@@ -350,3 +350,41 @@ a.alerta { text-decoration: none; }
 /* Tabela e política (consulta) */
 .regras { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
 .regras strong { color: var(--text); }
+
+/* Tabela e política: cor por tipo de tabela (verde Varejo · azul Empresas · âmbar BTU) */
+:root { --cor-varejo: var(--accent); --cor-empresas: var(--link); --cor-btu: var(--warn-dot); --cor-neutro: var(--border-strong); }
+.pt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; background: var(--cor-neutro); }
+.pt.varejo, .pt.regular { background: var(--cor-varejo); } .pt.empresas { background: var(--cor-empresas); } .pt.btu { background: var(--cor-btu); }
+.tab-bloco.cor-varejo { border-left: 3px solid var(--cor-varejo); }
+.tab-bloco.cor-empresas { border-left: 3px solid var(--cor-empresas); }
+.tab-bloco.cor-btu { border-left: 3px solid var(--cor-btu); }
+.tab-bloco.cor-varejo thead th { color: var(--ok-fg); } .tab-bloco.cor-empresas thead th { color: var(--info-fg); } .tab-bloco.cor-btu thead th { color: var(--warn-fg); }
+.tab .preco { font-family: var(--mono); font-weight: 600; color: var(--text); }
+.cor-varejo .tab .preco { color: var(--ok-fg); } .cor-empresas .tab .preco { color: var(--info-fg); } .cor-btu .tab .preco { color: var(--warn-fg); }
+.tab .com { color: var(--ok-fg); font-weight: 600; } .tab .com-btu { color: var(--warn-fg); }
+.resumo-tab { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.kpi-cor { position: relative; overflow: hidden; text-align: left; font: inherit; color: inherit; }
+.kpi-cor::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--cor-neutro); }
+.kpi-cor.regular::before, .kpi-cor.varejo::before { background: var(--cor-varejo); }
+.kpi-cor.empresas::before { background: var(--cor-empresas); } .kpi-cor.btu::before { background: var(--cor-btu); }
+.kpi-cor.varejo .val { color: var(--ok-fg); } .kpi-cor.empresas .val { color: var(--info-fg); } .kpi-cor.btu .val { color: var(--warn-fg); }
+button.kpi-cor { cursor: pointer; } button.kpi-cor:hover { border-color: var(--accent); }
+.btn-cidades { border-color: var(--accent); color: var(--accent); }
+.btn-cidades .n-cid { font-family: var(--mono); background: var(--ok-bg); color: var(--ok-fg); border-radius: 999px; padding: 1px 7px; margin-left: 4px; font-size: 11px; }
+dialog.modal-cidades { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); }
+.mc-corpo { padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.mc-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.mc-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mc-filtros .inp { flex: 1 1 200px; width: auto; }
+.mc-lista { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; max-height: 58vh; }
+.mc-grupo { padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); border-top: 3px solid var(--cor-varejo); }
+.mc-grupo.btu { border-top-color: var(--cor-btu); }
+.mc-grupo h4 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; }
+.mc-grupo h4 span { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.mc-grupo ul { margin: 0; padding: 0; list-style: none; columns: 3; column-gap: 16px; font-size: 13px; }
+.mc-grupo li { padding: 2px 0; break-inside: avoid; }
+.mc-grupo.regular li::before { content: '•'; color: var(--cor-varejo); margin-right: 6px; }
+.mc-grupo.btu li::before { content: '•'; color: var(--cor-btu); margin-right: 6px; }
+.mc-legenda { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+@media (max-width: 760px) { .resumo-tab { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .mc-grupo ul { columns: 2; } }

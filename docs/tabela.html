@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-5">
-<script src="config.js?v=031126-5"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-6">
+<script src="config.js?v=031126-6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-5"></script>
-<script src="assets/sidebar.js?v=031126-5"></script>
+<script src="assets/app.js?v=031126-6"></script>
+<script src="assets/sidebar.js?v=031126-6"></script>
 </head>
 <body>
 <div class="app">
@@ -26,23 +26,51 @@
         <h1>Tabela e política</h1>
         <span class="sub" id="sub">Portfólio e política comercial da Nio para a Dharma (PAP)</span>
       </div>
-      <div class="abas" role="tablist">
-        <button type="button" class="aba ativa" role="tab" aria-selected="true" data-aba="portfolio">Portfólio</button>
-        <button type="button" class="aba" role="tab" aria-selected="false" data-aba="politica">Política comercial</button>
+      <div class="tools">
+        <button type="button" class="btn btn-cidades" data-cidades>Cidades atendidas <span class="n-cid" id="n-cidades"></span></button>
+        <div class="abas" role="tablist">
+          <button type="button" class="aba ativa" role="tab" aria-selected="true" data-aba="portfolio">Portfólio</button>
+          <button type="button" class="aba" role="tab" aria-selected="false" data-aba="politica">Política comercial</button>
+        </div>
       </div>
     </header>
 
     <section id="portfolio" class="secao"><span class="carregando">Carregando…</span></section>
     <section id="politica" class="secao" hidden></section>
+
+    <div class="rodape-info"><span><strong>Regra 12:</strong> mudou tabela, área, bônus ou política da Nio, muda no mesmo passo o Supabase (migration), esta tela, a base da Mari, o INFRA e o Diário. Fonte: <span class="mono">docs/TABELA_VIGENTE_NIO_031126_1030.md</span>. Se o portal PAP mostrar outro preço na hora da venda, vale o portal e o Ricardo é avisado.</span></div>
   </main>
 </div>
+
+<dialog class="modal modal-cidades" id="modal-cidades" aria-labelledby="mc-tit">
+  <div class="mc-corpo">
+    <div class="mc-topo">
+      <h3 id="mc-tit">Cidades atendidas</h3>
+      <button type="button" class="btn btn-sm btn-ghost" data-fechar aria-label="Fechar">✕</button>
+    </div>
+    <p id="mc-sub"></p>
+    <div class="mc-filtros">
+      <input type="search" class="inp" id="mc-busca" placeholder="Buscar cidade" aria-label="Buscar cidade">
+      <div class="abas" role="tablist" id="mc-abas">
+        <button type="button" class="aba ativa" data-cl="">Todas</button>
+        <button type="button" class="aba" data-cl="regular">Regular</button>
+        <button type="button" class="aba" data-cl="btu">BTU</button>
+      </div>
+    </div>
+    <div class="mc-lista" id="mc-lista"></div>
+    <div class="mc-legenda">
+      <span><i class="pt regular"></i>Regular · Varejo e Empresas, tabela cheia</span>
+      <span><i class="pt btu"></i>BTU · só Empresas (tabela BTU); Varejo pendente</span>
+    </div>
+  </div>
+</dialog>
 <script>
 (async function () {
   const { esc } = NG;
   await NG.exigirLogin();
   NGSidebar.montar();
 
-  // Condições que não são número de tabela (TABELA_VIGENTE §1, §2 e §6). Regra 12 do CLAUDE.md:
+  // Condições que não são número de tabela (TABELA_VIGENTE §1, §2, §5 e §6). Regra 12 do CLAUDE.md (também no rodapé da tela):
   // mudou a tabela da Nio, muda aqui na mesma sessão.
   const CONDICOES = {
     varejo: [
@@ -70,12 +98,13 @@
   ];
 
   const hoje = NG.diaSP();
-  const [rp, ra, rb] = await Promise.all([
+  const [rp, ra, rb, rr] = await Promise.all([
     NG.sb.from('config_planos').select('*').lte('vigencia_inicio', hoje).order('preco'),
     NG.sb.from('config_adicionais').select('*').order('id'),
     NG.sb.from('config_bonus').select('*').lte('valido_de', hoje).order('id'),
+    NG.sb.from('config_area').select('*').eq('ativo', true).order('cidade'),
   ]);
-  const erro = [rp, ra, rb].find((r) => r.error);
+  const erro = [rp, ra, rb, rr].find((r) => r.error);
   if (erro) { document.getElementById('portfolio').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro.error))}</div>`; return; }
 
   const planos = (rp.data || []).filter((p) => !p.vigencia_fim || p.vigencia_fim >= hoje);
@@ -87,12 +116,17 @@
 
   const FAMILIAS = ['Fibra', 'Essencial', 'Super', 'Ultra'];
   const ordem = (a, b) => FAMILIAS.indexOf(a.familia) - FAMILIAS.indexOf(b.familia);
-  const de = (port, variante, ativo) => planos.filter((p) => p.portfolio === port && p.variante === variante && (ativo == null || p.ativo === ativo)).sort(ordem);
+  const de = (port, variante, ativo, cluster = 'regular') => planos.filter((p) => p.portfolio === port && p.variante === variante && p.cluster === cluster &&
+    (ativo == null || p.ativo === ativo)).sort(ordem);
+  const area = rr.data || [];
+  const cidades = (cl) => area.filter((a) => a.cluster === cl);
   const tabela = (cab, linhas, min) => `<div style="overflow-x:auto"><table class="tab" style="min-width:${min}px"><thead><tr>${
     cab.map((c) => `<th${c[1] ? ' style="text-align:right"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${
     linhas || `<tr><td colspan="${cab.length}" class="vazio">Nada vigente</td></tr>`}</tbody></table></div>`;
   const lista = (itens) => `<ul class="regras">${itens.map((t) => `<li>${t}</li>`).join('')}</ul>`;
-  const bloco = (titulo, sub, corpo) => `<section class="painel tab-bloco"><h2>${titulo}</h2>${sub ? `<span class="painel-sub">${sub}</span>` : ''}${corpo}</section>`;
+  // cor: varejo (verde) · empresas (azul) · btu (âmbar) · neutro — só uma faixa à esquerda e o marcador do título.
+  const bloco = (titulo, sub, corpo, cor = 'neutro', tag = '') => `<section class="painel tab-bloco cor-${cor}"><h2><i class="pt ${cor}"></i>${titulo}${tag}</h2>${sub ? `<span class="painel-sub">${sub}</span>` : ''}${corpo}</section>`;
+  const tag = (txt, cls) => ` <span class="chip ${cls}">${txt}</span>`;
   const bonusDe = (tipo, cluster, codigo) => {
     const b = bonus.filter((x) => x.tipo === tipo && x.cluster === cluster && (!x.plano_codigo || x.plano_codigo === codigo))
       .sort((x, y) => (y.plano_codigo ? 1 : 0) - (x.plano_codigo ? 1 : 0))[0];
@@ -107,7 +141,7 @@
       <td>${esc(p.wifi || '—')}</td>
       <td>${esc(p.internet_5g || '—')}</td>
       <td class="obs">${esc((p.inclusos || []).join(', ') || '—')}</td>
-      <td class="num"><strong>${m(p.preco)}</strong></td>
+      <td class="num preco">${m(p.preco)}</td>
       <td class="num">${p.preco_cartao != null ? m(p.preco_cartao) : '<span class="sub">mesmo</span>'}</td>
     </tr>`).join('');
   }
@@ -115,16 +149,29 @@
   const hab = (p) => (p ? `Habilitação de ${m(p.taxa_habilitacao)} isenta ficando ${p.isencao_meses} meses (cancelou antes, paga o proporcional aos meses restantes).` : '');
   const varejo = de('varejo', 'regular', true);
   const empresas = de('empresas', 'regular', true);
+  const empresasBtu = de('empresas', 'regular', true, 'btu');
+  const varejoBtu = de('varejo', 'regular', true, 'btu').concat(de('varejo', 'oferta50', true, 'btu'));
+  const minPreco = (lista, cartao) => Math.min(...lista.map((p) => Number(cartao && p.preco_cartao != null ? p.preco_cartao : p.preco)));
   const semFid = de('varejo', 'nfid', true);
   const foraDeVenda = planos.filter((p) => !p.ativo).sort(ordem);
   const ads = adicionais.filter((a) => a.ativo);
 
   document.getElementById('portfolio').innerHTML = [
-    bloco('Varejo · pessoa física (CPF)', hab(varejo[0]), tabela(CAB_PORT, linhasPortfolio(varejo), 860) + lista(CONDICOES.varejo.map(esc))),
+    `<div class="resumo-tab">
+      <button type="button" class="kpi kpi-cor regular" data-cidades><span class="rot">Cidades atendidas</span><span class="val">${area.length}</span>
+        <span class="nota">${cidades('regular').length} Regular · ${cidades('btu').length} BTU · ver lista →</span></button>
+      <div class="kpi kpi-cor varejo"><span class="rot">Varejo a partir de</span><span class="val">${m(minPreco(varejo))}</span><span class="nota">${m(minPreco(varejo, true))} no cartão</span></div>
+      <div class="kpi kpi-cor empresas"><span class="rot">Empresas a partir de</span><span class="val">${m(minPreco(empresas.concat(empresasBtu)))}</span><span class="nota">MEI e não-MEI</span></div>
+      <div class="kpi kpi-cor btu"><span class="rot">Comissão por venda</span><span class="val">até ${m(Math.max(...planos.filter((p) => p.ativo).map((p) => Number(p.comissao))))}</span><span class="nota">+ bônus · ver Política</span></div>
+    </div>`,
+    varejoBtu.length ? '' : '<div class="banner warn"><span><strong>Varejo (CPF) nas cidades BTU: tabela pendente</strong> — fale com o Ricardo. Nelas hoje só vende Empresas.</span></div>',
+    bloco('Varejo · pessoa física (CPF)', hab(varejo[0]), tabela(CAB_PORT, linhasPortfolio(varejo), 860) + lista(CONDICOES.varejo.map(esc)), 'varejo', tag('cidades Regular', 'ok')),
     semFid.length ? bloco('Sem fidelidade (só se o cliente pedir)',
       `Mesmos planos e preços do Varejo; a taxa de habilitação de ${m(semFid[0].taxa_habilitacao)} vai <strong>à vista na 1ª fatura</strong>. É direito do consumidor, não é foco de venda.`,
-      `<div class="chips">${semFid.map((p) => `<span class="chip">${esc(p.nome)}</span>`).join('')}</div>`) : '',
-    bloco('Empresas · MEI e não-MEI (CNPJ)', hab(empresas[0]), tabela(CAB_PORT, linhasPortfolio(empresas), 860) + lista(CONDICOES.empresas.map(esc))),
+      `<div class="chips">${semFid.map((p) => `<span class="chip">${esc(p.nome)}</span>`).join('')}</div>`, 'varejo') : '',
+    bloco('Empresas · MEI e não-MEI (CNPJ)', hab(empresas[0]), tabela(CAB_PORT, linhasPortfolio(empresas), 860) + lista(CONDICOES.empresas.map(esc)), 'empresas', tag('cidades Regular', 'ok')),
+    empresasBtu.length ? bloco('Empresas · MEI e não-MEI (CNPJ)', `${hab(empresasBtu[0])} Mesmo preço em todos os meios de pagamento.`,
+      tabela(CAB_PORT, linhasPortfolio(empresasBtu), 860), 'btu', tag('cidades BTU', 'warn')) : '',
     bloco('Serviços adicionais', 'Cobrados à parte, na mensalidade.', tabela(
       [['Serviço'], ['Portfólio'], ['Preço ao cliente', 1], ['Por contrato', 1]],
       ads.map((a) => `<tr><td><strong>${esc(a.nome)}</strong></td>
@@ -137,7 +184,7 @@
   ].join('');
 
   // ------------------------------------------------------------------ política
-  // Comissão por família: Regular = plano regular; Especial/BTU = plano do cluster btu da mesma família (hoje só a Oferta 50% do Varejo).
+  // Comissão por família: Regular = plano regular; Especial/BTU = plano do cluster btu da mesma família (Varejo: Oferta 50%, desligada; Empresas: E-BTU-*).
   function linhasComissao(port) {
     const regs = de(port, 'regular');
     return regs.map((p) => {
@@ -146,8 +193,8 @@
       const m10 = bonusDe('m10', p.cluster, p.codigo);
       return `<tr>
         <td><strong>${esc(p.nome)}</strong></td>
-        <td class="num"><strong>${m(p.comissao)}</strong></td>
-        <td class="num">${btu ? m(btu.comissao) : '—'}</td>
+        <td class="num com">${m(p.comissao)}</td>
+        <td class="num com-btu">${btu ? m(btu.comissao) : '—'}${btu && !btu.ativo ? '<div class="sub">fora de venda</div>' : ''}</td>
         <td class="num">${m(Number(p.comissao) + tra)}</td>
         <td class="num">${m10 != null ? '+ ' + m(m10) : '—'}</td>
       </tr>`;
@@ -164,9 +211,9 @@
     bloco('Como a comissão é paga', 'Política Comercial PAP de 22/10/2026 (cancela e substitui o Anexo II de 20/08) e contrato da Dharma.', lista(REGRAS_COMISSAO)),
     bloco('Comissão por venda · Varejo',
       `"Na instalação" soma a transição vigente${traReg ? ` (${m(traReg.valor)} até ${NG.fmtDiaISO(traReg.valido_ate)})` : ''}. O M-10 é potencial: entra só no 11º mês e nunca na comissão prevista.`,
-      tabela(CAB_COM, linhasComissao('varejo'), 680)),
+      tabela(CAB_COM, linhasComissao('varejo'), 680), 'varejo'),
     bloco('Comissão por venda · Empresas', 'NMEI (PJ não-MEI) ganha o bônus NMEI por cima — ver abaixo.', tabela(CAB_COM, linhasComissao('empresas'), 680)
-      + '<span class="painel-sub">Especial/BTU de Empresas não está cadastrado: só vale em município BTU, e hoje a Dharma vende só em Juiz de Fora (Regular).</span>'),
+      + '<span class="painel-sub">Especial/BTU vale nas cidades BTU. O Fibra 400 Mega não tem versão BTU.</span>', 'empresas'),
     bloco('Serviços adicionais', 'Comissão por item vendido junto com o plano.', tabela(
       [['Serviço'], ['Comissão', 1], ['Situação']],
       adicionais.map((a) => `<tr class="${a.ativo ? '' : 'inativo'}"><td><strong>${esc(a.nome)}</strong>${a.max_por_contrato > 1 ? `<div class="sub">por ponto, até ${a.max_por_contrato}</div>` : ''}</td>
@@ -182,13 +229,45 @@
           <td class="obs">${esc((m10[0] || {}).observacao || '')}</td></tr>` : '',
         ...['E-REG-FIBRA', 'E-REG-ESS', 'E-REG-SUP', 'E-REG-ULT'].filter((c) => nmei.some((b) => b.plano_codigo === c)).map((c) => {
           const r = nmei.find((b) => b.plano_codigo === c && b.cluster === 'regular');
-          const b = nmei.find((x) => x.plano_codigo === c && x.cluster === 'btu');
+          const b = nmei.find((x) => x.plano_codigo === c.replace('E-REG-', 'E-BTU-') && x.cluster === 'btu');
           return `<tr><td><strong>NMEI</strong><div class="sub">${esc(nomeDe(c))}</div></td>
             <td class="num">${r ? m(r.valor) : '—'}</td><td class="num">${b ? m(b.valor) : '—'}</td>
             <td class="obs">${esc((r || b || {}).observacao || '')}</td></tr>`;
         }),
       ].join(''), 760)),
   ].join('');
+
+  // ------------------------------------------------------- modal das cidades
+  const dlg = document.getElementById('modal-cidades');
+  const mcBusca = document.getElementById('mc-busca');
+  let mcCluster = '';
+  const normal = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  document.getElementById('n-cidades').textContent = area.length;
+  document.getElementById('mc-sub').textContent = `${area.length} cidades de MG (GDP 28/10/2026): ${cidades('regular').length} Regular e ${cidades('btu').length} BTU. A cidade do CEP decide a tabela; fora delas a venda é bloqueada.`;
+  function renderCidades() {
+    const q = normal(mcBusca.value.trim());
+    const grupo = (cl, titulo) => {
+      const itens = cidades(cl).filter((a) => !q || normal(a.cidade).includes(q));
+      if (mcCluster && mcCluster !== cl) return '';
+      return `<div class="mc-grupo ${cl}"><h4><i class="pt ${cl}"></i>${titulo} <span>${itens.length}</span></h4>${itens.length
+        ? `<ul>${itens.map((a) => `<li>${esc(a.cidade)}${a.bairro ? ` · ${esc(a.bairro)}` : ''}</li>`).join('')}</ul>`
+        : '<span class="sub">nenhuma</span>'}</div>`;
+    };
+    document.getElementById('mc-lista').innerHTML = grupo('regular', 'Regular') + grupo('btu', 'BTU');
+  }
+  document.querySelectorAll('[data-cidades]').forEach((b) => b.addEventListener('click', () => {
+    mcBusca.value = ''; renderCidades(); dlg.showModal(); mcBusca.focus();
+  }));
+  mcBusca.addEventListener('input', renderCidades);
+  document.getElementById('mc-abas').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-cl]');
+    if (!b) return;
+    mcCluster = b.dataset.cl;
+    document.querySelectorAll('#mc-abas .aba').forEach((x) => x.classList.toggle('ativa', x === b));
+    renderCidades();
+  });
+  dlg.querySelector('[data-fechar]').addEventListener('click', () => dlg.close());
+  dlg.addEventListener('click', (ev) => { if (ev.target === dlg) dlg.close(); });   // clique fora fecha
 
   // ------------------------------------------------------------------- abas
   function mostrarAba(qual) {

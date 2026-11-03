@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-5">
-<script src="config.js?v=031126-5"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-6">
+<script src="config.js?v=031126-6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-5"></script>
-<script src="assets/sidebar.js?v=031126-5"></script>
+<script src="assets/app.js?v=031126-6"></script>
+<script src="assets/sidebar.js?v=031126-6"></script>
 </head>
 <body>
 <div class="app">
@@ -80,7 +80,7 @@
         <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
 
         <div class="campo">
-          <span>Plano · tabela vigente desde <span id="vigencia">—</span></span>
+          <span>Plano · tabela vigente desde <span id="vigencia">—</span> · <span id="tabela-cidade"></span></span>
           <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
         </div>
         <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
@@ -213,16 +213,23 @@
   document.getElementById('vigencia').textContent = ini ? NG.fmtDiaISO(ini) : '—';
 
   // Endereço vindo do ViaCEP + resultado das travas.
-  const estado = { viacep: null, cobertura: null, area: null, dup: null };
+  const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null };
 
   // Cobertura rua a rua: ainda sem fonte. null = "consultar no APP".
   async function checarCobertura(/* cep, numero */) { return null; }
 
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
-  function dentroDaArea(cidade, bairro, uf) {
+  // Linha da área que cobre o endereço (traz o cluster: a tabela de preço da cidade). A mesma regra roda no banco (cluster_da_area).
+  function areaDe(cidade, bairro, uf) {
     if (!cidade) return null;
-    return (areas || []).some((a) => norm(a.cidade) === norm(cidade) && norm(a.uf) === norm(uf || 'MG') &&
-      (!a.bairro || norm(a.bairro) === norm(bairro)));
+    return (areas || []).filter((a) => norm(a.cidade) === norm(cidade) && norm(a.uf) === norm(uf || 'MG') &&
+      (!a.bairro || norm(a.bairro) === norm(bairro))).sort((a, b) => (b.bairro ? 1 : 0) - (a.bairro ? 1 : 0))[0] || null;
+  }
+  function atualizarArea() {
+    const j = estado.viacep;
+    const a = j ? areaDe(j.localidade, F.bairro.value, j.uf) : null;
+    estado.area = j ? !!a : null;
+    estado.cluster = a ? a.cluster : null;
   }
 
   // Varejo = PF; Empresas = MEI/NMEI. A variante sem fidelidade não aparece na lista: o checkbox troca para ela.
@@ -232,8 +239,17 @@
 
   function renderPlanos() {
     const atual = planoMarcado();
-    const lista = vigentes.filter((p) => (p.segmentos || []).includes(F.segmento.value) && !Object.values(SEM_FID).includes(p.variante) &&
+    // A tabela é a da cidade do CEP; antes do CEP mostra a Regular. Plano de um cluster nunca vale na cidade do outro.
+    const cluster = estado.cluster || 'regular';
+    const lista = vigentes.filter((p) => p.cluster === cluster && (p.segmentos || []).includes(F.segmento.value) && !Object.values(SEM_FID).includes(p.variante) &&
       (!p.forma_pagamento_permitida || p.forma_pagamento_permitida.includes(F.forma.value)));
+    const cidade = estado.viacep ? estado.viacep.localidade : '';
+    const vazio = cluster === 'btu' && portfolio() === 'varejo'
+      ? `<span class="rv-alerta">Tabela Varejo BTU pendente — fale com o Ricardo. ${esc(cidade)} é cidade BTU: hoje lá só vende Empresas (MEI/NMEI).</span>`
+      : '<span class="nota-campo">Nenhum plano vigente para este segmento/forma</span>';
+    document.getElementById('tabela-cidade').textContent = estado.cluster
+      ? `${cidade} · tabela ${cluster === 'btu' ? 'BTU' : 'Regular'}`
+      : estado.area === false ? `${cidade} · fora da área de atuação` : 'tabela Regular até o CEP dizer a cidade';
     document.getElementById('planos-op').innerHTML = lista.length ? lista.map((p) => `
       <label class="plano-op">
         <input type="radio" name="plano" value="${p.id}" ${String(p.id) === atual ? 'checked' : ''}>
@@ -242,8 +258,8 @@
         <span class="po-det">${esc([p.velocidade, p.wifi, p.internet_5g ? `Internet 5G ${p.internet_5g}` : null].filter(Boolean).join(' · '))}</span>
         ${p.inclusos && p.inclusos.length ? `<span class="po-det">Já vem com ${esc(p.inclusos.join(', '))}</span>` : ''}
         <span class="po-com">comissão ${NG.fmtMoeda(p.comissao)}</span>
-      </label>`).join('') : '<span class="nota-campo">Nenhum plano vigente para este segmento/forma</span>';
-    const temSemFid = vigentes.some((p) => p.portfolio === portfolio() && Object.values(SEM_FID).includes(p.variante));
+      </label>`).join('') : vazio;
+    const temSemFid = vigentes.some((p) => p.portfolio === portfolio() && p.cluster === cluster && Object.values(SEM_FID).includes(p.variante));
     document.getElementById('campo-nfid').hidden = !temSemFid;
     if (!temSemFid) F.nfid.checked = false;
     renderAdicionais();
@@ -324,7 +340,7 @@
       ? '<span class="chip warn">Cobertura: consultar no APP</span>'
       : `<span class="chip ${estado.cobertura ? 'ok' : 'bad'}">Cobertura Nio ${estado.cobertura ? '✓' : '✗'}</span>`;
     const a = estado.area === null ? '<span class="chip">Área: sem cidade</span>'
-      : `<span class="chip ${estado.area ? 'ok' : 'bad'}">${estado.area ? 'Dentro da área ✓' : 'Fora da área ✗'}</span>`;
+      : `<span class="chip ${estado.area ? 'ok' : 'bad'}">${estado.area ? `Dentro da área ✓ · ${estado.cluster === 'btu' ? 'BTU' : 'Regular'}` : 'Fora da área ✗'}</span>`;
     const d = estado.dup === null ? '' : estado.dup.endereco
       ? '<span class="chip bad">Endereço já tem venda ativa no NIOGEN ✗</span>'
       : '<span class="chip ok">Endereço sem venda ativa no NIOGEN ✓</span>';
@@ -352,21 +368,23 @@
       F.bairro.value = j.bairro || '';
       F.cidade_uf.value = `${j.localidade} / ${j.uf}`;
       document.getElementById('endereco').hidden = false;
-      estado.area = dentroDaArea(j.localidade, F.bairro.value, j.uf);
+      atualizarArea();
       estado.cobertura = await checarCobertura(cep, F.numero.value);
     } catch (e) {
       estado.viacep = null;
+      atualizarArea();
       document.getElementById('endereco').hidden = true;
       NG.toast(e.message === 'CEP não encontrado' ? 'CEP não encontrado no ViaCEP' : 'ViaCEP indisponível — tente de novo', 'bad');
     }
     renderTravas();
+    renderPlanos();
     checarDuplicidade();
   }
 
   F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
   F.numero.addEventListener('change', checarDuplicidade);
   F.bairro.addEventListener('change', () => {
-    if (estado.viacep) { estado.area = dentroDaArea(estado.viacep.localidade, F.bairro.value, estado.viacep.uf); renderTravas(); }
+    if (estado.viacep) { atualizarArea(); renderTravas(); renderPlanos(); }
   });
   F.doc.addEventListener('change', () => {
     const v = F.doc.value.trim();
@@ -457,7 +475,7 @@
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast(`${NG.primeiroNome(linha.cliente_nome)} salvo como ${STATUS_MAP[status].curto}`, 'ok');
     form.reset();
-    Object.assign(estado, { viacep: null, cobertura: null, area: null, dup: null });
+    Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null });
     document.getElementById('endereco').hidden = true;
     document.getElementById('doc-erro').textContent = '';
     renderTravas();

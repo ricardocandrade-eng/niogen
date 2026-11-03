@@ -11,13 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-5">
-<script src="config.js?v=031126-5"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-6">
+<script src="config.js?v=031126-6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=031126-5"></script>
-<script src="assets/sidebar.js?v=031126-5"></script>
-<script src="assets/osab.js?v=031126-5"></script>
+<script src="assets/app.js?v=031126-6"></script>
+<script src="assets/sidebar.js?v=031126-6"></script>
+<script src="assets/osab.js?v=031126-6"></script>
 </head>
 <body>
 <div class="app">
@@ -91,7 +91,7 @@
       <section class="painel tab-bloco"><h2>Planos</h2><div style="overflow-x:auto" id="t-planos"><span class="carregando">Carregando…</span></div></section>
       <section class="painel tab-bloco"><h2>Serviços adicionais</h2><div style="overflow-x:auto" id="t-adicionais"></div></section>
       <section class="painel tab-bloco"><h2>Bônus</h2><div style="overflow-x:auto" id="t-bonus"></div></section>
-      <section class="painel tab-bloco"><h2>Área de atuação e municípios da Nio</h2><div id="t-area" style="display:flex;flex-direction:column;gap:8px"></div></section>
+      <section class="painel tab-bloco"><h2>Área de atuação</h2><div id="t-area" style="display:flex;flex-direction:column;gap:8px"></div></section>
     </section>
   </main>
 </div>
@@ -324,14 +324,18 @@
         <td>${vig(b.valido_de, b.valido_ate)}</td>
         <td class="obs">${esc(b.observacao || '')}</td></tr>`).join(''), 760);
 
-    const mun = rm.data || [];
-    const chips = (cl) => mun.filter((x) => x.cluster === cl).map((x) => `<span class="chip">${esc(x.municipio)}</span>`).join('');
+    // Área de atuação = as cidades ativas de config_area (hoje as 38 de MG da GDP). Cluster = qual tabela vale na cidade.
+    const area = (rr.data || []).filter((a) => a.ativo);
+    const fora = (rr.data || []).filter((a) => !a.ativo);
+    const nome = (a) => `${esc(a.cidade)}${a.bairro ? ' · ' + esc(a.bairro) : ''}`;
+    const chips = (cl) => area.filter((a) => a.cluster === cl).map((a) => `<span class="chip ${cl === 'btu' ? 'warn' : 'ok'}">${nome(a)}</span>`).join('');
+    const semArea = (rm.data || []).filter((x) => !area.some((a) => a.cidade === x.municipio && a.uf === x.uf));
     document.getElementById('t-area').innerHTML = `
-      <div class="chips">${(rr.data || []).map((a) => `<span class="chip ${a.ativo ? 'ok' : 'dim'}">${esc(a.cidade)}${a.bairro ? ' · ' + esc(a.bairro) : ''} / ${esc(a.uf)} · ${esc(a.cluster)} · ${a.ativo ? 'vende' : 'desligada'}</span>`).join('') || '<span class="sub">nenhuma área</span>'}</div>
-      <span class="painel-sub">Só a área ativa autoriza venda. Nenhuma outra cidade é ligada até o gerente responder (pergunta 3).</span>
-      <span class="painel-sub">Municípios de MG que a Nio atende (GDP 28/10/2026) · só referência para a Mari: "a Nio atende sua cidade, mas não pela Dharma".</span>
-      <strong style="font-size:12px">Regular · ${mun.filter((x) => x.cluster === 'regular').length}</strong><div class="chips">${chips('regular')}</div>
-      <strong style="font-size:12px">BTU · ${mun.filter((x) => x.cluster === 'btu').length}</strong><div class="chips">${chips('btu')}</div>`;
+      <span class="painel-sub">${area.length} cidades ativas · fonte GDP 28/10/2026 (espelho em <span class="mono">nio_municipios</span>). Venda fora delas é bloqueada no banco; a cidade decide a tabela.</span>
+      <strong style="font-size:12px">Regular · ${area.filter((a) => a.cluster === 'regular').length} — tabelas Varejo e Empresas Regular</strong><div class="chips">${chips('regular')}</div>
+      <strong style="font-size:12px">BTU · ${area.filter((a) => a.cluster === 'btu').length} — só Empresas BTU; Varejo BTU pendente (pergunta 1)</strong><div class="chips">${chips('btu')}</div>
+      ${fora.length ? `<span class="painel-sub">Desligadas: ${fora.map(nome).join(', ')}</span>` : ''}
+      ${semArea.length ? `<span class="painel-sub">Na GDP e fora da área: ${semArea.map((x) => esc(x.municipio)).join(', ')}</span>` : ''}`;
   }
 
   function mostrarAba(qual) {
