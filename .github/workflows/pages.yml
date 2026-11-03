@@ -1,0 +1,44 @@
+# NIOGEN | .github/workflows/pages.yml | 03/11/2026
+# Publica a pasta docs/ no GitHub Pages. O docs/config.js não é versionado:
+# é gerado aqui a partir de SUPABASE_NIO_URL (repo variable) e SUPABASE_NIO_ANON (repo secret).
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gera docs/config.js
+        env:
+          SUPABASE_NIO_URL: ${{ vars.SUPABASE_NIO_URL }}
+          SUPABASE_NIO_ANON: ${{ secrets.SUPABASE_NIO_ANON }}
+        run: |
+          test -n "$SUPABASE_NIO_URL" || { echo "::error::variable SUPABASE_NIO_URL ausente"; exit 1; }
+          test -n "$SUPABASE_NIO_ANON" || { echo "::error::secret SUPABASE_NIO_ANON ausente"; exit 1; }
+          printf 'window.NIOGEN_CONFIG = { supabaseUrl: "%s", supabaseAnonKey: "%s" };\n' "$SUPABASE_NIO_URL" "$SUPABASE_NIO_ANON" > docs/config.js
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@v4
