@@ -11,13 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-3">
-<script src="config.js?v=031126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-4">
+<script src="config.js?v=031126-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=031126-3"></script>
-<script src="assets/sidebar.js?v=031126-3"></script>
-<script src="assets/osab.js?v=031126-3"></script>
+<script src="assets/app.js?v=031126-4"></script>
+<script src="assets/sidebar.js?v=031126-4"></script>
+<script src="assets/osab.js?v=031126-4"></script>
 </head>
 <body>
 <div class="app">
@@ -29,8 +29,8 @@
         <span class="sub">O que a Nio manda entra aqui · o que a Dharma decide fica aqui · só admin e backoffice</span>
       </div>
       <div class="abas" role="tablist">
-        <button type="button" class="aba ativa" role="tab" aria-selected="true">Importação</button>
-        <button type="button" class="aba" disabled title="em breve">Planos e área</button>
+        <button type="button" class="aba ativa" role="tab" aria-selected="true" data-aba="conteudo">Importação</button>
+        <button type="button" class="aba" role="tab" aria-selected="false" data-aba="tabela">Tabela vigente</button>
         <button type="button" class="aba" disabled title="em breve">Mari</button>
         <button type="button" class="aba" disabled title="em breve">Usuários</button>
       </div>
@@ -84,6 +84,14 @@
           </table>
         </div>
       </section>
+    </section>
+
+    <section id="tabela" class="secao" hidden>
+      <div class="rodape-info"><span><strong>Só leitura.</strong> Portfólio out/26 + Política Comercial PAP de 22/10/2026 (fonte: <span class="mono">docs/TABELA_VIGENTE_NIO_031126_1030.md</span>). Mudou a tabela da Nio: nova migration, nunca edição à mão. Se o portal PAP mostrar outro preço na hora da venda, vale o portal e o Ricardo é avisado.</span></div>
+      <section class="painel tab-bloco"><h2>Planos</h2><div style="overflow-x:auto" id="t-planos"><span class="carregando">Carregando…</span></div></section>
+      <section class="painel tab-bloco"><h2>Serviços adicionais</h2><div style="overflow-x:auto" id="t-adicionais"></div></section>
+      <section class="painel tab-bloco"><h2>Bônus</h2><div style="overflow-x:auto" id="t-bonus"></div></section>
+      <section class="painel tab-bloco"><h2>Área de atuação e municípios da Nio</h2><div id="t-area" style="display:flex;flex-direction:column;gap:8px"></div></section>
     </section>
   </main>
 </div>
@@ -261,6 +269,88 @@
     if (b && atual) aplicar(b);
   });
   document.getElementById('ver-ultima').addEventListener('click', () => ultima && mostrarResumo(ultima.resumo || {}, ultima.arquivo_nome));
+
+  // ---------------------------------------------------------- tabela vigente
+  let tabelaCarregada = false;
+  async function carregarTabela() {
+    tabelaCarregada = true;
+    const [rp, ra, rb, rr, rm] = await Promise.all([
+      NG.sb.from('config_planos').select('*').order('portfolio', { ascending: false }).order('id'),
+      NG.sb.from('config_adicionais').select('*').order('id'),
+      NG.sb.from('config_bonus').select('*').order('tipo').order('id'),
+      NG.sb.from('config_area').select('*').order('cidade'),
+      NG.sb.from('nio_municipios').select('*').order('municipio'),
+    ]);
+    const erro = [rp, ra, rb, rr, rm].find((r) => r.error);
+    if (erro) { document.getElementById('t-planos').innerHTML = `<span class="carregando">${esc(NG.msgErro(erro.error))}</span>`; return; }
+    const m = NG.fmtMoeda;
+    const sim = (b) => (b ? '<span class="chip ok">ativo</span>' : '<span class="chip dim">inativo</span>');
+    const vig = (de, ate) => `${NG.fmtDiaISO(de)}${ate ? ' a ' + NG.fmtDiaISO(ate) : ''}`;
+    const VAR = { regular: 'Regular', nfid: 'Sem fidelidade', oferta50: 'Oferta 50%', oferta50_nfid: 'Oferta 50% sem fidelidade' };
+    const tabela = (cab, linhas, min) => `<table class="tab" style="min-width:${min}px"><thead><tr>${cab.map((c) => `<th${c[1] ? ' style="text-align:right"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${linhas || `<tr><td colspan="${cab.length}" class="vazio">Nada cadastrado</td></tr>`}</tbody></table>`;
+
+    document.getElementById('t-planos').innerHTML = tabela(
+      [['Plano'], ['Portfólio · variante'], ['Velocidade · Wi-Fi · Internet 5G'], ['Boleto/débito', 1], ['Cartão', 1], ['Comissão', 1], ['Habilitação'], ['Vigência'], ['Situação']],
+      (rp.data || []).map((p) => `<tr class="${p.ativo ? '' : 'inativo'}">
+        <td><strong>${esc(p.nome)}</strong><div class="sub mono">${esc(p.codigo || '—')}</div>${p.observacao ? `<div class="obs">${esc(p.observacao)}</div>` : ''}</td>
+        <td>${esc(p.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(VAR[p.variante] || p.variante || '—')}<div class="sub">${esc((p.segmentos || []).join(', '))} · cluster ${esc(p.cluster || '—')}</div></td>
+        <td>${esc([p.velocidade, p.wifi].filter(Boolean).join(' · '))}${p.internet_5g ? `<div class="sub">Internet 5G ${esc(p.internet_5g)}</div>` : ''}${p.inclusos && p.inclusos.length ? `<div class="sub">${esc(p.inclusos.join(', '))}</div>` : ''}</td>
+        <td class="num">${m(p.preco)}</td>
+        <td class="num">${p.preco_cartao != null ? m(p.preco_cartao) : '<span class="sub">mesmo</span>'}</td>
+        <td class="num">${m(p.comissao)}</td>
+        <td>${p.taxa_a_vista ? `${m(p.taxa_habilitacao)} à vista` : `${m(p.taxa_habilitacao)} isenta em ${p.isencao_meses} meses`}</td>
+        <td>${vig(p.vigencia_inicio, p.vigencia_fim)}</td>
+        <td>${sim(p.ativo)}</td></tr>`).join(''), 980);
+
+    document.getElementById('t-adicionais').innerHTML = tabela(
+      [['Serviço'], ['Portfólio'], ['Preço ao cliente', 1], ['Comissão', 1], ['Máx. por contrato', 1], ['Vigência'], ['Situação']],
+      (ra.data || []).map((a) => `<tr class="${a.ativo ? '' : 'inativo'}">
+        <td><strong>${esc(a.nome)}</strong><div class="sub mono">${esc(a.codigo)}</div>${a.preco == null ? '<div class="obs">Preço ao cliente não consta no book.</div>' : ''}</td>
+        <td>${esc((a.portfolio || []).map((x) => (x === 'empresas' ? 'Empresas' : 'Varejo')).join(', '))}</td>
+        <td class="num">${a.preco != null ? m(a.preco) + '/mês' : '—'}</td>
+        <td class="num">${m(a.comissao)}</td>
+        <td class="num">${a.max_por_contrato}</td>
+        <td>${NG.fmtDiaISO(a.vigencia_inicio)}</td>
+        <td>${sim(a.ativo)}</td></tr>`).join(''), 720);
+
+    const TIPO = { transicao: 'Transição para Performance', m10: 'M-10 (potencial, fora da prevista)', nmei: 'NMEI (PJ não-MEI)' };
+    document.getElementById('t-bonus').innerHTML = tabela(
+      [['Bônus'], ['Cluster'], ['Plano'], ['Valor', 1], ['Validade'], ['Observação']],
+      (rb.data || []).map((b) => `<tr>
+        <td><strong>${esc(TIPO[b.tipo] || b.tipo)}</strong></td>
+        <td>${esc(b.cluster === 'btu' ? 'Especial/BTU' : 'Regular')}</td>
+        <td class="mono">${esc(b.plano_codigo || 'todos')}</td>
+        <td class="num">${m(b.valor)}</td>
+        <td>${vig(b.valido_de, b.valido_ate)}</td>
+        <td class="obs">${esc(b.observacao || '')}</td></tr>`).join(''), 760);
+
+    const mun = rm.data || [];
+    const chips = (cl) => mun.filter((x) => x.cluster === cl).map((x) => `<span class="chip">${esc(x.municipio)}</span>`).join('');
+    document.getElementById('t-area').innerHTML = `
+      <div class="chips">${(rr.data || []).map((a) => `<span class="chip ${a.ativo ? 'ok' : 'dim'}">${esc(a.cidade)}${a.bairro ? ' · ' + esc(a.bairro) : ''} / ${esc(a.uf)} · ${esc(a.cluster)} · ${a.ativo ? 'vende' : 'desligada'}</span>`).join('') || '<span class="sub">nenhuma área</span>'}</div>
+      <span class="painel-sub">Só a área ativa autoriza venda. Nenhuma outra cidade é ligada até o gerente responder (pergunta 3).</span>
+      <span class="painel-sub">Municípios de MG que a Nio atende (GDP 28/10/2026) · só referência para a Mari: "a Nio atende sua cidade, mas não pela Dharma".</span>
+      <strong style="font-size:12px">Regular · ${mun.filter((x) => x.cluster === 'regular').length}</strong><div class="chips">${chips('regular')}</div>
+      <strong style="font-size:12px">BTU · ${mun.filter((x) => x.cluster === 'btu').length}</strong><div class="chips">${chips('btu')}</div>`;
+  }
+
+  function mostrarAba(qual) {
+    document.querySelectorAll('[data-aba]').forEach((b) => {
+      const ativa = b.dataset.aba === qual;
+      b.classList.toggle('ativa', ativa);
+      b.setAttribute('aria-selected', String(ativa));
+    });
+    document.getElementById('conteudo').hidden = qual !== 'conteudo';
+    document.getElementById('tabela').hidden = qual !== 'tabela';
+    if (qual === 'tabela' && !tabelaCarregada) carregarTabela();
+  }
+  document.querySelector('.abas').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-aba]');
+    if (!b) return;
+    history.replaceState(null, '', b.dataset.aba === 'tabela' ? '#tabela' : location.pathname);
+    mostrarAba(b.dataset.aba);
+  });
+  if (location.hash === '#tabela') mostrarAba('tabela');
 
   await carregarHistorico();
 })();
