@@ -388,3 +388,19 @@ dialog.modal-cidades { width: min(640px, calc(100vw - 32px)); max-height: calc(1
 .mc-legenda { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
 @media (max-width: 760px) { .resumo-tab { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 480px) { .mc-grupo ul { columns: 2; } }
+
+/* Explicação de comissão: rótulo com title= (desktop) + ⓘ que abre o texto ao tocar (celular) */
+.com-rot { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; cursor: help; }
+.dica { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 4px; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; vertical-align: middle; }
+.dica:hover, .dica:focus-visible { color: var(--accent); outline: none; }
+.dica-pop { position: absolute; z-index: 1000; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-strong);
+  color: var(--text); font-size: 12px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); text-transform: none; letter-spacing: 0; font-weight: 400; }
+@media (pointer: coarse) { .dica { width: 26px; height: 26px; font-size: 15px; } }
+/* Selos da venda: comissão em risco × ganha · M-10 elegível × não elegível */
+.chips.selos { margin-top: 2px; }
+.chip.selo { cursor: help; border: 1px solid transparent; }
+.chip.selo.warn { border-color: var(--warn-border); } .chip.selo.ok { border-color: var(--ok-fg); }
+.chip.selo.info { border-color: var(--info-fg); } .chip.selo.dim { text-decoration: line-through; }
+.valor-card.ok { border-color: var(--ok-fg); } .valor-card.ok .rot { color: var(--ok-fg); }
+.valor-card.bad { border-color: var(--bad-border); } .valor-card.bad .rot, .valor-card.bad .val { color: var(--bad-fg); }

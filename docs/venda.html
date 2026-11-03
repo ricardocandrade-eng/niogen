@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-7">
-<script src="config.js?v=031126-7"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-8">
+<script src="config.js?v=031126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-7"></script>
-<script src="assets/sidebar.js?v=031126-7"></script>
+<script src="assets/app.js?v=031126-8"></script>
+<script src="assets/sidebar.js?v=031126-8"></script>
 </head>
 <body>
 <div class="app">
@@ -35,7 +35,7 @@
 
   const TITULOS = {
     '0_qualificado': 'Qualificada', '1_vendido': 'Vendida · biometria aprovada', '2_aguardando_instalacao': 'Aguardando instalação',
-    '3_instalado': 'Instalada', '4_ativo_provisorio': 'Ativa · comissão provisória', '5_comissao_firme': 'Comissão firme', saida: 'Saída',
+    '3_instalado': 'Instalada', '4_ativo_provisorio': 'Ativa · comissão em risco', '5_comissao_firme': 'Comissão ganha', saida: 'Saída',
   };
   const CANAIS = { whatsapp: 'WhatsApp', ligacao: 'Ligação', presencial: 'Presencial' };
 
@@ -88,7 +88,7 @@
     if (v.status === '1_vendido' && v.vendido_em) m.push(`agendar até ${NG.fmtDataHora(new Date(new Date(v.vendido_em).getTime() + 4 * 3600000))}`);
     if (v.instalacao_agendada_para && !v.instalado_em) m.push(`instalação ${NG.fmtDiaSemana(v.instalacao_agendada_para)} ${NG.fmtData(v.instalacao_agendada_para)} ${NG.janela(v.instalacao_agendada_para)}`);
     if (v.docs_prazo_em && !v.docs_entregues_em) m.push(`docs à Nio até ${NG.fmtData(v.docs_prazo_em)}`);
-    if (v.firme_em && v.status !== '5_comissao_firme' && v.status !== 'saida') m.push(`180 d sem churn ${NG.fmtDataAno(v.firme_em)}`);
+    if (v.firme_em && v.status !== '5_comissao_firme' && v.status !== 'saida') m.push(`comissão ganha em ${NG.fmtDataAno(v.firme_em)} (180 d sem cancelamento nem downgrade)`);
     if (v.interesse_futuro_em) m.push(`interesse futuro volta ${NG.fmtData(v.interesse_futuro_em + 'T12:00:00')}`);
     if (!m.length) return '';
     return `<div class="tl-item"><span class="tl-dot futuro"></span><div class="tl-txt"><strong style="color:var(--muted)">Próximos marcos</strong><span>${esc(m.join(' · '))}</span></div></div>`;
@@ -140,8 +140,9 @@
   function render(eventos, lim, usuarios) {
     const s = STATUS_MAP[v.status];
     document.title = `${v.cliente_nome} · NIOGEN`;
-    const firme = v.status === '5_comissao_firme';
-    const emRisco = v.status === 'saida' || firme ? 0 : (v.comissao_paga ?? v.comissao_prevista ?? 0);
+    const ganha = v.status === '5_comissao_firme';
+    const emRisco = v.status === 'saida' || ganha ? 0 : (v.comissao_paga ?? v.comissao_prevista ?? 0);
+    const ganhaEm = v.firme_em ? NG.fmtData(v.firme_em) : null;
     const estorno = Number(v.estorno_previsto || 0);
     const local = [v.cidade, v.bairro].filter(Boolean).join(' · ');
     const m = NG.fmtMoeda;
@@ -161,6 +162,7 @@
             ${local ? `<span>${esc(local)}</span><span>·</span>` : ''}
             <span>Origem: ${esc(ORIGENS[v.origem] || v.origem)}${v.origem_ref ? ' · ' + esc(v.origem_ref) : ''}</span>
           </div>
+          ${NG.selosComissao(v) ? `<div class="chips selos">${NG.selosComissao(v)}</div>` : ''}
         </div>
         <div class="tools">
           <button type="button" class="btn" disabled title="em breve">Abrir conversa</button>
@@ -176,18 +178,26 @@
           <span class="rot">Comissão prevista</span>
           <span class="val">${NG.fmtMoeda(v.comissao_prevista)}</span>
           <span class="nota">${partes}</span>
-          ${Number(v.bonus_m10_potencial) ? `<span class="nota">M-10 potencial ${m(v.bonus_m10_potencial)} no 11º mês, se ativa e adimplente (fora da prevista)</span>` : ''}
+          ${Number(v.bonus_m10_potencial) ? `<span class="nota">${NG.rotulo(`Bônus M-10 potencial ${m(v.bonus_m10_potencial)} no 11º mês`, 'm10')} · fora da comissão em risco</span>` : ''}
         </div>
         <div class="valor-card">
           <span class="rot">Comissão paga</span>
           <span class="val ${v.comissao_paga != null ? 'ok' : ''}">${NG.fmtMoeda(v.comissao_paga)}</span>
           <span class="nota">${v.comissao_paga != null ? `100 % na instalação${v.ciclo_pago ? ' · ciclo ' + esc(v.ciclo_pago) : ''}` : 'aguardando o extrato da Nio'}</span>
         </div>
-        <div class="valor-card ${emRisco || estorno ? 'warn' : ''}">
-          <span class="rot">Estorno em risco</span>
-          <span class="val">${estorno ? NG.fmtMoeda(estorno) + ' previsto' : NG.fmtMoeda(emRisco)}</span>
-          <span class="nota">${firme ? 'comissão firme' : v.firme_em ? `Churn &lt; 180 d = 100 % · firme em ${NG.fmtDataAno(v.firme_em)}` : 'Churn &lt; 180 d = 100 % · conta a partir da instalação'}</span>
-        </div>
+        ${estorno ? `<div class="valor-card bad">
+          <span class="rot">Estorno</span>
+          <span class="val">${NG.fmtMoeda(estorno)} previsto</span>
+          <span class="nota">a Nio desconta no extrato</span>
+        </div>` : ganha ? `<div class="valor-card ok">
+          <span class="rot">${NG.rotulo('Comissão (ganha)', 'ganha')}</span>
+          <span class="val ok">${NG.fmtMoeda(v.comissao_paga ?? v.comissao_prevista)}</span>
+          <span class="nota">passou das janelas de estorno · não volta mais</span>
+        </div>` : `<div class="valor-card ${emRisco ? 'warn' : ''}">
+          <span class="rot">${NG.rotulo('Comissão (em risco)', 'emRisco', ganhaEm)}</span>
+          <span class="val">${NG.fmtMoeda(emRisco)}</span>
+          <span class="nota">${v.status === 'saida' ? 'venda encerrada' : ganhaEm ? `vira ganha em ${NG.fmtDataAno(v.firme_em)}` : 'conta a partir da instalação: 180 dias'}</span>
+        </div>`}
       </div>
 
       <div class="duas" style="align-items:flex-start">

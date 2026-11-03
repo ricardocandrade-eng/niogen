@@ -27,8 +27,9 @@
     { id: '1_vendido', curto: '1 · Vendido', col: '1 · Vendido', chip: '' },
     { id: '2_aguardando_instalacao', curto: '2 · Aguardando', col: '2 · Aguardando instalação', chip: '' },
     { id: '3_instalado', curto: '3 · Instalado', col: '3 · Instalado', chip: '' },
-    { id: '4_ativo_provisorio', curto: '4 · Ativo', col: '4 · Ativo · comissão provisória', chip: 'ok' },
-    { id: '5_comissao_firme', curto: '5 · Comissão firme', col: '5 · Comissão firme', chip: 'ok' },
+    // Os ids são do banco e não mudam; só o texto ("em risco" / "ganha", decisão do Ricardo 03/11).
+    { id: '4_ativo_provisorio', curto: '4 · Ativo', col: '4 · Ativo · comissão em risco', chip: 'ok', dica: 'emRisco' },
+    { id: '5_comissao_firme', curto: '5 · Comissão ganha', col: '5 · Comissão ganha', chip: 'ok', dica: 'ganha' },
     { id: 'saida', curto: 'Saída', col: 'Saída · motivo obrigatório', chip: 'dim' },
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
@@ -129,6 +130,74 @@
     box.appendChild(el);
     setTimeout(() => el.remove(), tipo === 'bad' ? 7000 : 4000);
   }
+
+  // ---------- comissão: em risco / ganha / M-10 ----------
+  // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
+  const TEXTOS_COMISSAO = {
+    emRisco: (ganhaEm) => 'A Nio já pagou ou vai pagar, mas ainda pode estornar: 100% se o cliente cancelar em menos de 180 dias da ativação '
+      + 'ou cancelar e reativar em até 30 dias; a diferença se houver downgrade em até 180 dias.'
+      + (ganhaEm ? ` Vira 'ganha' em ${ganhaEm}.` : ''),
+    ganha: 'Passou dos 180 dias da ativação sem cancelamento nem downgrade. Não pode mais ser estornada.',
+    m10: 'Pago no 11º mês se o cliente chegar ao 10º mês ativo, sem fatura com mais de 15 dias de atraso e sem downgrade. Não entra na comissão em risco.',
+    m10Nao: (motivo) => `Não elegível ao bônus M-10: ${motivo}.`,
+  };
+  const textoComissao = (chave, ganhaEm) => {
+    const t = TEXTOS_COMISSAO[chave];
+    return typeof t === 'function' ? t(ganhaEm) : t;
+  };
+  // Rótulo com explicação: title= no desktop; o ⓘ abre o mesmo texto ao tocar (celular).
+  function dica(chave, ganhaEm) {
+    const t = esc(textoComissao(chave, ganhaEm));
+    return `<button type="button" class="dica" data-dica="${t}" title="${t}" aria-label="O que é isso?">ⓘ</button>`;
+  }
+  function rotulo(texto, chave, ganhaEm) {
+    return `<span class="com-rot" title="${esc(textoComissao(chave, ganhaEm))}">${esc(texto)}</span>${dica(chave, ganhaEm)}`;
+  }
+  // Selos da venda (status 1–5): comissão em risco × ganha e M-10 elegível × não elegível.
+  // Atraso > 15 dias e downgrade ainda não chegam ao NIOGEN (FPD/extrato não importados): o "não elegível" só vê o que existe.
+  const VENDIDA = ['1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  function selosComissao(v) {
+    if (!v || !VENDIDA.includes(v.status)) return '';
+    const selo = (txt, cls, texto) => `<span class="chip selo ${cls}" data-dica="${esc(texto)}" title="${esc(texto)}">${esc(txt)}</span>`;
+    const ganha = v.status === '5_comissao_firme';
+    const ganhaEm = v.firme_em ? fmtData(v.firme_em) : null;
+    const s1 = ganha
+      ? selo('Comissão ganha', 'ok', textoComissao('ganha'))
+      : selo(ganhaEm ? `Comissão em risco · até ${ganhaEm}` : 'Comissão em risco', 'warn', textoComissao('emRisco', ganhaEm));
+    let motivo = null;
+    if (v.nio_venda_valida === false) motivo = 'a Nio marcou a venda como inválida';
+    else if (!Number(v.bonus_m10_potencial)) motivo = 'o plano não tem bônus M-10 na política vigente';
+    let quando = '';
+    if (v.ativado_em || v.instalado_em) {
+      const d = new Date(v.ativado_em || v.instalado_em);
+      d.setMonth(d.getMonth() + 10);
+      quando = ` 10º mês ativo em ${parts(d, { month: '2-digit', year: 'numeric' })}.`;
+    }
+    const s2 = motivo
+      ? selo('M-10 não elegível', 'dim', textoComissao('m10Nao', motivo))
+      : selo(`M-10 elegível · ${fmtMoeda(v.bonus_m10_potencial)}`, 'info', textoComissao('m10') + quando);
+    return s1 + s2;
+  }
+
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-dica]');
+    const aberto = document.querySelector('.dica-pop');
+    if (aberto) aberto.remove();
+    if (!b || (aberto && aberto.dataset.de === b.dataset.dica)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const pop = document.createElement('div');
+    pop.className = 'dica-pop';
+    pop.setAttribute('role', 'tooltip');
+    pop.dataset.de = b.dataset.dica;
+    pop.textContent = b.dataset.dica;
+    document.body.appendChild(pop);
+    const r = b.getBoundingClientRect();
+    const larg = Math.min(300, window.innerWidth - 24);
+    pop.style.width = `${larg}px`;
+    pop.style.left = `${Math.max(12, Math.min(r.left + r.width / 2 - larg / 2, window.innerWidth - larg - 12)) + window.scrollX}px`;
+    pop.style.top = `${r.bottom + 6 + window.scrollY}px`;
+  }, true);
 
   // ---------- sessão ----------
   let usuarioAtual = null;
@@ -288,7 +357,7 @@
   window.NG = {
     sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, exigirLogin, sair, modal,
+    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, rotulo, selosComissao, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
     carregarUsuarios, preencherSelect,
     get usuario() { return usuarioAtual; },

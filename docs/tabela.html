@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-7">
-<script src="config.js?v=031126-7"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-8">
+<script src="config.js?v=031126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-7"></script>
-<script src="assets/sidebar.js?v=031126-7"></script>
+<script src="assets/app.js?v=031126-8"></script>
+<script src="assets/sidebar.js?v=031126-8"></script>
 </head>
 <body>
 <div class="app">
@@ -91,6 +91,8 @@
     ],
   };
   const REGRAS_COMISSAO = [
+    `<strong>Comissão (em risco)</strong>: ${esc(NG.textoComissao('emRisco'))}`,
+    `<strong>Comissão (ganha)</strong>: ${esc(NG.textoComissao('ganha'))}`,
     'Comissão só com <strong>biometria aprovada</strong>, instalação concluída e endereço dentro da área de atuação.',
     'Churn em menos de 180 dias = estorno de 100 %. Também estorna reativação em até 30 dias e cliente/endereço que já era ativo.',
     'Agendar a instalação em até 4 h da venda · documentos à Nio em até 15 dias · contestação em até 120 dias.',
@@ -202,7 +204,7 @@
       </tr>`;
     }).join('');
   }
-  const CAB_COM = [['Plano'], ['Regular', 1], ['Especial/BTU', 1], ['Na instalação (+ transição)', 1], ['M-10 no 11º mês', 1]];
+  const CAB_COM = [['Plano'], ['Regular', 1], ['Especial/BTU', 1], ['Na instalação (+ transição)', 1], [`M-10 no 11º mês ${NG.dica('m10')}`, 1]];
   const tra = bonus.filter((b) => b.tipo === 'transicao');
   const traReg = tra.find((b) => b.cluster === 'regular');
   const m10 = bonus.filter((b) => b.tipo === 'm10');
@@ -212,7 +214,7 @@
   document.getElementById('politica').innerHTML = [
     bloco('Como a comissão é paga', 'Política Comercial PAP de 22/10/2026 (cancela e substitui o Anexo II de 20/08) e contrato da Dharma.', lista(REGRAS_COMISSAO)),
     bloco('Comissão por venda · Varejo',
-      `"Na instalação" soma a transição vigente${traReg ? ` (${m(traReg.valor)} até ${NG.fmtDiaISO(traReg.valido_ate)})` : ''}. O M-10 é potencial: entra só no 11º mês e nunca na comissão prevista.`,
+      `"Na instalação" soma a transição vigente${traReg ? ` (${m(traReg.valor)} até ${NG.fmtDiaISO(traReg.valido_ate)})` : ''}. O M-10 é potencial: entra só no 11º mês e nunca na comissão em risco. ${NG.dica('m10')}`,
       tabela(CAB_COM, linhasComissao('varejo'), 680), 'varejo'),
     bloco('Comissão por venda · Empresas', 'NMEI (PJ não-MEI) ganha o bônus NMEI por cima — ver abaixo.', tabela(CAB_COM, linhasComissao('empresas'), 680)
       + '<span class="painel-sub">Especial/BTU vale nas cidades BTU. O Fibra 400 Mega não tem versão BTU.</span>', 'empresas'),
@@ -226,7 +228,7 @@
         tra.length ? `<tr><td><strong>Transição para Performance</strong><div class="sub">por venda, até o 10º mês da operação</div></td>
           <td class="num">${m((tra.find((b) => b.cluster === 'regular') || {}).valor)}</td><td class="num">${m((tra.find((b) => b.cluster === 'btu') || {}).valor)}</td>
           <td class="obs">Meses 1–3 da operação: faixa mínima (vigente até ${NG.fmtDiaISO(traReg && traReg.valido_ate)}). Do 4º ao 10º mês a faixa depende do gross do bimestre anterior: ≥ 400 vendas R$ 70 · 150–399 R$ 50 · &lt; 150 R$ 30 (BTU 53 · 38 · 23). Gross = banda larga fibra Varejo + Empresas.</td></tr>` : '',
-        m10.length ? `<tr><td><strong>M-10</strong><div class="sub">potencial, fora da prevista</div></td>
+        m10.length ? `<tr><td><strong>M-10</strong> ${NG.dica('m10')}<div class="sub">potencial, fora da comissão em risco</div></td>
           <td class="num">${m((m10.find((b) => b.cluster === 'regular') || {}).valor)}</td><td class="num">${m((m10.find((b) => b.cluster === 'btu') || {}).valor)}</td>
           <td class="obs">${esc((m10[0] || {}).observacao || '')}</td></tr>` : '',
         ...['E-REG-FIBRA', 'E-REG-ESS', 'E-REG-SUP', 'E-REG-ULT'].filter((c) => nmei.some((b) => b.plano_codigo === c)).map((c) => {

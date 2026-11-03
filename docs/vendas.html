@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-7">
-<script src="config.js?v=031126-7"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-8">
+<script src="config.js?v=031126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-7"></script>
-<script src="assets/sidebar.js?v=031126-7"></script>
+<script src="assets/app.js?v=031126-8"></script>
+<script src="assets/sidebar.js?v=031126-8"></script>
 </head>
 <body>
 <div class="app">
@@ -170,7 +170,7 @@
     tbody.innerHTML = lista.map((v) => `
       <tr class="${v.status === 'saida' ? 'saida' : ''}">
         <td><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><div class="sub">${esc([v.cidade, v.bairro].filter(Boolean).join(' · '))}</div></td>
-        <td>${chipStatus(v)}</td>
+        <td>${chipStatus(v)}${NG.selosComissao(v) ? `<div class="chips selos">${NG.selosComissao(v)}</div>` : ''}</td>
         <td>${esc(v.plano_nome || '—')}</td>
         <td>${esc(ORIGENS[v.origem] || v.origem)}</td>
         <td>${esc(v.vendedor_nome || '—')}</td>
@@ -328,9 +328,9 @@
       <div class="rv-linha"><span>Valor mensal ao cliente</span><strong>${m(c.valor + c.valorAd)}</strong></div>
       <span class="rv-nota">${esc(c.p.nome)} ${m(c.valor)} ${forma}${c.valorAd ? ` + ${m(c.valorAd)} de adicionais` : ''}</span>
       ${hab}
-      <div class="rv-linha"><span>Comissão prevista</span><strong>${m(c.total)}</strong></div>
-      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · provisória até 180 dias</span>
-      ${c.m10 ? `<span class="rv-nota">M-10 potencial: ${m(c.m10)} no 11º mês, se ativo e adimplente no 10º (fora da prevista)</span>` : ''}
+      <div class="rv-linha"><span>${NG.rotulo('Comissão prevista (em risco)', 'emRisco')}</span><strong>${m(c.total)}</strong></div>
+      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · em risco até 180 dias da ativação</span>
+      ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 11º mês`, 'm10')} (fora da comissão em risco)</span>` : ''}
       ${c.p.observacao ? `<span class="rv-nota">${esc(c.p.observacao)}</span>` : ''}`;
   }
 

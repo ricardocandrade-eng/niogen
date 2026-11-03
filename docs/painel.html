@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-7">
-<script src="config.js?v=031126-7"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-8">
+<script src="config.js?v=031126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-7"></script>
-<script src="assets/sidebar.js?v=031126-7"></script>
+<script src="assets/app.js?v=031126-8"></script>
+<script src="assets/sidebar.js?v=031126-8"></script>
 </head>
 <body>
 <div class="app">
@@ -120,10 +120,10 @@
         <span class="muted">${h.vendas_hoje === 1 ? 'venda' : 'vendas'} · ${n(h.instaladas_hoje)} ${h.instaladas_hoje === 1 ? 'instalada' : 'instaladas'} · ${n(h.biometrias_hoje)} ${h.biometrias_hoje === 1 ? 'biometria marcada' : 'biometrias marcadas'}</span>
       </div>
       <div class="painel hero" style="flex:1 1 200px">
-        <span class="muted">Comissão prevista · mês</span>
+        <span class="muted">${NG.rotulo('Comissão do mês (em risco)', 'emRisco')}</span>
         <span class="mono hero-med">${NG.fmtMoeda(m.comissao_prevista)}</span>
-        <span class="muted">${NG.fmtMoeda(m.comissao_instalada)} já instalado · ${NG.fmtMoeda(m.comissao_em_risco)} em risco</span>
-        ${Number(m.comissao_prevista) ? `<span class="muted" style="font-size:11px">${NG.fmtMoeda(m.comissao_nominal)} nominal · ${NG.fmtMoeda(m.comissao_adicionais)} adicionais · ${NG.fmtMoeda(Number(m.bonus_transicao || 0) + Number(m.bonus_nmei || 0))} bônus · + ${NG.fmtMoeda(m.bonus_m10_potencial)} M-10 potencial (fora)</span>` : ''}
+        <span class="muted">${NG.fmtMoeda(m.comissao_instalada)} já instalada · ${NG.fmtMoeda(m.comissao_em_risco)} com alerta de estorno do OSAB</span>
+        ${Number(m.comissao_prevista) ? `<span class="muted" style="font-size:11px">${NG.fmtMoeda(m.comissao_nominal)} nominal · ${NG.fmtMoeda(m.comissao_adicionais)} adicionais · ${NG.fmtMoeda(Number(m.bonus_transicao || 0) + Number(m.bonus_nmei || 0))} bônus · + ${NG.rotulo(`${NG.fmtMoeda(m.bonus_m10_potencial)} M-10 potencial`, 'm10')} (fora)</span>` : ''}
       </div>
     </div>
 
