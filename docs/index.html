@@ -1,0 +1,59 @@
+<!doctype html>
+<!-- NIOGEN | docs/index.html | 03/11/2026 — login (Supabase Auth e-mail/senha) → funil.html -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Entrar · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js"></script>
+</head>
+<body>
+<main class="login">
+  <form class="login-box" id="form-login" novalidate>
+    <div class="marca">
+      <span class="kicker">Dharma Telecom · Nio</span>
+      <h1>NIO<span>GEN</span></h1>
+      <p>Renascer. Reconstruir. Crescer.</p>
+    </div>
+    <label class="campo">E-mail<input type="email" name="email" autocomplete="username" required></label>
+    <label class="campo">Senha<input type="password" name="senha" autocomplete="current-password" required></label>
+    <div class="msg" id="msg" role="alert"></div>
+    <button type="submit" class="btn btn-acc btn-block">Entrar</button>
+  </form>
+</main>
+<script>
+(async function () {
+  const msg = document.getElementById('msg');
+  if (new URLSearchParams(location.search).get('erro') === 'perfil') {
+    msg.textContent = 'Usuário sem perfil ativo no NIOGEN. Fale com o admin.';
+  }
+  const { data } = await NG.sb.auth.getSession();
+  if (data.session && !msg.textContent) location.replace('funil.html');
+
+  document.getElementById('form-login').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    msg.textContent = '';
+    const btn = f.querySelector('button');
+    btn.disabled = true;
+    const { error } = await NG.sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.senha.value });
+    btn.disabled = false;
+    if (error) {
+      msg.textContent = /invalid/i.test(error.message) ? 'E-mail ou senha incorretos.' : error.message;
+      return;
+    }
+    location.replace('funil.html');
+  });
+})();
+</script>
+</body>
+</html>
