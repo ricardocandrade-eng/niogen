@@ -1,0 +1,384 @@
+<!doctype html>
+<!-- NIOGEN | docs/vendas.html | 03/11/2026 — lista de vendas + formulário "Venda de rua" com as travas do contrato -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Vendas · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/sidebar.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="vendas"></nav>
+  <main class="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1>Vendas</h1>
+        <span class="sub" id="sub">Tudo que entrou no funil, de qualquer origem</span>
+      </div>
+      <div class="tools">
+        <label class="filtro"><span>Buscar</span><input type="search" id="f-busca" aria-label="Buscar venda" placeholder="nome, CPF, pedido"></label>
+        <label class="filtro">Status <select id="f-status"></select></label>
+        <label class="filtro">Origem <select id="f-origem"></select></label>
+        <button type="button" class="btn" id="exportar">Exportar</button>
+      </div>
+    </header>
+
+    <div class="duas">
+      <section class="lista" aria-label="Lista de vendas">
+        <table class="tab">
+          <thead><tr><th>Cliente</th><th>Status</th><th>Plano</th><th>Origem</th><th>Vendedor</th><th>Entrou</th><th style="text-align:right">Comissão</th></tr></thead>
+          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </section>
+
+      <form class="painel form-rua" id="venda-rua" novalidate>
+        <div>
+          <h2>Venda de rua</h2>
+          <span class="painel-sub">Entrada pelo vendedor (PAP, indicação). As mesmas travas da Mari — só que aqui quem responde é você.</span>
+        </div>
+
+        <label class="campo">CEP e número
+          <div class="junto">
+            <input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required>
+            <input type="text" name="numero" aria-label="Número" placeholder="nº" style="width:90px;flex:0 0 90px" required>
+          </div>
+        </label>
+        <div id="endereco" hidden>
+          <div class="grade2">
+            <label class="campo">Logradouro<input type="text" name="logradouro"></label>
+            <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco, casa"></label>
+            <label class="campo">Bairro<input type="text" name="bairro"></label>
+            <label class="campo">Cidade / UF<input type="text" name="cidade_uf" readonly></label>
+          </div>
+        </div>
+        <div class="chips" id="travas" aria-live="polite"></div>
+
+        <div class="grade2">
+          <label class="campo">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
+          <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
+          <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
+          <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
+          <label class="campo">Plano (tabela vigente)<select name="plano"></select></label>
+          <label class="campo">Forma · vencimento
+            <div class="junto">
+              <select name="forma"><option value="cartao">Cartão</option><option value="boleto">Boleto</option><option value="dacc">DACC</option></select>
+              <input type="number" name="vencimento" min="1" max="31" placeholder="dia" aria-label="Dia de vencimento" style="width:70px;flex:0 0 70px">
+            </div>
+          </label>
+          <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
+          <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
+          <label class="campo" id="campo-ref" hidden>Quem indicou<input type="text" name="origem_ref"></label>
+        </div>
+        <span class="comissao-prev" id="comissao-prev"></span>
+
+        <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
+
+        <div class="aviso">
+          <span>Cancelou a Nio nos últimos 30 dias? Já é cliente Nio? Endereço com produto ativo? Até a importação do OSAB, quem confere é você, no APP — venda bloqueada não vira "Vendido".</span>
+          <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
+        </div>
+
+        <div class="grade2">
+          <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
+          <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
+          <label class="campo" id="campo-bio-em" hidden>Biometria em<input type="datetime-local" name="biometria_em"></label>
+        </div>
+
+        <div class="acoes">
+          <button type="button" class="btn btn-ghost" id="btn-qualificado">Salvar como qualificado</button>
+          <button type="button" class="btn btn-acc" id="btn-venda" disabled title="exige nº do pedido e biometria aprovada">Registrar venda</button>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc, STATUS, STATUS_MAP, ORIGENS } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+
+  // ------------------------------------------------------------------ lista
+  const tbody = document.getElementById('tbody');
+  const fBusca = document.getElementById('f-busca');
+  const fStatus = document.getElementById('f-status');
+  const fOrigem = document.getElementById('f-origem');
+  NG.preencherSelect(fStatus, STATUS.map((s) => [s.id, s.curto]), 'Todos');
+  NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas');
+  let vendas = [];
+
+  async function carregarLista() {
+    const { data, error } = await NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(1000);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    vendas = data || [];
+    const mes = NG.diaSP().slice(0, 7);
+    const doMes = vendas.filter((v) => NG.diaSP(v.criado_em).slice(0, 7) === mes).length;
+    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+    document.getElementById('sub').textContent = `Tudo que entrou no funil, de qualquer origem · ${doMes} ${doMes === 1 ? 'registro' : 'registros'} em ${nomeMes}`;
+    renderLista();
+  }
+
+  function filtradas() {
+    const q = fBusca.value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    return vendas.filter((v) =>
+      (!fStatus.value || v.status === fStatus.value) &&
+      (!fOrigem.value || v.origem === fOrigem.value) &&
+      (!q || String(v.cliente_nome || '').toLowerCase().includes(q) ||
+        (qd && (NG.soDigitos(v.cliente_cpf_cnpj).includes(qd) || String(v.nio_pedido || '').includes(qd)))));
+  }
+
+  function chipStatus(v) {
+    const s = STATUS_MAP[v.status];
+    if (v.status === '1_vendido' && v.horas_sem_agendamento != null) {
+      return `<span class="chip ${v.horas_sem_agendamento > 4 ? 'bad' : ''}">1 · Vendido · agendar</span>`;
+    }
+    if (v.status === 'saida') return `<span class="chip dim">Saída · ${esc((v.motivo_saida || '').toLowerCase())}</span>`;
+    return `<span class="chip ${s.chip}">${esc(s.curto)}</span>`;
+  }
+
+  function comissao(v) {
+    if (v.comissao_paga != null) return esc(NG.fmtNum(v.comissao_paga));
+    if (v.comissao_prevista != null && v.status !== 'saida') return `<span style="color:var(--muted)">${esc(NG.fmtNum(v.comissao_prevista))} prev.</span>`;
+    return '<span style="color:var(--muted)">—</span>';
+  }
+
+  function renderLista() {
+    const lista = filtradas();
+    if (!lista.length) { tbody.innerHTML = '<tr><td colspan="7" class="vazio">Nenhuma venda</td></tr>'; return; }
+    tbody.innerHTML = lista.map((v) => `
+      <tr class="${v.status === 'saida' ? 'saida' : ''}">
+        <td><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><div class="sub">${esc([v.cidade, v.bairro].filter(Boolean).join(' · '))}</div></td>
+        <td>${chipStatus(v)}</td>
+        <td>${esc(v.plano_nome || '—')}</td>
+        <td>${esc(ORIGENS[v.origem] || v.origem)}</td>
+        <td>${esc(v.vendedor_nome || '—')}</td>
+        <td>${NG.diaSP(v.criado_em) === NG.diaSP() ? 'hoje' : NG.fmtData(v.criado_em)}</td>
+        <td class="num">${comissao(v)}</td>
+      </tr>`).join('');
+  }
+
+  [fBusca, fStatus, fOrigem].forEach((el) => el.addEventListener('input', renderLista));
+
+  document.getElementById('exportar').addEventListener('click', () => {
+    const cols = [['cliente_nome', 'Cliente'], ['status', 'Status'], ['plano_nome', 'Plano'], ['origem', 'Origem'], ['vendedor_nome', 'Vendedor'],
+      ['cidade', 'Cidade'], ['bairro', 'Bairro'], ['nio_pedido', 'Pedido Nio'], ['criado_em', 'Entrou'], ['comissao_prevista', 'Comissão prevista'], ['comissao_paga', 'Comissão paga']];
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const csv = [cols.map((c) => q(c[1])).join(';')].concat(filtradas().map((v) => cols.map((c) => q(v[c[0]])).join(';'))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_vendas_${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ------------------------------------------------------------- formulário
+  const form = document.getElementById('venda-rua');
+  const F = form.elements;
+  const travasEl = document.getElementById('travas');
+  const btnQualif = document.getElementById('btn-qualificado');
+  const btnVenda = document.getElementById('btn-venda');
+
+  const hoje = NG.diaSP();
+  const [{ data: planos }, { data: areas }] = await Promise.all([
+    NG.sb.from('config_planos').select('*').eq('ativo', true).lte('vigencia_inicio', hoje).order('comissao'),
+    NG.sb.from('config_area').select('*').eq('ativo', true),
+  ]);
+  const vigentes = (planos || []).filter((p) => !p.vigencia_fim || p.vigencia_fim >= hoje);
+
+  // Endereço vindo do ViaCEP + resultado das travas.
+  const estado = { viacep: null, cobertura: null, area: null, dup: null };
+
+  // Cobertura rua a rua: ainda sem fonte. null = "consultar no APP".
+  async function checarCobertura(/* cep, numero */) { return null; }
+
+  const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+  function dentroDaArea(cidade, bairro, uf) {
+    if (!cidade) return null;
+    return (areas || []).some((a) => norm(a.cidade) === norm(cidade) && norm(a.uf) === norm(uf || 'MG') &&
+      (!a.bairro || norm(a.bairro) === norm(bairro)));
+  }
+
+  function renderPlanos() {
+    const atual = F.plano.value;
+    const lista = vigentes.filter((p) => p.segmento === F.segmento.value &&
+      (!p.forma_pagamento_permitida || p.forma_pagamento_permitida.includes(F.forma.value)));
+    F.plano.innerHTML = '<option value="">Escolher…</option>' + lista.map((p) =>
+      `<option value="${p.id}">${esc(p.nome)} · ${p.preco != null ? NG.fmtMoeda(p.preco) : 'R$ [PREÇO]'}</option>`).join('');
+    if (lista.some((p) => String(p.id) === atual)) F.plano.value = atual;
+    if (!lista.length) F.plano.innerHTML = '<option value="">Nenhum plano vigente para este segmento/forma</option>';
+    renderComissao();
+  }
+  function planoEscolhido() { return vigentes.find((p) => String(p.id) === F.plano.value) || null; }
+  function renderComissao() {
+    const p = planoEscolhido();
+    document.getElementById('comissao-prev').innerHTML = p
+      ? `Comissão prevista: <strong>${NG.fmtMoeda(p.comissao)}</strong> · ${esc(p.familia || '')} · ${esc(F.segmento.value)} · Anexo II (provisória até 180 d)`
+      : '';
+  }
+
+  function renderTravas() {
+    if (!estado.viacep) { travasEl.innerHTML = ''; return; }
+    const c = estado.cobertura === null
+      ? '<span class="chip warn">Cobertura: consultar no APP</span>'
+      : `<span class="chip ${estado.cobertura ? 'ok' : 'bad'}">Cobertura Nio ${estado.cobertura ? '✓' : '✗'}</span>`;
+    const a = estado.area === null ? '<span class="chip">Área: sem cidade</span>'
+      : `<span class="chip ${estado.area ? 'ok' : 'bad'}">${estado.area ? 'Dentro da área ✓' : 'Fora da área ✗'}</span>`;
+    const d = estado.dup === null ? '' : estado.dup.endereco
+      ? '<span class="chip bad">Endereço já tem venda ativa no NIOGEN ✗</span>'
+      : '<span class="chip ok">Endereço sem venda ativa no NIOGEN ✓</span>';
+    const doc = estado.dup && estado.dup.documento ? '<span class="chip bad">CPF/CNPJ já tem venda ativa ✗</span>' : '';
+    travasEl.innerHTML = c + a + d + doc;
+  }
+
+  async function checarDuplicidade() {
+    if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.dup = null; renderTravas(); return; }
+    const { data, error } = await NG.sb.rpc('checar_duplicidade', { p_cpf_cnpj: F.doc.value, p_cep: F.cep.value, p_numero: F.numero.value });
+    estado.dup = error ? null : data;
+    renderTravas();
+  }
+
+  async function buscarCep() {
+    const cep = NG.soDigitos(F.cep.value);
+    if (cep.length !== 8) return;
+    F.cep.value = `${cep.slice(0, 5)}-${cep.slice(5)}`;
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const j = await r.json();
+      if (j.erro) throw new Error('CEP não encontrado');
+      estado.viacep = j;
+      F.logradouro.value = j.logradouro || '';
+      F.bairro.value = j.bairro || '';
+      F.cidade_uf.value = `${j.localidade} / ${j.uf}`;
+      document.getElementById('endereco').hidden = false;
+      estado.area = dentroDaArea(j.localidade, F.bairro.value, j.uf);
+      estado.cobertura = await checarCobertura(cep, F.numero.value);
+    } catch (e) {
+      estado.viacep = null;
+      document.getElementById('endereco').hidden = true;
+      NG.toast(e.message === 'CEP não encontrado' ? 'CEP não encontrado no ViaCEP' : 'ViaCEP indisponível — tente de novo', 'bad');
+    }
+    renderTravas();
+    checarDuplicidade();
+  }
+
+  F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
+  F.numero.addEventListener('change', checarDuplicidade);
+  F.bairro.addEventListener('change', () => {
+    if (estado.viacep) { estado.area = dentroDaArea(estado.viacep.localidade, F.bairro.value, estado.viacep.uf); renderTravas(); }
+  });
+  F.doc.addEventListener('change', () => {
+    const v = F.doc.value.trim();
+    document.getElementById('doc-erro').textContent = v && !NG.documentoValido(v) ? 'CPF/CNPJ inválido' : '';
+    checarDuplicidade();
+  });
+  F.segmento.addEventListener('change', renderPlanos);
+  F.forma.addEventListener('change', renderPlanos);
+  F.plano.addEventListener('change', renderComissao);
+  F.origem.addEventListener('change', () => { document.getElementById('campo-ref').hidden = F.origem.value !== 'indicacao'; });
+  F.biometria.addEventListener('change', () => { document.getElementById('campo-bio-em').hidden = F.biometria.value !== 'agendada'; atualizarBotao(); });
+  F.pedido.addEventListener('input', atualizarBotao);
+
+  function atualizarBotao() {
+    btnVenda.disabled = !(F.pedido.value.trim() && F.biometria.value === 'aprovada');
+  }
+
+  // Monta a linha de vendas. Devolve [payload, pendências que impedem o status pedido].
+  function montar(status) {
+    const falta = [];
+    if (!F.nome.value.trim()) falta.push('nome');
+    if (!F.whatsapp.value.trim()) falta.push('WhatsApp');
+    if (!estado.viacep || !F.numero.value.trim()) falta.push('CEP e número');
+    const docOk = NG.documentoValido(F.doc.value);
+    const p = planoEscolhido();
+
+    if (status === '1_vendido') {
+      if (!docOk) falta.push('CPF/CNPJ válido');
+      if (!p) falta.push('plano');
+      if (!F.vencimento.value) falta.push('dia de vencimento');
+      if (!F.contato_ok.checked) falta.push('confirmação de contato e endereço');
+      if (!F.app_ok.checked) falta.push('conferência no APP');
+      if (estado.area === false) falta.push('endereço fora da área de atuação');
+      if (estado.dup && estado.dup.endereco) falta.push('endereço já tem venda ativa');
+      if (estado.dup && estado.dup.documento) falta.push('CPF/CNPJ já tem venda ativa');
+    }
+
+    let biometriaEm = null;
+    if (F.biometria.value === 'aprovada') biometriaEm = new Date().toISOString();
+    else if (F.biometria.value === 'agendada' && F.biometria_em.value) biometriaEm = new Date(F.biometria_em.value).toISOString();
+
+    const j = estado.viacep || {};
+    return [{
+      status,
+      origem: F.origem.value,
+      origem_ref: F.origem.value === 'indicacao' ? (F.origem_ref.value.trim() || null) : null,
+      cliente_nome: F.nome.value.trim(),
+      cliente_cpf_cnpj: NG.soDigitos(F.doc.value) || null,
+      cliente_whatsapp: NG.soDigitos(F.whatsapp.value) || null,
+      cliente_email: F.email.value.trim() || null,
+      segmento: F.segmento.value,
+      cep: NG.soDigitos(F.cep.value) || null,
+      logradouro: F.logradouro.value.trim() || null,
+      numero: F.numero.value.trim() || null,
+      complemento: F.complemento.value.trim() || null,
+      bairro: F.bairro.value.trim() || null,
+      cidade: j.localidade || null,
+      uf: j.uf || null,
+      plano_id: p ? p.id : null,
+      forma_pagamento: F.forma.value,
+      vencimento_dia: F.vencimento.value ? Number(F.vencimento.value) : null,
+      comissao_prevista: p ? p.comissao : null,
+      nio_pedido: F.pedido.value.trim() || null,
+      biometria_status: F.biometria.value || null,
+      biometria_em: biometriaEm,
+      vendedor_id: eu.id,
+      trava_cobertura: estado.cobertura,
+      trava_area: estado.area,
+      trava_sem_produto_ativo: F.app_ok.checked && !(estado.dup && (estado.dup.endereco || estado.dup.documento)),
+      trava_sem_cancelamento_30d: F.app_ok.checked,
+      trava_cpf_valido: docOk,
+      trava_contato_confirmado: F.contato_ok.checked,
+    }, falta];
+  }
+
+  async function salvar(status, botao) {
+    const [linha, falta] = montar(status);
+    if (falta.length) { NG.toast(`Falta: ${falta.join(', ')}.`, 'bad'); return; }
+    botao.disabled = true;
+    const { data, error } = await NG.sb.from('vendas').insert(linha).select('id').single();
+    botao.disabled = false;
+    atualizarBotao();
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`${NG.primeiroNome(linha.cliente_nome)} salvo como ${STATUS_MAP[status].curto}`, 'ok');
+    form.reset();
+    Object.assign(estado, { viacep: null, cobertura: null, area: null, dup: null });
+    document.getElementById('endereco').hidden = true;
+    document.getElementById('doc-erro').textContent = '';
+    renderTravas();
+    renderPlanos();
+    atualizarBotao();
+    await carregarLista();
+    return data;
+  }
+
+  btnQualif.addEventListener('click', () => salvar('0_qualificado', btnQualif));
+  btnVenda.addEventListener('click', () => salvar('1_vendido', btnVenda));
+
+  renderPlanos();
+  await carregarLista();
+  if (location.hash === '#venda-rua') { form.scrollIntoView({ behavior: 'smooth' }); F.cep.focus(); }
+})();
+</script>
+</body>
+</html>
