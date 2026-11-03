@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-6">
-<script src="config.js?v=031126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-7">
+<script src="config.js?v=031126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-6"></script>
-<script src="assets/sidebar.js?v=031126-6"></script>
+<script src="assets/app.js?v=031126-7"></script>
+<script src="assets/sidebar.js?v=031126-7"></script>
 </head>
 <body>
 <div class="app">
@@ -60,7 +60,7 @@
     <div class="mc-lista" id="mc-lista"></div>
     <div class="mc-legenda">
       <span><i class="pt regular"></i>Regular · Varejo e Empresas, tabela cheia</span>
-      <span><i class="pt btu"></i>BTU · só Empresas (tabela BTU); Varejo pendente</span>
+      <span><i class="pt btu"></i>BTU · Varejo e Empresas com a tabela BTU, mesmo preço em todos os meios</span>
     </div>
   </div>
 </dialog>
@@ -152,7 +152,7 @@
   const empresasBtu = de('empresas', 'regular', true, 'btu');
   const varejoBtu = de('varejo', 'regular', true, 'btu').concat(de('varejo', 'oferta50', true, 'btu'));
   const minPreco = (lista, cartao) => Math.min(...lista.map((p) => Number(cartao && p.preco_cartao != null ? p.preco_cartao : p.preco)));
-  const semFid = de('varejo', 'nfid', true);
+  const semFid = de('varejo', 'nfid', true).concat(de('varejo', 'oferta50_nfid', true, 'btu'));
   const foraDeVenda = planos.filter((p) => !p.ativo).sort(ordem);
   const ads = adicionais.filter((a) => a.ativo);
 
@@ -160,14 +160,16 @@
     `<div class="resumo-tab">
       <button type="button" class="kpi kpi-cor regular" data-cidades><span class="rot">Cidades atendidas</span><span class="val">${area.length}</span>
         <span class="nota">${cidades('regular').length} Regular · ${cidades('btu').length} BTU · ver lista →</span></button>
-      <div class="kpi kpi-cor varejo"><span class="rot">Varejo a partir de</span><span class="val">${m(minPreco(varejo))}</span><span class="nota">${m(minPreco(varejo, true))} no cartão</span></div>
+      <div class="kpi kpi-cor varejo"><span class="rot">Varejo a partir de</span><span class="val">${m(minPreco(varejo))}</span><span class="nota">${m(minPreco(varejo, true))} no cartão${varejoBtu.length ? ` · BTU desde ${m(minPreco(varejoBtu))}` : ''}</span></div>
       <div class="kpi kpi-cor empresas"><span class="rot">Empresas a partir de</span><span class="val">${m(minPreco(empresas.concat(empresasBtu)))}</span><span class="nota">MEI e não-MEI</span></div>
       <div class="kpi kpi-cor btu"><span class="rot">Comissão por venda</span><span class="val">até ${m(Math.max(...planos.filter((p) => p.ativo).map((p) => Number(p.comissao))))}</span><span class="nota">+ bônus · ver Política</span></div>
     </div>`,
     varejoBtu.length ? '' : '<div class="banner warn"><span><strong>Varejo (CPF) nas cidades BTU: tabela pendente</strong> — fale com o Ricardo. Nelas hoje só vende Empresas.</span></div>',
     bloco('Varejo · pessoa física (CPF)', hab(varejo[0]), tabela(CAB_PORT, linhasPortfolio(varejo), 860) + lista(CONDICOES.varejo.map(esc)), 'varejo', tag('cidades Regular', 'ok')),
+    varejoBtu.length ? bloco('Varejo · pessoa física (CPF)', `${hab(varejoBtu[0])} Mesmo preço em todos os meios de pagamento. Não dizer "50%" ao cliente sem peça aprovada pela Nio: apresentar o preço da cidade.`,
+      tabela(CAB_PORT, linhasPortfolio(varejoBtu), 860), 'btu', tag('cidades BTU', 'warn')) : '',
     semFid.length ? bloco('Sem fidelidade (só se o cliente pedir)',
-      `Mesmos planos e preços do Varejo; a taxa de habilitação de ${m(semFid[0].taxa_habilitacao)} vai <strong>à vista na 1ª fatura</strong>. É direito do consumidor, não é foco de venda.`,
+      `Mesmos planos e preços do Varejo da cidade (Regular ou BTU); a taxa de habilitação de ${m(semFid[0].taxa_habilitacao)} vai <strong>à vista na 1ª fatura</strong>. É direito do consumidor, não é foco de venda.`,
       `<div class="chips">${semFid.map((p) => `<span class="chip">${esc(p.nome)}</span>`).join('')}</div>`, 'varejo') : '',
     bloco('Empresas · MEI e não-MEI (CNPJ)', hab(empresas[0]), tabela(CAB_PORT, linhasPortfolio(empresas), 860) + lista(CONDICOES.empresas.map(esc)), 'empresas', tag('cidades Regular', 'ok')),
     empresasBtu.length ? bloco('Empresas · MEI e não-MEI (CNPJ)', `${hab(empresasBtu[0])} Mesmo preço em todos os meios de pagamento.`,

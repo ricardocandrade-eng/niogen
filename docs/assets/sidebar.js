@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.4 · 03/11';
+  const VERSAO = 'v0.4.1 · 03/11';
 
   const MENU = [
     ['Gestão', [

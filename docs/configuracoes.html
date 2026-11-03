@@ -11,13 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-6">
-<script src="config.js?v=031126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-7">
+<script src="config.js?v=031126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=031126-6"></script>
-<script src="assets/sidebar.js?v=031126-6"></script>
-<script src="assets/osab.js?v=031126-6"></script>
+<script src="assets/app.js?v=031126-7"></script>
+<script src="assets/sidebar.js?v=031126-7"></script>
+<script src="assets/osab.js?v=031126-7"></script>
 </head>
 <body>
 <div class="app">
@@ -333,7 +333,7 @@
     document.getElementById('t-area').innerHTML = `
       <span class="painel-sub">${area.length} cidades ativas · fonte GDP 28/10/2026 (espelho em <span class="mono">nio_municipios</span>). Venda fora delas é bloqueada no banco; a cidade decide a tabela.</span>
       <strong style="font-size:12px">Regular · ${area.filter((a) => a.cluster === 'regular').length} — tabelas Varejo e Empresas Regular</strong><div class="chips">${chips('regular')}</div>
-      <strong style="font-size:12px">BTU · ${area.filter((a) => a.cluster === 'btu').length} — só Empresas BTU; Varejo BTU pendente (pergunta 1)</strong><div class="chips">${chips('btu')}</div>
+      <strong style="font-size:12px">BTU · ${area.filter((a) => a.cluster === 'btu').length} — tabelas Varejo BTU (Oferta 50%) e Empresas BTU</strong><div class="chips">${chips('btu')}</div>
       ${fora.length ? `<span class="painel-sub">Desligadas: ${fora.map(nome).join(', ')}</span>` : ''}
       ${semArea.length ? `<span class="painel-sub">Na GDP e fora da área: ${semArea.map((x) => esc(x.municipio)).join(', ')}</span>` : ''}`;
   }
