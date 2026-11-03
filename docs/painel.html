@@ -112,7 +112,7 @@
         <div class="q-linha muted"><span>Vendas do mês (biometria aprovada)</span><span>${meta ? `meta ${meta}` : 'sem meta'}</span></div>
         <div class="hero-num"><span class="mono">${n(m.vendidas)}</span><span>${meta ? (faltam ? `faltam ${faltam} · ${uteisRestantes} dias úteis · precisa de ${dec(precisa)}/dia` : 'meta batida ✓') : ''}</span></div>
         <div class="meta-trilho"><div style="width:${pct(m.instaladas, meta || m.vendidas)}%;background:var(--accent)"></div><div style="width:${pct(m.aguardando, meta || m.vendidas)}%;background:#2E6B3A"></div></div>
-        <div class="legenda"><span><i style="background:var(--accent)"></i> ${n(m.instaladas)} instaladas</span><span><i style="background:#2E6B3A"></i> ${n(m.aguardando)} aguardando instalação</span><span>· ritmo: ${dec(ritmo)}/dia útil até agora</span></div>
+        <div class="legenda"><span><i style="background:var(--accent)"></i> ${n(m.instaladas)} ${m.instaladas === 1 ? 'instalada' : 'instaladas'}</span><span><i style="background:#2E6B3A"></i> ${n(m.aguardando)} aguardando instalação</span><span>· ritmo: ${dec(ritmo)}/dia útil até agora</span></div>
       </div>
       <div class="painel hero" style="flex:1 1 200px">
         <span class="muted">Parcial de hoje</span>

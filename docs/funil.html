@@ -154,6 +154,7 @@
       }
     }
     if (pendencia && v.status !== 'saida') { borda = borda || 'warn'; chips.push(chip(`Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`, 'warn')); }
+    if (v.nio_situacao && ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) chips.push(chip(`OSAB: ${v.nio_situacao}`));
     if (v.nio_venda_valida === false) { borda = 'bad'; chips.unshift(chip('Nio: venda inválida', 'bad')); }
 
     return `<article class="card ${borda}" data-id="${v.id}" draggable="true">
@@ -185,14 +186,14 @@
     const risco = conta(['venda_invalida', 'risco_contrato']);
     const docs = conta(['docs']);
     const esperando = lista.filter((v) => v.dias_esperando_biometria > 2).length;
-    const nv = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+    const nv = (n, um, varios) => `${NG.fmtNum(n)} ${n === 1 ? um : varios}`;
     const osab = ultimoOsab
       ? `OSAB de ${ultimoOsab.dt_ref ? ultimoOsab.dt_ref.split('-').reverse().slice(0, 2).join('/') : '—'} aplicado ${NG.fmtDataHora(ultimoOsab.aplicado_em)} · ${nv((ultimoOsab.resumo || {}).sem_venda || 0, 'pedido sem venda nossa', 'pedidos sem venda nossa')}`
       : 'OSAB ainda não importado';
     document.getElementById('alertas').innerHTML = [
       risco ? `<a class="alerta bad" href="painel.html">${nv(risco, 'venda', 'vendas')} com risco de multa/estorno (OSAB)</a>` : '',
       semAgenda ? `<a class="alerta bad" href="instalacoes.html">${nv(semAgenda, 'venda', 'vendas')} sem agendamento há mais de 4 h</a>` : '',
-      docs ? `<a class="alerta warn" href="painel.html">${nv(docs, 'venda', 'vendas')} com documentos à Nio vencendo</a>` : '',
+      docs ? `<a class="alerta warn" href="painel.html">${nv(docs, 'venda', 'vendas')} com documentos à Nio vencendo ou atrasados</a>` : '',
       esperando ? `<div class="alerta warn">${nv(esperando, 'qualificado esperando', 'qualificados esperando')} biometria há mais de 2 dias</div>` : '',
       `<div class="alerta">${esc(osab)}</div>`,
     ].join('');
