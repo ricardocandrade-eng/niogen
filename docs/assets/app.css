@@ -346,3 +346,7 @@ a.alerta { text-decoration: none; }
   .grade2 { grid-template-columns: 1fr; }
   .planos-op { grid-template-columns: 1fr; }
 }
+
+/* Tabela e política (consulta) */
+.regras { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.regras strong { color: var(--text); }

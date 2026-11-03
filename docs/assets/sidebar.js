@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.3 · 03/11';
+  const VERSAO = 'v0.3.1 · 03/11';
 
   const MENU = [
     ['Gestão', [
@@ -16,6 +16,7 @@
       { id: 'funil', ico: '◈', nome: 'Funil', href: 'funil.html' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
+      { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'fila', ico: '☷', nome: 'Fila Vero' },
     ]],
     ['Mari', [
