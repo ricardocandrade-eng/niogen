@@ -1,0 +1,14 @@
+{
+  "name": "NIOGEN — Dharma Telecom · Nio",
+  "short_name": "NIOGEN",
+  "description": "CRM da Dharma Telecom, agente credenciado PAP da Nio Internet. Renascer. Reconstruir. Crescer.",
+  "lang": "pt-BR",
+  "start_url": "funil.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0E1116",
+  "theme_color": "#0E1116",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
