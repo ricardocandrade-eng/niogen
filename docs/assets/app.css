@@ -404,3 +404,14 @@ dialog.modal-cidades { width: min(640px, calc(100vw - 32px)); max-height: calc(1
 .chip.selo.info { border-color: var(--info-fg); } .chip.selo.dim { text-decoration: line-through; }
 .valor-card.ok { border-color: var(--ok-fg); } .valor-card.ok .rot { color: var(--ok-fg); }
 .valor-card.bad { border-color: var(--bad-border); } .valor-card.bad .rot, .valor-card.bad .val { color: var(--bad-fg); }
+
+/* Cobertura (DFV) — bloco na venda de rua e na venda */
+.dfv-bloco { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-dim); margin: 0; min-width: 0; }
+fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; color: var(--text); }
+.dfv-bloco h2 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dfv-topo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dfv-link { border-color: var(--link); color: var(--link); text-decoration: none; }
+.dfv-hp > .campo { flex: 1 1 0; }
+.dfv-sem { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-fg); font-size: 12px; }
+.dfv-sem[hidden] { display: none; }
+.chip.selo.bad { border-color: var(--bad-border); }

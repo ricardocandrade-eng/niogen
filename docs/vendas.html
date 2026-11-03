@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-8">
-<script src="config.js?v=031126-8"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-9">
+<script src="config.js?v=031126-9"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-8"></script>
-<script src="assets/sidebar.js?v=031126-8"></script>
+<script src="assets/app.js?v=031126-9"></script>
+<script src="assets/sidebar.js?v=031126-9"></script>
 </head>
 <body>
 <div class="app">
@@ -63,6 +63,15 @@
           </div>
         </div>
         <div class="chips" id="travas" aria-live="polite"></div>
+
+        <fieldset class="dfv-bloco" id="dfv-rua">
+          <legend>Cobertura (DFV)</legend>
+          <div id="dfv-campos"></div>
+          <div class="dfv-sem" id="dfv-sem" hidden>
+            <span>Sem cobertura no DFV: não vender. Quer registrar como saída e voltar a falar em 90 dias?</span>
+            <button type="button" class="btn btn-sm" id="btn-sem-cobertura">Salvar como saída "Sem cobertura" · volta em 90 d</button>
+          </div>
+        </fieldset>
 
         <div class="grade2">
           <label class="campo">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
@@ -170,7 +179,7 @@
     tbody.innerHTML = lista.map((v) => `
       <tr class="${v.status === 'saida' ? 'saida' : ''}">
         <td><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><div class="sub">${esc([v.cidade, v.bairro].filter(Boolean).join(' · '))}</div></td>
-        <td>${chipStatus(v)}${NG.selosComissao(v) ? `<div class="chips selos">${NG.selosComissao(v)}</div>` : ''}</td>
+        <td>${chipStatus(v)}<div class="chips selos">${NG.seloDfv(v)}${NG.selosComissao(v)}</div></td>
         <td>${esc(v.plano_nome || '—')}</td>
         <td>${esc(ORIGENS[v.origem] || v.origem)}</td>
         <td>${esc(v.vendedor_nome || '—')}</td>
@@ -421,6 +430,7 @@
       if (estado.area === false) falta.push('endereço fora da área de atuação');
       if (estado.dup && estado.dup.endereco) falta.push('endereço já tem venda ativa');
       if (estado.dup && estado.dup.documento) falta.push('CPF/CNPJ já tem venda ativa');
+      if (!['viavel', 'viavel_predio'].includes(F.dfv_viabilidade.value)) falta.push('DFV viável (consulte antes de registrar a venda)');
     }
 
     let biometriaEm = null;
@@ -456,8 +466,12 @@
       trava_sem_cancelamento_30d: F.app_ok.checked,
       trava_cpf_valido: docOk,
       trava_contato_confirmado: F.contato_ok.checked,
+      ...NG.dfvLer(document.getElementById('dfv-campos')),
+      ...(status === 'saida' ? { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) } : {}),
     }, falta];
   }
+
+  const diaMais = (n) => NG.diaSP(new Date(Date.now() + n * 86400000));
 
   async function salvar(status, botao) {
     const [linha, falta] = montar(status);
@@ -480,10 +494,23 @@
     document.getElementById('doc-erro').textContent = '';
     renderTravas();
     renderPlanos();
+    atualizarDfv();
     atualizarBotao();
     await carregarLista();
     return data;
   }
+
+  // Cobertura (DFV): o resultado vai junto na gravação; a trava do banco só pesa ao registrar a venda (0 → 1).
+  const dfvEl = document.getElementById('dfv-campos');
+  dfvEl.innerHTML = NG.dfvCampos();
+  NG.ligarLinkDfv(dfvEl);
+  const semEl = document.getElementById('dfv-sem');
+  const atualizarDfv = () => {
+    const vi = F.dfv_viabilidade.value;
+    semEl.hidden = !['sem_viabilidade', 'nao_encontrado'].includes(vi);
+  };
+  F.dfv_viabilidade.addEventListener('change', atualizarDfv);
+  document.getElementById('btn-sem-cobertura').addEventListener('click', (ev) => salvar('saida', ev.currentTarget));
 
   btnQualif.addEventListener('click', () => salvar('0_qualificado', btnQualif));
   btnVenda.addEventListener('click', () => salvar('1_vendido', btnVenda));

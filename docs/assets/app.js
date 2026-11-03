@@ -146,9 +146,13 @@
     return typeof t === 'function' ? t(ganhaEm) : t;
   };
   // Rótulo com explicação: title= no desktop; o ⓘ abre o mesmo texto ao tocar (celular).
-  function dica(chave, ganhaEm) {
-    const t = esc(textoComissao(chave, ganhaEm));
+  function dicaTxt(texto) {
+    const t = esc(texto);
     return `<button type="button" class="dica" data-dica="${t}" title="${t}" aria-label="O que é isso?">ⓘ</button>`;
+  }
+  function dica(chave, ganhaEm) { return dicaTxt(textoComissao(chave, ganhaEm)); }
+  function rotuloTxt(texto, explicacao) {
+    return `<span class="com-rot" title="${esc(explicacao)}">${esc(texto)}</span>${dicaTxt(explicacao)}`;
   }
   function rotulo(texto, chave, ganhaEm) {
     return `<span class="com-rot" title="${esc(textoComissao(chave, ganhaEm))}">${esc(texto)}</span>${dica(chave, ganhaEm)}`;
@@ -177,6 +181,102 @@
       ? selo('M-10 não elegível', 'dim', textoComissao('m10Nao', motivo))
       : selo(`M-10 elegível · ${fmtMoeda(v.bonus_m10_potencial)}`, 'info', textoComissao('m10') + quando);
     return s1 + s2;
+  }
+
+  // ---------- DFV Nio (nível 1: consulta manual registrada na venda) ----------
+  // Único lugar dos textos do DFV (venda de rua, Venda, Funil e Painel usam daqui).
+  const DFV_OPCOES = {
+    nao_consultado: 'Não consultado',
+    viavel: 'Viável',
+    viavel_predio: 'Viável (prédio — unidade confirma no APP)',
+    sem_viabilidade: 'Sem viabilidade',
+    nao_encontrado: 'Endereço não encontrado',
+  };
+  const TEXTOS_DFV = {
+    regra: 'O APP NiO PAP dá a palavra final. Nunca dizer ao cliente "cobertura confirmada" com base no DFV: a rua o consultor confirma na visita.',
+    trava: 'Para registrar a venda (0 → 1), o DFV tem que estar Viável ou Viável (prédio) e a consulta ter menos de 7 dias.',
+    como: 'Usuário PARCEIRO · senhas com o Ricardo · filtre UF, município e CEP',
+    opcoes: {
+      nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de marcar a visita de biometria.',
+      viavel: 'Casa com viabilidade "Viável" e HP livre ≥ 1: endereço atendido e com porta livre. Segue para a biometria.',
+      viavel_predio: 'Prédio atendido com HP livre ≥ 1; a unidade só se confirma no APP. Segue para a biometria e anote o apto no pedido.',
+      sem_viabilidade: 'A fachada existe, mas a viabilidade não é "Viável" (restrição técnica ou pendência). Não vender: saída "Sem cobertura" com interesse futuro em 90 dias.',
+      nao_encontrado: 'A fachada não aparece no DFV: sem rede no endereço ou célula bloqueada. Não vender e não insistir no APP: saída "Sem cobertura".',
+    },
+    jaTemNio: 'Casa com HCS = 1 e HP livre = 0 quer dizer que o endereço já tem Nio: não vender (estorno 100 % + multa de recompra). Saída "Já é cliente Nio".',
+    placar: 'Das vendas que entraram no mês, quantas tiveram o DFV consultado e deram viável. Toda qualificada deve ser consultada antes da visita de biometria.',
+    faixa: 'Faixa de aprovação de crédito do bairro (últimos 2 meses). Não se fala disso com o cliente: serve para o Placar e o risco de FPD.',
+  };
+  const DFV_OK = ['viavel', 'viavel_predio'];
+  function dfvValido(v) {
+    return DFV_OK.includes(v.dfv_viabilidade) && !!v.dfv_consultado_em && (Date.now() - new Date(v.dfv_consultado_em)) < 7 * 86400000;
+  }
+  // Selo: verde viável · amarelo não consultado / vencido / dispensado · vermelho sem viabilidade ou não encontrado.
+  function seloDfv(v) {
+    if (!v || v.status === 'saida') return '';
+    const selo = (txt, cls, texto) => `<span class="chip selo ${cls}" data-dica="${esc(texto)}" title="${esc(texto)}">${esc(txt)}</span>`;
+    const quando = v.dfv_consultado_em ? fmtData(v.dfv_consultado_em) : '';
+    if (DFV_OK.includes(v.dfv_viabilidade)) {
+      return dfvValido(v)
+        ? selo(`DFV viável ${quando}`, 'ok', `${TEXTOS_DFV.opcoes[v.dfv_viabilidade]} ${TEXTOS_DFV.regra}`)
+        : selo(`DFV vencido (${quando})`, 'warn', `Consulta com mais de 7 dias. ${TEXTOS_DFV.trava}`);
+    }
+    if (v.dfv_viabilidade === 'sem_viabilidade' || v.dfv_viabilidade === 'nao_encontrado') {
+      return selo(`DFV: ${v.dfv_viabilidade === 'sem_viabilidade' ? 'sem viabilidade' : 'não encontrado'}`, 'bad', TEXTOS_DFV.opcoes[v.dfv_viabilidade]);
+    }
+    if (v.dfv_dispensado) return selo('DFV dispensado (admin)', 'warn', `Admin dispensou a consulta: ${v.dfv_dispensa_motivo || '—'}`);
+    return selo('DFV não consultado', 'warn', `${TEXTOS_DFV.opcoes.nao_consultado} ${TEXTOS_DFV.trava}`);
+  }
+  let linkDfvCache;
+  async function linkDfv() {
+    if (linkDfvCache === undefined) {
+      const { data } = await sb.from('config_links').select('url').eq('chave', 'dfv_sudeste').maybeSingle();
+      linkDfvCache = (data && data.url) || null;
+    }
+    return linkDfvCache;
+  }
+  // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
+  function dfvCampos(v) {
+    v = v || {};
+    const opt = (lista, atual) => lista.map(([val, txt]) => `<option value="${val}" ${val === (atual ?? '') ? 'selected' : ''}>${esc(txt)}</option>`).join('');
+    const todas = Object.entries(DFV_OPCOES).map(([k, t]) => `${t}: ${TEXTOS_DFV.opcoes[k]}`).join(' · ');
+    return `
+      <div class="dfv-topo">
+        <a class="btn btn-sm dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir DFV Sudeste ↗</a>
+        <span class="nota-campo">${esc(TEXTOS_DFV.como)}</span>
+      </div>
+      <div class="grade2">
+        <label class="campo"><span>Viabilidade no DFV ${dicaTxt(todas)}</span>
+          <select name="dfv_viabilidade">${opt(Object.entries(DFV_OPCOES), v.dfv_viabilidade || 'nao_consultado')}</select></label>
+        <label class="campo"><span>Faixa de aprovação ${dicaTxt(TEXTOS_DFV.faixa)}</span>
+          <select name="dfv_faixa_credito">${opt([['', '—'], ['<50', 'menor que 50 %'], ['50-70', '50 a 70 %'], ['>70', 'maior que 70 %'], ['nao_informado', 'não informado']], v.dfv_faixa_credito)}</select></label>
+        <label class="campo">Classificação
+          <select name="dfv_classificacao">${opt([['', '—'], ['ALTO', 'Alto'], ['MEDIO', 'Médio'], ['BAIXO', 'Baixo']], v.dfv_classificacao)}</select></label>
+        <div class="junto dfv-hp">
+          <label class="campo">HP livre<input type="number" min="0" name="dfv_hp_livre" value="${v.dfv_hp_livre ?? ''}"></label>
+          <label class="campo">HCs<input type="number" min="0" name="dfv_hcs" value="${v.dfv_hcs ?? ''}"></label>
+        </div>
+      </div>
+      <span class="nota-campo">${esc(TEXTOS_DFV.regra)} ${dicaTxt(TEXTOS_DFV.jaTemNio)}</span>`;
+  }
+  function dfvLer(root) {
+    const val = (n) => { const el = root.querySelector(`[name="${n}"]`); return el ? el.value : ''; };
+    const num = (n) => (val(n) === '' ? null : Number(val(n)));
+    return {
+      dfv_viabilidade: val('dfv_viabilidade') || 'nao_consultado',
+      dfv_faixa_credito: val('dfv_faixa_credito') || null,
+      dfv_classificacao: val('dfv_classificacao') || null,
+      dfv_hp_livre: num('dfv_hp_livre'),
+      dfv_hcs: num('dfv_hcs'),
+    };
+  }
+  async function ligarLinkDfv(root) {
+    const url = await linkDfv();
+    root.querySelectorAll('[data-dfv-link]').forEach((a) => {
+      if (url) { a.href = url; return; }
+      a.title = 'Link do DFV ainda não cadastrado no NIOGEN — peça ao Ricardo';
+      a.addEventListener('click', (e) => { e.preventDefault(); toast(a.title, 'bad'); });
+    });
   }
 
   document.addEventListener('click', (ev) => {
@@ -357,7 +457,8 @@
   window.NG = {
     sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, rotulo, selosComissao, exigirLogin, sair, modal,
+    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao,
+    DFV_OPCOES, TEXTOS_DFV, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
     carregarUsuarios, preencherSelect,
     get usuario() { return usuarioAtual; },

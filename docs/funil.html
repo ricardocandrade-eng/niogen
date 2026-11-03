@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-8">
-<script src="config.js?v=031126-8"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-9">
+<script src="config.js?v=031126-9"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-8"></script>
-<script src="assets/sidebar.js?v=031126-8"></script>
+<script src="assets/app.js?v=031126-9"></script>
+<script src="assets/sidebar.js?v=031126-9"></script>
 </head>
 <body>
 <div class="app">
@@ -29,6 +29,7 @@
       <div class="tools">
         <label class="filtro">Cidade <select id="f-cidade"><option value="">Todas</option></select></label>
         <label class="filtro">Vendedor <select id="f-vendedor"><option value="">Todos</option></select></label>
+        <label class="filtro">DFV <select id="f-dfv"><option value="">Todos</option><option value="nao_consultado">Não consultado</option><option value="sem">Sem cobertura</option><option value="vencido">Vencido (&gt; 7 d)</option></select></label>
         <a class="btn btn-acc" href="vendas.html#venda-rua" style="display:inline-flex;align-items:center;text-decoration:none">+ Venda de rua</a>
       </div>
     </header>
@@ -49,6 +50,13 @@
   const board = document.getElementById('board');
   const fCidade = document.getElementById('f-cidade');
   const fVendedor = document.getElementById('f-vendedor');
+  const fDfv = document.getElementById('f-dfv');
+  const filtroDfv = (v) => {
+    if (!fDfv.value) return true;
+    if (fDfv.value === 'nao_consultado') return v.dfv_viabilidade === 'nao_consultado' && !v.dfv_dispensado && v.status !== 'saida';
+    if (fDfv.value === 'sem') return ['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade);
+    return ['viavel', 'viavel_predio'].includes(v.dfv_viabilidade) && !NG.dfvValido(v) && v.status === '0_qualificado';
+  };
   let vendas = [];
 
   const usuarios = await NG.carregarUsuarios();
@@ -76,7 +84,7 @@
 
   const filtradas = () => vendas.filter((v) =>
     (!fCidade.value || v.cidade === fCidade.value) &&
-    (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
+    (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value) && filtroDfv(v));
 
   function chip(txt, tipo) { return `<span class="chip ${tipo || ''}">${esc(txt)}</span>`; }
 
@@ -161,7 +169,7 @@
       ${meta ? `<span class="meta">${meta}</span>` : ''}
       <span class="plano">${plano}</span>
       ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
-      ${NG.selosComissao(v) ? `<div class="chips selos">${NG.selosComissao(v)}</div>` : ''}
+      ${NG.seloDfv(v) || NG.selosComissao(v) ? `<div class="chips selos">${NG.seloDfv(v)}${NG.selosComissao(v)}</div>` : ''}
       ${seletorMover(v)}
     </article>`;
   }
@@ -250,6 +258,7 @@
 
   fCidade.addEventListener('change', render);
   fVendedor.addEventListener('change', render);
+  fDfv.addEventListener('change', render);
   await carregar();
 })();
 </script>

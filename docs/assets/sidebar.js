@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.4.2 · 03/11';
+  const VERSAO = 'v0.5 · 03/11';
 
   const MENU = [
     ['Gestão', [
@@ -17,6 +17,7 @@
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
+      { id: 'cobertura', ico: '⌖', nome: 'Cobertura (DFV)' },   // nível 2 (painel embutido) — em breve; hoje o link fica na venda
       { id: 'fila', ico: '☷', nome: 'Fila Vero' },
     ]],
     ['Mari', [

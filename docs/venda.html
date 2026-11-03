@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-8">
-<script src="config.js?v=031126-8"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-9">
+<script src="config.js?v=031126-9"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-8"></script>
-<script src="assets/sidebar.js?v=031126-8"></script>
+<script src="assets/app.js?v=031126-9"></script>
+<script src="assets/sidebar.js?v=031126-9"></script>
 </head>
 <body>
 <div class="app">
@@ -72,6 +72,17 @@
         d.pendencia_cod || d.pendencia_desc ? `pendência ${[d.pendencia_cod, d.pendencia_desc].filter(Boolean).join(' · ')}` : '',
         d.venda_valida === false ? 'venda inválida' : ''].filter(Boolean);
       texto = `${NG.fmtDataHora(e.criado_em)}${quem}${partesOsab.length ? ' · ' + esc(partesOsab.join(' · ')) : ''}`;
+    } else if (e.tipo === 'dfv_consulta') {
+      const ok = ['viavel', 'viavel_predio'].includes(d.viabilidade);
+      titulo = `DFV · ${NG.DFV_OPCOES[d.viabilidade] || d.viabilidade}`;
+      cor = ok ? '' : d.viabilidade === 'nao_consultado' ? 'warn' : 'bad';
+      const extra = [d.faixa_credito ? `crédito ${d.faixa_credito} %` : '', d.classificacao ? d.classificacao.toLowerCase() : '',
+        d.hp_livre != null ? `HP livre ${d.hp_livre}` : '', d.hcs != null ? `HCs ${d.hcs}` : ''].filter(Boolean);
+      texto = `${NG.fmtDataHora(d.consultado_em || e.criado_em)}${quem}${extra.length ? ' · ' + esc(extra.join(' · ')) : ''}`;
+    } else if (e.tipo === 'dfv_dispensa') {
+      titulo = 'DFV dispensado (admin)';
+      cor = 'warn';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · ${esc(d.motivo || '')}`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -162,7 +173,7 @@
             ${local ? `<span>${esc(local)}</span><span>·</span>` : ''}
             <span>Origem: ${esc(ORIGENS[v.origem] || v.origem)}${v.origem_ref ? ' · ' + esc(v.origem_ref) : ''}</span>
           </div>
-          ${NG.selosComissao(v) ? `<div class="chips selos">${NG.selosComissao(v)}</div>` : ''}
+          ${NG.seloDfv(v) || NG.selosComissao(v) ? `<div class="chips selos">${NG.seloDfv(v)}${NG.selosComissao(v)}</div>` : ''}
         </div>
         <div class="tools">
           <button type="button" class="btn" disabled title="em breve">Abrir conversa</button>
@@ -239,6 +250,21 @@
             </div>
           </section>
 
+          <section class="painel dfv-bloco" style="border-radius:10px;gap:10px" data-dfv>
+            <h2 style="font-size:14px">Cobertura (DFV) ${NG.seloDfv(v)}</h2>
+            <span class="painel-sub">${v.dfv_consultado_em ? `Última consulta ${NG.fmtDataHora(v.dfv_consultado_em)}${v.dfv_dias != null ? ` · há ${v.dfv_dias} d` : ''}` : 'Ainda não consultado'} · ${esc(NG.TEXTOS_DFV.trava)}</span>
+            <div data-dfv-campos>${NG.dfvCampos(v)}</div>
+            ${['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade) && v.status !== 'saida' ? `<div class="dfv-sem">
+              <span>Sem cobertura no DFV: não vender. Encerrar como saída e voltar a falar em 90 dias?</span>
+              <button type="button" class="btn btn-sm" data-acao="sem-cobertura">Saída "Sem cobertura" · volta em 90 d</button>
+            </div>` : ''}
+            <div class="acoes">
+              <button type="button" class="btn btn-acc" data-acao="dfv-salvar">Salvar consulta do DFV</button>
+              ${NG.usuario && NG.usuario.perfil === 'admin' && !v.dfv_dispensado ? '<button type="button" class="btn btn-ghost" data-acao="dfv-dispensar">Dispensar (admin)</button>' : ''}
+            </div>
+            ${v.dfv_dispensado ? `<span class="nota-campo">Dispensado pelo admin: ${esc(v.dfv_dispensa_motivo || '')}</span>` : ''}
+          </section>
+
           ${v.status === 'saida' ? '' : `<section class="painel" style="border-radius:10px;gap:10px">
             <h2 style="font-size:14px">Encerrar com motivo</h2>
             <label class="campo">Motivo<select data-motivo><option value="">Escolher…</option>${NG.MOTIVOS_SAIDA.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
@@ -256,6 +282,34 @@
     const sel = main.querySelector('[data-motivo]');
     if (sel) sel.addEventListener('change', () => { main.querySelector('[data-futuro]').hidden = !sel.value.startsWith('Interesse futuro'); });
     main._ctx = { lim, usuarios };
+    NG.ligarLinkDfv(main);
+  }
+
+  // DFV: grava o que a pessoa leu no painel; o banco carimba quando e quem (vendas_antes_dfv) e registra o evento.
+  async function salvarDfv() {
+    const dados = NG.dfvLer(main.querySelector('[data-dfv-campos]'));
+    const { error } = await NG.sb.from('vendas').update(dados).eq('id', v.id);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`DFV registrado: ${NG.DFV_OPCOES[dados.dfv_viabilidade]}`, 'ok');
+    carregar();
+  }
+  async function dispensarDfv() {
+    const fd = await NG.modal(`
+      <h3>Dispensar a consulta do DFV</h3>
+      <p>Só admin. A venda poderá ir para Vendido sem DFV viável; a dispensa fica na linha do tempo.</p>
+      <label class="campo">Motivo<input type="text" name="motivo" required placeholder="DFV fora do ar; confirmado no APP NiO PAP"></label>`);
+    if (!fd) return;
+    const { error } = await NG.sb.from('vendas').update({ dfv_dispensado: true, dfv_dispensa_motivo: String(fd.get('motivo') || '').trim() }).eq('id', v.id);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Consulta do DFV dispensada', 'ok');
+    carregar();
+  }
+  async function saidaSemCobertura() {
+    const volta = NG.diaSP(new Date(Date.now() + 90 * 86400000));
+    const { error } = await NG.sb.from('vendas').update({ status: 'saida', motivo_saida: 'Sem cobertura', interesse_futuro_em: volta }).eq('id', v.id);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`Saída "Sem cobertura" · volta em ${NG.fmtDiaISO(volta)}`, 'ok');
+    carregar();
   }
 
   async function registrarSaida() {
@@ -332,6 +386,9 @@
     if (b.dataset.acao === 'saida') registrarSaida();
     else if (b.dataset.acao === 'contato') registrarContato();
     else if (b.dataset.acao === 'editar') editar();
+    else if (b.dataset.acao === 'dfv-salvar') salvarDfv();
+    else if (b.dataset.acao === 'dfv-dispensar') dispensarDfv();
+    else if (b.dataset.acao === 'sem-cobertura') saidaSemCobertura();
   });
 
   if (!id) { main.innerHTML = '<div class="placeholder">Venda não informada. <a href="funil.html">Voltar ao funil</a></div>'; return; }
