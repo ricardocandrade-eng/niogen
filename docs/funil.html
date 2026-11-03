@@ -1,0 +1,234 @@
+<!doctype html>
+<!-- NIOGEN | docs/funil.html | 03/11/2026 — Funil 0→5 + Saída lendo v_funil; mover card = atualizar status -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Funil · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/sidebar.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="funil"></nav>
+  <main class="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1>Funil Nio</h1>
+        <span class="sub">Toda origem digital entra pela Mari · o vendedor entra na biometria · nada sai sem motivo</span>
+      </div>
+      <div class="tools">
+        <label class="filtro">Cidade <select id="f-cidade"><option value="">Todas</option></select></label>
+        <label class="filtro">Vendedor <select id="f-vendedor"><option value="">Todos</option></select></label>
+        <a class="btn btn-acc" href="vendas.html#venda-rua" style="display:inline-flex;align-items:center;text-decoration:none">+ Venda de rua</a>
+      </div>
+    </header>
+
+    <div class="alertas" id="alertas"></div>
+
+    <div class="board-wrap">
+      <div class="board funil" id="board"><div class="carregando">Carregando…</div></div>
+    </div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc, STATUS, STATUS_MAP, ORIGENS, FORMAS } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+
+  const board = document.getElementById('board');
+  const fCidade = document.getElementById('f-cidade');
+  const fVendedor = document.getElementById('f-vendedor');
+  let vendas = [];
+
+  const usuarios = await NG.carregarUsuarios();
+  NG.preencherSelect(fVendedor, usuarios.map((u) => [u.id, u.nome]), 'Todos');
+
+  async function carregar() {
+    const { data, error } = await NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    vendas = data || [];
+    const cidades = [...new Set(vendas.map((v) => v.cidade).filter(Boolean))].sort();
+    const atual = fCidade.value;
+    NG.preencherSelect(fCidade, cidades.map((c) => [c, c]), 'Todas');
+    fCidade.value = cidades.includes(atual) ? atual : '';
+    render();
+  }
+
+  const filtradas = () => vendas.filter((v) =>
+    (!fCidade.value || v.cidade === fCidade.value) &&
+    (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
+
+  function chip(txt, tipo) { return `<span class="chip ${tipo || ''}">${esc(txt)}</span>`; }
+
+  function card(v) {
+    let canto = '', meta = '', plano = '', chips = [], borda = '';
+    const local = [v.cidade, v.bairro].filter(Boolean).join(' · ');
+    const planoNome = v.plano_nome || '—';
+    const prev = v.comissao_prevista != null ? `R$ ${NG.fmtNum(v.comissao_prevista)} prev.` : '';
+    const pendencia = v.nio_pendencia_cod || v.nio_pendencia_desc;
+
+    switch (v.status) {
+      case '0_qualificado': {
+        canto = `${esc((ORIGENS[v.origem] || '').split(' · ')[0])} · ${esc(NG.diaSP(v.criado_em) === NG.diaSP() ? NG.fmtHora(v.criado_em) : NG.fmtData(v.criado_em))}`;
+        meta = esc(local);
+        plano = `${esc(planoNome)}${v.forma_pagamento ? ' · ' + esc(FORMAS[v.forma_pagamento]) : ''}`;
+        if (v.trava_area) chips.push(chip('Dentro da área', 'ok'));
+        if (v.trava_area === false) { chips.push(chip('Fora da área', 'bad')); borda = 'bad'; }
+        if (v.biometria_status === 'agendada' && v.biometria_em) chips.push(chip(`Biometria ${NG.fmtDiaSemana(v.biometria_em)} ${NG.fmtHora(v.biometria_em)}`, 'info'));
+        else if (v.biometria_status === 'aprovada') chips.push(chip('Biometria aprovada', 'ok'));
+        else if (v.biometria_status === 'reprovada') chips.push(chip('Biometria reprovada', 'bad'));
+        else chips.push(chip('Sem horário de biometria', 'warn'));
+        if (v.dias_esperando_biometria > 2) { borda = borda || 'warn'; chips.push(chip(`Esperando há ${Math.floor(v.dias_esperando_biometria)} d`, 'warn')); }
+        break;
+      }
+      case '1_vendido': {
+        canto = v.nio_pedido ? '#' + esc(v.nio_pedido) : '';
+        meta = esc([v.cidade, v.vendedor_nome].filter(Boolean).join(' · '));
+        plano = `${esc(planoNome)}${prev ? ' · ' + prev : ''}`;
+        const h = v.horas_sem_agendamento;
+        if (h != null && h > 4) { borda = 'bad'; chips.push(chip(`Agendar · ${NG.fmtHoras(h)} sem agenda`, 'bad')); }
+        else {
+          chips.push(chip('Biometria aprovada', 'ok'));
+          if (h != null) chips.push(chip(`${NG.fmtHoras(4 - h)} p/ agendar`, 'info'));
+        }
+        break;
+      }
+      case '2_aguardando_instalacao': {
+        canto = v.nio_pedido ? '#' + esc(v.nio_pedido) : '';
+        const quando = v.instalacao_agendada_para
+          ? `instala ${NG.fmtDiaSemana(v.instalacao_agendada_para)} ${NG.fmtData(v.instalacao_agendada_para)} ${NG.janela(v.instalacao_agendada_para)}` : 'sem data';
+        meta = esc([v.cidade, quando].filter(Boolean).join(' · '));
+        plano = `${esc(planoNome)}${prev ? ' · ' + prev : ''}`;
+        if (v.nio_situacao) chips.push(chip(`OSAB: ${v.nio_situacao}`));
+        break;
+      }
+      case '3_instalado': {
+        canto = v.nio_pedido ? '#' + esc(v.nio_pedido) : '';
+        meta = esc([v.cidade, `instalado ${NG.fmtData(v.instalado_em)}`].filter(Boolean).join(' · '));
+        plano = `${esc(planoNome)}${prev ? ' · ' + prev : ''}`;
+        if (!v.docs_entregues_em && v.docs_prazo_em) {
+          const atrasado = new Date(v.docs_prazo_em) < new Date();
+          chips.push(chip(`Docs à Nio até ${NG.fmtData(v.docs_prazo_em)}`, atrasado ? 'bad' : 'info'));
+          if (atrasado) borda = 'bad';
+        } else if (v.docs_entregues_em) chips.push(chip('Docs entregues ✓', 'ok'));
+        break;
+      }
+      case '4_ativo_provisorio':
+      case '5_comissao_firme': {
+        canto = v.nio_pedido ? '#' + esc(v.nio_pedido) : '';
+        const base = v.ativado_em || v.instalado_em;
+        meta = esc([v.cidade, base ? `ativo há ${NG.diasEntre(base, new Date())} d` : ''].filter(Boolean).join(' · '));
+        const pago = v.comissao_paga != null ? `R$ ${NG.fmtNum(v.comissao_paga)} pago${v.ciclo_pago ? ' ' + v.ciclo_pago : ''}` : prev;
+        plano = `${esc(planoNome)}${pago ? ' · ' + esc(pago) : ''}`;
+        if (v.status === '4_ativo_provisorio' && v.firme_em) chips.push(chip(`Firme em ${NG.fmtDataAno(v.firme_em)}`));
+        break;
+      }
+      case 'saida': {
+        const futuro = v.interesse_futuro_em ? ` · volta ${NG.fmtData(v.interesse_futuro_em + 'T12:00:00')}` : '';
+        return `<article class="card dim" data-id="${v.id}" draggable="true">
+          <div class="linha1"><a href="venda.html?id=${v.id}" style="color:var(--muted)">${esc(v.cliente_nome)}</a></div>
+          <span class="meta">${esc(v.motivo_saida || '')}${esc(futuro)}${v.cidade ? ' · ' + esc(v.cidade) : ''}</span>
+          ${seletorMover(v)}
+        </article>`;
+      }
+    }
+    if (pendencia && v.status !== 'saida') { borda = borda || 'warn'; chips.push(chip(`Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`, 'warn')); }
+
+    return `<article class="card ${borda}" data-id="${v.id}" draggable="true">
+      <div class="linha1"><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><span class="canto${v.status === '0_qualificado' ? '' : ' mono'}">${canto}</span></div>
+      ${meta ? `<span class="meta">${meta}</span>` : ''}
+      <span class="plano">${plano}</span>
+      ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
+      ${seletorMover(v)}
+    </article>`;
+  }
+
+  function seletorMover(v) {
+    return `<div class="mover"><select data-mover="${v.id}" aria-label="Mover ${esc(v.cliente_nome)} para">
+      <option value="">Mover para…</option>
+      ${STATUS.filter((s) => s.id !== v.status).map((s) => `<option value="${s.id}">${esc(s.curto)}</option>`).join('')}
+    </select></div>`;
+  }
+
+  function render() {
+    const lista = filtradas();
+    const porStatus = Object.fromEntries(STATUS.map((s) => [s.id, []]));
+    lista.forEach((v) => porStatus[v.status]?.push(v));
+
+    // Barra de alertas.
+    const semAgenda = lista.filter((v) => v.horas_sem_agendamento > 4).length;
+    const esperando = lista.filter((v) => v.dias_esperando_biometria > 2).length;
+    document.getElementById('alertas').innerHTML = [
+      semAgenda ? `<div class="alerta bad">${semAgenda} ${semAgenda === 1 ? 'venda' : 'vendas'} sem agendamento há mais de 4 h</div>` : '',
+      esperando ? `<div class="alerta warn">${esperando} ${esperando === 1 ? 'qualificado esperando' : 'qualificados esperando'} biometria há mais de 2 dias</div>` : '',
+      '<div class="alerta">OSAB · importação ainda não ligada (prompt 3)</div>',
+    ].join('');
+
+    board.innerHTML = STATUS.map((s) => {
+      const itens = porStatus[s.id];
+      const cor = s.id === '0_qualificado' ? 'color:var(--info-fg)' : s.id === '5_comissao_firme' ? 'color:var(--ok-fg)' : s.id === 'saida' ? 'color:var(--muted)' : '';
+      const vazio = s.id === '5_comissao_firme' && !itens.length
+        ? '<div class="col-vazia">Vendas firmam 180 dias após a instalação</div>'
+        : !itens.length ? '<div class="col-vazia">—</div>' : '';
+      return `<section class="col" data-status="${s.id}" aria-label="${esc(s.col)}">
+        <div class="col-head"><span style="${cor}">${esc(s.col)}</span><span>${itens.length}</span></div>
+        ${itens.map(card).join('')}${vazio}
+      </section>`;
+    }).join('');
+  }
+
+  async function mover(id, destino) {
+    const v = vendas.find((x) => x.id === id);
+    if (!v || !destino) return;
+    if (await NG.moverStatus(v, destino)) await carregar();
+    else render();
+  }
+
+  // Arrastar e soltar (desktop) + seletor "Mover para…" (celular e teclado).
+  board.addEventListener('dragstart', (ev) => {
+    const c = ev.target.closest('.card');
+    if (!c) return;
+    ev.dataTransfer.setData('text/plain', c.dataset.id);
+    c.classList.add('arrastando');
+  });
+  board.addEventListener('dragend', (ev) => {
+    ev.target.closest('.card')?.classList.remove('arrastando');
+    board.querySelectorAll('.drop-alvo').forEach((c) => c.classList.remove('drop-alvo'));
+  });
+  board.addEventListener('dragover', (ev) => {
+    const col = ev.target.closest('.col');
+    if (!col) return;
+    ev.preventDefault();
+    board.querySelectorAll('.drop-alvo').forEach((c) => c !== col && c.classList.remove('drop-alvo'));
+    col.classList.add('drop-alvo');
+  });
+  board.addEventListener('drop', (ev) => {
+    const col = ev.target.closest('.col');
+    if (!col) return;
+    ev.preventDefault();
+    col.classList.remove('drop-alvo');
+    mover(ev.dataTransfer.getData('text/plain'), col.dataset.status);
+  });
+  board.addEventListener('change', (ev) => {
+    const sel = ev.target.closest('[data-mover]');
+    if (sel && sel.value) mover(sel.dataset.mover, sel.value);
+  });
+
+  fCidade.addEventListener('change', render);
+  fVendedor.addEventListener('change', render);
+  await carregar();
+})();
+</script>
+</body>
+</html>
