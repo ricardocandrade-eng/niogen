@@ -5,7 +5,9 @@
 (function () {
   'use strict';
 
-  const cfg = window.NIOGEN_CONFIG || {};
+  // Limpa BOM, espaço e quebra de linha que um secret mal gravado deixa na chave (vira erro de header no fetch).
+  const limpa = (s) => String(s || '').replace(/[^\x21-\x7E]/g, '');
+  const cfg = { supabaseUrl: limpa((window.NIOGEN_CONFIG || {}).supabaseUrl), supabaseAnonKey: limpa((window.NIOGEN_CONFIG || {}).supabaseAnonKey) };
   if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
     document.addEventListener('DOMContentLoaded', () => {
       document.body.innerHTML = '<div class="login"><div class="login-box"><strong>config.js ausente</strong>' +
@@ -134,7 +136,12 @@
       return new Promise(() => {});
     }
     const { data: u, error } = await sb.from('usuarios').select('*').eq('id', data.session.user.id).maybeSingle();
-    if (error || !u || !u.ativo) {
+    if (error) {
+      // Falha de rede/configuração não é "sem perfil": mostra o erro real e mantém a sessão.
+      location.replace('index.html?erro=' + encodeURIComponent(msgErro(error)));
+      return new Promise(() => {});
+    }
+    if (!u || !u.ativo) {
       await sb.auth.signOut();
       location.replace('index.html?erro=perfil');
       return new Promise(() => {});

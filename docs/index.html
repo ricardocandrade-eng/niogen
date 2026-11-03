@@ -11,10 +11,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css">
-<script src="config.js"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-2">
+<script src="config.js?v=031126-2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js"></script>
+<script src="assets/app.js?v=031126-2"></script>
 </head>
 <body>
 <main class="login">
@@ -33,9 +33,9 @@
 <script>
 (async function () {
   const msg = document.getElementById('msg');
-  if (new URLSearchParams(location.search).get('erro') === 'perfil') {
-    msg.textContent = 'Usuário sem perfil ativo no NIOGEN. Fale com o admin.';
-  }
+  const erro = new URLSearchParams(location.search).get('erro');
+  if (erro === 'perfil') msg.textContent = 'Usuário sem perfil ativo no NIOGEN. Fale com o admin.';
+  else if (erro) msg.textContent = `Não foi possível carregar seu perfil: ${erro}`;
   const { data } = await NG.sb.auth.getSession();
   if (data.session && !msg.textContent) location.replace('funil.html');
 

@@ -61,7 +61,8 @@ O `docs/config.js` não entra no git: o workflow gera a partir de
 - repo variable `SUPABASE_NIO_URL`
 - repo secret `SUPABASE_NIO_ANON`
 
-A cada publicação, **bumpar o `CACHE` em `docs/sw.js`** (`niogen-DDMMAA-N`). A prova de que pegou é abrir a tela publicada.
+A cada publicação, **bumpar o `CACHE` em `docs/sw.js`** (`niogen-DDMMAA-N`) **e o `?v=DDMMAA-N`** dos `config.js`, `app.js`, `sidebar.js` e `app.css` nos HTML
+(o Pages manda o navegador guardar cada arquivo por 10 min; sem o `?v` uma tela nova pode rodar com um script velho). A prova de que pegou é abrir a tela publicada.
 
 ## Segredos
 
