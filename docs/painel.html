@@ -1,0 +1,170 @@
+<!doctype html>
+<!-- NIOGEN | docs/painel.html | 03/11/2026 — Painel do dia · aba Operação (v_painel_mes, v_painel_hoje, v_alertas_contrato) -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Painel · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=031126-3">
+<script src="config.js?v=031126-3"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=031126-3"></script>
+<script src="assets/sidebar.js?v=031126-3"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="painel"></nav>
+  <main class="main" id="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1 id="titulo">Painel</h1>
+        <span class="sub" id="sub">Carregando…</span>
+      </div>
+      <div class="abas" role="tablist">
+        <button type="button" class="aba ativa" role="tab" aria-selected="true">Operação</button>
+        <button type="button" class="aba" disabled title="em breve">Mari</button>
+        <button type="button" class="aba" disabled title="em breve">WABA</button>
+        <button type="button" class="aba" disabled title="em breve">Meta Ads</button>
+      </div>
+    </header>
+    <div id="conteudo"><div class="carregando">Carregando…</div></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc, ORIGENS, FORMAS } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+
+  const hoje = NG.diaSP();                       // AAAA-MM-DD
+  const [ano, mes, diaHoje] = hoje.split('-').map(Number);
+  const mesISO = `${hoje.slice(0, 7)}-01`;
+  const diasNoMes = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+  const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+  const diaSemana = (d) => new Date(Date.UTC(ano, mes - 1, d)).getUTCDay();
+  const util = (d) => diaSemana(d) >= 1 && diaSemana(d) <= 5;   // seg–sex (sem tabela de feriados ainda)
+  const pct = (a, b) => (b ? Math.min(100, (a / b) * 100) : 0);
+  const n = (v) => NG.fmtNum(v || 0);
+
+  const [rm, rh, ra, ri] = await Promise.all([
+    NG.sb.from('v_painel_mes').select('*').eq('mes', mesISO).maybeSingle(),
+    NG.sb.from('v_painel_hoje').select('*').maybeSingle(),
+    NG.sb.from('v_alertas_contrato').select('*'),
+    NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
+  ]);
+  const erro = rm.error || rh.error || ra.error || ri.error;
+  if (erro) { document.getElementById('conteudo').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro))}</div>`; return; }
+
+  const m = rm.data || { vendidas: 0, instaladas: 0, aguardando: 0, ativas_carteira: 0, saidas: 0, comissao_prevista: 0, comissao_instalada: 0, comissao_em_risco: 0,
+    por_origem: {}, por_cidade: {}, por_vendedor: [], por_plano: {}, por_forma: {}, por_dia_vendas: {}, por_dia_instaladas: {} };
+  const h = rh.data || {};
+  const alertas = ra.data || [];
+  const osab = (ri.data || [])[0];
+  const meta = m.meta_vendas || 0;
+
+  document.getElementById('titulo').textContent = `Painel · ${nomeMes}`;
+  const fraseDia = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, weekday: 'long', day: '2-digit', month: '2-digit' }).format(new Date());
+  document.getElementById('sub').textContent = `${fraseDia.charAt(0).toUpperCase() + fraseDia.slice(1)} · atualizado ${NG.fmtHora(new Date())} · ` +
+    (osab ? `OSAB de ${osab.dt_ref ? osab.dt_ref.split('-').reverse().slice(0, 2).join('/') : '—'} aplicado ${NG.fmtDataHora(osab.aplicado_em)}` : 'OSAB ainda não importado');
+
+  // Ritmo da meta.
+  const uteisRestantes = Array.from({ length: diasNoMes - diaHoje + 1 }, (_, i) => diaHoje + i).filter(util).length;
+  const uteisPassados = Array.from({ length: diaHoje }, (_, i) => i + 1).filter(util).length;
+  const faltam = Math.max(0, meta - m.vendidas);
+  const ritmo = uteisPassados ? m.vendidas / uteisPassados : 0;
+  const precisa = uteisRestantes ? faltam / uteisRestantes : faltam;
+  const dec = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+
+  // Barras por dia: barra = vendas, traço = instaladas.
+  const vDia = m.por_dia_vendas || {}, iDia = m.por_dia_instaladas || {};
+  const chave = (d) => `${hoje.slice(0, 7)}-${String(d).padStart(2, '0')}`;
+  const maxDia = Math.max(1, ...Object.values(vDia), ...Object.values(iDia));
+  const barras = Array.from({ length: diasNoMes }, (_, i) => {
+    const d = i + 1, nv = vDia[chave(d)] || 0, ni = iDia[chave(d)] || 0, futuro = d > diaHoje;
+    return `<div class="g-col${futuro ? ' futuro' : ''}${d === diaHoje ? ' hoje' : ''}" title="${String(d).padStart(2, '0')}/${String(mes).padStart(2, '0')} · ${nv} vendas · ${ni} instaladas">
+      <div class="g-barra" style="height:${futuro ? 0 : pct(nv, maxDia)}%"></div>
+      ${ni ? `<div class="g-traco" style="bottom:${pct(ni, maxDia)}%"></div>` : ''}
+    </div>`;
+  }).join('');
+  const dd = (d) => `${String(d).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+
+  const linhaBarra = (rotulo, valor, total, cor) => `<div class="q-item">
+      <div class="q-linha"><span>${esc(rotulo)}</span><span class="mono">${n(valor)}</span></div>
+      <div class="q-trilho"><div style="width:${pct(valor, total)}%;background:${cor}"></div></div></div>`;
+  const linhaSimples = (rotulo, valor, extra) => `<div class="q-linha"><span>${esc(rotulo)}</span><span class="mono">${valor}${extra ? ` <small>${extra}</small>` : ''}</span></div>`;
+  const ordenado = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]);
+  const CORES = ['var(--accent)', '#6FB1F7', '#B49CF2', '#F2B84B', '#8FE39A', '#A6AFBE'];
+
+  const origens = ordenado(m.por_origem);
+  const formas = m.por_forma || {};
+  const autom = (formas.cartao || 0) + (formas.dacc || 0);
+  const nivelCor = { bad: 'bad', warn: 'warn' };
+
+  document.getElementById('conteudo').innerHTML = `
+    <div class="duas">
+      <div class="painel hero" style="flex:2 1 420px">
+        <div class="q-linha muted"><span>Vendas do mês (biometria aprovada)</span><span>${meta ? `meta ${meta}` : 'sem meta'}</span></div>
+        <div class="hero-num"><span class="mono">${n(m.vendidas)}</span><span>${meta ? (faltam ? `faltam ${faltam} · ${uteisRestantes} dias úteis · precisa de ${dec(precisa)}/dia` : 'meta batida ✓') : ''}</span></div>
+        <div class="meta-trilho"><div style="width:${pct(m.instaladas, meta || m.vendidas)}%;background:var(--accent)"></div><div style="width:${pct(m.aguardando, meta || m.vendidas)}%;background:#2E6B3A"></div></div>
+        <div class="legenda"><span><i style="background:var(--accent)"></i> ${n(m.instaladas)} instaladas</span><span><i style="background:#2E6B3A"></i> ${n(m.aguardando)} aguardando instalação</span><span>· ritmo: ${dec(ritmo)}/dia útil até agora</span></div>
+      </div>
+      <div class="painel hero" style="flex:1 1 200px">
+        <span class="muted">Parcial de hoje</span>
+        <span class="mono hero-med">${n(h.vendas_hoje)}</span>
+        <span class="muted">${h.vendas_hoje === 1 ? 'venda' : 'vendas'} · ${n(h.instaladas_hoje)} ${h.instaladas_hoje === 1 ? 'instalada' : 'instaladas'} · ${n(h.biometrias_hoje)} ${h.biometrias_hoje === 1 ? 'biometria marcada' : 'biometrias marcadas'}</span>
+      </div>
+      <div class="painel hero" style="flex:1 1 200px">
+        <span class="muted">Comissão prevista · mês</span>
+        <span class="mono hero-med">${NG.fmtMoeda(m.comissao_prevista)}</span>
+        <span class="muted">${NG.fmtMoeda(m.comissao_instalada)} já instalado · ${NG.fmtMoeda(m.comissao_em_risco)} em risco</span>
+      </div>
+    </div>
+
+    <div class="kpis seis">
+      <a class="kpi" href="funil.html"><span class="rot">Qualificados (Mari)</span><span class="val">${n(h.qualificados)}</span><span class="nota">${n(h.esperando_biometria)} esperam biometria</span></a>
+      <a class="kpi ${h.sem_agendamento_4h ? 'bad' : ''}" href="instalacoes.html"><span class="rot">Sem agendamento &gt; 4 h</span><span class="val">${n(h.sem_agendamento_4h)}</span><span class="nota">indicador do contrato</span></a>
+      <a class="kpi" href="instalacoes.html"><span class="rot">Instalações hoje</span><span class="val">${n((h.instaladas_hoje || 0) + (h.instalacoes_agendadas_hoje || 0))}</span><span class="nota">${n(h.instaladas_hoje)} feita${h.instaladas_hoje === 1 ? '' : 's'} · ${n(h.instalacoes_agendadas_hoje)} agendada${h.instalacoes_agendadas_hoje === 1 ? '' : 's'}</span></a>
+      <a class="kpi ${h.pendencias_osab ? 'warn' : ''}" href="instalacoes.html"><span class="rot">Pendência OSAB</span><span class="val">${n(h.pendencias_osab)}</span><span class="nota">${esc(h.pendencia_top ? h.pendencia_top.toLowerCase() + ' · reagendar' : 'nenhuma')}</span></a>
+      <div class="kpi"><span class="rot">Ativos na carteira</span><span class="val">${n(m.ativas_carteira)}</span><span class="nota">adimplência chega com as faturas</span></div>
+      <a class="kpi" href="vendas.html"><span class="rot">Saídas no mês</span><span class="val">${n(m.saidas)}</span><span class="nota">${esc(m.saidas_motivo_top || '—')}</span></a>
+    </div>
+
+    <div class="duas">
+      <section class="painel" style="flex:2 1 480px">
+        <div class="q-linha"><h2>Vendas por dia · ${esc(nomeMes)}</h2><span class="muted">barra = vendas · traço = instaladas</span></div>
+        <div class="grafico" role="img" aria-label="Vendas por dia no mês">${barras}</div>
+        <div class="q-linha muted" style="font-size:11px"><span>${dd(1)}</span><span>${dd(8)}</span><span>${dd(15)}</span><span>hoje ${dd(diaHoje)}</span><span>${dd(diasNoMes)}</span></div>
+      </section>
+      <section class="painel" style="flex:1 1 260px;gap:10px">
+        <h2>Por origem · mês</h2>
+        ${origens.length ? origens.map(([o, v], i) => linhaBarra(ORIGENS[o] || o, v, m.vendidas, CORES[i % CORES.length])).join('') : '<span class="muted">—</span>'}
+        <h2 style="margin-top:8px">Por cidade</h2>
+        ${ordenado(m.por_cidade).map(([c, v]) => linhaSimples(c, n(v))).join('') || '<span class="muted">—</span>'}
+      </section>
+      <section class="painel" style="flex:1 1 260px;gap:10px">
+        <h2>Por vendedor · mês</h2>
+        ${(m.por_vendedor || []).map((x) => linhaSimples(x.nome, n(x.vendidas), `· ${n(x.instaladas)} inst.`)).join('') || '<span class="muted">—</span>'}
+        <h2 style="margin-top:8px">Por plano</h2>
+        ${ordenado(m.por_plano).map(([p, v]) => linhaSimples(p, n(v))).join('') || '<span class="muted">—</span>'}
+        <h2 style="margin-top:8px">Forma de pagamento</h2>
+        ${m.vendidas ? linhaSimples('Cartão / DACC', `<span style="color:var(--ok-fg)">${n(autom)} · ${Math.round(pct(autom, m.vendidas))} %</span>`) + linhaSimples(FORMAS.boleto, n(formas.boleto)) : '<span class="muted">—</span>'}
+      </section>
+    </div>
+
+    <section class="painel">
+      <h2>Agora · o que precisa de alguém</h2>
+      <div class="alertas">
+        ${alertas.length ? alertas.map((a) => `<a class="alerta ${nivelCor[a.nivel] || ''}" href="${esc(a.link)}">${esc(NG.primeiroNome(a.cliente_nome))} · ${esc(a.texto)}</a>`).join('')
+          : '<span class="muted">Nada pendente agora ✓</span>'}
+      </div>
+    </section>`;
+})();
+</script>
+</body>
+</html>

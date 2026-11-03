@@ -245,6 +245,53 @@ dialog.modal::backdrop { background: rgba(5, 7, 10, .7); }
 .login-box .marca p { margin: 0; font-size: 11px; color: var(--muted); font-family: var(--dm); }
 .login-box .msg { font-size: 12px; color: var(--bad-fg); min-height: 16px; }
 
+/* ---------- abas ---------- */
+.abas { display: flex; gap: 4px; padding: 4px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); flex-wrap: wrap; }
+.aba { min-height: 32px; padding: 0 12px; border-radius: 6px; border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.aba.ativa { background: var(--surface-2); color: var(--text); }
+.aba:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- configurações · relatórios ---------- */
+.secao { display: flex; flex-direction: column; gap: 14px; }
+.secao-tit { margin: 0; font-size: 14px; font-weight: 600; }
+.cards-rel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rel { padding: 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rel.tracejado { border-style: dashed; border-color: var(--border-strong); }
+.rel-topo { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.rel-topo strong { font-size: 14px; }
+.rel-desc { font-size: 12px; color: var(--muted); }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); font-size: 12px; }
+
+/* ---------- painel ---------- */
+.hero { gap: 8px; }
+.hero-num { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; font-size: 14px; color: var(--muted); }
+.hero-num .mono { font-size: 44px; font-weight: 600; color: var(--text); }
+.hero-med { font-size: 36px; font-weight: 600; }
+.meta-trilho { height: 10px; border-radius: 5px; background: var(--border); overflow: hidden; display: flex; }
+.meta-trilho div { height: 10px; }
+.legenda { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.legenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+.kpis.seis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+a.kpi { text-decoration: none; color: var(--text); }
+a.kpi:hover { border-color: var(--border-strong); }
+.grafico { display: flex; align-items: flex-end; gap: 4px; height: 140px; padding: 0 4px; border-bottom: 1px solid var(--border); }
+.g-col { flex: 1; height: 100%; position: relative; display: flex; align-items: flex-end; min-width: 0; }
+.g-barra { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; min-height: 0; }
+.g-col.futuro .g-barra { background: var(--border); }
+.g-col.hoje { outline: 1px dashed var(--border-strong); outline-offset: 1px; }
+.g-traco { position: absolute; left: -1px; right: -1px; height: 2px; background: var(--text); }
+.q-item { display: flex; flex-direction: column; gap: 4px; }
+.q-linha { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; }
+.q-linha small { font-size: 11px; color: var(--muted); }
+.q-trilho { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.q-trilho div { height: 6px; }
+a.alerta { text-decoration: none; }
+
+@media (max-width: 1200px) {
+  .kpis.seis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 /* ---------- celular ---------- */
 @media (max-width: 760px) {
   .nav { flex: 1 1 100%; border-right: 0; border-bottom: 1px solid var(--border); }
@@ -255,7 +302,9 @@ dialog.modal::backdrop { background: rgba(5, 7, 10, .7); }
   .nav-item.ativo { box-shadow: inset 0 -2px 0 var(--accent); }
   .nav-foot { padding: 4px 12px 8px; }
   .main { padding: 16px; }
-  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpis, .kpis.seis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards-rel { grid-template-columns: 1fr; }
+  .hero-num .mono { font-size: 36px; }
   .tres { grid-template-columns: 1fr; }
   .filtro, .tools .btn { flex: 1 1 auto; }
   .filtro input { width: 100%; }
