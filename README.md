@@ -5,6 +5,8 @@
 CRM da **Dharma Telecom**, agente credenciado PAP da **Nio Internet**. Front estático (HTML + CSS + JS puro,
 sem build) sobre o **Supabase Nio**, que é o banco único (NIOGEN e Mari leem e escrevem no mesmo lugar).
 
+**Publicado:** https://ricardocandrade-eng.github.io/niogen/ · Supabase Nio: `https://zlrfwbkblytnokuexjti.supabase.co`
+
 Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmapro-nio/`. O `CLAUDE.md` daqui é espelho do de lá.
 
 ## O que tem na v0
