@@ -15,7 +15,8 @@ Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmap
 |---|---|
 | Migration (tabelas, travas, eventos, views, RLS) | `supabase/migrations/0001_v0.sql` |
 | Seed do admin (primeiro usuário do Auth → perfil admin) | `supabase/seed/usuarios_seed.sql` |
-| Seed de EXEMPLO de planos e área (apagar quando a tabela real chegar) | `supabase/seed/config_exemplo_seed.sql` |
+| Tabela vigente da Nio (planos, adicionais, bônus, vencimento calculado, área JF, municípios da GDP) | `supabase/migrations/0005_tabela_vigente_221026.sql` |
+| Configurações › Tabela vigente (só leitura) | `docs/configuracoes.html#tabela` |
 | Importação do OSAB (tabelas, `aplicar_osab`, metas, alertas, views do Painel) | `supabase/migrations/0003_importacao_osab.sql` · `0004` |
 | Login → Painel | `docs/index.html` |
 | Painel (aba Operação) | `docs/painel.html` |
@@ -33,6 +34,14 @@ Telas do menu que ainda não existem aparecem desabilitadas ("em breve"). Mari, 
 - Entrar em "Aguardando instalação" grava `agendamento_registrado_em = now()` (indicador de 4 h).
 - "Saída" exige motivo.
 - Toda mudança de status, todo agendamento e todo contato vira linha em `eventos_venda`.
+
+## Comissão e vencimento (calculados no banco)
+
+- `recalcular_comissao(venda_id)` roda por trigger quando mudam plano, segmento, forma, status/`vendido_em` ou os adicionais:
+  `comissao_prevista` = nominal + adicionais + transição + NMEI. O **M-10** fica só em `bonus_m10_potencial` e nunca entra na prevista.
+- `vendas_calcula_vencimento`: boleto/débito vence 25 dias após `instalado_em` (dia recorrente = dia do 1º vencimento, ou 26 se instalou em 29–31);
+  cartão cobra no dia da instalação. Vale também quando o OSAB grava `instalado_em`. O vencimento não é digitado.
+- Mudou a tabela da Nio: nova migration (planos com nova `vigencia_inicio`), nunca edição à mão.
 
 ## Importação do OSAB
 
@@ -62,7 +71,7 @@ npx supabase db push
 ```
 
 Depois, no SQL editor: criar o usuário do Ricardo em Authentication › Users (Auto Confirm) e rodar `supabase/seed/usuarios_seed.sql`
-e, enquanto a tabela real não chega, `supabase/seed/config_exemplo_seed.sql`. **Nada à mão no painel sem migration correspondente.**
+(planos, área e bônus vêm da migration `0005`). **Nada à mão no painel sem migration correspondente.**
 
 ## Publicar (GitHub Pages)
 
