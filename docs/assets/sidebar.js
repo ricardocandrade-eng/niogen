@@ -5,11 +5,11 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.1 · 03/11';
+  const VERSAO = 'v0.2 · 03/11';
 
   const MENU = [
     ['Gestão', [
-      { id: 'painel', ico: '◉', nome: 'Painel' },
+      { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
       { id: 'placar', ico: '▤', nome: 'Placar' },
     ]],
     ['Vendas', [
@@ -27,7 +27,7 @@
       { id: 'conciliacao', ico: '◆', nome: 'Conciliação' },
     ]],
     ['Sistema', [
-      { id: 'config', ico: '⚙', nome: 'Configurações' },
+      { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },
       { id: 'senha', ico: '◌', nome: 'Alterar senha' },
     ]],
   ];
@@ -47,7 +47,7 @@
   function item(it, ativo) {
     const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${NG.esc(it.nome)}` +
       (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '');
-    if (!it.href) {
+    if (!it.href || (it.perfis && !it.perfis.includes((NG.usuario || {}).perfil))) {
       return `<span class="nav-item off" aria-disabled="true" title="em breve">${conteudo}</span>`;
     }
     return `<a class="nav-item${ativo ? ' ativo' : ''}" href="${it.href}"${ativo ? ' aria-current="page"' : ''}>${conteudo}</a>`;

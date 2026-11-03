@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-2">
-<script src="config.js?v=031126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-3">
+<script src="config.js?v=031126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-2"></script>
-<script src="assets/sidebar.js?v=031126-2"></script>
+<script src="assets/app.js?v=031126-3"></script>
+<script src="assets/sidebar.js?v=031126-3"></script>
 </head>
 <body>
 <div class="app">
@@ -54,10 +54,19 @@
   const usuarios = await NG.carregarUsuarios();
   NG.preencherSelect(fVendedor, usuarios.map((u) => [u.id, u.nome]), 'Todos');
 
+  let alertas = [], ultimoOsab = null;
+
   async function carregar() {
-    const { data, error } = await NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false });
+    const [rv, ra, ri] = await Promise.all([
+      NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }),
+      NG.sb.from('v_alertas_contrato').select('venda_id, tipo, nivel'),
+      NG.sb.from('importacoes').select('aplicado_em, dt_ref, resumo').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
+    ]);
+    const error = rv.error || ra.error || ri.error;
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
-    vendas = data || [];
+    vendas = rv.data || [];
+    alertas = ra.data || [];
+    ultimoOsab = (ri.data || [])[0] || null;
     const cidades = [...new Set(vendas.map((v) => v.cidade).filter(Boolean))].sort();
     const atual = fCidade.value;
     NG.preencherSelect(fCidade, cidades.map((c) => [c, c]), 'Todas');
@@ -96,6 +105,7 @@
         canto = v.nio_pedido ? '#' + esc(v.nio_pedido) : '';
         meta = esc([v.cidade, v.vendedor_nome].filter(Boolean).join(' · '));
         plano = `${esc(planoNome)}${prev ? ' · ' + prev : ''}`;
+        if (v.nio_situacao) chips.push(chip(`OSAB: ${v.nio_situacao}`));
         const h = v.horas_sem_agendamento;
         if (h != null && h > 4) { borda = 'bad'; chips.push(chip(`Agendar · ${NG.fmtHoras(h)} sem agenda`, 'bad')); }
         else {
@@ -144,6 +154,7 @@
       }
     }
     if (pendencia && v.status !== 'saida') { borda = borda || 'warn'; chips.push(chip(`Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`, 'warn')); }
+    if (v.nio_venda_valida === false) { borda = 'bad'; chips.unshift(chip('Nio: venda inválida', 'bad')); }
 
     return `<article class="card ${borda}" data-id="${v.id}" draggable="true">
       <div class="linha1"><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><span class="canto${v.status === '0_qualificado' ? '' : ' mono'}">${canto}</span></div>
@@ -166,13 +177,24 @@
     const porStatus = Object.fromEntries(STATUS.map((s) => [s.id, []]));
     lista.forEach((v) => porStatus[v.status]?.push(v));
 
-    // Barra de alertas.
-    const semAgenda = lista.filter((v) => v.horas_sem_agendamento > 4).length;
+    // Barra de alertas: v_alertas_contrato (respeitando os filtros) + qualificados esperando biometria.
+    const ids = new Set(lista.map((v) => v.id));
+    const doFiltro = alertas.filter((a) => ids.has(a.venda_id));
+    const conta = (tipos) => new Set(doFiltro.filter((a) => tipos.includes(a.tipo)).map((a) => a.venda_id)).size;
+    const semAgenda = conta(['sem_agendamento']);
+    const risco = conta(['venda_invalida', 'risco_contrato']);
+    const docs = conta(['docs']);
     const esperando = lista.filter((v) => v.dias_esperando_biometria > 2).length;
+    const nv = (n, um, varios) => `${n} ${n === 1 ? um : varios}`;
+    const osab = ultimoOsab
+      ? `OSAB de ${ultimoOsab.dt_ref ? ultimoOsab.dt_ref.split('-').reverse().slice(0, 2).join('/') : '—'} aplicado ${NG.fmtDataHora(ultimoOsab.aplicado_em)} · ${nv((ultimoOsab.resumo || {}).sem_venda || 0, 'pedido sem venda nossa', 'pedidos sem venda nossa')}`
+      : 'OSAB ainda não importado';
     document.getElementById('alertas').innerHTML = [
-      semAgenda ? `<div class="alerta bad">${semAgenda} ${semAgenda === 1 ? 'venda' : 'vendas'} sem agendamento há mais de 4 h</div>` : '',
-      esperando ? `<div class="alerta warn">${esperando} ${esperando === 1 ? 'qualificado esperando' : 'qualificados esperando'} biometria há mais de 2 dias</div>` : '',
-      '<div class="alerta">OSAB · importação ainda não ligada (prompt 3)</div>',
+      risco ? `<a class="alerta bad" href="painel.html">${nv(risco, 'venda', 'vendas')} com risco de multa/estorno (OSAB)</a>` : '',
+      semAgenda ? `<a class="alerta bad" href="instalacoes.html">${nv(semAgenda, 'venda', 'vendas')} sem agendamento há mais de 4 h</a>` : '',
+      docs ? `<a class="alerta warn" href="painel.html">${nv(docs, 'venda', 'vendas')} com documentos à Nio vencendo</a>` : '',
+      esperando ? `<div class="alerta warn">${nv(esperando, 'qualificado esperando', 'qualificados esperando')} biometria há mais de 2 dias</div>` : '',
+      `<div class="alerta">${esc(osab)}</div>`,
     ].join('');
 
     board.innerHTML = STATUS.map((s) => {

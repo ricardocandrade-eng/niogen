@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-2">
-<script src="config.js?v=031126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-3">
+<script src="config.js?v=031126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-2"></script>
-<script src="assets/sidebar.js?v=031126-2"></script>
+<script src="assets/app.js?v=031126-3"></script>
+<script src="assets/sidebar.js?v=031126-3"></script>
 </head>
 <body>
 <div class="app">
@@ -64,6 +64,17 @@
     } else if (e.tipo === 'contato') {
       titulo = `Contato · ${CANAIS[d.canal] || d.canal} · ${d.direcao === 'entrada' ? 'recebido' : 'enviado'}`;
       texto = `${NG.fmtDataHora(e.criado_em)} · por ${esc(d.por || '')}${d.resumo ? ' · ' + esc(d.resumo) : ''}`;
+    } else if (e.tipo === 'osab') {
+      titulo = `OSAB · ${d.situacao || 'sem situação'}`;
+      cor = d.para === 'saida' ? 'bad' : d.pendencia_cod ? 'warn' : '';
+      const partesOsab = [d.dt_ref ? `DT_REF ${d.dt_ref.split('-').reverse().join('/')}` : '', d.para ? `${STATUS_MAP[d.de]?.curto || d.de} → ${STATUS_MAP[d.para]?.curto || d.para}` : '',
+        d.pendencia_cod || d.pendencia_desc ? `pendência ${[d.pendencia_cod, d.pendencia_desc].filter(Boolean).join(' · ')}` : '',
+        d.venda_valida === false ? 'venda inválida' : ''].filter(Boolean);
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}${partesOsab.length ? ' · ' + esc(partesOsab.join(' · ')) : ''}`;
+    } else if (e.tipo === 'osab_venda_invalida') {
+      titulo = 'Nio: venda inválida / risco de multa ou estorno';
+      cor = 'bad';
+      texto = `${NG.fmtDataHora(e.criado_em)} · ${esc([d.pendencia_desc, d.motivo].filter(Boolean).join(' · ') || 'fg_venda_valida = 0')}`;
     } else {
       titulo = e.tipo;
       texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
@@ -89,6 +100,9 @@
   }
 
   function banner() {
+    if (v.nio_venda_valida === false) {
+      return `<div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>A Nio marcou esta venda como inválida${v.nio_pendencia_desc ? ' · ' + esc(v.nio_pendencia_desc) : ''}</strong><span>Venda inválida não conta para meta nem comissão e pode gerar multa ou estorno (venda indevida = tolerância zero). Avise o Ricardo.</span></div></div>`;
+    }
     if (v.status === '1_vendido' && v.horas_sem_agendamento > 4) {
       return `<div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Sem agendamento há ${NG.fmtHoras(v.horas_sem_agendamento)}</strong><span>Indicador de qualidade do contrato: instalação agendada em até 4 h após a venda.</span></div></div>`;
     }
