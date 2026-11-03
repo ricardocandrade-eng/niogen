@@ -16,7 +16,10 @@ Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmap
 | Migration (tabelas, travas, eventos, views, RLS) | `supabase/migrations/0001_v0.sql` |
 | Seed do admin (primeiro usuário do Auth → perfil admin) | `supabase/seed/usuarios_seed.sql` |
 | Seed de EXEMPLO de planos e área (apagar quando a tabela real chegar) | `supabase/seed/config_exemplo_seed.sql` |
-| Login | `docs/index.html` |
+| Importação do OSAB (tabelas, `aplicar_osab`, metas, alertas, views do Painel) | `supabase/migrations/0003_importacao_osab.sql` · `0004` |
+| Login → Painel | `docs/index.html` |
+| Painel (aba Operação) | `docs/painel.html` |
+| Configurações › Importação (OSAB com prévia) | `docs/configuracoes.html` · leitor `docs/assets/osab.js` |
 | Funil 0→5 + Saída | `docs/funil.html` |
 | Instalações por tempo | `docs/instalacoes.html` |
 | Vendas + venda de rua | `docs/vendas.html` |
@@ -30,6 +33,14 @@ Telas do menu que ainda não existem aparecem desabilitadas ("em breve"). Mari, 
 - Entrar em "Aguardando instalação" grava `agendamento_registrado_em = now()` (indicador de 4 h).
 - "Saída" exige motivo.
 - Toda mudança de status, todo agendamento e todo contato vira linha em `eventos_venda`.
+
+## Importação do OSAB
+
+Configurações › Importação: o arquivo é reconhecido pelas colunas (`PEDIDO`, `SITUACAO`, `fg_venda_valida`, `DATA_ABERTURA`, `DT_REF`),
+lido no navegador (SheetJS), mostra a prévia e só então grava `importacoes` + `nio_osab` (lotes de 500) e chama `aplicar_osab()`.
+A regra da prévia (`docs/assets/osab.js`) e a do banco (`aplicar_osab`) são a mesma — mudou uma, muda a outra.
+O OSAB só avança status (2 → 3 → 4 em concluído/válida; 1–2 → saída em cancelamento) e nunca apaga campo com vazio.
+Pedido repetido no arquivo: fica a ordem com `DATA_ABERTURA` mais recente.
 
 ## Rodar local
 
