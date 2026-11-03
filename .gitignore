@@ -1,0 +1,10 @@
+# NIOGEN — nada de segredo ou config local no git
+docs/config.js
+.env
+.env.*
+supabase/.temp/
+supabase/.branches/
+node_modules/
+.DS_Store
+Thumbs.db
+desktop.ini
