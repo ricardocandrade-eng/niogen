@@ -1,0 +1,304 @@
+<!doctype html>
+<!-- NIOGEN | docs/venda.html | 03/11/2026 — detalhe da venda: comissão, linha do tempo (eventos_venda), travas, dados, saída -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Venda · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js"></script>
+<script src="assets/sidebar.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="vendas"></nav>
+  <main class="main" id="main"><div class="carregando">Carregando…</div></main>
+</div>
+<script>
+(async function () {
+  const { esc, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+
+  const main = document.getElementById('main');
+  const id = new URLSearchParams(location.search).get('id');
+  let v = null;
+
+  const TITULOS = {
+    '0_qualificado': 'Qualificada', '1_vendido': 'Vendida · biometria aprovada', '2_aguardando_instalacao': 'Aguardando instalação',
+    '3_instalado': 'Instalada', '4_ativo_provisorio': 'Ativa · comissão provisória', '5_comissao_firme': 'Comissão firme', saida: 'Saída',
+  };
+  const CANAIS = { whatsapp: 'WhatsApp', ligacao: 'Ligação', presencial: 'Presencial' };
+
+  function eventoHtml(e) {
+    const d = e.detalhe || {};
+    const quem = e.autor ? ` · ${esc(e.autor)}` : '';
+    let titulo = '', texto = '', cor = '';
+    if (e.tipo === 'criada') {
+      titulo = `Entrou como ${STATUS_MAP[d.status]?.curto || d.status}`;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · origem ${esc(ORIGENS[d.origem] || d.origem || '')}`;
+    } else if (e.tipo === 'status') {
+      titulo = TITULOS[d.para] || d.para;
+      cor = d.para === 'saida' ? 'bad' : '';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · de ${esc(STATUS_MAP[d.de]?.curto || d.de)}`;
+      if (d.para === '1_vendido' && v.nio_pedido) texto += ` · pedido #${esc(v.nio_pedido)}`;
+      if (d.para === '2_aguardando_instalacao' && v.vendido_em && v.agendamento_registrado_em) {
+        const h = (new Date(v.agendamento_registrado_em) - new Date(v.vendido_em)) / 3600000;
+        titulo = `Instalação agendada em ${NG.fmtHoras(h)}`;
+        texto += h <= 4 ? ' · dentro do limite de 4 h' : ' · fora do limite de 4 h';
+        if (h > 4) cor = 'warn';
+      }
+      if (d.motivo) texto += ` · ${esc(d.motivo)}`;
+    } else if (e.tipo === 'agendamento') {
+      titulo = d.reagendamento ? 'Reagendada' : 'Data da instalação';
+      cor = d.reagendamento ? 'warn' : '';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · para ${NG.fmtDiaSemana(d.para)} ${NG.fmtData(d.para)} ${NG.janela(d.para)}`;
+    } else if (e.tipo === 'contato') {
+      titulo = `Contato · ${CANAIS[d.canal] || d.canal} · ${d.direcao === 'entrada' ? 'recebido' : 'enviado'}`;
+      texto = `${NG.fmtDataHora(e.criado_em)} · por ${esc(d.por || '')}${d.resumo ? ' · ' + esc(d.resumo) : ''}`;
+    } else {
+      titulo = e.tipo;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
+    }
+    return `<div class="tl-item"><span class="tl-dot ${cor}"></span><div class="tl-txt"><strong>${esc(titulo)}</strong><span>${texto}</span></div></div>`;
+  }
+
+  function proximosMarcos() {
+    const m = [];
+    if (v.status === '1_vendido' && v.vendido_em) m.push(`agendar até ${NG.fmtDataHora(new Date(new Date(v.vendido_em).getTime() + 4 * 3600000))}`);
+    if (v.instalacao_agendada_para && !v.instalado_em) m.push(`instalação ${NG.fmtDiaSemana(v.instalacao_agendada_para)} ${NG.fmtData(v.instalacao_agendada_para)} ${NG.janela(v.instalacao_agendada_para)}`);
+    if (v.docs_prazo_em && !v.docs_entregues_em) m.push(`docs à Nio até ${NG.fmtData(v.docs_prazo_em)}`);
+    if (v.firme_em && v.status !== '5_comissao_firme' && v.status !== 'saida') m.push(`180 d sem churn ${NG.fmtDataAno(v.firme_em)}`);
+    if (v.interesse_futuro_em) m.push(`interesse futuro volta ${NG.fmtData(v.interesse_futuro_em + 'T12:00:00')}`);
+    if (!m.length) return '';
+    return `<div class="tl-item"><span class="tl-dot futuro"></span><div class="tl-txt"><strong style="color:var(--muted)">Próximos marcos</strong><span>${esc(m.join(' · '))}</span></div></div>`;
+  }
+
+  function trava(rotulo, valor, okTxt) {
+    const cls = valor === true ? 'ok' : valor === false ? 'bad' : 'nd';
+    const txt = valor === true ? (okTxt || '✓') : valor === false ? '✗' : 'não verificada';
+    return `<div class="trava"><span>${esc(rotulo)}</span><span class="s ${cls}">${esc(txt)}</span></div>`;
+  }
+
+  function banner() {
+    if (v.status === '1_vendido' && v.horas_sem_agendamento > 4) {
+      return `<div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Sem agendamento há ${NG.fmtHoras(v.horas_sem_agendamento)}</strong><span>Indicador de qualidade do contrato: instalação agendada em até 4 h após a venda.</span></div></div>`;
+    }
+    if (v.docs_prazo_em && !v.docs_entregues_em && v.status !== 'saida') {
+      const dias = NG.diasEntre(new Date(), v.docs_prazo_em);
+      if (dias <= 3) return `<div class="banner ${dias < 0 ? '' : 'warn'}"><div style="display:flex;flex-direction:column;gap:2px"><strong>${dias < 0 ? 'Documentos à Nio atrasados' : `Documentos à Nio vencem em ${dias} d`}</strong><span>Contrato: termos assinados e documentação em até 15 dias após a habilitação.</span></div></div>`;
+    }
+    if (v.nio_pendencia_cod || v.nio_pendencia_desc) {
+      return `<div class="banner warn"><div style="display:flex;flex-direction:column;gap:2px"><strong>Pendência Nio · ${esc([v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · '))}</strong><span>Reagendar na tela Instalações.</span></div></div>`;
+    }
+    return '';
+  }
+
+  async function carregar() {
+    const [rv, re, rl] = await Promise.all([
+      NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
+      NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
+      NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
+    ]);
+    if (rv.error || !rv.data) {
+      main.innerHTML = `<div class="placeholder">${esc(rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada.')} <a href="funil.html">Voltar ao funil</a></div>`;
+      return;
+    }
+    v = rv.data;
+    const usuarios = await NG.carregarUsuarios();
+    const nomeDe = Object.fromEntries(usuarios.map((u) => [u.id, u.nome]));
+    const eventos = (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] }));
+    const lim = rl.data || { hoje: 0, mes: 0 };
+    render(eventos, lim, usuarios);
+  }
+
+  function render(eventos, lim, usuarios) {
+    const s = STATUS_MAP[v.status];
+    document.title = `${v.cliente_nome} · NIOGEN`;
+    const firme = v.status === '5_comissao_firme';
+    const emRisco = v.status === 'saida' || firme ? 0 : (v.comissao_paga ?? v.comissao_prevista ?? 0);
+    const estorno = Number(v.estorno_previsto || 0);
+    const local = [v.cidade, v.bairro].filter(Boolean).join(' · ');
+
+    main.innerHTML = `
+      <header class="page-head" style="align-items:flex-start">
+        <div class="tit" style="gap:6px">
+          <a class="voltar" href="funil.html">← Funil · ${esc(s.curto)}</a>
+          <h1 style="font-size:24px">${esc(v.cliente_nome)}</h1>
+          <div class="det-meta">
+            ${v.nio_pedido ? `<span class="mono">Pedido Nio #${esc(v.nio_pedido)}</span><span>·</span>` : ''}
+            ${v.nio_contrato ? `<span class="mono">Contrato ${esc(v.nio_contrato)}</span><span>·</span>` : ''}
+            ${local ? `<span>${esc(local)}</span><span>·</span>` : ''}
+            <span>Origem: ${esc(ORIGENS[v.origem] || v.origem)}${v.origem_ref ? ' · ' + esc(v.origem_ref) : ''}</span>
+          </div>
+        </div>
+        <div class="tools">
+          <button type="button" class="btn" disabled title="em breve">Abrir conversa</button>
+          <button type="button" class="btn" data-acao="contato">Registrar contato</button>
+          <button type="button" class="btn btn-acc" data-acao="editar">Editar</button>
+        </div>
+      </header>
+
+      ${banner()}
+
+      <div class="tres">
+        <div class="valor-card">
+          <span class="rot">Comissão prevista</span>
+          <span class="val">${NG.fmtMoeda(v.comissao_prevista)}</span>
+          <span class="nota">${esc([v.plano_nome, v.plano_familia, v.segmento, 'Anexo II'].filter(Boolean).join(' · '))}</span>
+        </div>
+        <div class="valor-card">
+          <span class="rot">Comissão paga</span>
+          <span class="val ${v.comissao_paga != null ? 'ok' : ''}">${NG.fmtMoeda(v.comissao_paga)}</span>
+          <span class="nota">${v.comissao_paga != null ? `100 % na instalação${v.ciclo_pago ? ' · ciclo ' + esc(v.ciclo_pago) : ''}` : 'aguardando o extrato da Nio'}</span>
+        </div>
+        <div class="valor-card ${emRisco || estorno ? 'warn' : ''}">
+          <span class="rot">Estorno em risco</span>
+          <span class="val">${estorno ? NG.fmtMoeda(estorno) + ' previsto' : NG.fmtMoeda(emRisco)}</span>
+          <span class="nota">${firme ? 'comissão firme' : v.firme_em ? `Churn &lt; 180 d = 100 % · firme em ${NG.fmtDataAno(v.firme_em)}` : 'Churn &lt; 180 d = 100 % · conta a partir da instalação'}</span>
+        </div>
+      </div>
+
+      <div class="duas" style="align-items:flex-start">
+        <section class="painel" style="flex:2 1 520px;border-radius:10px">
+          <h2 style="font-size:14px">Linha do tempo da venda</h2>
+          <div class="timeline">${eventos.map(eventoHtml).join('') || '<span class="carregando">Sem eventos</span>'}${proximosMarcos()}</div>
+        </section>
+
+        <aside style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px">
+          <section class="painel" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">Travas do contrato (na venda)</h2>
+            ${trava('Sem produto ativo / não era cliente Nio', v.trava_sem_produto_ativo, 'não ✓')}
+            ${trava('Sem cancelamento nos últimos 30 d', v.trava_sem_cancelamento_30d, 'não ✓')}
+            ${trava('Dentro da área de atuação', v.trava_area, local ? `${v.cidade} ✓` : '✓')}
+            ${trava('Cobertura Nio no endereço', v.trava_cobertura)}
+            ${trava('CPF/CNPJ válido', v.trava_cpf_valido)}
+            ${trava('Endereço e telefone confirmados', v.trava_contato_confirmado)}
+          </section>
+
+          <section class="painel" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">Dados</h2>
+            <div class="dados">
+              <span>Plano</span><span>${esc(v.plano_nome || '—')}${v.plano_preco != null ? ' · ' + NG.fmtMoeda(v.plano_preco) : ''}</span>
+              <span>Forma</span><span>${esc(FORMAS[v.forma_pagamento] || '—')}${v.vencimento_dia ? ' · venc. ' + v.vencimento_dia : ''}</span>
+              <span>Segmento</span><span>${esc(SEGMENTOS[v.segmento] || '—')}</span>
+              <span>Vendedor</span><span>${esc(v.vendedor_nome || '—')}</span>
+              <span>Biometria</span><span>${esc(v.biometria_status || '—')}${v.biometria_em ? ' · ' + NG.fmtDataHora(v.biometria_em) : ''}</span>
+              <span>CPF / CNPJ</span><span style="font-family:var(--mono);font-size:12px">${esc(v.cliente_cpf_cnpj || '—')}</span>
+              <span>WhatsApp</span><span>${esc(v.cliente_whatsapp || '—')}</span>
+              <span>E-mail</span><span>${esc(v.cliente_email || '—')}</span>
+              <span>Endereço</span><span>${esc([v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ') || '—')}${v.cep ? ' · CEP ' + esc(v.cep) : ''}</span>
+              <span>Docs entregues</span><span>${v.docs_entregues_em ? NG.fmtDataAno(v.docs_entregues_em) : '—'}</span>
+              <span>Contatos no mês</span><span>${lim.mes} de 15 · hoje ${lim.hoje} de 2</span>
+            </div>
+          </section>
+
+          ${v.status === 'saida' ? '' : `<section class="painel" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">Encerrar com motivo</h2>
+            <label class="campo">Motivo<select data-motivo><option value="">Escolher…</option>${NG.MOTIVOS_SAIDA.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
+            <label class="campo" data-futuro hidden>Volta em<input type="date" data-futuro-data></label>
+            <button type="button" class="btn btn-ghost" data-acao="saida" style="color:var(--muted)">Registrar saída</button>
+          </section>`}
+        </aside>
+
+        <section class="painel" style="flex:1 1 100%;border-radius:10px">
+          <h2 style="font-size:14px">Adimplência · bônus M-10 (R$ 150 no 10º mês)</h2>
+          <div class="placeholder">Disponível quando as faturas forem importadas.</div>
+        </section>
+      </div>`;
+
+    const sel = main.querySelector('[data-motivo]');
+    if (sel) sel.addEventListener('change', () => { main.querySelector('[data-futuro]').hidden = !sel.value.startsWith('Interesse futuro'); });
+    main._ctx = { lim, usuarios };
+  }
+
+  async function registrarSaida() {
+    const motivo = main.querySelector('[data-motivo]').value;
+    if (!motivo) { NG.toast('Escolha o motivo da saída.', 'bad'); return; }
+    const futuro = main.querySelector('[data-futuro-data]').value;
+    if (motivo.startsWith('Interesse futuro') && !futuro) { NG.toast('Informe a data de retorno.', 'bad'); return; }
+    const { error } = await NG.sb.from('vendas').update({ status: 'saida', motivo_saida: motivo, interesse_futuro_em: futuro || null }).eq('id', v.id);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Saída registrada', 'ok');
+    carregar();
+  }
+
+  // Teto do contrato: 2 contatos/dia e 15/mês (só saída conta). Exceção: o cliente pediu ou autorizou.
+  async function registrarContato() {
+    const { lim } = main._ctx;
+    const fd = await NG.modal(`
+      <h3>Registrar contato</h3>
+      <p>Hoje ${lim.hoje} de 2 · mês ${lim.mes} de 15 · seg–sex 9–21, sáb 10–16, nunca domingo ou feriado.</p>
+      <label class="campo">Canal<select name="canal"><option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option><option value="presencial">Presencial</option></select></label>
+      <label class="campo">Direção<select name="direcao"><option value="saida">Nós chamamos o cliente</option><option value="entrada">O cliente nos chamou</option></select></label>
+      <label class="campo">Resumo<textarea name="resumo" maxlength="500"></textarea></label>
+      <label class="check"><input type="checkbox" name="autorizado"> O cliente pediu ou autorizou este contato</label>
+    `);
+    if (!fd) return;
+    const saida = fd.get('direcao') === 'saida';
+    if (saida && (lim.hoje >= 2 || lim.mes >= 15) && !fd.get('autorizado')) {
+      NG.toast('Teto do contrato atingido (2/dia ou 15/mês). Só registre se o cliente pediu ou autorizou.', 'bad');
+      return;
+    }
+    const resumo = String(fd.get('resumo') || '').trim();
+    const { error } = await NG.sb.from('contatos_cliente').insert({
+      venda_id: v.id, canal: fd.get('canal'), direcao: fd.get('direcao'),
+      por: saida ? 'vendedor' : 'cliente',
+      resumo: (fd.get('autorizado') ? '[autorizado pelo cliente] ' : '') + resumo || null,
+    });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Contato registrado', 'ok');
+    carregar();
+  }
+
+  async function editar() {
+    const { usuarios } = main._ctx;
+    const vendedores = usuarios.filter((u) => u.perfil !== 'backoffice');
+    const dataLocal = (ts) => (ts ? NG.diaSP(ts) : '');
+    const fd = await NG.modal(`
+      <h3>Editar venda</h3>
+      <p>Mudanças de status são feitas no funil.</p>
+      <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off"></label>
+      <label class="campo">Contrato Nio<input type="text" name="contrato" value="${esc(v.nio_contrato || '')}"></label>
+      <label class="campo">Biometria<select name="biometria"><option value="">—</option>${Object.keys(NG.BIOMETRIA).map((b) => `<option value="${b}" ${v.biometria_status === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
+      <label class="campo">Vendedor<select name="vendedor"><option value="">—</option>${vendedores.map((u) => `<option value="${u.id}" ${u.id === v.vendedor_id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></label>
+      <label class="campo">Docs entregues à Nio em<input type="date" name="docs" value="${dataLocal(v.docs_entregues_em)}"></label>
+    `);
+    if (!fd) return;
+    const biometria = fd.get('biometria') || null;
+    const docs = fd.get('docs');
+    const { error } = await NG.sb.from('vendas').update({
+      nio_pedido: String(fd.get('pedido') || '').trim() || null,
+      nio_contrato: String(fd.get('contrato') || '').trim() || null,
+      biometria_status: biometria,
+      biometria_em: biometria && biometria !== v.biometria_status ? new Date().toISOString() : v.biometria_em,
+      vendedor_id: fd.get('vendedor') || null,
+      docs_entregues_em: docs ? `${docs}T12:00:00-03:00` : null,
+    }).eq('id', v.id);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Venda atualizada', 'ok');
+    carregar();
+  }
+
+  main.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-acao]');
+    if (!b) return;
+    if (b.dataset.acao === 'saida') registrarSaida();
+    else if (b.dataset.acao === 'contato') registrarContato();
+    else if (b.dataset.acao === 'editar') editar();
+  });
+
+  if (!id) { main.innerHTML = '<div class="placeholder">Venda não informada. <a href="funil.html">Voltar ao funil</a></div>'; return; }
+  await carregar();
+})();
+</script>
+</body>
+</html>
