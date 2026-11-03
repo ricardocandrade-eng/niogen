@@ -180,6 +180,39 @@ a.nav-item:hover { color: var(--text); }
 .acoes .btn { flex: 1; min-height: 42px; }
 .comissao-prev { font-size: 12px; color: var(--muted); }
 .comissao-prev strong { font-family: var(--mono); color: var(--text); }
+.nota-campo { font-size: 11px; color: var(--muted); }
+
+/* planos (tabela vigente) e serviços adicionais no formulário */
+.planos-op { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.plano-op { position: relative; display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 10px 34px; border-radius: 8px;
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text); cursor: pointer; }
+.plano-op input { position: absolute; left: 11px; top: 12px; accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.plano-op:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.po-nome { font-size: 13px; font-weight: 600; }
+.po-preco { font-size: 12px; color: var(--muted); }
+.po-preco b { font-family: var(--mono); color: var(--text); font-weight: 600; }
+.po-det { font-size: 11px; color: var(--muted); }
+.po-com { font-size: 11px; font-family: var(--dm); color: var(--ok-fg); }
+.adic { display: flex; flex-direction: column; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
+.ad-linha { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); font-size: 13px; cursor: pointer; }
+.ad-linha:last-child { border-bottom: 0; }
+.ad-nome { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ad-info { font-size: 11px; color: var(--muted); }
+.ad-linha input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; flex: 0 0 16px; }
+.ad-linha select { min-height: 32px; width: 64px; flex: 0 0 64px; padding: 0 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.resumo-venda { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--surface-dim); border: 1px solid var(--border-strong); }
+.resumo-venda:empty { display: none; }
+.rv-linha { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; margin-top: 4px; }
+.rv-linha:first-child { margin-top: 0; }
+.rv-linha strong { font-family: var(--mono); font-size: 16px; }
+.rv-nota { font-size: 11px; color: var(--muted); }
+.rv-alerta { font-size: 11px; color: var(--warn-fg); }
+
+/* Configurações › Tabela vigente */
+.tab tr.inativo td { color: var(--muted); opacity: .6; }
+.tab .obs { font-size: 11px; color: var(--muted); max-width: 320px; }
+.tab-bloco { display: flex; flex-direction: column; gap: 8px; }
+.tab-bloco h2 { margin: 0; font-size: 14px; font-weight: 600; }
 
 /* ---------- tabela ---------- */
 table.tab { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 13px; }
@@ -311,4 +344,5 @@ a.alerta { text-decoration: none; }
 }
 @media (max-width: 420px) {
   .grade2 { grid-template-columns: 1fr; }
+  .planos-op { grid-template-columns: 1fr; }
 }

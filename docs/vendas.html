@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-3">
-<script src="config.js?v=031126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-4">
+<script src="config.js?v=031126-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-3"></script>
-<script src="assets/sidebar.js?v=031126-3"></script>
+<script src="assets/app.js?v=031126-4"></script>
+<script src="assets/sidebar.js?v=031126-4"></script>
 </head>
 <body>
 <div class="app">
@@ -69,18 +69,28 @@
           <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
           <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
           <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
-          <label class="campo">Plano (tabela vigente)<select name="plano"></select></label>
-          <label class="campo">Forma · vencimento
-            <div class="junto">
-              <select name="forma"><option value="cartao">Cartão</option><option value="boleto">Boleto</option><option value="dacc">DACC</option></select>
-              <input type="number" name="vencimento" min="1" max="31" placeholder="dia" aria-label="Dia de vencimento" style="width:70px;flex:0 0 70px">
-            </div>
-          </label>
           <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
-          <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
           <label class="campo" id="campo-ref" hidden>Quem indicou<input type="text" name="origem_ref"></label>
         </div>
-        <span class="comissao-prev" id="comissao-prev"></span>
+
+        <div class="grade2">
+          <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
+          <label class="campo">Forma de pagamento<select name="forma"><option value="cartao">Cartão de crédito</option><option value="boleto">Boleto</option><option value="dacc">Débito em conta</option></select></label>
+        </div>
+        <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
+
+        <div class="campo">
+          <span>Plano · tabela vigente desde <span id="vigencia">—</span></span>
+          <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
+        </div>
+        <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
+
+        <div class="campo">
+          <span>Serviços adicionais</span>
+          <div class="adic" id="adicionais"></div>
+        </div>
+
+        <div class="resumo-venda" id="resumo" aria-live="polite"></div>
 
         <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
 
@@ -191,11 +201,16 @@
   const btnVenda = document.getElementById('btn-venda');
 
   const hoje = NG.diaSP();
-  const [{ data: planos }, { data: areas }] = await Promise.all([
-    NG.sb.from('config_planos').select('*').eq('ativo', true).lte('vigencia_inicio', hoje).order('comissao'),
+  const [{ data: planos }, { data: areas }, { data: adicionais }, { data: bonus }] = await Promise.all([
+    NG.sb.from('config_planos').select('*').eq('ativo', true).lte('vigencia_inicio', hoje).order('preco'),
     NG.sb.from('config_area').select('*').eq('ativo', true),
+    NG.sb.from('config_adicionais').select('*').eq('ativo', true).lte('vigencia_inicio', hoje).order('id'),
+    NG.sb.from('config_bonus').select('*').lte('valido_de', hoje),
   ]);
   const vigentes = (planos || []).filter((p) => !p.vigencia_fim || p.vigencia_fim >= hoje);
+  const bonusVigente = (bonus || []).filter((b) => !b.valido_ate || b.valido_ate >= hoje);
+  const ini = vigentes.map((p) => p.vigencia_inicio).sort().pop();
+  document.getElementById('vigencia').textContent = ini ? NG.fmtDiaISO(ini) : '—';
 
   // Endereço vindo do ViaCEP + resultado das travas.
   const estado = { viacep: null, cobertura: null, area: null, dup: null };
@@ -210,22 +225,97 @@
       (!a.bairro || norm(a.bairro) === norm(bairro)));
   }
 
+  // Varejo = PF; Empresas = MEI/NMEI. A variante sem fidelidade não aparece na lista: o checkbox troca para ela.
+  const SEM_FID = { regular: 'nfid', oferta50: 'oferta50_nfid' };
+  const portfolio = () => (F.segmento.value === 'PF' ? 'varejo' : 'empresas');
+  const planoMarcado = () => (form.querySelector('input[name="plano"]:checked') || {}).value || '';
+
   function renderPlanos() {
-    const atual = F.plano.value;
-    const lista = vigentes.filter((p) => p.segmento === F.segmento.value &&
+    const atual = planoMarcado();
+    const lista = vigentes.filter((p) => (p.segmentos || []).includes(F.segmento.value) && !Object.values(SEM_FID).includes(p.variante) &&
       (!p.forma_pagamento_permitida || p.forma_pagamento_permitida.includes(F.forma.value)));
-    F.plano.innerHTML = '<option value="">Escolher…</option>' + lista.map((p) =>
-      `<option value="${p.id}">${esc(p.nome)} · ${p.preco != null ? NG.fmtMoeda(p.preco) : 'R$ [PREÇO]'}</option>`).join('');
-    if (lista.some((p) => String(p.id) === atual)) F.plano.value = atual;
-    if (!lista.length) F.plano.innerHTML = '<option value="">Nenhum plano vigente para este segmento/forma</option>';
-    renderComissao();
+    document.getElementById('planos-op').innerHTML = lista.length ? lista.map((p) => `
+      <label class="plano-op">
+        <input type="radio" name="plano" value="${p.id}" ${String(p.id) === atual ? 'checked' : ''}>
+        <span class="po-nome">${esc(p.nome)}</span>
+        <span class="po-preco"><b>${NG.fmtMoeda(p.preco)}</b> boleto/débito${p.preco_cartao != null ? ` · ${NG.fmtMoeda(p.preco_cartao)} no cartão` : ' · mesmo preço no cartão'}</span>
+        <span class="po-det">${esc([p.velocidade, p.wifi, p.internet_5g ? `Internet 5G ${p.internet_5g}` : null].filter(Boolean).join(' · '))}</span>
+        ${p.inclusos && p.inclusos.length ? `<span class="po-det">Já vem com ${esc(p.inclusos.join(', '))}</span>` : ''}
+        <span class="po-com">comissão ${NG.fmtMoeda(p.comissao)}</span>
+      </label>`).join('') : '<span class="nota-campo">Nenhum plano vigente para este segmento/forma</span>';
+    const temSemFid = vigentes.some((p) => p.portfolio === portfolio() && Object.values(SEM_FID).includes(p.variante));
+    document.getElementById('campo-nfid').hidden = !temSemFid;
+    if (!temSemFid) F.nfid.checked = false;
+    renderAdicionais();
   }
-  function planoEscolhido() { return vigentes.find((p) => String(p.id) === F.plano.value) || null; }
-  function renderComissao() {
+
+  // Plano que vai para a venda: o marcado, ou o equivalente sem fidelidade se o checkbox estiver marcado.
+  function planoEscolhido() {
+    const base = vigentes.find((p) => String(p.id) === planoMarcado()) || null;
+    if (!base || !F.nfid.checked) return base;
+    return vigentes.find((p) => p.portfolio === base.portfolio && p.familia === base.familia && p.cluster === base.cluster &&
+      p.variante === SEM_FID[base.variante]) || base;
+  }
+
+  function renderAdicionais() {
+    const port = portfolio();
+    const lista = (adicionais || []).filter((a) => (a.portfolio || []).includes(port));
+    const antes = {};
+    document.querySelectorAll('#adicionais [data-ad]').forEach((el) => { antes[el.dataset.ad] = el.type === 'checkbox' ? (el.checked ? 1 : 0) : Number(el.value); });
+    document.getElementById('adicionais').innerHTML = lista.map((a) => {
+      const preco = a.preco != null ? `${NG.fmtMoeda(a.preco)}/mês${a.max_por_contrato > 1 ? ' cada' : ''}` : 'preço no portal';
+      const info = `<span class="ad-info">${preco} · comissão ${NG.fmtMoeda(a.comissao)}</span>`;
+      if (a.max_por_contrato > 1) {
+        const opts = Array.from({ length: a.max_por_contrato + 1 }, (_, i) => `<option value="${i}" ${antes[a.codigo] === i ? 'selected' : ''}>${i}</option>`).join('');
+        return `<label class="ad-linha"><span class="ad-nome">${esc(a.nome)}${info}</span><select data-ad="${a.codigo}" aria-label="${esc(a.nome)}: quantidade">${opts}</select></label>`;
+      }
+      return `<label class="ad-linha"><span class="ad-nome">${esc(a.nome)}${info}</span><input type="checkbox" data-ad="${a.codigo}" ${antes[a.codigo] ? 'checked' : ''}></label>`;
+    }).join('') || '<span class="nota-campo">Nenhum serviço adicional para este portfólio</span>';
+    renderResumo();
+  }
+
+  function adicionaisEscolhidos() {
+    return [...document.querySelectorAll('#adicionais [data-ad]')]
+      .map((el) => ({ a: (adicionais || []).find((x) => x.codigo === el.dataset.ad), qtd: el.type === 'checkbox' ? (el.checked ? 1 : 0) : Number(el.value) }))
+      .filter((x) => x.a && x.qtd > 0);
+  }
+
+  // Prévia da conta que o banco faz em recalcular_comissao: nominal + adicionais + transição + NMEI. O M-10 fica fora.
+  function bonusDe(tipo, p) {
+    const b = bonusVigente.filter((x) => x.tipo === tipo && x.cluster === p.cluster && (!x.plano_codigo || x.plano_codigo === p.codigo))
+      .sort((x, y) => (y.plano_codigo ? 1 : 0) - (x.plano_codigo ? 1 : 0))[0];
+    return b ? Number(b.valor) : 0;
+  }
+  function calcular() {
     const p = planoEscolhido();
-    document.getElementById('comissao-prev').innerHTML = p
-      ? `Comissão prevista: <strong>${NG.fmtMoeda(p.comissao)}</strong> · ${esc(p.familia || '')} · ${esc(F.segmento.value)} · Anexo II (provisória até 180 d)`
-      : '';
+    if (!p) return null;
+    const ads = adicionaisEscolhidos();
+    const valor = F.forma.value === 'cartao' && p.preco_cartao != null ? Number(p.preco_cartao) : Number(p.preco);
+    const valorAd = ads.reduce((s, x) => s + Number(x.a.preco || 0) * x.qtd, 0);
+    const nominal = Number(p.comissao || 0);
+    const adic = ads.reduce((s, x) => s + Number(x.a.comissao) * x.qtd, 0);
+    const transicao = bonusDe('transicao', p);
+    const nmei = F.segmento.value === 'NMEI' && p.portfolio === 'empresas' ? bonusDe('nmei', p) : 0;
+    return { p, valor, valorAd, nominal, adic, transicao, nmei, total: nominal + adic + transicao + nmei, m10: bonusDe('m10', p) };
+  }
+
+  function renderResumo() {
+    const c = calcular();
+    const el = document.getElementById('resumo');
+    if (!c) { el.innerHTML = ''; return; }
+    const m = NG.fmtMoeda;
+    const forma = F.forma.value === 'cartao' ? 'no cartão' : 'boleto/débito';
+    const hab = c.p.taxa_a_vista
+      ? `<span class="rv-alerta">Sem fidelidade: taxa de habilitação de ${m(c.p.taxa_habilitacao)} à vista na 1ª fatura.</span>`
+      : `<span class="rv-nota">Habilitação de ${m(c.p.taxa_habilitacao)} isenta ficando ${c.p.isencao_meses} meses (cancelou antes, paga o proporcional).</span>`;
+    el.innerHTML = `
+      <div class="rv-linha"><span>Valor mensal ao cliente</span><strong>${m(c.valor + c.valorAd)}</strong></div>
+      <span class="rv-nota">${esc(c.p.nome)} ${m(c.valor)} ${forma}${c.valorAd ? ` + ${m(c.valorAd)} de adicionais` : ''}</span>
+      ${hab}
+      <div class="rv-linha"><span>Comissão prevista</span><strong>${m(c.total)}</strong></div>
+      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · provisória até 180 dias</span>
+      ${c.m10 ? `<span class="rv-nota">M-10 potencial: ${m(c.m10)} no 11º mês, se ativo e adimplente no 10º (fora da prevista)</span>` : ''}
+      ${c.p.observacao ? `<span class="rv-nota">${esc(c.p.observacao)}</span>` : ''}`;
   }
 
   function renderTravas() {
@@ -285,7 +375,9 @@
   });
   F.segmento.addEventListener('change', renderPlanos);
   F.forma.addEventListener('change', renderPlanos);
-  F.plano.addEventListener('change', renderComissao);
+  document.getElementById('planos-op').addEventListener('change', renderResumo);
+  document.getElementById('adicionais').addEventListener('change', renderResumo);
+  F.nfid.addEventListener('change', renderResumo);
   F.origem.addEventListener('change', () => { document.getElementById('campo-ref').hidden = F.origem.value !== 'indicacao'; });
   F.biometria.addEventListener('change', () => { document.getElementById('campo-bio-em').hidden = F.biometria.value !== 'agendada'; atualizarBotao(); });
   F.pedido.addEventListener('input', atualizarBotao);
@@ -306,7 +398,6 @@
     if (status === '1_vendido') {
       if (!docOk) falta.push('CPF/CNPJ válido');
       if (!p) falta.push('plano');
-      if (!F.vencimento.value) falta.push('dia de vencimento');
       if (!F.contato_ok.checked) falta.push('confirmação de contato e endereço');
       if (!F.app_ok.checked) falta.push('conferência no APP');
       if (estado.area === false) falta.push('endereço fora da área de atuação');
@@ -337,8 +428,6 @@
       uf: j.uf || null,
       plano_id: p ? p.id : null,
       forma_pagamento: F.forma.value,
-      vencimento_dia: F.vencimento.value ? Number(F.vencimento.value) : null,
-      comissao_prevista: p ? p.comissao : null,
       nio_pedido: F.pedido.value.trim() || null,
       biometria_status: F.biometria.value || null,
       biometria_em: biometriaEm,
@@ -356,7 +445,13 @@
     const [linha, falta] = montar(status);
     if (falta.length) { NG.toast(`Falta: ${falta.join(', ')}.`, 'bad'); return; }
     botao.disabled = true;
+    // Comissão, valor mensal e vencimento quem calcula é o banco (recalcular_comissao / vendas_calcula_vencimento).
+    const ads = adicionaisEscolhidos();
     const { data, error } = await NG.sb.from('vendas').insert(linha).select('id').single();
+    if (!error && ads.length) {
+      const r = await NG.sb.from('venda_adicionais').insert(ads.map((x) => ({ venda_id: data.id, adicional_id: x.a.id, qtd: x.qtd })));
+      if (r.error) NG.toast(`Venda salva, mas os adicionais não: ${NG.msgErro(r.error)}`, 'bad');
+    }
     botao.disabled = false;
     atualizarBotao();
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }

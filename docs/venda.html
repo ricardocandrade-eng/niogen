@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-3">
-<script src="config.js?v=031126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-4">
+<script src="config.js?v=031126-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-3"></script>
-<script src="assets/sidebar.js?v=031126-3"></script>
+<script src="assets/app.js?v=031126-4"></script>
+<script src="assets/sidebar.js?v=031126-4"></script>
 </head>
 <body>
 <div class="app">
@@ -31,6 +31,7 @@
   const main = document.getElementById('main');
   const id = new URLSearchParams(location.search).get('id');
   let v = null;
+  let adics = [];
 
   const TITULOS = {
     '0_qualificado': 'Qualificada', '1_vendido': 'Vendida · biometria aprovada', '2_aguardando_instalacao': 'Aguardando instalação',
@@ -117,11 +118,13 @@
   }
 
   async function carregar() {
-    const [rv, re, rl] = await Promise.all([
+    const [rv, re, rl, ra] = await Promise.all([
       NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
+      NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
     ]);
+    adics = ra.data || [];
     if (rv.error || !rv.data) {
       main.innerHTML = `<div class="placeholder">${esc(rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada.')} <a href="funil.html">Voltar ao funil</a></div>`;
       return;
@@ -141,6 +144,11 @@
     const emRisco = v.status === 'saida' || firme ? 0 : (v.comissao_paga ?? v.comissao_prevista ?? 0);
     const estorno = Number(v.estorno_previsto || 0);
     const local = [v.cidade, v.bairro].filter(Boolean).join(' · ');
+    const m = NG.fmtMoeda;
+    const valorAd = adics.reduce((s, a) => s + Number((a.config_adicionais || {}).preco || 0) * a.qtd, 0);
+    const partes = `${m(v.comissao_nominal)} nominal · ${m(v.comissao_adicionais)} adicionais · ${m(v.bonus_transicao_previsto)} transição · ${m(v.bonus_nmei_previsto)} NMEI`;
+    const listaAd = adics.map((a) => `${a.qtd > 1 ? a.qtd + '× ' : ''}${(a.config_adicionais || {}).nome || '?'}`).join(', ');
+    const cartao = v.forma_pagamento === 'cartao';
 
     main.innerHTML = `
       <header class="page-head" style="align-items:flex-start">
@@ -167,7 +175,8 @@
         <div class="valor-card">
           <span class="rot">Comissão prevista</span>
           <span class="val">${NG.fmtMoeda(v.comissao_prevista)}</span>
-          <span class="nota">${esc([v.plano_nome, v.plano_familia, v.segmento, 'Anexo II'].filter(Boolean).join(' · '))}</span>
+          <span class="nota">${partes}</span>
+          ${Number(v.bonus_m10_potencial) ? `<span class="nota">M-10 potencial ${m(v.bonus_m10_potencial)} no 11º mês, se ativa e adimplente (fora da prevista)</span>` : ''}
         </div>
         <div class="valor-card">
           <span class="rot">Comissão paga</span>
@@ -201,8 +210,13 @@
           <section class="painel" style="border-radius:10px;gap:10px">
             <h2 style="font-size:14px">Dados</h2>
             <div class="dados">
-              <span>Plano</span><span>${esc(v.plano_nome || '—')}${v.plano_preco != null ? ' · ' + NG.fmtMoeda(v.plano_preco) : ''}</span>
-              <span>Forma</span><span>${esc(FORMAS[v.forma_pagamento] || '—')}${v.vencimento_dia ? ' · venc. ' + v.vencimento_dia : ''}</span>
+              <span>Plano</span><span>${esc(v.plano_nome || '—')}${v.plano_taxa_a_vista ? ' · taxa de habilitação à vista na 1ª fatura' : ''}</span>
+              <span>Adicionais</span><span>${esc(listaAd || '—')}</span>
+              <span>Valor mensal</span><span>${v.valor_mensal != null ? `${m(Number(v.valor_mensal) + valorAd)}${valorAd ? ` (plano ${m(v.valor_mensal)} + ${m(valorAd)})` : ''}` : '—'}</span>
+              <span>Forma</span><span>${esc(FORMAS[v.forma_pagamento] || '—')}</span>
+              <span>1º vencimento</span><span>${v.primeiro_vencimento
+                ? `${NG.fmtDiaISO(v.primeiro_vencimento)} · ${cartao ? 'cobra todo dia' : 'depois todo dia'} ${v.vencimento_dia}`
+                : cartao ? 'no dia da instalação' : '25 dias após a instalação'}</span>
               <span>Segmento</span><span>${esc(SEGMENTOS[v.segmento] || '—')}</span>
               <span>Vendedor</span><span>${esc(v.vendedor_nome || '—')}</span>
               <span>Biometria</span><span>${esc(v.biometria_status || '—')}${v.biometria_em ? ' · ' + NG.fmtDataHora(v.biometria_em) : ''}</span>
