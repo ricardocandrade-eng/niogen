@@ -1,0 +1,269 @@
+<!doctype html>
+<!-- NIOGEN | docs/configuracoes.html | 03/11/2026 — Importação e configurações · aba Importação (OSAB com prévia obrigatória) -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Configurações · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=031126-3">
+<script src="config.js?v=031126-3"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="assets/app.js?v=031126-3"></script>
+<script src="assets/sidebar.js?v=031126-3"></script>
+<script src="assets/osab.js?v=031126-3"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="config"></nav>
+  <main class="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1>Importação e configurações</h1>
+        <span class="sub">O que a Nio manda entra aqui · o que a Dharma decide fica aqui · só admin e backoffice</span>
+      </div>
+      <div class="abas" role="tablist">
+        <button type="button" class="aba ativa" role="tab" aria-selected="true">Importação</button>
+        <button type="button" class="aba" disabled title="em breve">Planos e área</button>
+        <button type="button" class="aba" disabled title="em breve">Mari</button>
+        <button type="button" class="aba" disabled title="em breve">Usuários</button>
+      </div>
+    </header>
+
+    <div id="sem-acesso" class="placeholder" hidden>A importação é feita por admin ou backoffice.</div>
+
+    <section id="conteudo" class="secao" hidden>
+      <h2 class="secao-tit">Relatórios da Nio</h2>
+      <div class="cards-rel">
+        <div class="rel">
+          <div class="rel-topo"><strong>OSAB · pedidos e instalação</strong><span class="chip" id="osab-ultima">nenhuma importação</span></div>
+          <span class="rel-desc">Chave <span class="mono">PEDIDO</span> · atualiza situação, pendência, data de instalação, venda válida · diário (e-mail ou portal do empresário)</span>
+          <div class="tools">
+            <label class="btn btn-sm" style="display:inline-flex;align-items:center;cursor:pointer">Enviar arquivo<input type="file" id="arquivo" accept=".xlsx,.xls,.xlsb,.csv" hidden></label>
+            <button type="button" class="btn btn-sm btn-ghost" id="ver-ultima" disabled>Ver resumo da última</button>
+          </div>
+        </div>
+        <div class="rel">
+          <div class="rel-topo"><strong>Extrato quinzenal · Pedidos × Linha a Linha</strong><span class="chip dim">em breve</span></div>
+          <span class="rel-desc">Chave <span class="mono">CONTRATO</span> + <span class="mono">NUM_OS_PEDIDO_SIEBEL</span> · comissão, estorno, bônus por linha · alimenta a Conciliação e a NF</span>
+          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
+        </div>
+        <div class="rel">
+          <div class="rel-topo"><strong>FPD · 1ª, 2ª e 3ª fatura</strong><span class="chip dim">em breve</span></div>
+          <span class="rel-desc">Chave <span class="mono">ID_CONTRATO</span> · 1 linha por fatura · pinta as bolinhas 1–3 da Adimplência · mensal</span>
+          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
+        </div>
+        <div class="rel">
+          <div class="rel-topo"><strong>CHURN · retiradas</strong><span class="chip dim">em breve</span></div>
+          <span class="rel-desc">Chave <span class="mono">NR_ORDEM</span> · tipo (vol/invol), motivo, safra · gera estorno previsto · pedir em .xlsx</span>
+          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
+        </div>
+        <div class="rel tracejado" style="grid-column:1/-1">
+          <div class="rel-topo"><strong style="color:var(--muted)">Extrato mensal de faturas (4ª à 10ª)</strong><span class="chip dim">ainda não recebido · pedir ao Rogério</span></div>
+          <span class="rel-desc">Sem ele as bolinhas 4–10 da Adimplência e o bônus M-10 ficam cegos depois do 3º mês.</span>
+        </div>
+      </div>
+      <div class="rodape-info">
+        <span><strong>Como funciona:</strong> o arquivo é identificado pelas colunas, não pelo nome · prévia obrigatória (linhas afetadas, divergências) antes de aplicar · nada sobrescreve dado digitado · o OSAB nunca rebaixa status · cada importação fica no histórico com quem aplicou e quando</span>
+      </div>
+
+      <section class="painel" id="previa" hidden aria-live="polite"></section>
+
+      <section class="painel">
+        <h2>Histórico de importações</h2>
+        <div style="overflow-x:auto">
+          <table class="tab" style="min-width:640px">
+            <thead><tr><th>Quando</th><th>Tipo</th><th>Arquivo</th><th>DT_REF</th><th style="text-align:right">Linhas</th><th style="text-align:right">Casaram</th><th style="text-align:right">Sem venda</th><th>Quem</th></tr></thead>
+            <tbody id="historico"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc, STATUS_MAP } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) { document.getElementById('sem-acesso').hidden = false; return; }
+  document.getElementById('conteudo').hidden = false;
+
+  const previa = document.getElementById('previa');
+  const inputArq = document.getElementById('arquivo');
+  const LOTE = 500;
+  let usuarios = {};
+  let ultima = null;
+  let atual = null;   // { arquivo, leitura, casam, mudam, pend, invalidas, semVenda }
+
+  const plural = (n, um, varios) => `${NG.fmtNum(n)} ${n === 1 ? um : varios}`;
+  const fmtDtRef = (d) => (d ? d.split('-').reverse().join('/') : '—');
+
+  async function carregarHistorico() {
+    const [{ data, error }, us] = await Promise.all([
+      NG.sb.from('importacoes').select('*').order('criado_em', { ascending: false }).limit(30),
+      NG.carregarUsuarios(),
+    ]);
+    usuarios = Object.fromEntries(us.map((u) => [u.id, u.nome]));
+    const tb = document.getElementById('historico');
+    if (error) { tb.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+    const lista = data || [];
+    ultima = lista.find((i) => i.tipo === 'osab' && i.aplicado_em) || null;
+    const chip = document.getElementById('osab-ultima');
+    if (ultima) {
+      chip.className = 'chip ok';
+      chip.textContent = `${NG.fmtDataHora(ultima.aplicado_em)} · DT_REF ${fmtDtRef(ultima.dt_ref)} · ${plural(ultima.aplicadas || 0, 'pedido nosso', 'pedidos nossos')}`;
+    }
+    document.getElementById('ver-ultima').disabled = !ultima;
+    tb.innerHTML = lista.length ? lista.map((i) => `<tr>
+        <td>${NG.fmtDataHora(i.aplicado_em || i.criado_em)}${i.aplicado_em ? '' : ' <span class="chip warn">não aplicada</span>'}</td>
+        <td>${esc(i.tipo.toUpperCase())}</td>
+        <td>${esc(i.arquivo_nome || '—')}</td>
+        <td>${fmtDtRef(i.dt_ref)}</td>
+        <td class="num">${NG.fmtNum(i.linhas)}</td>
+        <td class="num">${NG.fmtNum(i.aplicadas)}</td>
+        <td class="num">${NG.fmtNum(i.resumo && i.resumo.sem_venda)}</td>
+        <td>${esc(usuarios[i.criado_por] || '—')}</td>
+      </tr>`).join('') : '<tr><td colspan="8" class="vazio">Nenhuma importação ainda</td></tr>';
+  }
+
+  // ---------------------------------------------------------------- prévia
+  inputArq.addEventListener('change', async () => {
+    const f = inputArq.files[0];
+    inputArq.value = '';
+    if (!f) return;
+    previa.hidden = false;
+    previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><span class="carregando">Lendo o arquivo…</span>`;
+    let leitura;
+    try {
+      leitura = NGOsab.ler(await f.arrayBuffer());
+    } catch (e) {
+      leitura = { erro: `Não consegui ler o arquivo: ${e.message}` };
+    }
+    if (leitura.erro) {
+      atual = null;
+      previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Arquivo recusado</strong><span>${esc(leitura.erro)}</span></div></div>`;
+      return;
+    }
+
+    const { data: vendas, error } = await NG.sb.from('v_funil')
+      .select('id, cliente_nome, status, nio_pedido, nio_situacao, nio_pendencia_cod, nio_pendencia_desc, nio_venda_valida')
+      .not('nio_pedido', 'is', null).limit(10000);
+    if (error) { previa.innerHTML = `<h2>Prévia</h2><div class="banner"><strong>${esc(NG.msgErro(error))}</strong></div>`; return; }
+    const porPedido = new Map((vendas || []).map((v) => [v.nio_pedido, v]));
+
+    const casam = [], mudam = [], pend = [], invalidas = [];
+    let semVenda = 0;
+    for (const o of leitura.linhas) {
+      const v = porPedido.get(o.pedido);
+      if (!v) { semVenda++; continue; }
+      const c = NGOsab.classificar(o, v);
+      casam.push({ o, v, c });
+      if (c.para) mudam.push({ o, v, c });
+      if (c.pendencia) pend.push({ o, v, c });
+      if (c.risco) invalidas.push({ o, v, c });
+    }
+    atual = { arquivo: f.name, leitura, casam, mudam, pend, invalidas, semVenda };
+    renderPrevia();
+  });
+
+  function renderPrevia() {
+    const { arquivo, leitura, casam, mudam, pend, invalidas, semVenda } = atual;
+    const sit = Object.entries(leitura.situacoes).sort((a, b) => b[1] - a[1])
+      .map(([s, n]) => `<span class="chip">${esc(s)} · ${NG.fmtNum(n)}</span>`).join('');
+    const linhaVenda = (x, extra) => `<tr><td><a href="venda.html?id=${x.v.id}">${esc(x.v.cliente_nome)}</a><div class="sub mono">#${esc(x.o.pedido)}</div></td><td>${extra}</td></tr>`;
+    previa.innerHTML = `
+      <div class="rel-topo"><h2>Prévia · ${esc(arquivo)}</h2><span class="chip">aba ${esc(leitura.aba)} · DT_REF ${fmtDtRef(leitura.dt_ref)}</span></div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <div class="kpi"><span class="rot">Linhas lidas</span><span class="val">${NG.fmtNum(leitura.lidas)}</span><span class="nota">${plural(leitura.linhas.length, 'pedido distinto', 'pedidos distintos')}</span></div>
+        <div class="kpi"><span class="rot">Casam com venda nossa</span><span class="val ok">${NG.fmtNum(casam.length)}</span></div>
+        <div class="kpi"><span class="rot">Sem venda no NIOGEN</span><span class="val">${NG.fmtNum(semVenda)}</span><span class="nota">a Nio enxerga, nós não</span></div>
+        <div class="kpi ${mudam.length ? 'warn' : ''}"><span class="rot">Mudam de status</span><span class="val">${NG.fmtNum(mudam.length)}</span></div>
+        <div class="kpi ${pend.length ? 'warn' : ''}"><span class="rot">Entram em pendência</span><span class="val">${NG.fmtNum(pend.length)}</span></div>
+        <div class="kpi ${invalidas.length ? 'bad' : ''}"><span class="rot">Inválidas / risco</span><span class="val">${NG.fmtNum(invalidas.length)}</span><span class="nota">multa ou estorno</span></div>
+      </div>
+      ${leitura.duplicadas ? `<div class="aviso">${plural(leitura.duplicadas, 'linha repetida', 'linhas repetidas')} com o mesmo PEDIDO: fica a ordem mais recente (DATA_ABERTURA). ${leitura.semPedido ? plural(leitura.semPedido, 'linha sem PEDIDO ignorada', 'linhas sem PEDIDO ignoradas') + '.' : ''}</div>` : ''}
+      <div class="chips">${sit}</div>
+      ${mudam.length ? `<div style="overflow-x:auto"><table class="tab" style="min-width:480px"><thead><tr><th>Cliente</th><th>Muda</th></tr></thead><tbody>
+        ${mudam.map((x) => linhaVenda(x, `${esc(STATUS_MAP[x.v.status].curto)} → <strong>${esc(STATUS_MAP[x.c.para].curto)}</strong>${x.c.motivoSaida ? `<div class="sub">${esc(x.c.motivoSaida)}</div>` : ''}`)).join('')}
+      </tbody></table></div>` : ''}
+      ${pend.length ? `<div style="overflow-x:auto"><table class="tab" style="min-width:480px"><thead><tr><th>Cliente</th><th>Pendência Nio</th></tr></thead><tbody>
+        ${pend.map((x) => linhaVenda(x, esc([x.c.pendencia.cod, x.c.pendencia.desc].filter(Boolean).join(' · ')))).join('')}
+      </tbody></table></div>` : ''}
+      ${invalidas.length ? `<div style="overflow-x:auto"><table class="tab" style="min-width:480px"><thead><tr><th>Cliente</th><th>Risco</th></tr></thead><tbody>
+        ${invalidas.map((x) => linhaVenda(x, `<span style="color:var(--bad-fg)">${esc(x.o.venda_valida === false ? 'venda inválida' : 'cláusula de multa/estorno')}${x.o.desc_pendencia ? ' · ' + esc(x.o.desc_pendencia) : ''}${x.o.motivo_cancelamento ? ' · ' + esc(x.o.motivo_cancelamento) : ''}</span>`)).join('')}
+      </tbody></table></div>` : ''}
+      <div class="acoes">
+        <button type="button" class="btn btn-ghost" data-cancelar>Descartar</button>
+        <button type="button" class="btn btn-acc" data-aplicar>Aplicar</button>
+      </div>`;
+  }
+
+  // ---------------------------------------------------------------- aplicar
+  async function aplicar(botao) {
+    const { arquivo, leitura, casam, mudam, pend, invalidas, semVenda } = atual;
+    botao.disabled = true;
+    const passo = (t) => { botao.textContent = t; };
+    passo('Registrando…');
+    const { data: imp, error: e1 } = await NG.sb.from('importacoes').insert({
+      tipo: 'osab', arquivo_nome: arquivo, dt_ref: leitura.dt_ref, linhas: leitura.lidas,
+      ignoradas: leitura.duplicadas + leitura.semPedido,
+      resumo: { pedidos: leitura.linhas.length, duplicadas: leitura.duplicadas, sem_pedido: leitura.semPedido,
+        previa: { casam: casam.length, mudam: mudam.length, pendencias: pend.length, invalidas: invalidas.length, sem_venda: semVenda } },
+    }).select('id').single();
+    if (e1) { NG.toast(NG.msgErro(e1), 'bad'); botao.disabled = false; passo('Aplicar'); return; }
+
+    for (let i = 0; i < leitura.linhas.length; i += LOTE) {
+      passo(`Enviando ${NG.fmtNum(Math.min(i + LOTE, leitura.linhas.length))} de ${NG.fmtNum(leitura.linhas.length)}…`);
+      const lote = leitura.linhas.slice(i, i + LOTE).map((o) => ({ ...o, importacao_id: imp.id }));
+      const { error } = await NG.sb.from('nio_osab').upsert(lote, { onConflict: 'pedido' });
+      if (error) {
+        NG.toast(`Falhou no lote ${i / LOTE + 1}: ${NG.msgErro(error)}. Nada foi aplicado ao funil — envie o arquivo de novo.`, 'bad');
+        botao.disabled = false; passo('Aplicar');
+        carregarHistorico();
+        return;
+      }
+    }
+    passo('Aplicando no funil…');
+    const { data: resumo, error: e2 } = await NG.sb.rpc('aplicar_osab', { p_importacao_id: imp.id });
+    if (e2) { NG.toast(NG.msgErro(e2), 'bad'); botao.disabled = false; passo('Aplicar'); return; }
+    mostrarResumo(resumo, arquivo);
+    NG.toast('OSAB aplicado', 'ok');
+    atual = null;
+    carregarHistorico();
+  }
+
+  function mostrarResumo(r, arquivo) {
+    previa.hidden = false;
+    const sem = (r.sem_venda_pedidos || []);
+    previa.innerHTML = `
+      <div class="rel-topo"><h2>Aplicado · ${esc(arquivo || '')}</h2><a href="funil.html">ver no Funil →</a></div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        <div class="kpi"><span class="rot">Vendas atualizadas</span><span class="val ok">${NG.fmtNum(r.atualizadas)}</span></div>
+        <div class="kpi"><span class="rot">Mudaram de status</span><span class="val">${NG.fmtNum(r.mudaram_status)}</span><span class="nota">${plural(r.saidas || 0, 'saída', 'saídas')}</span></div>
+        <div class="kpi"><span class="rot">Em pendência</span><span class="val">${NG.fmtNum(r.pendencias)}</span></div>
+        <div class="kpi ${r.invalidas ? 'bad' : ''}"><span class="rot">Inválidas / risco</span><span class="val">${NG.fmtNum(r.invalidas)}</span></div>
+        <div class="kpi"><span class="rot">Sem venda no NIOGEN</span><span class="val">${NG.fmtNum(r.sem_venda)}</span></div>
+      </div>
+      ${sem.length ? `<details><summary class="painel-sub" style="cursor:pointer">Pedidos sem venda no NIOGEN (${NG.fmtNum(r.sem_venda)}${r.sem_venda > sem.length ? `, mostrando ${sem.length}` : ''})</summary>
+        <div class="chips" style="margin-top:8px">${sem.map((p) => `<span class="chip mono">${esc(p)}</span>`).join('')}</div></details>` : ''}`;
+  }
+
+  previa.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-cancelar]')) { atual = null; previa.hidden = true; previa.innerHTML = ''; }
+    const b = ev.target.closest('[data-aplicar]');
+    if (b && atual) aplicar(b);
+  });
+  document.getElementById('ver-ultima').addEventListener('click', () => ultima && mostrarResumo(ultima.resumo || {}, ultima.arquivo_nome));
+
+  await carregarHistorico();
+})();
+</script>
+</body>
+</html>
