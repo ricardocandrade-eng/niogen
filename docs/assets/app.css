@@ -415,3 +415,5 @@ fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; c
 .dfv-sem { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--bad-bg); border: 1px solid var(--bad-border); color: var(--bad-fg); font-size: 12px; }
 .dfv-sem[hidden] { display: none; }
 .chip.selo.bad { border-color: var(--bad-border); }
+.dfv-senha { font-family: var(--mono); font-size: 12px; padding: 1px 6px; border-radius: 4px; background: var(--surface-2); color: var(--text); }
+.dfv-passos { display: block; margin-top: 4px; }

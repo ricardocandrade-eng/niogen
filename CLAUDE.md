@@ -85,7 +85,7 @@ Se não for nenhum dos quatro, não se constrói — vira doc de ideia e espera.
 ### 5. Segurança, sem exceção
 Nenhum segredo em arquivo versionado, HTML ou chat. Token da WABA Nio (system user `Nio_API`), service role do Supabase Nio, token do Meta Ads Nio,
 chave Claude: `.env` da VPS, credencial do n8n, gerenciador de senhas. Chave exposta = rotacionar na hora. O app Meta "Renata Digital" serve as duas
-WABAs: **webhook da Nio sempre por override da WABA `1419511943295487`, nunca no nível do app**. Base de clientes da Nio não vai para chip comum/Evolution.
+WABAs: **webhook da Nio sempre por override da WABA `1419511943295487`, nunca no nível do app**. Base de clientes da Nio não vai para chip comum/Evolution. **Exceção (Ricardo, 03/11):** usuário e as 2 senhas do painel DFV Nio (filtro do relatório, não uma conta) ficam no Supabase Nio, em `config_links.acesso`, visíveis só para usuário logado no NIOGEN — gravadas pelo CLI, **nunca** em arquivo versionado, HTML, Drive ou INFRA.
 
 ### 6. Deploy
 Front: Claude Code publica no clone → push → hospedagem (Cloudflare Pages ou GitHub Pages — decidir, INFRA). **Sempre bumpar o `CACHE` do `sw.js`** se houver.

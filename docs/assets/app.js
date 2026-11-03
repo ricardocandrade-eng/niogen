@@ -227,14 +227,16 @@
     if (v.dfv_dispensado) return selo('DFV dispensado (admin)', 'warn', `Admin dispensou a consulta: ${v.dfv_dispensa_motivo || '—'}`);
     return selo('DFV não consultado', 'warn', `${TEXTOS_DFV.opcoes.nao_consultado} ${TEXTOS_DFV.trava}`);
   }
-  let linkDfvCache;
-  async function linkDfv() {
-    if (linkDfvCache === undefined) {
-      const { data } = await sb.from('config_links').select('url').eq('chave', 'dfv_sudeste').maybeSingle();
-      linkDfvCache = (data && data.url) || null;
+  // Link e acesso do DFV vêm do banco (config_links, só para logado) — nunca do repo, que é público.
+  let dfvCache;
+  async function dadosDfv() {
+    if (dfvCache === undefined) {
+      const { data } = await sb.from('config_links').select('url, acesso').eq('chave', 'dfv_sudeste').maybeSingle();
+      dfvCache = { url: (data && data.url) || null, acesso: (data && data.acesso) || null };
     }
-    return linkDfvCache;
+    return dfvCache;
   }
+  async function linkDfv() { return (await dadosDfv()).url; }
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
     v = v || {};
@@ -243,7 +245,7 @@
     return `
       <div class="dfv-topo">
         <a class="btn btn-sm dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir DFV Sudeste ↗</a>
-        <span class="nota-campo">${esc(TEXTOS_DFV.como)}</span>
+        <span class="nota-campo" data-dfv-acesso>${esc(TEXTOS_DFV.como)}</span>
       </div>
       <div class="grade2">
         <label class="campo"><span>Viabilidade no DFV ${dicaTxt(todas)}</span>
@@ -271,11 +273,24 @@
     };
   }
   async function ligarLinkDfv(root) {
-    const url = await linkDfv();
+    const { url, acesso } = await dadosDfv();
     root.querySelectorAll('[data-dfv-link]').forEach((a) => {
       if (url) { a.href = url; return; }
       a.title = 'Link do DFV ainda não cadastrado no NIOGEN — peça ao Ricardo';
       a.addEventListener('click', (e) => { e.preventDefault(); toast(a.title, 'bad'); });
+    });
+    if (!acesso) return;
+    // Senhas mascaradas até alguém tocar em "mostrar" (tela de celular na rua).
+    root.querySelectorAll('[data-dfv-acesso]').forEach((el) => {
+      const sen = (n) => `<code class="dfv-senha" data-senha="${esc(acesso[n] || '')}">••••</code>`;
+      el.innerHTML = `Usuário <strong>${esc(acesso.usuario || '')}</strong> · Senha 1 ${sen('senha1')} · Senha 2 ${sen('senha2')} `
+        + '<button type="button" class="btn btn-sm btn-ghost" data-mostrar-senha>mostrar</button>'
+        + (acesso.passos ? `<span class="dfv-passos">${esc(acesso.passos)}</span>` : '');
+      el.querySelector('[data-mostrar-senha]').addEventListener('click', (ev) => {
+        const ver = ev.currentTarget.textContent === 'mostrar';
+        el.querySelectorAll('[data-senha]').forEach((c) => { c.textContent = ver ? c.dataset.senha : '••••'; });
+        ev.currentTarget.textContent = ver ? 'esconder' : 'mostrar';
+      });
     });
   }
 
