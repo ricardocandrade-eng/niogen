@@ -1,0 +1,46 @@
+// NIOGEN | n8n/mari/n11_saida.js — nó "11 · Saída" do mari_principal (04/11/2026)
+// Ponto único de saída de todos os caminhos. Monta o corpo devolvido pela rota de teste
+// (modo 'teste') ou a mensagem a enviar pelo Chatwoot (modo 'chatwoot').
+const ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };
+const j = $input.first().json || {};
+const e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};
+
+let saida;
+if (j.saida) {
+  saida = j.saida;
+} else if (ex('10b · Supabase salvar turno')) {
+  const s = $('10 · Salvar turno').first().json;
+  const r = s.r || {};
+  const h = ex('9 · Handoff') ? $('9 · Handoff').first().json : null;
+  saida = {
+    resposta: r.texto,
+    conversa_id: r.conversaId,
+    etapa: r.handoff ? 'handoff' : (r.upd && r.upd.etapa) || null,
+    handoff: r.handoff ? { motivo: r.handoff.motivo, ...(h || {}) } : null,
+    tags: r.tags || {},
+    upd: r.upd || {},
+    modelo: r.modelo,
+    tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,
+    corrigido: r.violacoesCorrigidas || null,
+    erro: r.erro ? r.erro.mensagem : null,
+    prompt: r.promptVersao || null,
+  };
+} else if (ex('7f · Supabase abortar')) {
+  saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };
+} else if (j.esgotado) {
+  saida = { erro: 'conversa ocupada por mais de 45 s (lock)' };
+} else if (j.silencio === true && j.conversa_id) {
+  saida = { silencio: true, status: j.status, conversa_id: j.conversa_id, motivo: 'conversa em handoff — o humano conduz' };
+} else if (j.resultado) {
+  saida = { resultado: j.resultado, status: j.status || null };
+} else {
+  saida = { erro: 'saída não identificada' };
+}
+
+return [{ json: {
+  modo: e.modo || 'teste',
+  saida,
+  resposta: saida.resposta || '',
+  chatwootConversationId: e.chatwootConversationId || null,
+  config: e.config || {},
+} }];

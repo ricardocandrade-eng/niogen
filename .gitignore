@@ -12,3 +12,8 @@ desktop.ini
 # Dado da Nio (DFV, relatórios) nunca entra no repo: só no Supabase
 *.csv
 *.CSV
+
+# backups dos workflows n8n (deploy_mari.py) e saídas locais dos testes
+n8n/backups/
+tests/saida/
+__pycache__/
