@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-13">
-<script src="config.js?v=031126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-14">
+<script src="config.js?v=031126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-13"></script>
-<script src="assets/sidebar.js?v=031126-13"></script>
+<script src="assets/app.js?v=031126-14"></script>
+<script src="assets/sidebar.js?v=031126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -284,7 +284,7 @@
   document.getElementById('vigencia').textContent = ini ? NG.fmtDiaISO(ini) : '—';
 
   // Endereço vindo do ViaCEP + resultado das travas.
-  const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, dfv: null, dfvErro: false, consultando: false };
+  const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false };
 
 
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
@@ -398,7 +398,7 @@
       <span class="rv-nota">${esc(c.p.nome)} ${m(c.valor)} ${forma}${c.valorAd ? ` + ${m(c.valorAd)} de adicionais` : ''}</span>
       ${hab}
       <div class="rv-linha"><span>${NG.rotulo('Comissão prevista (em risco)', 'emRisco')}</span><strong>${m(c.total)}</strong></div>
-      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · em risco até 180 dias da ativação</span>
+      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · em risco até 30 dias da ativação</span>
       ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 11º mês`, 'm10')} (fora da comissão em risco)</span>` : ''}
       ${c.p.observacao ? `<span class="rv-nota">${esc(c.p.observacao)}</span>` : ''}`;
   }
@@ -414,13 +414,23 @@
       ? '<span class="chip bad">Endereço já tem venda ativa no NIOGEN ✗</span>'
       : '<span class="chip ok">Endereço sem venda ativa no NIOGEN ✓</span>';
     const doc = estado.dup && estado.dup.documento ? '<span class="chip bad">CPF/CNPJ já tem venda ativa ✗</span>' : '';
-    travasEl.innerHTML = a + d + doc;
+    // Recompra (endereço que já teve venda que saiu ou que a Nio cancelou): avisa, não bloqueia.
+    const rec = estado.recompra && estado.recompra.recompra ? '<span class="chip warn recompra">Possível recompra: a Nio aplica multa de R$ 500 por pedido. Confirme com o Ricardo antes de registrar.</span>' : '';
+    travasEl.innerHTML = a + d + doc + rec;
   }
 
   async function checarDuplicidade() {
     if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.dup = null; atualizar(); return; }
     const { data, error } = await NG.sb.rpc('checar_duplicidade', { p_cpf_cnpj: F.doc.value, p_cep: F.cep.value, p_numero: F.numero.value });
     estado.dup = error ? null : data;
+    atualizar();
+    checarRecompra();
+  }
+
+  async function checarRecompra() {
+    if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.recompra = null; atualizar(); return; }
+    const { data, error } = await NG.sb.rpc('checar_recompra', { p_cep: F.cep.value, p_numero: F.numero.value, p_complemento: F.complemento.value || null });
+    estado.recompra = error ? null : data;
     atualizar();
   }
 
@@ -621,7 +631,7 @@
     const manualSem = F.dfv_origem.value === 'manual' && ['sem_viabilidade', 'nao_encontrado'].includes(F.dfv_viabilidade.value);
     semEl.hidden = !(a.ocupado || manualSem);
     semEl.querySelector('span').textContent = a.ocupado
-      ? 'Se o cliente confirmar que já tem Nio: não vender (estorno 100 % e multa). Registrar como saída?'
+      ? 'Se o cliente confirmar que já tem Nio: não vender (estorno 100 %). Registrar como saída?'
       : 'Sem cobertura: não vender. Quer registrar como saída e voltar a falar em 90 dias?';
     btnSem.textContent = a.ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
 
@@ -657,7 +667,7 @@
 
   F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
   F.numero.addEventListener('change', () => { checarDuplicidade(); consultarDfv(); });
-  F.complemento.addEventListener('change', () => consultarDfv());
+  F.complemento.addEventListener('change', () => { consultarDfv(); checarRecompra(); });
   F.bairro.addEventListener('change', () => {
     if (estado.viacep) { atualizarArea(); renderPlanos(); atualizar(); }
   });
@@ -724,7 +734,7 @@
 
   function limpar() {
     form.reset();
-    Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, dfv: null, dfvErro: false, consultando: false });
+    Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false });
     document.getElementById('endereco').hidden = true;
     document.getElementById('doc-erro').textContent = '';
     abriuSozinho = new Set([1]);
@@ -742,7 +752,12 @@
     // Comissão, valor mensal e vencimento quem calcula é o banco (recalcular_comissao / vendas_calcula_vencimento).
     // As travas também: se algo escapar daqui, o RAISE do banco volta como toast.
     const ads = adicionaisEscolhidos();
+    const recompra = estado.recompra && estado.recompra.recompra ? estado.recompra : null;
     const { data, error } = await NG.sb.from('vendas').insert(linha).select('id').single();
+    if (!error && recompra) {
+      await NG.sb.from('eventos_venda').insert({ venda_id: data.id, tipo: 'alerta_recompra', detalhe: {
+        cep: linha.cep, numero: linha.numero, complemento: linha.complemento, anteriores: recompra.anteriores, ultima_em: recompra.ultima_em } });
+    }
     if (!error && ads.length) {
       const r = await NG.sb.from('venda_adicionais').insert(ads.map((x) => ({ venda_id: data.id, adicional_id: x.a.id, qtd: x.qtd })));
       if (r.error) NG.toast(`Venda salva, mas os adicionais não: ${NG.msgErro(r.error)}`, 'bad');
