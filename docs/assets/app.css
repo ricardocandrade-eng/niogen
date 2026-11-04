@@ -326,14 +326,18 @@ a.alerta { text-decoration: none; }
 }
 
 /* ---------- celular ---------- */
+/* Menu lateral recolhido atrás do ☰ (padrão de telas, 04/11): a barra .topo-movel é criada pelo sidebar.js. */
+.topo-movel { display: none; }
 @media (max-width: 760px) {
-  .nav { flex: 1 1 100%; border-right: 0; border-bottom: 1px solid var(--border); }
-  .nav-brand, .nav-user { padding-left: 16px; padding-right: 16px; }
-  .nav-items { flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px 12px; }
-  .nav-sec { flex: 1 1 100%; padding: 0 4px 2px; margin-top: 6px; }
-  .nav-item { width: auto; padding: 6px 10px; border-left: 0; border-radius: 6px; font-size: 12px; }
-  .nav-item.ativo { box-shadow: inset 0 -2px 0 var(--accent); }
-  .nav-foot { padding: 4px 12px 8px; }
+  .app { flex-direction: column; flex-wrap: nowrap; }
+  .topo-movel { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--nav); border-bottom: 1px solid var(--border); }
+  .topo-movel .menu-btn { width: 40px; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; }
+  .topo-movel strong { font-size: 16px; font-weight: 800; letter-spacing: .5px; }
+  .topo-movel strong span { color: var(--accent); }
+  .topo-movel .pag { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .nav { position: fixed; top: 0; left: 0; bottom: 0; z-index: 45; width: min(280px, 86vw); overflow-y: auto; transform: translateX(-100%); visibility: hidden; transition: transform .22s ease, visibility 0s linear .22s; box-shadow: 8px 0 24px rgba(0, 0, 0, .5); }
+  .nav.aberto { transform: none; visibility: visible; transition: transform .22s ease; }
+  .nav-veu { position: fixed; inset: 0; z-index: 44; background: rgba(5, 7, 10, .6); }
   .main { padding: 16px; }
   .kpis, .kpis.seis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cards-rel { grid-template-columns: 1fr; }
@@ -397,7 +401,7 @@ dialog.modal-cidades { width: min(640px, calc(100vw - 32px)); max-height: calc(1
 .dica-pop { position: absolute; z-index: 1000; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-strong);
   color: var(--text); font-size: 12px; line-height: 1.45; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); text-transform: none; letter-spacing: 0; font-weight: 400; }
 @media (pointer: coarse) { .dica { width: 26px; height: 26px; font-size: 15px; } }
-/* Selos da venda: comissão em risco × ganha · M-10 elegível × não elegível */
+/* Selos da venda (DFV e M-10 elegível × não elegível) */
 .chips.selos { margin-top: 2px; }
 .chip.selo { cursor: help; border: 1px solid transparent; }
 .chip.selo.warn { border-color: var(--warn-border); } .chip.selo.ok { border-color: var(--ok-fg); }
@@ -541,3 +545,169 @@ fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; c
 /* Estorno corrigido (04/11): aviso discreto de downgrade e alerta de recompra */
 .meta.aviso-dg { font-size: 11px; color: var(--muted); font-style: italic; }
 .chip.recompra { white-space: normal; line-height: 1.4; border-radius: 8px; border: 1px solid var(--warn-border); }
+
+/* ==========================================================================
+   Padrão de telas (v0.7 · 04/11) — docs/PADRAO_TELAS_NIOGEN_041126_1225.md
+   Componentes comuns: cabeçalho com ação principal, KPIs (até 4), abas em pílula, barra de filtros com Período,
+   tabela padrão, pílula por etapa, próximo passo (bad/warn/ok), gaveta lateral, cartões no celular e FAB.
+   ========================================================================== */
+.cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cab h1 { margin: 0; font-size: 22px; font-weight: 700; }
+.cab .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.btn-acc:hover:not(:disabled) { filter: brightness(1.08); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+
+/* KPIs: até 4 cartões, barra de progresso opcional */
+.kpis.quatro { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpis.quatro .kpi { padding: 14px 16px; border-radius: 12px; gap: 4px; }
+.kpis.quatro .kpi .rot { text-transform: uppercase; letter-spacing: .05em; }
+.kpis.quatro .kpi .nota { font-size: 12px; }
+.kpi .barra { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+.kpi .barra i { display: block; height: 100%; background: var(--accent); }
+
+/* Abas em pílula com contagem (a variante .alerta pinta a contagem de vermelho) */
+.abas.pilulas { padding: 0 0 2px; background: none; border: 0; gap: 6px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.abas.pilulas::-webkit-scrollbar { display: none; }
+.abas.pilulas .aba { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); font-size: 13px; white-space: nowrap; }
+.abas.pilulas .aba b { font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; }
+.abas.pilulas .aba.ativa { background: var(--surface-2); color: var(--text); border-color: var(--border-strong); }
+.abas.pilulas .aba.ativa b { background: var(--accent); color: var(--bg); }
+.abas.pilulas .aba.alerta { color: var(--warn-fg); background: transparent; border-color: var(--border); padding: 0 12px; }
+.abas.pilulas .aba.alerta::before { display: none; }
+.abas.pilulas .aba.alerta.ativa { background: var(--surface-2); border-color: var(--warn-border); }
+.abas.pilulas .aba.alerta b { background: var(--bad-bg); color: var(--bad-fg); }
+.abas.pilulas .aba.alerta.ativa b { background: var(--warn-dot); color: var(--bg); }
+
+/* Barra de filtros: busca larga + seletores + Período (com de/até) + ação à direita */
+.barra-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.busca { flex: 1 1 260px; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--muted); }
+.busca input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text); outline: 0; font-size: 13px; }
+.sel { min-height: 40px; padding: 0 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
+.sel option { background: var(--surface); }
+.periodo { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.periodo .datas { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
+.periodo input[type=date] { color-scheme: dark; }
+.barra-filtros .dir { margin-left: auto; display: flex; gap: 8px; }
+
+/* Tabela padrão: cabeçalho sticky, ordenação, linha clicável, rodapé com contagem */
+.lista.padrao { flex: none; overflow: visible; }
+.lista.padrao .rolagem { overflow-x: auto; }
+.lista.padrao table.tab { min-width: 860px; }
+.lista.padrao .tab thead th { position: sticky; top: 0; z-index: 1; background: var(--surface); white-space: nowrap; }
+.tab th[data-ord] { cursor: pointer; user-select: none; }
+.tab th[data-ord]:hover { color: var(--text); }
+.tab th .seta { opacity: .5; margin-left: 4px; font-family: var(--sans); }
+.tab th.num { text-align: right; }
+.lista.padrao .tab td { vertical-align: middle; }
+.tab tbody tr.clicavel { cursor: pointer; transition: background .12s; }
+.tab tbody tr.clicavel:hover { background: var(--surface-2); }
+.tab tbody tr.clicavel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tab .cli b { display: block; font-weight: 600; color: var(--text); }
+.tab .cli small, .tab .plano-c small { display: block; color: var(--muted); font-size: 12px; }
+.tab .plano-c b { font-weight: 600; }
+.tab .apagado { color: var(--muted); white-space: nowrap; }
+.tab tr.saida .cli b { color: var(--muted); }
+.rodape-lista { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+
+/* Pílula por etapa (uma por linha) */
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+.pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill.qualificado { background: var(--info-bg); color: var(--info-fg); }
+.pill.vendido, .pill.aguardando, .pill.instalado { background: #232A36; color: #C9D3E3; }
+.pill.ativo { background: var(--ok-bg); color: var(--ok-fg); }
+.pill.saida { background: var(--surface-dim); color: var(--muted); border: 1px solid var(--border); }
+
+/* Próximo passo: vermelho = atrasado/prazo do contrato · amarelo = fazer hoje · cinza = acompanhar */
+.prox { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.prox::before { content: ""; width: 7px; height: 7px; border-radius: 50%; flex: 0 0 7px; border: 1px solid var(--muted); box-sizing: border-box; }
+.prox.warn { color: var(--warn-fg); }
+.prox.warn::before { background: var(--warn-dot); border-color: var(--warn-dot); }
+.prox.bad { color: var(--bad-fg); }
+.prox.bad::before { background: var(--bad-dot); border-color: var(--bad-dot); }
+.prox.dim::before { display: none; }
+
+/* Cartões no celular + botão flutuante */
+.cartoes { display: none; flex-direction: column; gap: 10px; }
+.cartao { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-decoration: none; }
+a.cartao:hover { color: var(--text); border-color: var(--border-strong); }
+.cartao .cli b { display: block; font-weight: 600; }
+.cartao .cli small { color: var(--muted); font-size: 12px; }
+.cartao .valor { font-family: var(--mono); font-size: 14px; text-align: right; white-space: nowrap; }
+.cartao .l2 { grid-column: 1 / -1; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.cartao.saida { opacity: .7; }
+.cartoes .vazio { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+.fab { display: none; position: fixed; right: 18px; bottom: 18px; z-index: 25; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--accent); color: var(--bg); font-size: 28px; line-height: 1; cursor: pointer; box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+
+/* Gaveta lateral: NG.gaveta.abrir()/fechar() — ×, Esc e clique fora fecham; tela cheia ≤ 760 px */
+.gaveta-veu { position: fixed; inset: 0; z-index: 40; background: rgba(5, 7, 10, .6); opacity: 0; pointer-events: none; transition: opacity .2s; }
+.gaveta-veu.aberto { opacity: 1; pointer-events: auto; }
+.gaveta { position: fixed; top: 0; right: 0; bottom: 0; z-index: 41; width: min(560px, 100vw); display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); transform: translateX(100%); transition: transform .25s ease, visibility 0s linear .25s; visibility: hidden; }
+.gaveta.aberta { transform: none; visibility: visible; transition: transform .25s ease; }
+body.gaveta-on { overflow: hidden; }
+.g-cab { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.g-cab h2 { margin: 0; font-size: 17px; }
+.g-cab p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+.g-fechar { width: 36px; height: 36px; flex: 0 0 36px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; }
+.g-fechar:hover { color: var(--text); background: var(--surface-2); }
+.g-corpo { flex: 1; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.g-pe { display: flex; flex-direction: column; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); background: var(--surface-dim); }
+
+/* Barra de passos clicável (formulário longo em gaveta) */
+.g-passos { display: flex; gap: 4px; padding: 12px 20px; border-bottom: 1px solid var(--border); margin: 0; list-style: none; }
+.g-passos li { flex: 1; min-width: 0; }
+.g-passos button { width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-passos button i { display: block; height: 4px; border-radius: 2px; background: var(--surface-2); }
+.g-passos [data-estado="ok"] i { background: var(--ok-fg); }
+.g-passos [data-estado="warn"] i { background: var(--warn-dot); }
+.g-passos [data-estado="bad"] i { background: var(--bad-dot); }
+.g-passos button.atual { color: var(--text); font-weight: 600; }
+.g-passos button.atual i { box-shadow: 0 0 0 1px var(--accent); }
+.g-passos button.atual:not([data-estado="ok"]):not([data-estado="warn"]):not([data-estado="bad"]) i { background: var(--accent); }
+
+/* Segmentos (Cartão | Boleto | Débito) no lugar de selects curtos */
+.seg { display: flex; gap: 4px; padding: 3px; border-radius: 8px; background: var(--bg); border: 1px solid var(--border); }
+.seg label { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 8px; border-radius: 6px; color: var(--muted); font-size: 13px; cursor: pointer; text-align: center; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:has(input:checked) { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--accent); }
+
+@media (max-width: 1100px) {
+  .kpis.quatro { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .kpis.quatro { gap: 8px; }
+  .kpis.quatro .kpi { padding: 12px; }
+  .kpis.quatro .kpi .val { font-size: 18px; }
+  .lista.padrao { display: none; }
+  .cartoes { display: flex; }
+  .fab { display: block; }
+  .cab .acao-principal { display: none; }
+  .main.com-fab { padding-bottom: 90px; }
+  .barra-filtros .dir { display: none; }
+  .barra-filtros .sel { flex: 1 1 30%; min-width: 0; }
+  .periodo { flex: 1 1 100%; }
+  .periodo > .sel { flex: 1 1 auto; }
+  .g-passos button { font-size: 0; gap: 0; }
+  .g-cab, .g-corpo, .g-pe, .g-passos { padding-left: 16px; padding-right: 16px; }
+}
+
+/* Formulário em gaveta, um passo por vez (Nova venda) */
+.g-form { display: flex; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
+.passo-g { display: flex; flex-direction: column; gap: 12px; }
+.passo-g h3 { margin: 0; font-size: 15px; }
+.passo-g .ajuda { margin: -6px 0 0; font-size: 12px; color: var(--muted); }
+.g-form .campo input, .g-form .campo select { min-height: 42px; background: var(--bg); font-size: 14px; }
+.g-resumo { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--muted); }
+.g-resumo b { font-family: var(--mono); color: var(--text); margin-left: 6px; }
+.g-falta { font-size: 12px; color: var(--warn-fg); }
+.g-falta.ok { color: var(--ok-fg); }
+.g-botoes { display: flex; justify-content: space-between; gap: 8px; }
+.g-botoes .dir { display: flex; gap: 8px; margin-left: auto; }
+.g-botoes .btn { min-height: 42px; }
+@media (max-width: 1100px) { .lista.padrao .col-media { display: none; } .lista.padrao table.tab { min-width: 680px; } }
+@media (max-width: 760px) {
+  .g-botoes .dir { flex: 1; }
+  .g-botoes .btn { padding: 0 10px; font-size: 12px; }
+  .g-botoes .dir .btn { flex: 1; }
+  .g-resumo { flex-direction: column; gap: 2px; }
+}

@@ -1,4 +1,4 @@
-/* NIOGEN | docs/assets/app.js | 03/11/2026
+/* NIOGEN | docs/assets/app.js | 03/11/2026 · 04/11 componentes do padrão de telas (período, KPIs, abas, ordenação, gaveta)
  * Cliente Supabase, sessão, rótulos do funil, formatação e componentes comuns (toast, modais).
  * Depende de: config.js (window.NIOGEN_CONFIG) e supabase-js v2 (window.supabase), carregados antes.
  */
@@ -33,6 +33,17 @@
     { id: 'saida', curto: 'Saída', col: 'Saída · motivo obrigatório', chip: 'dim' },
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
+
+  // Etapas visíveis (padrão de telas): Qualificado · Vendido · Aguardando · Instalado · Ativo (4 e 5) · Saída.
+  const ETAPAS = [
+    { id: 'qualificado', nome: 'Qualificado', status: ['0_qualificado'] },
+    { id: 'vendido', nome: 'Vendido', status: ['1_vendido'] },
+    { id: 'aguardando', nome: 'Aguardando', status: ['2_aguardando_instalacao'] },
+    { id: 'instalado', nome: 'Instalado', status: ['3_instalado'] },
+    { id: 'ativo', nome: 'Ativo', status: ['4_ativo_provisorio', '5_comissao_firme'] },
+    { id: 'saida', nome: 'Saída', status: ['saida'] },
+  ];
+  const etapaDe = (status) => ETAPAS.find((e) => e.status.includes(status)) || { id: '', nome: status || '—', status: [] };
 
   const ORIGENS = {
     meta_ads: 'Meta Ads · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
@@ -608,15 +619,169 @@
       valores.map(([v, r]) => `<option value="${esc(v)}">${esc(r)}</option>`).join('');
   }
 
+  // ---------- padrão de telas (04/11): período, KPIs, abas, ordenação, etapa, gaveta ----------
+  const pad2 = (n) => String(n).padStart(2, '0');
+  // São Paulo não tem horário de verão desde 2019: meia-noite local = 03:00 UTC.
+  const inicioDiaSP = (dia) => new Date(`${dia}T00:00:00-03:00`);
+  const somaDias = (dia, n) => { const d = new Date(`${dia}T12:00:00-03:00`); d.setUTCDate(d.getUTCDate() + n); return diaSP(d); };
+  const PERIODOS = [['hoje', 'Hoje'], ['7', 'Últimos 7 dias'], ['mes', 'Este mês'], ['mesant', 'Mês passado'], ['tudo', 'Tudo'], ['custom', 'Período…']];
+  // Período → {inicio, fim} (Date, fim exclusivo = 00:00 do dia seguinte ao último) + {de, ate} (AAAA-MM-DD), em America/Sao_Paulo.
+  // "tudo" (ou datas vazias no Período…) devolve null na ponta aberta.
+  function periodo(valor, de, ate) {
+    const hoje = diaSP();
+    let a = null, b = null;
+    if (valor === 'hoje') { a = hoje; b = hoje; }
+    else if (valor === '7') { a = somaDias(hoje, -6); b = hoje; }
+    else if (valor === 'mes') { a = `${hoje.slice(0, 8)}01`; b = hoje; }
+    else if (valor === 'mesant') {
+      const primeiro = `${hoje.slice(0, 8)}01`;
+      b = somaDias(primeiro, -1);
+      a = `${b.slice(0, 8)}01`;
+    } else if (valor === 'custom') { a = de || null; b = ate || null; }
+    return { valor, de: a, ate: b, inicio: a ? inicioDiaSP(a) : null, fim: b ? inicioDiaSP(somaDias(b, 1)) : null };
+  }
+  const noPeriodo = (v, p) => {
+    if (!p || (!p.inicio && !p.fim)) return true;
+    if (!v) return false;
+    const t = new Date(v).getTime();
+    return (!p.inicio || t >= p.inicio.getTime()) && (!p.fim || t < p.fim.getTime());
+  };
+  // Seletor de Período (Hoje · 7 dias · Este mês · Mês passado · Tudo · Período… com de/até). Devolve {valor() → periodo, el}.
+  function filtroPeriodo(el, { padrao = 'mes', aoMudar } = {}) {
+    el.classList.add('periodo');
+    el.innerHTML = `<select class="sel" aria-label="Período">${PERIODOS.map(([v, t]) => `<option value="${v}" ${v === padrao ? 'selected' : ''}>${t}</option>`).join('')}</select>
+      <span class="datas" hidden><input class="sel" type="date" aria-label="De"> até <input class="sel" type="date" aria-label="Até"></span>`;
+    const sel = el.querySelector('select');
+    const datas = el.querySelector('.datas');
+    const [de, ate] = el.querySelectorAll('input');
+    const valor = () => periodo(sel.value, de.value, ate.value);
+    sel.addEventListener('change', () => {
+      datas.hidden = sel.value !== 'custom';
+      if (sel.value === 'custom' && !de.value && !ate.value) { const h = diaSP(); de.value = `${h.slice(0, 8)}01`; ate.value = h; }
+      if (aoMudar) aoMudar(valor());
+    });
+    [de, ate].forEach((i) => i.addEventListener('change', () => aoMudar && aoMudar(valor())));
+    return { el, valor, get rotulo() { return sel.options[sel.selectedIndex].text; } };
+  }
+
+  // Cartão de KPI: {rot, val, de (meta), nota, pct (0–100, barra), cls (warn/bad), dica (texto do ⓘ)}.
+  function kpi({ rot, val, de, nota, pct, cls, dica: d }) {
+    return `<div class="kpi ${cls || ''}">
+      <span class="rot">${esc(rot)}${d ? dicaTxt(d) : ''}</span>
+      <span class="val">${val}${de != null ? ` <small>/ ${esc(de)}</small>` : ''}</span>
+      ${pct != null ? `<div class="barra"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>` : ''}
+      ${nota ? `<span class="nota">${nota}</span>` : ''}
+    </div>`;
+  }
+
+  // Abas em pílula: itens [{id, nome, n, alerta}]. aoEscolher(id) ao clicar.
+  function abasPilulas(el, itens, ativa, aoEscolher) {
+    el.classList.add('abas', 'pilulas');
+    el.setAttribute('role', 'tablist');
+    el.innerHTML = itens.map((a) => `<button type="button" role="tab" class="aba${a.alerta ? ' alerta' : ''}${a.id === ativa ? ' ativa' : ''}"
+      aria-selected="${a.id === ativa}" data-aba="${esc(a.id)}">${esc(a.nome)}<b>${fmtNum(a.n)}</b></button>`).join('');
+    if (!el.dataset.ligado) {
+      el.dataset.ligado = '1';
+      el.addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (b && el._aoEscolher) el._aoEscolher(b.dataset.aba); });
+    }
+    el._aoEscolher = aoEscolher;
+  }
+
+  // Ordenação por coluna: <th data-ord="chave">. estado = {chave, dir (1 ↑ · -1 ↓)}; aoMudar() redesenha.
+  function ligarOrdenacao(thead, estado, aoMudar) {
+    const setas = () => thead.querySelectorAll('th[data-ord]').forEach((th) => {
+      let s = th.querySelector('.seta');
+      if (!s) { s = document.createElement('span'); s.className = 'seta'; th.appendChild(s); }
+      const on = th.dataset.ord === estado.chave;
+      s.textContent = on ? (estado.dir > 0 ? '↑' : '↓') : '↕';
+      th.setAttribute('aria-sort', on ? (estado.dir > 0 ? 'ascending' : 'descending') : 'none');
+    });
+    thead.addEventListener('click', (ev) => {
+      const th = ev.target.closest('th[data-ord]');
+      if (!th) return;
+      if (estado.chave === th.dataset.ord) estado.dir = -estado.dir;
+      else { estado.chave = th.dataset.ord; estado.dir = th.dataset.dir === 'desc' ? -1 : 1; }
+      setas();
+      aoMudar();
+    });
+    setas();
+  }
+  // Ordena uma cópia; vazio sempre no fim. chaves = {coluna: (item) => valor}.
+  function ordenar(lista, chaves, estado) {
+    const f = chaves[estado.chave];
+    if (!f) return lista.slice();
+    return lista.slice().sort((a, b) => {
+      const x = f(a), y = f(b);
+      const vx = x == null || x === '', vy = y == null || y === '';
+      if (vx || vy) return vx === vy ? 0 : vx ? 1 : -1;
+      const c = typeof x === 'string' ? x.localeCompare(y, 'pt-BR', { sensitivity: 'base' }) : x - y;
+      return c * estado.dir;
+    });
+  }
+
+  // Pílula da etapa (uma por linha) e "próximo passo" ({txt, nivel: bad | warn | ok | dim}).
+  const pilulaEtapa = (status) => { const e = etapaDe(status); return `<span class="pill ${e.id}">${esc(e.nome)}</span>`; };
+  const proxPasso = (p) => (p && p.txt ? `<span class="prox ${p.nivel || 'ok'}">${esc(p.txt)}</span>` : '<span class="prox dim">—</span>');
+  // Entrou: hoje / ontem / DD/MM.
+  function quando(v) {
+    if (!v) return '—';
+    const d = diaSP(v), h = diaSP();
+    return d === h ? 'hoje' : d === somaDias(h, -1) ? 'ontem' : fmtData(v);
+  }
+
+  // Gaveta lateral (direita, até 560 px; tela cheia no celular). Fecha com ×/[data-fechar], Esc ou clique fora.
+  const gaveta = (() => {
+    let atual = null, veu = null, antesFoco = null, aoFechar = null;
+    function abrir(alvo, opts = {}) {
+      const el = typeof alvo === 'string' ? document.getElementById(alvo) : alvo;
+      if (!el) return;
+      if (atual && atual !== el) fechar();
+      if (!veu) {
+        veu = document.createElement('div');
+        veu.className = 'gaveta-veu';
+        veu.addEventListener('click', () => fechar());
+        document.body.appendChild(veu);
+      }
+      antesFoco = document.activeElement;
+      atual = el;
+      aoFechar = opts.aoFechar || null;
+      el.querySelectorAll('[data-fechar]').forEach((b) => { b.onclick = () => fechar(); });
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      el.removeAttribute('aria-hidden');
+      el.classList.add('aberta');
+      veu.classList.add('aberto');
+      document.body.classList.add('gaveta-on');
+      if (opts.foco !== false) setTimeout(() => { const f = el.querySelector('[autofocus]') || el.querySelector('.g-corpo input, .g-corpo select'); if (f) f.focus({ preventScroll: true }); }, 280);
+    }
+    function fechar() {
+      if (!atual) return;
+      const el = atual, cb = aoFechar;
+      atual = null;
+      aoFechar = null;
+      el.classList.remove('aberta');
+      el.setAttribute('aria-hidden', 'true');
+      if (veu) veu.classList.remove('aberto');
+      document.body.classList.remove('gaveta-on');
+      if (antesFoco && antesFoco.focus) antesFoco.focus({ preventScroll: true });
+      if (cb) cb();
+    }
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && atual && !document.querySelector('dialog[open]') && !document.querySelector('.dica-pop')) fechar();
+    });
+    return { abrir, fechar, get aberta() { return !!atual; } };
+  })();
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
   window.NG = {
-    sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao, avisoDowngrade,
+    PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,

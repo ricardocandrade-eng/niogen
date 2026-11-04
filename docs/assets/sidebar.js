@@ -1,11 +1,11 @@
-/* NIOGEN | docs/assets/sidebar.js | 03/11/2026
+/* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
  * Uso: <nav class="nav" id="sidebar" data-pagina="funil"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.6.3 · 04/11';
+  const VERSAO = 'v0.7 · 04/11';
 
   const MENU = [
     ['Gestão', [
@@ -79,11 +79,45 @@
 
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
+    menuMovel(nav, pagina);
 
     // Badge de Instalações: vendas esperando agendamento.
     const { count } = await NG.sb.from('v_instalacoes').select('id', { count: 'exact', head: true }).eq('coluna', 'agendar');
     const b = nav.querySelector('[data-badge="agendar"]');
     if (b && count) { b.textContent = count; b.hidden = false; }
+  }
+
+  // Celular (≤ 760 px): o menu fica atrás do ☰ numa barra fina no topo; abre por cima da tela e fecha com
+  // ×/Esc/clique fora ou ao escolher um item. No desktop a barra não aparece (CSS).
+  function menuMovel(nav, pagina) {
+    if (document.querySelector('.topo-movel')) return;
+    const atual = MENU.flatMap(([, itens]) => itens).find((it) => it.id === pagina);
+    const topo = document.createElement('div');
+    topo.className = 'topo-movel';
+    topo.innerHTML = '<button type="button" class="menu-btn" aria-label="Abrir menu" aria-controls="sidebar" aria-expanded="false">☰</button>'
+      + `<strong>NIO<span>GEN</span></strong><span class="pag">${NG.esc(atual ? atual.nome : '')}</span>`;
+    nav.parentElement.insertBefore(topo, nav);
+    const btn = topo.querySelector('.menu-btn');
+    let veu = null;
+    const fechar = () => {
+      nav.classList.remove('aberto');
+      btn.setAttribute('aria-expanded', 'false');
+      if (veu) { veu.remove(); veu = null; }
+    };
+    const abrir = () => {
+      nav.classList.add('aberto');
+      btn.setAttribute('aria-expanded', 'true');
+      veu = document.createElement('div');
+      veu.className = 'nav-veu';
+      veu.addEventListener('click', fechar);
+      document.body.appendChild(veu);
+      const ativo = nav.querySelector('.nav-item.ativo') || nav.querySelector('a.nav-item');
+      if (ativo) ativo.focus({ preventScroll: true });
+    };
+    btn.addEventListener('click', () => (nav.classList.contains('aberto') ? fechar() : abrir()));
+    nav.addEventListener('click', (ev) => { if (ev.target.closest('a.nav-item')) fechar(); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && nav.classList.contains('aberto')) { fechar(); btn.focus(); } });
+    window.matchMedia('(min-width: 761px)').addEventListener('change', (m) => { if (m.matches) fechar(); });
   }
 
   window.NGSidebar = { montar };
