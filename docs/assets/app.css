@@ -537,3 +537,7 @@ fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; c
   .passos-ind span { display: none; }
   .passos-ind button { justify-content: center; }
 }
+
+/* Estorno corrigido (04/11): aviso discreto de downgrade e alerta de recompra */
+.meta.aviso-dg { font-size: 11px; color: var(--muted); font-style: italic; }
+.chip.recompra { white-space: normal; line-height: 1.4; border-radius: 8px; border: 1px solid var(--warn-border); }

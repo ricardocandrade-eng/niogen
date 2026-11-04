@@ -133,13 +133,19 @@
 
   // ---------- comissão: em risco / ganha / M-10 ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
+  // Regras de estorno corrigidas em 04/11 (Rogério + contrato): churn e inadimplência NÃO estornam; a janela de 100 % é
+  // cancelar e reativar em até 30 d (mais fraude, cliente/endereço já com Nio ativo, fora da área); downgrade ≤ 180 d = só a diferença.
   const TEXTOS_COMISSAO = {
-    emRisco: (ganhaEm) => 'A Nio já pagou ou vai pagar, mas ainda pode estornar: 100% se o cliente cancelar em menos de 180 dias da ativação '
-      + 'ou cancelar e reativar em até 30 dias; a diferença se houver downgrade em até 180 dias.'
+    emRisco: (ganhaEm) => 'Ainda pode ser estornada se o cliente cancelar e reativar em até 30 dias. Também há estorno a qualquer tempo '
+      + 'em caso de fraude, cliente/endereço que já tinha Nio ativo ou venda fora da área.'
       + (ganhaEm ? ` Vira 'ganha' em ${ganhaEm}.` : ''),
-    ganha: 'Passou dos 180 dias da ativação sem cancelamento nem downgrade. Não pode mais ser estornada.',
-    m10: 'Pago no 11º mês se o cliente chegar ao 10º mês ativo, sem fatura com mais de 15 dias de atraso e sem downgrade. Não entra na comissão em risco.',
+    ganha: 'Passou dos 30 dias da ativação sem cancelamento. Cancelamento depois disso não estorna. Downgrade até 180 dias da ativação '
+      + 'desconta só a diferença; fraude estorna a qualquer tempo.',
+    // Contrato, Anexo I 1.2.2.2 (texto do Ricardo, 04/11).
+    m10: 'Apurado no 11º mês após a ativação, se o cliente seguir ativo até o fim do 10º mês, com todas as faturas emitidas até lá pagas '
+      + '(nenhuma com mais de 15 dias de atraso) e sem downgrade. Não entra na comissão em risco.',
     m10Nao: (motivo) => `Não elegível ao bônus M-10: ${motivo}.`,
+    downgrade: (ate) => `Downgrade até ${ate} desconta só a diferença de comissão.`,
   };
   const textoComissao = (chave, ganhaEm) => {
     const t = TEXTOS_COMISSAO[chave];
@@ -171,16 +177,23 @@
     let motivo = null;
     if (v.nio_venda_valida === false) motivo = 'a Nio marcou a venda como inválida';
     else if (!Number(v.bonus_m10_potencial)) motivo = 'o plano não tem bônus M-10 na política vigente';
+    // Data prevista de apuração do M-10 = ativação (ou instalação) + 11 meses.
     let quando = '';
     if (v.ativado_em || v.instalado_em) {
       const d = new Date(v.ativado_em || v.instalado_em);
-      d.setMonth(d.getMonth() + 10);
-      quando = ` 10º mês ativo em ${parts(d, { month: '2-digit', year: 'numeric' })}.`;
+      d.setMonth(d.getMonth() + 11);
+      quando = ` Apuração prevista em ${parts(d, { month: '2-digit', year: 'numeric' })}.`;
     }
     const s2 = motivo
       ? selo('M-10 não elegível', 'dim', textoComissao('m10Nao', motivo))
       : selo(`M-10 elegível · ${fmtMoeda(v.bonus_m10_potencial)}`, 'info', textoComissao('m10') + quando);
     return s1 + s2;
+  }
+  // Aviso de downgrade (venda instalada/ativa, até ativação + 180 d). Não entra no valor em risco.
+  function avisoDowngrade(v) {
+    if (!v || !v.downgrade_ate || !['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) return '';
+    if (new Date(v.downgrade_ate) <= new Date()) return '';
+    return textoComissao('downgrade', fmtData(v.downgrade_ate));
   }
 
   // ---------- DFV Nio (nível 1: consulta manual registrada na venda) ----------
@@ -203,7 +216,7 @@
       sem_viabilidade: 'A fachada existe, mas a viabilidade não é "Viável" (restrição técnica ou pendência). Não vender: saída "Sem cobertura" com interesse futuro em 90 dias.',
       nao_encontrado: 'A fachada não aparece no DFV: sem rede no endereço ou célula bloqueada. Não vender e não insistir no APP: saída "Sem cobertura".',
     },
-    jaTemNio: 'Casa com HCS = 1 e HP livre = 0 quer dizer que o endereço já tem Nio: não vender (estorno 100 % + multa de recompra). Saída "Já é cliente Nio".',
+    jaTemNio: 'Casa com HCS = 1 e HP livre = 0 quer dizer que o endereço já tem Nio: não vender (estorno 100 %). Saída "Já é cliente Nio".',
     placar: 'Das vendas que entraram no mês, quantas tiveram o DFV consultado e deram viável. Toda qualificada deve ser consultada antes da visita de biometria.',
     faixa: 'Faixa de aprovação de crédito do bairro (últimos 2 meses). Não se fala disso com o cliente: serve para o Placar e o risco de FPD.',
   };
@@ -247,7 +260,7 @@
   const DFV_RESULTADO = {
     viavel: 'Viável na base DFV: fachada com porta livre.',
     viavel_predio: 'Prédio na base DFV: escolha a unidade (complemento) para conferir a porta.',
-    endereco_ocupado: 'Endereço já tem Nio (casa com HC = 1): não vender — estorno 100 % e multa. Saída "Já é cliente Nio".',
+    endereco_ocupado: 'Endereço já tem Nio (casa com HC = 1): não vender — estorno 100 %. Saída "Já é cliente Nio".',
     sem_porta_livre: 'Na base DFV, mas sem porta livre (HP livre = 0): não vender agora.',
     nao_encontrado: 'Fora da base DFV: sem viabilidade hoje (a Nio só exporta endereços viáveis). Confira CEP e número.',
     precisa_numero: 'CEP na base DFV: informe o número da fachada para consultar.',
@@ -603,7 +616,7 @@
   window.NG = {
     sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao,
+    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao, avisoDowngrade,
     DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,

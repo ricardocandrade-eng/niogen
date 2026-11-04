@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-13">
-<script src="config.js?v=031126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-14">
+<script src="config.js?v=031126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-13"></script>
-<script src="assets/sidebar.js?v=031126-13"></script>
+<script src="assets/app.js?v=031126-14"></script>
+<script src="assets/sidebar.js?v=031126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -94,7 +94,10 @@
     `<strong>Comissão (em risco)</strong>: ${esc(NG.textoComissao('emRisco'))}`,
     `<strong>Comissão (ganha)</strong>: ${esc(NG.textoComissao('ganha'))}`,
     'Comissão só com <strong>biometria aprovada</strong>, instalação concluída e endereço dentro da área de atuação.',
-    'Churn em menos de 180 dias = estorno de 100 %. Também estorna reativação em até 30 dias e cliente/endereço que já era ativo.',
+    'Estorno de 100 %: cancelar e reativar em até 30 dias (mesmo cliente ou mudança de endereço), cliente/endereço que já tinha Nio ativo, cancelamento por não qualidade, fraude ou venda fora da área.',
+    'Downgrade em até 180 dias da ativação: estorna só a diferença de comissão entre os planos.',
+    '<strong>Recompra</strong> (venda para endereço que já teve Nio, com pedido anterior cancelado): multa de R$ 500 por pedido — é multa, não estorno.',
+    '<strong>Churn e inadimplência não estornam</strong>: só pesam nos indicadores de qualidade (a inadimplência afeta o M-10).',
     'Agendar a instalação em até 4 h da venda · documentos à Nio em até 15 dias · contestação em até 120 dias.',
     'Sem desconto, prazo ou benefício fora desta tabela. Se o portal PAP mostrar outro preço na hora da venda, vale o portal e o Ricardo é avisado.',
   ];

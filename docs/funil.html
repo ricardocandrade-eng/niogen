@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-13">
-<script src="config.js?v=031126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-14">
+<script src="config.js?v=031126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-13"></script>
-<script src="assets/sidebar.js?v=031126-13"></script>
+<script src="assets/app.js?v=031126-14"></script>
+<script src="assets/sidebar.js?v=031126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -170,6 +170,7 @@
       <span class="plano">${plano}</span>
       ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
       ${NG.seloDfv(v) || NG.selosComissao(v) ? `<div class="chips selos">${NG.seloDfv(v)}${NG.selosComissao(v)}</div>` : ''}
+      ${NG.avisoDowngrade(v) ? `<span class="meta aviso-dg">${esc(NG.avisoDowngrade(v))}</span>` : ''}
       ${seletorMover(v)}
     </article>`;
   }
@@ -210,7 +211,7 @@
       const itens = porStatus[s.id];
       const cor = s.id === '0_qualificado' ? 'color:var(--info-fg)' : s.id === '5_comissao_firme' ? 'color:var(--ok-fg)' : s.id === 'saida' ? 'color:var(--muted)' : '';
       const vazio = s.id === '5_comissao_firme' && !itens.length
-        ? '<div class="col-vazia">A comissão vira ganha 180 dias após a ativação, sem cancelamento nem downgrade</div>'
+        ? '<div class="col-vazia">A comissão vira ganha 30 dias após a ativação, sem cancelamento e reativação</div>'
         : !itens.length ? '<div class="col-vazia">—</div>' : '';
       return `<section class="col" data-status="${s.id}" aria-label="${esc(s.col)}">
         <div class="col-head"><span style="${cor}">${s.dica ? NG.rotulo(s.col, s.dica) : esc(s.col)}</span><span>${itens.length}</span></div>
