@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.7 · 04/11';
+  const VERSAO = 'v0.8 · 04/11';
 
   const MENU = [
     ['Gestão', [
@@ -21,7 +21,7 @@
       { id: 'fila', ico: '☷', nome: 'Fila Vero' },
     ]],
     ['Mari', [
-      { id: 'mari', ico: '◎', nome: 'Mari · IA' },
+      { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
     ['Financeiro', [
@@ -47,6 +47,8 @@
   }
 
   function item(it, ativo) {
+    // esconder: o item some (em vez de "em breve") para quem não tem o perfil — ex.: vendedor não vê a Mari.
+    if (it.esconder && it.perfis && !it.perfis.includes((NG.usuario || {}).perfil)) return '';
     const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${NG.esc(it.nome)}` +
       (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '');
     if (!it.href || (it.perfis && !it.perfis.includes((NG.usuario || {}).perfil))) {

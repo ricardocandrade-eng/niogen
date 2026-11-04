@@ -1,0 +1,470 @@
+<!doctype html>
+<!-- NIOGEN | docs/mari.html | 04/11/2026 — Claude Code (prompt nº 12). Tela "Mari" no padrão de telas (Vendas v2):
+     4 KPIs do período, abas com "Precisam de ação", busca + Cidade/Etapa/Origem + Período (padrão Hoje), lista em largura
+     total com UMA situação e o próximo passo, detalhe em gaveta (conversa, dados, handoff, cadência, links, erros);
+     no celular, cartões + botão flutuante. SÓ LEITURA: nenhum botão muda a Mari. Admin e backoffice; vendedor não vê.
+     Dados: mari_conversas (RLS admin/backoffice), v_mari_cadencia, mari_turnos, mari_erros, config_planos, vendas. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Mari · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=041126-16">
+<script src="config.js?v=041126-16"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=041126-16"></script>
+<script src="assets/sidebar.js?v=041126-16"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="mari"></nav>
+  <main class="main com-fab">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A tela Mari é só para admin e backoffice.</div>
+    <header class="cab">
+      <div>
+        <h1>Mari</h1>
+        <div class="sub" id="sub">Atendimento da IA no WhatsApp</div>
+      </div>
+      <a class="btn btn-acc acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe (suporte acionado). O link liga quando ela for criada.">Abrir Chatwoot</a>
+    </header>
+
+    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+
+    <div id="abas"></div>
+
+    <div class="barra-filtros">
+      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar conversa" placeholder="Buscar por nome, telefone, CEP, bairro ou cidade"></label>
+      <select class="sel" id="f-cidade" aria-label="Cidade"></select>
+      <select class="sel" id="f-etapa" aria-label="Etapa"></select>
+      <select class="sel" id="f-origem" aria-label="Origem"></select>
+      <span id="f-periodo"></span>
+      <label class="check-mini" id="lbl-testes" hidden><input type="checkbox" id="f-testes"> mostrar testes</label>
+      <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
+    </div>
+
+    <section class="lista padrao" aria-label="Conversas da Mari">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr>
+            <th data-ord="contato">Contato</th>
+            <th data-ord="situacao">Situação</th>
+            <th data-ord="plano">Plano</th>
+            <th data-ord="valor" data-dir="desc" class="num">Valor</th>
+            <th>Próximo passo</th>
+            <th data-ord="ultima" data-dir="desc">Última mensagem</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a conversa</span></div>
+    </section>
+    <div class="cartoes" id="cartoes" aria-label="Conversas da Mari"></div>
+  </main>
+</div>
+<a class="fab desab" id="fab" aria-label="Abrir Chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">💬</a>
+
+<aside class="gaveta" id="gaveta-conversa" aria-label="Conversa da Mari" aria-hidden="true">
+  <div class="g-cab">
+    <div>
+      <h2 id="d-titulo">Conversa</h2>
+      <p id="d-sub"></p>
+    </div>
+    <button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button>
+  </div>
+  <div class="g-corpo" id="d-corpo"></div>
+  <div class="g-pe"><div class="g-botoes" id="d-links"></div></div>
+</aside>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.querySelectorAll('.cab, #kpis, #abas, .barra-filtros, .lista, .cartoes, #fab').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
+    return;
+  }
+  const ADMIN = eu.perfil === 'admin';
+
+  // Conta Nio no Chatwoot: preencher quando existir (nunca a conta da Vero). Vazio = links desligados.
+  const CHATWOOT_NIO_ACCOUNT = '';
+  const NUMERO_MARI = '31 2888-1265';
+  const PREFIXO_TESTE = '5500000000';
+  const DFV_TXT = { viavel: 'Viável', viavel_predio: 'Viável (prédio) — conferir a unidade', endereco_ocupado: 'Endereço já tem Nio', sem_porta_livre: 'Sem porta livre', nao_encontrado: 'Não encontrado na base DFV' };
+  const ELEG_TXT = { ok: 'OK', ja_cliente: 'Já é cliente Nio', cancelou_30d: 'Cancelou há menos de 30 dias', fora_area: 'Fora da área' };
+
+  const ETAPAS_MARI = { abertura: 'Abertura', endereco: 'Endereço', elegibilidade: 'Elegibilidade', planos: 'Planos', coleta: 'Coleta', resumo: 'Resumo', handoff: 'Handoff' };
+  const ORIGENS_MARI = { meta_ads: 'Meta Ads', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto (WhatsApp)', teste: 'Teste' };
+  const MOTIVOS = {
+    dados_completos: 'dados completos', pedido_humano: 'cliente pediu humano', objecao: 'objeção', recusa_compra: 'recusou',
+    multiplos_decisores: 'mais de um decisor', interesse_caindo: 'interesse caindo', urgencia_alta: 'urgência', sem_cobertura: 'sem cobertura',
+    fora_de_area: 'fora de área', ja_cliente_nio: 'já é cliente Nio', sem_contato: 'sem contato',
+  };
+  const ENCERRA = { recusa_compra: 'recusa', sem_cobertura: 'fora de área', fora_de_area: 'fora de área', ja_cliente_nio: 'já cliente', sem_contato: 'sem contato' };
+  const FORMA = { cartao: 'cartão', boleto: 'boleto', dacc: 'débito' };
+  const PASSO = { P1: '1º contato', F1: 'F1', F2: 'F2', D3: 'D3', D7: 'D7', D15: 'D15', ENCERRAR: 'encerrar', RETORNO: 'retorno', VISITA: 'confirmação da visita' };
+
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  const fBusca = document.getElementById('f-busca');
+  const fCidade = document.getElementById('f-cidade');
+  const fEtapa = document.getElementById('f-etapa');
+  const fOrigem = document.getElementById('f-origem');
+  const fTestes = document.getElementById('f-testes');
+  document.getElementById('lbl-testes').hidden = !ADMIN;
+  NG.preencherSelect(fEtapa, Object.entries(ETAPAS_MARI), 'Todas as etapas');
+  NG.preencherSelect(fOrigem, Object.entries(ORIGENS_MARI), 'Todas as origens');
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'hoje', aoMudar: render });
+
+  let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, aba = 'todas';
+  const ord = { chave: 'ultima', dir: -1 };
+
+  if (CHATWOOT_NIO_ACCOUNT) {
+    for (const id of ['btn-chatwoot', 'fab']) {
+      const a = document.getElementById(id);
+      a.href = `https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/dashboard`;
+      a.target = '_blank'; a.rel = 'noopener';
+      a.classList.remove('desab'); a.removeAttribute('aria-disabled'); a.title = 'Abrir a caixa da Nio no Chatwoot';
+    }
+  }
+
+  // ------------------------------------------------------------------ dados
+  const COLS = 'id, telefone, nome_contato, nome_confiavel, canal, origem, status, etapa, cep, numero, complemento, endereco_cep, cidade, uf, cluster, '
+    + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, dados, handoff_motivo, handoff_em, venda_id, '
+    + 'chatwoot_conversation_id, humano_atribuido, nao_contatar, agendamento_retorno, ultima_msg_lead_at, ultima_msg_mari_at, created_at, updated_at';
+
+  async function carregar() {
+    const [rc, rk, rp, re] = await Promise.all([
+      NG.sb.from('mari_conversas').select(COLS).order('updated_at', { ascending: false }).limit(2000),
+      NG.sb.from('v_mari_cadencia').select('*'),
+      NG.sb.from('config_planos').select('codigo, nome, nome_curto, preco, preco_cartao'),
+      NG.sb.from('mari_erros').select('id, conversa_id, no_n8n, mensagem, created_at').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(1000),
+    ]);
+    if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
+    convs = rc.data || [];
+    cad = Object.fromEntries(((rk.error ? [] : rk.data) || []).map((c) => [c.conversa_id, c]));
+    planos = Object.fromEntries((rp.data || []).map((p) => [p.codigo, p]));
+    erros = re.data || [];
+    // humano já respondeu depois do handoff? (só para quem está esperando humano)
+    const esperando = convs.filter((c) => c.status === 'handoff_realizado' && c.handoff_motivo !== 'dados_completos').map((c) => c.id);
+    humanoDepois = {};
+    if (esperando.length) {
+      const { data } = await NG.sb.from('mari_turnos').select('conversa_id, created_at').eq('papel', 'humano').in('conversa_id', esperando.slice(0, 300));
+      (data || []).forEach((t) => { const c = convs.find((x) => x.id === t.conversa_id); if (c && new Date(t.created_at) >= new Date(c.handoff_em)) humanoDepois[c.id] = true; });
+    }
+    const cidades = [...new Set(convs.map((c) => c.cidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const atual = fCidade.value;
+    NG.preencherSelect(fCidade, cidades.map((c) => [c, c]), 'Todas as cidades');
+    fCidade.value = atual;
+    contexto();
+    render();
+  }
+
+  function contexto() {
+    // Modo: deduzido das conversas (o interruptor vive no n8n). Nenhuma do WhatsApp = a Mari só atende a rota de teste.
+    const wa = convs.some((c) => c.canal === 'whatsapp');
+    const ult = convs.map((c) => [c.ultima_msg_mari_at, c.ultima_msg_lead_at]).flat().filter(Boolean).sort().pop();
+    document.getElementById('sub').innerHTML = `modo ${wa ? 'chatwoot' : 'teste'}${NG.dicaTxt(wa ? 'Há conversas vindas do WhatsApp.' : 'Nenhuma conversa veio do WhatsApp ainda: a Mari só atende a rota de teste.')} · ${esc(NUMERO_MARI)} · último turno ${ult ? esc(`${NG.quando(ult)} ${NG.fmtHora(ult)}`) : '—'}`;
+  }
+
+  // ------------------------------------------------------------------ regras de apresentação
+  const ehTeste = (c) => c.canal === 'teste' || String(c.telefone || '').startsWith(PREFIXO_TESTE);
+  const nomeDe = (c) => {
+    const n = (c.dados && c.dados.nome) || (c.nome_confiavel ? c.nome_contato : null);
+    return n ? String(n).trim() : null;
+  };
+  function telMascara(t) {
+    const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+    if (d.length < 10) return d ? `••••${d.slice(-4)}` : '—';
+    return `${d.slice(0, 2)} ${d.slice(2, 3)}••••-${d.slice(-4)}`;
+  }
+  const contatoDe = (c) => nomeDe(c) || telMascara(c.telefone);
+  const bairroDe = (c) => (c.endereco_cep && c.endereco_cep.bairro) || null;
+  const localDe = (c) => [bairroDe(c), c.cidade].filter(Boolean).join(' · ');
+  const plano = (c) => planos[c.plano_escolhido] || null;
+  const valorDe = (c) => { const p = plano(c); if (!p) return null; return c.forma_pagamento === 'cartao' ? Number(p.preco_cartao ?? p.preco) : Number(p.preco); };
+  const ultimaDe = (c) => [c.ultima_msg_lead_at, c.ultima_msg_mari_at].filter(Boolean).sort().pop() || c.created_at;
+  const errosDe = (id) => erros.filter((e) => e.conversa_id === id);
+  const erroHoje = (id) => errosDe(id).some((e) => NG.diaSP(e.created_at) === NG.diaSP());
+  function cpfMascara(cpf) {
+    const d = String(cpf || '').replace(/\D/g, '');
+    if (!d) return '—';
+    if (ADMIN) return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
+    return d.length >= 11 ? `•••.${d.slice(3, 6)}.•••-••` : '•••';
+  }
+
+  // Situação: UMA pílula por linha.
+  function situacao(c) {
+    if (c.status === 'ativo') return { id: 'andamento', cls: 'm-and', txt: `Em andamento: ${ETAPAS_MARI[c.etapa] || c.etapa}` };
+    if (c.status === 'handoff_realizado') {
+      if (c.handoff_motivo === 'dados_completos') return { id: 'qualificada', cls: 'm-ok', txt: 'Qualificada' };
+      if (ENCERRA[c.handoff_motivo]) return { id: 'encerrada', cls: 'm-fim', txt: `Encerrada · ${ENCERRA[c.handoff_motivo]}` };
+      return { id: 'humano', cls: 'm-hum', txt: 'Precisa de humano' };
+    }
+    const mot = ENCERRA[c.handoff_motivo] || (c.status === 'encerrado_humano' ? 'pelo humano' : MOTIVOS[c.handoff_motivo] || 'encerrada');
+    return { id: 'encerrada', cls: 'm-fim', txt: `Encerrada · ${mot}` };
+  }
+  const SIT_ORD = { humano: 0, andamento: 1, qualificada: 2, encerrada: 3 };
+
+  // Horário do contrato (seg–sex 9–21, sáb 10–16): conta o atraso do humano só dentro dele.
+  function noHorario(d) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: NG.TZ, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
+    const h = Number(p.hour) % 24;
+    if (p.weekday === 'Sun') return false;
+    return p.weekday === 'Sat' ? h >= 10 && h < 16 : h >= 9 && h < 21;
+  }
+  const minutos = (ts) => Math.max(0, Math.floor((Date.now() - new Date(ts)) / 60000));
+  const ha = (ts) => { const m = minutos(ts); return m < 60 ? `há ${m} min` : m < 1440 ? `há ${Math.floor(m / 60)} h` : `há ${Math.floor(m / 1440)} d`; };
+  const quandoCurto = (ts) => {
+    const d = NG.diaSP(ts), h = NG.diaSP();
+    if (d === h) return `às ${NG.fmtHora(ts).replace(':00', 'h')}`;
+    if (d === NG.somaDias(h, 1)) return 'amanhã';
+    return `em ${NG.fmtData(ts)}`;
+  };
+
+  // Próximo passo: vermelho = humano atrasado (> 15 min no horário) ou venda não criada · amarelo = cadência sai hoje/amanhã ·
+  // cinza = aguardando o cliente.
+  function proximo(c) {
+    const s = situacao(c);
+    if (s.id === 'humano') {
+      if (humanoDepois[c.id]) return { txt: 'Humano já respondeu', nivel: 'dim' };
+      const m = minutos(c.handoff_em);
+      const atrasado = m > 15 && noHorario(new Date());
+      return { txt: `Humano responder · ${ha(c.handoff_em)}`, nivel: atrasado ? 'bad' : 'warn', acao: true };
+    }
+    if (erroHoje(c.id) && s.id !== 'encerrada') return { txt: 'Erro na conversa · ver detalhe', nivel: 'bad', acao: true };
+    if (s.id === 'qualificada') return c.venda_id ? { txt: 'Venda criada · seguir em Vendas', nivel: 'dim' } : { txt: 'Venda não criada · ver erro', nivel: 'bad', acao: true };
+    if (s.id === 'encerrada') return { txt: '', nivel: 'dim' };
+    const k = cad[c.id];
+    if (!k || !k.proximo_passo) {
+      if (k && k.bloqueio) return { txt: k.bloqueio === 'aguardando a Mari responder' || k.bloqueio === 'Mari respondendo agora' ? 'Mari respondendo' : `Cadência parada · ${k.bloqueio}`, nivel: 'dim' };
+      return { txt: 'Aguardando o cliente', nivel: 'dim' };
+    }
+    const nome = PASSO[k.proximo_passo] || k.proximo_passo;
+    if (k.pode_enviar) return { txt: `${nome} agora`, nivel: 'warn' };
+    if (k.bloqueio && k.bloqueio !== 'aguardando') {
+      const quando = k.proximo_em ? ` ${quandoCurto(k.proximo_em)}` : '';
+      return { txt: `${nome}${quando} · ${k.bloqueio}`, nivel: 'dim' };
+    }
+    const d = k.proximo_em ? NG.diaSP(k.proximo_em) : null;
+    const hojeOuAmanha = d && d <= NG.somaDias(NG.diaSP(), 1);
+    return { txt: `${nome} ${k.proximo_em ? quandoCurto(k.proximo_em) : ''}`.trim(), nivel: hojeOuAmanha ? 'warn' : 'dim' };
+  }
+
+  // ------------------------------------------------------------------ filtro, abas, KPIs, lista
+  function base(comPeriodo = true) {
+    const p = per.valor();
+    const q = fBusca.value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    return convs.filter((c) =>
+      (fTestes.checked || !ehTeste(c)) &&
+      (!comPeriodo || NG.noPeriodo(ultimaDe(c), p) || NG.noPeriodo(c.created_at, p)) &&
+      (!fCidade.value || c.cidade === fCidade.value) &&
+      (!fEtapa.value || c.etapa === fEtapa.value) &&
+      (!fOrigem.value || c.origem === fOrigem.value) &&
+      (!q || [nomeDe(c), c.nome_contato, bairroDe(c), c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) ||
+        (qd.length >= 3 && [c.telefone, c.cep].some((x) => NG.soDigitos(x).includes(qd)))));
+  }
+  const precisaAcao = (c) => !!proximo(c).acao;
+  const naAba = (c, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(c) : situacao(c).id === a);
+  const CHAVES = {
+    contato: (c) => contatoDe(c).toLowerCase(),
+    situacao: (c) => SIT_ORD[situacao(c).id] ?? 9,
+    plano: (c) => (plano(c) ? plano(c).nome_curto || plano(c).nome : ''),
+    valor: (c) => valorDe(c),
+    ultima: (c) => new Date(ultimaDe(c)).getTime(),
+  };
+
+  function renderKpis(b) {
+    const p = per.valor();
+    const doPeriodo = b.filter((c) => NG.noPeriodo(c.created_at, p));
+    const qual = doPeriodo.filter((c) => c.handoff_motivo === 'dados_completos').length;
+    const pct = doPeriodo.length ? Math.round((qual / doPeriodo.length) * 100) : null;
+    const todas = base(false);
+    const agora = todas.filter((c) => c.status === 'ativo' && !c.humano_atribuido).length;
+    const esperando = todas.filter((c) => situacao(c).id === 'humano' && !humanoDepois[c.id]).length;
+    const errosDia = new Set(erros.filter((e) => NG.diaSP(e.created_at) === NG.diaSP() && todas.some((c) => c.id === e.conversa_id)).map((e) => e.conversa_id)).size;
+    const precisam = esperando + errosDia;
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Conversas', val: NG.fmtNum(doPeriodo.length), nota: esc(per.rotulo.toLowerCase()),
+        dica: 'Conversas que começaram no período (pela data de abertura), com os filtros de cidade, etapa e origem. Testes ficam fora.' }),
+      NG.kpi({ rot: 'Qualificadas', val: NG.fmtNum(qual), nota: pct == null ? 'nenhuma conversa no período' : `${pct}% de qualificação`, pct,
+        dica: 'Conversas do período que terminaram em handoff com dados completos (a Mari criou a venda em 0 · Qualificado). % = qualificadas ÷ conversas.' }),
+      NG.kpi({ rot: 'Em andamento agora', val: NG.fmtNum(agora), nota: 'com a Mari, sem humano',
+        dica: 'Conversas abertas neste momento que a Mari ainda conduz (status ativo, nenhum humano atribuído). Não depende do período.' }),
+      NG.kpi({ rot: 'Precisam de humano', val: NG.fmtNum(precisam), cls: precisam ? 'warn' : '',
+        nota: `${NG.fmtNum(esperando)} esperando resposta · ${NG.fmtNum(errosDia)} com erro hoje`,
+        dica: 'Handoff que não é "dados completos" (pediu humano, objeção, urgência…) ainda sem resposta de um humano, mais as conversas com erro hoje. Não depende do período.' }),
+    ].join('');
+  }
+
+  function renderAbas(b) {
+    const conta = (a) => b.filter((c) => naAba(c, a)).length;
+    NG.abasPilulas(document.getElementById('abas'), [
+      { id: 'todas', nome: 'Todas', n: b.length },
+      { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true },
+      { id: 'andamento', nome: 'Em andamento', n: conta('andamento') },
+      { id: 'qualificada', nome: 'Qualificadas', n: conta('qualificada') },
+      { id: 'humano', nome: 'Precisam de humano', n: conta('humano') },
+      { id: 'encerrada', nome: 'Encerradas', n: conta('encerrada') },
+    ], aba, (id) => { aba = id; render(); });
+  }
+
+  const pilula = (c) => { const s = situacao(c); return `<span class="pill ${s.cls}">${esc(s.txt)}</span>`; };
+  const planoTxt = (c) => { const p = plano(c); return p ? p.nome_curto || p.nome : '—'; };
+  const filtradas = () => NG.ordenar(base().filter((c) => naAba(c, aba)), CHAVES, ord);
+
+  function render() {
+    const b = base();
+    renderKpis(b);
+    renderAbas(b);
+    const lista = filtradas();
+    tbody.innerHTML = lista.length ? lista.map((c) => {
+      const v = valorDe(c);
+      return `<tr class="clicavel ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(localDe(c) || ORIGENS_MARI[c.origem] || '—')}</small></td>
+        <td>${pilula(c)}</td>
+        <td class="plano-c"><b>${esc(planoTxt(c))}</b><small>${esc(FORMA[c.forma_pagamento] || '')}</small></td>
+        <td class="num">${v == null ? '—' : esc(NG.fmtMoeda(v))}</td>
+        <td>${NG.proxPasso(proximo(c))}</td>
+        <td class="apagado">${esc(ha(ultimaDe(c)))}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="6" class="vazio">Nenhuma conversa neste filtro</td></tr>';
+    cartoesEl.innerHTML = lista.length ? lista.map((c) => {
+      const v = valorDe(c);
+      return `<button type="button" class="cartao ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}">
+        <div class="cli"><b>${esc(contatoDe(c))}</b><small>${esc([localDe(c), ha(ultimaDe(c))].filter(Boolean).join(' · '))}</small></div>
+        <div class="valor">${v == null ? '—' : esc(NG.fmtMoeda(v))}</div>
+        <div class="l2">${pilula(c)}<span>${esc(planoTxt(c))}</span></div>
+        <div class="l2">${NG.proxPasso(proximo(c))}</div>
+      </button>`;
+    }).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'conversa' : 'conversas'} no filtro`;
+  }
+
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  [fBusca, fCidade, fEtapa, fOrigem, fTestes].forEach((el) => el.addEventListener('input', render));
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(tr.dataset.id); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(tr.dataset.id); });
+  cartoesEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
+
+  // CSV: sem CPF, telefone mascarado.
+  document.getElementById('exportar').addEventListener('click', () => {
+    const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Situação', (c) => situacao(c).txt], ['Etapa', (c) => ETAPAS_MARI[c.etapa] || c.etapa],
+      ['Origem', (c) => ORIGENS_MARI[c.origem] || c.origem], ['Bairro', bairroDe], ['Cidade', (c) => c.cidade], ['Plano', planoTxt], ['Forma', (c) => FORMA[c.forma_pagamento] || ''],
+      ['Valor', valorDe], ['Próximo passo', (c) => proximo(c).txt], ['Abertura', (c) => NG.fmtDataHora(c.created_at)], ['Última mensagem', (c) => NG.fmtDataHora(ultimaDe(c))]];
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const csv = [cols.map((c) => q(c[0])).join(';')].concat(filtradas().map((c) => cols.map(([, f]) => q(f(c))).join(';'))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_mari_${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ------------------------------------------------------------------ detalhe (gaveta)
+  const gav = document.getElementById('gaveta-conversa');
+  const corpo = document.getElementById('d-corpo');
+  // Tags técnicas nunca aparecem cruas: some qualquer [TAG] … e o bloco [HANDOFF]; viram no máximo chips.
+  const limpa = (t) => String(t || '').replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '').replace(/\[[A-Z_]{3,}(?::[^\]]*)?\]/g, '').trim();
+  function chipsDe(tags) {
+    if (!tags || typeof tags !== 'object') return '';
+    const ch = [];
+    if (tags.cadencia) ch.push(`cadência ${PASSO[tags.cadencia] || tags.cadencia}${tags.simulado ? ' (simulado)' : ''}`);
+    if (tags.excecao) ch.push(tags.excecao);
+    const pl = tags.plano_escolhido || tags.plano;
+    if (pl) ch.push(`plano: ${(planos[pl] && (planos[pl].nome_curto || planos[pl].nome)) || pl}`);
+    if (tags.elegibilidade) ch.push(`elegibilidade: ${ELEG_TXT[tags.elegibilidade] || tags.elegibilidade}`);
+    if (tags.dfv || tags.dfv_resultado) ch.push(`DFV: ${DFV_TXT[tags.dfv || tags.dfv_resultado] || tags.dfv || tags.dfv_resultado}`);
+    return ch.length ? `<div class="chips">${ch.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '';
+  }
+  const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
+
+  async function abrir(id) {
+    const c = convs.find((x) => x.id === id);
+    if (!c) return;
+    document.getElementById('d-titulo').textContent = contatoDe(c);
+    document.getElementById('d-sub').innerHTML = `${pilula(c)} · ${esc(ORIGENS_MARI[c.origem] || c.origem)} · aberta ${esc(NG.fmtDataHora(c.created_at))}`;
+    corpo.innerHTML = '<div class="vazio">Carregando a conversa…</div>';
+    document.getElementById('d-links').innerHTML = '';
+    NG.gaveta.abrir(gav, { foco: false });
+
+    const [rt, rv] = await Promise.all([
+      NG.sb.from('mari_turnos').select('id, papel, texto, tags, created_at').eq('conversa_id', id).order('created_at').order('id').limit(400),
+      c.venda_id ? NG.sb.from('vendas').select('id, observacoes, status').eq('id', c.venda_id).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
+    const turnos = rt.data || [];
+    const d = c.dados || {};
+    const end = [c.endereco_cep && c.endereco_cep.logradouro, c.numero, c.complemento, bairroDe(c), c.cidade && `${c.cidade}${c.uf ? `/${c.uf}` : ''}`, c.cep]
+      .filter(Boolean).join(', ');
+    const k = cad[c.id];
+    const pr = proximo(c);
+
+    // briefing do handoff: venda (dados completos) ou a tag da fala de handoff
+    let briefing = rv.data && rv.data.observacoes ? rv.data.observacoes : null;
+    if (!briefing) {
+      const t = turnos.slice().reverse().find((x) => x.tags && (x.tags.handoff || x.tags.briefing_humano || x.tags.briefing));
+      if (t) briefing = (t.tags.handoff && (t.tags.handoff.briefing || (t.tags.handoff.lead && t.tags.handoff.lead.briefing))) || t.tags.briefing_humano || t.tags.briefing;
+    }
+
+    const baloes = turnos.filter((t) => ['lead', 'mari', 'humano', 'sistema'].includes(t.papel)).map((t) => {
+      const txt = limpa(t.texto);
+      if (!txt && !chipsDe(t.tags)) return '';
+      const quem = { lead: contatoDe(c), mari: 'Mari', humano: 'Humano', sistema: 'Sistema' }[t.papel];
+      return `<div class="balao ${t.papel}"><div class="b-quem">${esc(quem)} · ${esc(NG.fmtDataHora(t.created_at))}</div>${txt ? `<div class="b-txt">${esc(txt)}</div>` : ''}${chipsDe(t.tags)}</div>`;
+    }).join('') || '<div class="vazio">Sem mensagens</div>';
+
+    const errs = errosDe(c.id);
+    corpo.innerHTML = `
+      ${pr.txt ? `<div class="faixa ${pr.nivel === 'bad' ? 'vermelho' : pr.nivel === 'warn' ? 'amarelo' : 'cinza'}">Próximo passo: ${esc(pr.txt)}</div>` : ''}
+      <section class="d-sec"><h3>Conversa</h3><div class="conversa">${baloes}</div></section>
+      <section class="d-sec"><h3>Dados coletados</h3>
+        ${linha('Nome', esc(d.nome || '—'))}
+        ${linha('CPF', esc(cpfMascara(d.cpf)))}
+        ${linha('Telefone', esc(telMascara(d.telefone || c.telefone)))}
+        ${linha('E-mail', esc(d.email || '—'))}
+        ${linha('Endereço', esc(end || '—'))}
+        ${linha('Cidade · tabela', esc([c.cidade, c.cluster === 'btu' ? 'BTU' : c.cluster === 'regular' ? 'Regular' : null].filter(Boolean).join(' · ') || '—'))}
+        ${linha('Plano', esc(`${planoTxt(c)}${c.forma_pagamento ? ` · ${FORMA[c.forma_pagamento]}` : ''}${valorDe(c) != null ? ` · ${NG.fmtMoeda(valorDe(c))}/mês` : ''}`))}
+        ${linha('Visita preferida', esc(c.visita_preferencia || '—'))}
+        ${linha('Elegibilidade', esc(ELEG_TXT[c.elegibilidade] || c.elegibilidade || '—'))}
+        ${linha('DFV', esc(DFV_TXT[c.dfv_resultado] || c.dfv_resultado || 'não consultado'))}
+      </section>
+      ${c.handoff_motivo ? `<section class="d-sec"><h3>Handoff</h3>
+        ${linha('Motivo', esc(MOTIVOS[c.handoff_motivo] || c.handoff_motivo))}
+        ${linha('Quando', esc(NG.fmtDataHora(c.handoff_em)))}
+        ${briefing ? `<div class="briefing">${esc(briefing)}</div>` : '<span class="nota-campo">Sem briefing gravado.</span>'}
+      </section>` : ''}
+      <section class="d-sec"><h3>Cadência</h3>
+        ${k ? `${linha('Passo atual', esc(k.passo_atual === 'nenhum' ? 'nenhum ainda' : PASSO[k.passo_atual] || k.passo_atual))}
+          ${linha('Próximo', esc(k.proximo_passo ? `${PASSO[k.proximo_passo] || k.proximo_passo}${k.proximo_em ? ` · ${NG.fmtDiaSemana(k.proximo_em)} ${NG.fmtDataHora(k.proximo_em)}` : ''}` : '—'))}
+          ${linha('Bloqueio', esc(k.bloqueio && k.bloqueio !== 'aguardando' ? k.bloqueio : '—'))}
+          ${linha('Toques', esc(`${k.toques_hoje} hoje · ${k.toques_mes} no mês (teto 2 · 15)`))}
+          ${linha('Janela de 24 h', esc(k.janela_aberta ? `aberta até ${NG.fmtDataHora(k.janela_fecha_em)}` : 'fechada — só template'))}
+          ${k.ligar_sugerido ? '<div class="faixa amarelo">D4–D5: sugestão de ligação do consultor (não é automática).</div>' : ''}`
+          : '<span class="nota-campo">Fora da cadência (conversa encerrada, em handoff ou sem mensagem da Mari).</span>'}
+      </section>
+      ${errs.length ? `<section class="d-sec"><h3>Erros (7 dias)</h3>${errs.map((e) => `<div class="faixa vermelho"><b>${esc(NG.fmtDataHora(e.created_at))} · ${esc(e.no_n8n || '')}</b>${esc(e.mensagem || '')}</div>`).join('')}</section>` : ''}
+    `;
+    const links = [];
+    if (c.venda_id) links.push(`<a class="btn" href="venda.html?id=${esc(c.venda_id)}">Abrir venda no NIOGEN</a>`);
+    if (c.chatwoot_conversation_id && CHATWOOT_NIO_ACCOUNT) {
+      links.push(`<a class="btn" target="_blank" rel="noopener" href="https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${esc(c.chatwoot_conversation_id)}">Abrir no Chatwoot</a>`);
+    }
+    document.getElementById('d-links').innerHTML = links.join('') || '<span class="nota-campo">Sem venda criada e sem conversa no Chatwoot.</span>';
+    const conv = corpo.querySelector('.conversa');
+    if (conv) conv.scrollTop = conv.scrollHeight;
+  }
+
+  await carregar();
+  setInterval(carregar, 60000);   // a lista se atualiza sozinha a cada minuto (só leitura)
+})();
+</script>
+</body>
+</html>
