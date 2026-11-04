@@ -1,0 +1,149 @@
+<!doctype html>
+<!-- NIOGEN | docs/metaads.html | 03/11/2026 — Meta Ads v0: aba Bairros prioritários (v_dfv_bairros, base DFV da Nio). Sem API da Meta -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Meta Ads · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=031126-11">
+<script src="config.js?v=031126-11"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=031126-11"></script>
+<script src="assets/sidebar.js?v=031126-11"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="meta"></nav>
+  <main class="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1>Meta Ads</h1>
+        <span class="sub" id="sub">Carregando…</span>
+      </div>
+      <div class="abas" role="tablist">
+        <button type="button" class="aba ativa" role="tab" aria-selected="true">Bairros prioritários</button>
+        <button type="button" class="aba" disabled title="em breve">Campanhas</button>
+        <button type="button" class="aba" disabled title="em breve">Leads</button>
+      </div>
+    </header>
+
+    <section class="painel" style="gap:10px">
+      <h2>Como ler</h2>
+      <span class="painel-sub">Score = HP livre × % de aprovação de crédito do bairro (mediana de JF quando a Nio não informa) × (0,5 + 0,5 × % de fachadas ALTO/MÉDIO).
+        Centro = média das fachadas; raio = 1,5 × a dispersão delas. Bairro com aprovação abaixo de 50 % fica marcado: não comprar lead barato lá (75 % do churn do canal é involuntário) —
+        vai para o PAP de rua com o DFV na mão. Fonte: base DFV da Nio no Supabase, recalculada a cada carga.</span>
+      <div class="bairros-tools">
+        <label class="filtro">Marcar os <input type="number" id="top-n" min="1" max="50" value="7" style="width:64px"> primeiros com aprovação ≥ 50 %</label>
+        <button type="button" class="btn btn-sm" id="marcar-top">Marcar</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="limpar">Limpar</button>
+        <label class="check" style="align-items:center"><input type="checkbox" id="min-1km" checked> Raio mínimo 1 km (limite do Gerenciador)</label>
+      </div>
+      <div class="conjunto" id="conjunto" aria-live="polite">Marque os bairros na tabela.</div>
+      <div class="bairros-tools">
+        <button type="button" class="btn btn-acc" id="copiar">Copiar conjunto</button>
+        <span class="nota-campo" id="resumo-conj"></span>
+      </div>
+    </section>
+
+    <section class="lista" aria-label="Bairros por score">
+      <table class="tab">
+        <thead><tr><th></th><th>#</th><th>Bairro</th><th style="text-align:right">HP livre</th><th style="text-align:right">% livre</th>
+          <th style="text-align:right">Aprov. crédito</th><th style="text-align:right">ALTO/MÉDIO</th><th style="text-align:right">A/B + C</th>
+          <th>Centro (lat, lon)</th><th style="text-align:right">Raio</th><th style="text-align:right">Score</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="11" class="vazio">Carregando…</td></tr></tbody>
+      </table>
+    </section>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+
+  const { data, error } = await NG.sb.from('v_dfv_bairros').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA');
+  const tbody = document.getElementById('tbody');
+  if (error) { tbody.innerHTML = `<tr><td colspan="11" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+  const bairros = (data || []).sort((a, b) => Number(b.score) - Number(a.score));
+  if (!bairros.length) { tbody.innerHTML = '<tr><td colspan="11" class="vazio">Base DFV ainda não carregada.</td></tr>'; return; }
+
+  const totalLivre = bairros.reduce((s, b) => s + (b.hp_livre || 0), 0);
+  document.getElementById('sub').textContent = `Juiz de Fora · ${bairros.length} bairros · ${NG.fmtNum(totalLivre)} HPs livres · base DFV de ${NG.fmtDiaISO(bairros[0].particao)}`;
+
+  const pc = (v) => (v == null ? '—' : `${NG.fmtNum(Number(v) * 100)} %`);
+  const marcados = new Set();
+  const raio = (b) => {
+    const r = Number(b.raio_km) || 0;
+    return document.getElementById('min-1km').checked ? Math.max(1, r) : r;
+  };
+  const fmtRaio = (r) => r.toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const baixo = (b) => b.pct_aprov_bairro != null && Number(b.pct_aprov_bairro) < 0.5;
+
+  function linha(b, i) {
+    const aprov = b.aprov_estimada
+      ? '<span class="chip" title="A Nio não informou a aprovação deste bairro: o score usa a mediana de JF">n/i</span>'
+      : `<span class="${baixo(b) ? 'chip bad' : ''}" ${baixo(b) ? 'title="Aprovação abaixo de 50 %: PAP com DFV, não anúncio"' : ''}>${pc(b.pct_aprov_bairro)}</span>`
+        + (b.qt_propostas_bairro != null ? `<div class="sub">${NG.fmtNum(b.qt_propostas_bairro)} propostas</div>` : '');
+    return `<tr data-b="${esc(b.bairro)}" class="${marcados.has(b.bairro) ? 'marcado' : ''}">
+      <td class="ck"><input type="checkbox" aria-label="Marcar ${esc(b.bairro)}" ${marcados.has(b.bairro) ? 'checked' : ''}></td>
+      <td class="num">${i + 1}</td>
+      <td><strong>${esc(b.bairro)}</strong><div class="sub">${NG.fmtNum(b.fachadas)} fachadas · ${NG.fmtNum(b.hc_tot)} já com Nio</div></td>
+      <td class="num">${NG.fmtNum(b.hp_livre)}</td>
+      <td class="num">${pc(b.pct_livre)}</td>
+      <td class="num">${aprov}</td>
+      <td class="num">${pc(b.pct_alto_medio)}</td>
+      <td class="num">${pc(b.pct_ab_c)}</td>
+      <td class="mono" style="font-size:12px">${Number(b.lat_centro).toFixed(4)}, ${Number(b.lon_centro).toFixed(4)}</td>
+      <td class="num">${fmtRaio(Number(b.raio_km))} km</td>
+      <td class="num">${NG.fmtNum(b.score)}</td>
+    </tr>`;
+  }
+  const render = () => { tbody.innerHTML = bairros.map(linha).join(''); conjunto(); };
+
+  // Texto para colar no Gerenciador de Anúncios (Localização › Inserir em massa / soltar alfinete): um bairro por linha.
+  function conjunto() {
+    const sel = bairros.filter((b) => marcados.has(b.bairro));
+    const box = document.getElementById('conjunto');
+    if (!sel.length) { box.textContent = 'Marque os bairros na tabela.'; document.getElementById('resumo-conj').textContent = ''; return ''; }
+    const txt = sel.map((b) => `${Number(b.lat_centro).toFixed(6)}, ${Number(b.lon_centro).toFixed(6)}, ${fmtRaio(raio(b)).replace(',', '.')} km`).join('\n');
+    box.textContent = txt;
+    const livres = sel.reduce((s, b) => s + (b.hp_livre || 0), 0);
+    document.getElementById('resumo-conj').textContent = `${sel.length} bairro${sel.length === 1 ? '' : 's'} (na ordem: ${sel.map((b) => b.bairro).join(', ')}) · ${NG.fmtNum(livres)} HPs livres`
+      + (sel.some(baixo) ? ' · ⚠ inclui bairro com aprovação < 50 %' : '');
+    return txt;
+  }
+
+  tbody.addEventListener('change', (ev) => {
+    const tr = ev.target.closest('tr[data-b]');
+    if (!tr) return;
+    if (ev.target.checked) marcados.add(tr.dataset.b); else marcados.delete(tr.dataset.b);
+    tr.classList.toggle('marcado', ev.target.checked);
+    conjunto();
+  });
+  document.getElementById('marcar-top').addEventListener('click', () => {
+    const n = Math.max(1, Number(document.getElementById('top-n').value) || 7);
+    marcados.clear();
+    bairros.filter((b) => !baixo(b)).slice(0, n).forEach((b) => marcados.add(b.bairro));
+    render();
+  });
+  document.getElementById('limpar').addEventListener('click', () => { marcados.clear(); render(); });
+  document.getElementById('min-1km').addEventListener('change', conjunto);
+  document.getElementById('copiar').addEventListener('click', async () => {
+    const txt = conjunto();
+    if (!txt) { NG.toast('Marque pelo menos um bairro.', 'bad'); return; }
+    try { await navigator.clipboard.writeText(txt); NG.toast('Conjunto copiado — cole no Gerenciador de Anúncios', 'ok'); }
+    catch (e) { NG.toast('Não deu para copiar: selecione o texto do quadro e copie à mão.', 'bad'); }
+  });
+
+  bairros.filter((b) => !baixo(b)).slice(0, 7).forEach((b) => marcados.add(b.bairro));
+  render();
+})();
+</script>
+</body>
+</html>

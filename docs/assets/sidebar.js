@@ -5,7 +5,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.5.1 · 03/11';
+  const VERSAO = 'v0.6 · 03/11';
 
   const MENU = [
     ['Gestão', [
@@ -22,7 +22,7 @@
     ]],
     ['Mari', [
       { id: 'mari', ico: '◎', nome: 'Mari · IA' },
-      { id: 'meta', ico: '▲', nome: 'Meta Ads' },
+      { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
     ['Financeiro', [
       { id: 'adimplencia', ico: '◇', nome: 'Adimplência' },

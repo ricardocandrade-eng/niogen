@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-10">
-<script src="config.js?v=031126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-11">
+<script src="config.js?v=031126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-10"></script>
-<script src="assets/sidebar.js?v=031126-10"></script>
+<script src="assets/app.js?v=031126-11"></script>
+<script src="assets/sidebar.js?v=031126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -224,8 +224,7 @@
   // Endereço vindo do ViaCEP + resultado das travas.
   const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null };
 
-  // Cobertura rua a rua: ainda sem fonte. null = "consultar no APP".
-  async function checarCobertura(/* cep, numero */) { return null; }
+  // Cobertura rua a rua: vem da base DFV (dfv_consultar), preenchida pelo bloco Cobertura. null = "consultar".
 
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
   // Linha da área que cobre o endereço (traz o cluster: a tabela de preço da cidade). A mesma regra roda no banco (cluster_da_area).
@@ -346,8 +345,8 @@
   function renderTravas() {
     if (!estado.viacep) { travasEl.innerHTML = ''; return; }
     const c = estado.cobertura === null
-      ? '<span class="chip warn">Cobertura: consultar no APP</span>'
-      : `<span class="chip ${estado.cobertura ? 'ok' : 'bad'}">Cobertura Nio ${estado.cobertura ? '✓' : '✗'}</span>`;
+      ? '<span class="chip warn">Cobertura: consultar o DFV</span>'
+      : `<span class="chip ${estado.cobertura ? 'ok' : 'bad'}">Cobertura Nio (DFV) ${estado.cobertura ? '✓' : '✗'}</span>`;
     const a = estado.area === null ? '<span class="chip">Área: sem cidade</span>'
       : `<span class="chip ${estado.area ? 'ok' : 'bad'}">${estado.area ? `Dentro da área ✓ · ${estado.cluster === 'btu' ? 'BTU' : 'Regular'}` : 'Fora da área ✗'}</span>`;
     const d = estado.dup === null ? '' : estado.dup.endereco
@@ -378,7 +377,7 @@
       F.cidade_uf.value = `${j.localidade} / ${j.uf}`;
       document.getElementById('endereco').hidden = false;
       atualizarArea();
-      estado.cobertura = await checarCobertura(cep, F.numero.value);
+      consultarDfv();
     } catch (e) {
       estado.viacep = null;
       atualizarArea();
@@ -391,7 +390,8 @@
   }
 
   F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
-  F.numero.addEventListener('change', checarDuplicidade);
+  F.numero.addEventListener('change', () => { checarDuplicidade(); consultarDfv(); });
+  F.complemento.addEventListener('change', () => consultarDfv());
   F.bairro.addEventListener('change', () => {
     if (estado.viacep) { atualizarArea(); renderTravas(); renderPlanos(); }
   });
@@ -467,7 +467,9 @@
       trava_cpf_valido: docOk,
       trava_contato_confirmado: F.contato_ok.checked,
       ...NG.dfvLer(document.getElementById('dfv-campos')),
-      ...(status === 'saida' ? { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) } : {}),
+      ...(status === 'saida' ? (F.dfv_resultado.value === 'endereco_ocupado'
+        ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
+        : { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) }) : {}),
     }, falta];
   }
 
@@ -492,25 +494,46 @@
     Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null });
     document.getElementById('endereco').hidden = true;
     document.getElementById('doc-erro').textContent = '';
+    montarDfv();
     renderTravas();
     renderPlanos();
-    atualizarDfv();
     atualizarBotao();
     await carregarLista();
     return data;
   }
 
-  // Cobertura (DFV): o resultado vai junto na gravação; a trava do banco só pesa ao registrar a venda (0 → 1).
+  // Cobertura (DFV): consulta a base sozinha ao sair do número/complemento (e depois do ViaCEP); o resultado vai junto
+  // na gravação. A trava do banco só pesa ao registrar a venda (0 → 1). O seletor manual continua (origem "manual").
   const dfvEl = document.getElementById('dfv-campos');
-  dfvEl.innerHTML = NG.dfvCampos();
-  NG.ligarLinkDfv(dfvEl);
   const semEl = document.getElementById('dfv-sem');
+  const btnSem = document.getElementById('btn-sem-cobertura');
+  let consultarDfv = async () => null;
   const atualizarDfv = () => {
-    const vi = F.dfv_viabilidade.value;
-    semEl.hidden = !['sem_viabilidade', 'nao_encontrado'].includes(vi);
+    const ocupado = F.dfv_resultado.value === 'endereco_ocupado';
+    semEl.hidden = !['sem_viabilidade', 'nao_encontrado'].includes(F.dfv_viabilidade.value);
+    semEl.querySelector('span').textContent = ocupado
+      ? 'O DFV diz que o endereço já tem Nio: não vender (estorno 100 % e multa). Registrar como saída?'
+      : 'Sem cobertura no DFV: não vender. Quer registrar como saída e voltar a falar em 90 dias?';
+    btnSem.textContent = ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
   };
-  F.dfv_viabilidade.addEventListener('change', atualizarDfv);
-  document.getElementById('btn-sem-cobertura').addEventListener('click', (ev) => salvar('saida', ev.currentTarget));
+  function montarDfv() {
+    dfvEl.innerHTML = NG.dfvCampos();
+    NG.ligarLinkDfv(dfvEl);
+    consultarDfv = NG.ligarDfvAuto(dfvEl,
+      () => ({ cep: F.cep.value, numero: F.numero.value, complemento: F.complemento.value }),
+      {
+        aoEscolher: (comp) => { F.complemento.value = comp; },
+        aoMudar: (r) => {
+          estado.cobertura = !r || r.resultado === 'precisa_numero' ? null : ['viavel', 'viavel_predio'].includes(r.resultado);
+          renderTravas();
+          atualizarDfv();
+        },
+      });
+    F.dfv_viabilidade.addEventListener('change', atualizarDfv);
+    atualizarDfv();
+  }
+  montarDfv();
+  btnSem.addEventListener('click', (ev) => salvar('saida', ev.currentTarget));
 
   btnQualif.addEventListener('click', () => salvar('0_qualificado', btnQualif));
   btnVenda.addEventListener('click', () => salvar('1_vendido', btnVenda));

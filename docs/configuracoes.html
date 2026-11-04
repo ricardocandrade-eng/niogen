@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- NIOGEN | docs/configuracoes.html | 03/11/2026 — Importação e configurações · aba Importação (OSAB com prévia obrigatória) -->
+<!-- NIOGEN | docs/configuracoes.html | 03/11/2026 — Importação e configurações · aba Importação (OSAB com prévia obrigatória; base DFV: prévia, carga pelo CLI) -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,13 +11,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-10">
-<script src="config.js?v=031126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-11">
+<script src="config.js?v=031126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=031126-10"></script>
-<script src="assets/sidebar.js?v=031126-10"></script>
-<script src="assets/osab.js?v=031126-10"></script>
+<script src="assets/app.js?v=031126-11"></script>
+<script src="assets/sidebar.js?v=031126-11"></script>
+<script src="assets/osab.js?v=031126-11"></script>
+<script src="assets/dfv.js?v=031126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -47,6 +48,13 @@
           <div class="tools">
             <label class="btn btn-sm" style="display:inline-flex;align-items:center;cursor:pointer">Enviar arquivo<input type="file" id="arquivo" accept=".xlsx,.xls,.xlsb,.csv" hidden></label>
             <button type="button" class="btn btn-sm btn-ghost" id="ver-ultima" disabled>Ver resumo da última</button>
+          </div>
+        </div>
+        <div class="rel">
+          <div class="rel-topo"><strong>DFV · base HP/HC (viabilidade)</strong><span class="chip" id="dfv-ultima">nenhuma carga</span></div>
+          <span class="rel-desc">Chave <span class="mono">COD_SURVEY</span> + número + complemento · só endereços viáveis · substitui a partição inteira do município · CSV de ~45 MB · também reconhecido no botão do OSAB</span>
+          <div class="tools">
+            <label class="btn btn-sm" style="display:inline-flex;align-items:center;cursor:pointer">Prévia do CSV<input type="file" id="arquivo-dfv" accept=".csv" hidden></label>
           </div>
         </div>
         <div class="rel">
@@ -129,6 +137,12 @@
       chip.textContent = `${NG.fmtDataHora(ultima.aplicado_em)} · DT_REF ${fmtDtRef(ultima.dt_ref)} · ${plural(ultima.aplicadas || 0, 'pedido nosso', 'pedidos nossos')}`;
     }
     document.getElementById('ver-ultima').disabled = !ultima;
+    const dfvUlt = lista.find((i) => i.tipo === 'dfv_hp' && i.aplicado_em);
+    if (dfvUlt) {
+      const chipD = document.getElementById('dfv-ultima');
+      chipD.className = 'chip ok';
+      chipD.textContent = `${NG.fmtDataHora(dfvUlt.aplicado_em)} · base de ${fmtDtRef(dfvUlt.dt_ref)} · ${plural(dfvUlt.aplicadas || 0, 'fachada', 'fachadas')}`;
+    }
     tb.innerHTML = lista.length ? lista.map((i) => `<tr>
         <td>${NG.fmtDataHora(i.aplicado_em || i.criado_em)}${i.aplicado_em ? '' : ' <span class="chip warn">não aplicada</span>'}</td>
         <td>${esc(i.tipo.toUpperCase())}</td>
@@ -146,6 +160,8 @@
     const f = inputArq.files[0];
     inputArq.value = '';
     if (!f) return;
+    // CSV do DFV também entra por aqui: reconhece pelas colunas.
+    if (/\.csv$/i.test(f.name) && NGDfv.ehDfv(await NGDfv.primeiraLinha(f))) { previaDfv(f); return; }
     previa.hidden = false;
     previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><span class="carregando">Lendo o arquivo…</span>`;
     let leitura;
@@ -210,6 +226,61 @@
       <div class="acoes">
         <button type="button" class="btn btn-ghost" data-cancelar>Descartar</button>
         <button type="button" class="btn btn-acc" data-aplicar>Aplicar</button>
+      </div>`;
+  }
+
+  // ---------------------------------------------------------------- base DFV (prévia)
+  // Lê o CSV em streaming no navegador e compara com a partição atual (v_dfv_resumo). Aplicar pela tela fica para depois:
+  // a carga de 45 MB vai pelo CLI (supabase/scripts/dfv_carga.py → nio_hp_stage → aplicar_dfv), decisão de 03/11.
+  const inputDfv = document.getElementById('arquivo-dfv');
+  inputDfv.addEventListener('change', () => {
+    const f = inputDfv.files[0];
+    inputDfv.value = '';
+    if (f) previaDfv(f);
+  });
+  async function previaDfv(f) {
+    atual = null;
+    previa.hidden = false;
+    previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><span class="carregando" data-prog>Lendo o arquivo (${NG.fmtNum(f.size / 1048576)} MB)…</span>`;
+    if (!NGDfv.ehDfv(await NGDfv.primeiraLinha(f))) {
+      previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Arquivo recusado</strong><span>Não tem as colunas do DFV (COD_SURVEY, HP_LIVRE, dt_dfv_particao).</span></div></div>`;
+      return;
+    }
+    let r;
+    try {
+      r = await NGDfv.ler(f, (x) => { const el = previa.querySelector('[data-prog]'); if (el) el.textContent = `Lendo o arquivo… ${Math.round(x * 100)} %`; });
+    } catch (e) {
+      r = { erro: `Não consegui ler o arquivo: ${e.message}` };
+    }
+    if (r.erro) {
+      previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Arquivo recusado</strong><span>${esc(r.erro)}</span></div></div>`;
+      return;
+    }
+    const { data: atuais } = await NG.sb.from('v_dfv_resumo').select('*');
+    const ant = (atuais || []).filter((a) => r.municipios.includes(`${a.uf} · ${a.municipio}`));
+    const soma = (k) => ant.reduce((s, a) => s + (a[k] || 0), 0);
+    const dif = (novo, k) => {
+      if (!ant.length) return 'primeira carga';
+      const d = novo - soma(k);
+      return `${d > 0 ? '+' : ''}${NG.fmtNum(d)} vs base de ${fmtDtRef(ant[0].particao)}`;
+    };
+    const kpi = (rot, val, nota, cls) => `<div class="kpi ${cls || ''}"><span class="rot">${rot}</span><span class="val">${val}</span><span class="nota">${esc(nota || '')}</span></div>`;
+    previa.innerHTML = `
+      <div class="rel-topo"><h2>Prévia · ${esc(f.name)}</h2><span class="chip">base DFV · partição ${esc(r.particoes.map(fmtDtRef).join(', ') || '—')} · ${esc(r.municipios.join(', '))}</span></div>
+      <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
+        ${kpi('Fachadas', NG.fmtNum(r.linhas), dif(r.linhas, 'fachadas'))}
+        ${kpi('HPs', NG.fmtNum(r.hp_tot), dif(r.hp_tot, 'hp_tot'))}
+        ${kpi('HP livre', NG.fmtNum(r.hp_livre), dif(r.hp_livre, 'hp_livre'), 'ok')}
+        ${kpi('HCs (já com Nio)', NG.fmtNum(r.hc_tot), dif(r.hc_tot, 'hc_tot'))}
+        ${kpi('Casas já com Nio', NG.fmtNum(r.casas_ocupadas), 'trava "endereço já ativo"')}
+        ${kpi('Bairros · CEPs', `${NG.fmtNum(r.bairros)} · ${NG.fmtNum(r.ceps)}`, `${r.colunas} colunas`)}
+      </div>
+      ${r.repetidas || r.ruins ? `<div class="aviso">${r.repetidas ? plural(r.repetidas, 'linha repetida', 'linhas repetidas') + ' com a mesma chave (COD_SURVEY + número + complemento): conta uma vez. ' : ''}${r.ruins ? plural(r.ruins, 'linha com nº de colunas errado ignorada', 'linhas com nº de colunas errado ignoradas') + '.' : ''}</div>` : ''}
+      ${r.particoes.length !== 1 ? '<div class="aviso">O arquivo tem mais de uma partição (dt_dfv_particao): aplicar_dfv recusa.</div>' : ''}
+      <div class="rodape-info"><span><strong>Aplicar pela tela: em breve.</strong> Por enquanto a carga é pelo Claude Code (CLI): <span class="mono">supabase/scripts/dfv_carga.py</span> → <span class="mono">aplicar_dfv</span>, que substitui a partição inteira do município. O arquivo não sai deste navegador na prévia.</span></div>
+      <div class="acoes">
+        <button type="button" class="btn btn-ghost" data-cancelar>Fechar</button>
+        <button type="button" class="btn btn-acc" disabled title="em breve — carga pelo CLI">Aplicar (em breve)</button>
       </div>`;
   }
 

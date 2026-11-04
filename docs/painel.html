@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- NIOGEN | docs/painel.html | 03/11/2026 — Painel do dia · aba Operação (v_painel_mes, v_painel_hoje, v_alertas_contrato) -->
+<!-- NIOGEN | docs/painel.html | 03/11/2026 — Painel do dia · aba Operação (v_painel_mes, v_painel_hoje, v_alertas_contrato, v_dfv_resumo) -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-10">
-<script src="config.js?v=031126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-11">
+<script src="config.js?v=031126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-10"></script>
-<script src="assets/sidebar.js?v=031126-10"></script>
+<script src="assets/app.js?v=031126-11"></script>
+<script src="assets/sidebar.js?v=031126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -52,20 +52,22 @@
   const pct = (a, b) => (b ? Math.min(100, (a / b) * 100) : 0);
   const n = (v) => NG.fmtNum(v || 0);
 
-  const [rm, rh, ra, ri, rd] = await Promise.all([
+  const [rm, rh, ra, ri, rd, rz] = await Promise.all([
     NG.sb.from('v_painel_mes').select('*').eq('mes', mesISO).maybeSingle(),
     NG.sb.from('v_painel_hoje').select('*').maybeSingle(),
     NG.sb.from('v_alertas_contrato').select('*'),
     NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
     NG.sb.from('v_placar_dfv').select('*').eq('mes', mesISO).maybeSingle(),
+    NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
   ]);
-  const erro = rm.error || rh.error || ra.error || ri.error || rd.error;
+  const erro = rm.error || rh.error || ra.error || ri.error || rd.error || rz.error;
   if (erro) { document.getElementById('conteudo').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro))}</div>`; return; }
 
   const m = rm.data || { vendidas: 0, instaladas: 0, aguardando: 0, ativas_carteira: 0, saidas: 0, comissao_prevista: 0, comissao_instalada: 0, comissao_em_risco: 0,
     por_origem: {}, por_cidade: {}, por_vendedor: [], por_plano: {}, por_forma: {}, por_dia_vendas: {}, por_dia_instaladas: {} };
   const h = rh.data || {};
   const dfv = rd.data || { qualificadas: 0, dfv_consultadas: 0, dfv_viaveis: 0, dfv_sem_cobertura: 0 };
+  const base = rz.data;   // base DFV de JF (nio_hp)
   const alertas = ra.data || [];
   const osab = (ri.data || [])[0];
   const meta = m.meta_vendas || 0;
@@ -136,6 +138,9 @@
       <a class="kpi ${h.pendencias_osab ? 'warn' : ''}" href="instalacoes.html"><span class="rot">Pendência OSAB</span><span class="val">${n(h.pendencias_osab)}</span><span class="nota">${esc(h.pendencia_top ? h.pendencia_top.toLowerCase() + ' · reagendar' : 'nenhuma')}</span></a>
       <div class="kpi"><span class="rot">Ativos na carteira</span><span class="val">${n(m.ativas_carteira)}</span><span class="nota">adimplência chega com as faturas</span></div>
       <a class="kpi ${dfv.qualificadas && dfv.dfv_consultadas < dfv.qualificadas ? 'warn' : ''}" href="funil.html"><span class="rot">${NG.rotuloTxt('DFV viável ÷ qualificadas', NG.TEXTOS_DFV.placar)}</span><span class="val">${n(dfv.dfv_viaveis)} / ${n(dfv.qualificadas)}</span><span class="nota">${n(dfv.dfv_consultadas)} consultada${dfv.dfv_consultadas === 1 ? '' : 's'} · ${dfv.pct_viavel_consultadas != null ? NG.fmtNum(dfv.pct_viavel_consultadas) + ' % viáveis' : 'nenhuma consulta'}</span></a>
+      <a class="kpi" href="metaads.html" title="Base DFV da Nio no Supabase · ranking de bairros na tela Meta Ads"><span class="rot">Cobertura JF (DFV)</span><span class="val">${base ? n(base.hp_livre) : '—'}</span><span class="nota">${base
+        ? `HP livre · ${NG.fmtNum(Number(base.pct_ocupacao) * 100)} % ocupado · base de ${NG.fmtDiaISO(base.particao).slice(0, 5)} · bairros →`
+        : 'base DFV ainda não carregada'}</span></a>
       <a class="kpi" href="vendas.html"><span class="rot">Saídas no mês</span><span class="val">${n(m.saidas)}</span><span class="nota">${esc(m.saidas_motivo_top || '—')}</span></a>
     </div>
 

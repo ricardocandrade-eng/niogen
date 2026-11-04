@@ -218,9 +218,10 @@
     const quando = v.dfv_consultado_em ? fmtData(v.dfv_consultado_em) : '';
     if (DFV_OK.includes(v.dfv_viabilidade)) {
       return dfvValido(v)
-        ? selo(`DFV viável ${quando}`, 'ok', `${TEXTOS_DFV.opcoes[v.dfv_viabilidade]} ${TEXTOS_DFV.regra}`)
+        ? selo(`DFV viável ${quando}${v.dfv_origem === 'auto' ? ' · auto' : ''}`, 'ok', `${TEXTOS_DFV.opcoes[v.dfv_viabilidade]} ${TEXTOS_DFV.regra}`)
         : selo(`DFV vencido (${quando})`, 'warn', `Consulta com mais de 7 dias. ${TEXTOS_DFV.trava}`);
     }
+    if (v.dfv_resultado === 'endereco_ocupado') return selo('DFV: endereço já tem Nio', 'bad', DFV_RESULTADO.endereco_ocupado);
     if (v.dfv_viabilidade === 'sem_viabilidade' || v.dfv_viabilidade === 'nao_encontrado') {
       return selo(`DFV: ${v.dfv_viabilidade === 'sem_viabilidade' ? 'sem viabilidade' : 'não encontrado'}`, 'bad', TEXTOS_DFV.opcoes[v.dfv_viabilidade]);
     }
@@ -237,16 +238,45 @@
     return dfvCache;
   }
   async function linkDfv() { return (await dadosDfv()).url; }
+  // ---------- DFV nível 3: consulta automática na base nio_hp (dfv_consultar) ----------
+  // Resposta crua da função → valor do seletor (a mesma tabela do trigger vendas_antes_cobertura).
+  const DFV_MAPA = {
+    viavel: 'viavel', viavel_predio: 'viavel_predio', endereco_ocupado: 'sem_viabilidade',
+    sem_porta_livre: 'sem_viabilidade', nao_encontrado: 'nao_encontrado',
+  };
+  const DFV_RESULTADO = {
+    viavel: 'Viável na base DFV: fachada com porta livre.',
+    viavel_predio: 'Prédio na base DFV: escolha a unidade (complemento) para conferir a porta.',
+    endereco_ocupado: 'Endereço já tem Nio (casa com HC = 1): não vender — estorno 100 % e multa. Saída "Já é cliente Nio".',
+    sem_porta_livre: 'Na base DFV, mas sem porta livre (HP livre = 0): não vender agora.',
+    nao_encontrado: 'Fora da base DFV: sem viabilidade hoje (a Nio só exporta endereços viáveis). Confira CEP e número.',
+    precisa_numero: 'CEP na base DFV: informe o número da fachada para consultar.',
+  };
+  // Faixa de crédito da Nio → código do seletor (igual a dfv_faixa_codigo no banco).
+  const faixaCodigo = (t) => (!t ? null : /^maior/i.test(t) ? '>70' : /^entre/i.test(t) ? '50-70' : /^menor/i.test(t) ? '<50' : 'nao_informado');
+  const baseDe = (particao) => (particao ? fmtDiaISO(particao).slice(0, 5) : '');
+  async function dfvConsultar(cep, numero, complemento) {
+    const { data, error } = await sb.rpc('dfv_consultar', { p_cep: cep || '', p_numero: numero || '', p_complemento: complemento || null });
+    if (error) throw error;
+    return (data || [])[0] || null;
+  }
+
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
     v = v || {};
     const opt = (lista, atual) => lista.map(([val, txt]) => `<option value="${val}" ${val === (atual ?? '') ? 'selected' : ''}>${esc(txt)}</option>`).join('');
     const todas = Object.entries(DFV_OPCOES).map(([k, t]) => `${t}: ${TEXTOS_DFV.opcoes[k]}`).join(' · ');
+    const auto = v.dfv_origem === 'auto';
     return `
-      <div class="dfv-topo">
-        <a class="btn btn-sm dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir DFV Sudeste ↗</a>
-        <span class="nota-campo" data-dfv-acesso>${esc(TEXTOS_DFV.como)}</span>
+      <div class="dfv-auto">
+        <span class="chip ${auto ? 'info' : ''}" data-dfv-origem>${auto ? `automático · base de ${esc(baseDe(v.dfv_particao))}` : v.dfv_origem === 'manual' ? 'manual' : 'base DFV'}</span>
+        <span class="nota-campo" data-dfv-msg>${auto && v.dfv_resultado ? esc(DFV_RESULTADO[v.dfv_resultado] || '') : 'Preenche sozinho ao informar CEP e número.'}</span>
+        <button type="button" class="btn btn-sm" data-dfv-consultar>Consultar de novo</button>
       </div>
+      <div class="dfv-opcoes" data-dfv-opcoes hidden></div>
+      <input type="hidden" name="dfv_origem" value="${esc(v.dfv_origem || '')}">
+      <input type="hidden" name="dfv_resultado" value="${esc(v.dfv_resultado || '')}">
+      <input type="hidden" name="dfv_particao" value="${esc(v.dfv_particao || '')}">
       <div class="grade2">
         <label class="campo"><span>Viabilidade no DFV ${dicaTxt(todas)}</span>
           <select name="dfv_viabilidade">${opt(Object.entries(DFV_OPCOES), v.dfv_viabilidade || 'nao_consultado')}</select></label>
@@ -259,18 +289,102 @@
           <label class="campo">HCs<input type="number" min="0" name="dfv_hcs" value="${v.dfv_hcs ?? ''}"></label>
         </div>
       </div>
+      <details class="dfv-manual">
+        <summary>Consulta manual no painel da Nio (fallback)</summary>
+        <div class="dfv-topo">
+          <a class="btn btn-sm dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir DFV Sudeste ↗</a>
+          <span class="nota-campo" data-dfv-acesso>${esc(TEXTOS_DFV.como)}</span>
+        </div>
+        <span class="nota-campo">Mudou algum campo acima à mão? A consulta passa a valer como manual.</span>
+      </details>
       <span class="nota-campo">${esc(TEXTOS_DFV.regra)} ${dicaTxt(TEXTOS_DFV.jaTemNio)}</span>`;
   }
   function dfvLer(root) {
     const val = (n) => { const el = root.querySelector(`[name="${n}"]`); return el ? el.value : ''; };
     const num = (n) => (val(n) === '' ? null : Number(val(n)));
+    const vi = val('dfv_viabilidade') || 'nao_consultado';
     return {
-      dfv_viabilidade: val('dfv_viabilidade') || 'nao_consultado',
+      dfv_viabilidade: vi,
       dfv_faixa_credito: val('dfv_faixa_credito') || null,
       dfv_classificacao: val('dfv_classificacao') || null,
       dfv_hp_livre: num('dfv_hp_livre'),
       dfv_hcs: num('dfv_hcs'),
+      dfv_origem: vi === 'nao_consultado' ? null : (val('dfv_origem') || 'manual'),
+      dfv_resultado: val('dfv_resultado') || null,
+      dfv_particao: val('dfv_particao') || null,
     };
+  }
+  // Escreve no bloco o que a base respondeu (origem auto). Devolve a resposta.
+  function dfvPreencher(root, r) {
+    const set = (n, v) => { const el = root.querySelector(`[name="${n}"]`); if (el) el.value = v ?? ''; };
+    const msg = root.querySelector('[data-dfv-msg]');
+    const selo = root.querySelector('[data-dfv-origem]');
+    const ops = root.querySelector('[data-dfv-opcoes]');
+    ops.hidden = true;
+    ops.innerHTML = '';
+    if (!r) return r;
+    msg.textContent = DFV_RESULTADO[r.resultado] || r.resultado;
+    if (r.resultado === 'precisa_numero') return r;
+    set('dfv_viabilidade', DFV_MAPA[r.resultado] || 'nao_encontrado');
+    set('dfv_faixa_credito', faixaCodigo(r.faixa_credito));
+    set('dfv_classificacao', ['ALTO', 'MEDIO', 'BAIXO'].includes(r.classificacao) ? r.classificacao : '');
+    set('dfv_hp_livre', r.hp_livre);
+    set('dfv_hcs', r.hc_tot);
+    set('dfv_origem', 'auto');
+    set('dfv_resultado', r.resultado);
+    set('dfv_particao', r.particao || '');
+    selo.className = 'chip info';
+    selo.textContent = `automático · base de ${baseDe(r.particao)}`;
+    if (r.resultado === 'viavel_predio' && Array.isArray(r.opcoes) && r.opcoes.length) {
+      ops.innerHTML = `<span class="nota-campo">${fmtNum(r.opcoes.length)} unidades nesta fachada · ${fmtNum(r.hp_livre)} portas livres. Toque na do cliente:</span>
+        <div class="dfv-opcoes-lista">${r.opcoes.slice(0, 120).map((o) => `<button type="button" class="chip ${o.hp_livre >= 1 ? 'ok' : 'bad'}" data-dfv-comp="${esc(o.complemento || '')}"
+          title="HP livre ${o.hp_livre ?? '—'} · HC ${o.hc_tot ?? '—'}">${esc(o.complemento || `nº ${o.numero} (sem complemento)`)}</button>`).join('')}</div>
+        ${r.opcoes.length > 120 ? '<span class="nota-campo">Lista cortada em 120: digite o complemento e toque em "Consultar de novo".</span>' : ''}`;
+      ops.hidden = false;
+    }
+    return r;
+  }
+  // Liga o bloco: consulta (botão / chamada externa), escolha de unidade do prédio e mudança manual.
+  // endereco() → {cep, numero, complemento}; aoEscolher(complemento) grava o complemento escolhido; aoMudar(resposta|null).
+  function ligarDfvAuto(root, endereco, { aoEscolher, aoMudar } = {}) {
+    let seq = 0;
+    async function consultar() {
+      const e = endereco();
+      const msg = root.querySelector('[data-dfv-msg]');
+      if (soDigitos(e.cep).length !== 8 || !String(e.numero || '').trim()) {
+        msg.textContent = 'Informe CEP e número para consultar a base DFV.';
+        return null;
+      }
+      const meu = ++seq;
+      msg.textContent = 'Consultando a base DFV…';
+      try {
+        const r = await dfvConsultar(e.cep, e.numero, e.complemento);
+        if (meu !== seq) return null;
+        dfvPreencher(root, r);
+        if (aoMudar) aoMudar(r);
+        return r;
+      } catch (err) {
+        msg.textContent = `Base DFV indisponível (${msgErro(err)}) — use a consulta manual.`;
+        return null;
+      }
+    }
+    root.querySelector('[data-dfv-consultar]').addEventListener('click', consultar);
+    root.querySelector('[data-dfv-opcoes]').addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-dfv-comp]');
+      if (!b) return;
+      if (aoEscolher) await aoEscolher(b.dataset.dfvComp);
+      consultar();
+    });
+    root.querySelectorAll('select, input[type=number]').forEach((el) => el.addEventListener('change', () => {
+      root.querySelector('[name="dfv_origem"]').value = 'manual';
+      root.querySelector('[name="dfv_resultado"]').value = '';
+      root.querySelector('[name="dfv_particao"]').value = '';
+      const selo = root.querySelector('[data-dfv-origem]');
+      selo.className = 'chip';
+      selo.textContent = 'manual';
+      if (aoMudar) aoMudar(null);
+    }));
+    return consultar;
   }
   async function ligarLinkDfv(root) {
     const { url, acesso } = await dadosDfv();
@@ -473,7 +587,8 @@
     sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao,
-    DFV_OPCOES, TEXTOS_DFV, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv, exigirLogin, sair, modal,
+    DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
+    dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
     carregarUsuarios, preencherSelect,
     get usuario() { return usuarioAtual; },
