@@ -5,6 +5,7 @@
 # p_agora. Nada sai para WhatsApp/Chatwoot: só o banco é exercitado. Teardown: mari_limpar_teste antes e depois.
 #
 # Uso:  python tests/mari_cadencia_testes.py [--sem-teardown]
+# A limpeza roda num finally e é conferida (nenhuma fixture nem data futura pode sobrar nas tabelas reais).
 # Datas de referência: qua 11/11/2026 · sáb 14/11 · dom 15/11 (feriado e domingo) · ter 17/11.
 
 import json
@@ -226,13 +227,28 @@ def t10():
 
 if __name__ == '__main__':
     print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
-    for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10):
-        try:
-            t()
-        except Exception as e:
-            checa(t.__name__, False, f'erro: {e}')
-    if '--sem-teardown' not in sys.argv:
-        print('teardown final:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
+    try:
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10):
+            try:
+                t()
+            except Exception as e:
+                checa(t.__name__, False, f'erro: {e}')
+    finally:
+        # As fixtures usam relógio simulado (datas de 11 a 17/11): NUNCA podem ficar nas tabelas reais.
+        # A limpeza roda mesmo se a bateria quebrar no meio; --sem-teardown só para depurar, e avisa.
+        if '--sem-teardown' in sys.argv:
+            print("⚠️  --sem-teardown: as fixtures (datas futuras) ficaram no banco — limpe com mari_limpar_teste('55000000009')")
+        else:
+            print('teardown final:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
+            sobra = sql(f"""select
+                (select count(*) from public.mari_conversas where telefone like '{PREFIXO}9%') as conversas,
+                (select count(*) from public.contatos_cliente where telefone like '{PREFIXO}9%') as toques,
+                (select count(*) from public.mari_turnos where created_at > now() + interval '1 hour') as turnos_futuros,
+                (select count(*) from public.contatos_cliente where em > now() + interval '1 hour') as toques_futuros,
+                (select count(*) from public.mari_conversas where greatest(created_at, coalesce(ultima_msg_lead_at, created_at),
+                   coalesce(ultima_msg_mari_at, created_at)) > now() + interval '1 hour') as conversas_futuras""")[0]
+            limpo = all(int(v) == 0 for v in sobra.values())
+            checa('11 · limpeza: nenhuma fixture nem data futura nas tabelas reais', limpo, str(sobra))
     print()
     print('| # | Teste | Resultado |')
     print('|---|---|---|')

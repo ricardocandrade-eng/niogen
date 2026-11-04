@@ -360,7 +360,9 @@ def c6(tel=PREFIXO + '006'):
     cid = cid_de(log)
     b = sql(f"select handoff_briefing as b from mari_conversas where id = '{cid}'") if cid else []
     brief = norm((b[0]['b'] if b else '') or '')
-    sugestao = brief.split('nao fazer')[0]   # o "NÃO FAZER" pode (e deve) citar o desconto para proibi-lo
+    # Só a SUGESTÃO conta: o RESUMO descreve o que o cliente pediu ("pediu desconto adicional") e o NÃO FAZER
+    # cita o desconto justamente para proibi-lo.
+    sugestao = brief.split('sugestao', 1)[-1].split('nao fazer')[0] if 'sugestao' in brief else brief.split('nao fazer')[0]
     ok.append(('briefing gravado', bool(brief)))
     ok.append(('briefing sem flexibilidade de preço',
                bool(brief) and not re.search(r'flexibil|negoci|condicao especial|desconto (extra|especial|adicional)|abaix|fazer algo|brinde', sugestao)))
