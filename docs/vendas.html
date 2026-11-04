@@ -1,5 +1,7 @@
 <!doctype html>
-<!-- NIOGEN | docs/vendas.html | 03/11/2026 — lista de vendas + "Venda de rua" em 5 passos (endereço e cobertura · cliente · oferta · conferências · pedido e biometria) -->
+<!-- NIOGEN | docs/vendas.html | 04/11/2026 — Vendas v2 (padrão de telas): KPIs do período, abas por etapa, busca + Período,
+     lista em largura total com etapa + próximo passo; "Nova venda" (venda de rua, 5 passos, mesmas travas e gravação) em gaveta;
+     no celular, cartões + botão flutuante. Referência: docs/LAYOUT_vendas_v2 (artefato 9mrHryuD8iwhsiFH2qpjXS, v2.1). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,246 +13,405 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-14">
-<script src="config.js?v=031126-14"></script>
+<link rel="stylesheet" href="assets/app.css?v=041126-15">
+<script src="config.js?v=041126-15"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-14"></script>
-<script src="assets/sidebar.js?v=031126-14"></script>
+<script src="assets/app.js?v=041126-15"></script>
+<script src="assets/sidebar.js?v=041126-15"></script>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="vendas"></nav>
-  <main class="main">
-    <header class="page-head">
-      <div class="tit">
+  <main class="main com-fab">
+    <header class="cab">
+      <div>
         <h1>Vendas</h1>
-        <span class="sub" id="sub">Tudo que entrou no funil, de qualquer origem</span>
+        <div class="sub" id="sub">Tudo que entrou no funil, de qualquer origem</div>
       </div>
-      <div class="tools">
-        <label class="filtro"><span>Buscar</span><input type="search" id="f-busca" aria-label="Buscar venda" placeholder="nome, CPF, pedido"></label>
-        <label class="filtro">Status <select id="f-status"></select></label>
-        <label class="filtro">Origem <select id="f-origem"></select></label>
-        <button type="button" class="btn" id="exportar">Exportar</button>
-      </div>
+      <button type="button" class="btn btn-acc acao-principal" id="btn-nova">＋ Nova venda</button>
     </header>
 
-    <div class="duas">
-      <section class="lista" aria-label="Lista de vendas">
-        <table class="tab">
-          <thead><tr><th>Cliente</th><th>Status</th><th>Plano</th><th>Origem</th><th>Vendedor</th><th>Entrou</th><th style="text-align:right">Comissão</th></tr></thead>
-          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
-        </table>
-      </section>
+    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
 
-      <form class="painel form-rua" id="venda-rua" novalidate>
-        <div>
-          <h2>Venda de rua</h2>
-          <span class="painel-sub">Entrada pelo vendedor (PAP, indicação). A mesma ordem da Mari e do contrato — só que aqui quem responde é você.</span>
-        </div>
+    <div id="abas"></div>
 
-        <ol class="passos-ind" id="passos-ind" aria-label="Passos da venda">
-          <li><button type="button" data-ir="1"><b>1</b><span>Endereço</span></button></li>
-          <li><button type="button" data-ir="2"><b>2</b><span>Cliente</span></button></li>
-          <li><button type="button" data-ir="3"><b>3</b><span>Oferta</span></button></li>
-          <li><button type="button" data-ir="4"><b>4</b><span>Conferências</span></button></li>
-          <li><button type="button" data-ir="5"><b>5</b><span>Pedido</span></button></li>
-        </ol>
-
-        <!-- 1 · Endereço e cobertura -->
-        <section class="passo aberto" data-passo="1" id="passo-1">
-          <button type="button" class="passo-cab" aria-expanded="true">
-            <b class="passo-n">1</b><span class="passo-tit">Endereço e cobertura<small>Sem endereço não existe venda: ele define cidade, tabela e cobertura.</small></span><i class="passo-est" aria-hidden="true"></i>
-          </button>
-          <div class="passo-corpo">
-            <div class="grade3-end">
-              <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
-              <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
-              <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco, casa" autocomplete="off"></label>
-            </div>
-            <div id="endereco" hidden>
-              <div class="grade2">
-                <label class="campo">Logradouro<input type="text" name="logradouro"></label>
-                <label class="campo">Bairro<input type="text" name="bairro"></label>
-                <label class="campo">Cidade / UF<input type="text" name="cidade_uf" readonly></label>
-                <div class="campo"><span>Tabela da cidade</span><span id="cluster-chip" class="chip">—</span></div>
-              </div>
-            </div>
-            <div class="faixa cinza" id="faixa-dfv" aria-live="polite">Digite CEP e número para consultar a cobertura.</div>
-            <div class="chips" id="travas" aria-live="polite"></div>
-            <div class="dfv-sem" id="dfv-sem" hidden>
-              <span></span>
-              <button type="button" class="btn btn-sm" id="btn-sem-cobertura"></button>
-            </div>
-            <details class="dfv-ajuste" id="dfv-ajuste">
-              <summary>Ajustar a cobertura manualmente</summary>
-              <div id="dfv-campos"></div>
-            </details>
-          </div>
-        </section>
-
-        <!-- 2 · Cliente -->
-        <section class="passo" data-passo="2" id="passo-2">
-          <button type="button" class="passo-cab" aria-expanded="false">
-            <b class="passo-n">2</b><span class="passo-tit">Cliente<small>Quem compra. Confirme telefone e endereço com a pessoa: erro de cadastro é venda indevida.</small></span><i class="passo-est" aria-hidden="true"></i>
-          </button>
-          <div class="passo-corpo">
-            <div class="grade2">
-              <label class="campo">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
-              <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
-              <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
-              <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
-              <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
-              <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
-              <label class="campo" id="campo-ref" hidden>Quem indicou<input type="text" name="origem_ref"></label>
-            </div>
-            <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
-          </div>
-        </section>
-
-        <!-- 3 · Oferta -->
-        <section class="passo" data-passo="3" id="passo-3">
-          <button type="button" class="passo-cab" aria-expanded="false">
-            <b class="passo-n">3</b><span class="passo-tit">Oferta<small>Só a tabela vigente. Plano depende da cidade; o preço depende da forma.</small></span><i class="passo-est" aria-hidden="true"></i>
-          </button>
-          <div class="passo-corpo">
-            <label class="campo">Forma de pagamento<select name="forma"><option value="cartao">Cartão de crédito</option><option value="boleto">Boleto</option><option value="dacc">Débito em conta</option></select></label>
-            <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
-            <div class="campo">
-              <span>Plano · tabela vigente desde <span id="vigencia">—</span> · <span id="tabela-cidade"></span></span>
-              <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
-            </div>
-            <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer o plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
-            <div class="campo">
-              <span>Serviços adicionais</span>
-              <div class="adic" id="adicionais"></div>
-            </div>
-            <div class="resumo-venda" id="resumo" aria-live="polite"></div>
-          </div>
-        </section>
-
-        <!-- 4 · Conferências do contrato -->
-        <section class="passo" data-passo="4" id="passo-4">
-          <button type="button" class="passo-cab" aria-expanded="false">
-            <b class="passo-n">4</b><span class="passo-tit">Conferências do contrato<small>As três perguntas que valem estorno de 100 %.</small></span><i class="passo-est" aria-hidden="true"></i>
-          </button>
-          <div class="passo-corpo">
-            <div class="faixa vermelho" id="aviso-ocupado" hidden>A base DFV indica Nio ativo neste endereço: pergunte com atenção e confira no APP.</div>
-            <div class="confs" role="group" aria-label="Conferências do contrato">
-              <div class="conf"><span>Cancelou a Nio nos últimos 30 dias?</span>
-                <span class="simnao"><label><input type="radio" name="cf_cancelou" value="sim"> Sim</label><label><input type="radio" name="cf_cancelou" value="nao"> Não</label></span></div>
-              <div class="conf"><span>Já é cliente Nio?</span>
-                <span class="simnao"><label><input type="radio" name="cf_cliente" value="sim"> Sim</label><label><input type="radio" name="cf_cliente" value="nao"> Não</label></span></div>
-              <div class="conf"><span>O endereço tem produto Nio ativo?</span>
-                <span class="simnao"><label><input type="radio" name="cf_endereco" value="sim"> Sim</label><label><input type="radio" name="cf_endereco" value="nao"> Não</label></span></div>
-            </div>
-            <div class="dfv-sem" id="conf-sim" hidden>
-              <span></span>
-              <button type="button" class="btn btn-sm" id="btn-conf-saida"></button>
-            </div>
-            <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
-          </div>
-        </section>
-
-        <!-- 5 · Pedido e biometria -->
-        <section class="passo" data-passo="5" id="passo-5">
-          <button type="button" class="passo-cab" aria-expanded="false">
-            <b class="passo-n">5</b><span class="passo-tit">Pedido e biometria<small>Só existe depois da visita. É o que transforma qualificado em vendido.</small></span><i class="passo-est" aria-hidden="true"></i>
-          </button>
-          <div class="passo-corpo">
-            <div class="grade2">
-              <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
-              <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
-              <label class="campo" data-bio-agenda hidden>Data da biometria<input type="date" name="biometria_dia"></label>
-              <label class="campo" data-bio-agenda hidden>Período<select name="biometria_periodo"><option value="08:00">Manhã · 8–12h</option><option value="13:00">Tarde · 13–17h</option></select></label>
-            </div>
-            <span class="nota-campo" data-bio-agenda hidden>Depois do pedido, a instalação deve ser agendada em até 4 h (indicador do contrato).</span>
-          </div>
-        </section>
-
-        <div class="rodape-venda">
-          <div class="rv-botao">
-            <button type="button" class="btn btn-ghost" id="btn-qualificado" disabled>Salvar como qualificado</button>
-            <span class="rv-leg">antes da visita — cria a venda em 0 · Qualificado e avisa o consultor</span>
-            <span class="rv-falta" id="falta-qualif"></span>
-          </div>
-          <span class="rv-dica">Na rua, o normal é salvar como qualificado agora e registrar a venda depois da biometria, pela tela Venda.</span>
-          <div class="rv-botao">
-            <button type="button" class="btn btn-acc" id="btn-venda" disabled>Registrar venda</button>
-            <span class="rv-leg">exige nº do pedido, biometria aprovada, conferências e cobertura viável (&lt; 7 dias)</span>
-            <span class="rv-falta" id="falta-venda"></span>
-          </div>
-        </div>
-      </form>
+    <div class="barra-filtros">
+      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar venda" placeholder="Buscar por nome, CPF/CNPJ, telefone, pedido ou bairro"></label>
+      <select class="sel" id="f-origem" aria-label="Origem"></select>
+      <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
+      <span id="f-periodo"></span>
+      <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
     </div>
+
+    <section class="lista padrao" aria-label="Lista de vendas">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr>
+            <th data-ord="cliente">Cliente</th>
+            <th data-ord="etapa">Etapa</th>
+            <th>Próximo passo</th>
+            <th data-ord="plano">Plano</th>
+            <th data-ord="origem" class="col-media">Origem</th>
+            <th data-ord="vendedor" class="col-media">Vendedor</th>
+            <th data-ord="entrou" data-dir="desc">Entrou</th>
+            <th data-ord="comissao" data-dir="desc" class="num">Comissão</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a venda</span></div>
+    </section>
+    <div class="cartoes" id="cartoes" aria-label="Lista de vendas"></div>
   </main>
 </div>
+<button type="button" class="fab" id="fab" aria-label="Nova venda">＋</button>
+
+<!-- Nova venda de rua: gaveta lateral, 5 passos, um por vez. Regras, travas e gravação iguais às da v0.6.3. -->
+<aside class="gaveta" id="gaveta-venda" aria-label="Nova venda de rua" aria-hidden="true">
+  <form class="g-form" id="venda-rua" novalidate>
+    <div class="g-cab">
+      <div>
+        <h2>Nova venda de rua</h2>
+        <p>PAP ou indicação. Salve como qualificado agora; registre a venda depois da biometria.</p>
+      </div>
+      <button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+
+    <ol class="g-passos" id="passos-ind" aria-label="Passos da venda">
+      <li><button type="button" data-ir="1"><i></i>1. Endereço</button></li>
+      <li><button type="button" data-ir="2"><i></i>2. Cliente</button></li>
+      <li><button type="button" data-ir="3"><i></i>3. Oferta</button></li>
+      <li><button type="button" data-ir="4"><i></i>4. Conferências</button></li>
+      <li><button type="button" data-ir="5"><i></i>5. Pedido</button></li>
+    </ol>
+
+    <div class="g-corpo" id="g-corpo">
+      <!-- 1 · Endereço e cobertura -->
+      <section class="passo-g" data-passo="1">
+        <h3>Endereço e cobertura</h3>
+        <p class="ajuda">Sem endereço não existe venda: ele define cidade, tabela e cobertura.</p>
+        <div class="grade3-end">
+          <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
+          <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
+          <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco, casa" autocomplete="off"></label>
+        </div>
+        <div id="endereco" hidden>
+          <div class="grade2">
+            <label class="campo">Logradouro<input type="text" name="logradouro"></label>
+            <label class="campo">Bairro<input type="text" name="bairro"></label>
+            <label class="campo">Cidade / UF<input type="text" name="cidade_uf" readonly></label>
+            <div class="campo"><span>Tabela da cidade</span><span id="cluster-chip" class="chip">—</span></div>
+          </div>
+        </div>
+        <div class="faixa cinza" id="faixa-dfv" aria-live="polite">Digite CEP e número para consultar a cobertura.</div>
+        <div class="chips" id="travas" aria-live="polite"></div>
+        <div class="dfv-sem" id="dfv-sem" hidden>
+          <span></span>
+          <button type="button" class="btn btn-sm" id="btn-sem-cobertura"></button>
+        </div>
+        <details class="dfv-ajuste" id="dfv-ajuste">
+          <summary>Ajustar a cobertura manualmente</summary>
+          <div id="dfv-campos"></div>
+        </details>
+      </section>
+
+      <!-- 2 · Cliente -->
+      <section class="passo-g" data-passo="2" hidden>
+        <h3>Cliente</h3>
+        <p class="ajuda">Quem compra. Confirme telefone e endereço com a pessoa: erro de cadastro é venda indevida.</p>
+        <div class="seg" role="radiogroup" aria-label="Segmento">
+          <label><input type="radio" name="segmento" value="PF" checked>PF · Varejo</label>
+          <label><input type="radio" name="segmento" value="MEI">PJ · MEI</label>
+          <label><input type="radio" name="segmento" value="NMEI">PJ · NMEI</label>
+        </div>
+        <div class="grade2">
+          <label class="campo" style="grid-column:1/-1">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
+          <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
+          <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
+          <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
+          <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
+          <label class="campo" id="campo-ref" hidden style="grid-column:1/-1">Quem indicou<input type="text" name="origem_ref"></label>
+        </div>
+        <span class="nota-campo">PJ · NMEI recebe o bônus NMEI por cima da comissão.</span>
+        <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
+      </section>
+
+      <!-- 3 · Oferta -->
+      <section class="passo-g" data-passo="3" hidden>
+        <h3>Oferta</h3>
+        <p class="ajuda">Só a tabela vigente. Plano depende da cidade; o preço depende da forma de pagamento.</p>
+        <div class="seg" role="radiogroup" aria-label="Forma de pagamento">
+          <label><input type="radio" name="forma" value="cartao" checked>Cartão</label>
+          <label><input type="radio" name="forma" value="boleto">Boleto</label>
+          <label><input type="radio" name="forma" value="dacc">Débito</label>
+        </div>
+        <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
+        <div class="campo">
+          <span>Plano · tabela vigente desde <span id="vigencia">—</span> · <span id="tabela-cidade"></span></span>
+          <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
+        </div>
+        <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer o plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
+        <div class="campo">
+          <span>Serviços adicionais</span>
+          <div class="adic" id="adicionais"></div>
+        </div>
+        <div class="resumo-venda" id="resumo" aria-live="polite"></div>
+      </section>
+
+      <!-- 4 · Conferências do contrato -->
+      <section class="passo-g" data-passo="4" hidden>
+        <h3>Conferências do contrato</h3>
+        <p class="ajuda">As três perguntas que valem estorno de 100 %.</p>
+        <div class="faixa vermelho" id="aviso-ocupado" hidden>A base DFV indica Nio ativo neste endereço: pergunte com atenção e confira no APP.</div>
+        <div class="confs" role="group" aria-label="Conferências do contrato">
+          <div class="conf"><span>Cancelou a Nio nos últimos 30 dias?</span>
+            <span class="simnao"><label><input type="radio" name="cf_cancelou" value="sim"> Sim</label><label><input type="radio" name="cf_cancelou" value="nao"> Não</label></span></div>
+          <div class="conf"><span>Já é cliente Nio?</span>
+            <span class="simnao"><label><input type="radio" name="cf_cliente" value="sim"> Sim</label><label><input type="radio" name="cf_cliente" value="nao"> Não</label></span></div>
+          <div class="conf"><span>O endereço tem produto Nio ativo?</span>
+            <span class="simnao"><label><input type="radio" name="cf_endereco" value="sim"> Sim</label><label><input type="radio" name="cf_endereco" value="nao"> Não</label></span></div>
+        </div>
+        <div class="dfv-sem" id="conf-sim" hidden>
+          <span></span>
+          <button type="button" class="btn btn-sm" id="btn-conf-saida"></button>
+        </div>
+        <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
+      </section>
+
+      <!-- 5 · Pedido e biometria -->
+      <section class="passo-g" data-passo="5" hidden>
+        <h3>Pedido e biometria</h3>
+        <p class="ajuda">Só existe depois da visita. É o que transforma qualificado em vendido.</p>
+        <div class="grade2">
+          <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
+          <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
+          <label class="campo" data-bio-agenda hidden>Data da biometria<input type="date" name="biometria_dia"></label>
+          <label class="campo" data-bio-agenda hidden>Período<select name="biometria_periodo"><option value="08:00">Manhã · 8–12h</option><option value="13:00">Tarde · 13–17h</option></select></label>
+        </div>
+        <div class="faixa amarelo">Depois do pedido, agendar a instalação em até 4 h (indicador do contrato).</div>
+        <span class="nota-campo">Na rua, o normal é salvar como qualificado agora e registrar a venda depois da biometria, pela tela Venda.</span>
+      </section>
+    </div>
+
+    <div class="g-pe">
+      <div class="g-resumo"><span>Valor ao cliente<b id="r-valor">—</b></span><span>Comissão prevista<b id="r-com">—</b></span></div>
+      <div class="g-falta" id="g-falta" aria-live="polite"></div>
+      <div class="g-botoes">
+        <button type="button" class="btn btn-ghost" id="btn-voltar">← Voltar</button>
+        <div class="dir">
+          <button type="button" class="btn" id="btn-qualificado" disabled title="Antes da visita: cria a venda em 0 · Qualificado e avisa o consultor">Salvar como qualificado</button>
+          <button type="button" class="btn btn-acc" id="btn-avancar">Continuar →</button>
+          <button type="button" class="btn btn-acc" id="btn-venda" disabled hidden title="Exige nº do pedido, biometria aprovada, conferências e cobertura viável (&lt; 7 dias)">Registrar venda</button>
+        </div>
+      </div>
+    </div>
+  </form>
+</aside>
 <script>
 (async function () {
-  const { esc, STATUS, STATUS_MAP, ORIGENS } = NG;
+  const { esc, STATUS_MAP, ETAPAS, ORIGENS } = NG;
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
 
-  // ------------------------------------------------------------------ lista
+  // ================================================================== lista
   const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
   const fBusca = document.getElementById('f-busca');
-  const fStatus = document.getElementById('f-status');
   const fOrigem = document.getElementById('f-origem');
-  NG.preencherSelect(fStatus, STATUS.map((s) => [s.id, s.curto]), 'Todos');
-  NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas');
-  let vendas = [];
+  const fVendedor = document.getElementById('f-vendedor');
+  NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas as origens');
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: renderLista });
+  let vendas = [], metas = [], ultimoContato = {}, nomeCurto = {};
+  let aba = 'todas';
+  const ord = { chave: 'entrou', dir: -1 };
+
+  NG.carregarUsuarios().then((us) => {
+    NG.preencherSelect(fVendedor, us.map((u) => [u.id, u.nome]), 'Todos os vendedores');
+  });
 
   async function carregarLista() {
-    const { data, error } = await NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(1000);
-    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
-    vendas = data || [];
+    const [rv, rc, rp, rm] = await Promise.all([
+      NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
+      NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
+      NG.sb.from('config_planos').select('*'),
+      NG.sb.from('config_metas').select('*'),
+    ]);
+    if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
+    vendas = rv.data || [];
+    ultimoContato = {};
+    (rc.data || []).forEach((c) => { if (!ultimoContato[c.venda_id]) ultimoContato[c.venda_id] = c.em; });
+    nomeCurto = Object.fromEntries((rp.data || []).map((p) => [p.id, p.nome_curto || null]));
+    metas = rm.data || [];
     const mes = NG.diaSP().slice(0, 7);
-    const doMes = vendas.filter((v) => NG.diaSP(v.criado_em).slice(0, 7) === mes).length;
+    const meta = metaDoMes(mes);
     const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
-    document.getElementById('sub').textContent = `Tudo que entrou no funil, de qualquer origem · ${doMes} ${doMes === 1 ? 'registro' : 'registros'} em ${nomeMes}`;
+    document.getElementById('sub').textContent = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} · ${meta ? `meta ${meta}` : 'sem meta'} · tudo que entrou no funil, de qualquer origem`;
     renderLista();
   }
+  const metaDoMes = (aaaamm) => { const m = metas.find((x) => String(x.mes).slice(0, 7) === aaaamm); return m ? Number(m.meta_vendas) : 0; };
 
-  function filtradas() {
+  // ---------- próximo passo: o que alguém precisa fazer, com a cor da urgência ----------
+  // acao = entra em "Precisam de ação". Sinais do banco: horas_sem_agendamento, biometria_em, nio_pendencia_*, dfv_ok,
+  // docs_prazo_em, nio_venda_valida e o último contato (contatos_cliente, ou a entrada quando não há nenhum).
+  const ATIVAS = ['1_vendido', '2_aguardando_instalacao', '3_instalado'];
+  function proximo(v) {
+    const hoje = NG.diaSP();
+    const dd = (x) => NG.fmtData(x);
+    if (v.status === 'saida') {
+      const volta = v.interesse_futuro_em ? ` · volta ${NG.fmtDiaISO(v.interesse_futuro_em).slice(0, 5)}` : '';
+      return { txt: `${v.motivo_saida || 'Encerrada'}${volta}`, nivel: 'dim' };
+    }
+    if (v.nio_venda_valida === false) return { txt: 'Nio marcou a venda como inválida', nivel: 'bad', acao: true };
+    if ((v.nio_pendencia_cod || v.nio_pendencia_desc) && ATIVAS.includes(v.status)) {
+      return { txt: `Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`.slice(0, 70), nivel: 'bad', acao: true };
+    }
+    switch (v.status) {
+      case '0_qualificado': {
+        const bio = v.biometria_status === 'agendada' && v.biometria_em ? NG.diaSP(v.biometria_em) : null;
+        if (bio && bio < hoje) return { txt: `Biometria atrasada · era ${dd(v.biometria_em)}`, nivel: 'bad', acao: true };
+        if (bio === hoje) return { txt: `Biometria hoje · ${NG.fmtHora(v.biometria_em)}`, nivel: 'warn', acao: true };
+        const ult = ultimoContato[v.id] && new Date(ultimoContato[v.id]) > new Date(v.criado_em) ? ultimoContato[v.id] : v.criado_em;
+        const h = (Date.now() - new Date(ult)) / 3600000;
+        if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true };
+        // DFV só aparece quando bloqueia a venda (trava 0 → 1: viável e consultado há menos de 7 dias, ou dispensa do admin).
+        if (!v.dfv_ok && !v.dfv_dispensado) {
+          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: 'Sem cobertura no DFV · não vender', nivel: 'bad', acao: true };
+          return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true };
+        }
+        if (bio) return { txt: `Biometria ${NG.fmtDiaSemana(v.biometria_em)} ${dd(v.biometria_em)} · ${NG.fmtHora(v.biometria_em)}`, nivel: 'ok' };
+        return { txt: 'Marcar a biometria', nivel: 'ok' };
+      }
+      case '1_vendido': {
+        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
+        return { txt: `Agendar instalação${h != null ? ` · há ${NG.fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true };
+      }
+      case '2_aguardando_instalacao': {
+        const q = v.instalacao_agendada_para;
+        if (!q) return { txt: 'Sem data de instalação', nivel: 'warn', acao: true };
+        const d = NG.diaSP(q), j = NG.janela(q);
+        if (d === hoje) return { txt: `Instalação hoje · ${j}`, nivel: 'ok' };
+        if (d === NG.somaDias(hoje, 1)) return { txt: `Instalação amanhã · ${j}`, nivel: 'ok' };
+        if (d < hoje) return { txt: `Instalação era ${dd(q)} · aguardando OSAB`, nivel: 'ok' };
+        return { txt: `Instalação ${dd(q)} · ${j}`, nivel: 'ok' };
+      }
+      case '3_instalado': {
+        if (!v.docs_entregues_em && v.docs_prazo_em) {
+          const dias = (new Date(v.docs_prazo_em) - Date.now()) / 86400000;
+          if (dias < 0) return { txt: `Documentos à Nio atrasados · ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true };
+          if (dias <= 3) return { txt: `Documentos à Nio até ${dd(v.docs_prazo_em)}`, nivel: 'warn', acao: true };
+        }
+        return { txt: 'Aguardando ativação Nio', nivel: 'ok' };
+      }
+      case '4_ativo_provisorio':
+      case '5_comissao_firme': {
+        const b = v.ativado_em || v.instalado_em;
+        return { txt: b ? `Ativa desde ${dd(b)}` : 'Ativa', nivel: 'ok' };
+      }
+      default: return { txt: '', nivel: 'dim' };
+    }
+  }
+
+  const planoCurto = (v) => nomeCurto[v.plano_id] || v.plano_nome || '—';
+  const formaTxt = (v) => [({ cartao: 'cartão', boleto: 'boleto', dacc: 'débito' })[v.forma_pagamento],
+    ['nfid', 'oferta50_nfid'].includes(v.plano_variante) ? 'sem fidelidade' : null].filter(Boolean).join(' · ');
+  const comissaoDe = (v) => (v.comissao_paga != null ? Number(v.comissao_paga) : v.status === 'saida' || v.comissao_prevista == null ? null : Number(v.comissao_prevista));
+  const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
+  const ETAPA_IDX = Object.fromEntries(ETAPAS.map((e, i) => [e.id, i]));
+
+  // Período (pela data de entrada) + busca + origem + vendedor — a base das abas, da lista e dos cartões.
+  function base() {
+    const p = per.valor();
     const q = fBusca.value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     return vendas.filter((v) =>
-      (!fStatus.value || v.status === fStatus.value) &&
+      NG.noPeriodo(v.criado_em, p) &&
       (!fOrigem.value || v.origem === fOrigem.value) &&
-      (!q || String(v.cliente_nome || '').toLowerCase().includes(q) ||
-        (qd && (NG.soDigitos(v.cliente_cpf_cnpj).includes(qd) || String(v.nio_pedido || '').includes(qd)))));
+      (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value) &&
+      (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
+        (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
+  }
+  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? !!proximo(v).acao : NG.etapaDe(v.status).id === a);
+  const CHAVES = {
+    cliente: (v) => v.cliente_nome || '',
+    etapa: (v) => ETAPA_IDX[NG.etapaDe(v.status).id] ?? 99,
+    plano: (v) => planoCurto(v),
+    origem: (v) => ORIGENS[v.origem] || v.origem || '',
+    vendedor: (v) => v.vendedor_nome || '',
+    entrou: (v) => new Date(v.criado_em).getTime(),
+    comissao: (v) => comissaoDe(v),
+  };
+  const filtradas = () => NG.ordenar(base().filter((v) => naAba(v, aba)), CHAVES, ord);
+
+  function renderKpis() {
+    // KPIs do período escolhido (com origem e vendedor). Vendidas contam pela data da venda (pedido + biometria),
+    // não pela data de entrada da lista.
+    const p = per.valor();
+    const doFiltro = vendas.filter((v) => (!fOrigem.value || v.origem === fOrigem.value) &&
+      (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
+    const V = doFiltro.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
+    const n = (s) => V.filter((v) => s.includes(v.status)).length;
+    const inst = n(['3_instalado', '4_ativo_provisorio', '5_comissao_firme']);
+    const agu = n(['2_aguardando_instalacao']);
+    const agendar = n(['1_vendido']);
+    const atraso = V.filter((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4).length;
+    const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
+    const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
+    const nv = (x, um, varios) => `${NG.fmtNum(x)} ${x === 1 ? um : varios}`;
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: meta ? 'Vendidas · meta' : 'Vendidas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
+        nota: meta ? null : esc(per.rotulo.toLowerCase()),
+        dica: 'Vendas com pedido e biometria aprovada (data da venda) no período. A lista abaixo filtra pela data de entrada no funil.' }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} aguardando · ${NG.fmtNum(agendar)} a agendar` }),
+      NG.kpi({ rot: 'Comissão prevista no período', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da' : 'das'} ${nv(V.length, 'venda', 'vendas')} do período` }),
+      NG.kpi({ rot: 'Aguardando instalação', val: NG.fmtNum(agu + agendar), cls: atraso ? 'bad' : '',
+        nota: atraso ? `${nv(atraso, 'sem agendamento', 'sem agendamento')} há mais de 4 h` : agendar ? `${nv(agendar, 'a agendar', 'a agendar')} · prazo de 4 h` : 'nenhuma sem agendamento' }),
+    ].join('');
   }
 
-  function chipStatus(v) {
-    const s = STATUS_MAP[v.status];
-    if (v.status === '1_vendido' && v.horas_sem_agendamento != null) {
-      return `<span class="chip ${v.horas_sem_agendamento > 4 ? 'bad' : ''}">1 · Vendido · agendar</span>`;
-    }
-    if (v.status === 'saida') return `<span class="chip dim">Saída · ${esc((v.motivo_saida || '').toLowerCase())}</span>`;
-    return `<span class="chip ${s.chip}">${esc(s.curto)}</span>`;
-  }
-
-  function comissao(v) {
-    if (v.comissao_paga != null) return esc(NG.fmtNum(v.comissao_paga));
-    if (v.comissao_prevista != null && v.status !== 'saida') return `<span style="color:var(--muted)">${esc(NG.fmtNum(v.comissao_prevista))} prev.</span>`;
-    return '<span style="color:var(--muted)">—</span>';
+  function renderAbas(b) {
+    const conta = (a) => b.filter((v) => naAba(v, a)).length;
+    NG.abasPilulas(document.getElementById('abas'), [
+      { id: 'todas', nome: 'Todas', n: b.length },
+      { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true },
+      ...ETAPAS.map((e) => ({ id: e.id, nome: e.nome, n: conta(e.id) })),
+    ], aba, (id) => { aba = id; renderLista(); });
   }
 
   function renderLista() {
-    const lista = filtradas();
-    if (!lista.length) { tbody.innerHTML = '<tr><td colspan="7" class="vazio">Nenhuma venda</td></tr>'; return; }
-    tbody.innerHTML = lista.map((v) => `
-      <tr class="${v.status === 'saida' ? 'saida' : ''}">
-        <td><a href="venda.html?id=${v.id}">${esc(v.cliente_nome)}</a><div class="sub">${esc([v.cidade, v.bairro].filter(Boolean).join(' · '))}</div></td>
-        <td>${chipStatus(v)}<div class="chips selos">${NG.seloDfv(v)}${NG.selosComissao(v)}</div></td>
-        <td>${esc(v.plano_nome || '—')}</td>
-        <td>${esc(ORIGENS[v.origem] || v.origem)}</td>
-        <td>${esc(v.vendedor_nome || '—')}</td>
-        <td>${NG.diaSP(v.criado_em) === NG.diaSP() ? 'hoje' : NG.fmtData(v.criado_em)}</td>
-        <td class="num">${comissao(v)}</td>
-      </tr>`).join('');
+    const b = base();
+    renderKpis();
+    renderAbas(b);
+    const lista = NG.ordenar(b.filter((v) => naAba(v, aba)), CHAVES, ord);
+    const fmtCom = (v) => { const c = comissaoDe(v); return c == null ? '—' : NG.fmtMoeda(c); };
+    tbody.innerHTML = lista.length ? lista.map((v) => {
+      const pr = proximo(v);
+      return `<tr class="clicavel ${v.status === 'saida' ? 'saida' : ''}" data-id="${v.id}" tabindex="0" title="Abrir a venda">
+        <td class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></td>
+        <td>${NG.pilulaEtapa(v.status)}</td>
+        <td>${NG.proxPasso(pr)}</td>
+        <td class="plano-c"><b>${esc(planoCurto(v))}</b><small>${esc(formaTxt(v))}</small></td>
+        <td class="apagado col-media">${esc(ORIGENS[v.origem] || v.origem || '—')}</td>
+        <td class="col-media">${esc(v.vendedor_nome || '—')}</td>
+        <td class="apagado">${esc(NG.quando(v.criado_em))}</td>
+        <td class="num">${esc(fmtCom(v))}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="8" class="vazio">Nenhuma venda neste filtro</td></tr>`;
+    cartoesEl.innerHTML = lista.length ? lista.map((v) => `
+      <a class="cartao ${v.status === 'saida' ? 'saida' : ''}" href="venda.html?id=${v.id}">
+        <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc([v.bairro, NG.quando(v.criado_em)].filter(Boolean).join(' · '))}</small></div>
+        <div class="valor">${esc(fmtCom(v))}</div>
+        <div class="l2">${NG.pilulaEtapa(v.status)}<span>${esc(planoCurto(v))}</span></div>
+        <div class="l2">${NG.proxPasso(proximo(v))}</div>
+      </a>`).join('') : '<div class="vazio">Nenhuma venda neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'venda' : 'vendas'} no filtro`;
   }
 
-  [fBusca, fStatus, fOrigem].forEach((el) => el.addEventListener('input', renderLista));
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, renderLista);
+  [fBusca, fOrigem, fVendedor].forEach((el) => el.addEventListener('input', renderLista));
+  const abrirVenda = (tr, novaAba) => { const url = `venda.html?id=${tr.dataset.id}`; if (novaAba) window.open(url, '_blank'); else location.href = url; };
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirVenda(tr, ev.ctrlKey || ev.metaKey); });
+  tbody.addEventListener('auxclick', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.button === 1) abrirVenda(tr, true); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrirVenda(tr, false); });
 
   document.getElementById('exportar').addEventListener('click', () => {
     const cols = [['cliente_nome', 'Cliente'], ['status', 'Status'], ['plano_nome', 'Plano'], ['origem', 'Origem'], ['vendedor_nome', 'Vendedor'],
@@ -264,12 +425,22 @@
     URL.revokeObjectURL(a.href);
   });
 
-  // ------------------------------------------------------------- formulário
+  // ================================================================== nova venda (gaveta)
+  // Daqui para baixo: as mesmas regras, travas e gravação da venda de rua da v0.6.3. Só muda a apresentação:
+  // um passo por vez, barra de progresso clicável e rodapé fixo com valor, comissão prevista, o que falta e os botões.
+  const gavetaEl = document.getElementById('gaveta-venda');
+  const abrirGaveta = () => NG.gaveta.abrir(gavetaEl, { foco: false });
+  document.getElementById('btn-nova').addEventListener('click', abrirGaveta);
+  document.getElementById('fab').addEventListener('click', abrirGaveta);
+
   const form = document.getElementById('venda-rua');
   const F = form.elements;
   const travasEl = document.getElementById('travas');
   const btnQualif = document.getElementById('btn-qualificado');
   const btnVenda = document.getElementById('btn-venda');
+  const btnAvancar = document.getElementById('btn-avancar');
+  const btnVoltar = document.getElementById('btn-voltar');
+  const corpoEl = document.getElementById('g-corpo');
 
   const hoje = NG.diaSP();
   const [{ data: planos }, { data: areas }, { data: adicionais }, { data: bonus }] = await Promise.all([
@@ -285,7 +456,6 @@
 
   // Endereço vindo do ViaCEP + resultado das travas.
   const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false };
-
 
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
   // Linha da área que cobre o endereço (traz o cluster: a tabela de preço da cidade). A mesma regra roda no banco (cluster_da_area).
@@ -387,6 +557,8 @@
   function renderResumo() {
     const c = calcular();
     const el = document.getElementById('resumo');
+    document.getElementById('r-valor').textContent = c ? NG.fmtMoeda(c.valor + c.valorAd) : '—';
+    document.getElementById('r-com').textContent = c ? NG.fmtMoeda(c.total) : '—';
     if (!c) { el.innerHTML = ''; return; }
     const m = NG.fmtMoeda;
     const forma = F.forma.value === 'cartao' ? 'no cartão' : 'boleto/débito';
@@ -397,9 +569,9 @@
       <div class="rv-linha"><span>Valor mensal ao cliente</span><strong>${m(c.valor + c.valorAd)}</strong></div>
       <span class="rv-nota">${esc(c.p.nome)} ${m(c.valor)} ${forma}${c.valorAd ? ` + ${m(c.valorAd)} de adicionais` : ''}</span>
       ${hab}
-      <div class="rv-linha"><span>${NG.rotulo('Comissão prevista (em risco)', 'emRisco')}</span><strong>${m(c.total)}</strong></div>
-      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI · em risco até 30 dias da ativação</span>
-      ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 11º mês`, 'm10')} (fora da comissão em risco)</span>` : ''}
+      <div class="rv-linha"><span>Comissão prevista</span><strong>${m(c.total)}</strong></div>
+      <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI</span>
+      ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 11º mês`, 'm10')} (fora da comissão prevista)</span>` : ''}
       ${c.p.observacao ? `<span class="rv-nota">${esc(c.p.observacao)}</span>` : ''}`;
   }
 
@@ -533,10 +705,10 @@
     const r = estado.dfv;
     const base = F.dfv_particao.value ? ` · base de ${NG.fmtDiaISO(F.dfv_particao.value).slice(0, 5)}` : '';
     switch (r && r.resultado) {
-      case 'viavel': return set('verde', `Cobertura: viável${base}`);
+      case 'viavel': return set('verde', `✓ Cobertura viável${base}`);
       case 'viavel_predio': {
         const ops = (r.opcoes || []).slice(0, 120);
-        return set('verde', `Cobertura: prédio viável — escolha a unidade${base}
+        return set('verde', `✓ Prédio viável — escolha a unidade${base}
           <span class="dfv-opcoes-lista">${ops.map((o) => `<button type="button" class="chip ${o.hp_livre >= 1 ? 'ok' : 'bad'}" data-unidade="${esc(o.complemento || '')}"
             title="HP livre ${o.hp_livre ?? '—'} · HC ${o.hc_tot ?? '—'}">${esc(o.complemento || `nº ${o.numero} (sem complemento)`)}</button>`).join('')}</span>`);
       }
@@ -554,22 +726,30 @@
   });
 
   // ------------------------------------------------------------- passos e botões
-  const passos = [...form.querySelectorAll('.passo')];
+  const passos = [...form.querySelectorAll('.passo-g')];
   const indEl = document.getElementById('passos-ind');
   const btnConfSaida = document.getElementById('btn-conf-saida');
-  let abriuSozinho = new Set([1]);
+  let passoAtual = 1;
   const radio = (n) => (form.querySelector(`input[name="${n}"]:checked`) || {}).value || '';
   const diaMais = (n) => NG.diaSP(new Date(Date.now() + n * 86400000));
 
-  function abrir(n, sim = true) {
-    if (sim && n > 1 && estado.area === false) { NG.toast('Cidade fora da área de atuação: a venda não segue.', 'bad'); return false; }
-    const s = passos[n - 1];
-    s.classList.toggle('aberto', sim);
-    s.querySelector('.passo-cab').setAttribute('aria-expanded', String(sim));
+  // Um passo por vez. Fora da área de atuação a venda não passa do passo 1 (mesma regra da v0.6.3).
+  function irPara(n) {
+    if (n > 1 && estado.area === false) { NG.toast('Cidade fora da área de atuação: a venda não segue.', 'bad'); return false; }
+    passoAtual = Math.max(1, Math.min(5, n));
+    passos.forEach((s, i) => { s.hidden = i !== passoAtual - 1; });
+    [...indEl.querySelectorAll('button')].forEach((b, i) => {
+      b.classList.toggle('atual', i === passoAtual - 1);
+      if (i === passoAtual - 1) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+    });
+    btnVoltar.hidden = passoAtual === 1;
+    btnAvancar.hidden = passoAtual === 5;
+    btnVenda.hidden = passoAtual !== 5;
+    corpoEl.scrollTop = 0;
     return true;
   }
 
-  // Estado de cada passo: '' vazio · ok · warn (atenção) · bad. "pronto" = o mínimo para seguir (abre o próximo, libera o qualificado).
+  // Estado de cada passo: '' vazio · ok · warn (atenção) · bad. "pronto" = o mínimo para seguir (libera o qualificado).
   function avaliar() {
     const enderecoOk = NG.soDigitos(F.cep.value).length === 8 && !!estado.viacep && !!F.numero.value.trim() && estado.area === true;
     const docTxt = F.doc.value.trim();
@@ -612,20 +792,16 @@
 
   function atualizar() {
     const a = avaliar();
-    a.est.forEach((e, i) => {
-      passos[i].dataset.estado = e;
-      indEl.children[i].dataset.estado = e;
-    });
-    // O próximo passo abre sozinho uma vez, quando o anterior fica pronto. Nada fecha sozinho (exceto fora da área).
-    a.pronto.forEach((ok, i) => {
-      if (ok && i < 4 && !abriuSozinho.has(i + 2)) { abriuSozinho.add(i + 2); abrir(i + 2); }
-    });
-    if (estado.area === false) for (let n = 2; n <= 5; n++) abrir(n, false);
+    a.est.forEach((e, i) => { passos[i].dataset.estado = e; indEl.querySelectorAll('button')[i].dataset.estado = e; });
+    if (estado.area === false && passoAtual > 1) irPara(1);
 
     btnQualif.disabled = a.faltaQ.length > 0;
-    document.getElementById('falta-qualif').textContent = a.faltaQ.length ? `falta: ${a.faltaQ.join(' · ')}` : '';
     btnVenda.disabled = a.faltaV.length > 0;
-    document.getElementById('falta-venda').textContent = a.faltaV.length ? `falta: ${a.faltaV.join(' · ')}` : '';
+    const falta = document.getElementById('g-falta');
+    falta.className = `g-falta${a.faltaV.length ? '' : ' ok'}`;
+    falta.textContent = a.faltaQ.length ? `Falta: ${a.faltaQ.join(' · ')}`
+      : a.faltaV.length ? `Pronto para qualificado · para a venda falta: ${a.faltaV.join(' · ')}`
+        : '✓ Tudo certo para registrar a venda';
 
     // Passo 1: saída pronta quando o DFV acusa Nio ativo ou o ajuste manual diz sem cobertura.
     const manualSem = F.dfv_origem.value === 'manual' && ['sem_viabilidade', 'nao_encontrado'].includes(F.dfv_viabilidade.value);
@@ -651,19 +827,9 @@
     renderFaixa();
   }
 
-  form.addEventListener('click', (ev) => {
-    const cab = ev.target.closest('.passo-cab');
-    if (cab) {
-      const n = Number(cab.closest('.passo').dataset.passo);
-      abrir(n, !cab.closest('.passo').classList.contains('aberto'));
-      return;
-    }
-    const ir = ev.target.closest('[data-ir]');
-    if (ir) {
-      const n = Number(ir.dataset.ir);
-      if (abrir(n)) passos[n - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  });
+  indEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-ir]'); if (b) irPara(Number(b.dataset.ir)); });
+  btnAvancar.addEventListener('click', () => irPara(passoAtual + 1));
+  btnVoltar.addEventListener('click', () => irPara(passoAtual - 1));
 
   F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
   F.numero.addEventListener('change', () => { checarDuplicidade(); consultarDfv(); });
@@ -676,14 +842,15 @@
     document.getElementById('doc-erro').textContent = v && !NG.documentoValido(v) ? 'CPF/CNPJ inválido' : '';
     checarDuplicidade();
   });
-  F.segmento.addEventListener('change', renderPlanos);
-  F.forma.addEventListener('change', renderPlanos);
+  // Segmento e forma agora são segmentos (rádios): a troca chega pelo change do formulário.
+  form.addEventListener('change', (ev) => { if (['segmento', 'forma'].includes(ev.target.name)) renderPlanos(); });
   document.getElementById('planos-op').addEventListener('change', renderResumo);
   document.getElementById('adicionais').addEventListener('change', renderResumo);
   F.nfid.addEventListener('change', renderResumo);
   F.origem.addEventListener('change', () => { document.getElementById('campo-ref').hidden = F.origem.value !== 'indicacao'; });
   form.addEventListener('input', atualizar);
   form.addEventListener('change', atualizar);
+  form.addEventListener('submit', (ev) => ev.preventDefault());
 
   // Monta a linha de vendas. Devolve [payload, pendências que impedem o status pedido].
   function montar(status, saida) {
@@ -737,11 +904,10 @@
     Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false });
     document.getElementById('endereco').hidden = true;
     document.getElementById('doc-erro').textContent = '';
-    abriuSozinho = new Set([1]);
-    for (let n = 2; n <= 5; n++) abrir(n, false);
-    abrir(1);
+    document.getElementById('campo-ref').hidden = true;
     montarDfv();
     renderPlanos();
+    irPara(1);
     atualizar();
   }
 
@@ -766,6 +932,7 @@
     if (error) { NG.toast(NG.msgErro(error), 'bad'); atualizar(); return; }
     NG.toast(`${NG.primeiroNome(linha.cliente_nome)} salvo como ${status === 'saida' ? `saída · ${linha.motivo_saida}` : STATUS_MAP[status].curto}`, 'ok');
     limpar();
+    NG.gaveta.fechar();
     await carregarLista();
     return data;
   }
@@ -781,12 +948,15 @@
 
   montarDfv();
   renderPlanos();
+  irPara(1);
   atualizar();
   await carregarLista();
-  if (location.hash === '#venda-rua') { form.scrollIntoView({ behavior: 'smooth' }); F.cep.focus(); }
-  // Vindo da tela Cobertura (?cep=&numero=&complemento=): preenche e já roda ViaCEP + consulta automática do DFV.
+  // "+ Venda de rua" de outras telas (vendas.html#venda-rua ou #nova) abre a gaveta.
+  if (['#venda-rua', '#nova'].includes(location.hash)) { abrirGaveta(); setTimeout(() => F.cep.focus(), 300); }
+  // Vindo da tela Cobertura (?cep=&numero=&complemento=): abre a gaveta, preenche e já roda ViaCEP + consulta automática do DFV.
   const qs = new URLSearchParams(location.search);
   if (qs.get('cep')) {
+    abrirGaveta();
     F.numero.value = qs.get('numero') || '';
     F.complemento.value = qs.get('complemento') || '';
     F.cep.value = NG.soDigitos(qs.get('cep'));
