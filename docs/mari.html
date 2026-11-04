@@ -15,11 +15,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=041126-16">
-<script src="config.js?v=041126-16"></script>
+<link rel="stylesheet" href="assets/app.css?v=041126-17">
+<script src="config.js?v=041126-17"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=041126-16"></script>
-<script src="assets/sidebar.js?v=041126-16"></script>
+<script src="assets/app.js?v=041126-17"></script>
+<script src="assets/sidebar.js?v=041126-17"></script>
 </head>
 <body>
 <div class="app">
@@ -136,7 +136,7 @@
 
   // ------------------------------------------------------------------ dados
   const COLS = 'id, telefone, nome_contato, nome_confiavel, canal, origem, status, etapa, cep, numero, complemento, endereco_cep, cidade, uf, cluster, '
-    + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, dados, handoff_motivo, handoff_em, venda_id, '
+    + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, dados, handoff_motivo, handoff_em, handoff_briefing, venda_id, '
     + 'chatwoot_conversation_id, humano_atribuido, nao_contatar, agendamento_retorno, ultima_msg_lead_at, ultima_msg_mari_at, created_at, updated_at';
 
   async function carregar() {
@@ -406,8 +406,8 @@
     const k = cad[c.id];
     const pr = proximo(c);
 
-    // briefing do handoff: venda (dados completos) ou a tag da fala de handoff
-    let briefing = rv.data && rv.data.observacoes ? rv.data.observacoes : null;
+    // briefing do handoff: gravado na conversa para qualquer motivo (0019); antes disso, só na venda (dados completos)
+    let briefing = c.handoff_briefing || (rv.data && rv.data.observacoes ? rv.data.observacoes : null);
     if (!briefing) {
       const t = turnos.slice().reverse().find((x) => x.tags && (x.tags.handoff || x.tags.briefing_humano || x.tags.briefing));
       if (t) briefing = (t.tags.handoff && (t.tags.handoff.briefing || (t.tags.handoff.lead && t.tags.handoff.lead.briefing))) || t.tags.briefing_humano || t.tags.briefing;
