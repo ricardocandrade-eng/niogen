@@ -25,6 +25,10 @@ Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmap
 | Instalações por tempo | `docs/instalacoes.html` |
 | Vendas + venda de rua | `docs/vendas.html` |
 | Detalhe da venda | `docs/venda.html?id=` |
+| Base DFV da Nio (`nio_hp`, `dfv_consultar`, `aplicar_dfv`, `v_dfv_bairros`, `v_dfv_resumo`, consulta automática na venda) | `supabase/migrations/0011_dfv_nivel3.sql` |
+| Carga da base DFV pelo CLI (gera SQL fora do repo) | `supabase/scripts/dfv_carga.py` |
+| Meta Ads › Bairros prioritários | `docs/metaads.html` |
+| Contrato do RPC `dfv_consultar` para a Mari (n8n) | `n8n/RPC_dfv_consultar_031126_2130.md` |
 
 Telas do menu que ainda não existem aparecem desabilitadas ("em breve"). Mari, n8n, importação dos relatórios da Nio e Meta Ads vêm nos próximos prompts.
 
@@ -50,6 +54,18 @@ lido no navegador (SheetJS), mostra a prévia e só então grava `importacoes` +
 A regra da prévia (`docs/assets/osab.js`) e a do banco (`aplicar_osab`) são a mesma — mudou uma, muda a outra.
 O OSAB só avança status (2 → 3 → 4 em concluído/válida; 1–2 → saída em cancelamento) e nunca apaga campo com vazio.
 Pedido repetido no arquivo: fica a ordem com `DATA_ABERTURA` mais recente.
+
+## Base DFV (viabilidade)
+
+A Nio entrega um CSV por município (`;`, UTF-8 com BOM, só endereços **viáveis**). **Nunca entra no repo** (`*.csv` no `.gitignore`):
+vai para o Supabase e só lá fica. Fora da base = sem viabilidade hoje.
+
+- Carga (hoje só pelo CLI; a tela faz a prévia):
+  `python -I supabase/scripts/dfv_carga.py <arquivo.csv> <pasta FORA do repo> <uuid do admin>` e depois
+  `npx.cmd supabase db query --remote --yes -f <cada .sql, em ordem>` — o `99_aplicar.sql` chama `aplicar_dfv`,
+  que troca a partição inteira do município (nunca merge) e grava o resumo em `importacoes` (tipo `dfv_hp`).
+- `dfv_consultar(cep, numero, complemento)` → `viavel` · `viavel_predio` (+ `opcoes`) · `endereco_ocupado` · `sem_porta_livre` · `nao_encontrado` · `precisa_numero`.
+  O trigger `vendas_antes_cobertura` usa a mesma função quando uma venda em Qualificado ganha CEP + número; o seletor manual continua (`dfv_origem = 'manual'`).
 
 ## Rodar local
 

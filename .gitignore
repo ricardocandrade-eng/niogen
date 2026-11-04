@@ -8,3 +8,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Dado da Nio (DFV, relatórios) nunca entra no repo: só no Supabase
+*.csv
+*.CSV
