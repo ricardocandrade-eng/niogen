@@ -15,11 +15,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=041126-17">
-<script src="config.js?v=041126-17"></script>
+<link rel="stylesheet" href="assets/app.css?v=041126-18">
+<script src="config.js?v=041126-18"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=041126-17"></script>
-<script src="assets/sidebar.js?v=041126-17"></script>
+<script src="assets/app.js?v=041126-18"></script>
+<script src="assets/sidebar.js?v=041126-18"></script>
 </head>
 <body>
 <div class="app">
@@ -31,7 +31,7 @@
         <h1>Mari</h1>
         <div class="sub" id="sub">Atendimento da IA no WhatsApp</div>
       </div>
-      <a class="btn btn-acc acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe (suporte acionado). O link liga quando ela for criada.">Abrir Chatwoot</a>
+      <a class="btn acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">Abrir Chatwoot</a>
     </header>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
@@ -53,13 +53,14 @@
         <table class="tab">
           <thead><tr>
             <th data-ord="contato">Contato</th>
+            <th data-ord="local">Local</th>
             <th data-ord="situacao">Situação</th>
             <th data-ord="plano">Plano</th>
             <th data-ord="valor" data-dir="desc" class="num">Valor</th>
             <th>Próximo passo</th>
             <th data-ord="ultima" data-dir="desc">Última mensagem</th>
           </tr></thead>
-          <tbody id="tbody"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
+          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
       <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a conversa</span></div>
@@ -130,7 +131,7 @@
       const a = document.getElementById(id);
       a.href = `https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/dashboard`;
       a.target = '_blank'; a.rel = 'noopener';
-      a.classList.remove('desab'); a.removeAttribute('aria-disabled'); a.title = 'Abrir a caixa da Nio no Chatwoot';
+      a.classList.remove('desab'); if (a.classList.contains('btn')) a.classList.add('btn-acc'); a.removeAttribute('aria-disabled'); a.title = 'Abrir a caixa da Nio no Chatwoot';
     }
   }
 
@@ -146,7 +147,9 @@
       NG.sb.from('config_planos').select('codigo, nome, nome_curto, preco, preco_cartao'),
       NG.sb.from('mari_erros').select('id, conversa_id, no_n8n, mensagem, created_at').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(1000),
     ]);
-    if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
+    if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
+    // erro da cadência não derruba a tela, mas aparece (antes era engolido em silêncio)
+    if (rk.error) NG.toast(`Cadência indisponível: ${NG.msgErro(rk.error)}`, 'bad');
     convs = rc.data || [];
     cad = Object.fromEntries(((rk.error ? [] : rk.data) || []).map((c) => [c.conversa_id, c]));
     planos = Object.fromEntries((rp.data || []).map((p) => [p.codigo, p]));
@@ -275,6 +278,7 @@
   const naAba = (c, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(c) : situacao(c).id === a);
   const CHAVES = {
     contato: (c) => contatoDe(c).toLowerCase(),
+    local: (c) => localDe(c).toLowerCase(),
     situacao: (c) => SIT_ORD[situacao(c).id] ?? 9,
     plano: (c) => (plano(c) ? plano(c).nome_curto || plano(c).nome : ''),
     valor: (c) => valorDe(c),
@@ -311,7 +315,6 @@
       { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true },
       { id: 'andamento', nome: 'Em andamento', n: conta('andamento') },
       { id: 'qualificada', nome: 'Qualificadas', n: conta('qualificada') },
-      { id: 'humano', nome: 'Precisam de humano', n: conta('humano') },
       { id: 'encerrada', nome: 'Encerradas', n: conta('encerrada') },
     ], aba, (id) => { aba = id; render(); });
   }
@@ -328,14 +331,15 @@
     tbody.innerHTML = lista.length ? lista.map((c) => {
       const v = valorDe(c);
       return `<tr class="clicavel ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
-        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(localDe(c) || ORIGENS_MARI[c.origem] || '—')}</small></td>
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(c.origem === 'teste' ? '' : ORIGENS_MARI[c.origem] || c.origem || '')}</small></td>
+        <td class="apagado">${esc(localDe(c) || '—')}</td>
         <td>${pilula(c)}</td>
         <td class="plano-c"><b>${esc(planoTxt(c))}</b><small>${esc(FORMA[c.forma_pagamento] || '')}</small></td>
         <td class="num">${v == null ? '—' : esc(NG.fmtMoeda(v))}</td>
         <td>${NG.proxPasso(proximo(c))}</td>
         <td class="apagado">${esc(ha(ultimaDe(c)))}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="6" class="vazio">Nenhuma conversa neste filtro</td></tr>';
+    }).join('') : '<tr><td colspan="7" class="vazio">Nenhuma conversa neste filtro</td></tr>';
     cartoesEl.innerHTML = lista.length ? lista.map((c) => {
       const v = valorDe(c);
       return `<button type="button" class="cartao ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}">

@@ -717,7 +717,7 @@ body.gaveta-on { overflow: hidden; }
 .pill.m-ok { background: var(--ok-bg); color: var(--ok-fg); }
 .pill.m-hum { background: var(--warn-bg); color: var(--warn-fg); }
 .pill.m-fim { background: var(--surface-dim); color: var(--muted); border: 1px solid var(--border); }
-.btn.desab, .fab.desab { opacity: .45; cursor: not-allowed; pointer-events: auto; }
+.btn.desab, .fab.desab { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); box-shadow: none; cursor: not-allowed; }
 a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 a.fab { display: none; align-items: center; justify-content: center; text-decoration: none; font-size: 22px; }
 .check-mini { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
