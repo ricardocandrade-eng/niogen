@@ -252,6 +252,11 @@
     nao_encontrado: 'Fora da base DFV: sem viabilidade hoje (a Nio só exporta endereços viáveis). Confira CEP e número.',
     precisa_numero: 'CEP na base DFV: informe o número da fachada para consultar.',
   };
+  // Rótulo curto e cor (classe do chip) de cada resposta — tela Cobertura e selos.
+  const DFV_ROTULO = {
+    viavel: ['Viável', 'ok'], viavel_predio: ['Viável (prédio)', 'ok'], endereco_ocupado: ['Endereço já tem Nio', 'bad'],
+    sem_porta_livre: ['Sem porta livre', 'bad'], nao_encontrado: ['Não encontrado', 'bad'], precisa_numero: ['Precisa do número', 'warn'],
+  };
   // Faixa de crédito da Nio → código do seletor (igual a dfv_faixa_codigo no banco).
   const faixaCodigo = (t) => (!t ? null : /^maior/i.test(t) ? '>70' : /^entre/i.test(t) ? '50-70' : /^menor/i.test(t) ? '<50' : 'nao_informado');
   const baseDe = (particao) => (particao ? fmtDiaISO(particao).slice(0, 5) : '');
@@ -293,6 +298,7 @@
         <summary>Consulta manual no painel da Nio (fallback)</summary>
         <div class="dfv-topo">
           <a class="btn btn-sm dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir DFV Sudeste ↗</a>
+          <a class="btn btn-sm" data-dfv-tela target="_blank" rel="noopener" href="cobertura.html">Consultar na tela de cobertura ↗</a>
           <span class="nota-campo" data-dfv-acesso>${esc(TEXTOS_DFV.como)}</span>
         </div>
         <span class="nota-campo">Mudou algum campo acima à mão? A consulta passa a valer como manual.</span>
@@ -369,6 +375,17 @@
       }
     }
     root.querySelector('[data-dfv-consultar]').addEventListener('click', consultar);
+    // Tela Cobertura em nova aba com o endereço atual (a venda de rua não perde o que foi digitado).
+    root.querySelectorAll('[data-dfv-tela]').forEach((a) => {
+      const montarHref = () => {
+        const e = endereco();
+        const q = new URLSearchParams(Object.entries({ cep: soDigitos(e.cep), numero: String(e.numero || '').trim(), complemento: String(e.complemento || '').trim() })
+          .filter(([, v]) => v));
+        a.href = `cobertura.html${q.toString() ? '?' + q : ''}`;
+      };
+      a.addEventListener('mousedown', montarHref);
+      a.addEventListener('click', montarHref);
+    });
     root.querySelector('[data-dfv-opcoes]').addEventListener('click', async (ev) => {
       const b = ev.target.closest('[data-dfv-comp]');
       if (!b) return;
@@ -587,7 +604,7 @@
     sb, TZ, STATUS, STATUS_MAP, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao,
-    DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
+    DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
     carregarUsuarios, preencherSelect,

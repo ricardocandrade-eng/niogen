@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-11">
-<script src="config.js?v=031126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-12">
+<script src="config.js?v=031126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-11"></script>
-<script src="assets/sidebar.js?v=031126-11"></script>
+<script src="assets/app.js?v=031126-12"></script>
+<script src="assets/sidebar.js?v=031126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -541,6 +541,14 @@
   renderPlanos();
   await carregarLista();
   if (location.hash === '#venda-rua') { form.scrollIntoView({ behavior: 'smooth' }); F.cep.focus(); }
+  // Vindo da tela Cobertura (?cep=&numero=&complemento=): preenche e já roda ViaCEP + consulta automática do DFV.
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('cep')) {
+    F.numero.value = qs.get('numero') || '';
+    F.complemento.value = qs.get('complemento') || '';
+    F.cep.value = NG.soDigitos(qs.get('cep'));
+    await buscarCep();
+  }
 })();
 </script>
 </body>

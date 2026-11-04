@@ -1,0 +1,225 @@
+<!doctype html>
+<!-- NIOGEN | docs/cobertura.html | 03/11/2026 — Cobertura (DFV): consulta rápida pela base nio_hp (dfv_consultar), painel DFV Sudeste embutido e resumo de JF. Só leitura, todos os perfis; nada é gravado -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Cobertura (DFV) · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=031126-12">
+<script src="config.js?v=031126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=031126-12"></script>
+<script src="assets/sidebar.js?v=031126-12"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="cobertura"></nav>
+  <main class="main">
+    <header class="page-head">
+      <div class="tit">
+        <h1>Cobertura (DFV)</h1>
+        <span class="sub" id="sub">Consultar um endereço sem abrir uma venda</span>
+      </div>
+    </header>
+
+    <!-- 1. Consulta rápida -->
+    <section class="painel cob-consulta">
+      <h2>Consulta rápida</h2>
+      <form class="cob-form" id="form-cob" novalidate>
+        <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
+        <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
+        <label class="campo">Complemento <span class="muted">(opcional)</span><input type="text" name="complemento" placeholder="apto, bloco, casa" autocomplete="off"></label>
+        <button type="submit" class="btn btn-acc">Consultar</button>
+      </form>
+      <div id="resultado" aria-live="polite" hidden></div>
+      <span class="nota-campo">A base é uma foto da Nio (data acima) e só traz endereços viáveis de Juiz de Fora. Não encontrado = conferir no painel abaixo ou no APP NiO PAP. A palavra final é sempre a do APP no pedido.</span>
+    </section>
+
+    <!-- 2. Painel DFV Sudeste embutido -->
+    <div class="duas cob-painel" style="align-items:flex-start">
+      <section class="painel cob-entrar" style="flex:1 1 280px;gap:10px">
+        <h2>Como entrar no painel</h2>
+        <div class="dfv-acesso-card" data-dfv-acesso><span class="nota-campo">Usuário PARCEIRO · senhas com o Ricardo</span></div>
+        <ol class="cob-passos">
+          <li>Selecione o usuário <strong>PARCEIRO</strong></li>
+          <li>Digite a <strong>senha 1</strong></li>
+          <li>Aguarde aparecer o <strong>“ok”</strong></li>
+          <li>Digite a <strong>senha 2</strong> e toque em <strong>ENTRAR</strong></li>
+          <li>O painel abre na <strong>página 3</strong> (viabilidade por fachada)</li>
+        </ol>
+        <span class="nota-campo">Dica: filtre UF = MG, MUNICIPIO = JUIZ DE FORA e o CEP.</span>
+        <a class="btn dfv-link" data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir em nova aba ↗</a>
+      </section>
+      <section class="painel cob-frame" style="flex:3 1 560px;gap:10px">
+        <div class="q-linha"><h2>DFV Sudeste (Power BI da Nio)</h2>
+          <button type="button" class="btn btn-sm" id="mostrar-painel" hidden>Mostrar painel</button></div>
+        <div class="cob-falha" id="falha" hidden>O painel não abriu embutido; use <a data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir em nova aba ↗</a>.</div>
+        <div class="cob-moldura" id="moldura"><span class="carregando">Carregando o painel…</span></div>
+      </section>
+    </div>
+
+    <!-- 3. Resumo de JF -->
+    <section class="painel" id="resumo"><h2>Resumo de Juiz de Fora</h2><span class="carregando">Carregando…</span></section>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+
+  const form = document.getElementById('form-cob');
+  const F = form.elements;
+  const resEl = document.getElementById('resultado');
+  const pc = (v) => (v == null ? '—' : `${(Number(v) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`);
+  const base = (p) => (p ? NG.fmtDiaISO(p).slice(0, 5) : '—');
+
+  // ------------------------------------------------------------ 1. consulta rápida (nada é gravado)
+  function endereco() {
+    return { cep: NG.soDigitos(F.cep.value), numero: F.numero.value.trim(), complemento: F.complemento.value.trim() };
+  }
+  function linkVenda(e) {
+    const q = new URLSearchParams(Object.entries(e).filter(([, v]) => v));
+    return `vendas.html?${q}#venda-rua`;
+  }
+  function render(r, e) {
+    const [rot, cor] = NG.DFV_ROTULO[r.resultado] || [r.resultado, ''];
+    const dado = (k, v) => `<span>${esc(k)}</span><span>${v == null || v === '' ? '—' : v}</span>`;
+    const unidades = r.resultado === 'viavel_predio' && Array.isArray(r.opcoes) && r.opcoes.length
+      ? `<div class="dfv-opcoes"><span class="nota-campo">${NG.fmtNum(r.opcoes.length)} unidades nesta fachada · ${NG.fmtNum(r.hp_livre)} portas livres. Toque numa para consultar:</span>
+          <div class="dfv-opcoes-lista">${r.opcoes.slice(0, 120).map((o) => `<button type="button" class="chip ${o.hp_livre >= 1 ? 'ok' : 'bad'}" data-comp="${esc(o.complemento || '')}"
+            title="HP livre ${o.hp_livre ?? '—'} · HC ${o.hc_tot ?? '—'}">${esc(o.complemento || `nº ${o.numero} (sem complemento)`)}</button>`).join('')}</div>
+          ${r.opcoes.length > 120 ? '<span class="nota-campo">Lista cortada em 120: digite o complemento e consulte.</span>' : ''}</div>`
+      : '';
+    resEl.innerHTML = `
+      <div class="cob-res cob-${cor}">
+        <div class="cob-res-topo"><span class="chip ${cor} cob-rot">${esc(rot)}</span><span class="chip info">base de ${esc(base(r.particao))}</span></div>
+        <span>${esc(NG.DFV_RESULTADO[r.resultado] || '')}</span>
+      </div>
+      ${unidades}
+      ${r.resultado === 'nao_encontrado' && !r.bairro ? '' : `<div class="dados cob-dados">
+        ${dado('HP livre', r.hp_livre != null ? NG.fmtNum(r.hp_livre) : null)}
+        ${dado('HCs (já com Nio)', r.hc_tot != null ? NG.fmtNum(r.hc_tot) : null)}
+        ${dado('Tipo de edificação', esc(r.tipo_edificacao ? r.tipo_edificacao.toLowerCase() : ''))}
+        ${dado('Bairro', esc(r.bairro || ''))}
+        ${dado('Célula', esc(r.celula || ''))}
+        ${dado('Faixa de crédito', esc(r.faixa_credito || ''))}
+        ${dado('Classificação', esc(r.classificacao ? r.classificacao.toLowerCase() : ''))}
+      </div>`}
+      <div class="acoes" style="justify-content:flex-start">
+        <a class="btn btn-acc" href="${esc(linkVenda(e))}">Criar venda com este endereço</a>
+      </div>`;
+    resEl.hidden = false;
+  }
+  async function consultar() {
+    const e = endereco();
+    if (e.cep.length !== 8) { NG.toast('Informe o CEP com 8 dígitos.', 'bad'); F.cep.focus(); return; }
+    F.cep.value = `${e.cep.slice(0, 5)}-${e.cep.slice(5)}`;
+    resEl.hidden = false;
+    resEl.innerHTML = '<span class="carregando">Consultando a base DFV…</span>';
+    try {
+      const r = await NG.dfvConsultar(e.cep, e.numero, e.complemento);
+      if (!r) throw new Error('resposta vazia');
+      render(r, e);
+    } catch (err) {
+      resEl.innerHTML = `<div class="banner warn"><div style="display:flex;flex-direction:column;gap:2px"><strong>Base DFV indisponível</strong><span>${esc(NG.msgErro(err))} — use o painel abaixo.</span></div></div>`;
+    }
+  }
+  form.addEventListener('submit', (ev) => { ev.preventDefault(); consultar(); });
+  resEl.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-comp]');
+    if (!b) return;
+    F.complemento.value = b.dataset.comp;
+    consultar();
+  });
+
+  // Vindo da venda (Consultar na tela de cobertura): ?cep=&numero=&complemento= já consulta.
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('cep')) {
+    F.cep.value = qs.get('cep');
+    F.numero.value = qs.get('numero') || '';
+    F.complemento.value = qs.get('complemento') || '';
+    consultar();
+  }
+
+  // ------------------------------------------------------------ 2. painel embutido
+  // Link e acesso vêm de config_links (só logado), nunca do HTML. O iframe só é criado quando o painel aparece.
+  const moldura = document.getElementById('moldura');
+  const falha = document.getElementById('falha');
+  const btnMostrar = document.getElementById('mostrar-painel');
+  const { url } = await NG.dadosDfv();
+  NG.ligarLinkDfv(document.querySelector('main'));
+  let montado = false;
+  function montarPainel() {
+    if (montado) return;
+    montado = true;
+    if (!url) { moldura.innerHTML = ''; falha.hidden = false; falha.firstChild.textContent = 'Link do DFV ainda não cadastrado no NIOGEN — peça ao Ricardo. '; return; }
+    const fr = document.createElement('iframe');
+    fr.title = 'DFV Sudeste — Power BI da Nio';
+    fr.src = url;
+    fr.allowFullscreen = true;
+    fr.setAttribute('allowfullscreen', '');
+    fr.referrerPolicy = 'no-referrer';
+    let carregou = false;
+    // Sem "load" em 8 s = bloqueado ou fora do ar: mostra o aviso no lugar da área em branco.
+    // O aviso não some depois: o navegador também dispara "load" na página de erro, que chega atrasada e em branco.
+    let desistiu = false;
+    const t = setTimeout(() => { if (!carregou) { desistiu = true; falha.hidden = false; moldura.hidden = true; } }, 8000);
+    fr.addEventListener('load', () => {
+      carregou = true;
+      clearTimeout(t);
+      if (!desistiu) { moldura.hidden = false; return; }
+      // Chegou depois do aviso: pode ser o Power BI lento ou a página de erro. Quem decide é a pessoa.
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn btn-sm';
+      b.textContent = 'Mostrar o painel mesmo assim';
+      b.addEventListener('click', () => { moldura.hidden = false; b.remove(); });
+      falha.append(' ', b);
+    });
+    moldura.innerHTML = '';
+    moldura.appendChild(fr);
+  }
+  // Celular: o painel é pesado e a consulta rápida resolve a maioria — fica atrás de um botão.
+  const celular = window.matchMedia('(max-width: 767px)').matches;
+  if (celular) {
+    moldura.innerHTML = '';
+    moldura.hidden = true;
+    btnMostrar.hidden = false;
+    btnMostrar.addEventListener('click', () => { btnMostrar.hidden = true; moldura.hidden = false; montarPainel(); });
+  } else {
+    montarPainel();
+  }
+
+  // ------------------------------------------------------------ 3. resumo de JF
+  const [rz, rb] = await Promise.all([
+    NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
+    NG.sb.from('v_dfv_bairros').select('bairro, hp_livre, pct_aprov_bairro, aprov_estimada, raio_km, score').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').limit(5),
+  ]);
+  const resumo = document.getElementById('resumo');
+  if (rz.error || rb.error) { resumo.innerHTML = `<h2>Resumo de Juiz de Fora</h2><div class="placeholder">${esc(NG.msgErro(rz.error || rb.error))}</div>`; return; }
+  const z = rz.data;
+  if (!z) { resumo.innerHTML = '<h2>Resumo de Juiz de Fora</h2><div class="placeholder">Base DFV ainda não carregada.</div>'; return; }
+  document.getElementById('sub').textContent = `Consultar um endereço sem abrir uma venda · base DFV de ${NG.fmtDiaISO(z.particao)}`;
+  const top = (rb.data || []).sort((a, b) => Number(b.score) - Number(a.score));
+  resumo.innerHTML = `
+    <div class="q-linha"><h2>Resumo de Juiz de Fora</h2><span class="muted">base de ${esc(NG.fmtDiaISO(z.particao))}</span></div>
+    <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <div class="kpi"><span class="rot">HPs</span><span class="val">${NG.fmtNum(z.hp_tot)}</span><span class="nota">${NG.fmtNum(z.fachadas)} fachadas · ${NG.fmtNum(z.bairros)} bairros</span></div>
+      <div class="kpi"><span class="rot">HP livre</span><span class="val">${NG.fmtNum(z.hp_livre)}</span><span class="nota">portas para vender</span></div>
+      <div class="kpi"><span class="rot">Ocupação</span><span class="val">${pc(z.pct_ocupacao)}</span><span class="nota">${NG.fmtNum(z.hc_tot)} HCs · ${NG.fmtNum(z.casas_ocupadas)} casas já com Nio</span></div>
+      <div class="kpi"><span class="rot">Data da base</span><span class="val">${esc(base(z.particao))}</span><span class="nota">foto da Nio · só viáveis</span></div>
+    </div>
+    <div class="q-linha"><h2 style="font-size:14px">Bairros prioritários · top 5</h2><a href="metaads.html">ver todos →</a></div>
+    <div class="cob-top">${top.map((b, i) => `<div class="q-linha"><span><span class="mono muted">${i + 1}</span> ${esc(b.bairro)}</span>
+      <span class="mono">${NG.fmtNum(b.hp_livre)} livres · ${b.aprov_estimada ? 'aprov. n/i' : 'aprov. ' + pc(b.pct_aprov_bairro)}</span></div>`).join('')}</div>`;
+})();
+</script>
+</body>
+</html>

@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-11">
-<script src="config.js?v=031126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-12">
+<script src="config.js?v=031126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-11"></script>
-<script src="assets/sidebar.js?v=031126-11"></script>
+<script src="assets/app.js?v=031126-12"></script>
+<script src="assets/sidebar.js?v=031126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -138,8 +138,8 @@
       <a class="kpi ${h.pendencias_osab ? 'warn' : ''}" href="instalacoes.html"><span class="rot">Pendência OSAB</span><span class="val">${n(h.pendencias_osab)}</span><span class="nota">${esc(h.pendencia_top ? h.pendencia_top.toLowerCase() + ' · reagendar' : 'nenhuma')}</span></a>
       <div class="kpi"><span class="rot">Ativos na carteira</span><span class="val">${n(m.ativas_carteira)}</span><span class="nota">adimplência chega com as faturas</span></div>
       <a class="kpi ${dfv.qualificadas && dfv.dfv_consultadas < dfv.qualificadas ? 'warn' : ''}" href="funil.html"><span class="rot">${NG.rotuloTxt('DFV viável ÷ qualificadas', NG.TEXTOS_DFV.placar)}</span><span class="val">${n(dfv.dfv_viaveis)} / ${n(dfv.qualificadas)}</span><span class="nota">${n(dfv.dfv_consultadas)} consultada${dfv.dfv_consultadas === 1 ? '' : 's'} · ${dfv.pct_viavel_consultadas != null ? NG.fmtNum(dfv.pct_viavel_consultadas) + ' % viáveis' : 'nenhuma consulta'}</span></a>
-      <a class="kpi" href="metaads.html" title="Base DFV da Nio no Supabase · ranking de bairros na tela Meta Ads"><span class="rot">Cobertura JF (DFV)</span><span class="val">${base ? n(base.hp_livre) : '—'}</span><span class="nota">${base
-        ? `HP livre · ${NG.fmtNum(Number(base.pct_ocupacao) * 100)} % ocupado · base de ${NG.fmtDiaISO(base.particao).slice(0, 5)} · bairros →`
+      <a class="kpi" href="cobertura.html" title="Base DFV da Nio no Supabase · consulta rápida, painel e resumo na tela Cobertura (DFV)"><span class="rot">Cobertura JF (DFV)</span><span class="val">${base ? n(base.hp_livre) : '—'}</span><span class="nota">${base
+        ? `HP livre · ${NG.fmtNum(Number(base.pct_ocupacao) * 100)} % ocupado · base de ${NG.fmtDiaISO(base.particao).slice(0, 5)} · consultar →`
         : 'base DFV ainda não carregada'}</span></a>
       <a class="kpi" href="vendas.html"><span class="rot">Saídas no mês</span><span class="val">${n(m.saidas)}</span><span class="nota">${esc(m.saidas_motivo_top || '—')}</span></a>
     </div>
