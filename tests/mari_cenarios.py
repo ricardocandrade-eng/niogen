@@ -332,8 +332,7 @@ def c5():
     return ok, log, 'regular'
 
 
-def c6():
-    tel = PREFIXO + '006'
+def c6(tel=PREFIXO + '006'):
     persona = P(cep_msg='36070-480, número 901', numero='901', escolha='Tem desconto?')
     estado = {'pediu': 0}
     lead = Lead(persona)
@@ -357,6 +356,14 @@ def c6():
     ok = [('resposta padrão ao 1º pedido', 'tabelad' in norm(resp_desc)),
           ('handoff objecao já no 2º pedido', bool(t2) and (t2['r'].get('handoff') or {}).get('motivo') == 'objecao'),
           ('despedida com prazo', bool(t2) and bool(re.search(r'em ate 2 horas|proximo horario', norm(t2['mari']))))]
+    # Contrato: o briefing para o consultor nunca sugere desconto/flexibilidade fora da tabela (prompt v2, 04/11 16h50).
+    cid = cid_de(log)
+    b = sql(f"select handoff_briefing as b from mari_conversas where id = '{cid}'") if cid else []
+    brief = norm((b[0]['b'] if b else '') or '')
+    sugestao = brief.split('nao fazer')[0]   # o "NÃO FAZER" pode (e deve) citar o desconto para proibi-lo
+    ok.append(('briefing gravado', bool(brief)))
+    ok.append(('briefing sem flexibilidade de preço',
+               bool(brief) and not re.search(r'flexibil|negoci|condicao especial|desconto (extra|especial|adicional)|abaix|fazer algo|brinde', sugestao)))
     return ok, log, 'regular'
 
 
