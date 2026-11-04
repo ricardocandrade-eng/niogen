@@ -2,7 +2,9 @@
   "credenciais": {
     "supabase": "p59RBqdhm80tQqJq",
     "claude": "7TR9FOfOVcCzLYi0",
-    "teste": "uDwozyxJcB1mghWw"
+    "teste": "uDwozyxJcB1mghWw",
+    "chatwoot": "Ti7TJGxc6OMDWmkb"
   },
-  "workflow_id": "Nsb1dcL3HWQpKSav"
+  "workflow_id": "Nsb1dcL3HWQpKSav",
+  "cadencia_workflow_id": "efPnlQ1P4UoiNcFG"
 }
