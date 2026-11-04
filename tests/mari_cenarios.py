@@ -189,10 +189,12 @@ class Lead:
             return f"{p['nome']}, CPF {p['cpf']}"
         if '11 digitos' in n or 'cpf parece' in n:
             return p['cpf']
-        if 'telefone' in n or 'ddd' in n:
-            return p['telefone']
+        if p.get('telefone') and p['telefone'] in re.sub(r'\D', '', mari) and '?' in mari and 'confere os dados' not in n:
+            return p.get('confirma_tel', 'Isso, esse mesmo')
         if 'e-mail' in n or 'email' in n:
             return p['email']
+        if 'telefone' in n or 'ddd' in n:
+            return p['telefone']
         if 'forma de pagamento' in n or ('boleto' in n and 'cartao' in n and '?' in mari) or 'como prefere pagar' in n:
             return p.get('pagamento', 'Cartão de crédito')
         if 'visita' in n and ('dia' in n or 'periodo' in n or 'manha' in n):
@@ -438,6 +440,71 @@ def c12():
     return ok, log, 'regular'
 
 
+def c13():
+    # Teste do Ricardo no chat (04/11 ~10h): reclama da Vero, pede o mais barato, responde "Cartão" à confirmação,
+    # pede visita "hoje à tarde".
+    persona = P(nome='Renato Teste Alves', cpf=cpf_valido_de('123456789'), cep_msg='36070-480, número 910', numero='910',
+                email='renato.teste@exemplo.com', telefone='32966665555',
+                elegibilidade='Tenho Vero e tá uma porcaria', escolha='Me convenceu. Qual o plano mais barato?',
+                padrao='ok', pagamento='Cartão', visita='Hoje à tarde')
+    # Loop próprio: na 1ª fala depois de "o mais barato" que ainda não trouxe as condições (confirmação, "posso
+    # seguir?" ou upsell), o lead responde só "Cartão" — exatamente o passo que travou no teste do Ricardo.
+    tel = PREFIXO + '013'
+    lead = Lead(persona)
+    log = []
+    msg = 'Bom dia!'
+    pediu_barato = respondeu_cartao = False
+    for _ in range(18):
+        r = enviar(tel, msg, nome='Renato')
+        log.append({'lead': msg, 'mari': r.get('resposta'), 'r': r})
+        if r.get('handoff') or (r.get('erro') and not r.get('resposta')):
+            break
+        fala = r.get('resposta') or ''
+        if msg.startswith('Me convenceu'):
+            pediu_barato = True
+        if pediu_barato and not respondeu_cartao and '✅' not in fala and 'nome completo' not in norm(fala):
+            msg = 'Cartão'
+            respondeu_cartao = True
+        else:
+            msg = lead.responder(fala)
+    r = ultimo(log); cid = cid_de(log)
+    falas = todas_falas(log)
+    i_cartao = next((i for i, t in enumerate(log) if t['lead'] == 'Cartão'), None)
+    resp_cartao = (log[i_cartao]['mari'] or '') if i_cartao is not None else ''
+    prox = ' '.join((t['mari'] or '') for t in log[i_cartao:i_cartao + 2]) if i_cartao is not None else ''
+    resumo = next((f for f in falas if 'confere os dados' in norm(f)), '')
+    l_plano = next((l for l in resumo.split('\n') if 'Plano:' in l), '')
+    l_visita = next((l for l in resumo.split('\n') if 'Visita:' in l), '')
+    v = venda_da_conversa(cid)
+    i_vero = next((i for i, t in enumerate(log) if t['lead'].startswith('Tenho Vero')), None)
+    ok = [('acolhida + planos na mesma mensagem', i_vero is not None and '1️⃣' in (log[i_vero]['mari'] or '')),
+          ('respondeu "Cartão" à confirmação', i_cartao is not None),
+          ('confirmação no preço do cartão (R$95)', 'R$95' in resp_cartao and 'R$110' not in resp_cartao),
+          ('não parou: condições + nome/CPF logo em seguida', '✅' in prox and 'nome completo' in norm(prox)),
+          ('resumo com um preço só (R$95 no cartão)', 'R$95' in l_plano and 'R$110' not in l_plano),
+          ('visita "hoje à tarde" anotada', 'hoje' in norm(l_visita)),
+          ('sem regra de antecedência inventada', not any('anteced' in norm(f) for f in falas)),
+          ('não comenta o concorrente', not any(re.search(r'\bvero\b', norm(f)) for f in falas)),
+          ('venda criada no cartão, R$95', bool(v) and v['forma_pagamento'] == 'cartao' and float(v['valor_mensal'] or 0) == 95.0)]
+    return ok, log, 'regular'
+
+
+def c14():
+    # Revisão do Cowork (04/11 10h30): telefone diferente do WhatsApp → a Mari repete e pede confirmação antes de seguir.
+    persona = P(nome='Paula Teste Reis', cpf=cpf_valido_de('321654987'), cep_msg='36070-480, número 915', numero='915',
+                email='paula.teste@exemplo.com', telefone='32988887777')
+    log = conversar(PREFIXO + '014', persona)
+    r = ultimo(log); cid = cid_de(log)
+    i_tel = next((i for i, t in enumerate(log) if t['lead'] == '32988887777'), None)
+    resp = (log[i_tel]['mari'] or '') if i_tel is not None else ''
+    ok = [('passou o telefone', i_tel is not None),
+          ('repete o número', '988887777' in re.sub(r'\D', '', resp)),
+          ('pede confirmação', '?' in resp),
+          ('não pula para o e-mail antes do sim', 'mail' not in norm(resp)),
+          ('handoff dados_completos com venda', (r.get('handoff') or {}).get('motivo') == 'dados_completos' and venda_da_conversa(cid) is not None)]
+    return ok, log, 'regular'
+
+
 CENARIOS = {
     1: ('JF Regular — caminho feliz até dados_completos', c1),
     2: ('Montes Claros (BTU) — Oferta 50%, sem "no cartão"', c2),
@@ -451,6 +518,8 @@ CENARIOS = {
     10: ('Áudio / figurinha — resposta fixa de mídia', c10),
     11: ('"Para de me mandar mensagem" — recusa_compra', c11),
     12: ('Empresa MEI em JF — Empresas Regular, 24 meses', c12),
+    13: ('Teste do Ricardo — "Cartão" na confirmação, visita hoje, concorrente', c13),
+    14: ('Telefone diferente do WhatsApp — repete e confirma', c14),
 }
 
 
@@ -466,6 +535,14 @@ def rodar(n):
             glob.append(f'turno {i}: {f}')
         if t['r'].get('erro'):
             glob.append(f'turno {i}: erro do motor: {t["r"]["erro"]}')
+    # (a) condições do fechamento obrigatório trazem o vencimento (roteiro Passo 4, rev. 04/11).
+    for i, t in enumerate(log, 1):
+        f = norm(t['mari'])
+        if 'so pra voce ficar por dentro' in f and '25 dias' not in f:
+            glob.append(f'turno {i}: condições sem a regra de vencimento (25 dias)')
+        # (b) "Ótima escolha" antes de "Só pra você saber", na mesma mensagem.
+        if 'so pra voce saber' in f and not (0 <= f.find('otima escolha') < f.find('so pra voce saber')):
+            glob.append(f'turno {i}: sugestão de upgrade sem "Ótima escolha" antes')
     # LGPD (decisão pendente a): a 1ª fala que pede o CPF traz a linha curta.
     pede_cpf = next((t['mari'] for t in log if t['mari'] and 'cpf' in norm(t['mari'])
                      and ('me passa' in norm(t['mari']) or 'nome completo' in norm(t['mari']))), None)

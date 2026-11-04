@@ -137,9 +137,26 @@ L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (da
 L.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);
 L.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);
 L.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);
+if (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {
+  // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.
+  // Retorno = data do cancelamento + 31 dias = hoje + (31 − N), no calendário de Brasília.
+  const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora); // AAAA-MM-DD
+  const base = new Date(`${hojeSP}T12:00:00Z`);
+  const tabela = [];
+  for (let n = 0; n <= 30; n++) {
+    const d = new Date(base.getTime() + (31 - n) * 86400000).toISOString().slice(0, 10);
+    tabela.push(`${n}→${d.slice(8, 10)}/${d.slice(5, 7)} (${d})`);
+  }
+  L.push(`tabela_retorno_cancelamento (cancelou há N dias → nova adesão a partir de; já calculada — copie, não faça conta): ${tabela.join(' · ')}`);
+}
 L.push(`elegibilidade: ${conv.elegibilidade || 'não perguntada'}`);
 L.push(`segmento: ${seg}${seg === 'empresas' ? ` | mei: ${conv.mei === true ? 'sim' : conv.mei === false ? 'nao' : 'não perguntado'}` : ''}`);
 L.push(`plano_escolhido: ${planoSel ? `${planoSel.codigo} — ${nomeCurto(planoSel.nome)} — ${R(planoSel.preco)}${!btu && planoSel.preco_cartao != null ? ` (cartão ${R(planoSel.preco_cartao)})` : ''}` : '—'}`);
+if (planoSel && conv.forma_pagamento) {
+  // Preço da forma já escolhida (cartão em cidade Regular = preco_cartao), calculado aqui — o modelo só copia.
+  const noCartao = conv.forma_pagamento === 'cartao' && !btu && planoSel.preco_cartao != null;
+  L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
+}
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
 L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; visita=${conv.visita_preferencia || '—'}`);
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);

@@ -36,8 +36,8 @@ JS_DIR = os.path.join(AQUI, 'mari')
 BACKUP_DIR = os.path.join(AQUI, 'backups')
 EXPORT = os.path.join(AQUI, 'mari_principal.json')
 IDS = os.path.join(AQUI, 'mari_ids.json')            # IDs do workflow e das credenciais (não são segredo)
-PROMPT_FILE = os.path.join(REPO, 'mari', 'prompt_mari_v1.md')
-PROMPT_VERSAO = 'mari_v1'
+PROMPT_FILE = os.path.join(REPO, 'mari', 'prompt_mari_v2.md')
+PROMPT_VERSAO = 'mari_v2'
 
 N8N = 'https://n8n.ofertasverointernet.com.br'
 WF_NOME = 'mari_principal'
