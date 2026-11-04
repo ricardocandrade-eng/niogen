@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- NIOGEN | docs/vendas.html | 03/11/2026 — lista de vendas + formulário "Venda de rua" com as travas do contrato -->
+<!-- NIOGEN | docs/vendas.html | 03/11/2026 — lista de vendas + "Venda de rua" em 5 passos (endereço e cobertura · cliente · oferta · conferências · pedido e biometria) -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-12">
-<script src="config.js?v=031126-12"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-13">
+<script src="config.js?v=031126-13"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-12"></script>
-<script src="assets/sidebar.js?v=031126-12"></script>
+<script src="assets/app.js?v=031126-13"></script>
+<script src="assets/sidebar.js?v=031126-13"></script>
 </head>
 <body>
 <div class="app">
@@ -45,78 +45,140 @@
       <form class="painel form-rua" id="venda-rua" novalidate>
         <div>
           <h2>Venda de rua</h2>
-          <span class="painel-sub">Entrada pelo vendedor (PAP, indicação). As mesmas travas da Mari — só que aqui quem responde é você.</span>
+          <span class="painel-sub">Entrada pelo vendedor (PAP, indicação). A mesma ordem da Mari e do contrato — só que aqui quem responde é você.</span>
         </div>
 
-        <label class="campo">CEP e número
-          <div class="junto">
-            <input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required>
-            <input type="text" name="numero" aria-label="Número" placeholder="nº" style="width:90px;flex:0 0 90px" required>
+        <ol class="passos-ind" id="passos-ind" aria-label="Passos da venda">
+          <li><button type="button" data-ir="1"><b>1</b><span>Endereço</span></button></li>
+          <li><button type="button" data-ir="2"><b>2</b><span>Cliente</span></button></li>
+          <li><button type="button" data-ir="3"><b>3</b><span>Oferta</span></button></li>
+          <li><button type="button" data-ir="4"><b>4</b><span>Conferências</span></button></li>
+          <li><button type="button" data-ir="5"><b>5</b><span>Pedido</span></button></li>
+        </ol>
+
+        <!-- 1 · Endereço e cobertura -->
+        <section class="passo aberto" data-passo="1" id="passo-1">
+          <button type="button" class="passo-cab" aria-expanded="true">
+            <b class="passo-n">1</b><span class="passo-tit">Endereço e cobertura<small>Sem endereço não existe venda: ele define cidade, tabela e cobertura.</small></span><i class="passo-est" aria-hidden="true"></i>
+          </button>
+          <div class="passo-corpo">
+            <div class="grade3-end">
+              <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
+              <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
+              <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco, casa" autocomplete="off"></label>
+            </div>
+            <div id="endereco" hidden>
+              <div class="grade2">
+                <label class="campo">Logradouro<input type="text" name="logradouro"></label>
+                <label class="campo">Bairro<input type="text" name="bairro"></label>
+                <label class="campo">Cidade / UF<input type="text" name="cidade_uf" readonly></label>
+                <div class="campo"><span>Tabela da cidade</span><span id="cluster-chip" class="chip">—</span></div>
+              </div>
+            </div>
+            <div class="faixa cinza" id="faixa-dfv" aria-live="polite">Digite CEP e número para consultar a cobertura.</div>
+            <div class="chips" id="travas" aria-live="polite"></div>
+            <div class="dfv-sem" id="dfv-sem" hidden>
+              <span></span>
+              <button type="button" class="btn btn-sm" id="btn-sem-cobertura"></button>
+            </div>
+            <details class="dfv-ajuste" id="dfv-ajuste">
+              <summary>Ajustar a cobertura manualmente</summary>
+              <div id="dfv-campos"></div>
+            </details>
           </div>
-        </label>
-        <div id="endereco" hidden>
-          <div class="grade2">
-            <label class="campo">Logradouro<input type="text" name="logradouro"></label>
-            <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco, casa"></label>
-            <label class="campo">Bairro<input type="text" name="bairro"></label>
-            <label class="campo">Cidade / UF<input type="text" name="cidade_uf" readonly></label>
+        </section>
+
+        <!-- 2 · Cliente -->
+        <section class="passo" data-passo="2" id="passo-2">
+          <button type="button" class="passo-cab" aria-expanded="false">
+            <b class="passo-n">2</b><span class="passo-tit">Cliente<small>Quem compra. Confirme telefone e endereço com a pessoa: erro de cadastro é venda indevida.</small></span><i class="passo-est" aria-hidden="true"></i>
+          </button>
+          <div class="passo-corpo">
+            <div class="grade2">
+              <label class="campo">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
+              <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
+              <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
+              <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
+              <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
+              <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
+              <label class="campo" id="campo-ref" hidden>Quem indicou<input type="text" name="origem_ref"></label>
+            </div>
+            <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
           </div>
-        </div>
-        <div class="chips" id="travas" aria-live="polite"></div>
+        </section>
 
-        <fieldset class="dfv-bloco" id="dfv-rua">
-          <legend>Cobertura (DFV)</legend>
-          <div id="dfv-campos"></div>
-          <div class="dfv-sem" id="dfv-sem" hidden>
-            <span>Sem cobertura no DFV: não vender. Quer registrar como saída e voltar a falar em 90 dias?</span>
-            <button type="button" class="btn btn-sm" id="btn-sem-cobertura">Salvar como saída "Sem cobertura" · volta em 90 d</button>
+        <!-- 3 · Oferta -->
+        <section class="passo" data-passo="3" id="passo-3">
+          <button type="button" class="passo-cab" aria-expanded="false">
+            <b class="passo-n">3</b><span class="passo-tit">Oferta<small>Só a tabela vigente. Plano depende da cidade; o preço depende da forma.</small></span><i class="passo-est" aria-hidden="true"></i>
+          </button>
+          <div class="passo-corpo">
+            <label class="campo">Forma de pagamento<select name="forma"><option value="cartao">Cartão de crédito</option><option value="boleto">Boleto</option><option value="dacc">Débito em conta</option></select></label>
+            <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
+            <div class="campo">
+              <span>Plano · tabela vigente desde <span id="vigencia">—</span> · <span id="tabela-cidade"></span></span>
+              <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
+            </div>
+            <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer o plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
+            <div class="campo">
+              <span>Serviços adicionais</span>
+              <div class="adic" id="adicionais"></div>
+            </div>
+            <div class="resumo-venda" id="resumo" aria-live="polite"></div>
           </div>
-        </fieldset>
+        </section>
 
-        <div class="grade2">
-          <label class="campo">Nome completo<input type="text" name="nome" placeholder="como no documento" required></label>
-          <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
-          <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
-          <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
-          <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
-          <label class="campo" id="campo-ref" hidden>Quem indicou<input type="text" name="origem_ref"></label>
-        </div>
+        <!-- 4 · Conferências do contrato -->
+        <section class="passo" data-passo="4" id="passo-4">
+          <button type="button" class="passo-cab" aria-expanded="false">
+            <b class="passo-n">4</b><span class="passo-tit">Conferências do contrato<small>As três perguntas que valem estorno de 100 %.</small></span><i class="passo-est" aria-hidden="true"></i>
+          </button>
+          <div class="passo-corpo">
+            <div class="faixa vermelho" id="aviso-ocupado" hidden>A base DFV indica Nio ativo neste endereço: pergunte com atenção e confira no APP.</div>
+            <div class="confs" role="group" aria-label="Conferências do contrato">
+              <div class="conf"><span>Cancelou a Nio nos últimos 30 dias?</span>
+                <span class="simnao"><label><input type="radio" name="cf_cancelou" value="sim"> Sim</label><label><input type="radio" name="cf_cancelou" value="nao"> Não</label></span></div>
+              <div class="conf"><span>Já é cliente Nio?</span>
+                <span class="simnao"><label><input type="radio" name="cf_cliente" value="sim"> Sim</label><label><input type="radio" name="cf_cliente" value="nao"> Não</label></span></div>
+              <div class="conf"><span>O endereço tem produto Nio ativo?</span>
+                <span class="simnao"><label><input type="radio" name="cf_endereco" value="sim"> Sim</label><label><input type="radio" name="cf_endereco" value="nao"> Não</label></span></div>
+            </div>
+            <div class="dfv-sem" id="conf-sim" hidden>
+              <span></span>
+              <button type="button" class="btn btn-sm" id="btn-conf-saida"></button>
+            </div>
+            <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
+          </div>
+        </section>
 
-        <div class="grade2">
-          <label class="campo">Segmento<select name="segmento"><option value="PF">PF · Varejo</option><option value="MEI">PJ · MEI</option><option value="NMEI">PJ · NMEI (+ bônus)</option></select></label>
-          <label class="campo">Forma de pagamento<select name="forma"><option value="cartao">Cartão de crédito</option><option value="boleto">Boleto</option><option value="dacc">Débito em conta</option></select></label>
-        </div>
-        <span class="nota-campo">1º vencimento: 25 dias após a instalação (cartão: no dia da instalação). Não se escolhe dia de vencimento.</span>
+        <!-- 5 · Pedido e biometria -->
+        <section class="passo" data-passo="5" id="passo-5">
+          <button type="button" class="passo-cab" aria-expanded="false">
+            <b class="passo-n">5</b><span class="passo-tit">Pedido e biometria<small>Só existe depois da visita. É o que transforma qualificado em vendido.</small></span><i class="passo-est" aria-hidden="true"></i>
+          </button>
+          <div class="passo-corpo">
+            <div class="grade2">
+              <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
+              <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
+              <label class="campo" data-bio-agenda hidden>Data da biometria<input type="date" name="biometria_dia"></label>
+              <label class="campo" data-bio-agenda hidden>Período<select name="biometria_periodo"><option value="08:00">Manhã · 8–12h</option><option value="13:00">Tarde · 13–17h</option></select></label>
+            </div>
+            <span class="nota-campo" data-bio-agenda hidden>Depois do pedido, a instalação deve ser agendada em até 4 h (indicador do contrato).</span>
+          </div>
+        </section>
 
-        <div class="campo">
-          <span>Plano · tabela vigente desde <span id="vigencia">—</span> · <span id="tabela-cidade"></span></span>
-          <div class="planos-op" id="planos-op" role="radiogroup" aria-label="Plano"></div>
-        </div>
-        <label class="check" id="campo-nfid"><input type="checkbox" name="nfid"> Cliente quer plano sem fidelidade (taxa de R$ 540 à vista na 1ª fatura)</label>
-
-        <div class="campo">
-          <span>Serviços adicionais</span>
-          <div class="adic" id="adicionais"></div>
-        </div>
-
-        <div class="resumo-venda" id="resumo" aria-live="polite"></div>
-
-        <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
-
-        <div class="aviso">
-          <span>Cancelou a Nio nos últimos 30 dias? Já é cliente Nio? Endereço com produto ativo? Até a importação do OSAB, quem confere é você, no APP — venda bloqueada não vira "Vendido".</span>
-          <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
-        </div>
-
-        <div class="grade2">
-          <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
-          <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
-          <label class="campo" id="campo-bio-em" hidden>Biometria em<input type="datetime-local" name="biometria_em"></label>
-        </div>
-
-        <div class="acoes">
-          <button type="button" class="btn btn-ghost" id="btn-qualificado">Salvar como qualificado</button>
-          <button type="button" class="btn btn-acc" id="btn-venda" disabled title="exige nº do pedido e biometria aprovada">Registrar venda</button>
+        <div class="rodape-venda">
+          <div class="rv-botao">
+            <button type="button" class="btn btn-ghost" id="btn-qualificado" disabled>Salvar como qualificado</button>
+            <span class="rv-leg">antes da visita — cria a venda em 0 · Qualificado e avisa o consultor</span>
+            <span class="rv-falta" id="falta-qualif"></span>
+          </div>
+          <span class="rv-dica">Na rua, o normal é salvar como qualificado agora e registrar a venda depois da biometria, pela tela Venda.</span>
+          <div class="rv-botao">
+            <button type="button" class="btn btn-acc" id="btn-venda" disabled>Registrar venda</button>
+            <span class="rv-leg">exige nº do pedido, biometria aprovada, conferências e cobertura viável (&lt; 7 dias)</span>
+            <span class="rv-falta" id="falta-venda"></span>
+          </div>
         </div>
       </form>
     </div>
@@ -222,9 +284,8 @@
   document.getElementById('vigencia').textContent = ini ? NG.fmtDiaISO(ini) : '—';
 
   // Endereço vindo do ViaCEP + resultado das travas.
-  const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null };
+  const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, dfv: null, dfvErro: false, consultando: false };
 
-  // Cobertura rua a rua: vem da base DFV (dfv_consultar), preenchida pelo bloco Cobertura. null = "consultar".
 
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
   // Linha da área que cobre o endereço (traz o cluster: a tabela de preço da cidade). A mesma regra roda no banco (cluster_da_area).
@@ -262,7 +323,7 @@
       <label class="plano-op">
         <input type="radio" name="plano" value="${p.id}" ${String(p.id) === atual ? 'checked' : ''}>
         <span class="po-nome">${esc(p.nome)}</span>
-        <span class="po-preco"><b>${NG.fmtMoeda(p.preco)}</b> boleto/débito${p.preco_cartao != null ? ` · ${NG.fmtMoeda(p.preco_cartao)} no cartão` : ' · mesmo preço no cartão'}</span>
+        <span class="po-preco"><b>${NG.fmtMoeda(F.forma.value === 'cartao' && p.preco_cartao != null ? p.preco_cartao : p.preco)}</b>/mês ${({ cartao: 'no cartão', boleto: 'no boleto', dacc: 'no débito' })[F.forma.value]}</span>
         <span class="po-det">${esc([p.velocidade, p.wifi, p.internet_5g ? `Internet 5G ${p.internet_5g}` : null].filter(Boolean).join(' · '))}</span>
         ${p.inclusos && p.inclusos.length ? `<span class="po-det">Já vem com ${esc(p.inclusos.join(', '))}</span>` : ''}
         <span class="po-com">comissão ${NG.fmtMoeda(p.comissao)}</span>
@@ -343,24 +404,24 @@
   }
 
   function renderTravas() {
+    const chip = document.getElementById('cluster-chip');
+    chip.className = `chip ${estado.area === false ? 'bad' : estado.area ? 'ok' : ''}`;
+    chip.textContent = estado.area === false ? 'Fora da área de atuação' : estado.cluster ? (estado.cluster === 'btu' ? 'BTU' : 'Regular') : '—';
     if (!estado.viacep) { travasEl.innerHTML = ''; return; }
-    const c = estado.cobertura === null
-      ? '<span class="chip warn">Cobertura: consultar o DFV</span>'
-      : `<span class="chip ${estado.cobertura ? 'ok' : 'bad'}">Cobertura Nio (DFV) ${estado.cobertura ? '✓' : '✗'}</span>`;
-    const a = estado.area === null ? '<span class="chip">Área: sem cidade</span>'
-      : `<span class="chip ${estado.area ? 'ok' : 'bad'}">${estado.area ? `Dentro da área ✓ · ${estado.cluster === 'btu' ? 'BTU' : 'Regular'}` : 'Fora da área ✗'}</span>`;
+    const a = estado.area === false ? '<span class="chip bad">Cidade fora da área de atuação ✗</span>'
+      : estado.area ? `<span class="chip ok">Dentro da área ✓ · ${estado.cluster === 'btu' ? 'BTU' : 'Regular'}</span>` : '';
     const d = estado.dup === null ? '' : estado.dup.endereco
       ? '<span class="chip bad">Endereço já tem venda ativa no NIOGEN ✗</span>'
       : '<span class="chip ok">Endereço sem venda ativa no NIOGEN ✓</span>';
     const doc = estado.dup && estado.dup.documento ? '<span class="chip bad">CPF/CNPJ já tem venda ativa ✗</span>' : '';
-    travasEl.innerHTML = c + a + d + doc;
+    travasEl.innerHTML = a + d + doc;
   }
 
   async function checarDuplicidade() {
-    if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.dup = null; renderTravas(); return; }
+    if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.dup = null; atualizar(); return; }
     const { data, error } = await NG.sb.rpc('checar_duplicidade', { p_cpf_cnpj: F.doc.value, p_cep: F.cep.value, p_numero: F.numero.value });
     estado.dup = error ? null : data;
-    renderTravas();
+    atualizar();
   }
 
   async function buscarCep() {
@@ -384,16 +445,221 @@
       document.getElementById('endereco').hidden = true;
       NG.toast(e.message === 'CEP não encontrado' ? 'CEP não encontrado no ViaCEP' : 'ViaCEP indisponível — tente de novo', 'bad');
     }
-    renderTravas();
     renderPlanos();
     checarDuplicidade();
   }
+
+  // ------------------------------------------------------------- cobertura (passo 1)
+  // A base responde sozinha ao sair do número/complemento (e depois do ViaCEP). O resultado aparece como faixa no passo 1;
+  // os campos dfv_* vão junto na gravação. O seletor manual (5 opções) fica recolhido em "Ajustar a cobertura manualmente".
+  const dfvEl = document.getElementById('dfv-campos');
+  const semEl = document.getElementById('dfv-sem');
+  const btnSem = document.getElementById('btn-sem-cobertura');
+  const faixaEl = document.getElementById('faixa-dfv');
+  const dfvOk = () => ['viavel', 'viavel_predio'].includes(F.dfv_viabilidade.value);
+  let seqDfv = 0;
+
+  function coberturaDoSeletor() {
+    const vi = F.dfv_viabilidade.value;
+    return dfvOk() ? true : vi === 'nao_consultado' ? null : false;
+  }
+  function montarDfv() {
+    dfvEl.innerHTML = NG.dfvCampos();
+    NG.ligarLinkDfv(dfvEl);
+    // "Consultar de novo" e a troca manual dentro do ajuste continuam valendo; o resultado volta para a faixa.
+    NG.ligarDfvAuto(dfvEl,
+      () => ({ cep: F.cep.value, numero: F.numero.value, complemento: F.complemento.value }),
+      {
+        aoEscolher: (comp) => { F.complemento.value = comp; },
+        aoMudar: (r) => {
+          estado.dfvErro = false;
+          if (r) estado.dfv = r;
+          estado.cobertura = r ? (r.resultado === 'precisa_numero' ? null : ['viavel', 'viavel_predio'].includes(r.resultado)) : coberturaDoSeletor();
+          atualizar();
+        },
+      });
+  }
+  async function consultarDfv() {
+    const e = { cep: F.cep.value, numero: F.numero.value, complemento: F.complemento.value };
+    // Endereço novo = consulta nova: os campos dfv_* de um endereço anterior não podem ir para esta venda.
+    montarDfv();
+    estado.dfv = null;
+    estado.cobertura = null;
+    estado.dfvErro = false;
+    if (NG.soDigitos(e.cep).length !== 8 || !String(e.numero).trim()) { atualizar(); return; }
+    const meu = ++seqDfv;
+    estado.consultando = true;
+    atualizar();
+    try {
+      const r = await NG.dfvConsultar(e.cep, e.numero, e.complemento);
+      if (meu !== seqDfv) return;
+      estado.dfv = r;
+      NG.dfvPreencher(dfvEl, r);
+      estado.cobertura = !r || r.resultado === 'precisa_numero' ? null : ['viavel', 'viavel_predio'].includes(r.resultado);
+    } catch (err) {
+      if (meu !== seqDfv) return;
+      estado.dfvErro = true;
+    }
+    estado.consultando = false;
+    atualizar();
+  }
+
+  function renderFaixa() {
+    const cep = NG.soDigitos(F.cep.value);
+    const num = F.numero.value.trim();
+    const set = (cor, html) => { faixaEl.className = `faixa ${cor}`; faixaEl.innerHTML = html; NG.ligarLinkDfv(faixaEl); };
+    const q = new URLSearchParams(Object.entries({ cep, numero: num, complemento: F.complemento.value.trim() }).filter(([, v]) => v));
+    const links = `<span class="faixa-links"><a href="cobertura.html?${esc(q.toString())}" target="_blank" rel="noopener">Abrir tela de cobertura ↗</a>`
+      + '<a data-dfv-link href="#" target="_blank" rel="noopener noreferrer">Abrir DFV Sudeste ↗</a></span>';
+    if (cep.length !== 8 || !num) return set('cinza', cep.length === 8 ? 'Digite o número para consultar a cobertura.' : 'Digite CEP e número para consultar a cobertura.');
+    if (estado.consultando) return set('cinza', 'Consultando a base DFV…');
+    const vi = F.dfv_viabilidade.value;
+    if (F.dfv_origem.value === 'manual') {
+      if (dfvOk()) return set('verde', `Cobertura (ajuste manual): ${vi === 'viavel_predio' ? 'prédio viável' : 'viável'}`);
+      if (vi === 'nao_consultado') return set('cinza', 'Cobertura ainda não consultada.');
+      return set('vermelho', `Cobertura (ajuste manual): ${esc(NG.DFV_OPCOES[vi].toLowerCase())} — não vender.`);
+    }
+    if (estado.dfvErro) return set('amarelo', `Base DFV indisponível — conferir no painel ou no APP antes da visita. ${links}`);
+    const r = estado.dfv;
+    const base = F.dfv_particao.value ? ` · base de ${NG.fmtDiaISO(F.dfv_particao.value).slice(0, 5)}` : '';
+    switch (r && r.resultado) {
+      case 'viavel': return set('verde', `Cobertura: viável${base}`);
+      case 'viavel_predio': {
+        const ops = (r.opcoes || []).slice(0, 120);
+        return set('verde', `Cobertura: prédio viável — escolha a unidade${base}
+          <span class="dfv-opcoes-lista">${ops.map((o) => `<button type="button" class="chip ${o.hp_livre >= 1 ? 'ok' : 'bad'}" data-unidade="${esc(o.complemento || '')}"
+            title="HP livre ${o.hp_livre ?? '—'} · HC ${o.hc_tot ?? '—'}">${esc(o.complemento || `nº ${o.numero} (sem complemento)`)}</button>`).join('')}</span>`);
+      }
+      case 'endereco_ocupado': return set('vermelho', 'Atenção: a base indica Nio ativo neste endereço — confirme com o cliente e no APP.');
+      case 'sem_porta_livre': return set('amarelo', `Na base, mas sem porta livre — conferir no painel ou no APP antes da visita${base}. ${links}`);
+      case 'nao_encontrado': return set('amarelo', `Não encontrado na base — conferir no painel ou no APP antes da visita. ${links}`);
+      default: return set('cinza', 'Digite o número para consultar a cobertura.');
+    }
+  }
+  faixaEl.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-unidade]');
+    if (!b) return;
+    F.complemento.value = b.dataset.unidade;
+    consultarDfv();
+  });
+
+  // ------------------------------------------------------------- passos e botões
+  const passos = [...form.querySelectorAll('.passo')];
+  const indEl = document.getElementById('passos-ind');
+  const btnConfSaida = document.getElementById('btn-conf-saida');
+  let abriuSozinho = new Set([1]);
+  const radio = (n) => (form.querySelector(`input[name="${n}"]:checked`) || {}).value || '';
+  const diaMais = (n) => NG.diaSP(new Date(Date.now() + n * 86400000));
+
+  function abrir(n, sim = true) {
+    if (sim && n > 1 && estado.area === false) { NG.toast('Cidade fora da área de atuação: a venda não segue.', 'bad'); return false; }
+    const s = passos[n - 1];
+    s.classList.toggle('aberto', sim);
+    s.querySelector('.passo-cab').setAttribute('aria-expanded', String(sim));
+    return true;
+  }
+
+  // Estado de cada passo: '' vazio · ok · warn (atenção) · bad. "pronto" = o mínimo para seguir (abre o próximo, libera o qualificado).
+  function avaliar() {
+    const enderecoOk = NG.soDigitos(F.cep.value).length === 8 && !!estado.viacep && !!F.numero.value.trim() && estado.area === true;
+    const docTxt = F.doc.value.trim();
+    const docOk = NG.documentoValido(docTxt);
+    const confs = [radio('cf_cancelou'), radio('cf_cliente'), radio('cf_endereco')];
+    const ocupado = F.dfv_resultado.value === 'endereco_ocupado';
+    const pronto = [
+      enderecoOk,
+      !!F.nome.value.trim() && !!F.whatsapp.value.trim() && F.contato_ok.checked && (!docTxt || docOk),
+      !!planoEscolhido(),
+      confs.every((x) => x === 'nao') && F.app_ok.checked,
+      !!F.pedido.value.trim() && F.biometria.value === 'aprovada',
+    ];
+    const naoViavel = F.dfv_viabilidade.value !== 'nao_consultado' && !dfvOk();
+    const est = [
+      estado.area === false ? 'bad' : enderecoOk ? (naoViavel || estado.dfvErro ? 'warn' : 'ok') : '',
+      docTxt && !docOk ? 'warn' : pronto[1] ? 'ok' : '',
+      pronto[2] ? 'ok' : '',
+      confs.includes('sim') ? 'bad' : pronto[3] ? 'ok' : ocupado ? 'warn' : '',
+      F.biometria.value === 'reprovada' ? 'bad' : pronto[4] ? 'ok' : F.biometria.value === 'agendada' ? 'warn' : '',
+    ];
+    const foraArea = estado.area === false ? 'cidade fora da área' : 'endereço';
+    const faltaQ = [];
+    if (!pronto[0]) faltaQ.push(foraArea);
+    if (!pronto[1]) faltaQ.push(docTxt && !docOk ? 'CPF/CNPJ válido' : 'cliente');
+    if (!pronto[2]) faltaQ.push('plano');
+    const faltaV = [];
+    if (!pronto[0]) faltaV.push(foraArea);
+    if (!dfvOk()) faltaV.push('cobertura');
+    if (!F.nome.value.trim() || !F.whatsapp.value.trim() || !F.contato_ok.checked) faltaV.push('cliente');
+    if (!docOk) faltaV.push('CPF/CNPJ válido');
+    if (!pronto[2]) faltaV.push('plano');
+    if (!pronto[3]) faltaV.push('conferências');
+    if (estado.dup && estado.dup.endereco) faltaV.push('endereço já tem venda ativa');
+    if (estado.dup && estado.dup.documento) faltaV.push('CPF/CNPJ já tem venda ativa');
+    if (!F.pedido.value.trim()) faltaV.push('nº do pedido');
+    if (F.biometria.value !== 'aprovada') faltaV.push('biometria');
+    return { pronto, est, faltaQ, faltaV, confs, ocupado };
+  }
+
+  function atualizar() {
+    const a = avaliar();
+    a.est.forEach((e, i) => {
+      passos[i].dataset.estado = e;
+      indEl.children[i].dataset.estado = e;
+    });
+    // O próximo passo abre sozinho uma vez, quando o anterior fica pronto. Nada fecha sozinho (exceto fora da área).
+    a.pronto.forEach((ok, i) => {
+      if (ok && i < 4 && !abriuSozinho.has(i + 2)) { abriuSozinho.add(i + 2); abrir(i + 2); }
+    });
+    if (estado.area === false) for (let n = 2; n <= 5; n++) abrir(n, false);
+
+    btnQualif.disabled = a.faltaQ.length > 0;
+    document.getElementById('falta-qualif').textContent = a.faltaQ.length ? `falta: ${a.faltaQ.join(' · ')}` : '';
+    btnVenda.disabled = a.faltaV.length > 0;
+    document.getElementById('falta-venda').textContent = a.faltaV.length ? `falta: ${a.faltaV.join(' · ')}` : '';
+
+    // Passo 1: saída pronta quando o DFV acusa Nio ativo ou o ajuste manual diz sem cobertura.
+    const manualSem = F.dfv_origem.value === 'manual' && ['sem_viabilidade', 'nao_encontrado'].includes(F.dfv_viabilidade.value);
+    semEl.hidden = !(a.ocupado || manualSem);
+    semEl.querySelector('span').textContent = a.ocupado
+      ? 'Se o cliente confirmar que já tem Nio: não vender (estorno 100 % e multa). Registrar como saída?'
+      : 'Sem cobertura: não vender. Quer registrar como saída e voltar a falar em 90 dias?';
+    btnSem.textContent = a.ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
+
+    // Passo 4: o DFV pré-marca atenção; um "Sim" explica o que acontece e oferece a saída certa.
+    document.getElementById('aviso-ocupado').hidden = !a.ocupado;
+    const conf = document.getElementById('conf-sim');
+    const cliente = a.confs[1] === 'sim' || a.confs[2] === 'sim';
+    conf.hidden = !a.confs.includes('sim');
+    conf.querySelector('span').textContent = cliente
+      ? 'Já é cliente Nio ou o endereço tem produto ativo: a venda seria estornada em 100 % (e multa de recompra). Não vender — saída "Já é cliente Nio".'
+      : 'Cancelou há 30 dias ou menos: reativar nesse prazo é estorno de 100 %. Não vender agora — Interesse futuro daqui a 31 dias.';
+    btnConfSaida.textContent = cliente ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Interesse futuro" · volta em 31 d';
+    btnConfSaida.dataset.saida = cliente ? 'cliente' : 'futuro';
+
+    form.querySelectorAll('[data-bio-agenda]').forEach((el) => { el.hidden = F.biometria.value !== 'agendada'; });
+    renderTravas();
+    renderFaixa();
+  }
+
+  form.addEventListener('click', (ev) => {
+    const cab = ev.target.closest('.passo-cab');
+    if (cab) {
+      const n = Number(cab.closest('.passo').dataset.passo);
+      abrir(n, !cab.closest('.passo').classList.contains('aberto'));
+      return;
+    }
+    const ir = ev.target.closest('[data-ir]');
+    if (ir) {
+      const n = Number(ir.dataset.ir);
+      if (abrir(n)) passos[n - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
 
   F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
   F.numero.addEventListener('change', () => { checarDuplicidade(); consultarDfv(); });
   F.complemento.addEventListener('change', () => consultarDfv());
   F.bairro.addEventListener('change', () => {
-    if (estado.viacep) { atualizarArea(); renderTravas(); renderPlanos(); }
+    if (estado.viacep) { atualizarArea(); renderPlanos(); atualizar(); }
   });
   F.doc.addEventListener('change', () => {
     const v = F.doc.value.trim();
@@ -406,36 +672,20 @@
   document.getElementById('adicionais').addEventListener('change', renderResumo);
   F.nfid.addEventListener('change', renderResumo);
   F.origem.addEventListener('change', () => { document.getElementById('campo-ref').hidden = F.origem.value !== 'indicacao'; });
-  F.biometria.addEventListener('change', () => { document.getElementById('campo-bio-em').hidden = F.biometria.value !== 'agendada'; atualizarBotao(); });
-  F.pedido.addEventListener('input', atualizarBotao);
-
-  function atualizarBotao() {
-    btnVenda.disabled = !(F.pedido.value.trim() && F.biometria.value === 'aprovada');
-  }
+  form.addEventListener('input', atualizar);
+  form.addEventListener('change', atualizar);
 
   // Monta a linha de vendas. Devolve [payload, pendências que impedem o status pedido].
-  function montar(status) {
-    const falta = [];
-    if (!F.nome.value.trim()) falta.push('nome');
-    if (!F.whatsapp.value.trim()) falta.push('WhatsApp');
-    if (!estado.viacep || !F.numero.value.trim()) falta.push('CEP e número');
+  function montar(status, saida) {
+    const a = avaliar();
+    const falta = status === '1_vendido' ? a.faltaV : status === '0_qualificado' ? a.faltaQ
+      : [!F.nome.value.trim() && 'nome', !F.whatsapp.value.trim() && 'WhatsApp', !(estado.viacep && F.numero.value.trim()) && 'CEP e número'].filter(Boolean);
     const docOk = NG.documentoValido(F.doc.value);
     const p = planoEscolhido();
 
-    if (status === '1_vendido') {
-      if (!docOk) falta.push('CPF/CNPJ válido');
-      if (!p) falta.push('plano');
-      if (!F.contato_ok.checked) falta.push('confirmação de contato e endereço');
-      if (!F.app_ok.checked) falta.push('conferência no APP');
-      if (estado.area === false) falta.push('endereço fora da área de atuação');
-      if (estado.dup && estado.dup.endereco) falta.push('endereço já tem venda ativa');
-      if (estado.dup && estado.dup.documento) falta.push('CPF/CNPJ já tem venda ativa');
-      if (!['viavel', 'viavel_predio'].includes(F.dfv_viabilidade.value)) falta.push('DFV viável (consulte antes de registrar a venda)');
-    }
-
     let biometriaEm = null;
     if (F.biometria.value === 'aprovada') biometriaEm = new Date().toISOString();
-    else if (F.biometria.value === 'agendada' && F.biometria_em.value) biometriaEm = new Date(F.biometria_em.value).toISOString();
+    else if (F.biometria.value === 'agendada' && F.biometria_dia.value) biometriaEm = `${F.biometria_dia.value}T${F.biometria_periodo.value}:00-03:00`;
 
     const j = estado.viacep || {};
     return [{
@@ -462,24 +712,35 @@
       vendedor_id: eu.id,
       trava_cobertura: estado.cobertura,
       trava_area: estado.area,
-      trava_sem_produto_ativo: F.app_ok.checked && !(estado.dup && (estado.dup.endereco || estado.dup.documento)),
-      trava_sem_cancelamento_30d: F.app_ok.checked,
+      // Conferências do passo 4 (até o OSAB, quem confere é o vendedor no APP).
+      trava_sem_produto_ativo: F.app_ok.checked && a.confs[1] === 'nao' && a.confs[2] === 'nao' && !(estado.dup && (estado.dup.endereco || estado.dup.documento)),
+      trava_sem_cancelamento_30d: F.app_ok.checked && a.confs[0] === 'nao',
       trava_cpf_valido: docOk,
       trava_contato_confirmado: F.contato_ok.checked,
-      ...NG.dfvLer(document.getElementById('dfv-campos')),
-      ...(status === 'saida' ? (F.dfv_resultado.value === 'endereco_ocupado'
-        ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
-        : { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) }) : {}),
+      ...NG.dfvLer(dfvEl),
+      ...(status === 'saida' ? saida : {}),
     }, falta];
   }
 
-  const diaMais = (n) => NG.diaSP(new Date(Date.now() + n * 86400000));
+  function limpar() {
+    form.reset();
+    Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, dfv: null, dfvErro: false, consultando: false });
+    document.getElementById('endereco').hidden = true;
+    document.getElementById('doc-erro').textContent = '';
+    abriuSozinho = new Set([1]);
+    for (let n = 2; n <= 5; n++) abrir(n, false);
+    abrir(1);
+    montarDfv();
+    renderPlanos();
+    atualizar();
+  }
 
-  async function salvar(status, botao) {
-    const [linha, falta] = montar(status);
+  async function salvar(status, botao, saida) {
+    const [linha, falta] = montar(status, saida);
     if (falta.length) { NG.toast(`Falta: ${falta.join(', ')}.`, 'bad'); return; }
     botao.disabled = true;
     // Comissão, valor mensal e vencimento quem calcula é o banco (recalcular_comissao / vendas_calcula_vencimento).
+    // As travas também: se algo escapar daqui, o RAISE do banco volta como toast.
     const ads = adicionaisEscolhidos();
     const { data, error } = await NG.sb.from('vendas').insert(linha).select('id').single();
     if (!error && ads.length) {
@@ -487,58 +748,25 @@
       if (r.error) NG.toast(`Venda salva, mas os adicionais não: ${NG.msgErro(r.error)}`, 'bad');
     }
     botao.disabled = false;
-    atualizarBotao();
-    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
-    NG.toast(`${NG.primeiroNome(linha.cliente_nome)} salvo como ${STATUS_MAP[status].curto}`, 'ok');
-    form.reset();
-    Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null });
-    document.getElementById('endereco').hidden = true;
-    document.getElementById('doc-erro').textContent = '';
-    montarDfv();
-    renderTravas();
-    renderPlanos();
-    atualizarBotao();
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); atualizar(); return; }
+    NG.toast(`${NG.primeiroNome(linha.cliente_nome)} salvo como ${status === 'saida' ? `saída · ${linha.motivo_saida}` : STATUS_MAP[status].curto}`, 'ok');
+    limpar();
     await carregarLista();
     return data;
   }
 
-  // Cobertura (DFV): consulta a base sozinha ao sair do número/complemento (e depois do ViaCEP); o resultado vai junto
-  // na gravação. A trava do banco só pesa ao registrar a venda (0 → 1). O seletor manual continua (origem "manual").
-  const dfvEl = document.getElementById('dfv-campos');
-  const semEl = document.getElementById('dfv-sem');
-  const btnSem = document.getElementById('btn-sem-cobertura');
-  let consultarDfv = async () => null;
-  const atualizarDfv = () => {
-    const ocupado = F.dfv_resultado.value === 'endereco_ocupado';
-    semEl.hidden = !['sem_viabilidade', 'nao_encontrado'].includes(F.dfv_viabilidade.value);
-    semEl.querySelector('span').textContent = ocupado
-      ? 'O DFV diz que o endereço já tem Nio: não vender (estorno 100 % e multa). Registrar como saída?'
-      : 'Sem cobertura no DFV: não vender. Quer registrar como saída e voltar a falar em 90 dias?';
-    btnSem.textContent = ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
-  };
-  function montarDfv() {
-    dfvEl.innerHTML = NG.dfvCampos();
-    NG.ligarLinkDfv(dfvEl);
-    consultarDfv = NG.ligarDfvAuto(dfvEl,
-      () => ({ cep: F.cep.value, numero: F.numero.value, complemento: F.complemento.value }),
-      {
-        aoEscolher: (comp) => { F.complemento.value = comp; },
-        aoMudar: (r) => {
-          estado.cobertura = !r || r.resultado === 'precisa_numero' ? null : ['viavel', 'viavel_predio'].includes(r.resultado);
-          renderTravas();
-          atualizarDfv();
-        },
-      });
-    F.dfv_viabilidade.addEventListener('change', atualizarDfv);
-    atualizarDfv();
-  }
-  montarDfv();
-  btnSem.addEventListener('click', (ev) => salvar('saida', ev.currentTarget));
-
+  btnSem.addEventListener('click', (ev) => salvar('saida', ev.currentTarget, F.dfv_resultado.value === 'endereco_ocupado'
+    ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
+    : { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) }));
+  btnConfSaida.addEventListener('click', (ev) => salvar('saida', ev.currentTarget, ev.currentTarget.dataset.saida === 'cliente'
+    ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
+    : { motivo_saida: 'Interesse futuro (com data)', interesse_futuro_em: diaMais(31) }));
   btnQualif.addEventListener('click', () => salvar('0_qualificado', btnQualif));
   btnVenda.addEventListener('click', () => salvar('1_vendido', btnVenda));
 
+  montarDfv();
   renderPlanos();
+  atualizar();
   await carregarLista();
   if (location.hash === '#venda-rua') { form.scrollIntoView({ behavior: 'smooth' }); F.cep.focus(); }
   // Vindo da tela Cobertura (?cep=&numero=&complemento=): preenche e já roda ViaCEP + consulta automática do DFV.

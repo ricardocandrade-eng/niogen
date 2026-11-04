@@ -11,11 +11,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=031126-12">
-<script src="config.js?v=031126-12"></script>
+<link rel="stylesheet" href="assets/app.css?v=031126-13">
+<script src="config.js?v=031126-13"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=031126-12"></script>
-<script src="assets/sidebar.js?v=031126-12"></script>
+<script src="assets/app.js?v=031126-13"></script>
+<script src="assets/sidebar.js?v=031126-13"></script>
 </head>
 <body>
 <div class="app">
@@ -188,9 +188,14 @@
         </div>
       </header>
 
+      <nav class="mapa-passos" aria-label="Passos da venda">
+        <a href="#vp-1"><b>1</b> Endereço e cobertura</a><a href="#vp-2"><b>2</b> Cliente</a><a href="#vp-3"><b>3</b> Oferta</a>
+        <a href="#vp-4"><b>4</b> Conferências</a><a href="#vp-5"><b>5</b> Pedido e biometria</a>
+      </nav>
+
       ${banner()}
 
-      <div class="tres">
+      <div class="tres" id="vp-3">
         <div class="valor-card">
           <span class="rot">Comissão prevista</span>
           <span class="val">${NG.fmtMoeda(v.comissao_prevista)}</span>
@@ -224,8 +229,18 @@
         </section>
 
         <aside style="flex:1 1 340px;min-width:0;display:flex;flex-direction:column;gap:14px">
-          <section class="painel" style="border-radius:10px;gap:10px">
-            <h2 style="font-size:14px">Travas do contrato (na venda)</h2>
+          <section class="painel" id="vp-5" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">5 · Pedido e biometria</h2>
+            <div class="dados">
+              <span>Nº do pedido</span><span class="mono">${esc(v.nio_pedido || '—')}</span>
+              <span>Biometria</span><span>${esc(v.biometria_status || '—')}${v.biometria_em ? ' · ' + NG.fmtDataHora(v.biometria_em) : ''}</span>
+            </div>
+            ${v.status === '0_qualificado' ? `<button type="button" class="btn btn-acc" data-acao="registrar">Registrar venda</button>
+              <span class="nota-campo">Exige nº do pedido, biometria aprovada e cobertura viável (&lt; 7 dias). Depois do pedido, agendar a instalação em até 4 h.</span>` : ''}
+          </section>
+
+          <section class="painel" id="vp-4" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">4 · Conferências do contrato (na venda)</h2>
             ${trava('Sem produto ativo / não era cliente Nio', v.trava_sem_produto_ativo, 'não ✓')}
             ${trava('Sem cancelamento nos últimos 30 d', v.trava_sem_cancelamento_30d, 'não ✓')}
             ${trava('Dentro da área de atuação', v.trava_area, local ? `${v.cidade} ✓` : '✓')}
@@ -234,8 +249,8 @@
             ${trava('Endereço e telefone confirmados', v.trava_contato_confirmado)}
           </section>
 
-          <section class="painel" style="border-radius:10px;gap:10px">
-            <h2 style="font-size:14px">Dados</h2>
+          <section class="painel" id="vp-2" style="border-radius:10px;gap:10px">
+            <h2 style="font-size:14px">2 · Cliente e dados da venda</h2>
             <div class="dados">
               <span>Plano</span><span>${esc(v.plano_nome || '—')}${v.plano_taxa_a_vista ? ' · taxa de habilitação à vista na 1ª fatura' : ''}</span>
               <span>Adicionais</span><span>${esc(listaAd || '—')}</span>
@@ -256,8 +271,8 @@
             </div>
           </section>
 
-          <section class="painel dfv-bloco" style="border-radius:10px;gap:10px" data-dfv>
-            <h2 style="font-size:14px">Cobertura (DFV) ${NG.seloDfv(v)}</h2>
+          <section class="painel dfv-bloco" id="vp-1" style="border-radius:10px;gap:10px" data-dfv>
+            <h2 style="font-size:14px">1 · Endereço e cobertura (DFV) ${NG.seloDfv(v)}</h2>
             <span class="painel-sub">${v.dfv_consultado_em ? `Última consulta ${NG.fmtDataHora(v.dfv_consultado_em)}${v.dfv_dias != null ? ` · há ${v.dfv_dias} d` : ''}` : 'Ainda não consultado'} · ${esc(NG.TEXTOS_DFV.trava)}</span>
             <div data-dfv-campos>${NG.dfvCampos(v)}</div>
             ${['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade) && v.status !== 'saida' ? (v.dfv_resultado === 'endereco_ocupado' ? `<div class="dfv-sem">
@@ -415,6 +430,7 @@
     else if (b.dataset.acao === 'dfv-salvar') salvarDfv();
     else if (b.dataset.acao === 'dfv-dispensar') dispensarDfv();
     else if (b.dataset.acao === 'sem-cobertura') saidaSemCobertura();
+    else if (b.dataset.acao === 'registrar') NG.moverStatus(v, '1_vendido').then((ok) => { if (ok) carregar(); });
   });
 
   if (!id) { main.innerHTML = '<div class="placeholder">Venda não informada. <a href="funil.html">Voltar ao funil</a></div>'; return; }
