@@ -27,9 +27,10 @@
     { id: '1_vendido', curto: '1 · Vendido', col: '1 · Vendido', chip: '' },
     { id: '2_aguardando_instalacao', curto: '2 · Aguardando', col: '2 · Aguardando instalação', chip: '' },
     { id: '3_instalado', curto: '3 · Instalado', col: '3 · Instalado', chip: '' },
-    // Os ids são do banco e não mudam; só o texto ("em risco" / "ganha", decisão do Ricardo 03/11).
-    { id: '4_ativo_provisorio', curto: '4 · Ativo', col: '4 · Ativo · comissão em risco', chip: 'ok', dica: 'emRisco' },
-    { id: '5_comissao_firme', curto: '5 · Comissão ganha', col: '5 · Comissão ganha', chip: 'ok', dica: 'ganha' },
+    // Os ids são do banco e não mudam. Desde 04/11 (padrão de telas) 4 e 5 aparecem juntos como "Ativo";
+    // o 5 fica fora dos seletores (oculto) — a passagem 4 → 5, se existir, roda sem aparecer.
+    { id: '4_ativo_provisorio', curto: '4 · Ativo', col: '4 · Ativo', chip: 'ok' },
+    { id: '5_comissao_firme', curto: '4 · Ativo', col: '4 · Ativo', chip: 'ok', oculto: true },
     { id: 'saida', curto: 'Saída', col: 'Saída · motivo obrigatório', chip: 'dim' },
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
@@ -142,49 +143,39 @@
     setTimeout(() => el.remove(), tipo === 'bad' ? 7000 : 4000);
   }
 
-  // ---------- comissão: em risco / ganha / M-10 ----------
+  // ---------- comissão: prevista / paga · M-10 · downgrade ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
-  // Regras de estorno corrigidas em 04/11 (Rogério + contrato): churn e inadimplência NÃO estornam; a janela de 100 % é
-  // cancelar e reativar em até 30 d (mais fraude, cliente/endereço já com Nio ativo, fora da área); downgrade ≤ 180 d = só a diferença.
+  // Desde 04/11 (decisão do Ricardo no padrão de telas) a comissão aparece só como "prevista" (antes do pagamento) ou
+  // "paga" (no extrato). As regras de estorno (Rogério + contrato, 04/11) seguem no banco e na Tabela e política.
   const TEXTOS_COMISSAO = {
-    emRisco: (ganhaEm) => 'Ainda pode ser estornada se o cliente cancelar e reativar em até 30 dias. Também há estorno a qualquer tempo '
-      + 'em caso de fraude, cliente/endereço que já tinha Nio ativo ou venda fora da área.'
-      + (ganhaEm ? ` Vira 'ganha' em ${ganhaEm}.` : ''),
-    ganha: 'Passou dos 30 dias da ativação sem cancelamento. Cancelamento depois disso não estorna. Downgrade até 180 dias da ativação '
-      + 'desconta só a diferença; fraude estorna a qualquer tempo.',
     // Contrato, Anexo I 1.2.2.2 (texto do Ricardo, 04/11).
     m10: 'Apurado no 11º mês após a ativação, se o cliente seguir ativo até o fim do 10º mês, com todas as faturas emitidas até lá pagas '
-      + '(nenhuma com mais de 15 dias de atraso) e sem downgrade. Não entra na comissão em risco.',
+      + '(nenhuma com mais de 15 dias de atraso) e sem downgrade. Não entra na comissão prevista.',
     m10Nao: (motivo) => `Não elegível ao bônus M-10: ${motivo}.`,
     downgrade: (ate) => `Downgrade até ${ate} desconta só a diferença de comissão.`,
   };
-  const textoComissao = (chave, ganhaEm) => {
+  const textoComissao = (chave, arg) => {
     const t = TEXTOS_COMISSAO[chave];
-    return typeof t === 'function' ? t(ganhaEm) : t;
+    return typeof t === 'function' ? t(arg) : t;
   };
   // Rótulo com explicação: title= no desktop; o ⓘ abre o mesmo texto ao tocar (celular).
   function dicaTxt(texto) {
     const t = esc(texto);
     return `<button type="button" class="dica" data-dica="${t}" title="${t}" aria-label="O que é isso?">ⓘ</button>`;
   }
-  function dica(chave, ganhaEm) { return dicaTxt(textoComissao(chave, ganhaEm)); }
+  function dica(chave, arg) { return dicaTxt(textoComissao(chave, arg)); }
   function rotuloTxt(texto, explicacao) {
     return `<span class="com-rot" title="${esc(explicacao)}">${esc(texto)}</span>${dicaTxt(explicacao)}`;
   }
-  function rotulo(texto, chave, ganhaEm) {
-    return `<span class="com-rot" title="${esc(textoComissao(chave, ganhaEm))}">${esc(texto)}</span>${dica(chave, ganhaEm)}`;
+  function rotulo(texto, chave, arg) {
+    return `<span class="com-rot" title="${esc(textoComissao(chave, arg))}">${esc(texto)}</span>${dica(chave, arg)}`;
   }
-  // Selos da venda (status 1–5): comissão em risco × ganha e M-10 elegível × não elegível.
+  // Selo do M-10 (status 1–5): elegível × não elegível. Fica no Funil e no detalhe; a lista de Vendas não mostra selos.
   // Atraso > 15 dias e downgrade ainda não chegam ao NIOGEN (FPD/extrato não importados): o "não elegível" só vê o que existe.
   const VENDIDA = ['1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
-  function selosComissao(v) {
+  function seloM10(v) {
     if (!v || !VENDIDA.includes(v.status)) return '';
     const selo = (txt, cls, texto) => `<span class="chip selo ${cls}" data-dica="${esc(texto)}" title="${esc(texto)}">${esc(txt)}</span>`;
-    const ganha = v.status === '5_comissao_firme';
-    const ganhaEm = v.firme_em ? fmtData(v.firme_em) : null;
-    const s1 = ganha
-      ? selo('Comissão ganha', 'ok', textoComissao('ganha'))
-      : selo(ganhaEm ? `Comissão em risco · até ${ganhaEm}` : 'Comissão em risco', 'warn', textoComissao('emRisco', ganhaEm));
     let motivo = null;
     if (v.nio_venda_valida === false) motivo = 'a Nio marcou a venda como inválida';
     else if (!Number(v.bonus_m10_potencial)) motivo = 'o plano não tem bônus M-10 na política vigente';
@@ -195,12 +186,11 @@
       d.setMonth(d.getMonth() + 11);
       quando = ` Apuração prevista em ${parts(d, { month: '2-digit', year: 'numeric' })}.`;
     }
-    const s2 = motivo
+    return motivo
       ? selo('M-10 não elegível', 'dim', textoComissao('m10Nao', motivo))
       : selo(`M-10 elegível · ${fmtMoeda(v.bonus_m10_potencial)}`, 'info', textoComissao('m10') + quando);
-    return s1 + s2;
   }
-  // Aviso de downgrade (venda instalada/ativa, até ativação + 180 d). Não entra no valor em risco.
+  // Aviso de downgrade (venda instalada/ativa, até ativação + 180 d).
   function avisoDowngrade(v) {
     if (!v || !v.downgrade_ate || !['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) return '';
     if (new Date(v.downgrade_ate) <= new Date()) return '';
@@ -780,7 +770,7 @@
   window.NG = {
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, selosComissao, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, seloM10, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
