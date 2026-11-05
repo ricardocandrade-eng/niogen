@@ -729,7 +729,7 @@ def c21():
     ok = [(f'10 conversas ({len(aberturas)} aberturas, {len(confirmacoes)} confirmações)', len(aberturas) == 10 and len(confirmacoes) == 10),
           (f'no máx. 2 emojis por conversa (excesso em {excesso or "nenhuma"})', not excesso),
           (f'abertura repetida no máx. 2× (pior: {ca.most_common(1)[0][1] if ca else 0}×)', bool(ca) and ca.most_common(1)[0][1] <= 2),
-          (f'confirmação repetida no máx. 2× (pior: {cc.most_common(1)[0][1] if cc else 0}×; com upsell {com_upsell}/10 — guard-rail 23 fixa a frase)',
+          (f'confirmação repetida no máx. 2× (pior: {cc.most_common(1)[0][1] if cc else 0}×; com upsell {com_upsell}/10)',
            bool(cc) and cc.most_common(1)[0][1] <= 2)]
     log = [t for lg in logs for t in lg]
     REPETICAO['aberturas'] = ca.most_common()
@@ -783,9 +783,12 @@ def rodar(n):
         f = norm(t['mari'])
         if (condicoes(t['mari']) or 'so pra voce ficar por dentro' in f) and '25 dias' not in f:
             glob.append(f'turno {i}: condições sem a regra de vencimento (25 dias)')
-        # (b) "Ótima escolha" antes da sugestão de upgrade, na mesma resposta (guard-rail 23).
+        # (b) guard-rail 23: a sugestão de upgrade vem depois da confirmação da escolha. v2: "Ótima escolha" literal;
+        #     v3 (afrouxado 05/11): confirmação com o valor do plano (1º "R$" antes do "por mais R$").
         upsell = 'por mais r$' in f and ((t['r'].get('tags') or {}).get('upsell_oferecido') or 'so pra voce saber' in f)
-        if upsell and not (0 <= f.find('otima escolha') < max(f.find('por mais'), 0)):
+        if upsell and ENSAIO and f.find('r$') >= f.find('por mais r$'):
+            glob.append(f'turno {i}: sugestão de upgrade sem confirmar antes a escolha com o valor')
+        elif upsell and not ENSAIO and not (0 <= f.find('otima escolha') < max(f.find('por mais'), 0)):
             glob.append(f'turno {i}: sugestão de upgrade sem "Ótima escolha" antes')
     # LGPD (decisão pendente a): a 1ª fala que pede o CPF traz a linha curta.
     pede_cpf = next((t['mari'] for t in log if t['mari'] and 'cpf' in norm(t['mari'])

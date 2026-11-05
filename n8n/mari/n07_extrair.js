@@ -98,9 +98,10 @@ function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
   if (V3) FRASES_ROBO.filter(([k]) => n.includes(k)).forEach(([, r]) => v.push(`usou a expressão de robô ${r}`));
-  // Guard-rail 23: resposta com sugestão de upgrade começa por "Ótima escolha!" (a variação da v3 não vale aqui).
-  if (V3 && temTag('UPSELL_OFERECIDO') && /por mais r\$/.test(n) && !/^\W*otima escolha/.test(n)) {
-    v.push('sugestão de upgrade sem começar por "Ótima escolha! O [plano] por R$[valor] por mês" (guard-rail 23)');
+  // Guard-rail 23 (afrouxado 05/11): a sugestão de upgrade vem DEPOIS da confirmação da escolha com o valor do plano
+  // (a confirmação sorteada da conversa) — o 1º "R$" da resposta tem de vir antes do "por mais R$".
+  if (V3 && temTag('UPSELL_OFERECIDO') && /por mais r\$/.test(n) && n.indexOf('r$') >= n.indexOf('por mais r$')) {
+    v.push('sugestão de upgrade sem antes confirmar a escolha com o plano e o valor (guard-rail 23)');
   }
   if (t.includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {

@@ -214,9 +214,9 @@ if (v3) {
   };
   const cump = listaDoPrompt('Cumprimentos:')[vCump - 1];
   const ped = listaDoPrompt('Pedidos do CEP')[vPed - 1];
-  const conf = listaDoPrompt('Sem upsell — confirmações')[variacao - 1];
+  const conf = listaDoPrompt('Com ou sem upsell — confirmações')[variacao - 1];
   if (primeira && cump && ped) L.push(`abertura_da_conversa (use estas duas frases quase como estão): «${cump}» + «${ped}»`);
-  if (conf) L.push(`confirmacao_da_conversa (só quando NÃO houver upsell; troque [plano] e [valor]): «${conf}»`);
+  if (conf) L.push(`confirmacao_da_conversa (com ou sem upsell; troque [plano] e [valor]): «${conf}»`);
   L.push(`emoji: você já usou ${emojiMari} na conversa | cliente usa emoji: ${emojiCliente > 0 ? `sim (${emojiCliente})` : 'nao — no máximo 2 na conversa inteira'}`);
 }
 if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);
