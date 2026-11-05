@@ -199,6 +199,10 @@
     faixa: 'Faixa de aprovação de crédito do bairro (últimos 2 meses). Não se fala disso com o cliente: serve para o Placar e o risco de FPD.',
   };
   const DFV_OK = ['viavel', 'viavel_predio'];
+  // Conta Nio no Chatwoot (nunca a da Vero). Vazio = links para o Chatwoot desligados.
+  const CHATWOOT_NIO_ACCOUNT = '195428';   // conta "Nio Atendimento" (modo chatwoot desde 04/11)
+  const linkChatwoot = (conversa) => (CHATWOOT_NIO_ACCOUNT && conversa
+    ? `https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${encodeURIComponent(conversa)}` : null);
   function dfvValido(v) {
     return DFV_OK.includes(v.dfv_viabilidade) && !!v.dfv_consultado_em && (Date.now() - new Date(v.dfv_consultado_em)) < 7 * 86400000;
   }
@@ -812,7 +816,7 @@
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
-    proximoPasso, ultimosContatos, abrirVenda,
+    proximoPasso, ultimosContatos, abrirVenda, CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela

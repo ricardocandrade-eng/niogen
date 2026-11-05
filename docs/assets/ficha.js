@@ -34,23 +34,11 @@
     if (s.length === 10) return `(${s.slice(0, 2)}) ${s.slice(2, 6)}-${s.slice(6)}`;
     return s;
   };
-  const waLink = (t) => {
-    const s = NG.soDigitos(t);
-    if (!s) return null;
-    return `https://wa.me/${s.length <= 11 ? '55' + s : s}`;
-  };
   const fmtDoc = (x) => {
     const s = NG.soDigitos(x);
     if (s.length === 11) return `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 9)}-${s.slice(9)}`;
     if (s.length === 14) return `${s.slice(0, 2)}.${s.slice(2, 5)}.${s.slice(5, 8)}/${s.slice(8, 12)}-${s.slice(12)}`;
     return s || '—';
-  };
-  // CPF/CNPJ mascarado por padrão (prints e tela de rua); "mostrar" revela.
-  const docMascarado = (x) => {
-    const s = NG.soDigitos(x);
-    if (s.length === 11) return `${s.slice(0, 3)}.•••.•••-${s.slice(9)}`;
-    if (s.length === 14) return `${s.slice(0, 2)}.•••.•••/••••-${s.slice(12)}`;
-    return s ? '•••' : '—';
   };
   const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
   const diaSemanaData = (x) => `${NG.fmtDiaSemana(x)} ${NG.fmtData(x)}`;
@@ -148,7 +136,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -168,6 +156,7 @@
       lim: rl.data || { hoje: 0, mes: 0 },
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
+      chatwoot: NG.linkChatwoot(((rc.data || [])[0] || {}).chatwoot_conversation_id),
       contatos: rk.data || [],
       usuarios: ru,
       nomeCurto,
@@ -377,9 +366,8 @@
     const ops = DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual);
     const local = [v.bairro, v.cidade].filter(Boolean).join(' · ');
     const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
-    const wa = waLink(v.cliente_whatsapp);
     const menu = [
-      wa ? `<a role="menuitem" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp do cliente ↗</a>` : '',
+      d.chatwoot ? `<a role="menuitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : '',
       v.cliente_whatsapp ? '<button type="button" role="menuitem" data-f="copiar-tel">Copiar telefone</button>' : '',
       d.conversaId ? `<a role="menuitem" href="mari.html?conversa=${esc(d.conversaId)}">Ver conversa da Mari</a>` : '',
       `<a role="menuitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Ver no Quadro</a>`,
@@ -480,9 +468,9 @@
     return [
       {
         id: 'cliente', titulo: 'Cliente e contato',
-        resumo: [v.cliente_cpf_cnpj ? docMascarado(v.cliente_cpf_cnpj) : 'sem CPF/CNPJ', fmtTel(v.cliente_whatsapp)].join(' · '),
+        resumo: [v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : 'sem CPF/CNPJ', fmtTel(v.cliente_whatsapp)].join(' · '),
         corpo: () => `${linha('Nome', esc(v.cliente_nome))}
-          ${linha('CPF / CNPJ', v.cliente_cpf_cnpj ? `<span class="mono" data-doc="${esc(fmtDoc(v.cliente_cpf_cnpj))}">${esc(docMascarado(v.cliente_cpf_cnpj))}</span> <button type="button" class="btn btn-sm btn-ghost" data-f="mostrar-doc">mostrar</button>` : '—')}
+          ${linha('CPF / CNPJ', v.cliente_cpf_cnpj ? `<span class="mono">${esc(fmtDoc(v.cliente_cpf_cnpj))}</span>` : '—')}
           ${linha('WhatsApp', esc(fmtTel(v.cliente_whatsapp)))}
           ${linha('E-mail', esc(v.cliente_email || '—'))}
           ${linha('Segmento', esc(SEGMENTOS[v.segmento] || '—'))}
@@ -707,13 +695,6 @@
       if (acao === 'copiar-tel') {
         const t = fmtTel(d.v.cliente_whatsapp);
         try { await navigator.clipboard.writeText(t); NG.toast(`Telefone copiado: ${t}`, 'ok'); } catch (e) { NG.toast(t); }
-        return;
-      }
-      if (acao === 'mostrar-doc') {
-        const s = b.parentElement.querySelector('[data-doc]');
-        const ver = b.textContent === 'mostrar';
-        s.textContent = ver ? s.dataset.doc : docMascarado(d.v.cliente_cpf_cnpj);
-        b.textContent = ver ? 'esconder' : 'mostrar';
         return;
       }
       if (acao === 'bloco') {
