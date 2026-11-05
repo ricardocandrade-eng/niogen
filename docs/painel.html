@@ -58,6 +58,7 @@
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   const veMari = ['admin', 'backoffice'].includes(eu.perfil);
   let vendas = [], metas = [], ultimoContato = {}, base, osab = null, mari;   // base/mari: undefined = carregando
+  let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
@@ -77,12 +78,14 @@
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
   async function carregarExtras() {
-    const [rz, rmari] = await Promise.all([
+    const [rz, rmari, rp] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
+      veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
     ]);
     base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
     mari = rmari || { lista: [] };
+    portal = rp && !rp.error ? rp.data : null;
     render();
   }
 
@@ -177,6 +180,7 @@
         <div class="q-linha"><h2>Mari · precisam de humano</h2><a class="muted" href="mari.html">Mari →</a></div>
         ${mari === undefined ? '<span class="nota-campo">Carregando…</span>' : mari.erro ? `<span class="nota-campo">${esc(mari.erro)}</span>` : `<div class="bc-num"><span class="mono ${lista.length ? 'warn-txt' : ''}">${NG.fmtNum(lista.length)}</span><span class="muted">conversa${lista.length === 1 ? '' : 's'} esperando um consultor</span></div>
         ${lista.slice(0, 4).map((c) => `<a class="bc-linha" href="mari.html?conversa=${esc(c.id)}"><span>${esc(c.nome_contato || 'Contato')}</span><span class="muted">desde ${esc(NG.quando(c.handoff_em))} ${esc(NG.fmtHora(c.handoff_em))}</span></a>`).join('')}`}
+        ${portal && portal.ok === false && !portal.nunca ? `<span class="prox bad" title="${esc(portal.ultimo_erro || 'sessão vencida')}">Portal PAP sem sessão${portal.sem_sessao_desde ? ` desde ${esc(NG.quando(portal.sem_sessao_desde))} ${esc(NG.fmtHora(portal.sem_sessao_desde))}` : ''} · a Mari fala por cidade</span>` : ''}
       </section>`);
     }
     // Cobertura JF (base DFV) → Cobertura
