@@ -1,0 +1,354 @@
+<!doctype html>
+<!-- NIOGEN | docs/adimplencia.html | 05/11/2026 — Claude Code (prompt nº 14b). Adimplência da carteira no padrão de telas.
+     Propósito: proteger o bônus M-10 (R$ 150 por venda; BTU R$ 113) e puxar a régua de pagamento D−2 · D0 · D+5 · ligar.
+     4 KPIs (Carteira ativa · Em dia · Atraso ≤ 15 d · Atraso > 15 d), abas com contagem, busca + Vendedor + Bairro + Período
+     (data da ativação), lista Cliente · Ativa desde · 10 bolinhas (faturas 1–10) · Próximo passo · Vendedor; clique → ficha da venda.
+     Regra: só a situação das faturas. Inadimplência NÃO estorna comissão (contrato) — esta tela não fala de estorno.
+     Dados: view v_adimplencia (rascunho supabase/rascunhos/0022_adimplencia_conciliacao_RASCUNHO.sql — NÃO aplicada).
+     Sem a view (ou vazia): estado vazio "Aguardando o 1º arquivo de faturas" + chave "dados de exemplo"
+     (assets/exemplos/adimplencia_exemplo.json, faixa amarela EXEMPLO). Admin e backoffice; vendedor não vê. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Adimplência · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=051126-11">
+<script src="config.js?v=051126-11"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=051126-11"></script>
+<script src="assets/sidebar.js?v=051126-11"></script>
+<script src="assets/ficha.js?v=051126-11"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="adimplencia"></nav>
+  <main class="main">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A tela Adimplência é só para admin e backoffice.</div>
+    <div class="faixa amarelo faixa-exemplo" id="faixa-exemplo" role="status" hidden>
+      <b>EXEMPLO — não são dados reais.</b><span>Clientes e faturas inventados para ver o layout. Desligue "dados de exemplo" para voltar.</span>
+    </div>
+    <header class="cab">
+      <div>
+        <h1>Adimplência</h1>
+        <div class="sub" id="sub">Faturas 1 a 10 de cada cliente ativo · protege o bônus M-10 e puxa a régua D−2 · D0 · D+5</div>
+      </div>
+      <div class="cab-acoes">
+        <label class="chave" title="Mostra clientes e faturas inventados, só para ver o layout"><input type="checkbox" id="f-exemplo" role="switch"> dados de exemplo</label>
+        <a class="btn acao-principal desab" aria-disabled="true" title="A importação de faturas ainda não existe: aguarda o 1º arquivo da Nio e a aprovação do SQL">⇪ Importar faturas</a>
+      </div>
+    </header>
+
+    <section class="vazio-tela" id="vazio" hidden aria-live="polite">
+      <span class="pill saida">aguardando arquivo</span>
+      <p><b>Aguardando o 1º arquivo de faturas da Nio.</b> Quando chegar, cada cliente ativo aparece aqui com as faturas 1 a 10, quem está atrasado e o próximo passo da régua (D−2 · D0 · D+5 · ligar).</p>
+      <span class="nota-campo" id="vazio-nota">Depende da importação do FPD (faturas 1–3) e do extrato mensal das faturas 4 a 10 — ainda não recebido (pedir ao Rogério). O SQL está em rascunho, não aplicado.</span>
+      <button type="button" class="btn btn-ghost" id="ver-exemplo">Ver com dados de exemplo</button>
+    </section>
+
+    <div id="conteudo" hidden>
+      <section class="kpis quatro" id="kpis" aria-label="Resumo da carteira"></section>
+
+      <div id="abas"></div>
+
+      <div class="barra-filtros">
+        <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar cliente" placeholder="Buscar por nome, CPF/CNPJ, telefone, pedido, contrato ou bairro"></label>
+        <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
+        <select class="sel" id="f-bairro" aria-label="Bairro"></select>
+        <span id="f-periodo" title="O período vale para a data da ativação"></span>
+        <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
+      </div>
+
+      <section class="lista padrao" aria-label="Carteira ativa">
+        <div class="rolagem">
+          <table class="tab">
+            <thead><tr>
+              <th data-ord="cliente">Cliente</th>
+              <th data-ord="ativa" data-dir="desc">Ativa desde</th>
+              <th data-ord="atraso" data-dir="desc">Faturas 1–10</th>
+              <th>Próximo passo</th>
+              <th data-ord="vendedor" class="col-media">Vendedor</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span id="contagem"></span><span class="legenda" id="legenda"></span></div>
+      </section>
+      <div class="cartoes" id="cartoes" aria-label="Carteira ativa"></div>
+      <div class="legenda so-movel" id="legenda-movel"></div>
+    </div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.querySelector('.cab').hidden = true;
+    return;
+  }
+
+  // Régua de pagamento (CLAUDE.md, regras da Mari): D−2 · D0 · D+5, só fatura em aberto; depois do D+5 o vendedor liga
+  // (com 15 dias em aberto a fatura desclassifica o M-10). Contrato: M-10 = 10º mês ativo, adimplente e sem downgrade,
+  // apurado pela Nio no 11º mês.
+  const LIMITE_M10 = 15;
+  const N_FATURAS = 10;
+  const SIT = { emdia: 'Em dia', ate15: 'Atraso ≤ 15 d', mais15: 'Atraso > 15 d' };
+
+  const elConteudo = document.getElementById('conteudo');
+  const elVazio = document.getElementById('vazio');
+  const elFaixa = document.getElementById('faixa-exemplo');
+  const fExemplo = document.getElementById('f-exemplo');
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  const fBusca = document.getElementById('f-busca');
+  const fVendedor = document.getElementById('f-vendedor');
+  const fBairro = document.getElementById('f-bairro');
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'tudo', aoMudar: render });
+  let carteira = [], exemplo = false, aba = 'todas';
+  const ord = { chave: 'atraso', dir: -1 };
+
+  // ---------- fontes ----------
+  // Real: v_adimplencia (1 linha por venda ativa, faturas em jsonb). Sem a view (rascunho não aplicado) = vazio.
+  async function carregarReal() {
+    const r = await NG.sb.from('v_adimplencia').select('*').limit(5000);
+    if (r.error) {
+      const naoExiste = ['PGRST205', '42P01'].includes(r.error.code) || /does not exist|schema cache/i.test(r.error.message || '');
+      if (!naoExiste) NG.toast(NG.msgErro(r.error), 'bad');
+      return [];
+    }
+    return r.data || [];
+  }
+  // Exemplo: JSON com datas relativas a hoje (o exemplo não envelhece). Mesmo formato da view.
+  async function carregarExemplo() {
+    const j = await fetch('assets/exemplos/adimplencia_exemplo.json', { cache: 'no-cache' }).then((x) => x.json());
+    const hoje = NG.diaSP();
+    return j.clientes.map((c, i) => {
+      const ativ = NG.somaDias(hoje, -c.ativ_ha);
+      const faturas = [];
+      for (let n = 1; n <= 12; n++) {
+        const venc = NG.somaDias(ativ, 25 + 30 * (n - 1));
+        if (NG.somaDias(venc, -10) > hoje) break;                    // emitida 10 dias antes do vencimento
+        const ov = c.atrasos && Object.prototype.hasOwnProperty.call(c.atrasos, String(n)) ? c.atrasos[n] : 0;
+        const vencida = venc <= hoje;
+        const pagamento = ov === null || !vencida ? null : NG.somaDias(venc, ov);
+        faturas.push({ nr: n, vencimento: venc, pagamento: pagamento && pagamento <= hoje ? pagamento : null, valor: c.valor,
+          situacao: pagamento && pagamento <= hoje ? 'paga' : 'aberta' });
+      }
+      return {
+        venda_id: `exemplo-${i + 1}`, cliente_nome: c.nome, bairro: c.bairro, cidade: 'Juiz de Fora',
+        vendedor_id: c.vendedor, vendedor_nome: c.vendedor, nio_pedido: String(90000101 + i), nio_contrato: String(70000101 + i),
+        ativado_em: `${ativ}T12:00:00-03:00`, bonus_m10_potencial: c.m10, faturas,
+      };
+    });
+  }
+
+  async function carregar() {
+    const dados = exemplo ? await carregarExemplo() : await carregarReal();
+    carteira = dados.map(calcular);
+    elFaixa.hidden = !exemplo;
+    const temDados = carteira.length > 0;
+    elVazio.hidden = temDados;
+    elConteudo.hidden = !temDados;
+    if (!temDados) return;
+    const manter = (sel, valores, todos) => { const a = sel.value; NG.preencherSelect(sel, valores, todos); sel.value = valores.some(([v]) => v === a) ? a : ''; };
+    const vend = [...new Map(carteira.filter((v) => v.vendedor_id).map((v) => [v.vendedor_id, v.vendedor_nome || '—'])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+    manter(fVendedor, vend, 'Todos os vendedores');
+    manter(fBairro, [...new Set(carteira.map((v) => v.bairro).filter(Boolean))].sort().map((b) => [b, b]), 'Todos os bairros');
+    render();
+  }
+
+  // ---------- regras (só a situação das faturas) ----------
+  // Fatura: {nr, vencimento, pagamento, valor, situacao: paga | aberta | sem_cobranca}. Bolinha:
+  // paga (verde) · ate15 (laranja, em aberto 1–15 d) · mais15 (vermelha, em aberto > 15 d) · avencer (cinza) · futura (não emitida).
+  function estado(f, hoje) {
+    if (!f) return { cls: 'futura', atraso: 0 };
+    const venc = String(f.vencimento).slice(0, 10);
+    if (f.situacao === 'paga' || f.situacao === 'sem_cobranca' || f.pagamento) {
+      const pg = f.pagamento ? String(f.pagamento).slice(0, 10) : null;
+      return { cls: 'paga', atraso: 0, pagoCom: pg ? Math.max(0, NG.diasEntre(`${venc}T12:00:00-03:00`, `${pg}T12:00:00-03:00`)) : 0 };
+    }
+    const atraso = NG.diasEntre(`${venc}T12:00:00-03:00`, `${hoje}T12:00:00-03:00`);
+    if (atraso <= 0) return { cls: 'avencer', atraso: 0, faltam: -atraso };
+    return { cls: atraso > LIMITE_M10 ? 'mais15' : 'ate15', atraso };
+  }
+  const mesDeVida = (ativ, hoje) => (ativ ? Math.floor(NG.diasEntre(ativ, `${hoje}T12:00:00-03:00`) / 30.44) + 1 : null);
+
+  function calcular(v) {
+    const hoje = NG.diaSP();
+    const faturas = (v.faturas || []).slice().sort((a, b) => a.nr - b.nr);
+    const porNr = Object.fromEntries(faturas.map((f) => [f.nr, f]));
+    const bolas = [];
+    for (let n = 1; n <= N_FATURAS; n++) bolas.push({ n, f: porNr[n], e: estado(porNr[n], hoje) });
+    const todos = faturas.map((f) => ({ f, e: estado(f, hoje) }));
+    const atrasadas = todos.filter((x) => x.e.atraso > 0).sort((a, b) => b.e.atraso - a.e.atraso);
+    const maxAtraso = atrasadas.length ? atrasadas[0].e.atraso : 0;
+    const proxAVencer = todos.filter((x) => x.e.cls === 'avencer').sort((a, b) => a.e.faltam - b.e.faltam)[0] || null;
+    const situacao = maxAtraso === 0 ? 'emdia' : maxAtraso <= LIMITE_M10 ? 'ate15' : 'mais15';
+    const mes = mesDeVida(v.ativado_em, hoje);
+    return Object.assign({}, v, { bolas, atrasadas, maxAtraso, proxAVencer, situacao, mes,
+      pagas: todos.filter((x) => x.e.cls === 'paga').length,
+      elegivel: mes != null && mes >= 10 && mes <= 11 && situacao !== 'mais15' });
+  }
+
+  // Próximo passo da régua: o atraso mais antigo manda; sem atraso, a próxima fatura a vencer.
+  function proximo(v) {
+    const hoje = NG.diaSP();
+    const n = v.maxAtraso;
+    if (n > LIMITE_M10) return { txt: `Ligar · ${n} d em atraso · perde o M-10`, nivel: 'bad' };
+    if (n > 5) { const r = LIMITE_M10 + 1 - n; return { txt: `Ligar hoje · ${n} d em atraso · perde o M-10 em ${r} d`, nivel: 'bad' }; }
+    if (n === 5) return { txt: 'D+5 hoje · fatura em aberto', nivel: 'warn' };
+    if (n > 0) { const f = v.atrasadas[0].f; return { txt: `D+5 em ${NG.fmtDiaISO(NG.somaDias(String(f.vencimento).slice(0, 10), 5)).slice(0, 5)} · ${n} d em atraso`, nivel: 'warn' }; }
+    if (v.proxAVencer) {
+      const d = v.proxAVencer.e.faltam;
+      const venc = String(v.proxAVencer.f.vencimento).slice(0, 10);
+      if (d === 0) return { txt: 'D0 hoje · fatura vence hoje', nivel: 'warn' };
+      if (d === 2) return { txt: `D−2 hoje · fatura vence ${NG.fmtDiaISO(venc).slice(0, 5)}`, nivel: 'warn' };
+      if (d === 1) return { txt: 'D0 amanhã', nivel: 'dim' };
+      return { txt: `D−2 em ${NG.fmtDiaISO(NG.somaDias(venc, -2)).slice(0, 5)}`, nivel: 'dim' };
+    }
+    if (!v.bolas[0].f) return { txt: '1ª fatura ainda não emitida', nivel: 'dim' };
+    if (v.elegivel) return { txt: v.mes >= 11 ? 'M-10 em apuração pela Nio neste mês' : 'No 10º mês · M-10 apurado no 11º', nivel: 'ok' };
+    return { txt: '', nivel: 'dim' };
+  }
+  const precisaAcao = (v) => v.maxAtraso >= 1;
+
+  // ---------- filtros, abas, ordenação ----------
+  function base() {
+    const p = per.valor();
+    const q = fBusca.value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    return carteira.filter((v) =>
+      NG.noPeriodo(v.ativado_em, p) &&
+      (!fVendedor.value || v.vendedor_id === fVendedor.value) &&
+      (!fBairro.value || v.bairro === fBairro.value) &&
+      (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido, v.nio_contrato].some((x) => String(x || '').toLowerCase().includes(q)) ||
+        (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido, v.nio_contrato].some((x) => NG.soDigitos(x).includes(qd)))));
+  }
+  const ABAS = [['todas', 'Todas'], ['acao', 'Precisam de ação'], ['emdia', 'Em dia'], ['ate15', 'Atraso ≤ 15 d'], ['mais15', 'Atraso > 15 d'], ['m10', 'Elegíveis ao M-10']];
+  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(v) : a === 'm10' ? v.elegivel : v.situacao === a);
+  const CHAVES = {
+    cliente: (v) => v.cliente_nome || '',
+    ativa: (v) => (v.ativado_em ? new Date(v.ativado_em).getTime() : null),
+    atraso: (v) => v.maxAtraso * 100 + (N_FATURAS - v.pagas),
+    vendedor: (v) => v.vendedor_nome || '',
+  };
+
+  // ---------- desenho ----------
+  const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
+  function dicaBola(b) {
+    if (!b.f) return `Fatura ${b.n} · ainda não emitida`;
+    const venc = NG.fmtDiaISO(String(b.f.vencimento).slice(0, 10));
+    if (b.e.cls === 'paga') return `Fatura ${b.n} · venc. ${venc} · ${b.f.situacao === 'sem_cobranca' ? 'sem cobrança' : `paga${b.f.pagamento ? ' ' + NG.fmtDiaISO(String(b.f.pagamento).slice(0, 10)) : ''}`}${b.e.pagoCom ? ` (${b.e.pagoCom} d depois do vencimento)` : ''}`;
+    if (b.e.cls === 'avencer') return `Fatura ${b.n} · vence ${venc}`;
+    return `Fatura ${b.n} · venc. ${venc} · em aberto há ${b.e.atraso} d`;
+  }
+  const bolinhas = (v) => `<span class="fat10" aria-label="${v.pagas} de ${N_FATURAS} faturas pagas">${v.bolas.map((b) =>
+    `<i class="${b.e.cls}${b.e.pagoCom > LIMITE_M10 ? ' tarde' : ''}" title="${esc(dicaBola(b))}"></i>`).join('')}</span>`;
+  const ativaTxt = (v) => ({ txt: v.ativado_em ? NG.fmtDataAno(v.ativado_em) : '—', sub: v.mes ? `${v.mes}º mês ativo` : '' });
+  const LEGENDA = '<span class="fat10"><i class="paga"></i></span>paga <span class="fat10"><i class="ate15"></i></span>atraso ≤ 15 d '
+    + '<span class="fat10"><i class="mais15"></i></span>atraso > 15 d <span class="fat10"><i class="avencer"></i></span>a vencer '
+    + '<span class="fat10"><i class="futura"></i></span>não emitida';
+
+  function renderKpis(b) {
+    const n = b.length;
+    const emdia = b.filter((v) => v.situacao === 'emdia').length;
+    const ate15 = b.filter((v) => v.situacao === 'ate15');
+    const mais15 = b.filter((v) => v.situacao === 'mais15');
+    const ligar = ate15.filter((v) => v.maxAtraso > 5).length;
+    const d5 = ate15.filter((v) => v.maxAtraso === 5).length;
+    const possivel = b.filter((v) => v.situacao !== 'mais15' && (v.mes || 0) <= 11).reduce((s, v) => s + Number(v.bonus_m10_potencial || 0), 0);
+    const perdido = mais15.reduce((s, v) => s + Number(v.bonus_m10_potencial || 0), 0);
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Carteira ativa', val: NG.fmtNum(n), nota: `M-10 possível ${NG.fmtMoeda(possivel)}`,
+        dica: 'Vendas ativas com faturas da Nio. M-10 possível = bônus de quem ainda está dentro do 10º/11º mês e sem fatura em aberto há mais de 15 dias (só potencial: não entra na comissão prevista).' }),
+      NG.kpi({ rot: 'Em dia', val: NG.fmtNum(emdia), cls: '', nota: n ? `${Math.round((emdia / n) * 100)} % da carteira` : '—' }),
+      NG.kpi({ rot: 'Atraso ≤ 15 d', val: NG.fmtNum(ate15.length), cls: ate15.length ? 'warn' : '',
+        nota: ate15.length ? `${NG.fmtNum(d5)} no D+5 hoje · ${NG.fmtNum(ligar)} para ligar` : 'nenhum',
+        dica: 'Alguma fatura em aberto de 1 a 15 dias. Régua: D+5 (mensagem) e depois o vendedor liga — com 16 dias a fatura desclassifica o M-10.' }),
+      NG.kpi({ rot: 'Atraso > 15 d', val: NG.fmtNum(mais15.length), cls: mais15.length ? 'bad' : '',
+        nota: mais15.length ? `perdem o M-10 · ${NG.fmtMoeda(perdido)}` : 'nenhum',
+        dica: 'Alguma fatura em aberto há mais de 15 dias do vencimento: pelo contrato o cliente conta como inadimplente para o M-10. Inadimplência não estorna comissão; pesa só no indicador de qualidade (FPD = 1ª fatura não paga em 60 dias).' }),
+    ].join('');
+  }
+
+  function render() {
+    const b = base();
+    renderKpis(b);
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: b.filter((v) => naAba(v, id)).length, alerta: id === 'acao' })),
+      aba, (id) => { aba = id; render(); });
+    const lista = NG.ordenar(b.filter((v) => naAba(v, aba)), CHAVES, ord);
+    tbody.innerHTML = lista.length ? lista.map((v) => {
+      const a = ativaTxt(v);
+      return `<tr class="clicavel" data-id="${esc(v.venda_id)}" tabindex="0" title="Abrir a ficha">
+        <td class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></td>
+        <td class="plano-c"><b>${esc(a.txt)}</b><small>${esc(a.sub)}</small></td>
+        <td>${bolinhas(v)}</td>
+        <td>${NG.proxPasso(proximo(v))}</td>
+        <td class="col-media">${esc(v.vendedor_nome || '—')}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="5" class="vazio">Nenhum cliente neste filtro</td></tr>';
+    cartoesEl.innerHTML = lista.length ? lista.map((v) => `<a class="cartao" href="#venda=${esc(v.venda_id)}" data-id="${esc(v.venda_id)}">
+        <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(v.bairro || v.cidade || '—')}</small></div>
+        <div class="valor">${v.mes ? `${v.mes}º mês` : '—'}</div>
+        <div class="l2">${bolinhas(v)}</div>
+        <div class="l2">${NG.proxPasso(proximo(v))}</div>
+      </a>`).join('') : '<div class="vazio">Nenhum cliente neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'cliente' : 'clientes'} no filtro`;
+  }
+  document.getElementById('legenda').innerHTML = LEGENDA;
+  document.getElementById('legenda-movel').innerHTML = LEGENDA;
+
+  // ---------- interação ----------
+  function abrir(id, novaAba) {
+    if (exemplo) { NG.toast('Exemplo: esta linha não tem ficha de venda.'); return; }
+    NG.abrirVenda(id, novaAba);
+  }
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  [fBusca, fVendedor, fBairro].forEach((el) => el.addEventListener('input', render));
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(tr.dataset.id, ev.ctrlKey || ev.metaKey); });
+  tbody.addEventListener('auxclick', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.button === 1) abrir(tr.dataset.id, true); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(tr.dataset.id); });
+  cartoesEl.addEventListener('click', (ev) => { const a = ev.target.closest('a[data-id]'); if (a && exemplo) { ev.preventDefault(); abrir(a.dataset.id); } });
+
+  function ligarExemplo(on) {
+    exemplo = on;
+    fExemplo.checked = on;
+    const u = new URL(location.href);
+    if (on) u.searchParams.set('exemplo', '1'); else u.searchParams.delete('exemplo');
+    history.replaceState(null, '', u);
+    aba = 'todas';
+    carregar();
+  }
+  fExemplo.addEventListener('change', () => ligarExemplo(fExemplo.checked));
+  document.getElementById('ver-exemplo').addEventListener('click', () => ligarExemplo(true));
+
+  document.getElementById('exportar').addEventListener('click', () => {
+    const linhas = NG.ordenar(base().filter((v) => naAba(v, aba)), CHAVES, ord);
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const cab = ['Cliente', 'Bairro', 'Cidade', 'Ativa desde', 'Mês ativo', 'Situação', 'Maior atraso (d)', 'Faturas pagas (1–10)', 'Próximo passo', 'Vendedor', 'Pedido Nio', 'Contrato Nio'];
+    const csv = [cab.map(q).join(';')].concat(linhas.map((v) => [v.cliente_nome, v.bairro, v.cidade, v.ativado_em ? NG.fmtDataAno(v.ativado_em) : '', v.mes,
+      SIT[v.situacao], v.maxAtraso, v.bolas.filter((b) => b.e.cls === 'paga').length, proximo(v).txt, v.vendedor_nome, v.nio_pedido, v.nio_contrato].map(q).join(';'))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_adimplencia_${exemplo ? 'EXEMPLO_' : ''}${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  NGFicha.aoMudar(() => { if (!exemplo) carregar(); });
+  exemplo = new URLSearchParams(location.search).get('exemplo') === '1';
+  fExemplo.checked = exemplo;
+  await carregar();
+  NGFicha.iniciar();
+})();
+</script>
+</body>
+</html>

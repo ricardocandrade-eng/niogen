@@ -13,11 +13,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=051126-10">
-<script src="config.js?v=051126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-11">
+<script src="config.js?v=051126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=051126-10"></script>
-<script src="assets/sidebar.js?v=051126-10"></script>
+<script src="assets/app.js?v=051126-11"></script>
+<script src="assets/sidebar.js?v=051126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -53,6 +53,8 @@
       depende: 'Enquanto isso, a troca é feita pelo admin no Supabase Auth.' },
   };
   const id = new URLSearchParams(location.search).get('tela');
+  // 05/11 (prompt 14b): Adimplência e Conciliação já existem — link antigo vai direto para a tela.
+  if (id === 'adimplencia' || id === 'conciliacao') { location.replace(`${id}.html`); return; }
   const t = TELAS[id] || { nome: 'Em breve', sub: '', frase: 'Esta tela ainda não existe.', depende: '' };
   document.getElementById('sidebar').dataset.pagina = TELAS[id] ? id : '';
   await NG.exigirLogin();

@@ -1,4 +1,5 @@
 /* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular · 05/11 telas "em breve" abrem embreve.html
+ * 05/11 (prompt 14b): Adimplência e Conciliação saíram de "em breve" — só admin/backoffice (vendedor não vê o item).
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
@@ -6,7 +7,7 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v1.0 · 05/11';
+  const VERSAO = 'v1.1 · 05/11';
 
   const MENU = [
     ['Gestão', [
@@ -25,8 +26,8 @@
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
     ['Financeiro', [
-      { id: 'adimplencia', ico: '◇', nome: 'Adimplência', breve: true },
-      { id: 'conciliacao', ico: '◆', nome: 'Conciliação', breve: true },
+      { id: 'adimplencia', ico: '◇', nome: 'Adimplência', href: 'adimplencia.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'conciliacao', ico: '◆', nome: 'Conciliação', href: 'conciliacao.html', perfis: ['admin', 'backoffice'], esconder: true },
     ]],
     ['Sistema', [
       { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },

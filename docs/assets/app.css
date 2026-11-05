@@ -829,3 +829,51 @@ label.cartao { cursor: pointer; }
 .vazio-tela p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text); }
 .login-box .campo input { min-height: 42px; background: var(--bg); font-size: 14px; }
 .login-box .btn { min-height: 42px; }
+
+/* Adimplência e Conciliação (prompt nº 14b, 05/11): chave "dados de exemplo", faixa EXEMPLO, 10 bolinhas de fatura,
+   valores com sinal, composição na gaveta. Cores só dos tokens (laranja = --warn-dot). */
+.chave { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.chave input { appearance: none; -webkit-appearance: none; position: relative; width: 34px; height: 20px; margin: 0; flex: 0 0 34px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border-strong); cursor: pointer; transition: background .15s; }
+.chave input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.chave input:checked { background: var(--warn-bg); border-color: var(--warn-border); }
+.chave input:checked::after { transform: translateX(14px); background: var(--warn-dot); }
+.chave input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chave:has(input:checked) { color: var(--warn-fg); font-weight: 600; }
+.faixa-exemplo { position: sticky; top: 0; z-index: 5; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.faixa-exemplo b { letter-spacing: .04em; }
+.fat10 { display: inline-flex; align-items: center; gap: 4px; }
+.fat10 i { display: block; width: 12px; height: 12px; flex: 0 0 12px; border-radius: 50%; box-sizing: border-box; background: var(--surface-2); }
+.fat10 i.paga { background: var(--ok-fg); }
+.fat10 i.paga.tarde { box-shadow: 0 0 0 2px var(--warn-dot); }
+.fat10 i.ate15 { background: var(--warn-dot); }
+.fat10 i.mais15 { background: var(--bad-dot); }
+.fat10 i.avencer { background: var(--muted); }
+.fat10 i.futura { background: none; border: 1px solid var(--border-strong); }
+.legenda { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; }
+.legenda .fat10 { margin-left: 8px; }
+.legenda .fat10:first-child { margin-left: 0; }
+.legenda .fat10 i { width: 9px; height: 9px; flex-basis: 9px; }
+.legenda.so-movel { display: none; font-size: 12px; color: var(--muted); padding: 4px 2px; }
+.tab .num.neg, .comp .num.neg, .kpi .val.neg { color: var(--bad-fg); }
+.tab .num.pos, .comp .num.pos { color: var(--ok-fg); }
+.tab .num small { display: block; font-family: var(--sans); font-size: 11px; color: var(--muted); }
+.tab td.motivo { max-width: 300px; font-size: 13px; }
+.comp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comp td { padding: 7px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+.comp td small { display: block; font-size: 11px; color: var(--muted); }
+.comp td.num { text-align: right; font-family: var(--mono); white-space: nowrap; padding-left: 12px; }
+.comp tr.total td { font-weight: 700; border-bottom: 0; }
+.comp tr.vazio td { color: var(--muted); }
+.sel.ciclo { min-width: 220px; }
+.rodape-ciclo { align-items: center; }
+.rodape-ciclo .nf { font-size: 14px; color: var(--text); }
+.rodape-ciclo .nf b { font-family: var(--mono); }
+.contestacao textarea { min-height: 72px; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: inherit; font-size: 14px; }
+@media (max-width: 760px) {
+  .cab-acoes { width: 100%; justify-content: space-between; }
+  .legenda.so-movel { display: flex; }
+  .faixa-exemplo { top: 57px; }   /* abaixo da barra ☰ (sticky, ~57 px) */
+  .sel.ciclo { min-width: 0; flex: 1 1 100%; }
+  .cartao .fat10 i { width: 13px; height: 13px; flex-basis: 13px; }
+}
+.cartao .valor.neg { color: var(--bad-fg); } .cartao .valor.pos { color: var(--ok-fg); }

@@ -1,0 +1,531 @@
+<!doctype html>
+<!-- NIOGEN | docs/conciliacao.html | 05/11/2026 — Claude Code (prompt nº 14b). Conciliação no padrão de telas.
+     Propósito: comissão prevista (NIOGEN) × paga (pedido / linha a linha da Nio), por ciclo quinzenal; contestar em até 120 dias.
+     4 KPIs (Prevista no ciclo · Paga no ciclo · Diferença · A contestar com prazo ≤ 15 d), seletor de ciclo (quinzena ou mês) no lugar
+     do Período, abas Todas · Divergências · Batem · Faltam na Nio · Extras da Nio · Contestadas, lista Cliente · Pedido · Prevista ·
+     Paga · Diferença · Motivo provável · Prazo de contestação; gaveta com a composição e "Abrir contestação" (só registra no NIOGEN,
+     não envia nada à Nio). Rodapé do ciclo: NF a emitir (a NF só depois do pedido da Nio; processamento em até 10 dias úteis).
+     Dados: views v_conciliacao + v_conciliacao_ciclos e tabela nio_contestacoes (rascunho
+     supabase/rascunhos/0022_adimplencia_conciliacao_RASCUNHO.sql — NÃO aplicado). Sem as views: estado vazio + chave "dados de exemplo"
+     (assets/exemplos/conciliacao_exemplo.json, faixa amarela EXEMPLO). Admin e backoffice; vendedor não vê. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Conciliação · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=051126-11">
+<script src="config.js?v=051126-11"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=051126-11"></script>
+<script src="assets/sidebar.js?v=051126-11"></script>
+<script src="assets/ficha.js?v=051126-11"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="conciliacao"></nav>
+  <main class="main">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A tela Conciliação é só para admin e backoffice.</div>
+    <div class="faixa amarelo faixa-exemplo" id="faixa-exemplo" role="status" hidden>
+      <b>EXEMPLO — não são dados reais.</b><span>Pedidos, valores e linhas da Nio inventados para ver o layout. Desligue "dados de exemplo" para voltar.</span>
+    </div>
+    <header class="cab">
+      <div>
+        <h1>Conciliação</h1>
+        <div class="sub" id="sub">Comissão prevista no NIOGEN × paga no pedido da Nio, por quinzena · contestação em até 120 dias</div>
+      </div>
+      <div class="cab-acoes">
+        <label class="chave" title="Mostra pedidos e valores inventados, só para ver o layout"><input type="checkbox" id="f-exemplo" role="switch"> dados de exemplo</label>
+        <a class="btn acao-principal desab" aria-disabled="true" title="A importação do pedido / linha a linha ainda não existe: aguarda o 1º arquivo da Nio e a aprovação do SQL">⇪ Importar pedido da Nio</a>
+      </div>
+    </header>
+
+    <section class="vazio-tela" id="vazio" hidden aria-live="polite">
+      <span class="pill saida">aguardando arquivo</span>
+      <p><b>Aguardando o 1º arquivo de pedido da Nio.</b> Quando chegar o extrato quinzenal (Pedidos × Linha a Linha), cada venda ativada aparece aqui com a comissão prevista, o que a Nio pagou, a diferença e o prazo para contestar.</p>
+      <span class="nota-campo">Depende da importação do extrato quinzenal. O SQL está em rascunho, não aplicado; a chave do pedido (CONTRATO × NUM_OS_PEDIDO_SIEBEL) só o 1º arquivo real confirma.</span>
+      <button type="button" class="btn btn-ghost" id="ver-exemplo">Ver com dados de exemplo</button>
+    </section>
+
+    <div id="conteudo" hidden>
+      <section class="kpis quatro" id="kpis" aria-label="Resumo do ciclo"></section>
+
+      <div id="abas"></div>
+
+      <div class="barra-filtros">
+        <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar" placeholder="Buscar por nome, pedido ou contrato"></label>
+        <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
+        <select class="sel ciclo" id="f-ciclo" aria-label="Ciclo"></select>
+        <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
+      </div>
+
+      <section class="lista padrao" aria-label="Conciliação do ciclo">
+        <div class="rolagem">
+          <table class="tab">
+            <thead><tr>
+              <th data-ord="cliente">Cliente</th>
+              <th data-ord="pedido">Pedido</th>
+              <th data-ord="prevista" data-dir="desc" class="num">Prevista</th>
+              <th data-ord="paga" data-dir="desc" class="num">Paga</th>
+              <th data-ord="dif" class="num">Diferença</th>
+              <th>Motivo provável</th>
+              <th data-ord="prazo">Prazo de contestação</th>
+            </tr></thead>
+            <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para ver a composição</span></div>
+      </section>
+      <div class="cartoes" id="cartoes" aria-label="Conciliação do ciclo"></div>
+
+      <div class="rodape-info rodape-ciclo" id="rodape-ciclo"></div>
+    </div>
+  </main>
+</div>
+
+<aside class="gaveta" id="gaveta-conc" aria-label="Composição da comissão" aria-hidden="true">
+  <div class="g-cab">
+    <div>
+      <h2 id="d-titulo">Composição</h2>
+      <p id="d-sub"></p>
+    </div>
+    <button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button>
+  </div>
+  <div class="g-corpo" id="d-corpo"></div>
+  <div class="g-pe"><div class="g-botoes" id="d-botoes"></div></div>
+</aside>
+
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.querySelector('.cab').hidden = true;
+    return;
+  }
+
+  // Contrato (docs/CONTRATO_DHARMA_regras.md): apuração quinzenal; pedido da Nio → Dharma emite a NF → processamento em até
+  // 10 dias úteis; contestação em até 120 dias corridos do fato gerador (aqui: a ativação). Recompra = multa de R$ 500 (não é
+  // estorno); fraude = estorno de 100 %. Churn e inadimplência não estornam.
+  const PRAZO_CONTESTACAO = 120;
+  const ALERTA_PRAZO = 15;
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const SIT = { diverge: 'Divergência', bate: 'Bate', falta: 'Falta na Nio', extra: 'Extra da Nio', contestada: 'Contestada', aguardando: 'Aguardando pedido' };
+  const MOTIVOS_CONTESTACAO = [
+    ['valor_tabela', 'Comissão diferente da tabela'], ['bonus_nao_pago', 'Bônus ou transição não pago'],
+    ['adicional_nao_pago', 'Adicional não pago'], ['nao_veio', 'Venda ativada não veio no extrato'],
+    ['estorno_indevido', 'Estorno indevido'], ['multa_indevida', 'Multa de recompra indevida'], ['outro', 'Outro'],
+  ];
+  const MOTIVO_TXT = Object.fromEntries(MOTIVOS_CONTESTACAO);
+
+  const elConteudo = document.getElementById('conteudo');
+  const elVazio = document.getElementById('vazio');
+  const elFaixa = document.getElementById('faixa-exemplo');
+  const fExemplo = document.getElementById('f-exemplo');
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  const fBusca = document.getElementById('f-busca');
+  const fVendedor = document.getElementById('f-vendedor');
+  const fCiclo = document.getElementById('f-ciclo');
+  let linhas = [], ciclos = {}, exemplo = false, aba = 'todas', abertaChave = null;
+  const ord = { chave: 'dif', dir: 1 };
+
+  // ---------- ciclos (quinzenas) ----------
+  // id '2026-10-2Q': 1Q = dias 1–15, 2Q = 16 ao fim do mês. Rótulo da Nio: 2QOUT26.
+  function cicloDe(dia) {
+    const [a, m, d] = String(dia).slice(0, 10).split('-').map(Number);
+    const q = d <= 15 ? 1 : 2;
+    const ultimo = new Date(Date.UTC(a, m, 0)).getUTCDate();
+    const mm = String(m).padStart(2, '0');
+    return { id: `${a}-${mm}-${q}Q`, mes: `${a}-${mm}`, q, ini: `${a}-${mm}-${q === 1 ? '01' : '16'}`, fim: `${a}-${mm}-${q === 1 ? '15' : ultimo}`,
+      nio: `${q}Q${MESES[m - 1].toUpperCase()}${String(a).slice(2)}` };
+  }
+  const rotCiclo = (c) => `${c.q}ª quinzena · ${MESES[Number(c.mes.slice(5)) - 1]}/${c.mes.slice(2, 4)} (${c.ini.slice(8)}–${c.fim.slice(8)})`;
+  const rotMes = (mes) => `${MESES_LONGO[Number(mes.slice(5)) - 1]}/${mes.slice(2, 4)} · mês inteiro`;
+
+  // ---------- fontes ----------
+  const naoExiste = (e) => ['PGRST205', '42P01'].includes(e.code) || /does not exist|schema cache/i.test(e.message || '');
+  async function carregarReal() {
+    const [rl, rc] = await Promise.all([
+      NG.sb.from('v_conciliacao').select('*').limit(5000),
+      NG.sb.from('v_conciliacao_ciclos').select('*').limit(500),
+    ]);
+    for (const r of [rl, rc]) if (r.error && !naoExiste(r.error)) NG.toast(NG.msgErro(r.error), 'bad');
+    if (rl.error || rc.error) return { linhas: [], ciclos: [] };
+    return { linhas: rl.data || [], ciclos: rc.data || [] };
+  }
+  // Exemplo: mesmo formato das views, com datas relativas a hoje. Ciclos já encerrados têm pedido; o corrente não.
+  async function carregarExemplo() {
+    const j = await fetch('assets/exemplos/conciliacao_exemplo.json', { cache: 'no-cache' }).then((x) => x.json());
+    const hoje = NG.diaSP();
+    const ls = j.linhas.map((x, i) => {
+      const ativ = NG.somaDias(hoje, -x.ativ_ha);
+      const c = cicloDe(ativ);
+      const temVenda = !!x.cliente;
+      const prevista = temVenda ? x.nominal + x.adicionais + x.transicao + x.nmei : null;
+      const nio = x.nio || [];
+      const enc = c.fim < hoje;
+      return {
+        chave: `exemplo-${i + 1}`, ciclo: c.id, venda_id: temVenda ? `exemplo-${i + 1}` : null, cliente_nome: x.cliente,
+        nio_pedido: x.pedido, nio_contrato: x.contrato, vendedor_nome: x.vendedor, ativado_em: ativ,
+        prevista, comissao_nominal: x.nominal ?? null, comissao_adicionais: x.adicionais ?? null,
+        bonus_transicao_previsto: x.transicao ?? null, bonus_nmei_previsto: x.nmei ?? null,
+        linhas: enc ? nio : [], paga: enc && nio.length ? nio.reduce((s, l) => s + Number(l.comissao), 0) : null,
+        fato_gerador: ativ,
+        contestacao: x.contestacao ? { aberta_em: NG.somaDias(hoje, -x.contestacao.aberta_ha), motivo: x.contestacao.motivo,
+          descricao: x.contestacao.descricao, valor: x.contestacao.valor, status: 'aberta' } : null,
+      };
+    });
+    const ids = [...new Set(ls.map((l) => l.ciclo))].sort();
+    const cs = ids.map((id, k) => {
+      const c = cicloDe(id.slice(0, 8) + (id.endsWith('1Q') ? '01' : '16'));
+      if (c.fim >= hoje) return { ciclo: id, documento_compras: null, valor_pedido: null };
+      const valor = ls.filter((l) => l.ciclo === id && l.paga != null).reduce((s, l) => s + l.paga, 0);
+      const ultimo = k === ids.length - 1 || cicloDe(ids[k + 1].slice(0, 8) + (ids[k + 1].endsWith('1Q') ? '01' : '16')).fim >= hoje;
+      return { ciclo: id, documento_compras: `45000${String(k + 1).padStart(5, '0')}`, valor_pedido: valor,
+        status_pedido: ultimo ? 'Aguardando NF' : 'Pago', previsao_pg: ultimo ? NG.somaDias(hoje, 14) : null,
+        dt_compensacao: ultimo ? null : NG.somaDias(c.fim, 25), numero_nf: ultimo ? null : `00${k + 101}` };
+    });
+    return { linhas: ls, ciclos: cs };
+  }
+
+  async function carregar() {
+    const d = exemplo ? await carregarExemplo() : await carregarReal();
+    ciclos = Object.fromEntries(d.ciclos.map((c) => [c.ciclo, c]));
+    linhas = d.linhas.map((l, i) => Object.assign({ chave: l.chave || `${l.ciclo}|${l.venda_id || l.nio_contrato || i}` }, l));
+    elFaixa.hidden = !exemplo;
+    const tem = linhas.length > 0;
+    elVazio.hidden = tem;
+    elConteudo.hidden = !tem;
+    if (!tem) return;
+    montarCiclos();
+    const vend = [...new Set(linhas.map((l) => l.vendedor_nome).filter(Boolean))].sort().map((n) => [n, n]);
+    const a = fVendedor.value;
+    NG.preencherSelect(fVendedor, vend, 'Todos os vendedores');
+    fVendedor.value = vend.some(([v]) => v === a) ? a : '';
+    render();
+    if (abertaChave) { const l = linhas.find((x) => x.chave === abertaChave); if (l) abrirGaveta(l); }
+  }
+
+  // Seletor: quinzenas (mais recente primeiro) e meses. Padrão: a quinzena mais recente que já tem pedido da Nio.
+  function montarCiclos() {
+    const ids = [...new Set(linhas.map((l) => l.ciclo).concat(Object.keys(ciclos)))].sort().reverse();
+    const meses = [...new Set(ids.map((id) => id.slice(0, 7)))];
+    const atual = fCiclo.value;
+    fCiclo.innerHTML = `<optgroup label="Quinzenas">${ids.map((id) => {
+      const c = cicloDe(id.slice(0, 8) + (id.endsWith('1Q') ? '01' : '16'));
+      return `<option value="q:${id}">${esc(rotCiclo(c))}${temPedido(id) ? '' : ' · sem pedido'}</option>`;
+    }).join('')}</optgroup><optgroup label="Meses">${meses.map((m) => `<option value="m:${m}">${esc(rotMes(m))}</option>`).join('')}</optgroup>`;
+    const opcoes = [...fCiclo.options].map((o) => o.value);
+    fCiclo.value = opcoes.includes(atual) ? atual : `q:${ids.find(temPedido) || ids[0]}`;
+  }
+  const temPedido = (id) => !!(ciclos[id] && ciclos[id].valor_pedido != null);
+  const ciclosSel = () => { const [t, v] = fCiclo.value.split(':'); return t === 'q' ? [v] : [...new Set(linhas.map((l) => l.ciclo).concat(Object.keys(ciclos)))].filter((id) => id.startsWith(v)); };
+
+  // ---------- regras ----------
+  const somaEv = (l, f) => (l.linhas || []).filter(f).reduce((s, x) => s + Number(x.comissao || 0), 0);
+  const ehComissao = (x) => /^COMISS/i.test(x.evento || '');
+  const ehBonus = (x, sub) => /^BONUS/i.test(x.evento || '') && (!sub || new RegExp(sub, 'i').test(x.sub_evento || ''));
+  const ehRecompra = (x) => x.recompra === true || /RECOMPRA/i.test(`${x.evento} ${x.sub_evento}`);
+  const ehEstorno = (x) => /^ESTORNO/i.test(x.evento || '');
+  function situacao(l) {
+    if (l.contestacao) return 'contestada';
+    if (l.prevista == null) return 'extra';
+    if (!temPedido(l.ciclo) && !(l.linhas || []).length) return 'aguardando';
+    if (l.paga == null) return 'falta';
+    return Math.abs(Number(l.paga) - Number(l.prevista)) < 0.005 ? 'bate' : 'diverge';
+  }
+  const diferenca = (l) => (situacao(l) === 'aguardando' ? null : Number(l.paga || 0) - Number(l.prevista || 0));
+  const prazoDia = (l) => (l.fato_gerador ? NG.somaDias(String(l.fato_gerador).slice(0, 10), PRAZO_CONTESTACAO) : null);
+  const diasPrazo = (l) => { const p = prazoDia(l); return p ? NG.diasEntre(`${NG.diaSP()}T12:00:00-03:00`, `${p}T12:00:00-03:00`) : null; };
+  // Contestável: a Nio pagou menos (ou não pagou) o que o NIOGEN previa, ainda sem contestação.
+  const contestavel = (l) => ['diverge', 'falta'].includes(situacao(l)) && diferenca(l) < 0;
+  const humano = (s) => String(s || '').replace(/_/g, ' ').toLowerCase();
+
+  // Motivo provável (hipótese para conferir, nunca conclusão — regra 10).
+  function motivo(l) {
+    const s = situacao(l);
+    if (s === 'aguardando') return 'O pedido da Nio deste ciclo ainda não saiu';
+    if (s === 'contestada') return `Contestada: ${MOTIVO_TXT[l.contestacao.motivo] || humano(l.contestacao.motivo)}`;
+    if (s === 'extra') {
+      if (l.venda_id) return 'Lançamento da Nio fora do ciclo da ativação (estorno tardio ou complemento)';
+      const b = (l.linhas || []).find((x) => ehBonus(x));
+      if (b && !l.nio_contrato) return `Bônus da Nio sem venda ligada (${humano(b.sub_evento)})`;
+      return 'Contrato sem venda no NIOGEN — conferir a chave ou cadastrar';
+    }
+    if (s === 'falta') return l.nio_contrato ? 'Não veio no extrato — ativação depois do corte? conferir no próximo ciclo' : 'Sem contrato no NIOGEN — conferir a chave do pedido';
+    if (s === 'bate') return 'Bate com a tabela';
+    const m = [];
+    if ((l.linhas || []).some(ehRecompra)) m.push('multa de recompra (R$ 500)');
+    (l.linhas || []).filter(ehEstorno).forEach((x) => m.push(`estorno: ${humano(x.sub_evento)}`));
+    const com = somaEv(l, ehComissao);
+    const nominal = Number(l.comissao_nominal || 0), adic = Number(l.comissao_adicionais || 0);
+    if (adic > 0 && Math.abs(com - nominal) < 0.005) m.push('adicional não pago');
+    else if (Math.abs(com - nominal - adic) >= 0.005) m.push(`comissão ${NG.fmtMoeda(com)} × tabela ${NG.fmtMoeda(nominal + adic)} — conferir oferta`);
+    if (Number(l.bonus_transicao_previsto || 0) > 0 && !(l.linhas || []).some((x) => ehBonus(x, 'TRANSI'))) m.push('transição não paga');
+    if (Number(l.bonus_nmei_previsto || 0) > 0 && !(l.linhas || []).some((x) => ehBonus(x, 'NMEI'))) m.push('bônus NMEI não pago');
+    if (!m.length) m.push(Number(l.paga) > Number(l.prevista) ? 'Nio pagou a mais — conferir antes da NF' : 'valor diferente — conferir linha a linha');
+    const t = m.join(' · ');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  // Prazo como "próximo passo": vermelho ≤ 15 d (ou vencido), amarelo ≤ 30 d, cinza no resto.
+  function prazo(l) {
+    const s = situacao(l);
+    const p = prazoDia(l);
+    if (!p) return { txt: '', nivel: 'dim' };
+    const ate = NG.fmtDiaISO(p);
+    if (s === 'contestada') return { txt: `contestada em ${NG.fmtDiaISO(l.contestacao.aberta_em).slice(0, 5)}`, nivel: 'dim' };
+    if (!contestavel(l)) return { txt: s === 'bate' || s === 'extra' ? '' : `até ${ate}`, nivel: 'dim' };
+    const d = diasPrazo(l);
+    if (d < 0) return { txt: `vencido em ${ate.slice(0, 5)}`, nivel: 'bad' };
+    if (d <= ALERTA_PRAZO) return { txt: `${d} d · até ${ate.slice(0, 5)}`, nivel: 'bad' };
+    if (d <= 30) return { txt: `${d} d · até ${ate.slice(0, 5)}`, nivel: 'warn' };
+    return { txt: `até ${ate}`, nivel: 'dim' };
+  }
+
+  // ---------- filtros, abas, ordenação ----------
+  function filtroBase(l) {
+    const q = fBusca.value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    return (!fVendedor.value || l.vendedor_nome === fVendedor.value) &&
+      (!q || [l.cliente_nome, l.nio_pedido, l.nio_contrato].some((x) => String(x || '').toLowerCase().includes(q)) ||
+        (qd.length >= 3 && [l.nio_pedido, l.nio_contrato].some((x) => NG.soDigitos(x).includes(qd))));
+  }
+  const doCiclo = () => { const ids = ciclosSel(); return linhas.filter((l) => ids.includes(l.ciclo) && filtroBase(l)); };
+  const ABAS = [['todas', 'Todas'], ['diverge', 'Divergências'], ['bate', 'Batem'], ['falta', 'Faltam na Nio'], ['extra', 'Extras da Nio'], ['contestada', 'Contestadas']];
+  const naAba = (l, a) => a === 'todas' || situacao(l) === a;
+  const CHAVES = {
+    cliente: (l) => l.cliente_nome || '',
+    pedido: (l) => l.nio_pedido || '',
+    prevista: (l) => (l.prevista == null ? null : Number(l.prevista)),
+    paga: (l) => (l.paga == null ? null : Number(l.paga)),
+    dif: (l) => diferenca(l),
+    prazo: (l) => (contestavel(l) ? diasPrazo(l) : null),
+  };
+
+  // ---------- desenho ----------
+  const moeda = (v) => (v == null ? '—' : NG.fmtMoeda(v));
+  const difHtml = (d) => (d == null ? '<span class="muted">—</span>' : Math.abs(d) < 0.005 ? NG.fmtMoeda(0) : `${d > 0 ? '+' : '−'} ${NG.fmtMoeda(Math.abs(d))}`);
+  const difCls = (d) => (d == null || Math.abs(d) < 0.005 ? '' : d < 0 ? ' neg' : ' pos');
+  const nomeLinha = (l) => l.cliente_nome || (l.nio_contrato ? 'Contrato sem venda no NIOGEN' : 'Lançamento da Nio sem contrato');
+
+  function renderKpis(lista) {
+    const ids = ciclosSel();
+    const comPedido = ids.filter(temPedido);
+    const prevista = lista.filter((l) => l.prevista != null).reduce((s, l) => s + Number(l.prevista), 0);
+    const nPrev = lista.filter((l) => l.prevista != null).length;
+    const paga = lista.reduce((s, l) => s + Number(l.paga || 0), 0);
+    const nLinhas = lista.reduce((s, l) => s + (l.linhas || []).length, 0);
+    const conta = (s) => lista.filter((l) => situacao(l) === s).length;
+    const conferidas = lista.filter((l) => situacao(l) !== 'aguardando');
+    const dif = conferidas.reduce((s, l) => s + diferenca(l), 0);
+    // "A contestar" olha TODOS os ciclos: um prazo vencendo num ciclo antigo não pode sumir porque o seletor está em outro.
+    const aContestar = linhas.filter((l) => filtroBase(l) && contestavel(l) && diasPrazo(l) >= 0 && diasPrazo(l) <= ALERTA_PRAZO);
+    const valorContestar = aContestar.reduce((s, l) => s - diferenca(l), 0);
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Prevista no ciclo', val: NG.fmtMoeda(prevista), nota: `${NG.fmtNum(nPrev)} ${nPrev === 1 ? 'venda ativada' : 'vendas ativadas'}`,
+        dica: 'Comissão prevista no NIOGEN (nominal + adicionais + transição + NMEI) das vendas ativadas no ciclo. O M-10 fica fora: é pago à parte, no 11º mês.' }),
+      NG.kpi({ rot: 'Paga no ciclo', val: comPedido.length ? NG.fmtMoeda(paga) : '—',
+        nota: comPedido.length ? `${NG.fmtNum(nLinhas)} ${nLinhas === 1 ? 'linha' : 'linhas'} da Nio${comPedido.length < ids.length ? ' · falta pedido de 1 quinzena' : ''}` : 'aguardando o pedido da Nio',
+        dica: 'Soma da aba Linha a Linha do extrato (comissão, bônus, estornos e multas) dos contratos do ciclo.' }),
+      NG.kpi({ rot: 'Diferença', val: comPedido.length ? difHtml(dif) : '—', cls: comPedido.length && dif < -0.005 ? 'bad' : '',
+        nota: comPedido.length ? `${NG.fmtNum(conta('diverge'))} divergências · ${NG.fmtNum(conta('falta'))} faltam · ${NG.fmtNum(conta('extra'))} extras` : 'sem pedido para comparar',
+        dica: 'Paga − prevista, só onde o pedido da Nio já saiu. Negativa = a Nio pagou menos que o previsto.' }),
+      NG.kpi({ rot: 'A contestar', val: NG.fmtNum(aContestar.length), cls: aContestar.length ? 'bad' : '',
+        nota: aContestar.length ? `${NG.fmtMoeda(valorContestar)} · prazo em ≤ ${ALERTA_PRAZO} d · todos os ciclos` : `nenhum prazo em ≤ ${ALERTA_PRAZO} d`,
+        dica: 'Divergências e faltas (a Nio pagou menos) ainda sem contestação, com o prazo de 120 dias do fato gerador vencendo em até 15 dias. Conta todos os ciclos, não só o escolhido.' }),
+    ].join('');
+  }
+
+  function renderRodape() {
+    const ids = ciclosSel().sort();
+    const cs = ids.map((id) => ciclos[id]).filter((c) => c && c.valor_pedido != null);
+    const el = document.getElementById('rodape-ciclo');
+    if (!cs.length) {
+      el.innerHTML = '<span class="nf">NF a emitir: <b>aguardando o pedido da Nio</b></span><span>A NF só sai depois do pedido da Nio · processamento em até 10 dias úteis</span>';
+      return;
+    }
+    const total = cs.reduce((s, c) => s + Number(c.valor_pedido), 0);
+    const det = cs.map((c) => {
+      const ci = cicloDe(c.ciclo.slice(0, 8) + (c.ciclo.endsWith('1Q') ? '01' : '16'));
+      const st = c.dt_compensacao ? `pago em ${NG.fmtDiaISO(c.dt_compensacao).slice(0, 5)}` : c.numero_nf ? `NF ${c.numero_nf} emitida` : (c.status_pedido || 'aguardando NF');
+      return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(c.documento_compras || '—')}</span> · ${esc(NG.fmtMoeda(c.valor_pedido))} · ${esc(st)}${c.previsao_pg ? ` · previsão ${esc(NG.fmtDiaISO(c.previsao_pg).slice(0, 5))}` : ''}</span>`;
+    }).join('');
+    const falta = ids.length > cs.length ? '<span>1 quinzena ainda sem pedido</span>' : '';
+    // "NF a emitir" enquanto alguma quinzena do ciclo não tem NF; com todas emitidas, "NF do ciclo".
+    const rot = cs.every((c) => c.numero_nf || c.dt_compensacao) && ids.length === cs.length ? 'NF do ciclo' : 'NF a emitir';
+    el.innerHTML = `<span class="nf">${rot}: <b>${esc(NG.fmtMoeda(total))}</b></span>${det}${falta}<span>A NF só depois do pedido da Nio · processamento em até 10 dias úteis</span>`;
+  }
+
+  function render() {
+    const doC = doCiclo();
+    renderKpis(doC);
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: doC.filter((l) => naAba(l, id)).length, alerta: id === 'diverge' })),
+      aba, (id) => { aba = id; render(); });
+    const lista = NG.ordenar(doC.filter((l) => naAba(l, aba)), CHAVES, ord);
+    tbody.innerHTML = lista.length ? lista.map((l) => {
+      const d = diferenca(l);
+      return `<tr class="clicavel" data-chave="${esc(l.chave)}" tabindex="0" title="Ver a composição">
+        <td class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc(l.vendedor_nome || '')}</small></td>
+        <td class="plano-c"><b class="mono">${esc(l.nio_pedido || '—')}</b><small>${l.nio_contrato ? `contrato ${esc(l.nio_contrato)}` : ''}</small></td>
+        <td class="num">${moeda(l.prevista)}</td>
+        <td class="num">${moeda(l.paga)}</td>
+        <td class="num${difCls(d)}">${difHtml(d)}</td>
+        <td class="motivo">${esc(motivo(l))}</td>
+        <td>${NG.proxPasso(prazo(l))}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="7" class="vazio">Nada neste filtro</td></tr>';
+    cartoesEl.innerHTML = lista.length ? lista.map((l) => {
+      const d = diferenca(l);
+      return `<a class="cartao" href="#" data-chave="${esc(l.chave)}">
+        <div class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc(l.nio_pedido ? `pedido ${l.nio_pedido}` : '—')}</small></div>
+        <div class="valor${difCls(d)}">${difHtml(d)}</div>
+        <div class="l2"><span>prevista ${moeda(l.prevista)}</span><span>· paga ${moeda(l.paga)}</span></div>
+        <div class="l2"><span>${esc(motivo(l))}</span></div>
+        <div class="l2">${NG.proxPasso(prazo(l))}</div>
+      </a>`;
+    }).join('') : '<div class="vazio">Nada neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'linha' : 'linhas'} no filtro`;
+    renderRodape();
+  }
+
+  // ---------- gaveta: composição + contestação ----------
+  const gaveta = document.getElementById('gaveta-conc');
+  function linhaNio(x) {
+    let rot = `${humano(x.evento)} · ${humano(x.sub_evento)}`;
+    if (ehRecompra(x)) rot = 'Multa de recompra (não é estorno)';
+    else if (ehEstorno(x) && /FRAUDE/i.test(x.sub_evento || '')) rot = 'Estorno de fraude (100 %)';
+    else if (ehEstorno(x)) rot = `Estorno · ${humano(x.sub_evento)}`;
+    else if (ehComissao(x)) rot = 'Comissão da ativação';
+    else if (ehBonus(x, 'TRANSI')) rot = 'Transição para Performance';
+    else if (ehBonus(x, 'NMEI')) rot = 'Bônus NMEI';
+    else if (ehBonus(x)) rot = `Bônus · ${humano(x.sub_evento)}`;
+    const v = Number(x.comissao || 0);
+    return `<tr><td>${esc(rot)}<small>${esc([x.produto, x.oferta].filter(Boolean).join(' · '))}</small></td><td class="num${v < 0 ? ' neg' : ''}">${v < 0 ? '− ' + esc(NG.fmtMoeda(-v)) : esc(NG.fmtMoeda(v))}</td></tr>`;
+  }
+  function abrirGaveta(l) {
+    abertaChave = l.chave;
+    const s = situacao(l);
+    const d = diferenca(l);
+    const ci = cicloDe(l.ciclo.slice(0, 8) + (l.ciclo.endsWith('1Q') ? '01' : '16'));
+    document.getElementById('d-titulo').textContent = nomeLinha(l);
+    document.getElementById('d-sub').textContent = [exemplo && 'EXEMPLO — não são dados reais', l.nio_pedido && `Pedido ${l.nio_pedido}`, l.nio_contrato && `contrato ${l.nio_contrato}`,
+      l.ativado_em && `ativada ${NG.fmtDiaISO(String(l.ativado_em).slice(0, 10))}`, `ciclo ${ci.nio}`].filter(Boolean).join(' · ');
+    const cor = { diverge: 'amarelo', falta: 'vermelho', extra: 'amarelo', bate: 'verde', contestada: 'cinza', aguardando: 'cinza' }[s];
+    const pz = prazo(l);
+    const prev = l.prevista == null ? '<tr class="vazio"><td>Sem venda no NIOGEN: nada previsto</td><td class="num">—</td></tr>' : [
+      ['Comissão nominal (tabela)', l.comissao_nominal], ['Adicionais', l.comissao_adicionais], ['Transição para Performance', l.bonus_transicao_previsto], ['Bônus NMEI', l.bonus_nmei_previsto],
+    ].filter(([, v]) => v != null && Number(v) !== 0).map(([r, v]) => `<tr><td>${esc(r)}</td><td class="num">${esc(NG.fmtMoeda(v))}</td></tr>`).join('')
+      + `<tr class="total"><td>Prevista</td><td class="num">${esc(NG.fmtMoeda(l.prevista))}</td></tr>`;
+    const nio = (l.linhas || []).length ? l.linhas.map(linhaNio).join('') + `<tr class="total"><td>Paga</td><td class="num">${esc(moeda(l.paga))}</td></tr>`
+      : `<tr class="vazio"><td>${s === 'aguardando' ? 'O pedido deste ciclo ainda não saiu' : 'Nenhuma linha deste contrato no extrato do ciclo'}</td><td class="num">—</td></tr>`;
+    let contest = '';
+    if (l.contestacao) {
+      const c = l.contestacao;
+      contest = `<section class="secao"><h3 class="secao-tit">Contestação registrada</h3><div class="dados">
+        <span>Aberta em</span><span>${esc(NG.fmtDiaISO(c.aberta_em))}</span>
+        <span>Motivo</span><span>${esc(MOTIVO_TXT[c.motivo] || humano(c.motivo))}</span>
+        <span>Valor</span><span class="mono">${esc(NG.fmtMoeda(c.valor))}</span>
+        <span>Situação</span><span>${esc(c.status || 'aberta')}</span>
+        ${c.descricao ? `<span>Descrição</span><span>${esc(c.descricao)}</span>` : ''}</div>
+        <p class="muted">Registro interno. O envio à Nio (e-mail ao Rogério / Pipefy) é feito por fora, por quem abriu.</p></section>`;
+    } else if (contestavel(l)) {
+      const sugerido = s === 'falta' ? 'nao_veio' : (l.linhas || []).some(ehRecompra) ? 'multa_indevida' : (l.linhas || []).some(ehEstorno) ? 'estorno_indevido'
+        : /adicional/i.test(motivo(l)) ? 'adicional_nao_pago' : /transi|NMEI/i.test(motivo(l)) ? 'bonus_nao_pago' : 'valor_tabela';
+      contest = `<form class="secao contestacao" id="form-contestacao">
+        <h3 class="secao-tit">Abrir contestação</h3>
+        <div class="${pz.nivel === 'bad' ? 'faixa vermelho' : 'faixa amarelo'}">Prazo: ${esc(pz.txt || '—')} (120 dias da ativação). Só registra no NIOGEN — não envia nada à Nio.</div>
+        <label class="campo"><span>Motivo</span><select name="motivo" required>${MOTIVOS_CONTESTACAO.map(([v, t]) => `<option value="${v}"${v === sugerido ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+        <label class="campo"><span>Valor contestado (R$)</span><input name="valor" type="number" min="0.01" step="0.01" required value="${Math.abs(d || 0).toFixed(2)}" inputmode="decimal"></label>
+        <label class="campo"><span>O que aconteceu</span><textarea name="descricao" maxlength="600" placeholder="Ex.: Super 800MB veio com valor da tabela Especial; tabela Regular = R$ 450.">${esc(motivo(l))}.</textarea></label>
+      </form>`;
+    }
+    document.getElementById('d-corpo').innerHTML = `
+      <div class="faixa ${cor}"><b>${esc(SIT[s])}</b><span>${esc(motivo(l))}</span></div>
+      <section class="secao"><h3 class="secao-tit">Prevista no NIOGEN</h3><table class="comp">${prev}</table></section>
+      <section class="secao"><h3 class="secao-tit">Paga pela Nio · linha a linha</h3><table class="comp">${nio}</table></section>
+      ${d != null ? `<table class="comp"><tr class="total"><td>Diferença (paga − prevista)</td><td class="num${difCls(d)}">${difHtml(d)}</td></tr></table>` : ''}
+      ${contest}`;
+    const bts = [];
+    if (l.venda_id && !exemplo) bts.push('<button type="button" class="btn btn-ghost" id="d-ficha">Abrir a ficha da venda</button>');
+    bts.push(`<div class="dir">${contestavel(l) && !l.contestacao ? '<button type="submit" form="form-contestacao" class="btn btn-acc">Registrar contestação</button>' : '<button type="button" class="btn" data-fechar>Fechar</button>'}</div>`);
+    document.getElementById('d-botoes').innerHTML = bts.join('');
+    const bf = document.getElementById('d-ficha');
+    if (bf) bf.addEventListener('click', () => { NG.gaveta.fechar(); NG.abrirVenda(l.venda_id); });
+    const form = document.getElementById('form-contestacao');
+    if (form) form.addEventListener('submit', (ev) => { ev.preventDefault(); registrar(l, new FormData(form)); });
+    NG.gaveta.abrir(gaveta, { aoFechar: () => { abertaChave = null; } });
+  }
+
+  async function registrar(l, fd) {
+    const reg = { motivo: fd.get('motivo'), valor: Number(fd.get('valor')), descricao: String(fd.get('descricao') || '').trim() || null };
+    if (exemplo) {
+      l.contestacao = Object.assign({ aberta_em: NG.diaSP(), status: 'aberta' }, reg);
+      NG.toast('Exemplo: contestação só na tela, nada foi gravado.');
+      render();
+      abrirGaveta(l);
+      return;
+    }
+    const { error } = await NG.sb.from('nio_contestacoes').insert(Object.assign({
+      ciclo: l.ciclo, venda_id: l.venda_id, nio_pedido: l.nio_pedido, nio_contrato: l.nio_contrato, prazo_em: prazoDia(l),
+    }, reg));
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Contestação registrada. Envie à Nio pelo canal combinado.', 'ok');
+    await carregar();
+  }
+
+  // ---------- interação ----------
+  const porChave = (c) => linhas.find((l) => l.chave === c);
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  [fBusca, fVendedor].forEach((el) => el.addEventListener('input', render));
+  fCiclo.addEventListener('change', render);
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-chave]'); if (tr) abrirGaveta(porChave(tr.dataset.chave)); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-chave]'); if (tr && ev.key === 'Enter') abrirGaveta(porChave(tr.dataset.chave)); });
+  cartoesEl.addEventListener('click', (ev) => { const a = ev.target.closest('a[data-chave]'); if (a) { ev.preventDefault(); abrirGaveta(porChave(a.dataset.chave)); } });
+
+  function ligarExemplo(on) {
+    exemplo = on;
+    fExemplo.checked = on;
+    const u = new URL(location.href);
+    if (on) u.searchParams.set('exemplo', '1'); else u.searchParams.delete('exemplo');
+    history.replaceState(null, '', u);
+    aba = 'todas';
+    fCiclo.value = '';
+    if (gaveta.classList.contains('aberta')) NG.gaveta.fechar();
+    carregar();
+  }
+  fExemplo.addEventListener('change', () => ligarExemplo(fExemplo.checked));
+  document.getElementById('ver-exemplo').addEventListener('click', () => ligarExemplo(true));
+
+  document.getElementById('exportar').addEventListener('click', () => {
+    const ls = NG.ordenar(doCiclo().filter((l) => naAba(l, aba)), CHAVES, ord);
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const n = (x) => (x == null ? '' : Number(x).toFixed(2).replace('.', ','));
+    const cab = ['Ciclo', 'Cliente', 'Pedido', 'Contrato', 'Vendedor', 'Ativação', 'Situação', 'Prevista', 'Paga', 'Diferença', 'Motivo provável', 'Prazo de contestação'];
+    const csv = [cab.map(q).join(';')].concat(ls.map((l) => [cicloDe(l.ciclo.slice(0, 8) + (l.ciclo.endsWith('1Q') ? '01' : '16')).nio, nomeLinha(l), l.nio_pedido, l.nio_contrato,
+      l.vendedor_nome, l.ativado_em ? NG.fmtDiaISO(String(l.ativado_em).slice(0, 10)) : '', SIT[situacao(l)], n(l.prevista), n(l.paga), n(diferenca(l)), motivo(l),
+      prazoDia(l) ? NG.fmtDiaISO(prazoDia(l)) : ''].map(q).join(';'))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_conciliacao_${exemplo ? 'EXEMPLO_' : ''}${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  NGFicha.aoMudar(() => { if (!exemplo) carregar(); });
+  exemplo = new URLSearchParams(location.search).get('exemplo') === '1';
+  fExemplo.checked = exemplo;
+  await carregar();
+  NGFicha.iniciar();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "_cabecalho": "NIOGEN | docs/assets/exemplos/adimplencia_exemplo.json | 05/11/2026 — Claude Code (prompt 14b). EXEMPLO — NÃO SÃO DADOS REAIS. Só para ver o layout da tela Adimplência enquanto não chega o 1º arquivo de faturas da Nio. Datas relativas a hoje: ativ_ha = dias desde a ativação; a fatura n vence em ativação + 25 + 30·(n−1) dias e é emitida 10 dias antes do vencimento. 'atrasos' sobrescreve faturas: número = paga com esse atraso em dias; null = em aberto. Sem sobrescrever = paga no vencimento.",
+  "clientes": [
+    { "nome": "Ana Paula EXEMPLO", "bairro": "Centro", "vendedor": "Carlos EXEMPLO", "ativ_ha": 280, "valor": 119.90, "m10": 150 },
+    { "nome": "Bruno EXEMPLO Lima", "bairro": "Alto dos Passos", "vendedor": "Júlia EXEMPLO", "ativ_ha": 312, "valor": 99.90, "m10": 150 },
+    { "nome": "Carla EXEMPLO Reis", "bairro": "São Mateus", "vendedor": "Carlos EXEMPLO", "ativ_ha": 257, "valor": 99.90, "m10": 150, "atrasos": { "8": null } },
+    { "nome": "Diego EXEMPLO Alves", "bairro": "Granbery", "vendedor": "Júlia EXEMPLO", "ativ_ha": 83, "valor": 119.90, "m10": 150 },
+    { "nome": "Elaine EXEMPLO Costa", "bairro": "Bom Pastor", "vendedor": "Carlos EXEMPLO", "ativ_ha": 145, "valor": 99.90, "m10": 150, "atrasos": { "5": null } },
+    { "nome": "Fábio EXEMPLO Rocha", "bairro": "Benfica", "vendedor": "Júlia EXEMPLO", "ativ_ha": 58, "valor": 89.90, "m10": 150, "atrasos": { "2": null } },
+    { "nome": "Gisele EXEMPLO Martins", "bairro": "Centro", "vendedor": "Carlos EXEMPLO", "ativ_ha": 180, "valor": 119.90, "m10": 150, "atrasos": { "6": null } },
+    { "nome": "Hugo EXEMPLO Pereira", "bairro": "São Mateus", "vendedor": "Júlia EXEMPLO", "ativ_ha": 214, "valor": 99.90, "m10": 150, "atrasos": { "7": null } },
+    { "nome": "Íris EXEMPLO Duarte", "bairro": "Alto dos Passos", "vendedor": "Carlos EXEMPLO", "ativ_ha": 129, "valor": 89.90, "m10": 150, "atrasos": { "4": null } },
+    { "nome": "João EXEMPLO Batista", "bairro": "Benfica", "vendedor": "Júlia EXEMPLO", "ativ_ha": 185, "valor": 99.90, "m10": 150, "atrasos": { "5": null, "6": null } },
+    { "nome": "Karina EXEMPLO Melo", "bairro": "Granbery", "vendedor": "Carlos EXEMPLO", "ativ_ha": 95, "valor": 119.90, "m10": 150, "atrasos": { "1": null, "2": null, "3": null } },
+    { "nome": "Lucas EXEMPLO Ferraz", "bairro": "Bom Pastor", "vendedor": "Júlia EXEMPLO", "ativ_ha": 109, "valor": 99.90, "m10": 150 },
+    { "nome": "Marina EXEMPLO Teles", "bairro": "Centro", "vendedor": "Carlos EXEMPLO", "ativ_ha": 12, "valor": 119.90, "m10": 150 },
+    { "nome": "Nelson EXEMPLO Prado", "bairro": "São Mateus", "vendedor": "Júlia EXEMPLO", "ativ_ha": 200, "valor": 89.90, "m10": 150, "atrasos": { "3": 20 } }
+  ]
+}
