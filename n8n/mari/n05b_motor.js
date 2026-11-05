@@ -162,7 +162,7 @@ if (V4) {
   // o estado diz "indisponivel" e a Mari segue a fala por cidade + DFV (Bloco 9 do prompt v4).
   const nv = conv.nio_viab_resultado || 'indisponivel';
   L.push(`nio_viab_resultado (viabilidade oficial do endereço, uso interno, nunca citar): ${nv}${conv.nio_viab_velocidade ? ` | velocidade_maxima: ${conv.nio_viab_velocidade}` : ''}`
-    + (nv === 'indisponivel' ? ' (sem resultado oficial: fluxo normal com planos e cobertura pela cidade — nunca diga que a fibra não chegou)' : ''));
+    + (['viavel', 'posse'].includes(nv) ? '' : ' (fluxo normal: planos e cobertura pela cidade — nunca diga nem insinue que o endereço não é atendido)'));
 }
 if (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {
   // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.
