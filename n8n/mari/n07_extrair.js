@@ -145,7 +145,11 @@ function violacoesDe(t) {
   }
   if (VER >= 5) {
     // Prompt 18 (C8): a revenda não cobra, não recebe e não manda link de pagamento — quem cobra é a Nio.
-    if (/link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|dados do cartao|(a gente|nos|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)|cobranca (e feita |fica )?(pelo|por|com) (nosso|o nosso|a gente)/.test(n)) {
+    // Negar é permitido ("não tem link de pagamento", "a gente não cobra"): a frase negada sai antes da checagem
+    // (bateria da produção, cenário 30: a negação caía no filtro duas vezes e virava "Só um instante").
+    const nPag = n.replace(/\b(nao|nenhum|sem|nunca)\b[^.?!\n]{0,40}?(link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|cobra\w*)/g, ' ')
+      .replace(/\b(a gente|nos|nosso time|o time|o consultor) (nao|nunca) (cobra|vai cobrar|faz a cobranca)/g, ' ');
+    if (/link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|dados do cartao|(a gente|nos|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)|cobranca (e feita |fica )?(pelo|por|com) (nosso|o nosso|a gente)/.test(nPag)) {
       v.push('falou de link de pagamento ou de cobrança pela revenda (quem cobra é a própria Nio; escolhida a forma, só "Anotado!" e segue)');
     }
     // Guard-rail 14: "sem custo" só na linha do roteador do bloco de condições (texto do Ricardo).
@@ -186,6 +190,10 @@ const EMOJI_PROIBIDOS = new Set(['🎯', '📍', '💰', '✅', '🚀', '✨', '
 let baloes = String(texto || '').split(/\s*\|\|\s*/).map((s) => s.trim()).filter(Boolean);
 if (baloes.length > 3) baloes = [baloes[0], baloes[1], baloes.slice(2).join('\n\n')];
 const emojiAjustes = [];
+// Ricardo (05/11 ~17h15): 💚 em toda saudação e despedida. Quem põe é o sistema (fim deste nó) e ele não conta no limite
+// de emoji — o 💚 que o modelo escrever sai aqui, antes da regra de emoji.
+const CORACAO = '💚';
+if (VER >= 5) baloes = baloes.map((b) => b.replace(/[ \t]*💚[ \t]*/gu, ' ').trim()).filter(Boolean);
 // v4 (Ricardo, 05/11, pendência 47): ✅ e 🎯 liberados SÓ nas falas de cobertura do roteiro — "a Nio atende o seu
 // endereço ✅" e "a Nio atende aí em [cidade] 🎯". Viram marcador antes da regra de emoji (não contam no limite) e voltam no fim.
 const SELO_OK = '\u0001OK\u0001', SELO_AL = '\u0001AL\u0001';
@@ -218,6 +226,12 @@ if (VER >= 5) {
     const ls = b.split(/\n/).map((l) => l.trim()).filter(Boolean);
     return ls.map((l, i) => (i === 0 ? '' : (l.startsWith('•') && ls[i - 1].startsWith('•') ? '\n' : '\n\n')) + l).join('');
   });
+}
+// 💚 na saudação: fim do 1º parágrafo da 1ª mensagem da conversa ("Olá, tudo bem? Mari da Nio aqui. 💚").
+if (VER >= 5 && ctx.primeira && baloes.length) {
+  const ps = baloes[0].split('\n\n');
+  ps[0] = `${ps[0]} ${CORACAO}`;
+  baloes[0] = ps.join('\n\n');
 }
 texto = baloes.join('\n\n');
 
@@ -360,12 +374,20 @@ if (motivo) {
   }
 }
 
+// Balões finais: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
+let baloesFinais = baloes.length && baloes.join('\n\n') === texto ? baloes : (texto ? [texto] : []);
+// 💚 na despedida: todo handoff começa com o coração ("💚 Pronto, Ricardo, anotado!").
+if (VER >= 5 && handoff && baloesFinais.length && !baloesFinais[0].startsWith(CORACAO)) {
+  baloesFinais = [`${CORACAO} ${baloesFinais[0]}`, ...baloesFinais.slice(1)];
+  texto = baloesFinais.join('\n\n');
+}
+
 return [{ json: {
   corrigir: false,
   conversaId: ctx.conversaId,
   texto, tags, upd, handoff, erro,
   // Balões: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
-  baloes: baloes.length && baloes.join('\n\n') === texto ? baloes : (texto ? [texto] : []),
+  baloes: baloesFinais,
   emojiAjustes: emojiAjustes.length ? emojiAjustes : null,
   modelo: resp.model || motor.model,
   tokensIn, tokensOut,

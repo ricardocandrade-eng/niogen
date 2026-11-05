@@ -198,7 +198,7 @@ L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
 // v3 (regra de emoji): quantos emojis a Mari já usou e se o cliente usa — o 7 · Extrair aplica o teto.
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
-const nEmoji = (s) => (String(s || '').match(EMOJI_RE) || []).length;
+const nEmoji = (s) => (String(s || '').replace(/💚/gu, '').match(EMOJI_RE) || []).length;   // 💚 (saudação/despedida, 05/11) não conta
 const emojiMari = historico.filter((h) => h.papel === 'mari').reduce((a, h) => a + nEmoji(h.texto), 0);
 const emojiCliente = historico.filter((h) => h.papel === 'lead').reduce((a, h) => a + nEmoji(h.texto), 0) + nEmoji(cons.mensagem);
 const v3 = VER >= 3;
@@ -284,6 +284,7 @@ return [{ json: {
       nio_viab_resultado: conv.nio_viab_resultado, nio_viab_velocidade: conv.nio_viab_velocidade, nio_viab_interesse_id: conv.nio_viab_interesse_id,
       dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
+    primeira,   // 💚 na saudação (7 · Extrair)
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
     emojiMari, emojiCliente,

@@ -178,6 +178,14 @@ PAGAMENTO_REVENDA = (r'link (de |do |pro |para o |pra )?pagamento|pagamento segu
                      r'(a gente|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)')
 
 
+def pag_revenda(n):
+    """Fala de link de pagamento / cobrança pela revenda — negar ("não tem link de pagamento") é permitido."""
+    n = re.sub(r'\b(nao|nenhum|sem|nunca)\b[^.?!\n]{0,40}?(link (de |do |pro |para o |pra )?pagamento|pagamento seguro|'
+               r'cadastr\w* (do |o |seu )?cartao|cobra\w*)', ' ', n)
+    n = re.sub(r'\b(a gente|nos|nosso time|o time|o consultor) (nao|nunca) (cobra|vai cobrar|faz a cobranca)', ' ', n)
+    return bool(re.search(PAGAMENTO_REVENDA, n))
+
+
 def bloco_condicoes(meses=12, taxa='R$ 540'):
     """Texto exato do Ricardo (05/11 16h33); varejo = 12 meses. Empresas = 24; sem fidelidade = taxa na 1ª fatura."""
     linha = (f'• Taxa de instalação ({taxa}) ZERO ao manter o plano por {meses} meses.' if meses
@@ -200,6 +208,8 @@ def sem_selo(x):
     """pendência 47: ✅/🎯 colados nas falas de cobertura não contam como emoji (v4)."""
     if not V4:
         return x or ''
+    if V5:   # 💚 da saudação e da despedida (Ricardo, 05/11) é do sistema: não conta como emoji
+        x = re.sub(r'[ \t]*💚[ \t]*', ' ', x or '').strip()
     x = re.sub(r'(atende o seu endere[cç]o!?)\s*✅', r'\1', x or '', flags=re.I)
     return re.sub(r'(atende (?:a[ií] em [^\n.!]{2,40}?|a sua cidade)[.!]?)\s*🎯', r'\1', x, flags=re.I)
 
@@ -246,7 +256,7 @@ def checar_global(resp, cluster, baloes=None):
             falhas.append('negou ou insinuou falta de cobertura')
     if V5:
         # Prompt 18 (C5–C8): parágrafos com linha em branco; condições = texto exato; pagamento é da Nio.
-        if re.search(PAGAMENTO_REVENDA, n):
+        if pag_revenda(n):
             falhas.append('falou de link de pagamento / cobrança pela revenda')
         for b in (baloes or [t]):
             ls = [l.strip() for l in b.split('\n')]
@@ -303,10 +313,11 @@ class Lead:
             return p['cep_msg']
         if 'numero' in n and '?' in mari and 'telefone' not in n and 'cpf' not in n:
             return p['numero']
+        # elegibilidade antes do complemento: a reação "sem complemento então" vem na mesma fala da pergunta
+        if 'ja tem nio' in n or 'tinha oi fibra' in n or 'teve oi fibra' in n or 'cliente nio' in n:
+            return p.get('elegibilidade', 'Não, ninguém aqui tem Nio')
         if 'complemento' in n:
             return p.get('complemento', 'Não tem complemento')
-        if 'ja tem nio' in n or 'tinha oi fibra' in n:
-            return p.get('elegibilidade', 'Não, ninguém aqui tem Nio')
         if re.search(r'\bmei\b', n) and '?' in mari and not tem_lista(mari):
             return p.get('mei', 'Sim, sou MEI')
         if 'nome completo' in n and 'cpf' in n:
@@ -1020,8 +1031,10 @@ def c29():
     b = norm(briefing(cid)) if cid else ''
     ok = [('cliente escolheu cartão', i_pag is not None),
           ('"Anotado" e já pergunta manhã ou tarde', 'anotado' in resp and ('manha' in resp or 'tarde' in resp)),
-          ('nenhuma fala com link de pagamento / cobrança pela revenda', not any(re.search(PAGAMENTO_REVENDA, norm(f)) for f in todas_falas(log))),
+          ('nenhuma fala com link de pagamento / cobrança pela revenda', not any(pag_revenda(norm(f)) for f in todas_falas(log))),
           ('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
+          ('💚 no cumprimento da 1ª mensagem', '💚' in ((log[0]['mari'] or '').split('\n\n')[0] if log else '')),
+          ('despedida começa com 💚', (r.get('resposta') or '').startswith('💚')),
           ('briefing sem link de pagamento (só o link da biometria)', bool(b) and 'link da biometria' in b
            and not re.search(r'link (de |do )?pagamento|(e|ou) (o )?(link )?(de|do) pagamento|pagamento seguro', b))]
     return ok, log, 'regular'
@@ -1036,8 +1049,8 @@ def c30():
     log = depois(tel, log, ['Antes de passar meus dados: como eu pago? Vocês mandam um link de pagamento?'])
     resp = norm(log[-1]['mari'] or '')
     ok = [('respondeu', bool(resp)),
-          ('"a cobrança é feita pela própria Nio"', 'cobranca e feita pela propria nio' in resp),
-          ('sem link de pagamento / cobrança pela revenda', not re.search(PAGAMENTO_REVENDA, resp) and 'http' not in resp)]
+          ('"a cobrança é feita pela própria Nio" (o conteúdo)', bool(re.search(r'cobranca e feita pela propria nio|quem cobra e a propria nio|cobrado pela propria nio', resp))),
+          ('sem link de pagamento / cobrança pela revenda', not pag_revenda(resp) and 'http' not in resp)]
     return ok, log, 'regular'
 
 
