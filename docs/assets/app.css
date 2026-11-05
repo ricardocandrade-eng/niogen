@@ -930,3 +930,8 @@ details.cob-det > summary h2 { font-size: 15px; }
 @media (max-width: 760px) {
   .cob-dados { grid-template-columns: 1fr; }
 }
+
+/* Meta Ads › Bairros prioritários (05/11): cartão marcável no celular */
+.cartao.marcado { border-color: var(--accent); }
+label.cartao { cursor: pointer; }
+.cartao .valor input, .tab td.ck input { width: 18px; height: 18px; accent-color: var(--accent); }
