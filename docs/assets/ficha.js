@@ -104,6 +104,10 @@
       titulo = 'DFV dispensado (admin)';
       cor = 'warn';
       texto = `${NG.fmtDataHora(e.criado_em)}${quem} · ${esc(dt.motivo || '')}`;
+    } else if (e.tipo === 'biometria_link') {
+      // 0027: o atendente mandou o link do portal na conversa do Chatwoot e o NIOGEN gravou sozinho.
+      titulo = dt.reenvio ? 'Link da biometria reenviado (Chatwoot)' : 'Link da biometria enviado (Chatwoot)';
+      texto = `${NG.fmtDataHora(e.criado_em)} · gravado automaticamente da conversa · biometria pendente`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';

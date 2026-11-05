@@ -288,10 +288,40 @@ def t13():
           f"16/11: {c and c['template']} {c and c['params']} ({c and c['bloqueio']})")
 
 
+def t14():
+    # 0027: atendente manda o link da biometria no Chatwoot → o NIOGEN grava sozinho na venda da conversa.
+    base = 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/'
+    tel = f'{PREFIXO}917'
+    sql(venda_teste(17, biometria_status="'nao_enviada'")
+        + conv(17, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(117)}'"))
+
+    def humano(txt):
+        r = sql(f"select public.mari_registrar_turno('{tel}', 'Atendente', $${txt}$$, 'humano', 'teste') as r")
+        return (r[0]['r'] or {}).get('biometria_link')
+
+    def venda():
+        return sql(f"select biometria_status, biometria_link, biometria_link_enviado_em from public.vendas where id = '{uid(117)}'")[0]
+
+    r0 = humano('Oi, tudo bem? Já abri o seu pedido aqui.')
+    r1 = humano(f'Segue o link da biometria: {base}abc17 é só tocar e seguir.')
+    v1 = venda()
+    r2 = humano(f'Reforçando o link: {base}abc17')
+    r3 = humano(f'Gerei um novo, use este: {base}novo17')
+    v3 = venda()
+    ev = sql(f"select count(*) as n from public.eventos_venda where venda_id = '{uid(117)}' and tipo = 'biometria_link'")[0]['n']
+    sql(f"update public.vendas set biometria_status = 'validada' where id = '{uid(117)}'")
+    r4 = humano(f'Mais um: {base}depois17')
+    ok = (r0 is None and r1 == 'link registrado' and v1['biometria_status'] == 'pendente' and v1['biometria_link'] == base + 'abc17'
+          and v1['biometria_link_enviado_em'] and r2 == 'mesmo link já registrado' and r3 == 'link trocado (reenvio)'
+          and v3['biometria_link'] == base + 'novo17' and int(ev) == 2 and r4 == 'venda já passou da biometria')
+    checa('14 · link da biometria mandado no Chatwoot → gravado na venda (reenvio troca; validada não mexe)', bool(ok),
+          f"sem link: {r0} · 1º: {r1} ({v1['biometria_status']}) · repetido: {r2} · novo: {r3} · eventos: {ev} · validada: {r4}")
+
+
 if __name__ == '__main__':
     print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
     try:
-        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13):
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14):
             try:
                 t()
             except Exception as e:
