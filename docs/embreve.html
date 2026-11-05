@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- NIOGEN | docs/embreve.html | 05/11/2026 02h50 — Claude Code, rodada noturna de layout
+     Telas "em breve" no padrão: cabeçalho + estado vazio com uma frase do que a tela vai mostrar.
+     Uma página só para todas (embreve.html?tela=placar|fila|adimplencia|conciliacao|senha); o menu marca a tela atual. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Em breve · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=051126-8">
+<script src="config.js?v=051126-8"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=051126-8"></script>
+<script src="assets/sidebar.js?v=051126-8"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina=""></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1 id="titulo">Em breve</h1>
+        <div class="sub" id="sub"></div>
+      </div>
+    </header>
+    <section class="vazio-tela" aria-live="polite">
+      <span class="pill saida">em breve</span>
+      <p id="frase"></p>
+      <span class="nota-campo" id="depende"></span>
+      <a class="btn" href="painel.html">Voltar ao Painel</a>
+    </section>
+  </main>
+</div>
+<script>
+(async function () {
+  // O que cada tela vai mostrar (plano 30-50-70 e mockup das 12 telas) e do que ela depende para existir.
+  const TELAS = {
+    placar: { nome: 'Placar', sub: 'Gestão', frase: 'O ranking do mês por vendedor e por origem, com as vendas por dia e as quebras por cidade, plano e forma de pagamento — o que saiu do Painel para ele ficar curto.',
+      depende: 'Depende só das vendas que já estão no NIOGEN.' },
+    fila: { nome: 'Fila Vero', sub: 'Vendas', frase: 'Os clientes da Fila Vero com a cobertura Nio checada pelo CEP, prontos para o primeiro contato por template aprovado: 1 contato por dia e 2 no total por cliente, todo toque registrado; quem responde entra na Mari com origem "Fila Vero".',
+      depende: 'Depende da tabela fila_vero no Supabase Nio e da ingestão reescrita (INFRA §7).' },
+    adimplencia: { nome: 'Adimplência', sub: 'Financeiro', frase: 'As faturas de cada cliente ativo, da 1ª à 10ª, com a régua de pagamento D−2 · D0 · D+5 e quem está perto de perder o bônus M-10.',
+      depende: 'Depende da importação do FPD (faturas 1–3) e do extrato mensal de faturas 4ª a 10ª (ainda não recebido — pedir ao Rogério).' },
+    conciliacao: { nome: 'Conciliação', sub: 'Financeiro', frase: 'O extrato quinzenal da Nio linha a linha contra a comissão prevista de cada venda: o que foi pago, o que faltou, o que foi estornado e a base da nota fiscal.',
+      depende: 'Depende da importação do extrato quinzenal (Pedidos × Linha a Linha).' },
+    senha: { nome: 'Alterar senha', sub: 'Sistema', frase: 'Trocar a sua senha de acesso ao NIOGEN sem precisar pedir ao admin.',
+      depende: 'Enquanto isso, a troca é feita pelo admin no Supabase Auth.' },
+  };
+  const id = new URLSearchParams(location.search).get('tela');
+  const t = TELAS[id] || { nome: 'Em breve', sub: '', frase: 'Esta tela ainda não existe.', depende: '' };
+  document.getElementById('sidebar').dataset.pagina = TELAS[id] ? id : '';
+  await NG.exigirLogin();
+  NGSidebar.montar();
+  document.title = `${t.nome} · NIOGEN`;
+  document.getElementById('titulo').textContent = t.nome;
+  document.getElementById('sub').textContent = t.sub ? `${t.sub} · em breve` : '';
+  document.getElementById('frase').textContent = t.frase;
+  document.getElementById('depende').textContent = t.depende;
+})();
+</script>
+</body>
+</html>

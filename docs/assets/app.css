@@ -935,3 +935,11 @@ details.cob-det > summary h2 { font-size: 15px; }
 .cartao.marcado { border-color: var(--accent); }
 label.cartao { cursor: pointer; }
 .cartao .valor input, .tab td.ck input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* Telas "em breve" e login (05/11) */
+.nav-item .tag-breve { margin-left: auto; font-family: var(--dm); font-size: 9px; letter-spacing: .5px; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 6px; }
+.nav-item.breve:not(.ativo) { opacity: .6; }
+.vazio-tela { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 640px; padding: 28px; border-radius: 12px; border: 1px dashed var(--border-strong); background: var(--surface); }
+.vazio-tela p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text); }
+.login-box .campo input { min-height: 42px; background: var(--bg); font-size: 14px; }
+.login-box .btn { min-height: 42px; }

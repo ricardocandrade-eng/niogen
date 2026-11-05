@@ -1,4 +1,4 @@
-/* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular
+/* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular · 05/11 telas "em breve" abrem embreve.html
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
@@ -6,31 +6,31 @@
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.9 · 04/11';
+  const VERSAO = 'v1.0 · 05/11';
 
   const MENU = [
     ['Gestão', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
-      { id: 'placar', ico: '▤', nome: 'Placar' },
+      { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
     ]],
     ['Vendas', [
       { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura (DFV)', href: 'cobertura.html' },
-      { id: 'fila', ico: '☷', nome: 'Fila Vero' },
+      { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
     ]],
     ['Mari', [
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
     ['Financeiro', [
-      { id: 'adimplencia', ico: '◇', nome: 'Adimplência' },
-      { id: 'conciliacao', ico: '◆', nome: 'Conciliação' },
+      { id: 'adimplencia', ico: '◇', nome: 'Adimplência', breve: true },
+      { id: 'conciliacao', ico: '◆', nome: 'Conciliação', breve: true },
     ]],
     ['Sistema', [
       { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },
-      { id: 'senha', ico: '◌', nome: 'Alterar senha' },
+      { id: 'senha', ico: '◌', nome: 'Alterar senha', breve: true },
     ]],
   ];
 
@@ -50,7 +50,10 @@
     // esconder: o item some (em vez de "em breve") para quem não tem o perfil — ex.: vendedor não vê a Mari.
     if (it.esconder && it.perfis && !it.perfis.includes((NG.usuario || {}).perfil)) return '';
     const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${NG.esc(it.nome)}` +
-      (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '');
+      (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '') +
+      (it.breve ? '<span class="tag-breve">em breve</span>' : '');
+    // Telas "em breve" (05/11): abrem embreve.html com a frase do que vão mostrar, e o menu marca a atual.
+    if (it.breve) return `<a class="nav-item breve${ativo ? ' ativo' : ''}" href="embreve.html?tela=${it.id}"${ativo ? ' aria-current="page"' : ''}>${conteudo}</a>`;
     if (!it.href || (it.perfis && !it.perfis.includes((NG.usuario || {}).perfil))) {
       return `<span class="nav-item off" aria-disabled="true" title="em breve">${conteudo}</span>`;
     }
