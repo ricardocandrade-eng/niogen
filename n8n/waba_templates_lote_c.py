@@ -10,6 +10,7 @@
 # Uso:  python n8n/waba_templates_lote_c.py            # dry-run: mostra o que mandaria
 #       python n8n/waba_templates_lote_c.py --enviar   # submete (só os que ainda não têm meta_id)
 #       python n8n/waba_templates_lote_c.py --status   # consulta o status na Meta e atualiza o banco
+#       python n8n/waba_templates_lote_c.py --reenviar nio_lembrete_biometria   # edita um template rejeitado (mesmo id)
 
 import json
 import os
@@ -28,9 +29,12 @@ GRAPH = 'https://graph.facebook.com/v21.0'
 
 LOTE_C = [
     {'nome': 'nio_lembrete_biometria',
-     'corpo': 'Oi, {{1}}! É a Mari, da Nio 👋\n\nSeu pedido de internet está quase pronto: só falta a biometria pelo celular, que leva uns 2 minutos. O link é este: {{2}}\n\nSe tiver qualquer dificuldade, me chama por aqui que o nosso time ajuda 😊',
-     'exemplo': ['Ana', 'https://pap.niointernet.com.br/biometria/exemplo'],
-     'botoes': ['Preciso de ajuda', 'Já fiz']},
+     # 0026: rejeitado com o link no corpo (INCORRECT_CATEGORY) → corpo sem link + botão de URL dinâmico (Ricardo, 05/11).
+     'corpo': 'Oi, {{1}}! É a Mari, da Nio 👋\n\nSeu pedido de internet está quase pronto: só falta a biometria pelo celular, que leva uns 2 minutos. É só tocar em "Fazer a biometria" aqui embaixo.\n\nSe tiver qualquer dificuldade, me chama por aqui que o nosso time ajuda 😊',
+     'exemplo': ['Ana'],
+     'botao_url': {'texto': 'Fazer a biometria', 'url': 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/{{1}}',
+                   'exemplo': 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/11uugb2uoh3k8s'},
+     'botoes': ['Preciso de ajuda']},
     {'nome': 'nio_instalacao_agendada',
      'corpo': 'Oi, {{1}}! É a Mari, da Nio. Sua instalação está agendada:\n\nDia: {{2}}\nPeríodo: {{3}}\nEndereço: {{4}}\n\nO técnico da Nio vai até aí; é importante ter alguém maior de idade em casa. Se precisar remarcar, me avisa por aqui 😊',
      'exemplo': ['Ana', 'sexta-feira, 07/11', 'manhã, 8h às 12h', 'Rua Halfeld, 500, Centro'],
@@ -79,9 +83,14 @@ def graph(method, path, body=None):
 
 
 def payload(t):
+    botoes = []
+    if t.get('botao_url'):
+        u = t['botao_url']
+        botoes.append({'type': 'URL', 'text': u['texto'], 'url': u['url'], 'example': [u['exemplo']]})
+    botoes += [{'type': 'QUICK_REPLY', 'text': b} for b in t['botoes']]
     return {'name': t['nome'], 'language': 'pt_BR', 'category': 'UTILITY',
             'components': [{'type': 'BODY', 'text': t['corpo'], 'example': {'body_text': [t['exemplo']]}},
-                           {'type': 'BUTTONS', 'buttons': [{'type': 'QUICK_REPLY', 'text': b} for b in t['botoes']]}]}
+                           {'type': 'BUTTONS', 'buttons': botoes}]}
 
 
 def main():
@@ -104,6 +113,13 @@ def main():
         return
 
     for t in LOTE_C:
+        b = banco[t['nome']]
+        if b['meta_id'] and '--reenviar' in sys.argv and t['nome'] in sys.argv:
+            # template rejeitado: edita o mesmo id (a Meta aceita editar REJECTED) com o texto novo do banco
+            corpo = {k: v for k, v in payload(t).items() if k in ('category', 'components')}
+            r = graph('POST', f"/{b['meta_id']}", corpo)
+            print(f"{t['nome']} (reenvio do id {b['meta_id']}): {r}")
+            continue
         if banco[t['nome']]['meta_id']:
             print(f"{t['nome']}: já submetido (id {banco[t['nome']]['meta_id']}, {banco[t['nome']]['status']}) — pulei")
             continue

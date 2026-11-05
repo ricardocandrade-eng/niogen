@@ -204,7 +204,7 @@ def t9():
     tpl = sql("select nome as k, public.mari_render_template(nome, case nome when 'nio_retomada_lead_d3' "
               "then '[\"tudo bem\", \"internet fibra em Juiz de Fora\"]'::jsonb when 'nio_confirmacao_visita' "
               "then '[\"Marina\", \"quinta-feira, 06/11\", \"14h às 15h\", \"Rua Halfeld, 500, apto 302\"]'::jsonb "
-              "when 'nio_lembrete_biometria' then '[\"Ana\", \"https://exemplo.test/bio/abc\"]'::jsonb "
+              "when 'nio_lembrete_biometria' then '[\"Ana\"]'::jsonb "
               "when 'nio_instalacao_agendada' then '[\"Ana\", \"terça-feira, 17/11\", \"manhã, 8h às 12h\", \"Rua Halfeld, 500, Centro\"]'::jsonb "
               "when 'nio_lembrete_instalacao' then '[\"Ana\", \"17/11\", \"manhã\"]'::jsonb "
               "else '[\"Ana\"]'::jsonb end) as t from public.config_templates_waba")
@@ -243,7 +243,8 @@ def venda_teste(n, **c):
 
 def t12():
     # biometria por link enviada qua 11/11 10h → D+1 (qui 12/11) lembrete; D+3 (sáb 14/11) humano liga.
-    sql(venda_teste(15, biometria_status="'pendente'", biometria_link="'https://exemplo.test/bio/abc'",
+    LINK = 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/teste15abc'
+    sql(venda_teste(15, biometria_status="'pendente'", biometria_link=f"'{LINK}'",
                     biometria_link_enviado_em="'2026-11-11 10:00-03'")
         + conv(15, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(115)}'", nome_contato="'Bia Teste'",
                nome_confiavel='true', ultima_msg_lead_at="'2026-11-11 09:30-03'")
@@ -252,12 +253,12 @@ def t12():
     a1 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela fechada → template C1 (PENDING até a Meta aprovar)
     sql(f"update public.mari_conversas set ultima_msg_lead_at = '2026-11-12 10:00-03' where id = '{uid(15)}'")
     a2 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela aberta → texto livre com o link
-    ok2 = a2 and a2['proximo_passo'] == 'BIO1' and a2['pode_enviar'] and a2['acao'] == 'texto' and 'exemplo.test/bio/abc' in (a2['texto'] or '')
+    ok2 = a2 and a2['proximo_passo'] == 'BIO1' and a2['pode_enviar'] and a2['acao'] == 'texto' and LINK in (a2['texto'] or '')
     if ok2:
         sql(f"select public.mari_cadencia_registrar('{uid(15)}', 'BIO1', true, null, '2026-11-12 10:30-03', $${a2['texto']}$$, null)")
     a3 = um(sql(avaliar(15, '2026-11-14 10:30-03')))
     ok = (a0 and a0['proximo_passo'] == 'BIO1' and not a0['pode_enviar']
-          and a1 and a1['proximo_passo'] == 'BIO1' and a1['template'] == 'nio_lembrete_biometria' and a1['params'][1] == 'https://exemplo.test/bio/abc'
+          and a1 and a1['proximo_passo'] == 'BIO1' and a1['template'] == 'nio_lembrete_biometria' and a1['params'][1] == 'teste15abc' and 'Fazer a biometria' in (a1['texto'] or '')
           and ok2
           and a3 and a3['proximo_passo'] == 'BIO3' and not a3['pode_enviar'] and a3['ligar_sugerido'])
     checa('12 · biometria pendente: D+1 lembrete com o link; D+3 → humano liga (nunca automático)', bool(ok),
