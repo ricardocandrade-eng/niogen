@@ -880,3 +880,31 @@ button.cartao { font: inherit; color: var(--text); text-align: left; width: 100%
   .f-tempo span { font-size: 11px; }
   .f-bloco-cab span { max-width: 55%; }
 }
+
+/* Painel no padrão (05/11): "Precisam de ação agora" + blocos curtos que levam às telas */
+.lista-acao { display: flex; flex-direction: column; }
+.la { display: grid; grid-template-columns: minmax(0, 1.2fr) auto minmax(0, 1.4fr); align-items: center; gap: 6px 14px; padding: 10px 4px; border-bottom: 1px solid var(--border); color: var(--text); text-decoration: none; border-radius: 6px; }
+.la:last-child { border-bottom: 0; }
+.la:hover { background: var(--surface-2); color: var(--text); }
+.la-cli b { display: block; font-weight: 600; font-size: 13px; }
+.la-cli small { display: block; color: var(--muted); font-size: 12px; }
+.la .pill { justify-self: start; }
+.vazio-curto { padding: 14px 4px; font-size: 13px; color: var(--muted); }
+.painel-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.bloco-curto { gap: 10px; }
+.bloco-curto h2 { font-size: 14px; }
+a.q-item { color: var(--text); text-decoration: none; }
+a.q-item:hover .q-linha span:first-child { text-decoration: underline; }
+.q-trilho i { display: block; height: 6px; border-radius: 3px; background: var(--muted); }
+.q-trilho i.et-qualificado { background: var(--info-fg); }
+.q-trilho i.et-ativo { background: var(--ok-fg); }
+.bc-num { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bc-num .mono { font-size: 28px; font-weight: 600; }
+.bc-linha { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text); text-decoration: none; padding: 4px 0; border-top: 1px solid var(--border); }
+.bc-linha:hover { color: var(--text); text-decoration: underline; }
+.cab-acoes .periodo .sel { min-height: 40px; }
+@media (max-width: 760px) {
+  .la { grid-template-columns: minmax(0, 1fr) auto; }
+  .la-prox { grid-column: 1 / -1; }
+  .cab-acoes { flex-wrap: wrap; }
+}

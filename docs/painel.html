@@ -1,5 +1,10 @@
 <!doctype html>
-<!-- NIOGEN | docs/painel.html | 03/11/2026 — Painel do dia · aba Operação (v_painel_mes, v_painel_hoje, v_alertas_contrato, v_dfv_resumo) -->
+<!-- NIOGEN | docs/painel.html | 03/11/2026 · 05/11 rodada noturna — Painel no padrão de telas.
+     Topo: Período (padrão Este mês) + 4 KPIs (Vendidas/meta com barra · Instaladas · Comissão prevista · Precisam de ação).
+     Abaixo: "Precisam de ação agora" (as 8 primeiras, clique → ficha da venda em gaveta) e blocos curtos que levam às telas:
+     Vendas por etapa → Quadro · Instalações de hoje · Mari: conversas que precisam de humano (admin/backoffice) · Cobertura JF.
+     Nada de tabela larga: o gráfico por dia e as quebras por origem/cidade/vendedor/plano/forma saíram daqui (vão para o Placar).
+     Dados: v_funil (KPIs e lista, mesma regra da tela Vendas), contatos_cliente, mari_conversas/mari_turnos, v_dfv_resumo, importacoes. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,168 +16,182 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=051126-2">
-<script src="config.js?v=051126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-3">
+<script src="config.js?v=051126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=051126-2"></script>
-<script src="assets/sidebar.js?v=051126-2"></script>
+<script src="assets/app.js?v=051126-3"></script>
+<script src="assets/sidebar.js?v=051126-3"></script>
+<script src="assets/ficha.js?v=051126-3"></script>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="painel"></nav>
-  <main class="main" id="main">
-    <header class="page-head">
-      <div class="tit">
+  <main class="main com-fab">
+    <header class="cab">
+      <div>
         <h1 id="titulo">Painel</h1>
-        <span class="sub" id="sub">Carregando…</span>
+        <div class="sub" id="sub">Carregando…</div>
       </div>
-      <div class="abas" role="tablist">
-        <button type="button" class="aba ativa" role="tab" aria-selected="true">Operação</button>
-        <button type="button" class="aba" disabled title="em breve">Mari</button>
-        <button type="button" class="aba" disabled title="em breve">WABA</button>
-        <button type="button" class="aba" disabled title="em breve">Meta Ads</button>
+      <div class="cab-acoes">
+        <span id="f-periodo"></span>
+        <a class="btn btn-acc acao-principal" href="vendas.html#nova">＋ Nova venda</a>
       </div>
     </header>
-    <div id="conteudo"><div class="carregando">Carregando…</div></div>
+
+    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+
+    <section class="painel" aria-labelledby="t-acao">
+      <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=acao" id="ver-acao">ver todas →</a></div>
+      <div class="lista-acao" id="lista-acao"><div class="carregando">Carregando…</div></div>
+    </section>
+
+    <div class="painel-grade" id="blocos"></div>
   </main>
 </div>
+<a class="fab" href="vendas.html#nova" aria-label="Nova venda">＋</a>
 <script>
 (async function () {
-  const { esc, ORIGENS, FORMAS } = NG;
-  await NG.exigirLogin();
+  const { esc, ETAPAS } = NG;
+  const eu = await NG.exigirLogin();
   NGSidebar.montar();
 
-  const hoje = NG.diaSP();                       // AAAA-MM-DD
-  const [ano, mes, diaHoje] = hoje.split('-').map(Number);
-  const mesISO = `${hoje.slice(0, 7)}-01`;
-  const diasNoMes = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
-  const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
-  const diaSemana = (d) => new Date(Date.UTC(ano, mes - 1, d)).getUTCDay();
-  const util = (d) => diaSemana(d) >= 1 && diaSemana(d) <= 5;   // seg–sex (sem tabela de feriados ainda)
-  const pct = (a, b) => (b ? Math.min(100, (a / b) * 100) : 0);
-  const n = (v) => NG.fmtNum(v || 0);
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
+  const veMari = ['admin', 'backoffice'].includes(eu.perfil);
+  let vendas = [], metas = [], ultimoContato = {}, base, osab = null, mari;   // base/mari: undefined = carregando
 
-  const [rm, rh, ra, ri, rd, rz] = await Promise.all([
-    NG.sb.from('v_painel_mes').select('*').eq('mes', mesISO).maybeSingle(),
-    NG.sb.from('v_painel_hoje').select('*').maybeSingle(),
-    NG.sb.from('v_alertas_contrato').select('*'),
-    NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
-    NG.sb.from('v_placar_dfv').select('*').eq('mes', mesISO).maybeSingle(),
-    NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
-  ]);
-  const erro = rm.error || rh.error || ra.error || ri.error || rd.error || rz.error;
-  if (erro) { document.getElementById('conteudo').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro))}</div>`; return; }
+  // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
+  let extrasPedidos = false;
+  async function carregar() {
+    const [rv, rm, rc, ri] = await Promise.all([
+      NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
+      NG.sb.from('config_metas').select('*'),
+      NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
+      NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
+    ]);
+    if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
+    vendas = rv.data || [];
+    metas = rm.data || [];
+    ultimoContato = NG.ultimosContatos(rc.data);
+    osab = (ri.data || [])[0] || null;
+    render();
+    if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
+  }
+  async function carregarExtras() {
+    const [rz, rmari] = await Promise.all([
+      NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
+      veMari ? carregarMari() : Promise.resolve(null),
+    ]);
+    base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
+    mari = rmari || { lista: [] };
+    render();
+  }
 
-  const m = rm.data || { vendidas: 0, instaladas: 0, aguardando: 0, ativas_carteira: 0, saidas: 0, comissao_prevista: 0, comissao_instalada: 0, comissao_em_risco: 0,
-    por_origem: {}, por_cidade: {}, por_vendedor: [], por_plano: {}, por_forma: {}, por_dia_vendas: {}, por_dia_instaladas: {} };
-  const h = rh.data || {};
-  const dfv = rd.data || { qualificadas: 0, dfv_consultadas: 0, dfv_viaveis: 0, dfv_sem_cobertura: 0 };
-  const base = rz.data;   // base DFV de JF (nio_hp)
-  const alertas = ra.data || [];
-  const osab = (ri.data || [])[0];
-  const meta = m.meta_vendas || 0;
+  // Mari: conversas que pediram humano e ninguém respondeu ainda (a mesma regra da tela Mari; testes fora).
+  const ENCERRA = ['recusa_compra', 'sem_cobertura', 'fora_de_area', 'ja_cliente_nio', 'sem_contato'];
+  async function carregarMari() {
+    const { data, error } = await NG.sb.from('mari_conversas').select('id, telefone, canal, nome_contato, handoff_em, handoff_motivo, status')
+      .eq('status', 'handoff_realizado').order('handoff_em', { ascending: true }).limit(500);
+    if (error) return { erro: NG.msgErro(error) };
+    const esperando = (data || []).filter((c) => c.canal !== 'teste' && !String(c.telefone || '').startsWith('5500000000')
+      && c.handoff_motivo !== 'dados_completos' && !ENCERRA.includes(c.handoff_motivo));
+    if (!esperando.length) return { lista: [] };
+    const { data: t } = await NG.sb.from('mari_turnos').select('conversa_id, created_at').eq('papel', 'humano').in('conversa_id', esperando.slice(0, 300).map((c) => c.id));
+    const respondeu = new Set((t || []).filter((x) => { const c = esperando.find((y) => y.id === x.conversa_id); return c && new Date(x.created_at) >= new Date(c.handoff_em); }).map((x) => x.conversa_id));
+    return { lista: esperando.filter((c) => !respondeu.has(c.id)) };
+  }
 
-  document.getElementById('titulo').textContent = `Painel · ${nomeMes}`;
-  const fraseDia = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, weekday: 'long', day: '2-digit', month: '2-digit' }).format(new Date());
-  document.getElementById('sub').textContent = `${fraseDia.charAt(0).toUpperCase() + fraseDia.slice(1)} · atualizado ${NG.fmtHora(new Date())} · ` +
-    (osab ? `OSAB de ${osab.dt_ref ? osab.dt_ref.split('-').reverse().slice(0, 2).join('/') : '—'} aplicado ${NG.fmtDataHora(osab.aplicado_em)}` : 'OSAB ainda não importado');
+  const metaDoMes = (aaaamm) => { const m = metas.find((x) => String(x.mes).slice(0, 7) === aaaamm); return m ? Number(m.meta_vendas) : 0; };
+  const URG = { bad: 0, warn: 1 };
+  const proximo = (v) => NG.proximoPasso(v, ultimoContato[v.id]);
 
-  // Ritmo da meta.
-  const uteisRestantes = Array.from({ length: diasNoMes - diaHoje + 1 }, (_, i) => diaHoje + i).filter(util).length;
-  const uteisPassados = Array.from({ length: diaHoje }, (_, i) => i + 1).filter(util).length;
-  const faltam = Math.max(0, meta - m.vendidas);
-  const ritmo = uteisPassados ? m.vendidas / uteisPassados : 0;
-  const precisa = uteisRestantes ? faltam / uteisRestantes : faltam;
-  const dec = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+  function render() {
+    const p = per.valor();
+    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+    const fraseDia = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, weekday: 'long', day: '2-digit', month: '2-digit' }).format(new Date());
+    document.getElementById('titulo').textContent = 'Painel';
+    document.getElementById('sub').textContent = `${fraseDia.charAt(0).toUpperCase() + fraseDia.slice(1)} · atualizado ${NG.fmtHora(new Date())} · `
+      + (osab ? `OSAB de ${osab.dt_ref ? NG.fmtDiaISO(osab.dt_ref).slice(0, 5) : '—'} aplicado ${NG.fmtDataHora(osab.aplicado_em)}` : 'OSAB ainda não importado');
 
-  // Barras por dia: barra = vendas, traço = instaladas.
-  const vDia = m.por_dia_vendas || {}, iDia = m.por_dia_instaladas || {};
-  const chave = (d) => `${hoje.slice(0, 7)}-${String(d).padStart(2, '0')}`;
-  const maxDia = Math.max(1, ...Object.values(vDia), ...Object.values(iDia));
-  const barras = Array.from({ length: diasNoMes }, (_, i) => {
-    const d = i + 1, nv = vDia[chave(d)] || 0, ni = iDia[chave(d)] || 0, futuro = d > diaHoje;
-    return `<div class="g-col${futuro ? ' futuro' : ''}${d === diaHoje ? ' hoje' : ''}" title="${String(d).padStart(2, '0')}/${String(mes).padStart(2, '0')} · ${nv} vendas · ${ni} instaladas">
-      <div class="g-barra" style="height:${futuro ? 0 : pct(nv, maxDia)}%"></div>
-      ${ni ? `<div class="g-traco" style="bottom:${pct(ni, maxDia)}%"></div>` : ''}
-    </div>`;
-  }).join('');
-  const dd = (d) => `${String(d).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+    // ---------- KPIs do período (a mesma conta da tela Vendas: vendidas pela data da venda) ----------
+    const V = vendas.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
+    const inst = vendas.filter((v) => v.instalado_em && NG.noPeriodo(v.instalado_em, p));
+    const aguard = V.filter((v) => ['1_vendido', '2_aguardando_instalacao'].includes(v.status)).length;
+    const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
+    const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
+    const acao = vendas.filter((v) => v.status !== 'saida' && proximo(v).acao)
+      .map((v) => ({ v, pr: proximo(v) }))
+      .sort((a, b) => (URG[a.pr.nivel] ?? 2) - (URG[b.pr.nivel] ?? 2) || new Date(a.v.criado_em) - new Date(b.v.criado_em));
+    const verm = acao.filter((x) => x.pr.nivel === 'bad').length;
+    const faltam = Math.max(0, meta - V.length);
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: meta ? 'Vendidas · meta' : 'Vendidas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
+        nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
+        dica: 'Vendas com pedido e biometria aprovada (data da venda) no período.' }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst.length), nota: `${NG.fmtNum(aguard)} vendida${aguard === 1 ? '' : 's'} aguardando instalação` }),
+      NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
+        dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
+      NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
+        nota: acao.length ? `${NG.fmtNum(verm)} atrasada${verm === 1 ? '' : 's'} ou com prazo do contrato estourando` : 'nada pendente ✓',
+        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, biometria, contato, DFV, documentos, pendência da Nio.' }),
+    ].join('');
 
-  const linhaBarra = (rotulo, valor, total, cor) => `<div class="q-item">
-      <div class="q-linha"><span>${esc(rotulo)}</span><span class="mono">${n(valor)}</span></div>
-      <div class="q-trilho"><div style="width:${pct(valor, total)}%;background:${cor}"></div></div></div>`;
-  const linhaSimples = (rotulo, valor, extra) => `<div class="q-linha"><span>${esc(rotulo)}</span><span class="mono">${valor}${extra ? ` <small>${extra}</small>` : ''}</span></div>`;
-  const ordenado = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]);
-  const CORES = ['var(--accent)', '#6FB1F7', '#B49CF2', '#F2B84B', '#8FE39A', '#A6AFBE'];
+    // ---------- Precisam de ação agora (8 primeiras) ----------
+    const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
+    document.getElementById('lista-acao').innerHTML = acao.length ? acao.slice(0, 8).map(({ v, pr }) => `
+      <a class="la" href="#venda=${v.id}">
+        <span class="la-cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></span>
+        ${NG.pilulaEtapa(v.status)}
+        <span class="la-prox">${NG.proxPasso(pr)}</span>
+      </a>`).join('') : '<div class="vazio-curto">Nada pendente agora ✓</div>';
+    document.getElementById('ver-acao').textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver em Vendas →';
 
-  const origens = ordenado(m.por_origem);
-  const formas = m.por_forma || {};
-  const autom = (formas.cartao || 0) + (formas.dacc || 0);
-  const nivelCor = { bad: 'bad', warn: 'warn' };
+    // ---------- blocos curtos ----------
+    const blocos = [];
+    // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
+    const porEtapa = Object.fromEntries(ETAPAS.map((e) => [e.id, 0]));
+    vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v.status).id; if (e in porEtapa) porEtapa[e] += 1; });
+    const maxE = Math.max(1, ...ETAPAS.filter((e) => e.id !== 'saida').map((e) => porEtapa[e.id]));
+    blocos.push(`<section class="painel bloco-curto">
+      <div class="q-linha"><h2>Vendas por etapa</h2><a class="muted" href="vendas.html?vista=quadro">Quadro →</a></div>
+      ${ETAPAS.filter((e) => e.id !== 'saida').map((e) => `<a class="q-item" href="vendas.html?vista=quadro&amp;etapa=${e.id}">
+        <div class="q-linha"><span>${esc(e.nome)}</span><span class="mono">${NG.fmtNum(porEtapa[e.id])}</span></div>
+        <div class="q-trilho"><i class="et-${e.id}" style="width:${(porEtapa[e.id] / maxE) * 100}%"></i></div></a>`).join('')}
+      <span class="nota-campo">Saída: ${NG.fmtNum(porEtapa.saida)} no período · abertas aparecem sempre</span>
+    </section>`);
+    // Instalações de hoje → Instalações
+    const hoje = NG.diaSP();
+    const instHoje = vendas.filter((v) => !v.instalado_em && v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && NG.diaSP(v.instalacao_agendada_para) === hoje)
+      .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
+    const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
+    const semAgenda = vendas.filter((v) => v.status === '1_vendido').length;
+    blocos.push(`<section class="painel bloco-curto">
+      <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>
+      <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
+      ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
+      ${semAgenda ? `<span class="prox ${vendas.some((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} vendida${semAgenda === 1 ? '' : 's'} sem agendamento</span>` : ''}
+    </section>`);
+    // Mari: conversas que precisam de humano (só admin/backoffice veem a Mari)
+    if (veMari) {
+      const lista = (mari && mari.lista) || [];
+      blocos.push(`<section class="painel bloco-curto">
+        <div class="q-linha"><h2>Mari · precisam de humano</h2><a class="muted" href="mari.html">Mari →</a></div>
+        ${mari === undefined ? '<span class="nota-campo">Carregando…</span>' : mari.erro ? `<span class="nota-campo">${esc(mari.erro)}</span>` : `<div class="bc-num"><span class="mono ${lista.length ? 'warn-txt' : ''}">${NG.fmtNum(lista.length)}</span><span class="muted">conversa${lista.length === 1 ? '' : 's'} esperando um consultor</span></div>
+        ${lista.slice(0, 4).map((c) => `<a class="bc-linha" href="mari.html?conversa=${esc(c.id)}"><span>${esc(c.nome_contato || 'Contato')}</span><span class="muted">desde ${esc(NG.quando(c.handoff_em))} ${esc(NG.fmtHora(c.handoff_em))}</span></a>`).join('')}`}
+      </section>`);
+    }
+    // Cobertura JF (base DFV) → Cobertura
+    blocos.push(`<section class="painel bloco-curto">
+      <div class="q-linha"><h2>Cobertura JF (DFV)</h2><a class="muted" href="cobertura.html">Consultar →</a></div>
+      ${base === undefined ? '<span class="nota-campo">Carregando…</span>' : base && base.erro ? `<span class="nota-campo">Resumo indisponível agora (${esc(base.erro)}).</span>` : base ? `<div class="bc-num"><span class="mono">${NG.fmtNum(base.hp_livre)}</span><span class="muted">portas livres (HP) · ${NG.fmtNum(Number(base.pct_ocupacao) * 100)} % ocupado</span></div>
+        <span class="nota-campo">Base de ${esc(NG.fmtDiaISO(base.particao))} · consulta por CEP e número na tela Cobertura</span>`
+        : '<span class="nota-campo">Base DFV ainda não carregada.</span>'}
+    </section>`);
+    document.getElementById('blocos').innerHTML = blocos.join('');
+  }
 
-  document.getElementById('conteudo').innerHTML = `
-    <div class="duas">
-      <div class="painel hero" style="flex:2 1 420px">
-        <div class="q-linha muted"><span>Vendas do mês (biometria aprovada)</span><span>${meta ? `meta ${meta}` : 'sem meta'}</span></div>
-        <div class="hero-num"><span class="mono">${n(m.vendidas)}</span><span>${meta ? (faltam ? `faltam ${faltam} · ${uteisRestantes} dias úteis · precisa de ${dec(precisa)}/dia` : 'meta batida ✓') : ''}</span></div>
-        <div class="meta-trilho"><div style="width:${pct(m.instaladas, meta || m.vendidas)}%;background:var(--accent)"></div><div style="width:${pct(m.aguardando, meta || m.vendidas)}%;background:#2E6B3A"></div></div>
-        <div class="legenda"><span><i style="background:var(--accent)"></i> ${n(m.instaladas)} ${m.instaladas === 1 ? 'instalada' : 'instaladas'}</span><span><i style="background:#2E6B3A"></i> ${n(m.aguardando)} aguardando instalação</span><span>· ritmo: ${dec(ritmo)}/dia útil até agora</span></div>
-      </div>
-      <div class="painel hero" style="flex:1 1 200px">
-        <span class="muted">Parcial de hoje</span>
-        <span class="mono hero-med">${n(h.vendas_hoje)}</span>
-        <span class="muted">${h.vendas_hoje === 1 ? 'venda' : 'vendas'} · ${n(h.instaladas_hoje)} ${h.instaladas_hoje === 1 ? 'instalada' : 'instaladas'} · ${n(h.biometrias_hoje)} ${h.biometrias_hoje === 1 ? 'biometria marcada' : 'biometrias marcadas'}</span>
-      </div>
-      <div class="painel hero" style="flex:1 1 200px">
-        <span class="muted">Comissão prevista do mês</span>
-        <span class="mono hero-med">${NG.fmtMoeda(m.comissao_prevista)}</span>
-        <span class="muted">${NG.fmtMoeda(m.comissao_instalada)} já instalada · ${NG.fmtMoeda(m.comissao_em_risco)} com alerta de estorno do OSAB</span>
-        ${Number(m.comissao_prevista) ? `<span class="muted" style="font-size:11px">${NG.fmtMoeda(m.comissao_nominal)} nominal · ${NG.fmtMoeda(m.comissao_adicionais)} adicionais · ${NG.fmtMoeda(Number(m.bonus_transicao || 0) + Number(m.bonus_nmei || 0))} bônus · + ${NG.rotulo(`${NG.fmtMoeda(m.bonus_m10_potencial)} M-10 potencial`, 'm10')} (fora)</span>` : ''}
-      </div>
-    </div>
-
-    <div class="kpis seis" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-      <a class="kpi" href="vendas.html?vista=quadro&amp;etapa=qualificado"><span class="rot">Qualificados (Mari)</span><span class="val">${n(h.qualificados)}</span><span class="nota">${n(h.esperando_biometria)} esperam biometria</span></a>
-      <a class="kpi ${h.sem_agendamento_4h ? 'bad' : ''}" href="instalacoes.html"><span class="rot">Sem agendamento &gt; 4 h</span><span class="val">${n(h.sem_agendamento_4h)}</span><span class="nota">indicador do contrato</span></a>
-      <a class="kpi" href="instalacoes.html"><span class="rot">Instalações hoje</span><span class="val">${n((h.instaladas_hoje || 0) + (h.instalacoes_agendadas_hoje || 0))}</span><span class="nota">${n(h.instaladas_hoje)} feita${h.instaladas_hoje === 1 ? '' : 's'} · ${n(h.instalacoes_agendadas_hoje)} agendada${h.instalacoes_agendadas_hoje === 1 ? '' : 's'}</span></a>
-      <a class="kpi ${h.pendencias_osab ? 'warn' : ''}" href="instalacoes.html"><span class="rot">Pendência OSAB</span><span class="val">${n(h.pendencias_osab)}</span><span class="nota">${esc(h.pendencia_top ? h.pendencia_top.toLowerCase() + ' · reagendar' : 'nenhuma')}</span></a>
-      <div class="kpi"><span class="rot">Ativos na carteira</span><span class="val">${n(m.ativas_carteira)}</span><span class="nota">adimplência chega com as faturas</span></div>
-      <a class="kpi ${dfv.qualificadas && dfv.dfv_consultadas < dfv.qualificadas ? 'warn' : ''}" href="vendas.html?vista=quadro&amp;etapa=qualificado"><span class="rot">${NG.rotuloTxt('DFV viável ÷ qualificadas', NG.TEXTOS_DFV.placar)}</span><span class="val">${n(dfv.dfv_viaveis)} / ${n(dfv.qualificadas)}</span><span class="nota">${n(dfv.dfv_consultadas)} consultada${dfv.dfv_consultadas === 1 ? '' : 's'} · ${dfv.pct_viavel_consultadas != null ? NG.fmtNum(dfv.pct_viavel_consultadas) + ' % viáveis' : 'nenhuma consulta'}</span></a>
-      <a class="kpi" href="cobertura.html" title="Base DFV da Nio no Supabase · consulta rápida, painel e resumo na tela Cobertura (DFV)"><span class="rot">Cobertura JF (DFV)</span><span class="val">${base ? n(base.hp_livre) : '—'}</span><span class="nota">${base
-        ? `HP livre · ${NG.fmtNum(Number(base.pct_ocupacao) * 100)} % ocupado · base de ${NG.fmtDiaISO(base.particao).slice(0, 5)} · consultar →`
-        : 'base DFV ainda não carregada'}</span></a>
-      <a class="kpi" href="vendas.html"><span class="rot">Saídas no mês</span><span class="val">${n(m.saidas)}</span><span class="nota">${esc(m.saidas_motivo_top || '—')}</span></a>
-    </div>
-
-    <div class="duas">
-      <section class="painel" style="flex:2 1 480px">
-        <div class="q-linha"><h2>Vendas por dia · ${esc(nomeMes)}</h2><span class="muted">barra = vendas · traço = instaladas</span></div>
-        <div class="grafico" role="img" aria-label="Vendas por dia no mês">${barras}</div>
-        <div class="q-linha muted" style="font-size:11px"><span>${dd(1)}</span><span>${dd(8)}</span><span>${dd(15)}</span><span>hoje ${dd(diaHoje)}</span><span>${dd(diasNoMes)}</span></div>
-      </section>
-      <section class="painel" style="flex:1 1 260px;gap:10px">
-        <h2>Por origem · mês</h2>
-        ${origens.length ? origens.map(([o, v], i) => linhaBarra(ORIGENS[o] || o, v, m.vendidas, CORES[i % CORES.length])).join('') : '<span class="muted">—</span>'}
-        <h2 style="margin-top:8px">Por cidade</h2>
-        ${ordenado(m.por_cidade).map(([c, v]) => linhaSimples(c, n(v))).join('') || '<span class="muted">—</span>'}
-      </section>
-      <section class="painel" style="flex:1 1 260px;gap:10px">
-        <h2>Por vendedor · mês</h2>
-        ${(m.por_vendedor || []).map((x) => linhaSimples(x.nome, n(x.vendidas), `· ${n(x.instaladas)} inst.`)).join('') || '<span class="muted">—</span>'}
-        <h2 style="margin-top:8px">Por plano</h2>
-        ${ordenado(m.por_plano).map(([p, v]) => linhaSimples(p, n(v))).join('') || '<span class="muted">—</span>'}
-        <h2 style="margin-top:8px">Forma de pagamento</h2>
-        ${m.vendidas ? linhaSimples('Cartão / DACC', `<span style="color:var(--ok-fg)">${n(autom)} · ${Math.round(pct(autom, m.vendidas))} %</span>`) + linhaSimples(FORMAS.boleto, n(formas.boleto)) : '<span class="muted">—</span>'}
-      </section>
-    </div>
-
-    <section class="painel">
-      <h2>Agora · o que precisa de alguém</h2>
-      <div class="alertas">
-        ${alertas.length ? alertas.map((a) => `<a class="alerta ${nivelCor[a.nivel] || ''}" href="${esc(a.link)}">${esc(NG.primeiroNome(a.cliente_nome))} · ${esc(a.texto)}</a>`).join('')
-          : '<span class="muted">Nada pendente agora ✓</span>'}
-      </div>
-    </section>`;
+  NGFicha.aoMudar(() => carregar());
+  await carregar();
+  NGFicha.iniciar();
 })();
 </script>
 </body>

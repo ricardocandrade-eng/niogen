@@ -14,12 +14,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=051126-2">
-<script src="config.js?v=051126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-3">
+<script src="config.js?v=051126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=051126-2"></script>
-<script src="assets/sidebar.js?v=051126-2"></script>
-<script src="assets/ficha.js?v=051126-2"></script>
+<script src="assets/app.js?v=051126-3"></script>
+<script src="assets/sidebar.js?v=051126-3"></script>
+<script src="assets/ficha.js?v=051126-3"></script>
 </head>
 <body>
 <div class="app">
@@ -255,6 +255,8 @@
   // ?etapa= (links antigos do Funil e do Painel): abre a aba na Lista; no Quadro, leva até a coluna.
   const etapaIni = ETAPAS.some((e) => e.id === qsIni.get('etapa')) ? qsIni.get('etapa') : null;
   if (etapaIni) aba = etapaIni;
+  // ?aba=acao ("ver todas" do Painel): abre direto em "Precisam de ação".
+  if (qsIni.get('aba') === 'acao') aba = 'acao';
   const mainEl = document.querySelector('main.main');
   const vistaEl = document.querySelector('.seg.vista');
 
