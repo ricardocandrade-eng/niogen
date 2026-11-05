@@ -143,6 +143,14 @@ const EMOJI_PROIBIDOS = new Set(['🎯', '📍', '💰', '✅', '🚀', '✨', '
 let baloes = String(texto || '').split(/\s*\|\|\s*/).map((s) => s.trim()).filter(Boolean);
 if (baloes.length > 3) baloes = [baloes[0], baloes[1], baloes.slice(2).join('\n\n')];
 const emojiAjustes = [];
+// v4 (Ricardo, 05/11, pendência 47): ✅ e 🎯 liberados SÓ nas falas de cobertura do roteiro — "a Nio atende o seu
+// endereço ✅" e "a Nio atende aí em [cidade] 🎯". Viram marcador antes da regra de emoji (não contam no limite) e voltam no fim.
+const SELO_OK = '\u0001OK\u0001', SELO_AL = '\u0001AL\u0001';
+if (V4) {
+  baloes = baloes.map((b) => b
+    .replace(/(atende o seu endere[cç]o!?)[ \t]*✅️?/gi, (m, f) => `${f} ${SELO_OK}`)
+    .replace(/(atende (?:a[ií] em [^\n.!🎯]{2,40}?|a sua cidade)[.!]?)[ \t]*🎯/gi, (m, f) => `${f.trimEnd()} ${SELO_AL}`));
+}
 if (V3) {
   const limpa = (s) => s.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/^[ \t]+/gm, '').trim();
   baloes = baloes.map((b) => {
@@ -159,6 +167,7 @@ if (V3) {
     baloes = baloes.map((b) => limpa(b.replace(EMOJI_RE, (e) => { if (livres > 0) { livres -= 1; return e; } emojiAjustes.push('acima de 2 na conversa'); return ''; })));
   }
 }
+if (V4) baloes = baloes.map((b) => b.split(SELO_OK).join('✅').split(SELO_AL).join('🎯'));
 texto = baloes.join('\n\n');
 
 // ── 5. atualizações da conversa ──

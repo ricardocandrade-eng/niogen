@@ -175,9 +175,21 @@ NEGA_COBERTURA = (r'nao atende (o seu|seu|esse|ai)|ainda nao chegou|nao chegou (
                   r'nao tem (cobertura|fibra)|fibra .{0,20}chegar na sua rua')
 
 
+def sem_selo(x):
+    """pendência 47: ✅/🎯 colados nas falas de cobertura não contam como emoji (v4)."""
+    if not V4:
+        return x or ''
+    x = re.sub(r'(atende o seu endere[cç]o!?)\s*✅', r'\1', x or '', flags=re.I)
+    return re.sub(r'(atende (?:a[ií] em [^\n.!]{2,40}?|a sua cidade)[.!]?)\s*🎯', r'\1', x, flags=re.I)
+
+
 def checar_global(resp, cluster, baloes=None):
     falhas = []
     t = resp or ''
+    if V4:
+        # pendência 47: ✅/🎯 só valem colados nas falas de cobertura; fora delas continuam proibidos.
+        t = sem_selo(t)
+        baloes = [sem_selo(b) for b in baloes] if baloes else baloes
     n = norm(t)
     if True:   # v3+ nas duas rotas
         for e in EMOJI_PROIBIDOS:
@@ -994,7 +1006,7 @@ def rodar(n):
         # Regra de emoji da v3: cliente sem emoji → a Mari usa no máximo 2 na conversa (a resposta fixa de mídia,
         # do motor, fica fora da conta).
         cliente = sum(len(emojis(t['lead'])) for t in log)
-        mari = sum(len(emojis(t['mari'])) for t in log if t['r'].get('modelo') != 'fixo:midia')
+        mari = sum(len(emojis(sem_selo(t['mari']))) for t in log if t['r'].get('modelo') != 'fixo:midia')
         if not cliente and mari > 2:
             glob.append(f'{mari} emojis da Mari numa conversa em que o cliente não usou nenhum')
         ajustes = [a for t in log for a in (t['r'].get('emoji_ajustes') or [])]
