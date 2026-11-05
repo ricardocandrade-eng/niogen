@@ -1,5 +1,8 @@
 <!doctype html>
-<!-- NIOGEN | docs/configuracoes.html | 03/11/2026 — Importação e configurações · aba Importação (OSAB com prévia obrigatória; base DFV: prévia, carga pelo CLI) -->
+<!-- NIOGEN | docs/configuracoes.html | 03/11/2026 · 05/11 rodada noturna — Configurações no padrão de telas (só admin e backoffice).
+     Importação: relatórios da Nio como lista + histórico com status em pílula; prévia, aplicar e detalhes em gaveta.
+     A leitura (NGOsab/NGDfv), a prévia obrigatória e o aplicar_osab são os mesmos de antes; a base DFV segue com carga pelo CLI.
+     Tabela vigente: planos, adicionais, bônus e área como listas padrão (busca, ordenação, cartões no celular), só leitura. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -11,149 +14,228 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=051126-6">
-<script src="config.js?v=051126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-7">
+<script src="config.js?v=051126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=051126-6"></script>
-<script src="assets/sidebar.js?v=051126-6"></script>
-<script src="assets/osab.js?v=051126-6"></script>
-<script src="assets/dfv.js?v=051126-6"></script>
+<script src="assets/app.js?v=051126-7"></script>
+<script src="assets/sidebar.js?v=051126-7"></script>
+<script src="assets/osab.js?v=051126-7"></script>
+<script src="assets/dfv.js?v=051126-7"></script>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="config"></nav>
   <main class="main">
-    <header class="page-head">
-      <div class="tit">
-        <h1>Importação e configurações</h1>
-        <span class="sub">O que a Nio manda entra aqui · o que a Dharma decide fica aqui · só admin e backoffice</span>
+    <header class="cab">
+      <div>
+        <h1>Configurações</h1>
+        <div class="sub">O que a Nio manda entra aqui · o que a Dharma decide fica aqui · só admin e backoffice · Mari e Usuários: em breve</div>
       </div>
-      <div class="abas" role="tablist">
-        <button type="button" class="aba ativa" role="tab" aria-selected="true" data-aba="conteudo">Importação</button>
-        <button type="button" class="aba" role="tab" aria-selected="false" data-aba="tabela">Tabela vigente</button>
-        <button type="button" class="aba" disabled title="em breve">Mari</button>
-        <button type="button" class="aba" disabled title="em breve">Usuários</button>
+      <div class="cab-acoes" id="cab-acoes" hidden>
+        <label class="btn btn-acc acao-principal" style="cursor:pointer">⇪ Importar arquivo da Nio<input type="file" id="arquivo" accept=".xlsx,.xls,.xlsb,.csv" hidden></label>
+        <input type="file" id="arquivo-dfv" accept=".csv" hidden>
       </div>
     </header>
 
-    <div id="sem-acesso" class="placeholder" hidden>A importação é feita por admin ou backoffice.</div>
+    <div id="sem-acesso" class="placeholder" hidden>Configurações e importação são de admin ou backoffice.</div>
+    <div id="abas"></div>
 
+    <!-- Importação -->
     <section id="conteudo" class="secao" hidden>
       <h2 class="secao-tit">Relatórios da Nio</h2>
-      <div class="cards-rel">
-        <div class="rel">
-          <div class="rel-topo"><strong>OSAB · pedidos e instalação</strong><span class="chip" id="osab-ultima">nenhuma importação</span></div>
-          <span class="rel-desc">Chave <span class="mono">PEDIDO</span> · atualiza situação, pendência, data de instalação, venda válida · diário (e-mail ou portal do empresário)</span>
-          <div class="tools">
-            <label class="btn btn-sm" style="display:inline-flex;align-items:center;cursor:pointer">Enviar arquivo<input type="file" id="arquivo" accept=".xlsx,.xls,.xlsb,.csv" hidden></label>
-            <button type="button" class="btn btn-sm btn-ghost" id="ver-ultima" disabled>Ver resumo da última</button>
-          </div>
-        </div>
-        <div class="rel">
-          <div class="rel-topo"><strong>DFV · base HP/HC (viabilidade)</strong><span class="chip" id="dfv-ultima">nenhuma carga</span></div>
-          <span class="rel-desc">Chave <span class="mono">COD_SURVEY</span> + número + complemento · só endereços viáveis · substitui a partição inteira do município · CSV de ~45 MB · também reconhecido no botão do OSAB</span>
-          <div class="tools">
-            <label class="btn btn-sm" style="display:inline-flex;align-items:center;cursor:pointer">Prévia do CSV<input type="file" id="arquivo-dfv" accept=".csv" hidden></label>
-          </div>
-        </div>
-        <div class="rel">
-          <div class="rel-topo"><strong>Extrato quinzenal · Pedidos × Linha a Linha</strong><span class="chip dim">em breve</span></div>
-          <span class="rel-desc">Chave <span class="mono">CONTRATO</span> + <span class="mono">NUM_OS_PEDIDO_SIEBEL</span> · comissão, estorno, bônus por linha · alimenta a Conciliação e a NF</span>
-          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
-        </div>
-        <div class="rel">
-          <div class="rel-topo"><strong>FPD · 1ª, 2ª e 3ª fatura</strong><span class="chip dim">em breve</span></div>
-          <span class="rel-desc">Chave <span class="mono">ID_CONTRATO</span> · 1 linha por fatura · pinta as bolinhas 1–3 da Adimplência · mensal</span>
-          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
-        </div>
-        <div class="rel">
-          <div class="rel-topo"><strong>CHURN · retiradas</strong><span class="chip dim">em breve</span></div>
-          <span class="rel-desc">Chave <span class="mono">NR_ORDEM</span> · tipo (vol/invol), motivo, safra · só indicador de qualidade (churn não estorna) · pedir em .xlsx</span>
-          <div class="tools"><button type="button" class="btn btn-sm" disabled title="em breve">Enviar arquivo</button></div>
-        </div>
-        <div class="rel tracejado" style="grid-column:1/-1">
-          <div class="rel-topo"><strong style="color:var(--muted)">Extrato mensal de faturas (4ª à 10ª)</strong><span class="chip dim">ainda não recebido · pedir ao Rogério</span></div>
-          <span class="rel-desc">Sem ele as bolinhas 4–10 da Adimplência e o bônus M-10 ficam cegos depois do 3º mês.</span>
-        </div>
-      </div>
-      <div class="rodape-info">
-        <span><strong>Como funciona:</strong> o arquivo é identificado pelas colunas, não pelo nome · prévia obrigatória (linhas afetadas, divergências) antes de aplicar · nada sobrescreve dado digitado · o OSAB nunca rebaixa status · cada importação fica no histórico com quem aplicou e quando</span>
-      </div>
-
-      <section class="painel" id="previa" hidden aria-live="polite"></section>
-
-      <section class="painel">
-        <h2>Histórico de importações</h2>
-        <div style="overflow-x:auto">
-          <table class="tab" style="min-width:640px">
-            <thead><tr><th>Quando</th><th>Tipo</th><th>Arquivo</th><th>DT_REF</th><th style="text-align:right">Linhas</th><th style="text-align:right">Casaram</th><th style="text-align:right">Sem venda</th><th>Quem</th></tr></thead>
-            <tbody id="historico"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
-          </table>
-        </div>
+      <section class="lista padrao" aria-label="Relatórios da Nio">
+        <div class="rolagem"><table class="tab">
+          <thead><tr><th>Relatório</th><th class="col-media">Chave</th><th>Última importação</th><th>Situação</th></tr></thead>
+          <tbody id="relatorios"></tbody>
+        </table></div>
+        <div class="rodape-lista"><span>O arquivo é reconhecido pelas colunas, não pelo nome · prévia obrigatória antes de aplicar</span><span>Clique para ver como importar</span></div>
       </section>
+      <div class="cartoes" id="relatorios-c"></div>
+
+      <h2 class="secao-tit">Histórico de importações</h2>
+      <div class="barra-filtros">
+        <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar no histórico" placeholder="Buscar arquivo ou quem importou"></label>
+        <select class="sel" id="f-tipo" aria-label="Tipo"><option value="">Todos os tipos</option><option value="osab">OSAB</option><option value="dfv_hp">DFV</option></select>
+        <span id="f-periodo"></span>
+      </div>
+      <section class="lista padrao" aria-label="Histórico de importações">
+        <div class="rolagem"><table class="tab">
+          <thead><tr><th data-ord="quando" data-dir="desc">Quando</th><th data-ord="tipo">Tipo</th><th>Arquivo</th><th class="col-media">DT_REF</th>
+            <th data-ord="linhas" data-dir="desc" class="num">Linhas</th><th class="num">Casaram</th><th class="num col-media">Sem venda</th><th class="col-media">Quem</th><th>Situação</th></tr></thead>
+          <tbody id="historico"><tr><td colspan="9" class="vazio">Carregando…</td></tr></tbody>
+        </table></div>
+        <div class="rodape-lista"><span id="h-contagem"></span><span>Nada sobrescreve dado digitado · o OSAB nunca rebaixa status</span></div>
+      </section>
+      <div class="cartoes" id="historico-c"></div>
     </section>
 
+    <!-- Tabela vigente -->
     <section id="tabela" class="secao" hidden>
+      <div class="barra-filtros">
+        <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="t-busca" aria-label="Buscar na tabela" placeholder="Buscar plano, código, serviço ou cidade"></label>
+        <select class="sel" id="t-tipo" aria-label="O que mostrar"><option value="planos">Planos</option><option value="adicionais">Serviços adicionais</option><option value="bonus">Bônus</option><option value="area">Área de atuação</option></select>
+        <label class="check-mini"><input type="checkbox" id="t-inativos"> Mostrar inativos</label>
+      </div>
+      <div id="t-secoes"><span class="carregando">Carregando…</span></div>
       <div class="rodape-info"><span><strong>Só leitura.</strong> Portfólio out/26 + Política Comercial PAP de 22/10/2026 (fonte: <span class="mono">docs/TABELA_VIGENTE_NIO_031126_1030.md</span>). Mudou a tabela da Nio: nova migration, nunca edição à mão. Se o portal PAP mostrar outro preço na hora da venda, vale o portal e o Ricardo é avisado.</span></div>
-      <section class="painel tab-bloco"><h2>Planos</h2><div style="overflow-x:auto" id="t-planos"><span class="carregando">Carregando…</span></div></section>
-      <section class="painel tab-bloco"><h2>Serviços adicionais</h2><div style="overflow-x:auto" id="t-adicionais"></div></section>
-      <section class="painel tab-bloco"><h2>Bônus</h2><div style="overflow-x:auto" id="t-bonus"></div></section>
-      <section class="painel tab-bloco"><h2>Área de atuação</h2><div id="t-area" style="display:flex;flex-direction:column;gap:8px"></div></section>
     </section>
   </main>
 </div>
+
+<aside class="gaveta larga" id="gaveta-cfg" aria-label="Detalhe" aria-hidden="true">
+  <div class="g-cab"><div><h2 id="gc-tit">Detalhe</h2><p id="gc-sub"></p></div><button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button></div>
+  <div class="g-corpo" id="previa" aria-live="polite"></div>
+</aside>
 <script>
 (async function () {
   const { esc, STATUS_MAP } = NG;
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
   if (!['admin', 'backoffice'].includes(eu.perfil)) { document.getElementById('sem-acesso').hidden = false; return; }
-  document.getElementById('conteudo').hidden = false;
+  document.getElementById('cab-acoes').hidden = false;
 
   const previa = document.getElementById('previa');
+  const gav = document.getElementById('gaveta-cfg');
   const inputArq = document.getElementById('arquivo');
   const LOTE = 500;
   let usuarios = {};
   let ultima = null;
+  let historico = [];
   let atual = null;   // { arquivo, leitura, casam, mudam, pend, invalidas, semVenda }
 
   const plural = (n, um, varios) => `${NG.fmtNum(n)} ${n === 1 ? um : varios}`;
   const fmtDtRef = (d) => (d ? d.split('-').reverse().join('/') : '—');
+  const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
+  function abrirPrevia(tit, sub) {
+    document.getElementById('gc-tit').textContent = tit;
+    document.getElementById('gc-sub').textContent = sub || '';
+    if (!gav.classList.contains('aberta')) NG.gaveta.abrir(gav, { foco: false });
+  }
+
+  // ---------------------------------------------------------------- relatórios da Nio (lista + gaveta)
+  const REL = [
+    { id: 'osab', nome: 'OSAB · pedidos e instalação', chave: 'PEDIDO', desc: 'Atualiza situação, pendência, data de instalação e venda válida. Diário (e-mail ou portal do empresário).' },
+    { id: 'dfv_hp', nome: 'DFV · base HP/HC (viabilidade)', chave: 'COD_SURVEY + número + complemento', desc: 'Só endereços viáveis; substitui a partição inteira do município. CSV de ~45 MB, também reconhecido no botão principal. Aplicar pela tela: em breve (carga pelo CLI).' },
+    { id: 'extrato', nome: 'Extrato quinzenal · Pedidos × Linha a Linha', chave: 'CONTRATO + NUM_OS_PEDIDO_SIEBEL', desc: 'Comissão, estorno e bônus por linha. Alimenta a Conciliação e a NF.', breve: true },
+    { id: 'fpd', nome: 'FPD · 1ª, 2ª e 3ª fatura', chave: 'ID_CONTRATO', desc: '1 linha por fatura. Pinta as bolinhas 1–3 da Adimplência. Mensal.', breve: true },
+    { id: 'churn', nome: 'CHURN · retiradas', chave: 'NR_ORDEM', desc: 'Tipo (vol/invol), motivo, safra. Só indicador de qualidade (churn não estorna). Pedir em .xlsx.', breve: true },
+    { id: 'faturas', nome: 'Extrato mensal de faturas (4ª à 10ª)', chave: '—', desc: 'Sem ele as bolinhas 4–10 da Adimplência e o bônus M-10 ficam cegos depois do 3º mês.', pedir: true },
+  ];
+  function situacaoRel(r) {
+    if (r.breve) return { txt: 'em breve', cls: 'saida' };
+    if (r.pedir) return { txt: 'pedir ao Rogério', cls: 'cob-warn' };
+    const u = historico.find((i) => i.tipo === r.id && i.aplicado_em);
+    return u ? { txt: 'importado', cls: 'ativo', u } : { txt: 'nenhuma importação', cls: 'cob-warn' };
+  }
+  function renderRelatorios() {
+    const linhas = REL.map((r) => {
+      const s = situacaoRel(r);
+      const ult = s.u ? `${NG.fmtDataHora(s.u.aplicado_em)}${s.u.dt_ref ? ` · ${r.id === 'osab' ? 'DT_REF' : 'base de'} ${fmtDtRef(s.u.dt_ref)}` : ''}` : '—';
+      return { r, s, ult };
+    });
+    document.getElementById('relatorios').innerHTML = linhas.map(({ r, s, ult }) => `<tr class="clicavel ${r.breve ? 'saida' : ''}" data-rel="${r.id}" tabindex="0">
+      <td class="cli"><b>${esc(r.nome)}</b><small>${esc(r.desc)}</small></td>
+      <td class="mono col-media" style="font-size:12px">${esc(r.chave)}</td>
+      <td class="apagado">${esc(ult)}</td>
+      <td><span class="pill ${s.cls}">${esc(s.txt)}</span></td></tr>`).join('');
+    document.getElementById('relatorios-c').innerHTML = linhas.map(({ r, s, ult }) => `<button type="button" class="cartao ${r.breve ? 'saida' : ''}" data-rel="${r.id}">
+      <div class="cli"><b>${esc(r.nome)}</b><small>${esc(ult)}</small></div><div class="valor"><span class="pill ${s.cls}">${esc(s.txt)}</span></div></button>`).join('');
+  }
+  function abrirRelatorio(id) {
+    const r = REL.find((x) => x.id === id);
+    if (!r) return;
+    const s = situacaoRel(r);
+    atual = null;
+    abrirPrevia(r.nome, `Chave ${r.chave}`);
+    previa.innerHTML = `<span class="painel-sub">${esc(r.desc)}</span>
+      ${linha('Situação', `<span class="pill ${s.cls}">${esc(s.txt)}</span>`)}
+      ${s.u ? linha('Última', esc(`${NG.fmtDataHora(s.u.aplicado_em)} · ${plural(s.u.aplicadas || 0, r.id === 'osab' ? 'pedido nosso' : 'fachada', r.id === 'osab' ? 'pedidos nossos' : 'fachadas')}`)) : ''}
+      <div class="f-form-acoes" style="justify-content:flex-start">
+        ${r.id === 'osab' ? '<button type="button" class="btn btn-acc" data-enviar="arquivo">Enviar arquivo do OSAB</button>' : ''}
+        ${r.id === 'osab' && s.u ? '<button type="button" class="btn" data-resumo-ultima>Ver resumo da última</button>' : ''}
+        ${r.id === 'dfv_hp' ? '<button type="button" class="btn btn-acc" data-enviar="arquivo-dfv">Prévia do CSV</button>' : ''}
+      </div>
+      <span class="nota-campo">Prévia obrigatória (linhas afetadas, divergências) antes de aplicar · nada sobrescreve dado digitado · o OSAB nunca rebaixa status · cada importação fica no histórico com quem aplicou e quando.</span>`;
+  }
+
+  // ---------------------------------------------------------------- histórico (lista padrão, status em pílula)
+  const fBusca = document.getElementById('f-busca');
+  const fTipo = document.getElementById('f-tipo');
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'tudo', aoMudar: () => renderHistorico() });
+  const ordH = { chave: 'quando', dir: -1 };
+  const CHAVES_H = { quando: (i) => new Date(i.aplicado_em || i.criado_em).getTime(), tipo: (i) => i.tipo, linhas: (i) => Number(i.linhas || 0) };
+  const TIPO_TXT = { osab: 'OSAB', dfv_hp: 'DFV' };
+  const statusImp = (i) => (i.aplicado_em ? '<span class="pill ativo">aplicada</span>' : '<span class="pill cob-warn">não aplicada</span>');
+  function renderHistorico() {
+    const q = fBusca.value.trim().toLowerCase();
+    const p = per.valor();
+    const lista = NG.ordenar(historico.filter((i) => (!fTipo.value || i.tipo === fTipo.value) && NG.noPeriodo(i.aplicado_em || i.criado_em, p)
+      && (!q || [i.arquivo_nome, usuarios[i.criado_por], TIPO_TXT[i.tipo]].some((x) => String(x || '').toLowerCase().includes(q)))), CHAVES_H, ordH);
+    document.getElementById('historico').innerHTML = lista.length ? lista.map((i) => `<tr class="clicavel" data-imp="${esc(i.id)}" tabindex="0">
+        <td>${NG.fmtDataHora(i.aplicado_em || i.criado_em)}</td>
+        <td>${esc(TIPO_TXT[i.tipo] || String(i.tipo).toUpperCase())}</td>
+        <td class="cli"><b>${esc(i.arquivo_nome || '—')}</b></td>
+        <td class="col-media">${fmtDtRef(i.dt_ref)}</td>
+        <td class="num">${NG.fmtNum(i.linhas)}</td>
+        <td class="num">${NG.fmtNum(i.aplicadas)}</td>
+        <td class="num col-media">${NG.fmtNum(i.resumo && i.resumo.sem_venda)}</td>
+        <td class="col-media">${esc(usuarios[i.criado_por] || '—')}</td>
+        <td>${statusImp(i)}</td>
+      </tr>`).join('') : '<tr><td colspan="9" class="vazio">Nenhuma importação neste filtro</td></tr>';
+    document.getElementById('historico-c').innerHTML = lista.length ? lista.map((i) => `<button type="button" class="cartao" data-imp="${esc(i.id)}">
+      <div class="cli"><b>${esc(TIPO_TXT[i.tipo] || i.tipo)} · ${esc(i.arquivo_nome || '—')}</b><small>${NG.fmtDataHora(i.aplicado_em || i.criado_em)} · ${esc(usuarios[i.criado_por] || '—')}</small></div>
+      <div class="valor">${statusImp(i)}</div>
+      <div class="l2"><span>${NG.fmtNum(i.linhas)} linhas · ${NG.fmtNum(i.aplicadas)} casaram</span></div></button>`).join('') : '<div class="vazio">Nenhuma importação neste filtro</div>';
+    document.getElementById('h-contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'importação' : 'importações'} no filtro`;
+  }
+  function abrirImportacao(id) {
+    const i = historico.find((x) => String(x.id) === String(id));
+    if (!i) return;
+    atual = null;
+    if (i.tipo === 'osab' && i.aplicado_em) { mostrarResumo(i.resumo || {}, i.arquivo_nome); return; }
+    abrirPrevia(`${TIPO_TXT[i.tipo] || i.tipo} · ${i.arquivo_nome || '—'}`, NG.fmtDataHora(i.aplicado_em || i.criado_em));
+    const r = i.resumo || {};
+    previa.innerHTML = `${linha('Situação', statusImp(i))}
+      ${linha(i.tipo === 'osab' ? 'DT_REF' : 'Partição', esc(fmtDtRef(i.dt_ref)))}
+      ${linha('Linhas', esc(NG.fmtNum(i.linhas)))}
+      ${linha(i.tipo === 'osab' ? 'Casaram' : 'Fachadas aplicadas', esc(NG.fmtNum(i.aplicadas)))}
+      ${linha('Ignoradas', esc(NG.fmtNum(i.ignoradas)))}
+      ${linha('Quem', esc(usuarios[i.criado_por] || '—'))}
+      ${Object.keys(r).length ? `<details><summary class="painel-sub" style="cursor:pointer">Resumo gravado</summary><pre class="conjunto">${esc(JSON.stringify(r, null, 2))}</pre></details>` : ''}`;
+  }
 
   async function carregarHistorico() {
     const [{ data, error }, us] = await Promise.all([
-      NG.sb.from('importacoes').select('*').order('criado_em', { ascending: false }).limit(30),
+      NG.sb.from('importacoes').select('*').order('criado_em', { ascending: false }).limit(200),
       NG.carregarUsuarios(),
     ]);
     usuarios = Object.fromEntries(us.map((u) => [u.id, u.nome]));
-    const tb = document.getElementById('historico');
-    if (error) { tb.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
-    const lista = data || [];
-    ultima = lista.find((i) => i.tipo === 'osab' && i.aplicado_em) || null;
-    const chip = document.getElementById('osab-ultima');
-    if (ultima) {
-      chip.className = 'chip ok';
-      chip.textContent = `${NG.fmtDataHora(ultima.aplicado_em)} · DT_REF ${fmtDtRef(ultima.dt_ref)} · ${plural(ultima.aplicadas || 0, 'pedido nosso', 'pedidos nossos')}`;
-    }
-    document.getElementById('ver-ultima').disabled = !ultima;
-    const dfvUlt = lista.find((i) => i.tipo === 'dfv_hp' && i.aplicado_em);
-    if (dfvUlt) {
-      const chipD = document.getElementById('dfv-ultima');
-      chipD.className = 'chip ok';
-      chipD.textContent = `${NG.fmtDataHora(dfvUlt.aplicado_em)} · base de ${fmtDtRef(dfvUlt.dt_ref)} · ${plural(dfvUlt.aplicadas || 0, 'fachada', 'fachadas')}`;
-    }
-    tb.innerHTML = lista.length ? lista.map((i) => `<tr>
-        <td>${NG.fmtDataHora(i.aplicado_em || i.criado_em)}${i.aplicado_em ? '' : ' <span class="chip warn">não aplicada</span>'}</td>
-        <td>${esc(i.tipo.toUpperCase())}</td>
-        <td>${esc(i.arquivo_nome || '—')}</td>
-        <td>${fmtDtRef(i.dt_ref)}</td>
-        <td class="num">${NG.fmtNum(i.linhas)}</td>
-        <td class="num">${NG.fmtNum(i.aplicadas)}</td>
-        <td class="num">${NG.fmtNum(i.resumo && i.resumo.sem_venda)}</td>
-        <td>${esc(usuarios[i.criado_por] || '—')}</td>
-      </tr>`).join('') : '<tr><td colspan="8" class="vazio">Nenhuma importação ainda</td></tr>';
+    if (error) { document.getElementById('historico').innerHTML = `<tr><td colspan="9" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+    historico = data || [];
+    ultima = historico.find((i) => i.tipo === 'osab' && i.aplicado_em) || null;
+    renderRelatorios();
+    renderHistorico();
+    renderAbas();
   }
+  NG.ligarOrdenacao(document.querySelector('[aria-label="Histórico de importações"] thead'), ordH, renderHistorico);
+  [fBusca, fTipo].forEach((x) => x.addEventListener('input', renderHistorico));
+  document.getElementById('conteudo').addEventListener('click', (ev) => {
+    const r = ev.target.closest('[data-rel]');
+    if (r) { abrirRelatorio(r.dataset.rel); return; }
+    const i = ev.target.closest('[data-imp]');
+    if (i) abrirImportacao(i.dataset.imp);
+  });
+  document.getElementById('conteudo').addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    const r = ev.target.closest('tr[data-rel]'); if (r) abrirRelatorio(r.dataset.rel);
+    const i = ev.target.closest('tr[data-imp]'); if (i) abrirImportacao(i.dataset.imp);
+  });
+  previa.addEventListener('click', (ev) => {
+    const e = ev.target.closest('[data-enviar]');
+    if (e) { document.getElementById(e.dataset.enviar).click(); return; }
+    if (ev.target.closest('[data-resumo-ultima]') && ultima) mostrarResumo(ultima.resumo || {}, ultima.arquivo_nome);
+  });
 
   // ---------------------------------------------------------------- prévia
   inputArq.addEventListener('change', async () => {
@@ -162,8 +244,8 @@
     if (!f) return;
     // CSV do DFV também entra por aqui: reconhece pelas colunas.
     if (/\.csv$/i.test(f.name) && NGDfv.ehDfv(await NGDfv.primeiraLinha(f))) { previaDfv(f); return; }
-    previa.hidden = false;
-    previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><span class="carregando">Lendo o arquivo…</span>`;
+    abrirPrevia('Prévia da importação', f.name);
+    previa.innerHTML = `<span class="carregando">Lendo o arquivo…</span>`;
     let leitura;
     try {
       leitura = NGOsab.ler(await f.arrayBuffer());
@@ -201,7 +283,7 @@
     const { arquivo, leitura, casam, mudam, pend, invalidas, semVenda } = atual;
     const sit = Object.entries(leitura.situacoes).sort((a, b) => b[1] - a[1])
       .map(([s, n]) => `<span class="chip">${esc(s)} · ${NG.fmtNum(n)}</span>`).join('');
-    const linhaVenda = (x, extra) => `<tr><td><a href="venda.html?id=${x.v.id}">${esc(x.v.cliente_nome)}</a><div class="sub mono">#${esc(x.o.pedido)}</div></td><td>${extra}</td></tr>`;
+    const linhaVenda = (x, extra) => `<tr><td><a href="venda.html?id=${x.v.id}" target="_blank" rel="noopener">${esc(x.v.cliente_nome)}</a><div class="sub mono">#${esc(x.o.pedido)}</div></td><td>${extra}</td></tr>`;
     previa.innerHTML = `
       <div class="rel-topo"><h2>Prévia · ${esc(arquivo)}</h2><span class="chip">aba ${esc(leitura.aba)} · DT_REF ${fmtDtRef(leitura.dt_ref)}</span></div>
       <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
@@ -240,8 +322,8 @@
   });
   async function previaDfv(f) {
     atual = null;
-    previa.hidden = false;
-    previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><span class="carregando" data-prog>Lendo o arquivo (${NG.fmtNum(f.size / 1048576)} MB)…</span>`;
+    abrirPrevia('Prévia da base DFV', f.name);
+    previa.innerHTML = `<span class="carregando" data-prog>Lendo o arquivo (${NG.fmtNum(f.size / 1048576)} MB)…</span>`;
     if (!NGDfv.ehDfv(await NGDfv.primeiraLinha(f))) {
       previa.innerHTML = `<h2>Prévia · ${esc(f.name)}</h2><div class="banner"><div style="display:flex;flex-direction:column;gap:2px"><strong>Arquivo recusado</strong><span>Não tem as colunas do DFV (COD_SURVEY, HP_LIVRE, dt_dfv_particao).</span></div></div>`;
       return;
@@ -319,7 +401,7 @@
   }
 
   function mostrarResumo(r, arquivo) {
-    previa.hidden = false;
+    abrirPrevia('Importação aplicada', arquivo || '');
     const sem = (r.sem_venda_pedidos || []);
     previa.innerHTML = `
       <div class="rel-topo"><h2>Aplicado · ${esc(arquivo || '')}</h2><a href="vendas.html?vista=quadro">ver em Vendas →</a></div>
@@ -335,14 +417,73 @@
   }
 
   previa.addEventListener('click', (ev) => {
-    if (ev.target.closest('[data-cancelar]')) { atual = null; previa.hidden = true; previa.innerHTML = ''; }
+    if (ev.target.closest('[data-cancelar]')) { atual = null; NG.gaveta.fechar(); }
     const b = ev.target.closest('[data-aplicar]');
     if (b && atual) aplicar(b);
   });
-  document.getElementById('ver-ultima').addEventListener('click', () => ultima && mostrarResumo(ultima.resumo || {}, ultima.arquivo_nome));
 
-  // ---------------------------------------------------------- tabela vigente
+  // ---------------------------------------------------------- tabela vigente (listas padrão, só leitura)
   let tabelaCarregada = false;
+  let T = null;
+  const tBusca = document.getElementById('t-busca');
+  const tTipo = document.getElementById('t-tipo');
+  const tInativos = document.getElementById('t-inativos');
+  const m = NG.fmtMoeda;
+  const VAR = { regular: 'Regular', nfid: 'Sem fidelidade', oferta50: 'Oferta 50%', oferta50_nfid: 'Oferta 50% sem fidelidade' };
+  const TIPO_B = { transicao: 'Transição para Performance', m10: 'M-10 (potencial, fora da prevista)', nmei: 'NMEI (PJ não-MEI)' };
+  const vig = (de, ate) => `${NG.fmtDiaISO(de)}${ate ? ' a ' + NG.fmtDiaISO(ate) : ''}`;
+  const sit = (b) => (b ? '<span class="pill ativo">ativo</span>' : '<span class="pill saida">inativo</span>');
+  const casa = (...c) => { const q = tBusca.value.trim().toLowerCase(); return !q || c.some((x) => String(x || '').toLowerCase().includes(q)); };
+  const SEC = {
+    planos: {
+      cols: '<th data-ord="nome">Plano</th><th data-ord="port">Portfólio · variante</th><th class="col-media">Velocidade</th><th data-ord="preco" class="num">Boleto/débito</th><th class="num">Cartão</th><th data-ord="comissao" data-dir="desc" class="num">Comissão</th><th>Situação</th>',
+      ord: { chave: 'port', dir: 1 }, un: ['plano', 'planos'],
+      chaves: { nome: (p) => p.nome, port: (p) => `${p.portfolio === 'empresas' ? 1 : 0}${p.cluster}${p.variante}${String(p.preco).padStart(6, '0')}`, preco: (p) => Number(p.preco), comissao: (p) => Number(p.comissao) },
+      itens: () => T.planos.filter((p) => (tInativos.checked || p.ativo) && casa(p.nome, p.nome_curto, p.codigo, p.familia)),
+      tr: (p) => `<tr class="clicavel ${p.ativo ? '' : 'saida'}" data-det="planos:${p.id}" tabindex="0"><td class="cli"><b>${esc(p.nome)}</b><small class="mono">${esc(p.codigo || '—')}</small></td>
+        <td>${esc(p.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(VAR[p.variante] || p.variante || '—')}<small class="apagado" style="display:block">cluster ${esc(p.cluster || '—')}</small></td>
+        <td class="col-media">${esc(p.velocidade || '—')}</td><td class="num">${m(p.preco)}</td><td class="num">${p.preco_cartao != null ? m(p.preco_cartao) : '<span class="apagado">mesmo</span>'}</td>
+        <td class="num">${m(p.comissao)}</td><td>${sit(p.ativo)}</td></tr>`,
+      cartao: (p) => `<button type="button" class="cartao ${p.ativo ? '' : 'saida'}" data-det="planos:${p.id}"><div class="cli"><b>${esc(p.nome_curto || p.nome)}</b><small class="mono">${esc(p.codigo || '')}</small></div>
+        <div class="valor">${m(p.preco)}</div><div class="l2">${sit(p.ativo)}<span>comissão ${m(p.comissao)} · ${esc(VAR[p.variante] || '')}</span></div></button>`,
+    },
+    adicionais: {
+      cols: '<th data-ord="nome">Serviço</th><th class="col-media">Portfólio</th><th data-ord="preco" class="num">Preço ao cliente</th><th data-ord="comissao" data-dir="desc" class="num">Comissão</th><th class="num">Máx. por contrato</th><th class="col-media">Vigência</th><th>Situação</th>',
+      ord: { chave: 'nome', dir: 1 }, un: ['serviço', 'serviços'],
+      chaves: { nome: (a) => a.nome, preco: (a) => Number(a.preco || 0), comissao: (a) => Number(a.comissao || 0) },
+      itens: () => T.adicionais.filter((a) => (tInativos.checked || a.ativo) && casa(a.nome, a.codigo)),
+      tr: (a) => `<tr class="${a.ativo ? '' : 'saida'}"><td class="cli"><b>${esc(a.nome)}</b><small class="mono">${esc(a.codigo)}</small></td>
+        <td class="col-media">${esc((a.portfolio || []).map((x) => (x === 'empresas' ? 'Empresas' : 'Varejo')).join(', '))}</td>
+        <td class="num">${a.preco != null ? m(a.preco) + '/mês' : '—'}</td><td class="num">${m(a.comissao)}</td><td class="num">${a.max_por_contrato}</td>
+        <td class="col-media">${NG.fmtDiaISO(a.vigencia_inicio)}</td><td>${sit(a.ativo)}</td></tr>`,
+      cartao: (a) => `<div class="cartao ${a.ativo ? '' : 'saida'}"><div class="cli"><b>${esc(a.nome)}</b><small class="mono">${esc(a.codigo)}</small></div>
+        <div class="valor">${a.preco != null ? m(a.preco) : '—'}</div><div class="l2">${sit(a.ativo)}<span>comissão ${m(a.comissao)} · até ${a.max_por_contrato}</span></div></div>`,
+    },
+    bonus: {
+      cols: '<th data-ord="tipo">Bônus</th><th>Cluster</th><th class="col-media">Plano</th><th data-ord="valor" data-dir="desc" class="num">Valor</th><th>Validade</th><th class="col-media">Observação</th>',
+      ord: { chave: 'tipo', dir: 1 }, un: ['bônus', 'bônus'],
+      chaves: { tipo: (b) => b.tipo, valor: (b) => Number(b.valor) },
+      itens: () => T.bonus.filter((b) => casa(TIPO_B[b.tipo], b.plano_codigo, b.observacao)),
+      tr: (b) => `<tr><td class="cli"><b>${esc(TIPO_B[b.tipo] || b.tipo)}</b></td><td>${esc(b.cluster === 'btu' ? 'Especial/BTU' : 'Regular')}</td>
+        <td class="mono col-media">${esc(b.plano_codigo || 'todos')}</td><td class="num">${m(b.valor)}</td><td>${vig(b.valido_de, b.valido_ate)}</td><td class="obs col-media">${esc(b.observacao || '')}</td></tr>`,
+      cartao: (b) => `<div class="cartao"><div class="cli"><b>${esc(TIPO_B[b.tipo] || b.tipo)}</b><small>${esc(b.cluster === 'btu' ? 'Especial/BTU' : 'Regular')} · ${esc(b.plano_codigo || 'todos')}</small></div>
+        <div class="valor">${m(b.valor)}</div><div class="l2"><span>${vig(b.valido_de, b.valido_ate)}</span></div></div>`,
+    },
+    area: {
+      cols: '<th data-ord="cidade">Cidade</th><th>UF</th><th data-ord="cluster">Tabela</th><th>Situação</th>',
+      ord: { chave: 'cidade', dir: 1 }, un: ['cidade', 'cidades'],
+      chaves: { cidade: (a) => a.cidade, cluster: (a) => a.cluster },
+      itens: () => T.area.filter((a) => (tInativos.checked || a.ativo) && casa(a.cidade, a.bairro, a.cluster)),
+      tr: (a) => `<tr class="${a.ativo ? '' : 'saida'}"><td class="cli"><b>${esc(a.cidade)}</b>${a.bairro ? `<small>${esc(a.bairro)}</small>` : ''}</td><td>${esc(a.uf)}</td>
+        <td><span class="pill ${a.cluster === 'btu' ? 'tb-btu' : 'tb-reg'}">${a.cluster === 'btu' ? 'BTU' : 'Regular'}</span></td><td>${sit(a.ativo)}</td></tr>`,
+      cartao: (a) => `<div class="cartao ${a.ativo ? '' : 'saida'}"><div class="cli"><b>${esc(a.cidade)}</b><small>${esc(a.uf)}</small></div>
+        <div class="valor"><span class="pill ${a.cluster === 'btu' ? 'tb-btu' : 'tb-reg'}">${a.cluster === 'btu' ? 'BTU' : 'Regular'}</span></div></div>`,
+      pe: () => {
+        const fora = T.municipios.filter((x) => !T.area.some((a) => a.ativo && a.cidade === x.municipio && a.uf === x.uf));
+        return `<span class="nota-campo">Área de atuação = cidades ativas de config_area (GDP 28/10/2026, espelho em nio_municipios). Venda fora delas é bloqueada no banco; a cidade decide a tabela.${fora.length ? ` Na GDP e fora da área: ${esc(fora.map((x) => x.municipio).join(', '))}.` : ''}</span>`;
+      },
+    },
+  };
   async function carregarTabela() {
     tabelaCarregada = true;
     const [rp, ra, rb, rr, rm] = await Promise.all([
@@ -353,81 +494,69 @@
       NG.sb.from('nio_municipios').select('*').order('municipio'),
     ]);
     const erro = [rp, ra, rb, rr, rm].find((r) => r.error);
-    if (erro) { document.getElementById('t-planos').innerHTML = `<span class="carregando">${esc(NG.msgErro(erro.error))}</span>`; return; }
-    const m = NG.fmtMoeda;
-    const sim = (b) => (b ? '<span class="chip ok">ativo</span>' : '<span class="chip dim">inativo</span>');
-    const vig = (de, ate) => `${NG.fmtDiaISO(de)}${ate ? ' a ' + NG.fmtDiaISO(ate) : ''}`;
-    const VAR = { regular: 'Regular', nfid: 'Sem fidelidade', oferta50: 'Oferta 50%', oferta50_nfid: 'Oferta 50% sem fidelidade' };
-    const tabela = (cab, linhas, min) => `<table class="tab" style="min-width:${min}px"><thead><tr>${cab.map((c) => `<th${c[1] ? ' style="text-align:right"' : ''}>${c[0]}</th>`).join('')}</tr></thead><tbody>${linhas || `<tr><td colspan="${cab.length}" class="vazio">Nada cadastrado</td></tr>`}</tbody></table>`;
-
-    document.getElementById('t-planos').innerHTML = tabela(
-      [['Plano'], ['Portfólio · variante'], ['Velocidade · Wi-Fi · Internet 5G'], ['Boleto/débito', 1], ['Cartão', 1], ['Comissão', 1], ['Habilitação'], ['Vigência'], ['Situação']],
-      (rp.data || []).map((p) => `<tr class="${p.ativo ? '' : 'inativo'}">
-        <td><strong>${esc(p.nome)}</strong><div class="sub mono">${esc(p.codigo || '—')}</div>${p.observacao ? `<div class="obs">${esc(p.observacao)}</div>` : ''}</td>
-        <td>${esc(p.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(VAR[p.variante] || p.variante || '—')}<div class="sub">${esc((p.segmentos || []).join(', '))} · cluster ${esc(p.cluster || '—')}</div></td>
-        <td>${esc([p.velocidade, p.wifi].filter(Boolean).join(' · '))}${p.internet_5g ? `<div class="sub">Internet 5G ${esc(p.internet_5g)}</div>` : ''}${p.inclusos && p.inclusos.length ? `<div class="sub">${esc(p.inclusos.join(', '))}</div>` : ''}</td>
-        <td class="num">${m(p.preco)}</td>
-        <td class="num">${p.preco_cartao != null ? m(p.preco_cartao) : '<span class="sub">mesmo</span>'}</td>
-        <td class="num">${m(p.comissao)}</td>
-        <td>${p.taxa_a_vista ? `${m(p.taxa_habilitacao)} à vista` : `${m(p.taxa_habilitacao)} isenta em ${p.isencao_meses} meses`}</td>
-        <td>${vig(p.vigencia_inicio, p.vigencia_fim)}</td>
-        <td>${sim(p.ativo)}</td></tr>`).join(''), 980);
-
-    document.getElementById('t-adicionais').innerHTML = tabela(
-      [['Serviço'], ['Portfólio'], ['Preço ao cliente', 1], ['Comissão', 1], ['Máx. por contrato', 1], ['Vigência'], ['Situação']],
-      (ra.data || []).map((a) => `<tr class="${a.ativo ? '' : 'inativo'}">
-        <td><strong>${esc(a.nome)}</strong><div class="sub mono">${esc(a.codigo)}</div>${a.preco == null ? '<div class="obs">Preço ao cliente não consta no book.</div>' : ''}</td>
-        <td>${esc((a.portfolio || []).map((x) => (x === 'empresas' ? 'Empresas' : 'Varejo')).join(', '))}</td>
-        <td class="num">${a.preco != null ? m(a.preco) + '/mês' : '—'}</td>
-        <td class="num">${m(a.comissao)}</td>
-        <td class="num">${a.max_por_contrato}</td>
-        <td>${NG.fmtDiaISO(a.vigencia_inicio)}</td>
-        <td>${sim(a.ativo)}</td></tr>`).join(''), 720);
-
-    const TIPO = { transicao: 'Transição para Performance', m10: 'M-10 (potencial, fora da prevista)', nmei: 'NMEI (PJ não-MEI)' };
-    document.getElementById('t-bonus').innerHTML = tabela(
-      [['Bônus'], ['Cluster'], ['Plano'], ['Valor', 1], ['Validade'], ['Observação']],
-      (rb.data || []).map((b) => `<tr>
-        <td><strong>${esc(TIPO[b.tipo] || b.tipo)}</strong></td>
-        <td>${esc(b.cluster === 'btu' ? 'Especial/BTU' : 'Regular')}</td>
-        <td class="mono">${esc(b.plano_codigo || 'todos')}</td>
-        <td class="num">${m(b.valor)}</td>
-        <td>${vig(b.valido_de, b.valido_ate)}</td>
-        <td class="obs">${esc(b.observacao || '')}</td></tr>`).join(''), 760);
-
-    // Área de atuação = as cidades ativas de config_area (hoje as 38 de MG da GDP). Cluster = qual tabela vale na cidade.
-    const area = (rr.data || []).filter((a) => a.ativo);
-    const fora = (rr.data || []).filter((a) => !a.ativo);
-    const nome = (a) => `${esc(a.cidade)}${a.bairro ? ' · ' + esc(a.bairro) : ''}`;
-    const chips = (cl) => area.filter((a) => a.cluster === cl).map((a) => `<span class="chip ${cl === 'btu' ? 'warn' : 'ok'}">${nome(a)}</span>`).join('');
-    const semArea = (rm.data || []).filter((x) => !area.some((a) => a.cidade === x.municipio && a.uf === x.uf));
-    document.getElementById('t-area').innerHTML = `
-      <span class="painel-sub">${area.length} cidades ativas · fonte GDP 28/10/2026 (espelho em <span class="mono">nio_municipios</span>). Venda fora delas é bloqueada no banco; a cidade decide a tabela.</span>
-      <strong style="font-size:12px">Regular · ${area.filter((a) => a.cluster === 'regular').length} — tabelas Varejo e Empresas Regular</strong><div class="chips">${chips('regular')}</div>
-      <strong style="font-size:12px">BTU · ${area.filter((a) => a.cluster === 'btu').length} — tabelas Varejo BTU (Oferta 50%) e Empresas BTU</strong><div class="chips">${chips('btu')}</div>
-      ${fora.length ? `<span class="painel-sub">Desligadas: ${fora.map(nome).join(', ')}</span>` : ''}
-      ${semArea.length ? `<span class="painel-sub">Na GDP e fora da área: ${semArea.map((x) => esc(x.municipio)).join(', ')}</span>` : ''}`;
+    if (erro) { document.getElementById('t-secoes').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro.error))}</div>`; return; }
+    T = { planos: rp.data || [], adicionais: ra.data || [], bonus: rb.data || [], area: rr.data || [], municipios: rm.data || [] };
+    document.getElementById('t-secoes').innerHTML = Object.keys(SEC).map((k) => `<div class="tb-secao" data-tsec="${k}" hidden>
+      <section class="lista padrao"><div class="rolagem"><table class="tab"><thead><tr>${SEC[k].cols}</tr></thead><tbody></tbody></table></div>
+        <div class="rodape-lista"><span data-cont></span><span>${k === 'planos' ? 'Clique no plano para ver todos os campos' : ''}</span></div></section>
+      <div class="cartoes"></div><div data-pe></div></div>`).join('');
+    Object.keys(SEC).forEach((k) => NG.ligarOrdenacao(document.querySelector(`[data-tsec="${k}"] thead`), SEC[k].ord, renderTabela));
+    renderTabela();
+    renderAbas();
   }
-
-  function mostrarAba(qual) {
-    document.querySelectorAll('[data-aba]').forEach((b) => {
-      const ativa = b.dataset.aba === qual;
-      b.classList.toggle('ativa', ativa);
-      b.setAttribute('aria-selected', String(ativa));
+  function renderTabela() {
+    if (!T) return;
+    Object.keys(SEC).forEach((k) => {
+      const el = document.querySelector(`[data-tsec="${k}"]`);
+      el.hidden = k !== tTipo.value;
+      if (k !== tTipo.value) return;
+      const s = SEC[k];
+      const itens = NG.ordenar(s.itens(), s.chaves, s.ord);
+      el.querySelector('tbody').innerHTML = itens.length ? itens.map(s.tr).join('') : '<tr><td colspan="7" class="vazio">Nada neste filtro</td></tr>';
+      el.querySelector('.cartoes').innerHTML = itens.length ? itens.map(s.cartao).join('') : '<div class="vazio">Nada neste filtro</div>';
+      el.querySelector('[data-cont]').textContent = `${NG.fmtNum(itens.length)} ${itens.length === 1 ? s.un[0] : s.un[1]} no filtro`;
+      el.querySelector('[data-pe]').innerHTML = s.pe ? s.pe() : '';
     });
-    document.getElementById('conteudo').hidden = qual !== 'conteudo';
-    document.getElementById('tabela').hidden = qual !== 'tabela';
-    if (qual === 'tabela' && !tabelaCarregada) carregarTabela();
   }
-  document.querySelector('.abas').addEventListener('click', (ev) => {
-    const b = ev.target.closest('[data-aba]');
-    if (!b) return;
-    history.replaceState(null, '', b.dataset.aba === 'tabela' ? '#tabela' : location.pathname);
-    mostrarAba(b.dataset.aba);
+  [tBusca, tTipo, tInativos].forEach((x) => x.addEventListener('input', renderTabela));
+  document.getElementById('tabela').addEventListener('click', (ev) => {
+    const d = ev.target.closest('[data-det^="planos:"]');
+    if (!d) return;
+    const p = T.planos.find((x) => String(x.id) === d.dataset.det.split(':')[1]);
+    if (!p) return;
+    atual = null;
+    abrirPrevia(p.nome, `${p.codigo || ''} · ${p.portfolio === 'empresas' ? 'Empresas' : 'Varejo'} · ${VAR[p.variante] || p.variante || ''}`);
+    previa.innerHTML = `${linha('Nome curto', esc(p.nome_curto || '—'))}${linha('Família', esc(p.familia || '—'))}
+      ${linha('Segmentos', esc((p.segmentos || []).join(', ') || '—'))}${linha('Cluster', esc(p.cluster || '—'))}
+      ${linha('Velocidade · Wi-Fi', esc([p.velocidade, p.wifi].filter(Boolean).join(' · ') || '—'))}${linha('Internet 5G', esc(p.internet_5g || '—'))}
+      ${linha('Já vem com', esc((p.inclusos || []).join(', ') || '—'))}
+      ${linha('Boleto / débito', m(p.preco))}${linha('Cartão', p.preco_cartao != null ? m(p.preco_cartao) : 'mesmo')}
+      ${linha('Comissão', m(p.comissao))}
+      ${linha('Habilitação', esc(p.taxa_a_vista ? `${m(p.taxa_habilitacao)} à vista` : `${m(p.taxa_habilitacao)} isenta em ${p.isencao_meses} meses`))}
+      ${linha('Formas permitidas', esc((p.forma_pagamento_permitida || []).join(', ') || 'todas'))}
+      ${linha('Vigência', esc(vig(p.vigencia_inicio, p.vigencia_fim)))}${linha('Situação', sit(p.ativo))}
+      ${p.observacao ? `<span class="nota-campo">${esc(p.observacao)}</span>` : ''}`;
   });
-  if (location.hash === '#tabela') mostrarAba('tabela');
+  document.getElementById('tabela').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { const d = ev.target.closest('tr[data-det]'); if (d) d.click(); } });
+
+  // ---------------------------------------------------------- abas (Importação · Tabela vigente)
+  let aba = location.hash === '#tabela' ? 'tabela' : 'conteudo';
+  function renderAbas() {
+    NG.abasPilulas(document.getElementById('abas'), [
+      { id: 'conteudo', nome: 'Importação', n: historico.length },
+      { id: 'tabela', nome: 'Tabela vigente', n: T ? T.planos.filter((p) => p.ativo).length : 0 },
+    ], aba, (id) => { aba = id; history.replaceState(null, '', id === 'tabela' ? '#tabela' : location.pathname); mostrarAba(); });
+  }
+  function mostrarAba() {
+    renderAbas();
+    document.getElementById('conteudo').hidden = aba !== 'conteudo';
+    document.getElementById('tabela').hidden = aba !== 'tabela';
+    if (aba === 'tabela' && !tabelaCarregada) carregarTabela();
+  }
+  mostrarAba();
 
   await carregarHistorico();
+  if (!tabelaCarregada) carregarTabela();   // contagem da aba Tabela vigente já certa
 })();
 </script>
 </body>
