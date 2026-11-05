@@ -6,7 +6,9 @@
 # palavras proibidas, sem asterisco, ~4 linhas, preços batendo com config_planos, nunca "cobertura confirmada").
 # Checagens no banco pelo CLI do Supabase (read-only). Teardown: mari_limpar_teste('5500000000') antes e depois.
 #
-# Uso:  python tests/mari_cenarios.py [n ...] [--sem-teardown] [--workers 4]
+# Uso:  python tests/mari_cenarios.py [n ...] [--ensaio] [--sem-teardown] [--workers 4]
+#       --ensaio = prompt v3 no workflow mari_principal_v3 (rota mari-teste-v3), telefones 5500000003xxx,
+#       checagens de forma da v3 e os cenários de tom 15–21.
 # Segredo: variável de ambiente MARI_TESTE_SECRET (nunca impressa).
 
 import concurrent.futures as cf
@@ -25,8 +27,11 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-URL = 'https://n8n.ofertasverointernet.com.br/webhook/mari-teste'
-PREFIXO = '5500000000'
+# --ensaio: workflow mari_principal_v3 (rota própria) e telefones 5500000003xxx — a limpeza não toca nas
+# conversas 5500000000xxx (as 6 de revisão da tela Mari ficam).
+ENSAIO = '--ensaio' in sys.argv
+URL = 'https://n8n.ofertasverointernet.com.br/webhook/' + ('mari-teste-v3' if ENSAIO else 'mari-teste')
+PREFIXO = '5500000003' if ENSAIO else '5500000000'
 SAIDA = os.path.join(REPO, 'tests', 'saida')
 NPX = 'npx.cmd' if sys.platform == 'win32' else 'npx'
 
@@ -51,6 +56,33 @@ def norm(s):
     return unicodedata.normalize('NFD', str(s or '').lower()).encode('ascii', 'ignore').decode()
 
 
+def tem_lista(f):
+    """Lista de planos: 1️⃣ (v2) ou linhas "1) …" (v3)."""
+    f = f or ''
+    return '1️⃣' in f or '4️⃣' in f or bool(re.search(r'(?m)^\s*[1-9]\)\s', f))
+
+
+def condicoes(f):
+    """Mensagem das condições do fechamento (v2 com ✅, v3 em texto corrido)."""
+    n = norm(f)
+    return '2030' in n and 'roteador' in n
+
+
+def resumo(f):
+    n = norm(f)
+    return 'confere os dados' in n or ('nome:' in n and 'cpf:' in n)
+
+
+EMOJI_RE = re.compile('[\U0001F300-\U0001FAFF☀-➿⭐⭕]')
+EMOJI_PROIBIDOS = ['🎯', '📍', '💰', '✅', '🚀', '✨', '💡', '🔥', '📌', '👉', '⭐']
+FRASES_ROBO = ['prezad', 'informamos', 'gostaria de', 'fico a disposicao', 'estou aqui para ajudar',
+               'como posso te ajudar hoje', 'certamente', 'excelente pergunta']
+
+
+def emojis(f):
+    return EMOJI_RE.findall(f or '')
+
+
 # ─────────────────────────── banco (CLI read-only) ───────────────────────────
 
 def sql(q, escrita=False):
@@ -72,6 +104,7 @@ def teardown():
 
 
 PLANOS = {}
+AJUSTES_EMOJI = {}      # correções de emoji feitas pelo motor (v3), por cenário — métrica, não falha
 
 
 def carregar_planos():
@@ -95,6 +128,12 @@ def precos_permitidos(cluster):
         if p['preco_cartao'] is not None:
             vals.add(round(float(p['preco']) - float(p['preco_cartao']), 2))   # "R$15 a menos no cartão"
     vals.add(400.0)                                # perda/dano de equipamento (base §3)
+    for p in ps:                                   # v3: preco_dia ("R$3,67 por dia", "menos de R$4")
+        for k in ('preco', 'preco_cartao'):
+            if p[k] is not None:
+                c = -(-round(float(p[k]) * 100) // 30)
+                vals.add(round(c / 100, 2))
+                vals.add(float(c // 100 + 1))
     return vals
 
 
@@ -128,19 +167,38 @@ PROIBIDAS = [NOME_PROIBIDO, 'gratis', 'gratuit', 'combo', 'pacote', 'bundle', 'n
              'nio mobile', 'chip da nio', '2028', 'cobertura confirmada']
 
 
-def checar_global(resp, cluster):
+def checar_global(resp, cluster, baloes=None):
     falhas = []
     t = resp or ''
     n = norm(t)
+    if ENSAIO:
+        for e in EMOJI_PROIBIDOS:
+            if e in t:
+                falhas.append(f'emoji proibido {e}')
+        if '⃣' in t:
+            falhas.append('número em emoji (1️⃣)')
+        for fr in FRASES_ROBO:
+            if fr in n:
+                falhas.append(f'expressão de robô "{fr}"')
+        bs = baloes or [t]
+        if len(bs) > 3:
+            falhas.append(f'{len(bs)} balões')
+        n_itens = len(re.findall(r'(?m)^\s*[1-9]\)\s', t))
+        if n_itens and not any(len(re.findall(r'(?m)^\s*[1-9]\)\s', b)) == n_itens for b in bs):
+            falhas.append('lista de planos partida em balões')
+        for b in bs:
+            if len(emojis(b)) > 1:
+                falhas.append('dois emojis no mesmo balão')
     for p in PROIBIDAS:
         if p in n:
             falhas.append(f'palavra proibida "{p}"')
     if '*' in t:
         falhas.append('asterisco')
-    lista = any(x in t for x in ('1️⃣', '2️⃣', '4️⃣', '•', '✅'))
-    linhas = [l for l in t.split('\n') if l.strip()]
-    if not lista and len(linhas) > 5:
-        falhas.append(f'{len(linhas)} linhas')
+    for b in (baloes or [t]):
+        lista = tem_lista(b) or any(x in b for x in ('•', '✅'))
+        linhas = [l for l in b.split('\n') if l.strip()]
+        if not lista and len(linhas) > 5:
+            falhas.append(f'{len(linhas)} linhas num balão')
     if cluster:
         ok = precos_permitidos(cluster)
         for m in re.finditer(r'R\$\s?(\d{1,4}(?:[.,]\d{2})?)', t):
@@ -171,19 +229,19 @@ class Lead:
     def responder(self, mari):
         n = norm(mari)
         p = self.p
-        if 'confere os dados' in n or 'ainda ta tudo certo' in n:
+        if resumo(mari) or 'ainda ta tudo certo' in n:
             return p.get('confirma', 'Sim, tá tudo certo, pode encaminhar')
-        if 'so pra voce saber' in n and 'por mais' in n and 'nome completo' not in n:
+        if 'por mais r$' in n and 'nome completo' not in n:
             return 'Não, fico com esse mesmo'
-        if 'cep' in n and ('numero' in n or 'me envia' in n or 'me passa' in n):
+        if 'cep' in n and ('numero' in n or 'me envia' in n or 'me passa' in n or 'me manda' in n or 'me fala' in n or '?' in mari):
             return p['cep_msg']
-        if 'qual e?' in n and 'numero' in n:
+        if 'numero' in n and '?' in mari and 'telefone' not in n and 'cpf' not in n:
             return p['numero']
         if 'complemento' in n:
             return p.get('complemento', 'Não tem complemento')
         if 'ja tem nio' in n or 'tinha oi fibra' in n:
             return p.get('elegibilidade', 'Não, ninguém aqui tem Nio')
-        if re.search(r'\bmei\b', n) and '?' in mari:
+        if re.search(r'\bmei\b', n) and '?' in mari and not tem_lista(mari):
             return p.get('mei', 'Sim, sou MEI')
         if 'nome completo' in n and 'cpf' in n:
             return f"{p['nome']}, CPF {p['cpf']}"
@@ -195,13 +253,13 @@ class Lead:
             return p['email']
         if 'telefone' in n or 'ddd' in n:
             return p['telefone']
-        if 'forma de pagamento' in n or ('boleto' in n and 'cartao' in n and '?' in mari) or 'como prefere pagar' in n:
+        if 'forma de pagamento' in n or ('boleto' in n and 'cartao' in n and '?' in mari) or 'prefere pagar' in n or ('pagar' in n and '?' in mari):
             return p.get('pagamento', 'Cartão de crédito')
-        if 'visita' in n and ('dia' in n or 'periodo' in n or 'manha' in n):
+        if ('visita' in n and ('dia' in n or 'periodo' in n or 'manha' in n)) or 'melhor dia' in n or 'passar ai' in n:
             return p.get('visita', 'Sexta-feira de manhã')
-        if '1️⃣' in mari or 'qual combina' in n:
+        if tem_lista(mari) or re.search(r'qual (dos|deles|te agrad|combina|voce prefer|prefere)', n):
             return p.get('escolha', 'Quero o 2')
-        if 'tudo certo?' in n:
+        if 'tudo certo?' in n or 'fechou?' in n:
             return 'Tudo certo'
         return p.get('padrao', 'ok')
 
@@ -267,8 +325,12 @@ def P(**kw):
     return base
 
 
+NUM_C1 = '1889' if ENSAIO else '889'
+
+
 def c1():
-    log = conversar(PREFIXO + '001', P())
+    log = conversar(PREFIXO + '001', P(cpf=cpf_valido_de('529982250') if ENSAIO else cpf_valido_de('529982247'),
+                                       cep_msg=f'36070-480, número {NUM_C1}', numero=NUM_C1))
     r = ultimo(log); cid = cid_de(log)
     v = venda_da_conversa(cid)
     ok = []
@@ -276,19 +338,20 @@ def c1():
     ok.append(('venda criada em 0', bool(v) and v['status'] == '0_qualificado'))
     ok.append(('plano regular', bool(v) and str(v['plano'] or '').startswith('V-REG-')))
     ok.append(('forma', bool(v) and v['forma_pagamento'] in ('cartao', 'boleto', 'dacc')))
-    ok.append(('endereço', bool(v) and v['cep'] == '36070480' and v['numero'] == '889' and v['cidade'] == 'Juiz de Fora'))
+    ok.append(('endereço', bool(v) and v['cep'] == '36070480' and v['numero'] == NUM_C1 and v['cidade'] == 'Juiz de Fora'))
     ok.append(('dfv gravado', bool(v) and v['dfv_viabilidade'] != 'nao_consultado'))
     return ok, log, 'regular'
 
 
 def c2():
-    log = conversar(PREFIXO + '002', P(nome='Carlos Teste Moura', cpf=cpf_valido_de('111444777'),
-                                       cep_msg='39400-104, número 250', numero='250', telefone='38999990000',
+    log = conversar(PREFIXO + '002', P(nome='Carlos Teste Moura', cpf=cpf_valido_de('111444778' if ENSAIO else '111444777'),
+                                       cep_msg='39400-104, número ' + ('1250' if ENSAIO else '250'),
+                                       numero='1250' if ENSAIO else '250', telefone='38999990000',
                                        email='carlos.teste@exemplo.com', pagamento='Boleto'))
     r = ultimo(log); cid = cid_de(log)
     v = venda_da_conversa(cid)
     falas = todas_falas(log)
-    lista = [f for f in falas if '1️⃣' in f]
+    lista = [f for f in falas if tem_lista(f)]
     ok = []
     ok.append(('lista de planos BTU', bool(lista)))
     ok.append(('sem "no cartão" nos planos', bool(lista) and not any('no cartao' in norm(f) for f in lista)))
@@ -325,7 +388,7 @@ def c5():
     tags_ag = any((t['r'].get('tags') or {}).get('agendamento_retorno') for t in log)
     falas = ' '.join(todas_falas(log))
     data_ok = (datetime.date.today() + datetime.timedelta(days=21)).strftime('%d/%m')   # cancelou há 10 d + 31 d
-    ok = [('não vende (sem lista de planos)', '1️⃣' not in falas),
+    ok = [('não vende (sem lista de planos)', not tem_lista(falas)),
           (f'retorno em {data_ok} (cancelamento + 31 d)', data_ok in falas),
           ('[AGENDAMENTO_RETORNO]', tags_ag or bool(cv.get('agendamento_retorno'))),
           ('nenhuma venda', venda_da_conversa(cid) is None)]
@@ -344,7 +407,7 @@ def c6(tel=PREFIXO + '006'):
         if r.get('handoff') or (r.get('erro') and not r.get('resposta')):
             break
         fala = r.get('resposta') or ''
-        if estado['pediu'] == 0 and '1️⃣' in fala:
+        if estado['pediu'] == 0 and tem_lista(fala):
             msg = 'Tem desconto?'; estado['pediu'] = 1
         elif estado['pediu'] == 1:
             msg = 'Ah, faz por menos, vai. Me dá um desconto'; estado['pediu'] = 2
@@ -440,7 +503,7 @@ def c12():
     log = conversar(PREFIXO + '012', persona)
     r = ultimo(log); cid = cid_de(log)
     falas = todas_falas(log)
-    lista = [f for f in falas if '1️⃣' in f]
+    lista = [f for f in falas if tem_lista(f)]
     v = venda_da_conversa(cid)
     ok = [('pergunta MEI', any('mei' in norm(f) for f in falas)),
           ('tabela Empresas Regular', bool(lista) and 'R$110' in lista[0] and 'R$130' in lista[0]),
@@ -471,7 +534,7 @@ def c13():
         fala = r.get('resposta') or ''
         if msg.startswith('Me convenceu'):
             pediu_barato = True
-        if pediu_barato and not respondeu_cartao and '✅' not in fala and 'nome completo' not in norm(fala):
+        if pediu_barato and not respondeu_cartao and not condicoes(fala) and 'nome completo' not in norm(fala):
             msg = 'Cartão'
             respondeu_cartao = True
         else:
@@ -481,15 +544,15 @@ def c13():
     i_cartao = next((i for i, t in enumerate(log) if t['lead'] == 'Cartão'), None)
     resp_cartao = (log[i_cartao]['mari'] or '') if i_cartao is not None else ''
     prox = ' '.join((t['mari'] or '') for t in log[i_cartao:i_cartao + 2]) if i_cartao is not None else ''
-    resumo = next((f for f in falas if 'confere os dados' in norm(f)), '')
-    l_plano = next((l for l in resumo.split('\n') if 'Plano:' in l), '')
-    l_visita = next((l for l in resumo.split('\n') if 'Visita:' in l), '')
+    txt_resumo = next((f for f in falas if resumo(f)), '')
+    l_plano = next((l for l in txt_resumo.split('\n') if 'Plano:' in l), '')
+    l_visita = next((l for l in txt_resumo.split('\n') if 'Visita:' in l), '')
     v = venda_da_conversa(cid)
     i_vero = next((i for i, t in enumerate(log) if t['lead'].startswith('Tenho Vero')), None)
-    ok = [('acolhida + planos na mesma mensagem', i_vero is not None and '1️⃣' in (log[i_vero]['mari'] or '')),
+    ok = [('acolhida + planos na mesma mensagem', i_vero is not None and tem_lista(log[i_vero]['mari'] or '')),
           ('respondeu "Cartão" à confirmação', i_cartao is not None),
           ('confirmação no preço do cartão (R$95)', 'R$95' in resp_cartao and 'R$110' not in resp_cartao),
-          ('não parou: condições + nome/CPF logo em seguida', '✅' in prox and 'nome completo' in norm(prox)),
+          ('não parou: condições + nome/CPF logo em seguida', condicoes(prox) and 'nome completo' in norm(prox)),
           ('resumo com um preço só (R$95 no cartão)', 'R$95' in l_plano and 'R$110' not in l_plano),
           ('visita "hoje à tarde" anotada', 'hoje' in norm(l_visita)),
           ('sem regra de antecedência inventada', not any('anteced' in norm(f) for f in falas)),
@@ -514,6 +577,169 @@ def c14():
     return ok, log, 'regular'
 
 
+# ─────────────────────────── cenários de tom (prompt v3, proposta §7) ───────────────────────────
+
+GIRIAS = ['blz', 'kkk', 'haha', 'bora', 'show', 'massa', 'top', 'tmj']
+ACOLHIDA = r'cansa|ninguem merece|chato|imagino|puxa|poxa|entendo|que saco|complicad|dificil|frustrante|sei como|desgast'
+
+
+def ate_lista(tel, persona, primeira, max_turnos=8, nome='Teste'):
+    """Conversa com o lead simulado até a Mari mandar a lista de planos. Devolve o log."""
+    lead = Lead(persona)
+    log = []
+    msg = primeira
+    for _ in range(max_turnos):
+        r = enviar(tel, msg, nome=nome)
+        log.append({'lead': msg, 'mari': r.get('resposta'), 'r': r})
+        if r.get('handoff') or (r.get('erro') and not r.get('resposta')) or tem_lista(r.get('resposta') or ''):
+            break
+        msg = lead.responder(r.get('resposta') or '')
+    return log
+
+
+def depois(tel, log, msgs, nome='Teste'):
+    for m in msgs:
+        r = enviar(tel, m, nome=nome)
+        log.append({'lead': m, 'mari': r.get('resposta'), 'r': r})
+        if r.get('handoff'):
+            break
+    return log
+
+
+def baloes_mari(log):
+    return [b for t in log for b in (t['r'].get('baloes') or [t['mari'] or ''])]
+
+
+def c15():
+    # Cliente informal e curto ("blz", "qto fica") → Mari curta e leve.
+    tel = PREFIXO + '015'
+    persona = P(cep_msg='36070480 n 920', numero='920', elegibilidade='nao', escolha='o 2 blz', padrao='blz', complemento='n tem')
+    log = ate_lista(tel, persona, 'oi qto fica a net ai')
+    log = depois(tel, log, ['o 2 blz'])
+    curtos = [b for b in baloes_mari(log) if not tem_lista(b) and not condicoes(b)]
+    media = sum(len(b) for b in curtos) / max(1, len(curtos))
+    n = norm(' '.join(curtos))
+    ok = [('chegou à lista', any(tem_lista(t['mari'] or '') for t in log)),
+          (f'balões curtos (média {media:.0f} caracteres ≤ 140)', media <= 140),
+          ('sem expressão de robô', not any(f in n for f in FRASES_ROBO))]
+    return ok, log, 'regular'
+
+
+def c16():
+    # Cliente formal e completo → Mari completa, sem gíria.
+    tel = PREFIXO + '016'
+    persona = P(cep_msg='Meu CEP é 36070-480 e o número da residência é 925.', numero='925',
+                complemento='Não há complemento.', elegibilidade='Não. Nunca tivemos Nio nem Oi Fibra nesta residência.',
+                escolha='Gostaria de contratar a segunda opção, por gentileza.', padrao='Perfeitamente.')
+    log = ate_lista(tel, persona, 'Boa tarde. Gostaria de obter informações sobre os planos de internet disponíveis para a minha residência.')
+    log = depois(tel, log, ['Gostaria de contratar a segunda opção, por gentileza.'])
+    n = norm(' '.join(t['mari'] or '' for t in log))
+    ok = [('chegou à lista', any(tem_lista(t['mari'] or '') for t in log)),
+          ('sem gíria com cliente formal', not any(re.search(rf'\b{g}\b', n) for g in GIRIAS))]
+    return ok, log, 'regular'
+
+
+def c17():
+    # Cliente irritado com a internet atual → acolhe sem falar da outra empresa e já mostra os planos.
+    tel = PREFIXO + '017'
+    persona = P(cep_msg='36070-480, número 930', numero='930',
+                elegibilidade='Não, tenho outra aqui mas cai toda hora, tô de saco cheio já')
+    log = ate_lista(tel, persona, 'Oi, quero trocar de internet')
+    i = next((k for k, t in enumerate(log) if t['lead'].startswith('Não, tenho outra')), None)
+    resp = (log[i]['mari'] or '') if i is not None else ''
+    n = norm(resp)
+    ok = [('respondeu à reclamação', i is not None),
+          ('acolhe a irritação', bool(re.search(ACOLHIDA, n))),
+          ('planos na mesma resposta', tem_lista(resp)),
+          ('acolhida antes da lista', bool(re.search(ACOLHIDA, norm(resp.split('1)')[0])))),
+          ('não fala de outra empresa', not re.search(r'\b(vero|claro|vivo|tim|oi)\b(?! fibra)', n.replace('oi fibra', '')))]
+    return ok, log, 'regular'
+
+
+def c18():
+    # "kkk" → pode rir junto, curto; responde a pergunta (o mais barato) sem upgrade e sem 😂 repetido.
+    tel = PREFIXO + '018'
+    persona = P(cep_msg='36070-480, número 935', numero='935')
+    log = ate_lista(tel, persona, 'Oi, quero saber da internet')
+    log = depois(tel, log, ['kkkk to vendo aqui, o 1 é o mais barato né?'])
+    resp = log[-1]['mari'] or ''
+    ok = [('chegou à lista', any(tem_lista(t['mari'] or '') for t in log[:-1])),
+          ('sem 😂 repetido', resp.count('😂') <= 1),
+          ('responde o preço', 'R$' in resp),
+          ('sem sugestão de upgrade', 'por mais r$' not in norm(resp)),
+          ('não fecha sozinha', not log[-1]['r'].get('handoff'))]
+    return ok, log, 'regular'
+
+
+def c19():
+    # "ok" solto depois da lista → não vira escolha de plano; a Mari pergunta qual.
+    tel = PREFIXO + '019'
+    persona = P(cep_msg='36070-480, número 940', numero='940')
+    log = ate_lista(tel, persona, 'Oi, quero saber da internet')
+    log = depois(tel, log, ['ok'])
+    r = log[-1]['r']
+    escolheu = bool((r.get('tags') or {}).get('plano_escolhido') or (r.get('upd') or {}).get('plano_escolhido'))
+    ok = [('chegou à lista', any(tem_lista(t['mari'] or '') for t in log[:-1])),
+          ('"ok" não escolheu plano', not escolheu),
+          ('pergunta qual', '?' in (r.get('resposta') or ''))]
+    return ok, log, 'regular'
+
+
+def c20():
+    # "Achei caro" → valor por dia pronto (preco_dia do motor), valor fixo até 2030, sem desconto e sem handoff.
+    tel = PREFIXO + '020'
+    persona = P(cep_msg='36070-480, número 945', numero='945')
+    log = ate_lista(tel, persona, 'Oi, quero saber da internet')
+    log = depois(tel, log, ['achei caro'])
+    r = log[-1]['r']
+    resp = r.get('resposta') or ''
+    n = norm(resp)
+    ok = [('chegou à lista', any(tem_lista(t['mari'] or '') for t in log[:-1])),
+          ('fala o valor por dia', 'por dia' in n),
+          ('sem handoff', not r.get('handoff')),
+          ('não responde como desconto', 'unico desconto' not in n),
+          ('oferece seguir ou o mais em conta', '?' in resp)]
+    return ok, log, 'regular'
+
+
+def c21():
+    # Anti-repetição: 10 conversas com a MESMA mensagem de entrada; nenhuma abertura ou confirmação igual em mais de 2.
+    def limpo(t):
+        return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9 ]', '', norm(t))).strip()
+
+    def frase(t):
+        return limpo(re.split(r'(?<=[.!?])\s', (t or '').strip())[0])
+
+    def uma(k):
+        tel = PREFIXO + f'1{k:02d}'
+        persona = P(cep_msg=f'36070-480, número {950 + k}', numero=str(950 + k))
+        lg = ate_lista(tel, persona, 'Oi, quero saber da internet da Nio')
+        lg = depois(tel, lg, ['Quero o 3'])
+        return lg
+
+    with cf.ThreadPoolExecutor(max_workers=5) as pool:
+        logs = list(pool.map(uma, range(1, 11)))
+    aberturas = [limpo((lg[0]['r'].get('baloes') or [lg[0]['mari']])[0]) for lg in logs if lg]
+    confirmacoes = [frase((lg[-1]['r'].get('baloes') or [lg[-1]['mari']])[0]) for lg in logs if lg and lg[-1]['lead'] == 'Quero o 3']
+    from collections import Counter
+    ca, cc = Counter(aberturas), Counter(confirmacoes)
+    excesso = [k for k, lg in enumerate(logs, 1) if not any(emojis(t['lead']) for t in lg)
+               and sum(len(emojis(t['mari'])) for t in lg) > 2]
+    com_upsell = sum(1 for lg in logs if lg and 'por mais r$' in norm(lg[-1]['mari']))
+    ok = [(f'10 conversas ({len(aberturas)} aberturas, {len(confirmacoes)} confirmações)', len(aberturas) == 10 and len(confirmacoes) == 10),
+          (f'no máx. 2 emojis por conversa (excesso em {excesso or "nenhuma"})', not excesso),
+          (f'abertura repetida no máx. 2× (pior: {ca.most_common(1)[0][1] if ca else 0}×)', bool(ca) and ca.most_common(1)[0][1] <= 2),
+          (f'confirmação repetida no máx. 2× (pior: {cc.most_common(1)[0][1] if cc else 0}×; com upsell {com_upsell}/10 — guard-rail 23 fixa a frase)',
+           bool(cc) and cc.most_common(1)[0][1] <= 2)]
+    log = [t for lg in logs for t in lg]
+    REPETICAO['aberturas'] = ca.most_common()
+    REPETICAO['confirmacoes'] = cc.most_common()
+    return ok, log, 'regular'
+
+
+REPETICAO = {}
+
+
 CENARIOS = {
     1: ('JF Regular — caminho feliz até dados_completos', c1),
     2: ('Montes Claros (BTU) — Oferta 50%, sem "no cartão"', c2),
@@ -529,7 +755,15 @@ CENARIOS = {
     12: ('Empresa MEI em JF — Empresas Regular, 24 meses', c12),
     13: ('Teste do Ricardo — "Cartão" na confirmação, visita hoje, concorrente', c13),
     14: ('Telefone diferente do WhatsApp — repete e confirma', c14),
+    15: ('Tom — cliente informal ("blz", "qto fica")', c15),
+    16: ('Tom — cliente formal', c16),
+    17: ('Tom — cliente irritado com a internet atual', c17),
+    18: ('Tom — "kkk" + pergunta do mais barato', c18),
+    19: ('Tom — "ok" solto depois da lista', c19),
+    20: ('Tom — "achei caro" (preco_dia)', c20),
+    21: ('Anti-repetição — 10 conversas, abertura e confirmação', c21),
 }
+TOM = {15, 16, 17, 18, 19, 20, 21}   # só fazem sentido no prompt v3 (--ensaio)
 
 
 def rodar(n):
@@ -540,23 +774,34 @@ def rodar(n):
         return n, nome, [('execução', False)], [], f'exceção: {e}'
     glob = []
     for i, t in enumerate(log, 1):
-        for f in checar_global(t['mari'], cluster):
+        for f in checar_global(t['mari'], cluster, t['r'].get('baloes')):
             glob.append(f'turno {i}: {f}')
         if t['r'].get('erro'):
             glob.append(f'turno {i}: erro do motor: {t["r"]["erro"]}')
     # (a) condições do fechamento obrigatório trazem o vencimento (roteiro Passo 4, rev. 04/11).
     for i, t in enumerate(log, 1):
         f = norm(t['mari'])
-        if 'so pra voce ficar por dentro' in f and '25 dias' not in f:
+        if (condicoes(t['mari']) or 'so pra voce ficar por dentro' in f) and '25 dias' not in f:
             glob.append(f'turno {i}: condições sem a regra de vencimento (25 dias)')
-        # (b) "Ótima escolha" antes de "Só pra você saber", na mesma mensagem.
-        if 'so pra voce saber' in f and not (0 <= f.find('otima escolha') < f.find('so pra voce saber')):
+        # (b) "Ótima escolha" antes da sugestão de upgrade, na mesma resposta (guard-rail 23).
+        upsell = 'por mais r$' in f and ((t['r'].get('tags') or {}).get('upsell_oferecido') or 'so pra voce saber' in f)
+        if upsell and not (0 <= f.find('otima escolha') < max(f.find('por mais'), 0)):
             glob.append(f'turno {i}: sugestão de upgrade sem "Ótima escolha" antes')
     # LGPD (decisão pendente a): a 1ª fala que pede o CPF traz a linha curta.
     pede_cpf = next((t['mari'] for t in log if t['mari'] and 'cpf' in norm(t['mari'])
                      and ('me passa' in norm(t['mari']) or 'nome completo' in norm(t['mari']))), None)
-    if pede_cpf is not None and 'seus dados sao usados' not in norm(pede_cpf):
+    if pede_cpf is not None and 'seus dados' not in norm(pede_cpf):
         glob.append('LGPD: 1º pedido de CPF sem a linha de LGPD')
+    if ENSAIO and n != 21:
+        # Regra de emoji da v3: cliente sem emoji → a Mari usa no máximo 2 na conversa (a resposta fixa de mídia,
+        # do motor, fica fora da conta).
+        cliente = sum(len(emojis(t['lead'])) for t in log)
+        mari = sum(len(emojis(t['mari'])) for t in log if t['r'].get('modelo') != 'fixo:midia')
+        if not cliente and mari > 2:
+            glob.append(f'{mari} emojis da Mari numa conversa em que o cliente não usou nenhum')
+        ajustes = [a for t in log for a in (t['r'].get('emoji_ajustes') or [])]
+        if ajustes:
+            AJUSTES_EMOJI[n] = ajustes
     checks = list(checks) + [('checagens globais', not glob)]
     return n, nome, checks, log, '; '.join(glob)
 
@@ -570,7 +815,7 @@ def main():
         i = args.index('--workers')
         workers = int(args[i + 1])
         del args[i:i + 2]
-    sel = [int(a) for a in args if a.isdigit()] or list(CENARIOS)
+    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if ENSAIO or n not in TOM]
     carregar_planos()
     print('teardown inicial:', teardown())
     os.makedirs(SAIDA, exist_ok=True)
@@ -595,6 +840,13 @@ def main():
     for n, nome, checks, obs in res:
         falhas = [c for c, b in checks if not b]
         print(f'| {n} | {nome} | {"✅" if not falhas else "❌"} | {", ".join(falhas) or "—"} |')
+    if AJUSTES_EMOJI:
+        print('\nemoji corrigido pelo motor (o modelo errou e o 7 · Extrair consertou):')
+        for n in sorted(AJUSTES_EMOJI):
+            print(f'  {n}: {AJUSTES_EMOJI[n]}')
+    if REPETICAO:
+        print('\nanti-repetição — aberturas:', REPETICAO.get('aberturas'))
+        print('anti-repetição — confirmações:', REPETICAO.get('confirmacoes'))
     if '--sem-teardown' not in sys.argv:
         print('teardown final:', teardown())
     sys.exit(0 if all(all(c[1] for c in r[2]) for r in res) else 1)

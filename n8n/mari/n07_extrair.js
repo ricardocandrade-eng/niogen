@@ -87,9 +87,21 @@ const PROIBIDAS = [
   ['bundle', '"bundle"'], ['nio 5g', '"Nio 5G"'], ['nio movel', '"Nio Móvel"'], ['nio cel', '"Nio Cel"'], ['nio mobile', '"Nio Mobile"'],
   ['chip da nio', '"chip da Nio"'], ['2028', '"2028"'], ['cobertura confirmada', '"cobertura confirmada"'],
 ];
+// v3 (Bloco 2, itens 4 e 5) — só para o prompt v3 (a v2 usa ✅ 🎯 📍 💰 1️⃣ de propósito).
+// Expressão de robô → pede reescrita. Emoji → o motor corrige sozinho (sem gastar outra chamada) e conta.
+const V3 = String(ctx.promptVersao || '').startsWith('mari_v3');
+const FRASES_ROBO = [['prezad', '"Prezado"'], ['informamos', '"Informamos"'], ['gostaria de', '"Gostaria de"'],
+  ['fico a disposicao', '"Fico à disposição"'], ['estou aqui para ajudar', '"Estou aqui para ajudar"'],
+  ['como posso te ajudar hoje', '"Como posso te ajudar hoje?"'], ['certamente', '"Certamente"'], ['excelente pergunta', '"Excelente pergunta"']];
+
 function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
+  if (V3) FRASES_ROBO.filter(([k]) => n.includes(k)).forEach(([, r]) => v.push(`usou a expressão de robô ${r}`));
+  // Guard-rail 23: resposta com sugestão de upgrade começa por "Ótima escolha!" (a variação da v3 não vale aqui).
+  if (V3 && temTag('UPSELL_OFERECIDO') && /por mais r\$/.test(n) && !/^\W*otima escolha/.test(n)) {
+    v.push('sugestão de upgrade sem começar por "Ótima escolha! O [plano] por R$[valor] por mês" (guard-rail 23)');
+  }
   if (t.includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {
     v.push('deixou um campo entre colchetes sem preencher (placeholder)');
@@ -114,6 +126,30 @@ if (!erroApi) {
   erro = { no: tentativa === 2 ? '6r · Claude (correção)' : '6 · Claude', mensagem: `Claude API: ${erroApi}`, payload: { prompt: ctx.promptVersao } };
   texto = 'Tive uma instabilidade aqui 😕 Pode me mandar sua última mensagem de novo?';
 }
+
+// ── 4b. balões ("||", até 3) e regra de emoji da v3 (correção determinística, contada em emojiAjustes) ──
+const EMOJI_RE = /\p{Extended_Pictographic}️?/gu;
+const EMOJI_PROIBIDOS = new Set(['🎯', '📍', '💰', '✅', '🚀', '✨', '💡', '🔥', '📌', '👉', '⭐']);
+let baloes = String(texto || '').split(/\s*\|\|\s*/).map((s) => s.trim()).filter(Boolean);
+if (baloes.length > 3) baloes = [baloes[0], baloes[1], baloes.slice(2).join('\n\n')];
+const emojiAjustes = [];
+if (V3) {
+  const limpa = (s) => s.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/^[ \t]+/gm, '').trim();
+  baloes = baloes.map((b) => {
+    let s = b.replace(/([0-9])️?⃣/g, (m, d) => { emojiAjustes.push('1️⃣→1)'); return `${d})`; });
+    s = s.replace(EMOJI_RE, (e) => { const base = e.replace('️', ''); if (EMOJI_PROIBIDOS.has(base)) { emojiAjustes.push(`proibido ${base}`); return ''; } return e; });
+    s = s.replace(/^(\s*)(\p{Extended_Pictographic}️?\s*)+/gmu, (m, sp) => { emojiAjustes.push('emoji no começo de linha'); return sp; });
+    let visto = 0;
+    s = s.replace(EMOJI_RE, (e) => { visto += 1; if (visto > 1) { emojiAjustes.push('2º emoji no mesmo balão'); return ''; } return e; });
+    return limpa(s);
+  }).filter(Boolean);
+  // Cliente que não usa emoji: no máximo 2 na conversa inteira (os já usados vêm do 5b · Motor).
+  if (!(ctx.emojiCliente > 0)) {
+    let livres = Math.max(0, 2 - (ctx.emojiMari || 0));
+    baloes = baloes.map((b) => limpa(b.replace(EMOJI_RE, (e) => { if (livres > 0) { livres -= 1; return e; } emojiAjustes.push('acima de 2 na conversa'); return ''; })));
+  }
+}
+texto = baloes.join('\n\n');
 
 // ── 5. atualizações da conversa ──
 const c = ctx.conversa || {};
@@ -248,6 +284,9 @@ return [{ json: {
   corrigir: false,
   conversaId: ctx.conversaId,
   texto, tags, upd, handoff, erro,
+  // Balões: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
+  baloes: baloes.length && baloes.join('\n\n') === texto ? baloes : (texto ? [texto] : []),
+  emojiAjustes: emojiAjustes.length ? emojiAjustes : null,
   modelo: resp.model || motor.model,
   tokensIn, tokensOut,
   latenciaMs: Date.now() - ctx.t0,

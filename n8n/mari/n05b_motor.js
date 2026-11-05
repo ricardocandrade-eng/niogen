@@ -63,6 +63,22 @@ const cluster = conv.cluster || null;
 const btu = cluster === 'btu';
 const principais = planos.filter((p) => p.portfolio === seg && ['regular', 'oferta50'].includes(p.variante)).sort((a, b) => a.preco - b.preco);
 
+// preco_dia (v3, "achei caro"): preço da forma / 30, arredondado PARA CIMA no centavo, e o "menos de R$N" seguro
+// (N = parte inteira + 1, sempre maior que o valor por dia). Calculado aqui — o modelo só copia.
+const formaConv = conv.forma_pagamento || null;
+const porDia = (v) => {
+  if (v === null || v === undefined || v === '') return null;
+  const c = Math.ceil(Math.round(Number(v) * 100) / 30);          // centavos, para cima
+  const reais = (c / 100).toFixed(2).replace('.', ',');
+  return `R$${reais} por dia (dá pra dizer "menos de R$${Math.floor(c / 100) + 1} por dia")`;
+};
+function linhaDia(p) {
+  const cartao = !btu && p.preco_cartao != null;
+  if (formaConv === 'cartao' && cartao) return `preco_dia (no cartão, a forma escolhida): ${porDia(p.preco_cartao)}`;
+  if (formaConv) return `preco_dia (na forma escolhida): ${porDia(p.preco)}`;
+  return cartao ? `preco_dia: ${porDia(p.preco)} · no cartão ${porDia(p.preco_cartao)}` : `preco_dia: ${porDia(p.preco)}`;
+}
+
 function linhaPlano(p, semFidelidade) {
   const campos = [
     `codigo: ${p.codigo}`,
@@ -74,6 +90,7 @@ function linhaPlano(p, semFidelidade) {
   if (vem.length) campos.push(`já vem com: ${vem.join(' + ')}`);
   campos.push(`preco: ${R(p.preco)}/mês`);
   if (!btu) campos.push(p.preco_cartao != null ? `preco_cartao: ${R(p.preco_cartao)}/mês` : 'preco_cartao: — (mesmo preço no cartão)');
+  if (!semFidelidade) campos.push(linhaDia(p));
   if (semFidelidade) campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)} inteira na 1ª fatura`);
   else campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)}, isenta com ${p.isencao_meses} meses`);
   return '- ' + campos.join(' | ');
@@ -160,6 +177,48 @@ if (planoSel && conv.forma_pagamento) {
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
 L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; visita=${conv.visita_preferencia || '—'}`);
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
+// v3 (regra de emoji): quantos emojis a Mari já usou e se o cliente usa — o 7 · Extrair aplica o teto.
+const EMOJI_RE = /\p{Extended_Pictographic}/gu;
+const nEmoji = (s) => (String(s || '').match(EMOJI_RE) || []).length;
+const emojiMari = historico.filter((h) => h.papel === 'mari').reduce((a, h) => a + nEmoji(h.texto), 0);
+const emojiCliente = historico.filter((h) => h.papel === 'lead').reduce((a, h) => a + nEmoji(h.texto), 0) + nEmoji(cons.mensagem);
+const v3 = String(conteudo.promptVersao || '').startsWith('mari_v3');
+if (v3) {
+  // Variação fixa por conversa (1–6), do id: conversas independentes não sabem umas das outras e, sem isto,
+  // o modelo abre e confirma sempre pelo exemplo nº 1 (bateria 04/11: 7/10 aberturas e 9/10 confirmações iguais).
+  // Sorteio por conversa, guardado para os turnos seguintes (até 2000 conversas). Abertura = cumprimento (6) ×
+  // pedido do CEP (6) = 36 combinações — com 6 opções só, 10 conversas repetem quase sempre (bateria 04/11).
+  // (Rodízio por contador não serve: execuções simultâneas leem o mesmo contador.)
+  const sdv = $getWorkflowStaticData('global');
+  sdv._variacoes = sdv._variacoes || {};
+  const cid = String(conv.id || '');
+  if (!sdv._variacoes[cid]) {
+    const d6 = () => 1 + Math.floor(Math.random() * 6);
+    sdv._variacoes[cid] = [d6(), d6(), d6()];
+    const chaves = Object.keys(sdv._variacoes);
+    if (chaves.length > 2000) chaves.slice(0, chaves.length - 2000).forEach((k) => delete sdv._variacoes[k]);
+  }
+  const [vCump, vPed, variacao] = sdv._variacoes[cid];
+  // O modelo não segue "use a nº N" (bateria 04/11: 6/10 no mesmo cumprimento, que ele achou mais simpático).
+  // Então o motor copia do PRÓPRIO prompt (as listas moram no .md) as frases sorteadas e manda prontas no estado.
+  const listaDoPrompt = (titulo) => {
+    const pb = String(conteudo.promptBase || '');
+    const i = pb.indexOf(titulo);
+    if (i < 0) return [];
+    const out = [];
+    for (const l of pb.slice(i + titulo.length).split('\n').slice(1)) {
+      const m = l.match(/^\s*\d\.\s+"(.+)"\s*$/);
+      if (m) out.push(m[1]); else if (out.length) break;
+    }
+    return out;
+  };
+  const cump = listaDoPrompt('Cumprimentos:')[vCump - 1];
+  const ped = listaDoPrompt('Pedidos do CEP')[vPed - 1];
+  const conf = listaDoPrompt('Sem upsell — confirmações')[variacao - 1];
+  if (primeira && cump && ped) L.push(`abertura_da_conversa (use estas duas frases quase como estão): «${cump}» + «${ped}»`);
+  if (conf) L.push(`confirmacao_da_conversa (só quando NÃO houver upsell; troque [plano] e [valor]): «${conf}»`);
+  L.push(`emoji: você já usou ${emojiMari} na conversa | cliente usa emoji: ${emojiCliente > 0 ? `sim (${emojiCliente})` : 'nao — no máximo 2 na conversa inteira'}`);
+}
 if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);
 const estadoTxt = L.join('\n');
 
@@ -205,5 +264,6 @@ return [{ json: {
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
+    emojiMari, emojiCliente,
   },
 } }];

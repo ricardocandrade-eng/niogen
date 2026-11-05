@@ -26,7 +26,12 @@ if (j.saida) {
     corrigido: r.violacoesCorrigidas || null,
     erro: r.erro ? r.erro.mensagem : null,
     prompt: r.promptVersao || null,
+    // Balões (v3, "||"): o envio pelo Chatwoot manda um por vez, com o atraso antes de cada um
+    // (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).
+    baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.texto ? [r.texto] : [])),
+    emoji_ajustes: r.emojiAjustes || null,
   };
+  saida.atrasos = saida.baloes.map((b) => Math.min(6, Math.max(2, Math.round(b.length / 60))));
 } else if (ex('7f · Supabase abortar')) {
   saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };
 } else if (j.esgotado) {
@@ -45,6 +50,8 @@ return [{ json: {
   modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',
   saida,
   resposta: saida.resposta || '',
+  baloes: saida.baloes || (saida.resposta ? [saida.resposta] : []),
+  atrasos: saida.atrasos || (saida.resposta ? [2] : []),
   chatwootConversationId: e.chatwootConversationId || null,
   config: e.config || {},
 } }];

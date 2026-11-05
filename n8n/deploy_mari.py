@@ -34,13 +34,35 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(AQUI)
 JS_DIR = os.path.join(AQUI, 'mari')
 BACKUP_DIR = os.path.join(AQUI, 'backups')
-EXPORT = os.path.join(AQUI, 'mari_principal.json')
 IDS = os.path.join(AQUI, 'mari_ids.json')            # IDs do workflow e das credenciais (não são segredo)
-PROMPT_FILE = os.path.join(REPO, 'mari', 'prompt_mari_v2.md')
-PROMPT_VERSAO = 'mari_v2'
+
+# Alvos. PRODUÇÃO = mari_principal (no ar, modo chatwoot). ENSAIO = mari_principal_v3: cópia só com a rota de teste
+# própria (sem o webhook do Chatwoot — não recebe nem manda nada para número real), para validar um prompt novo
+# sem trocar o que está no ar. Escolha com --ensaio em qualquer comando. Trocar a produção para a v3 = mudar o
+# 'prompt'/'versao' da produção aqui, depois da aprovação do Ricardo, e rodar "estrutura".
+ALVOS = {
+    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v2.md', 'versao': 'mari_v2', 'id_key': 'workflow_id',
+                 'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
+    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'ensaio_workflow_id',
+               'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
+}
+ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'
+_A = ALVOS[ALVO]
+WF_NOME = _A['nome']
+ID_KEY = _A['id_key']
+EXPORT = os.path.join(AQUI, _A['export'])
+PROMPT_FILE = os.path.join(REPO, 'mari', _A['prompt'])
+PROMPT_VERSAO = _A['versao']
+ROTA_TESTE = _A['rota']
+COM_CHATWOOT = _A['chatwoot']
+
+
+def semente(s):
+    # Produção mantém as sementes de sempre (IDs de nó e de webhook idênticos ao que está no ar).
+    return s if ALVO == 'producao' else f'{s}#{WF_NOME}'
+
 
 N8N = 'https://n8n.ofertasverointernet.com.br'
-WF_NOME = 'mari_principal'
 SB = 'https://zlrfwbkblytnokuexjti.supabase.co'      # Supabase Nio (não é o da Vero)
 
 CRED_SUPABASE = 'Supabase Nio (service role)'
@@ -146,6 +168,7 @@ CODE = {
     '10 · Salvar turno': 'n10_salvar.js',
     '11 · Saída': 'n11_saida.js',
     'E1 · Log erro': 'nE1_log_erro.js',
+    '12a · Balões': 'n12a_baloes.js',
 }
 
 
@@ -161,7 +184,7 @@ def build(ids):
 
     def add(name, ntype, ver, params, x, y, **extra):
         n = {'parameters': params, 'name': name, 'type': ntype, 'typeVersion': ver, 'position': [x, y],
-             'id': str(uuid.uuid5(uuid.NAMESPACE_URL, f'niogen/mari_principal/{name}'))}
+             'id': str(uuid.uuid5(uuid.NAMESPACE_URL, semente(f'niogen/mari_principal/{name}')))}
         n.update(extra)
         nodes.append(n)
         pos[name] = (x, y)
@@ -201,17 +224,19 @@ def build(ids):
     E = "$('3a · Supabase entrada').first().json"
     # ── entrada ──
     add('1 · Webhook Mari teste', 'n8n-nodes-base.webhook', 2, {
-        'httpMethod': 'POST', 'path': 'mari-teste', 'authentication': 'headerAuth',
+        'httpMethod': 'POST', 'path': ROTA_TESTE, 'authentication': 'headerAuth',
         'responseMode': 'responseNode', 'options': {}}, 0, 0,
-        credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari-teste')))
-    add('1c · Webhook Chatwoot', 'n8n-nodes-base.webhook', 2, {
+        credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari-teste'))))
+    if COM_CHATWOOT:
+      add('1c · Webhook Chatwoot', 'n8n-nodes-base.webhook', 2, {
         'httpMethod': 'POST', 'path': 'mari-chatwoot', 'responseMode': 'responseNode', 'options': {}}, 0, 200,
         webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari-chatwoot')),
         notes='MODO CHATWOOT — webhook de conta do Chatwoot "Nio Atendimento". Origem validada no nó 2 · Entrada '
               '(header x-chatwoot-signature + conta/caixa da Nio). Só processa com staticData._modoMari = chatwoot.')
     # O n8n recusa webhook "onReceived" num workflow que tem Respond to Webhook (o 12t da rota de teste):
     # o 1c responde por este nó, na hora (200 sem corpo), e a execução segue para o 2 · Entrada.
-    add('1r · OK Chatwoot', 'n8n-nodes-base.respondToWebhook', 1.1, {
+    if COM_CHATWOOT:
+      add('1r · OK Chatwoot', 'n8n-nodes-base.respondToWebhook', 1.1, {
         'respondWith': 'noData', 'options': {}}, 110, 300)
     code('2 · Entrada', 220, 100)
     iff('2e · Encerrar?', '={{ $json.encerrar === true }}', 440, 100)
@@ -239,7 +264,7 @@ def build(ids):
         "p_origem: $json.origem, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 1540, 300)
     iff('3b · Silêncio?', '={{ $json.silencio === true }}', 1760, 300)
     add('3w · Debounce 2s', 'n8n-nodes-base.wait', 1.1, {'amount': 2, 'unit': 'seconds'}, 1980, 400,
-        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari/3w')))
+        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/3w'))))
     rpc('3c · Supabase consolidar', 'mari_consolidar',
         f"={{{{ JSON.stringify({{ p_conversa: {E}.conversa_id, p_ts: {E}.ts }}) }}}}", 2200, 400)
     iff('3d · Ok?', "={{ $json.resultado === 'ok' }}", 2420, 400)
@@ -247,7 +272,7 @@ def build(ids):
     code('3e · Espera lock', 2860, 700)
     iff('3f · Esgotou?', '={{ $json.esgotado === true }}', 3080, 700)
     add('3g · Espera 1s', 'n8n-nodes-base.wait', 1.1, {'amount': 1, 'unit': 'seconds'}, 3300, 800,
-        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari/3g')))
+        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/3g'))))
 
     # ── contexto + conteúdo + motor ──
     code('4 · Preparar', 2640, 300)
@@ -287,14 +312,19 @@ def build(ids):
     add('12t · Responder (teste)', 'n8n-nodes-base.respondToWebhook', 1.1, {
         'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json.saida) }}', 'options': {}}, 7040, 200)
     iff('11c · Tem resposta?', "={{ ($json.resposta || '').length > 0 }}", 7040, 400)
+    # Balões (prompt v3, "||"): um envio por balão, com atraso de digitação antes de cada um. Resposta sem "||" = 1 balão.
+    code('12a · Balões', 7260, 400)
+    add('12b · Um balão', 'n8n-nodes-base.splitInBatches', 3, {'batchSize': 1, 'options': {}}, 7480, 400)
+    add('12w · Digitando', 'n8n-nodes-base.wait', 1.1, {'amount': '={{ $json.atraso }}', 'unit': 'seconds'}, 7700, 500,
+        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/12w'))))
     add('12c · Chatwoot enviar', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST',
         'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}/messages",
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'sendBody': True, 'specifyBody': 'json',
-        'jsonBody': "={{ JSON.stringify({ content: $json.resposta, message_type: 'outgoing', private: false }) }}",
-        'options': {'timeout': 15000}}, 7260, 400, credentials=cw_cred,
-        notes='MODO CHATWOOT — envio pela API do Chatwoot (bolha na conversa). Credencial "Chatwoot Nio".')
+        'jsonBody': "={{ JSON.stringify({ content: $json.conteudo, message_type: 'outgoing', private: false }) }}",
+        'options': {'timeout': 15000}}, 7920, 500, credentials=cw_cred,
+        notes='MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial "Chatwoot Nio".')
 
     # ── erros ──
     add('E · Error Trigger', 'n8n-nodes-base.errorTrigger', 1, {}, 0, 1000)
@@ -363,13 +393,20 @@ def build(ids):
         ('11 · Saída', 0, '11m · Modo teste?'),
         ('11m · Modo teste?', 0, '12t · Responder (teste)'),
         ('11m · Modo teste?', 1, '11c · Tem resposta?'),
-        ('11c · Tem resposta?', 0, '12c · Chatwoot enviar'),
+        ('11c · Tem resposta?', 0, '12a · Balões'),
+        ('12a · Balões', 0, '12b · Um balão'),
+        ('12b · Um balão', 1, '12w · Digitando'),          # saída 1 = laço; saída 0 = acabou
+        ('12w · Digitando', 0, '12c · Chatwoot enviar'),
+        ('12c · Chatwoot enviar', 0, '12b · Um balão'),
         ('E · Error Trigger', 0, 'E1 · Log erro'),
         ('E1 · Log erro', 0, 'E2 · Supabase mari_erros'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}
+    opcionais = {'1c · Webhook Chatwoot', '1r · OK Chatwoot'}      # ausentes no ensaio
     for o, i, d in ligações:
+        if not COM_CHATWOOT and (o in opcionais or d in opcionais):
+            continue
         assert o in nomes and d in nomes, (o, d)
         main = conns.setdefault(o, {'main': []})['main']
         while len(main) <= i:
@@ -378,8 +415,8 @@ def build(ids):
 
     settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all',
                 'saveManualExecutions': True, 'timezone': 'America/Sao_Paulo'}
-    if ids.get('workflow_id'):
-        settings['errorWorkflow'] = ids['workflow_id']
+    if ids.get(ID_KEY):
+        settings['errorWorkflow'] = ids[ID_KEY]
     return {'name': WF_NOME, 'nodes': nodes, 'connections': conns, 'settings': settings}
 
 
@@ -405,9 +442,9 @@ def salvar_export(wf):
 
 
 def achar_wf(ids):
-    wid = ids.get('workflow_id')
+    wid = ids.get(ID_KEY)
     if not wid:
-        raise SystemExit('workflow_id ausente em mari_ids.json — rode "criar" antes.')
+        raise SystemExit(f'{ID_KEY} ausente em mari_ids.json — rode "criar" antes.')
     wf = api('GET', f'/workflows/{wid}')
     if wf.get('name') != WF_NOME:
         raise SystemExit(f'o ID {wid} não é o {WF_NOME} (é "{wf.get("name")}") — abortado, nada foi alterado.')
@@ -417,7 +454,7 @@ def achar_wf(ids):
 def backup(wf):
     os.makedirs(BACKUP_DIR, exist_ok=True)
     stamp = datetime.datetime.now().strftime('%d%m%y_%H%M%S')
-    p = os.path.join(BACKUP_DIR, f'mari_principal_{stamp}.json')
+    p = os.path.join(BACKUP_DIR, f'{WF_NOME}_{stamp}.json')
     with open(p, 'w', encoding='utf-8') as f:
         json.dump(wf, f, ensure_ascii=False, indent=2)
     print(f'backup: {os.path.relpath(p, REPO)}')
@@ -458,15 +495,15 @@ def cmd_credenciais():
 
 def cmd_criar():
     ids = ler_ids()
-    if ids.get('workflow_id'):
-        raise SystemExit(f'já existe workflow_id {ids["workflow_id"]} em mari_ids.json — use "codigo" ou "estrutura".')
+    if ids.get(ID_KEY):
+        raise SystemExit(f'já existe {ID_KEY} {ids[ID_KEY]} em mari_ids.json — use "codigo" ou "estrutura".')
     existentes = api('GET', '/workflows?limit=250').get('data', [])
     if any(w.get('name') == WF_NOME for w in existentes):
         raise SystemExit(f'já existe um workflow chamado {WF_NOME} no n8n — nada foi criado.')
     wf = build(ids)
     checar_sem_segredo(wf)
     r = api('POST', '/workflows', wf)
-    ids['workflow_id'] = r['id']
+    ids[ID_KEY] = r['id']
     gravar_ids(ids)
     print(f'criado: {WF_NOME} ({r["id"]}), active={r.get("active")}')
     # errorWorkflow = o próprio (precisa do ID) — PUT no workflow recém-criado, com backup.
@@ -496,11 +533,11 @@ def cmd_codigo(dry):
     if dry:
         print('(dry-run: nada gravado)')
         return
-    backup(api('GET', f'/workflows/{ids["workflow_id"]}'))
+    backup(api('GET', f'/workflows/{ids[ID_KEY]}'))
     ativo = wf.get('active')
-    put(ids['workflow_id'], wf)
-    if ativo and not api('GET', f'/workflows/{ids["workflow_id"]}').get('active'):
-        api('POST', f'/workflows/{ids["workflow_id"]}/activate')
+    put(ids[ID_KEY], wf)
+    if ativo and not api('GET', f'/workflows/{ids[ID_KEY]}').get('active'):
+        api('POST', f'/workflows/{ids[ID_KEY]}/activate')
     print('ok')
     cmd_exportar()
 
@@ -510,9 +547,9 @@ def cmd_estrutura():
     atual = achar_wf(ids)
     backup(atual)
     ativo = atual.get('active')
-    put(ids['workflow_id'], build(ids))
-    if ativo and not api('GET', f'/workflows/{ids["workflow_id"]}').get('active'):
-        api('POST', f'/workflows/{ids["workflow_id"]}/activate')
+    put(ids[ID_KEY], build(ids))
+    if ativo and not api('GET', f'/workflows/{ids[ID_KEY]}').get('active'):
+        api('POST', f'/workflows/{ids[ID_KEY]}/activate')
     print('ok')
     cmd_exportar()
 
@@ -520,7 +557,7 @@ def cmd_estrutura():
 def cmd_ativar(ligar):
     ids = ler_ids()
     achar_wf(ids)
-    r = api('POST', f'/workflows/{ids["workflow_id"]}/{"activate" if ligar else "deactivate"}')
+    r = api('POST', f'/workflows/{ids[ID_KEY]}/{"activate" if ligar else "deactivate"}')
     print(f'{WF_NOME}: active={r.get("active")}')
 
 
