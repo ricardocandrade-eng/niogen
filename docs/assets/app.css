@@ -908,3 +908,11 @@ a.q-item:hover .q-linha span:first-child { text-decoration: underline; }
   .la-prox { grid-column: 1 / -1; }
   .cab-acoes { flex-wrap: wrap; }
 }
+
+/* Tabela e política no padrão (05/11): uma seção por aba, pílula da tabela da cidade, cidades em gaveta */
+.tb-secao { display: flex; flex-direction: column; gap: 14px; }
+.pill.tb-reg { background: var(--surface-2); color: var(--text); }
+.pill.tb-btu { background: var(--warn-bg); color: var(--warn-fg); }
+.gaveta .mc-lista { max-height: none; overflow: visible; }
+.gaveta .busca { flex: none; }
+div.cartao { color: var(--text); }
