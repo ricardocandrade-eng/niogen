@@ -109,7 +109,9 @@
   };
   const ENCERRA = { recusa_compra: 'recusa', sem_cobertura: 'fora de área', fora_de_area: 'fora de área', ja_cliente_nio: 'já cliente', sem_contato: 'sem contato' };
   const FORMA = { cartao: 'cartão', boleto: 'boleto', dacc: 'débito' };
-  const PASSO = { P1: '1º contato', F1: 'F1', F2: 'F2', D3: 'D3', D7: 'D7', D15: 'D15', ENCERRAR: 'encerrar', RETORNO: 'retorno', VISITA: 'confirmação da visita' };
+  const PASSO = { P1: '1º contato', F1: 'F1', F2: 'F2', D3: 'D3', D7: 'D7', D15: 'D15', ENCERRAR: 'encerrar', RETORNO: 'retorno',
+    BIO1: 'lembrete da biometria (D+1)', BIO3: 'biometria D+3 · humano liga', INSTALACAO: 'instalação agendada (C2)', VESPERA: 'véspera da instalação (C3)',
+    VISITA: 'confirmação (antiga, fora de uso)' };
 
   const tbody = document.getElementById('tbody');
   const cartoesEl = document.getElementById('cartoes');
@@ -137,7 +139,7 @@
 
   // ------------------------------------------------------------------ dados
   const COLS = 'id, telefone, nome_contato, nome_confiavel, canal, origem, status, etapa, cep, numero, complemento, endereco_cep, cidade, uf, cluster, '
-    + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, dados, handoff_motivo, handoff_em, handoff_briefing, venda_id, '
+    + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, instalacao_preferencia, nio_viab_resultado, dados, handoff_motivo, handoff_em, handoff_briefing, venda_id, '
     + 'chatwoot_conversation_id, humano_atribuido, nao_contatar, agendamento_retorno, ultima_msg_lead_at, ultima_msg_mari_at, created_at, updated_at';
 
   async function carregar() {
@@ -436,7 +438,8 @@
         ${linha('Endereço', esc(end || '—'))}
         ${linha('Cidade · tabela', esc([c.cidade, c.cluster === 'btu' ? 'BTU' : c.cluster === 'regular' ? 'Regular' : null].filter(Boolean).join(' · ') || '—'))}
         ${linha('Plano', esc(`${planoTxt(c)}${c.forma_pagamento ? ` · ${FORMA[c.forma_pagamento]}` : ''}${valorDe(c) != null ? ` · ${NG.fmtMoeda(valorDe(c))}/mês` : ''}`))}
-        ${linha('Visita preferida', esc(c.visita_preferencia || '—'))}
+        ${linha('Instalação (preferência)', esc(c.instalacao_preferencia || c.visita_preferencia || '—'))}
+        ${c.nio_viab_resultado ? linha('Viabilidade Nio (portal)', esc(NG.VIAB_NIO[c.nio_viab_resultado] || c.nio_viab_resultado)) : ''}
         ${linha('Elegibilidade', esc(ELEG_TXT[c.elegibilidade] || c.elegibilidade || '—'))}
         ${linha('DFV', esc(DFV_TXT[c.dfv_resultado] || c.dfv_resultado || 'não consultado'))}
       </section>

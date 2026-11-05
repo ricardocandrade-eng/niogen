@@ -14,7 +14,7 @@
     <div class="g-cab">
       <div>
         <h2>Nova venda de rua</h2>
-        <p>PAP ou indicação. Salve como qualificado agora; registre a venda depois da biometria.</p>
+        <p>PAP ou indicação. Salve como qualificado agora; o pedido sai no portal PAP e a biometria vai por link.</p>
       </div>
       <button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button>
     </div>
@@ -104,7 +104,7 @@
       <section class="passo-g" data-passo="4" hidden>
         <h3>Conferências do contrato</h3>
         <p class="ajuda">As três perguntas que valem estorno de 100 %.</p>
-        <div class="faixa vermelho" id="aviso-ocupado" hidden>A base DFV indica Nio ativo neste endereço: pergunte com atenção e confira no APP.</div>
+        <div class="faixa vermelho" id="aviso-ocupado" hidden>A base DFV indica Nio ativo neste endereço: pergunte com atenção e confira no portal.</div>
         <div class="confs" role="group" aria-label="Conferências do contrato">
           <div class="conf"><span>Cancelou a Nio nos últimos 30 dias?</span>
             <span class="simnao"><label><input type="radio" name="cf_cancelou" value="sim"> Sim</label><label><input type="radio" name="cf_cancelou" value="nao"> Não</label></span></div>
@@ -117,21 +117,21 @@
           <span></span>
           <button type="button" class="btn btn-sm" id="btn-conf-saida"></button>
         </div>
-        <label class="check"><input type="checkbox" name="app_ok"> Conferi no APP NiO PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
+        <label class="check"><input type="checkbox" name="app_ok"> Conferi no portal PAP: não é cliente Nio, endereço sem produto ativo e sem cancelamento nos últimos 30 dias</label>
       </section>
 
-      <!-- 5 · Pedido e biometria -->
+      <!-- 5 · Pedido no portal e biometria por link (venda remota, 05/11: não existe biometria em campo) -->
       <section class="passo-g" data-passo="5" hidden>
-        <h3>Pedido e biometria</h3>
-        <p class="ajuda">Só existe depois da visita. É o que transforma qualificado em vendido.</p>
+        <h3>Pedido no portal e biometria</h3>
+        <p class="ajuda">O pedido é aberto no portal PAP (perfil BO); o cliente faz a biometria por um link no celular. É o que transforma qualificado em vendido.</p>
+        <div class="f-form-acoes"><a class="btn btn-ghost" href="https://pap.niointernet.com.br/administrativo/novo-pedido" target="_blank" rel="noopener">Abrir no portal PAP ↗</a></div>
         <div class="grade2">
-          <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
-          <label class="campo">Biometria<select name="biometria"><option value="">Escolher…</option><option value="aprovada">Aprovada agora</option><option value="agendada">Agendar</option><option value="reprovada">Reprovada</option></select></label>
-          <label class="campo" data-bio-agenda hidden>Data da biometria<input type="date" name="biometria_dia"></label>
-          <label class="campo" data-bio-agenda hidden>Período<select name="biometria_periodo"><option value="08:00">Manhã · 8–12h</option><option value="13:00">Tarde · 13–17h</option></select></label>
+          <label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
+          <label class="campo">Biometria (link)<select name="biometria"><option value="">Escolher…</option><option value="nao_enviada">Link ainda não enviado</option><option value="pendente">Link enviado · pendente</option><option value="com_risco">Com risco</option><option value="validada">Validada</option></select></label>
+          <label class="campo">Instalação · preferência<select name="inst_pref"><option value="">—</option><option value="manhã">Manhã</option><option value="tarde">Tarde</option></select></label>
         </div>
-        <div class="faixa amarelo">Depois do pedido, agendar a instalação em até 4 h (indicador do contrato).</div>
-        <span class="nota-campo">Na rua, o normal é salvar como qualificado agora e registrar a venda depois da biometria, pela tela Venda.</span>
+        <div class="faixa amarelo">Biometria validada: agendar a instalação em até 4 h (indicador do contrato).</div>
+        <span class="nota-campo">O normal é salvar como qualificado agora e registrar a venda quando a biometria validar, pela ficha da venda.</span>
       </section>
     </div>
 
@@ -141,9 +141,9 @@
       <div class="g-botoes">
         <button type="button" class="btn btn-ghost" id="btn-voltar">← Voltar</button>
         <div class="dir">
-          <button type="button" class="btn" id="btn-qualificado" disabled title="Antes da visita: cria a venda em 0 · Qualificado e avisa o consultor">Salvar como qualificado</button>
+          <button type="button" class="btn" id="btn-qualificado" disabled title="Antes do pedido no portal: cria a venda em 0 · Qualificado">Salvar como qualificado</button>
           <button type="button" class="btn btn-acc" id="btn-avancar">Continuar →</button>
-          <button type="button" class="btn btn-acc" id="btn-venda" disabled hidden title="Exige nº do pedido, biometria aprovada, conferências e cobertura viável (&lt; 7 dias)">Registrar venda</button>
+          <button type="button" class="btn btn-acc" id="btn-venda" disabled hidden title="Exige nº do pedido do portal, biometria validada, conferências e viabilidade (&lt; 7 dias)">Registrar venda</button>
         </div>
       </div>
     </div>
@@ -437,7 +437,7 @@
         if (vi === 'nao_consultado') return set('cinza', 'Cobertura ainda não consultada.');
         return set('vermelho', `Cobertura (ajuste manual): ${esc(NG.DFV_OPCOES[vi].toLowerCase())} — não vender.`);
       }
-      if (estado.dfvErro) return set('amarelo', `Base DFV indisponível — conferir no painel ou no APP antes da visita. ${links}`);
+      if (estado.dfvErro) return set('amarelo', `Base DFV indisponível — conferir no painel ou no portal antes de abrir o pedido. ${links}`);
       const r = estado.dfv;
       const base = F.dfv_particao.value ? ` · base de ${NG.fmtDiaISO(F.dfv_particao.value).slice(0, 5)}` : '';
       switch (r && r.resultado) {
@@ -448,9 +448,9 @@
             <span class="dfv-opcoes-lista">${ops.map((o) => `<button type="button" class="chip ${o.hp_livre >= 1 ? 'ok' : 'bad'}" data-unidade="${esc(o.complemento || '')}"
               title="HP livre ${o.hp_livre ?? '—'} · HC ${o.hc_tot ?? '—'}">${esc(o.complemento || `nº ${o.numero} (sem complemento)`)}</button>`).join('')}</span>`);
         }
-        case 'endereco_ocupado': return set('vermelho', 'Atenção: a base indica Nio ativo neste endereço — confirme com o cliente e no APP.');
-        case 'sem_porta_livre': return set('amarelo', `Na base, mas sem porta livre — conferir no painel ou no APP antes da visita${base}. ${links}`);
-        case 'nao_encontrado': return set('amarelo', `Não encontrado na base — conferir no painel ou no APP antes da visita. ${links}`);
+        case 'endereco_ocupado': return set('vermelho', 'Atenção: a base indica Nio ativo neste endereço — confirme com o cliente e no portal.');
+        case 'sem_porta_livre': return set('amarelo', `Na base, mas sem porta livre — conferir no painel ou no portal antes de abrir o pedido${base}. ${links}`);
+        case 'nao_encontrado': return set('amarelo', `Não encontrado na base — conferir no painel ou no portal antes de abrir o pedido. ${links}`);
         default: return set('cinza', 'Digite o número para consultar a cobertura.');
       }
     }
@@ -497,7 +497,7 @@
         !!F.nome.value.trim() && !!F.whatsapp.value.trim() && F.contato_ok.checked && (!docTxt || docOk),
         !!planoEscolhido(),
         confs.every((x) => x === 'nao') && F.app_ok.checked,
-        !!F.pedido.value.trim() && F.biometria.value === 'aprovada',
+        !!F.pedido.value.trim() && F.biometria.value === 'validada',
       ];
       const naoViavel = F.dfv_viabilidade.value !== 'nao_consultado' && !dfvOk();
       const est = [
@@ -505,7 +505,7 @@
         docTxt && !docOk ? 'warn' : pronto[1] ? 'ok' : '',
         pronto[2] ? 'ok' : '',
         confs.includes('sim') ? 'bad' : pronto[3] ? 'ok' : ocupado ? 'warn' : '',
-        F.biometria.value === 'reprovada' ? 'bad' : pronto[4] ? 'ok' : F.biometria.value === 'agendada' ? 'warn' : '',
+        F.biometria.value === 'com_risco' ? 'bad' : pronto[4] ? 'ok' : F.biometria.value === 'pendente' ? 'warn' : '',
       ];
       const foraArea = estado.area === false ? 'cidade fora da área' : 'endereço';
       const faltaQ = [];
@@ -522,7 +522,7 @@
       if (estado.dup && estado.dup.endereco) faltaV.push('endereço já tem venda ativa');
       if (estado.dup && estado.dup.documento) faltaV.push('CPF/CNPJ já tem venda ativa');
       if (!F.pedido.value.trim()) faltaV.push('nº do pedido');
-      if (F.biometria.value !== 'aprovada') faltaV.push('biometria');
+      if (F.biometria.value !== 'validada') faltaV.push('biometria validada');
       return { pronto, est, faltaQ, faltaV, confs, ocupado };
     }
 
@@ -558,7 +558,6 @@
       btnConfSaida.textContent = cliente ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Interesse futuro" · volta em 31 d';
       btnConfSaida.dataset.saida = cliente ? 'cliente' : 'futuro';
 
-      form.querySelectorAll('[data-bio-agenda]').forEach((el) => { el.hidden = F.biometria.value !== 'agendada'; });
       renderTravas();
       renderFaixa();
     }
@@ -596,9 +595,6 @@
       const docOk = NG.documentoValido(F.doc.value);
       const p = planoEscolhido();
 
-      let biometriaEm = null;
-      if (F.biometria.value === 'aprovada') biometriaEm = new Date().toISOString();
-      else if (F.biometria.value === 'agendada' && F.biometria_dia.value) biometriaEm = `${F.biometria_dia.value}T${F.biometria_periodo.value}:00-03:00`;
 
       const j = estado.viacep || {};
       return [{
@@ -620,12 +616,12 @@
         plano_id: p ? p.id : null,
         forma_pagamento: F.forma.value,
         nio_pedido: F.pedido.value.trim() || null,
-        biometria_status: F.biometria.value || null,
-        biometria_em: biometriaEm,
+        biometria_status: F.biometria.value || null,   // carimbos de data: trigger vendas_antes_biometria
+        instalacao_preferencia: F.inst_pref.value || null,
         vendedor_id: eu.id,
         trava_cobertura: estado.cobertura,
         trava_area: estado.area,
-        // Conferências do passo 4 (até o OSAB, quem confere é o vendedor no APP).
+        // Conferências do passo 4 (até o OSAB, quem confere é o vendedor no portal).
         trava_sem_produto_ativo: F.app_ok.checked && a.confs[1] === 'nao' && a.confs[2] === 'nao' && !(estado.dup && (estado.dup.endereco || estado.dup.documento)),
         trava_sem_cancelamento_30d: F.app_ok.checked && a.confs[0] === 'nao',
         trava_cpf_valido: docOk,

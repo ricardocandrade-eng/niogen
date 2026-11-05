@@ -29,7 +29,7 @@
     <header class="cab">
       <div>
         <h1>Instalações</h1>
-        <div class="sub">Do pedido no APP até a instalação · a Nio mede: agendar em até 4 h e instalar na 1ª visita</div>
+        <div class="sub">Do pedido no portal até a instalação · a Nio mede: agendar em até 4 h e instalar de primeira</div>
       </div>
       <div class="cab-acoes" id="cab-acoes"></div>
     </header>
@@ -123,7 +123,8 @@
     return NG.proximoPasso(v, ultimoContato[v.id]);
   }
   const precisaAcao = (v) => situacao(v) === 'atrasada' || !!proximo(v).acao;
-  const horasSemAgenda = (v) => (v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : 0);
+  // "A agendar há > 4 h" conta da biometria validada ou do pedido (vendido_em), o que vier depois (v_funil.agendar_desde).
+  const horasSemAgenda = (v) => { const desde = v.agendar_desde || v.vendido_em; return desde ? (Date.now() - new Date(desde)) / 3600000 : 0; };
 
   // Busca + vendedor + bairro; o Período corta só as instaladas (data da instalação).
   function base() {
@@ -176,7 +177,7 @@
     document.getElementById('kpis').innerHTML = [
       NG.kpi({ rot: 'A agendar', val: NG.fmtNum(agendar.length), cls: mais4 ? 'bad' : agendar.length ? 'warn' : '',
         nota: mais4 ? `${NG.fmtNum(mais4)} há mais de 4 h` : agendar.length ? 'dentro do prazo de 4 h' : 'nenhuma esperando agenda',
-        dica: 'Vendidas (pedido + biometria) sem data de instalação. Contrato: agendar em até 4 h depois da venda.' }),
+        dica: 'Vendidas (pedido no portal + biometria validada) sem data de instalação. Contrato: agendar em até 4 h — conta da biometria validada ou do pedido, o que vier depois.' }),
       NG.kpi({ rot: 'Agendadas hoje', val: NG.fmtNum(hojeL.length), nota: hojeL.length ? `${NG.fmtNum(manha)} manhã · ${NG.fmtNum(hojeL.length - manha)} tarde${instHoje ? ` · ${NG.fmtNum(instHoje)} já instalada${instHoje === 1 ? '' : 's'}` : ''}` : instHoje ? `${NG.fmtNum(instHoje)} instalada${instHoje === 1 ? '' : 's'} hoje` : 'nenhuma para hoje' }),
       NG.kpi({ rot: 'Atrasadas', val: NG.fmtNum(atras.length), cls: atras.length ? 'bad' : '',
         nota: atras.length ? `${NG.fmtNum(pend)} com pendência da Nio · ${NG.fmtNum(atras.length - pend)} passaram da data` : 'nenhuma',

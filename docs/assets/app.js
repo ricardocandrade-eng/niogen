@@ -52,12 +52,20 @@
   };
   const FORMAS = { boleto: 'Boleto', cartao: 'Cartão', dacc: 'DACC' };
   const SEGMENTOS = { PF: 'PF · Varejo', MEI: 'PJ · MEI', NMEI: 'PJ · NMEI' };
-  const BIOMETRIA = { agendada: 'agendada', aprovada: 'aprovada', reprovada: 'reprovada' };
+  // Venda remota (05/11): não existe biometria em campo. O portal PAP manda um LINK ao cliente e mostra
+  // Pendente · com Risco · Validada. "Não enviada" = o link ainda não saiu.
+  const BIOMETRIA = { nao_enviada: 'link não enviado', pendente: 'pendente (link enviado)', com_risco: 'com risco', validada: 'validada' };
+  const CREDITO = { pendente: 'pendente (24 h)', aprovado: 'aprovado', so_cartao: 'aprovado só no cartão', negado: 'negado' };
+  // Viabilidade oficial do portal (nível A em espera: hoje registrada à mão na ficha). Nunca nega venda sozinha (05/11 10h05):
+  // ≠ viável = conferir manualmente no portal (variações de CEP/rua/número); quem decide sem cobertura é o humano.
+  const VIAB_NIO = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado', posse: 'Endereço já tem Nio (posse)', indisponivel: 'Portal não respondeu' };
+  const PORTAL_PAP_NOVO_PEDIDO = 'https://pap.niointernet.com.br/administrativo/novo-pedido';
+  const opcoes = (mapa, atual, vazio = '—') => `<option value="">${vazio}</option>${Object.entries(mapa).map(([k, t]) => `<option value="${k}" ${atual === k ? 'selected' : ''}>${t}</option>`).join('')}`;
   const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice' };
 
   const MOTIVOS_SAIDA = [
     'Sem cobertura', 'Já é cliente Nio', 'Concorrente', 'Preço', 'Sem contato (cadência esgotada)',
-    'Desistiu', 'Reprovado na biometria', 'Fora da área', 'Interesse futuro (com data)',
+    'Desistiu', 'Reprovado na biometria', 'Crédito negado', 'Fora da área', 'Interesse futuro (com data)',
   ];
 
   // ---------- formatação ----------
@@ -179,23 +187,23 @@
   const DFV_OPCOES = {
     nao_consultado: 'Não consultado',
     viavel: 'Viável',
-    viavel_predio: 'Viável (prédio — unidade confirma no APP)',
+    viavel_predio: 'Viável (prédio — unidade confirma no portal)',
     sem_viabilidade: 'Sem viabilidade',
     nao_encontrado: 'Endereço não encontrado',
   };
   const TEXTOS_DFV = {
-    regra: 'O APP NiO PAP dá a palavra final. Nunca dizer ao cliente "cobertura confirmada" com base no DFV: a rua o consultor confirma na visita.',
-    trava: 'Para registrar a venda (0 → 1), o DFV tem que estar Viável ou Viável (prédio) e a consulta ter menos de 7 dias.',
+    regra: 'O portal PAP dá a palavra final (viabilidade oficial no pedido). Nunca dizer ao cliente "cobertura confirmada" com base no DFV.',
+    trava: 'Para registrar a venda (0 → 1), a viabilidade tem que estar Viável — a oficial do portal ou a do DFV (Viável ou Viável prédio) — com menos de 7 dias.',
     como: 'Usuário PARCEIRO · senhas com o Ricardo · filtre UF, município e CEP',
     opcoes: {
-      nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de marcar a visita de biometria.',
-      viavel: 'Casa com viabilidade "Viável" e HP livre ≥ 1: endereço atendido e com porta livre. Segue para a biometria.',
-      viavel_predio: 'Prédio atendido com HP livre ≥ 1; a unidade só se confirma no APP. Segue para a biometria e anote o apto no pedido.',
+      nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de abrir o pedido no portal.',
+      viavel: 'Casa com viabilidade "Viável" e HP livre ≥ 1: endereço atendido e com porta livre. Segue para o pedido no portal.',
+      viavel_predio: 'Prédio atendido com HP livre ≥ 1; a unidade só se confirma no portal. Segue para o pedido e anote o apto.',
       sem_viabilidade: 'A fachada existe, mas a viabilidade não é "Viável" (restrição técnica ou pendência). Não vender: saída "Sem cobertura" com interesse futuro em 90 dias.',
-      nao_encontrado: 'A fachada não aparece no DFV: sem rede no endereço ou célula bloqueada. Não vender e não insistir no APP: saída "Sem cobertura".',
+      nao_encontrado: 'A fachada não aparece no DFV: sem rede no endereço ou célula bloqueada. Não vender e não insistir no portal: saída "Sem cobertura".',
     },
     jaTemNio: 'Casa com HCS = 1 e HP livre = 0 quer dizer que o endereço já tem Nio: não vender (estorno 100 %). Saída "Já é cliente Nio".',
-    placar: 'Das vendas que entraram no mês, quantas tiveram o DFV consultado e deram viável. Toda qualificada deve ser consultada antes da visita de biometria.',
+    placar: 'Das vendas que entraram no mês, quantas tiveram o DFV consultado e deram viável. Toda qualificada deve ser consultada antes de abrir o pedido no portal.',
     faixa: 'Faixa de aprovação de crédito do bairro (últimos 2 meses). Não se fala disso com o cliente: serve para o Placar e o risco de FPD.',
   };
   const DFV_OK = ['viavel', 'viavel_predio'];
@@ -507,21 +515,15 @@
   async function pedirPedidoBiometria(venda) {
     const fd = await modal(`
       <h3>Registrar venda</h3>
-      <p>Para virar "Vendido" a Nio exige o nº do pedido do APP NiO PAP e a biometria aprovada.</p>
-      <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" value="${esc(venda.nio_pedido || '')}" autocomplete="off"></label>
-      <label class="campo">Biometria<select name="biometria">
-        <option value="">—</option>
-        ${Object.keys(BIOMETRIA).map((b) => `<option value="${b}" ${venda.biometria_status === b ? 'selected' : ''}>${b}</option>`).join('')}
-      </select></label>
+      <p>Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link).</p>
+      <label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(venda.nio_pedido || '')}" autocomplete="off"></label>
+      <label class="campo">Biometria<select name="biometria">${opcoes(BIOMETRIA, venda.biometria_status)}</select></label>
     `);
     if (!fd) return null;
     const pedido = String(fd.get('pedido') || '').trim();
     const biometria = fd.get('biometria') || null;
-    return {
-      nio_pedido: pedido || null,
-      biometria_status: biometria,
-      biometria_em: biometria && biometria !== venda.biometria_status ? new Date().toISOString() : venda.biometria_em,
-    };
+    // biometria_em, biometria_validada_em e biometria_link_enviado_em: carimbo do banco (trigger vendas_antes_biometria).
+    return { nio_pedido: pedido || null, biometria_status: biometria };
   }
 
   async function pedirSaida(venda) {
@@ -699,19 +701,33 @@
     }
     switch (v.status) {
       case '0_qualificado': {
-        const bio = v.biometria_status === 'agendada' && v.biometria_em ? diaSP(v.biometria_em) : null;
-        if (bio && bio < hoje) return { txt: `Biometria atrasada · era ${dd(v.biometria_em)}`, nivel: 'bad', acao: true, resolver: 'pedido' };
-        if (bio === hoje) return { txt: `Biometria hoje · ${fmtHora(v.biometria_em)}`, nivel: 'warn', acao: true, resolver: 'pedido' };
+        // Venda remota (05/11): pedido no portal → link da biometria → validada → Vendido. Alertas: link há > 24 h sem
+        // validação (amarelo) e > 72 h (vermelho, humano liga); crédito pendente há > 24 h (reconsultar no portal).
+        const hBio = v.horas_biometria_pendente != null ? Number(v.horas_biometria_pendente) : null;
+        const hCred = v.horas_credito_pendente != null ? Number(v.horas_credito_pendente) : null;
+        if (v.credito_resultado === 'negado') return { txt: 'Crédito negado no portal · encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
+        if (v.biometria_status === 'validada') {
+          if (!v.nio_pedido) return { txt: 'Biometria validada · falta o nº do pedido', nivel: 'warn', acao: true, resolver: 'pedido' };
+          if (v.viab_ok === false) return { txt: 'Biometria validada · viabilidade vencida', nivel: 'warn', acao: true, resolver: 'dfv' };
+          return { txt: 'Biometria validada · registrar a venda', nivel: 'warn', acao: true, resolver: 'pedido' };
+        }
+        if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (hBio != null && hBio > 72) return { txt: `Link da biometria há ${fmtHoras(hBio)} · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (hCred != null && hCred > 24) return { txt: `Crédito pendente há ${fmtHoras(hCred)} · reconsultar no portal`, nivel: 'warn', acao: true, resolver: 'portal' };
+        if (hBio != null && hBio > 24) return { txt: `Link da biometria há ${fmtHoras(hBio)} sem validar`, nivel: 'warn', acao: true, resolver: 'bio_status' };
+        if (v.biometria_status === 'pendente') return { txt: `Aguardando a biometria (link${hBio != null ? ` há ${fmtHoras(hBio)}` : ' enviado'})`, nivel: 'ok', resolver: 'bio_status' };
         const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
         const h = (Date.now() - new Date(ult)) / 3600000;
         if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
-        // DFV só aparece quando bloqueia a venda (trava 0 → 1: viável e consultado há menos de 7 dias, ou dispensa do admin).
-        if (!v.dfv_ok && !v.dfv_dispensado) {
+        // Viabilidade só aparece quando bloqueia a venda (trava 0 → 1: oficial do portal ou DFV viável < 7 d, ou dispensa).
+        if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado) && !v.viab_ok) {
+          return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/número`, nivel: 'warn', acao: true, resolver: 'dfv' };
+        }
+        if (!(v.viab_ok ?? v.dfv_ok) && !v.dfv_dispensado) {
           if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: 'Sem cobertura no DFV · não vender', nivel: 'bad', acao: true, resolver: 'sem_cobertura' };
           return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true, resolver: 'dfv' };
         }
-        if (bio) return { txt: `Biometria ${fmtDiaSemana(v.biometria_em)} ${dd(v.biometria_em)} · ${fmtHora(v.biometria_em)}`, nivel: 'ok', resolver: 'pedido' };
-        return { txt: 'Marcar a biometria', nivel: 'ok', resolver: 'biometria' };
+        return { txt: 'Abrir pedido no portal e enviar o link da biometria', nivel: 'ok', resolver: 'portal' };
       }
       case '1_vendido': {
         const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
@@ -812,7 +828,7 @@
   }
 
   window.NG = {
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,

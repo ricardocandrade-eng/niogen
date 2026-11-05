@@ -126,13 +126,13 @@
     document.getElementById('kpis').innerHTML = [
       NG.kpi({ rot: meta ? 'Vendidas · meta' : 'Vendidas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
-        dica: 'Vendas com pedido e biometria aprovada (data da venda) no período.' }),
+        dica: 'Vendas com pedido no portal e biometria validada (data da venda) no período.' }),
       NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst.length), nota: `${NG.fmtNum(aguard)} vendida${aguard === 1 ? '' : 's'} aguardando instalação` }),
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
         nota: acao.length ? `${NG.fmtNum(verm)} atrasada${verm === 1 ? '' : 's'} ou com prazo do contrato estourando` : 'nada pendente ✓',
-        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, biometria, contato, DFV, documentos, pendência da Nio.' }),
+        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, pedido no portal, link da biometria (> 24 h / > 72 h), crédito pendente, contato, viabilidade, documentos, pendência da Nio.' }),
     ].join('');
 
     // ---------- Precisam de ação agora (8 primeiras) ----------
