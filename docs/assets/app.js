@@ -164,31 +164,8 @@
     return `<button type="button" class="dica" data-dica="${t}" title="${t}" aria-label="O que é isso?">ⓘ</button>`;
   }
   function dica(chave, arg) { return dicaTxt(textoComissao(chave, arg)); }
-  function rotuloTxt(texto, explicacao) {
-    return `<span class="com-rot" title="${esc(explicacao)}">${esc(texto)}</span>${dicaTxt(explicacao)}`;
-  }
   function rotulo(texto, chave, arg) {
     return `<span class="com-rot" title="${esc(textoComissao(chave, arg))}">${esc(texto)}</span>${dica(chave, arg)}`;
-  }
-  // Selo do M-10 (status 1–5): elegível × não elegível. Fica no Funil e no detalhe; a lista de Vendas não mostra selos.
-  // Atraso > 15 dias e downgrade ainda não chegam ao NIOGEN (FPD/extrato não importados): o "não elegível" só vê o que existe.
-  const VENDIDA = ['1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
-  function seloM10(v) {
-    if (!v || !VENDIDA.includes(v.status)) return '';
-    const selo = (txt, cls, texto) => `<span class="chip selo ${cls}" data-dica="${esc(texto)}" title="${esc(texto)}">${esc(txt)}</span>`;
-    let motivo = null;
-    if (v.nio_venda_valida === false) motivo = 'a Nio marcou a venda como inválida';
-    else if (!Number(v.bonus_m10_potencial)) motivo = 'o plano não tem bônus M-10 na política vigente';
-    // Data prevista de apuração do M-10 = ativação (ou instalação) + 11 meses.
-    let quando = '';
-    if (v.ativado_em || v.instalado_em) {
-      const d = new Date(v.ativado_em || v.instalado_em);
-      d.setMonth(d.getMonth() + 11);
-      quando = ` Apuração prevista em ${parts(d, { month: '2-digit', year: 'numeric' })}.`;
-    }
-    return motivo
-      ? selo('M-10 não elegível', 'dim', textoComissao('m10Nao', motivo))
-      : selo(`M-10 elegível · ${fmtMoeda(v.bonus_m10_potencial)}`, 'info', textoComissao('m10') + quando);
   }
   // Aviso de downgrade (venda instalada/ativa, até ativação + 180 d).
   function avisoDowngrade(v) {
@@ -251,7 +228,6 @@
     }
     return dfvCache;
   }
-  async function linkDfv() { return (await dadosDfv()).url; }
   // ---------- DFV nível 3: consulta automática na base nio_hp (dfv_consultar) ----------
   // Resposta crua da função → valor do seletor (a mesma tabela do trigger vendas_antes_cobertura).
   const DFV_MAPA = {
@@ -588,17 +564,6 @@
     return true;
   }
 
-  async function registrarAgendamento(venda, titulo) {
-    const quando = await pedirAgendamento(titulo || 'Registrar agendamento', venda);
-    if (!quando) return false;
-    const campos = { instalacao_agendada_para: quando, nio_pendencia_cod: null, nio_pendencia_desc: null };
-    if (venda.status === '1_vendido') campos.status = '2_aguardando_instalacao';
-    const { error } = await sb.from('vendas').update(campos).eq('id', venda.id);
-    if (error) { toast(msgErro(error), 'bad'); return false; }
-    toast(`Instalação de ${primeiroNome(venda.cliente_nome)} agendada`, 'ok');
-    return true;
-  }
-
   // ---------- dados comuns ----------
   async function carregarUsuarios() {
     const { data } = await sb.from('usuarios').select('id, nome, perfil').eq('ativo', true).order('nome');
@@ -845,12 +810,12 @@
   window.NG = {
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, seloM10, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda,
-    DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
+    DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
-    pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
+    moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     get usuario() { return usuarioAtual; },
   };

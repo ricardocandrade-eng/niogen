@@ -220,7 +220,7 @@
        <label class="campo">Direção<select name="direcao"><option value="saida">Nós chamamos o cliente</option><option value="entrada">O cliente nos chamou</option></select></label></div>
        <label class="campo">Resumo<textarea name="resumo" maxlength="500"></textarea></label>
        <label class="check"><input type="checkbox" name="autorizado"> O cliente pediu ou autorizou este contato</label>`, 'Registrar contato'),
-    // Instalação: agendar (Vendido → Aguardando) ou reagendar; limpa a pendência da Nio (igual a NG.registrarAgendamento).
+    // Instalação: agendar (Vendido → Aguardando) ou reagendar; limpa a pendência da Nio (os campos do antigo NG.registrarAgendamento).
     agendar: (v) => formWrap('agendar', v.instalacao_agendada_para ? 'Reagendar instalação' : 'Agendar instalação',
       v.status === '1_vendido' ? 'Contrato: agendar em até 4 h depois da venda. Salvar leva a venda para "Aguardando".' : '',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
