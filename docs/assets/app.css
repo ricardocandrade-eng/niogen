@@ -916,3 +916,17 @@ a.q-item:hover .q-linha span:first-child { text-decoration: underline; }
 .gaveta .mc-lista { max-height: none; overflow: visible; }
 .gaveta .busca { flex: none; }
 div.cartao { color: var(--text); }
+
+/* Cobertura no padrão (05/11): resultado em pílula, dados em duas colunas, painel da Nio recolhido */
+.pill.cob-bad { background: var(--bad-bg); color: var(--bad-fg); }
+.pill.cob-warn { background: var(--warn-bg); color: var(--warn-fg); }
+.cob-pill { font-size: 13px; font-weight: 600; padding: 4px 12px; }
+.cob-dados { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; }
+details.cob-det > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+details.cob-det > summary::-webkit-details-marker { display: none; }
+details.cob-det > summary::before { content: "\25B8"; color: var(--muted); display: inline-block; transition: transform .15s; }
+details.cob-det[open] > summary::before { transform: rotate(90deg); }
+details.cob-det > summary h2 { font-size: 15px; }
+@media (max-width: 760px) {
+  .cob-dados { grid-template-columns: 1fr; }
+}
