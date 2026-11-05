@@ -237,7 +237,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/cadencia/c06_guard.js — nó \"6h · Guard Chatwoot\" do mari_cadencia (04/11/2026)\n// Antes de QUALQUER envio real, relê a conversa no Chatwoot (padrão noF1 da Renata):\n// humano atribuído, time atribuído ou conversa resolvida → para a escada (mari_cadencia_parar) e não envia.\n// Sem resposta do Chatwoot (nó 6g desligado ou erro) → NÃO envia: vira falha (não queima o passo).\nconst m = $('5 · Montar envio').first().json;\nconst cw = $input.first().json || {};\nconst temDados = cw && (cw.id !== undefined || cw.status !== undefined) && !cw.conversaId;\n\nif (!temDados) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, erro: 'guard do Chatwoot sem resposta (nó desligado ou erro) — não enviado' } }];\n}\nconst humano = !!(cw.meta && cw.meta.assignee) || !!cw.assignee_id;\nconst time = !!cw.team_id || !!(cw.meta && cw.meta.team);\nconst resolvida = cw.status === 'resolved';\nconst parar = humano || time || resolvida;\nreturn [{ json: { ...m, parar, enviar: !parar, humano, time, resolvida } }];\n"
+        "jsCode": "// NIOGEN | n8n/cadencia/c06_guard.js — nó \"6h · Guard Chatwoot\" do mari_cadencia (04/11/2026)\n// Antes de QUALQUER envio real, relê a conversa no Chatwoot (padrão noF1 da Renata):\n// humano atribuído, time atribuído, conversa resolvida ou etiqueta nao-contatar → para a escada (mari_cadencia_parar) e não envia.\n// Sem resposta do Chatwoot (nó 6g desligado ou erro) → NÃO envia: vira falha (não queima o passo).\nconst m = $('5 · Montar envio').first().json;\nconst cw = $input.first().json || {};\nconst temDados = cw && (cw.id !== undefined || cw.status !== undefined) && !cw.conversaId;\n\nif (!temDados) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, erro: 'guard do Chatwoot sem resposta (nó desligado ou erro) — não enviado' } }];\n}\nconst humano = !!(cw.meta && cw.meta.assignee) || !!cw.assignee_id;\nconst time = !!cw.team_id || !!(cw.meta && cw.meta.team);\nconst resolvida = cw.status === 'resolved';\nconst naoContatar = Array.isArray(cw.labels) && cw.labels.includes('nao-contatar');   // adendo 2 (05/11): não tocar\nconst parar = humano || time || resolvida || naoContatar;\nreturn [{ json: { ...m, parar, enviar: !parar, humano, time, resolvida, naoContatar } }];\n"
       },
       "name": "6h · Guard Chatwoot",
       "type": "n8n-nodes-base.code",
@@ -289,7 +289,7 @@
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversaId, p_humano: !!$json.humano, p_time: !!$json.time, p_resolvida: !!$json.resolvida }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversaId, p_humano: !!$json.humano, p_time: !!$json.time, p_resolvida: !!$json.resolvida, p_nao_contatar: !!$json.naoContatar }) }}",
         "options": {
           "timeout": 20000
         }

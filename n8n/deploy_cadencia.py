@@ -104,7 +104,7 @@ def build(ids):
     code('6h · Guard Chatwoot', 1980, 500)
     iff('6i · Parar escada?', '={{ $json.parar === true }}', 2200, 500)
     rpc('6p · Supabase parar', 'mari_cadencia_parar',
-        '={{ JSON.stringify({ p_conversa: $json.conversaId, p_humano: !!$json.humano, p_time: !!$json.time, p_resolvida: !!$json.resolvida }) }}',
+        '={{ JSON.stringify({ p_conversa: $json.conversaId, p_humano: !!$json.humano, p_time: !!$json.time, p_resolvida: !!$json.resolvida, p_nao_contatar: !!$json.naoContatar }) }}',
         2420, 400)
     iff('6e · Enviar?', '={{ $json.enviar === true }}', 2420, 600)
     add('7 · Chatwoot enviar', 'n8n-nodes-base.httpRequest', 4.2, {

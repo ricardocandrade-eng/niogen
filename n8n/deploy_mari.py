@@ -169,6 +169,7 @@ CODE = {
     '7r · Extrair (correção)': 'n07_extrair.js',
     '7c · Anti-duplicata': 'n07c_duplicata.js',
     '10 · Salvar turno': 'n10_salvar.js',
+    '9d · Montar handoff Chatwoot': 'n09d_handoff_chatwoot.js',
     '11 · Saída': 'n11_saida.js',
     'E1 · Log erro': 'nE1_log_erro.js',
     '12a · Balões': 'n12a_baloes.js',
@@ -310,6 +311,38 @@ def build(ids):
         "={{ JSON.stringify({ p_conversa: $('10 · Salvar turno').first().json.r.conversaId, "
         "p_motivo: $('10 · Salvar turno').first().json.r.handoff.motivo, "
         "p_lead: $('10 · Salvar turno').first().json.r.handoff.lead }) }}", 6380, 200)
+    # Adendo 2 (prompt 16, Parte G): rastro do handoff no Chatwoot — etiquetas, nota privada, time backoffice.
+    # Só no modo chatwoot; cada chamada com onError = segue (o handoff nunca derruba a resposta ao cliente).
+    iff('9c · Chatwoot handoff?', "={{ $('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.chatwootConversationId }}", 6600, 0)
+    add('9b · Supabase briefing', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET',
+        'url': f"={SB}/rest/v1/mari_conversas?id=eq.{{{{ $('10 · Salvar turno').first().json.r.conversaId }}}}&select=handoff_briefing,handoff_motivo,venda_id",
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'options': {'timeout': 10000}}, 6820, -100, credentials=sb_cred, alwaysOutputData=True, onError='continueRegularOutput')
+    code('9d · Montar handoff Chatwoot', 7040, -100)
+    CW = "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/conversations/{{ $('9d · Montar handoff Chatwoot').first().json.conversa }}"
+    add('9e · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': CW + '/labels',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ labels: $('9d · Montar handoff Chatwoot').first().json.labels }) }}",
+        'options': {'timeout': 10000}}, 7260, -100, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Adendo 2 — união das etiquetas atuais (lidas no 2g) com handoff / handoff-venda / handoff-humano.')
+    add('9f · Chatwoot nota', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': CW + '/messages',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ content: $('9d · Montar handoff Chatwoot').first().json.nota, message_type: 'outgoing', private: true }) }}",
+        'options': {'timeout': 10000}}, 7480, -100, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Adendo 2 — nota PRIVADA com o briefing (o cliente não vê; o 2 · Entrada ignora mensagem privada).')
+    iff('9g · Atribuir time?', "={{ $('9d · Montar handoff Chatwoot').first().json.atribuirTime === true }}", 7700, -100)
+    add('9h · Chatwoot time', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': CW + '/assignments',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ team_id: $('9d · Montar handoff Chatwoot').first().json.teamId }) }}",
+        'options': {'timeout': 10000}}, 7920, -200, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Adendo 2 — time backoffice (15102), só handoff-venda e handoff-humano. Automações da conta não são mexidas.')
     code('11 · Saída', 6600, 300)
     iff('11m · Modo teste?', "={{ $json.modo !== 'chatwoot' }}", 6820, 300)
     add('12t · Responder (teste)', 'n8n-nodes-base.respondToWebhook', 1.1, {
@@ -392,7 +425,16 @@ def build(ids):
         ('10b · Supabase salvar turno', 0, '8 · É handoff?'),
         ('8 · É handoff?', 0, '9 · Handoff'),
         ('8 · É handoff?', 1, '11 · Saída'),
-        ('9 · Handoff', 0, '11 · Saída'),
+        ('9 · Handoff', 0, '9c · Chatwoot handoff?'),
+        ('9c · Chatwoot handoff?', 0, '9b · Supabase briefing'),
+        ('9c · Chatwoot handoff?', 1, '11 · Saída'),
+        ('9b · Supabase briefing', 0, '9d · Montar handoff Chatwoot'),
+        ('9d · Montar handoff Chatwoot', 0, '9e · Chatwoot etiquetas'),
+        ('9e · Chatwoot etiquetas', 0, '9f · Chatwoot nota'),
+        ('9f · Chatwoot nota', 0, '9g · Atribuir time?'),
+        ('9g · Atribuir time?', 0, '9h · Chatwoot time'),
+        ('9g · Atribuir time?', 1, '11 · Saída'),
+        ('9h · Chatwoot time', 0, '11 · Saída'),
         ('11 · Saída', 0, '11m · Modo teste?'),
         ('11m · Modo teste?', 0, '12t · Responder (teste)'),
         ('11m · Modo teste?', 1, '11c · Tem resposta?'),
