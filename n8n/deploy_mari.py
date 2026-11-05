@@ -42,7 +42,8 @@ IDS = os.path.join(AQUI, 'mari_ids.json')            # IDs do workflow e das cre
 # 'prompt'/'versao' da produção aqui, depois da aprovação do Ricardo, e rodar "estrutura".
 ALVOS = {
     # v3 em produção desde 05/11 (aprovação do Ricardo: "Sim, vire"); v2 = histórico.
-    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'workflow_id',
+    # v4 (venda remota) em produção desde 05/11 (bateria do ensaio 26/27, OK prévio do Ricardo: "As duas rodadas").
+    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v4.md', 'versao': 'mari_v4', 'id_key': 'workflow_id',
                  'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
     # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
     'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v4.md', 'versao': 'mari_v4', 'id_key': 'ensaio_workflow_id',
