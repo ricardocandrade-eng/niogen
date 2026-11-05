@@ -204,6 +204,9 @@ def t9():
     tpl = sql("select nome as k, public.mari_render_template(nome, case nome when 'nio_retomada_lead_d3' "
               "then '[\"tudo bem\", \"internet fibra em Juiz de Fora\"]'::jsonb when 'nio_confirmacao_visita' "
               "then '[\"Marina\", \"quinta-feira, 06/11\", \"14h às 15h\", \"Rua Halfeld, 500, apto 302\"]'::jsonb "
+              "when 'nio_lembrete_biometria' then '[\"Ana\", \"https://exemplo.test/bio/abc\"]'::jsonb "
+              "when 'nio_instalacao_agendada' then '[\"Ana\", \"terça-feira, 17/11\", \"manhã, 8h às 12h\", \"Rua Halfeld, 500, Centro\"]'::jsonb "
+              "when 'nio_lembrete_instalacao' then '[\"Ana\", \"17/11\", \"manhã\"]'::jsonb "
               "else '[\"Ana\"]'::jsonb end) as t from public.config_templates_waba")
     ruins = []
     for r in textos + tpl:
@@ -225,10 +228,69 @@ def t10():
           f"8h40: {a0 and a0['bloqueio']} · 9h: {a and a['template']} params={a and a['params']}")
 
 
+# ───────────── venda remota (prompt nº 15, parte D): biometria pendente e instalação agendada ─────────────
+
+def venda_teste(n, **c):
+    """INSERT de uma venda ligada à conversa de teste n (apagada pelo mari_limpar_teste via origem_ref)."""
+    base = {'id': f"'{uid(100 + n)}'", 'status': "'0_qualificado'", 'origem': "'outro'", 'origem_ref': f"'mari:{uid(n)}'",
+            'cliente_nome': "'Bia Teste Cadencia'", 'cliente_whatsapp': f"'{PREFIXO}9{n:02d}'", 'segmento': "'PF'",
+            'cep': "'36013260'", 'logradouro': "'Rua São Sebastião'", 'numero': f"'9{n:02d}'", 'bairro': "'Centro'",
+            'cidade': "'Juiz de Fora'", 'uf': "'MG'", 'forma_pagamento': "'boleto'",
+            'plano_id': "(select id from public.config_planos where codigo = 'V-REG-SUP')"}
+    base.update(c)
+    return f"insert into public.vendas ({', '.join(base)}) values ({', '.join(base.values())});"
+
+
+def t12():
+    # biometria por link enviada qua 11/11 10h → D+1 (qui 12/11) lembrete; D+3 (sáb 14/11) humano liga.
+    sql(venda_teste(15, biometria_status="'pendente'", biometria_link="'https://exemplo.test/bio/abc'",
+                    biometria_link_enviado_em="'2026-11-11 10:00-03'")
+        + conv(15, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(115)}'", nome_contato="'Bia Teste'",
+               nome_confiavel='true', ultima_msg_lead_at="'2026-11-11 09:30-03'")
+        + turno(15, 'mari', '2026-11-11 09:31-03', 'Pronto, anotado!'))
+    a0 = um(sql(avaliar(15, '2026-11-11 15:00-03')))
+    a1 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela fechada → template C1 (PENDING até a Meta aprovar)
+    sql(f"update public.mari_conversas set ultima_msg_lead_at = '2026-11-12 10:00-03' where id = '{uid(15)}'")
+    a2 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela aberta → texto livre com o link
+    ok2 = a2 and a2['proximo_passo'] == 'BIO1' and a2['pode_enviar'] and a2['acao'] == 'texto' and 'exemplo.test/bio/abc' in (a2['texto'] or '')
+    if ok2:
+        sql(f"select public.mari_cadencia_registrar('{uid(15)}', 'BIO1', true, null, '2026-11-12 10:30-03', $${a2['texto']}$$, null)")
+    a3 = um(sql(avaliar(15, '2026-11-14 10:30-03')))
+    ok = (a0 and a0['proximo_passo'] == 'BIO1' and not a0['pode_enviar']
+          and a1 and a1['proximo_passo'] == 'BIO1' and a1['template'] == 'nio_lembrete_biometria' and a1['params'][1] == 'https://exemplo.test/bio/abc'
+          and ok2
+          and a3 and a3['proximo_passo'] == 'BIO3' and not a3['pode_enviar'] and a3['ligar_sugerido'])
+    checa('12 · biometria pendente: D+1 lembrete com o link; D+3 → humano liga (nunca automático)', bool(ok),
+          f"11/11 15h: {a0 and a0['bloqueio']} · 12/11 sem janela: {a1 and a1['template']} ({a1 and a1['bloqueio']}) · "
+          f"12/11 na janela: {a2 and a2['acao']} pode={a2 and a2['pode_enviar']} · 14/11: {a3 and a3['proximo_passo']} "
+          f"ligar={a3 and a3['ligar_sugerido']} ({a3 and a3['bloqueio']})")
+
+
+def t13():
+    # instalação agendada ter 17/11 manhã (agendada na sex 13/11) → C2 na hora; C3 na véspera (seg 16/11).
+    sql(venda_teste(16, status="'2_aguardando_instalacao'", nio_pedido="'TESTE-CAD-16'", biometria_status="'validada'",
+                    nio_viab_resultado="'viavel'", instalacao_agendada_para="'2026-11-17 08:00-03'", instalacao_turno="'manha'")
+        + conv(16, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(116)}'", nome_contato="'Bia Teste'",
+               nome_confiavel='true', ultima_msg_lead_at="'2026-11-13 10:00-03'")
+        + turno(16, 'mari', '2026-11-13 10:01-03', 'Pronto, anotado!'))
+    a = um(sql(avaliar(16, '2026-11-13 10:30-03')))
+    ok_c2 = (a and a['proximo_passo'] == 'INSTALACAO' and a['pode_enviar'] and a['acao'] == 'texto'
+             and a['params'][1] == 'terça-feira, 17/11' and a['params'][2].startswith('manhã'))
+    if ok_c2:
+        sql(f"select public.mari_cadencia_registrar('{uid(16)}', 'INSTALACAO', true, null, '2026-11-13 10:30-03', $${a['texto']}$$, null)")
+    b = um(sql(avaliar(16, '2026-11-14 10:00-03')))
+    c = um(sql(avaliar(16, '2026-11-16 10:00-03')))
+    ok = (ok_c2 and b and b['proximo_passo'] == 'VESPERA' and not b['pode_enviar']
+          and c and c['proximo_passo'] == 'VESPERA' and c['template'] == 'nio_lembrete_instalacao' and c['params'][1:] == ['17/11', 'manhã'])
+    checa('13 · instalação agendada: C2 ao agendar; C3 só na véspera', bool(ok),
+          f"13/11: {a and a['proximo_passo']} {a and a['params']} pode={a and a['pode_enviar']} · 14/11: {b and b['bloqueio']} · "
+          f"16/11: {c and c['template']} {c and c['params']} ({c and c['bloqueio']})")
+
+
 if __name__ == '__main__':
     print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
     try:
-        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10):
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13):
             try:
                 t()
             except Exception as e:
