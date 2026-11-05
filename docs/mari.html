@@ -467,6 +467,9 @@
   }
 
   await carregar();
+  // Link direto vindo do detalhe da venda ("Ver conversa"): mari.html?conversa=<id> abre a gaveta dessa conversa.
+  const qConversa = new URLSearchParams(location.search).get('conversa');
+  if (qConversa) abrir(qConversa);
   setInterval(carregar, 60000);   // a lista se atualiza sozinha a cada minuto (só leitura)
 })();
 </script>

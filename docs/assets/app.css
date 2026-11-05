@@ -738,3 +738,48 @@ button.cartao { font: inherit; color: var(--text); text-align: left; width: 100%
 .balao .b-txt { white-space: pre-wrap; overflow-wrap: anywhere; }
 .balao .chip { font-size: 10px; }
 @media (max-width: 760px) { a.fab { display: flex; } .d-l { grid-template-columns: 110px minmax(0, 1fr); } }
+
+/* Vendas · chave Lista | Quadro (prompt 13). A vista ativa fica em main[data-vista]. */
+.cab-acoes { display: flex; align-items: center; gap: 10px; }
+.seg.vista { flex: none; }
+.seg.vista label { flex: none; min-height: 34px; padding: 0 16px; }
+.main[data-vista="quadro"] .lista.padrao, .main[data-vista="quadro"] .cartoes { display: none; }
+.main[data-vista="lista"] .quadro-vendas { display: none; }
+
+/* Vista Quadro: 5 colunas; Saída e Interesse futuro recolhidos numa faixa abaixo */
+.quadro-vendas { display: flex; flex-direction: column; gap: 12px; }
+.board.qv { overflow-x: auto; padding-bottom: 6px; align-items: flex-start; }
+.qv-col { flex: 1 1 0; min-width: 210px; gap: 8px; }
+.qv-col .col-head .c-info { color: var(--info-fg); }
+.qv-col .col-head .c-ok { color: var(--ok-fg); }
+.qv-corpo { display: flex; flex-direction: column; gap: 8px; }
+.qv-corpo.rola { max-height: 640px; overflow-y: auto; padding-right: 4px; }
+.qcard { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-decoration: none; }
+.qcard:hover { color: var(--text); border-color: var(--border-strong); }
+.qcard b { font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.qcard small { font-size: 12px; color: var(--muted); }
+.qcard .prox { margin-top: 2px; }
+.qcard.bad { border-left: 3px solid var(--bad-dot); }
+.qcard.warn { border-left: 3px solid var(--warn-dot); }
+.qcard.dim { background: var(--surface-dim); }
+.qcard[draggable="true"] { cursor: grab; }
+.qcard.arrastando { opacity: .5; }
+.qv-fora { border-radius: 10px; }
+.qv-fora.drop-alvo, .qv-fora.destaque, .qv-col.destaque { outline: 2px dashed var(--accent); outline-offset: 4px; }
+.qv-faixa { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 42px; padding: 0 14px; border-radius: 10px; border: 1px dashed var(--border); background: var(--surface-dim); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.qv-faixa:hover { color: var(--text); border-color: var(--border-strong); }
+.qv-faixa b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+.qv-fora-corpo { display: flex; flex-direction: column; gap: 14px; padding: 12px 2px 2px; }
+.qv-grupo h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.qv-grupo h3 span { font-family: var(--mono); font-weight: 500; }
+.qv-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+@media (max-width: 760px) {
+  .cab-acoes { width: 100%; }
+  .seg.vista { flex: 1; }
+  .seg.vista label { flex: 1; }
+  /* Celular: uma coluna por vez, rolando na horizontal com encaixe. */
+  .board.qv { scroll-snap-type: x mandatory; gap: 10px; margin: 0 -16px; padding: 0 16px 6px; scroll-padding: 0 16px; }
+  .qv-col { flex: 0 0 86%; min-width: 0; scroll-snap-align: start; }
+  .qv-corpo.rola { max-height: none; overflow: visible; }
+  .qv-grade { grid-template-columns: 1fr; }
+}

@@ -1,5 +1,7 @@
 <!doctype html>
-<!-- NIOGEN | docs/venda.html | 03/11/2026 — detalhe da venda: comissão, linha do tempo (eventos_venda), travas, dados, saída -->
+<!-- NIOGEN | docs/venda.html | 03/11/2026 — detalhe da venda: comissão, linha do tempo (eventos_venda), travas, dados, saída
+     04/11 (prompt 13): volta para Vendas (o Funil virou a vista Quadro); "Mover para…" muda a etapa daqui (é o caminho no celular,
+     onde o Quadro não arrasta) com as mesmas travas de NG.moverStatus; "Ver conversa" abre a conversa da Mari quando houver. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -32,6 +34,7 @@
   const id = new URLSearchParams(location.search).get('id');
   let v = null;
   let adics = [];
+  let conversaId = null;
 
   const TITULOS = {
     '0_qualificado': 'Qualificada', '1_vendido': 'Vendida · biometria aprovada', '2_aguardando_instalacao': 'Aguardando instalação',
@@ -115,6 +118,16 @@
     return `<div class="tl-item"><span class="tl-dot futuro"></span><div class="tl-txt"><strong style="color:var(--muted)">Próximos marcos</strong><span>${esc(m.join(' · '))}</span></div></div>`;
   }
 
+  // Mesmas etapas do Quadro de Vendas. Ativo não aparece: vem da importação do OSAB.
+  const DESTINOS = [['0_qualificado', 'Qualificado'], ['1_vendido', 'Vendido'], ['2_aguardando_instalacao', 'Aguardando instalação'],
+    ['3_instalado', 'Instalado'], ['saida', 'Saída']];
+  function seletorEtapa() {
+    const atual = NG.etapaDe(v.status).id;
+    const ops = DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual);
+    return `<select class="sel" data-mover aria-label="Mover para outra etapa"><option value="">Mover para…</option>
+      ${ops.map(([st, nome]) => `<option value="${st}">${esc(nome)}</option>`).join('')}</select>`;
+  }
+
   function trava(rotulo, valor, okTxt) {
     const cls = valor === true ? 'ok' : valor === false ? 'bad' : 'nd';
     const txt = valor === true ? (okTxt || '✓') : valor === false ? '✗' : 'não verificada';
@@ -139,15 +152,20 @@
   }
 
   async function carregar() {
-    const [rv, re, rl, ra] = await Promise.all([
+    const [rv, re, rl, ra, rc] = await Promise.all([
       NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
+      // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
+      ['admin', 'backoffice'].includes((NG.usuario || {}).perfil)
+        ? NG.sb.from('mari_conversas').select('id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        : Promise.resolve({ data: [] }),
     ]);
+    conversaId = ((rc.data || [])[0] || {}).id || null;
     adics = ra.data || [];
     if (rv.error || !rv.data) {
-      main.innerHTML = `<div class="placeholder">${esc(rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada.')} <a href="funil.html">Voltar ao funil</a></div>`;
+      main.innerHTML = `<div class="placeholder">${esc(rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada.')} <a href="vendas.html">Voltar a Vendas</a></div>`;
       return;
     }
     v = rv.data;
@@ -172,7 +190,7 @@
     main.innerHTML = `
       <header class="page-head" style="align-items:flex-start">
         <div class="tit" style="gap:6px">
-          <a class="voltar" href="funil.html">← Funil · ${esc(s.curto)}</a>
+          <a class="voltar" href="vendas.html">← Vendas · ${esc(NG.etapaDe(v.status).nome)}</a>
           <h1 style="font-size:24px">${esc(v.cliente_nome)}</h1>
           <div class="det-meta">
             ${v.nio_pedido ? `<span class="mono">Pedido Nio #${esc(v.nio_pedido)}</span><span>·</span>` : ''}
@@ -183,7 +201,8 @@
           ${NG.seloDfv(v) || NG.seloM10(v) ? `<div class="chips selos">${NG.seloDfv(v)}${NG.seloM10(v)}</div>` : ''}
         </div>
         <div class="tools">
-          <button type="button" class="btn" disabled title="em breve">Abrir conversa</button>
+          ${seletorEtapa()}
+          ${conversaId ? `<a class="btn" href="mari.html?conversa=${esc(conversaId)}">Ver conversa</a>` : ''}
           <button type="button" class="btn" data-acao="contato">Registrar contato</button>
           <button type="button" class="btn btn-acc" data-acao="editar">Editar</button>
         </div>
@@ -395,7 +414,7 @@
     const dataLocal = (ts) => (ts ? NG.diaSP(ts) : '');
     const fd = await NG.modal(`
       <h3>Editar venda</h3>
-      <p>Mudanças de status são feitas no funil.</p>
+      <p>A etapa muda pelo "Mover para…" desta tela ou arrastando no Quadro de Vendas.</p>
       <label class="campo">Nº do pedido (APP NiO PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off"></label>
       <label class="campo">Contrato Nio<input type="text" name="contrato" value="${esc(v.nio_contrato || '')}"></label>
       <label class="campo">Biometria<select name="biometria"><option value="">—</option>${Object.keys(NG.BIOMETRIA).map((b) => `<option value="${b}" ${v.biometria_status === b ? 'selected' : ''}>${b}</option>`).join('')}</select></label>
@@ -418,6 +437,12 @@
     carregar();
   }
 
+  main.addEventListener('change', (ev) => {
+    const sel = ev.target.closest('[data-mover]');
+    if (!sel || !sel.value) return;
+    NG.moverStatus(v, sel.value).then((ok) => { if (ok) carregar(); else sel.value = ''; });
+  });
+
   main.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-acao]');
     if (!b) return;
@@ -430,7 +455,7 @@
     else if (b.dataset.acao === 'registrar') NG.moverStatus(v, '1_vendido').then((ok) => { if (ok) carregar(); });
   });
 
-  if (!id) { main.innerHTML = '<div class="placeholder">Venda não informada. <a href="funil.html">Voltar ao funil</a></div>'; return; }
+  if (!id) { main.innerHTML = '<div class="placeholder">Venda não informada. <a href="vendas.html">Voltar a Vendas</a></div>'; return; }
   await carregar();
 })();
 </script>
