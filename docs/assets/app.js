@@ -712,6 +712,81 @@
   // Pílula da etapa (uma por linha) e "próximo passo" ({txt, nivel: bad | warn | ok | dim}).
   const pilulaEtapa = (status) => { const e = etapaDe(status); return `<span class="pill ${e.id}">${esc(e.nome)}</span>`; };
   const proxPasso = (p) => (p && p.txt ? `<span class="prox ${p.nivel || 'ok'}">${esc(p.txt)}</span>` : '<span class="prox dim">—</span>');
+  // ---------- próximo passo da venda (Vendas, Instalações, Painel e ficha usam daqui) ----------
+  // {txt, nivel, acao (entra em "Precisam de ação"), resolver (o formulário da ficha que resolve o passo)}.
+  // Sinais do banco: horas_sem_agendamento, biometria_em, nio_pendencia_*, dfv_ok, docs_prazo_em, nio_venda_valida e o
+  // último contato (contatos_cliente, ou a entrada quando não há nenhum). ultimoContatoEm = data do último contato ou null.
+  const ATIVAS_INST = ['1_vendido', '2_aguardando_instalacao', '3_instalado'];
+  function proximoPasso(v, ultimoContatoEm) {
+    const hoje = diaSP();
+    const dd = (x) => fmtData(x);
+    if (v.status === 'saida') {
+      const volta = v.interesse_futuro_em ? ` · volta ${fmtDiaISO(v.interesse_futuro_em).slice(0, 5)}` : '';
+      return { txt: `${v.motivo_saida || 'Encerrada'}${volta}`, nivel: 'dim' };
+    }
+    if (v.nio_venda_valida === false) return { txt: 'Nio marcou a venda como inválida', nivel: 'bad', acao: true, resolver: 'invalida' };
+    if ((v.nio_pendencia_cod || v.nio_pendencia_desc) && ATIVAS_INST.includes(v.status)) {
+      return { txt: `Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`.slice(0, 70), nivel: 'bad', acao: true, resolver: 'reagendar' };
+    }
+    switch (v.status) {
+      case '0_qualificado': {
+        const bio = v.biometria_status === 'agendada' && v.biometria_em ? diaSP(v.biometria_em) : null;
+        if (bio && bio < hoje) return { txt: `Biometria atrasada · era ${dd(v.biometria_em)}`, nivel: 'bad', acao: true, resolver: 'pedido' };
+        if (bio === hoje) return { txt: `Biometria hoje · ${fmtHora(v.biometria_em)}`, nivel: 'warn', acao: true, resolver: 'pedido' };
+        const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
+        const h = (Date.now() - new Date(ult)) / 3600000;
+        if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
+        // DFV só aparece quando bloqueia a venda (trava 0 → 1: viável e consultado há menos de 7 dias, ou dispensa do admin).
+        if (!v.dfv_ok && !v.dfv_dispensado) {
+          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: 'Sem cobertura no DFV · não vender', nivel: 'bad', acao: true, resolver: 'sem_cobertura' };
+          return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true, resolver: 'dfv' };
+        }
+        if (bio) return { txt: `Biometria ${fmtDiaSemana(v.biometria_em)} ${dd(v.biometria_em)} · ${fmtHora(v.biometria_em)}`, nivel: 'ok', resolver: 'pedido' };
+        return { txt: 'Marcar a biometria', nivel: 'ok', resolver: 'biometria' };
+      }
+      case '1_vendido': {
+        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
+        return { txt: `Agendar instalação${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true, resolver: 'agendar' };
+      }
+      case '2_aguardando_instalacao': {
+        const q = v.instalacao_agendada_para;
+        if (!q) return { txt: 'Sem data de instalação', nivel: 'warn', acao: true, resolver: 'agendar' };
+        const d = diaSP(q), j = janela(q);
+        if (d === hoje) return { txt: `Instalação hoje · ${j}`, nivel: 'ok', resolver: 'reagendar' };
+        if (d === somaDias(hoje, 1)) return { txt: `Instalação amanhã · ${j}`, nivel: 'ok', resolver: 'reagendar' };
+        if (d < hoje) return { txt: `Instalação era ${dd(q)} · aguardando OSAB`, nivel: 'ok', resolver: 'reagendar' };
+        return { txt: `Instalação ${dd(q)} · ${j}`, nivel: 'ok', resolver: 'reagendar' };
+      }
+      case '3_instalado': {
+        if (!v.docs_entregues_em && v.docs_prazo_em) {
+          const dias = (new Date(v.docs_prazo_em) - Date.now()) / 86400000;
+          if (dias < 0) return { txt: `Documentos à Nio atrasados · ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true, resolver: 'docs' };
+          if (dias <= 3) return { txt: `Documentos à Nio até ${dd(v.docs_prazo_em)}`, nivel: 'warn', acao: true, resolver: 'docs' };
+        }
+        return { txt: 'Aguardando ativação Nio', nivel: 'ok', resolver: v.docs_entregues_em ? null : 'docs' };
+      }
+      case '4_ativo_provisorio':
+      case '5_comissao_firme': {
+        const b = v.ativado_em || v.instalado_em;
+        return { txt: b ? `Ativa desde ${dd(b)}` : 'Ativa', nivel: 'ok' };
+      }
+      default: return { txt: '', nivel: 'dim' };
+    }
+  }
+  // Último contato por venda (contatos_cliente ordenado do mais novo para o mais velho) → {venda_id: em}.
+  function ultimosContatos(linhas) {
+    const m = {};
+    (linhas || []).forEach((c) => { if (!m[c.venda_id]) m[c.venda_id] = c.em; });
+    return m;
+  }
+  // Abre a ficha da venda em gaveta (se a tela carregou o ficha.js) ou cai na página cheia.
+  function abrirVenda(id, novaAba) {
+    if (!id) return;
+    if (novaAba) { window.open(`${location.pathname}${location.search}#venda=${id}`, '_blank'); return; }
+    if (window.NGFicha) window.NGFicha.abrir(id);
+    else location.href = `venda.html?id=${id}`;
+  }
+
   // Entrou: hoje / ontem / DD/MM.
   function quando(v) {
     if (!v) return '—';
@@ -772,7 +847,8 @@
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, rotuloTxt, seloM10, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
-    DFV_OPCOES, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
+    proximoPasso, ultimosContatos, abrirVenda,
+    DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, linkDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     pedirAgendamento, moverStatus, registrarAgendamento, pedirSaida, pedirPedidoBiometria,
     carregarUsuarios, preencherSelect,

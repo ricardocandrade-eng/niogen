@@ -14,11 +14,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=041126-20">
-<script src="config.js?v=041126-20"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-1">
+<script src="config.js?v=051126-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=041126-20"></script>
-<script src="assets/sidebar.js?v=041126-20"></script>
+<script src="assets/app.js?v=051126-1"></script>
+<script src="assets/sidebar.js?v=051126-1"></script>
+<script src="assets/ficha.js?v=051126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -66,7 +67,7 @@
           <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
-      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a venda</span></div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a ficha</span></div>
     </section>
     <div class="cartoes" id="cartoes" aria-label="Lista de vendas"></div>
 
@@ -284,8 +285,7 @@
     ]);
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
     vendas = rv.data || [];
-    ultimoContato = {};
-    (rc.data || []).forEach((c) => { if (!ultimoContato[c.venda_id]) ultimoContato[c.venda_id] = c.em; });
+    ultimoContato = NG.ultimosContatos(rc.data);
     nomeCurto = Object.fromEntries((rp.data || []).map((p) => [p.id, p.nome_curto || null]));
     metas = rm.data || [];
     const mes = NG.diaSP().slice(0, 7);
@@ -296,66 +296,8 @@
   }
   const metaDoMes = (aaaamm) => { const m = metas.find((x) => String(x.mes).slice(0, 7) === aaaamm); return m ? Number(m.meta_vendas) : 0; };
 
-  // ---------- próximo passo: o que alguém precisa fazer, com a cor da urgência ----------
-  // acao = entra em "Precisam de ação". Sinais do banco: horas_sem_agendamento, biometria_em, nio_pendencia_*, dfv_ok,
-  // docs_prazo_em, nio_venda_valida e o último contato (contatos_cliente, ou a entrada quando não há nenhum).
-  const ATIVAS = ['1_vendido', '2_aguardando_instalacao', '3_instalado'];
-  function proximo(v) {
-    const hoje = NG.diaSP();
-    const dd = (x) => NG.fmtData(x);
-    if (v.status === 'saida') {
-      const volta = v.interesse_futuro_em ? ` · volta ${NG.fmtDiaISO(v.interesse_futuro_em).slice(0, 5)}` : '';
-      return { txt: `${v.motivo_saida || 'Encerrada'}${volta}`, nivel: 'dim' };
-    }
-    if (v.nio_venda_valida === false) return { txt: 'Nio marcou a venda como inválida', nivel: 'bad', acao: true };
-    if ((v.nio_pendencia_cod || v.nio_pendencia_desc) && ATIVAS.includes(v.status)) {
-      return { txt: `Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`.slice(0, 70), nivel: 'bad', acao: true };
-    }
-    switch (v.status) {
-      case '0_qualificado': {
-        const bio = v.biometria_status === 'agendada' && v.biometria_em ? NG.diaSP(v.biometria_em) : null;
-        if (bio && bio < hoje) return { txt: `Biometria atrasada · era ${dd(v.biometria_em)}`, nivel: 'bad', acao: true };
-        if (bio === hoje) return { txt: `Biometria hoje · ${NG.fmtHora(v.biometria_em)}`, nivel: 'warn', acao: true };
-        const ult = ultimoContato[v.id] && new Date(ultimoContato[v.id]) > new Date(v.criado_em) ? ultimoContato[v.id] : v.criado_em;
-        const h = (Date.now() - new Date(ult)) / 3600000;
-        if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true };
-        // DFV só aparece quando bloqueia a venda (trava 0 → 1: viável e consultado há menos de 7 dias, ou dispensa do admin).
-        if (!v.dfv_ok && !v.dfv_dispensado) {
-          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: 'Sem cobertura no DFV · não vender', nivel: 'bad', acao: true };
-          return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true };
-        }
-        if (bio) return { txt: `Biometria ${NG.fmtDiaSemana(v.biometria_em)} ${dd(v.biometria_em)} · ${NG.fmtHora(v.biometria_em)}`, nivel: 'ok' };
-        return { txt: 'Marcar a biometria', nivel: 'ok' };
-      }
-      case '1_vendido': {
-        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
-        return { txt: `Agendar instalação${h != null ? ` · há ${NG.fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true };
-      }
-      case '2_aguardando_instalacao': {
-        const q = v.instalacao_agendada_para;
-        if (!q) return { txt: 'Sem data de instalação', nivel: 'warn', acao: true };
-        const d = NG.diaSP(q), j = NG.janela(q);
-        if (d === hoje) return { txt: `Instalação hoje · ${j}`, nivel: 'ok' };
-        if (d === NG.somaDias(hoje, 1)) return { txt: `Instalação amanhã · ${j}`, nivel: 'ok' };
-        if (d < hoje) return { txt: `Instalação era ${dd(q)} · aguardando OSAB`, nivel: 'ok' };
-        return { txt: `Instalação ${dd(q)} · ${j}`, nivel: 'ok' };
-      }
-      case '3_instalado': {
-        if (!v.docs_entregues_em && v.docs_prazo_em) {
-          const dias = (new Date(v.docs_prazo_em) - Date.now()) / 86400000;
-          if (dias < 0) return { txt: `Documentos à Nio atrasados · ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true };
-          if (dias <= 3) return { txt: `Documentos à Nio até ${dd(v.docs_prazo_em)}`, nivel: 'warn', acao: true };
-        }
-        return { txt: 'Aguardando ativação Nio', nivel: 'ok' };
-      }
-      case '4_ativo_provisorio':
-      case '5_comissao_firme': {
-        const b = v.ativado_em || v.instalado_em;
-        return { txt: b ? `Ativa desde ${dd(b)}` : 'Ativa', nivel: 'ok' };
-      }
-      default: return { txt: '', nivel: 'dim' };
-    }
-  }
+  // Próximo passo: o mesmo da ficha e das outras telas (NG.proximoPasso, em app.js).
+  const proximo = (v) => NG.proximoPasso(v, ultimoContato[v.id]);
 
   const planoCurto = (v) => nomeCurto[v.plano_id] || v.plano_nome || '—';
   const formaTxt = (v) => [({ cartao: 'cartão', boleto: 'boleto', dacc: 'débito' })[v.forma_pagamento],
@@ -448,7 +390,7 @@
       </tr>`;
     }).join('') : `<tr><td colspan="8" class="vazio">Nenhuma venda neste filtro</td></tr>`;
     cartoesEl.innerHTML = lista.length ? lista.map((v) => `
-      <a class="cartao ${v.status === 'saida' ? 'saida' : ''}" href="venda.html?id=${v.id}">
+      <a class="cartao ${v.status === 'saida' ? 'saida' : ''}" href="#venda=${v.id}">
         <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc([v.bairro, NG.quando(v.criado_em)].filter(Boolean).join(' · '))}</small></div>
         <div class="valor">${esc(fmtCom(v))}</div>
         <div class="l2">${NG.pilulaEtapa(v.status)}<span>${esc(planoCurto(v))}</span></div>
@@ -476,7 +418,7 @@
   const URGENCIA = { bad: 0, warn: 1 };
   const ehFuturo = (v) => !!v.interesse_futuro_em;
   let foraAberto = etapaIni === 'saida';
-  const podeArrastar = () => !movel.matches;   // celular: muda a etapa pelo detalhe da venda
+  const podeArrastar = () => !movel.matches;   // celular: muda a etapa pelo "Mover para…" da ficha
 
   // Na coluna Ativo o próximo passo mostra a comissão (paga, se já veio no extrato; senão a prevista).
   function proximoQ(v) {
@@ -488,7 +430,7 @@
 
   function qcard(v, pr) {
     const sub = [planoCurto(v), ORIGEM_CURTA[v.origem] || v.origem].filter(Boolean).join(' · ');
-    return `<a class="qcard ${pr.nivel || ''}" href="venda.html?id=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}">
+    return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}">
       <b>${esc(v.cliente_nome)}</b><small>${esc(sub)}</small>${NG.proxPasso(pr)}</a>`;
   }
 
@@ -563,7 +505,8 @@
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
   [fBusca, fOrigem, fVendedor].forEach((el) => el.addEventListener('input', render));
-  const abrirVenda = (tr, novaAba) => { const url = `venda.html?id=${tr.dataset.id}`; if (novaAba) window.open(url, '_blank'); else location.href = url; };
+  // Linha → ficha da venda em gaveta (#venda=<id>); Ctrl/⌘ ou botão do meio → nova aba já com a ficha aberta.
+  const abrirVenda = (tr, novaAba) => NG.abrirVenda(tr.dataset.id, novaAba);
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirVenda(tr, ev.ctrlKey || ev.metaKey); });
   tbody.addEventListener('auxclick', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.button === 1) abrirVenda(tr, true); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrirVenda(tr, false); });
@@ -1115,6 +1058,9 @@
       setTimeout(() => alvo.classList.remove('destaque'), 1600);
     }
   }
+  // Ficha da venda: salvar algo nela recarrega a lista; #venda=<id> na URL abre direto.
+  NGFicha.aoMudar(() => carregarLista());
+  NGFicha.iniciar();
   // "+ Venda de rua" de outras telas (vendas.html#venda-rua ou #nova) abre a gaveta.
   if (['#venda-rua', '#nova'].includes(location.hash)) { abrirGaveta(); setTimeout(() => F.cep.focus(), 300); }
   // Vindo da tela Cobertura (?cep=&numero=&complemento=): abre a gaveta, preenche e já roda ViaCEP + consulta automática do DFV.

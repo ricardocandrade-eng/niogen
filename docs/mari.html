@@ -15,11 +15,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=041126-20">
-<script src="config.js?v=041126-20"></script>
+<link rel="stylesheet" href="assets/app.css?v=051126-1">
+<script src="config.js?v=051126-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=041126-20"></script>
-<script src="assets/sidebar.js?v=041126-20"></script>
+<script src="assets/app.js?v=051126-1"></script>
+<script src="assets/sidebar.js?v=051126-1"></script>
+<script src="assets/ficha.js?v=051126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -457,7 +458,8 @@
       ${errs.length ? `<section class="d-sec"><h3>Erros (7 dias)</h3>${errs.map((e) => `<div class="faixa vermelho"><b>${esc(NG.fmtDataHora(e.created_at))} · ${esc(e.no_n8n || '')}</b>${esc(e.mensagem || '')}</div>`).join('')}</section>` : ''}
     `;
     const links = [];
-    if (c.venda_id) links.push(`<a class="btn" href="venda.html?id=${esc(c.venda_id)}">Abrir venda no NIOGEN</a>`);
+    // "Ver venda": abre a ficha da venda em gaveta nesta mesma tela (#venda=<id>; voltar fecha).
+    if (c.venda_id) links.push(`<a class="btn" href="#venda=${esc(c.venda_id)}">Ver venda</a>`);
     if (c.chatwoot_conversation_id && CHATWOOT_NIO_ACCOUNT) {
       links.push(`<a class="btn" target="_blank" rel="noopener" href="https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${esc(c.chatwoot_conversation_id)}">Abrir no Chatwoot</a>`);
     }
@@ -470,6 +472,7 @@
   // Link direto vindo do detalhe da venda ("Ver conversa"): mari.html?conversa=<id> abre a gaveta dessa conversa.
   const qConversa = new URLSearchParams(location.search).get('conversa');
   if (qConversa) abrir(qConversa);
+  NGFicha.iniciar();   // mari.html#venda=<id> abre a ficha direto
   setInterval(carregar, 60000);   // a lista se atualiza sozinha a cada minuto (só leitura)
 })();
 </script>
