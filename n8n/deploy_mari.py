@@ -41,7 +41,8 @@ IDS = os.path.join(AQUI, 'mari_ids.json')            # IDs do workflow e das cre
 # sem trocar o que está no ar. Escolha com --ensaio em qualquer comando. Trocar a produção para a v3 = mudar o
 # 'prompt'/'versao' da produção aqui, depois da aprovação do Ricardo, e rodar "estrutura".
 ALVOS = {
-    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v2.md', 'versao': 'mari_v2', 'id_key': 'workflow_id',
+    # v3 em produção desde 05/11 (aprovação do Ricardo: "Sim, vire"); v2 = histórico.
+    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'workflow_id',
                  'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
     'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'ensaio_workflow_id',
                'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
