@@ -21,9 +21,8 @@ Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmap
 | Login → Painel | `docs/index.html` |
 | Painel (aba Operação) | `docs/painel.html` |
 | Configurações › Importação (OSAB com prévia) | `docs/configuracoes.html` · leitor `docs/assets/osab.js` |
-| Funil 0→5 + Saída | `docs/funil.html` |
 | Instalações por tempo | `docs/instalacoes.html` |
-| Vendas + venda de rua | `docs/vendas.html` |
+| Vendas: Lista \| Quadro (o antigo Funil; `?vista=lista\|quadro`) + venda de rua | `docs/vendas.html` · `docs/funil.html` só redireciona para o Quadro |
 | Detalhe da venda | `docs/venda.html?id=` |
 | Base DFV da Nio (`nio_hp`, `dfv_consultar`, `aplicar_dfv`, `v_dfv_bairros`, `v_dfv_resumo`, consulta automática na venda) | `supabase/migrations/0011_dfv_nivel3.sql` |
 | Carga da base DFV pelo CLI (gera SQL fora do repo) | `supabase/scripts/dfv_carga.py` |

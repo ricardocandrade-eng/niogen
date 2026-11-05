@@ -105,10 +105,9 @@ a.nav-item:hover { color: var(--text); }
 .banner span { font-size: 12px; color: #F3C6C6; }
 .banner.warn span { color: var(--warn-fg); }
 
-/* ---------- quadros (funil / instalações) ---------- */
+/* ---------- quadros (Vendas · Quadro / Instalações) ---------- */
 .board-wrap { overflow-x: auto; padding-bottom: 8px; }
 .board { display: flex; gap: 12px; }
-.board.funil { min-width: 1680px; }
 .board.inst { min-width: 1500px; }
 .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 10px; border-radius: 10px; }
 .col.drop-alvo { outline: 2px dashed var(--accent); outline-offset: 4px; }
@@ -122,8 +121,6 @@ a.nav-item:hover { color: var(--text); }
 .col-vazia { padding: 16px 12px; border-radius: 10px; border: 1px dashed var(--border); font-size: 12px; color: var(--muted); text-align: center; }
 
 .card { padding: 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.card[draggable="true"] { cursor: grab; }
-.card.arrastando { opacity: .5; }
 .card.bad { border-color: var(--bad-border); }
 .card.warn { border-color: var(--warn-border); }
 .card.dim { background: var(--surface-dim); }
@@ -136,8 +133,6 @@ a.nav-item:hover { color: var(--text); }
 .card .meta.bad { color: var(--bad-fg); }
 .card .meta.warn { color: var(--warn-fg); }
 .card .plano { font-size: 13px; }
-.card .mover { display: flex; justify-content: flex-end; }
-.card .mover select { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; padding: 3px 6px; }
 .card.inst { gap: 6px; }
 
 /* ---------- KPIs ---------- */
@@ -543,7 +538,6 @@ fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; c
 }
 
 /* Estorno corrigido (04/11): aviso discreto de downgrade e alerta de recompra */
-.meta.aviso-dg { font-size: 11px; color: var(--muted); font-style: italic; }
 .chip.recompra { white-space: normal; line-height: 1.4; border-radius: 8px; border: 1px solid var(--warn-border); }
 
 /* ==========================================================================

@@ -322,7 +322,7 @@
     previa.hidden = false;
     const sem = (r.sem_venda_pedidos || []);
     previa.innerHTML = `
-      <div class="rel-topo"><h2>Aplicado · ${esc(arquivo || '')}</h2><a href="funil.html">ver no Funil →</a></div>
+      <div class="rel-topo"><h2>Aplicado · ${esc(arquivo || '')}</h2><a href="vendas.html?vista=quadro">ver em Vendas →</a></div>
       <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
         <div class="kpi"><span class="rot">Vendas atualizadas</span><span class="val ok">${NG.fmtNum(r.atualizadas)}</span></div>
         <div class="kpi"><span class="rot">Mudaram de status</span><span class="val">${NG.fmtNum(r.mudaram_status)}</span><span class="nota">${plural(r.saidas || 0, 'saída', 'saídas')}</span></div>

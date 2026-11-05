@@ -52,7 +52,7 @@ o mockup `claude.ai/artifact/SUJ1dg3yrDzd3UKtReDTBo` (as 12 telas).
 ## A arquitetura em cinco linhas (decisão de 02/11/2026)
 
 1. **Supabase Nio** é o **banco único**: Mari e NIOGEN leem e escrevem no mesmo lugar. Nada em Sheets como fonte da verdade.
-2. **NIOGEN** é um front próprio em HTML sobre o Supabase (mesmo padrão Painel/Pocket do Parque, com o Supabase no lugar do Cofre). 11 telas: Painel · Placar · Funil · Instalações · Mari · Vendas · Adimplência · Conciliação · Meta Ads · Fila Vero · Configurações.
+2. **NIOGEN** é um front próprio em HTML sobre o Supabase (mesmo padrão Painel/Pocket do Parque, com o Supabase no lugar do Cofre). 10 telas: Painel · Placar · Vendas (lista ou quadro — o Funil virou a vista Quadro em 04/11) · Instalações · Mari · Adimplência · Conciliação · Meta Ads · Fila Vero · Configurações.
 3. **Mari** = n8n + Chatwoot da Nio + Supabase Nio + Claude. Motor da Renata (guards, debounce, takeover, janela 24h), cabeça nova. Objetivo dela: **venda qualificada com biometria agendada**.
 4. **n8n** importa os relatórios da Nio (OSAB, FPD, CHURN, extrato), roda a cadência e a régua de pagamento, avisa o vendedor.
 5. **Fonte da verdade**: código → GitHub (`niogen`). Dado da operação → Supabase Nio. Verdade contábil → **a Nio** (NIOGEN é o auditor, não a folha). Segredos → `.env` da VPS / painel n8n / gerenciador de senhas. **O Drive nunca guarda código nem segredo.**

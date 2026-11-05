@@ -1,11 +1,12 @@
 /* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
- * Uso: <nav class="nav" id="sidebar" data-pagina="funil"></nav> e NGSidebar.montar() depois do login.
+ * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
+ * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
   'use strict';
 
-  const VERSAO = 'v0.8 · 04/11';
+  const VERSAO = 'v0.9 · 04/11';
 
   const MENU = [
     ['Gestão', [
@@ -13,9 +14,8 @@
       { id: 'placar', ico: '▤', nome: 'Placar' },
     ]],
     ['Vendas', [
-      { id: 'funil', ico: '◈', nome: 'Funil', href: 'funil.html' },
-      { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
+      { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura (DFV)', href: 'cobertura.html' },
       { id: 'fila', ico: '☷', nome: 'Fila Vero' },
