@@ -199,10 +199,10 @@
       nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de abrir o pedido no portal.',
       viavel: 'Casa com viabilidade "Viável" e HP livre ≥ 1: endereço atendido e com porta livre. Segue para o pedido no portal.',
       viavel_predio: 'Prédio atendido com HP livre ≥ 1; a unidade só se confirma no portal. Segue para o pedido e anote o apto.',
-      sem_viabilidade: 'A fachada existe, mas a viabilidade não é "Viável" (restrição técnica ou pendência). Não vender: saída "Sem cobertura" com interesse futuro em 90 dias.',
-      nao_encontrado: 'A fachada não aparece no DFV: sem rede no endereço ou célula bloqueada. Não vender e não insistir no portal: saída "Sem cobertura".',
+      sem_viabilidade: 'A fachada existe, mas a viabilidade não é "Viável" (restrição técnica ou pendência). Não decide a venda: confira no portal (variações de CEP, rua e número) — quem manda é o portal.',
+      nao_encontrado: 'A fachada não aparece no DFV (pode ser CEP, rua ou número escrito diferente na base). Não decide a venda: confira no portal — quem manda é o portal.',
     },
-    jaTemNio: 'Casa com HCS = 1 e HP livre = 0 quer dizer que o endereço já tem Nio: não vender (estorno 100 %). Saída "Já é cliente Nio".',
+    jaTemNio: 'Casa com HCS = 1 e HP livre = 0 indica Nio no endereço: pergunte ao cliente e confira no portal. Só é saída "Já é cliente Nio" se o cliente confirmar (aí, vender seria estorno 100 %).',
     placar: 'Das vendas que entraram no mês, quantas tiveram o DFV consultado e deram viável. Toda qualificada deve ser consultada antes de abrir o pedido no portal.',
     faixa: 'Faixa de aprovação de crédito do bairro (últimos 2 meses). Não se fala disso com o cliente: serve para o Placar e o risco de FPD.',
   };
@@ -249,8 +249,8 @@
   const DFV_RESULTADO = {
     viavel: 'Viável na base DFV: fachada com porta livre.',
     viavel_predio: 'Prédio na base DFV: escolha a unidade (complemento) para conferir a porta.',
-    endereco_ocupado: 'Endereço já tem Nio (casa com HC = 1): não vender — estorno 100 %. Saída "Já é cliente Nio".',
-    sem_porta_livre: 'Na base DFV, mas sem porta livre (HP livre = 0): não vender agora.',
+    endereco_ocupado: 'DFV indica Nio no endereço (casa com HC = 1): pergunte ao cliente e confira no portal. Só encerra como "Já é cliente Nio" se o cliente confirmar.',
+    sem_porta_livre: 'Na base DFV, mas sem porta livre (HP livre = 0): confira no portal — quem manda é o portal.',
     nao_encontrado: 'Fora da base DFV: sem viabilidade hoje (a Nio só exporta endereços viáveis). Confira CEP e número.',
     precisa_numero: 'CEP na base DFV: informe o número da fachada para consultar.',
   };
@@ -724,7 +724,7 @@
           return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/número`, nivel: 'warn', acao: true, resolver: 'dfv' };
         }
         if (!(v.viab_ok ?? v.dfv_ok) && !v.dfv_dispensado) {
-          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: 'Sem cobertura no DFV · não vender', nivel: 'bad', acao: true, resolver: 'sem_cobertura' };
+          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: `DFV: ${v.dfv_resultado === 'endereco_ocupado' ? 'indica Nio no endereço' : DFV_OPCOES[v.dfv_viabilidade].toLowerCase()} · conferir no portal`, nivel: 'warn', acao: true, resolver: 'dfv' };
           return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true, resolver: 'dfv' };
         }
         return { txt: 'Abrir pedido no portal e enviar o link da biometria', nivel: 'ok', resolver: 'portal' };

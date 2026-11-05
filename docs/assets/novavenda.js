@@ -435,7 +435,7 @@
       if (F.dfv_origem.value === 'manual') {
         if (dfvOk()) return set('verde', `Cobertura (ajuste manual): ${vi === 'viavel_predio' ? 'prédio viável' : 'viável'}`);
         if (vi === 'nao_consultado') return set('cinza', 'Cobertura ainda não consultada.');
-        return set('vermelho', `Cobertura (ajuste manual): ${esc(NG.DFV_OPCOES[vi].toLowerCase())} — não vender.`);
+        return set('amarelo', `Cobertura (ajuste manual): ${esc(NG.DFV_OPCOES[vi].toLowerCase())} — conferir no portal (quem manda é o portal).`);
       }
       if (estado.dfvErro) return set('amarelo', `Base DFV indisponível — conferir no painel ou no portal antes de abrir o pedido. ${links}`);
       const r = estado.dfv;
@@ -544,7 +544,7 @@
       semEl.hidden = !(a.ocupado || manualSem);
       semEl.querySelector('span').textContent = a.ocupado
         ? 'Se o cliente confirmar que já tem Nio: não vender (estorno 100 %). Registrar como saída?'
-        : 'Sem cobertura: não vender. Quer registrar como saída e voltar a falar em 90 dias?';
+        : 'O portal confirmou sem cobertura (depois de tentar variações de CEP, rua e número)? Quer registrar como saída e voltar a falar em 90 dias?';
       btnSem.textContent = a.ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
 
       // Passo 4: o DFV pré-marca atenção; um "Sim" explica o que acontece e oferece a saída certa.

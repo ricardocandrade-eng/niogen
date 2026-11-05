@@ -95,7 +95,7 @@
     } else if (e.tipo === 'dfv_endereco_ocupado') {
       titulo = 'DFV: endereço já tem Nio';
       cor = 'bad';
-      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · não vender (estorno 100 %) · saída "Já é cliente Nio"`;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · confirmar com o cliente e no portal (só é saída "Já é cliente Nio" se ele confirmar)`;
     } else if (e.tipo === 'alerta_recompra') {
       titulo = 'Possível recompra · multa de R$ 500 por pedido';
       cor = 'warn';
@@ -235,8 +235,8 @@
       `<label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${NG.MOTIVOS_SAIDA.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
        <label class="campo" data-futuro hidden>Volta em<input type="date" name="futuro"></label>`, 'Registrar saída'),
     sem_cobertura: (v) => formWrap('sem_cobertura', v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : 'Encerrar: sem cobertura',
-      v.dfv_resultado === 'endereco_ocupado' ? 'O DFV diz que o endereço já tem Nio: não vender (estorno 100 %). A venda vai para Saída "Já é cliente Nio".'
-        : 'Sem cobertura no DFV: não vender. A venda vai para Saída "Sem cobertura" e volta para a fila em 90 dias.', '', 'Encerrar'),
+      v.dfv_resultado === 'endereco_ocupado' ? 'Use só se o cliente confirmou que já tem Nio (vender seria estorno 100 %). A venda vai para Saída "Já é cliente Nio".'
+        : 'Use só depois de conferir no portal (com variações de CEP, rua e número) que não há viabilidade. A venda vai para Saída "Sem cobertura" e volta para a fila em 90 dias.', '', 'Encerrar'),
     // Mover para Aguardando pelo seletor (era o modal de NG.moverStatus: só a data).
     mover_aguardando: (v) => formWrap('mover_aguardando', 'Mover para Aguardando instalação', 'Informe a data combinada com o cliente.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
