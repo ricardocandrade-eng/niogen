@@ -1,0 +1,24 @@
+# NIOGEN | portal/docker-compose.yml | 05/11/2026 — Claude Code (prompt nº 16)
+# VPS NO BRASIL (o front do portal bloqueia IP de fora do país). Sobe o "operador" do portal PAP.
+# Segredos em /opt/niogen/portal/.env (chmod 600, fora do repo): NIO_PORTAL_USER, NIO_PORTAL_PASS,
+# NIO_PORTAL_SERVICO_SECRET. A porta só existe em 127.0.0.1: o n8n chega pelo túnel SSH (portal/tunel/).
+services:
+  niogen-portal:
+    build: .
+    image: niogen-portal:1
+    container_name: niogen-portal
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NIO_PORTAL_DOMINIO: vtalcorp.onmicrosoft.com
+      NIO_PORTAL_ERROS_DIR: /erros
+      TZ: America/Sao_Paulo
+    ports:
+      - "127.0.0.1:8090:8090"
+    volumes:
+      - ./erros:/erros
+    shm_size: 256m
+    mem_limit: 1g
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }

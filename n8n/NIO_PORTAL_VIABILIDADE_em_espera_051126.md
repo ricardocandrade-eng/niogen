@@ -3,6 +3,11 @@
 
 # `nio_portal_viabilidade` — nível A em espera (05/11/2026)
 
+> **Atualização 05/11 tarde (prompt 16):** a Nio não tem API e autorizou o login BO; o SSO não tem MFA. O login por
+> navegador **funciona** (`portal/`), mas o front bloqueia IP de fora do Brasil e a API exige o sufixo do front em cada
+> chamada → decisão do Ricardo: **operador numa VPS no Brasil, chamadas dentro da página** com a função do próprio
+> front. Estado e próximos passos em **`portal/README.md`**. O "Não fazer" abaixo continua valendo para o n8n.
+
 ## O que o prompt 15 supunha
 Login do portal PAP por API: `POST /api/portal/loginbo` com matrícula + senha → token → `novafibra/endereco` → polling → `posseSalesforce`.
 
