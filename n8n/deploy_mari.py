@@ -46,7 +46,8 @@ ALVOS = {
     'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v4.md', 'versao': 'mari_v4', 'id_key': 'workflow_id',
                  'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
     # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
-    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v4.md', 'versao': 'mari_v4', 'id_key': 'ensaio_workflow_id',
+    # Ensaio na v5 (prompt nº 18: formato, condições exatas, pagamento é da Nio, retomada) desde 05/11 16h50.
+    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v5.md', 'versao': 'mari_v5', 'id_key': 'ensaio_workflow_id',
                'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
 }
 ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'
@@ -249,6 +250,11 @@ def build(ids):
     rpc('2y · Supabase registrar humano', 'mari_registrar_turno',
         "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'humano', "
         "p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 770, 550)
+    # Prompt 18 (A): conversa resolvida no Chatwoot → fecha o ciclo da Mari (0030). Sem resposta ao cliente; a execução
+    # termina no 2v (como o 2y), o Chatwoot já recebeu o 200 pelo 1r.
+    iff('2q · Resolvida?', "={{ $json.registrar === 'resolvida' }}", 660, 450)
+    rpc('2v · Supabase encerrar ciclo', 'mari_encerrar_ciclo',
+        "={{ JSON.stringify({ p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 880, 650)
     iff('2m · Modo chatwoot?', "={{ $json.modo === 'chatwoot' }}", 660, 200)
     add('2g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET',
@@ -381,7 +387,9 @@ def build(ids):
         ('2e · Encerrar?', 0, '11 · Saída'),
         ('2e · Encerrar?', 1, '2x · Fala humana?'),
         ('2x · Fala humana?', 0, '2y · Supabase registrar humano'),
-        ('2x · Fala humana?', 1, '2m · Modo chatwoot?'),
+        ('2x · Fala humana?', 1, '2q · Resolvida?'),
+        ('2q · Resolvida?', 0, '2v · Supabase encerrar ciclo'),
+        ('2q · Resolvida?', 1, '2m · Modo chatwoot?'),
         ('2m · Modo chatwoot?', 0, '2g · Chatwoot conversa'),
         ('2m · Modo chatwoot?', 1, '2h · Guard humano'),
         ('2g · Chatwoot conversa', 0, '2h · Guard humano'),

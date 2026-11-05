@@ -80,6 +80,37 @@ let texto = bruto
   .replace(/\n{3,}/g, '\n\n')
   .trim();
 
+// ── 3b. bloco de condições (prompt v5, decisão do Ricardo 05/11 16h33) ──
+// O texto é EXATO: o modelo escreve só a marca [CONDICOES] e o sistema põe o bloco, com a taxa e os meses do plano
+// escolhido (varejo = R$ 540 / 12 meses = o texto do Ricardo palavra por palavra; Empresas = 24 meses; sem fidelidade =
+// taxa na 1ª fatura, porque "ZERO" seria benefício fora da tabela).
+const VERc = Number((String(ctx.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
+const COND_ABRE = 'Antes de fechar, rapidinho as condições do seu plano:';
+let condicoesInseridas = false;
+function blocoCondicoes() {
+  const codTag = String(tag('PLANO_ESCOLHIDO') || '').toUpperCase().match(/[VE]-[A-Z0-9]+-[A-Z]+/);
+  const cod = (codTag && codTag[0]) || (ctx.conversa || {}).plano_escolhido;
+  const pl = (ctx.planos || []).find((p) => p.codigo === cod) || null;
+  const taxa = pl && pl.taxa_habilitacao != null ? Number(pl.taxa_habilitacao) : 540;
+  const taxaTxt = `R$ ${Number.isInteger(taxa) ? taxa : taxa.toFixed(2).replace('.', ',')}`;
+  const meses = pl ? pl.isencao_meses : 12;
+  const linhaTaxa = meses
+    ? `• Taxa de instalação (${taxaTxt}) ZERO ao manter o plano por ${meses} meses.`
+    : `• Taxa de instalação (${taxaTxt}) cobrada na 1ª fatura (versão sem fidelidade).`;
+  return [COND_ABRE, '',
+    '• Preço fixo garantido até janeiro/2030 (sem reajuste anual).',
+    linhaTaxa,
+    '• Roteador em comodato incluído sem custo extra.',
+    '• 1ª fatura: 25 dias após a instalação no boleto (ou no dia da instalação no cartão).',
+    '', 'A velocidade real depende do aparelho e do Wi-Fi.'].join('\n');
+}
+if (VERc >= 5 && /\[CONDI[CÇ][OÕ]ES\]/i.test(texto)) {
+  // O bloco vai sempre sozinho num balão: o sistema põe o "||" antes e depois (balões vazios somem no corte).
+  texto = texto.replace(/\[CONDI[CÇ][OÕ]ES\]/gi, () => (condicoesInseridas ? '' : (condicoesInseridas = true, `\n||\n${blocoCondicoes()}\n||\n`)))
+    .replace(/(\s*\|\|\s*){2,}/g, '\n||\n').replace(/^\s*\|\|\s*|\s*\|\|\s*$/g, '')
+    .replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // ── 4. filtro de saída ──
 // O nome da revendedora é montado por partes: o export do workflow não pode conter a palavra.
 const PROIBIDAS = [
@@ -111,6 +142,18 @@ function violacoesDe(t) {
   // (a confirmação sorteada da conversa) — o 1º "R$" da resposta tem de vir antes do "por mais R$".
   if (V3 && temTag('UPSELL_OFERECIDO') && /por mais r\$/.test(n) && n.indexOf('r$') >= n.indexOf('por mais r$')) {
     v.push('sugestão de upgrade sem antes confirmar a escolha com o plano e o valor (guard-rail 23)');
+  }
+  if (VER >= 5) {
+    // Prompt 18 (C8): a revenda não cobra, não recebe e não manda link de pagamento — quem cobra é a Nio.
+    if (/link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|dados do cartao|(a gente|nos|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)|cobranca (e feita |fica )?(pelo|por|com) (nosso|o nosso|a gente)/.test(n)) {
+      v.push('falou de link de pagamento ou de cobrança pela revenda (quem cobra é a própria Nio; escolhida a forma, só "Anotado!" e segue)');
+    }
+    // Guard-rail 14: "sem custo" só na linha do roteador do bloco de condições (texto do Ricardo).
+    if (n.replace(/roteador em comodato incluido sem custo extra/g, '').includes('sem custo')) v.push('usou "sem custo" (proibido; a única exceção é a linha do roteador nas condições)');
+    // C7: condições só pelo bloco exato ([CONDICOES]); escritas com as próprias palavras → reescrever.
+    if (!t.includes(COND_ABRE) && /2030/.test(n) && /roteador/.test(n)) {
+      v.push('escreveu as condições com as próprias palavras — use a marca [CONDICOES] sozinha num balão (o sistema põe o texto exato)');
+    }
   }
   if (t.includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {
@@ -168,6 +211,14 @@ if (V3) {
   }
 }
 if (V4) baloes = baloes.map((b) => b.split(SELO_OK).join('✅').split(SELO_AL).join('🎯'));
+// Prompt 18 (C5/C6): parágrafos separados por linha em branco em todo balão; a lista de planos com uma linha em branco
+// entre cada opção. Só as linhas "•" seguidas (resumo e condições) ficam coladas uma na outra.
+if (VER >= 5) {
+  baloes = baloes.map((b) => {
+    const ls = b.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    return ls.map((l, i) => (i === 0 ? '' : (l.startsWith('•') && ls[i - 1].startsWith('•') ? '\n' : '\n\n')) + l).join('');
+  });
+}
 texto = baloes.join('\n\n');
 
 // ── 5. atualizações da conversa ──

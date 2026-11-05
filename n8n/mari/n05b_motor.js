@@ -150,6 +150,15 @@ const L = [];
 L.push(`primeira_mensagem: ${primeira ? 'sim' : 'nao'}`);
 L.push(`status_conversa: ${conv.status}`);
 L.push(`etapa: ${conv.etapa}`);
+if (conv.ciclo_anterior && typeof conv.ciclo_anterior === 'object') {
+  // Prompt 18 (A, migration 0030): a conversa foi resolvida pelo nosso time e o cliente voltou a escrever.
+  const ca = conv.ciclo_anterior;
+  const MOT = { dados_completos: 'dados completos — o pedido já foi passado ao nosso time', pedido_humano: 'pediu um consultor',
+    objecao: 'objeção', urgencia_alta: 'urgência', recusa_compra: 'recusou', multiplos_decisores: 'ia decidir com mais alguém',
+    interesse_caindo: 'interesse caindo', fora_de_area: 'fora da área', ja_cliente_nio: 'já é cliente Nio' };
+  L.push(`retomada: sim — esta conversa já passou pelo nosso time e foi encerrada; o cliente voltou a escrever agora. `
+    + `Handoff anterior: ${MOT[ca.motivo] || ca.motivo || '?'}${ca.venda_id ? ' | venda_ja_registrada: sim' : ''}. Siga a regra RETOMADA (Bloco 3).`);
+}
 L.push(`telefone_whatsapp: ${String(conv.telefone || '').replace(/^55/, '')}`);
 L.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);
 L.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);
@@ -267,7 +276,8 @@ return [{ json: {
   ctx: {
     conversaId: conv.id, t0: Date.now(), promptVersao: conteudo.promptVersao,
     cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,
-    planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao })),
+    planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao,
+      taxa_habilitacao: p.taxa_habilitacao, isencao_meses: p.isencao_meses })),   // 0030/prompt 18: bloco [CONDICOES] do 7 · Extrair
     conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,
       elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,
       visita_preferencia: conv.visita_preferencia, instalacao_preferencia: conv.instalacao_preferencia,

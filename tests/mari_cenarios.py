@@ -34,6 +34,9 @@ ENSAIO = '--ensaio' in sys.argv
 # emoji valem nas duas rotas. V4 = venda remota (instalação no lugar da visita, guard-rail 24, Bloco 9):
 # no ensaio sempre; na produção com --v4 (depois de virar ALVOS['producao'] para a v4).
 V4 = ENSAIO or '--v4' in sys.argv
+# V5 = prompt nº 18 (formato, condições exatas, pagamento é da Nio, retomada): ensaio sempre; produção com --v5.
+V5 = ENSAIO or '--v5' in sys.argv
+V4 = V4 or V5
 URL = 'https://n8n.ofertasverointernet.com.br/webhook/' + ('mari-teste-v3' if ENSAIO else 'mari-teste')
 PREFIXO = '5500000003' if ENSAIO else '5500000000'
 SAIDA = os.path.join(REPO, 'tests', 'saida')
@@ -171,6 +174,24 @@ PROIBIDAS = [NOME_PROIBIDO, 'gratis', 'gratuit', 'combo', 'pacote', 'bundle', 'n
              'nio mobile', 'chip da nio', '2028', 'cobertura confirmada']
 
 
+PAGAMENTO_REVENDA = (r'link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|'
+                     r'(a gente|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)')
+
+
+def bloco_condicoes(meses=12, taxa='R$ 540'):
+    """Texto exato do Ricardo (05/11 16h33); varejo = 12 meses. Empresas = 24; sem fidelidade = taxa na 1ª fatura."""
+    linha = (f'• Taxa de instalação ({taxa}) ZERO ao manter o plano por {meses} meses.' if meses
+             else f'• Taxa de instalação ({taxa}) cobrada na 1ª fatura (versão sem fidelidade).')
+    return '\n'.join(['Antes de fechar, rapidinho as condições do seu plano:', '',
+                      '• Preço fixo garantido até janeiro/2030 (sem reajuste anual).', linha,
+                      '• Roteador em comodato incluído sem custo extra.',
+                      '• 1ª fatura: 25 dias após a instalação no boleto (ou no dia da instalação no cartão).', '',
+                      'A velocidade real depende do aparelho e do Wi-Fi.'])
+
+
+BLOCOS_CONDICOES = [bloco_condicoes(12), bloco_condicoes(24), bloco_condicoes(None)]
+
+
 NEGA_COBERTURA = (r'nao atende (o seu|seu|esse|ai)|ainda nao chegou|nao chegou (a )?fibra|sem viabilidade|sem cobertura|'
                   r'nao tem (cobertura|fibra)|fibra .{0,20}chegar na sua rua')
 
@@ -223,6 +244,17 @@ def checar_global(resp, cluster, baloes=None):
         # Adendo do Ricardo (05/11 10h05): a viabilidade nunca nega venda.
         if re.search(NEGA_COBERTURA, n):
             falhas.append('negou ou insinuou falta de cobertura')
+    if V5:
+        # Prompt 18 (C5–C8): parágrafos com linha em branco; condições = texto exato; pagamento é da Nio.
+        if re.search(PAGAMENTO_REVENDA, n):
+            falhas.append('falou de link de pagamento / cobrança pela revenda')
+        for b in (baloes or [t]):
+            ls = [l.strip() for l in b.split('\n')]
+            if any(ls[k] and ls[k - 1] and not (ls[k].startswith('•') and ls[k - 1].startswith('•')) for k in range(1, len(ls))):
+                falhas.append('parágrafos sem linha em branco no mesmo balão')
+                break
+        if condicoes(t) and not any(x in t for x in BLOCOS_CONDICOES):
+            falhas.append('condições fora do texto exato do Ricardo')
     if '*' in t:
         falhas.append('asterisco')
     for b in (baloes or [t]):
@@ -939,6 +971,121 @@ def c27():
     return ok, log, 'regular'
 
 
+# ─────────────────────────── prompt nº 18 (v5) ───────────────────────────
+
+N18 = (lambda k: str((2100 if ENSAIO else 1100) + k))   # números de casa próprios (a trava de duplicidade olha o endereço)
+
+
+def ate_condicoes(tel, persona, log, max_msgs=3, nome='Teste'):
+    """Depois da lista: escolhe e segue o lead até a Mari mandar as condições."""
+    lead = Lead(persona)
+    msg = persona.get('escolha', 'Quero o 2')
+    for _ in range(max_msgs):
+        r = enviar(tel, msg, nome=nome)
+        log.append({'lead': msg, 'mari': r.get('resposta'), 'r': r})
+        if r.get('handoff') or condicoes(r.get('resposta') or ''):
+            break
+        msg = lead.responder(r.get('resposta') or '')
+    return log
+
+
+def c28():
+    # C6 + C7: lista com uma linha em branco entre as opções; bloco de condições exato; proporcional só se perguntar.
+    tel = PREFIXO + '028'
+    persona = P(nome='Bruna Teste Rocha', cpf=cpf_valido_de('258147369' if ENSAIO else '258147360'),
+                cep_msg=f'36070-480, número {N18(1)}', numero=N18(1))
+    log = ate_lista(tel, persona, 'Oi, quero ver os planos')
+    lista = next((b for t in log for b in (t['r'].get('baloes') or []) if tem_lista(b)), '')
+    log = ate_condicoes(tel, persona, log)
+    bal = [b for t in log for b in (t['r'].get('baloes') or [t['mari'] or ''])]
+    cond = next((b for b in bal if condicoes(b)), '')
+    ok = [('chegou à lista', bool(lista)),
+          ('linha em branco entre as opções', bool(lista) and bool(re.search(r'\n\n2\)', lista)) and not re.search(r'[^\n]\n[2-9]\)', lista)),
+          ('mandou as condições', bool(cond)),
+          ('condições = texto exato do Ricardo (12 meses)', cond.strip() == bloco_condicoes(12)),
+          ('não explicou o proporcional sem perguntarem', not any('proporcional' in norm(b) for b in bal))]
+    return ok, log, 'regular'
+
+
+def c29():
+    # C8: cartão escolhido → "Anotado!" + manhã/tarde, sem link de pagamento em fala nenhuma nem no briefing.
+    tel = PREFIXO + '029'
+    persona = P(nome='Cecilia Teste Matos', cpf=cpf_valido_de('369258147' if ENSAIO else '369258140'),
+                cep_msg=f'36070-480, número {N18(2)}', numero=N18(2), email='cecilia.teste@exemplo.com',
+                telefone='32922221111', pagamento='Cartão de crédito')
+    log = conversar(tel, persona)
+    r = ultimo(log); cid = cid_de(log)
+    i_pag = next((i for i, t in enumerate(log) if t['lead'] == 'Cartão de crédito'), None)
+    resp = norm(log[i_pag]['mari'] or '') if i_pag is not None else ''
+    b = norm(briefing(cid)) if cid else ''
+    ok = [('cliente escolheu cartão', i_pag is not None),
+          ('"Anotado" e já pergunta manhã ou tarde', 'anotado' in resp and ('manha' in resp or 'tarde' in resp)),
+          ('nenhuma fala com link de pagamento / cobrança pela revenda', not any(re.search(PAGAMENTO_REVENDA, norm(f)) for f in todas_falas(log))),
+          ('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
+          ('briefing sem link de pagamento (só o link da biometria)', bool(b) and 'link da biometria' in b
+           and not re.search(r'link (de |do )?pagamento|(e|ou) (o )?(link )?(de|do) pagamento|pagamento seguro', b))]
+    return ok, log, 'regular'
+
+
+def c30():
+    # C8: "como pago?" → "A cobrança é feita pela própria Nio, na forma que você escolheu".
+    tel = PREFIXO + '030'
+    persona = P(nome='Davi Teste Nunes', cep_msg=f'36070-480, número {N18(3)}', numero=N18(3))
+    log = ate_lista(tel, persona, 'Oi, boa noite')
+    log = ate_condicoes(tel, persona, log)
+    log = depois(tel, log, ['Antes de passar meus dados: como eu pago? Vocês mandam um link de pagamento?'])
+    resp = norm(log[-1]['mari'] or '')
+    ok = [('respondeu', bool(resp)),
+          ('"a cobrança é feita pela própria Nio"', 'cobranca e feita pela propria nio' in resp),
+          ('sem link de pagamento / cobrança pela revenda', not re.search(PAGAMENTO_REVENDA, resp) and 'http' not in resp)]
+    return ok, log, 'regular'
+
+
+def c31():
+    # A: conversa em handoff (dados completos) → ciclo fechado (como faz o "resolvida" do Chatwoot) → cliente volta:
+    # a Mari responde, sem refazer pergunta nem vender de novo.
+    tel = PREFIXO + '031'
+    persona = P(nome='Elisa Teste Faria', cpf=cpf_valido_de('147369258' if ENSAIO else '147369250'),
+                cep_msg=f'36070-480, número {N18(4)}', numero=N18(4), email='elisa.teste@exemplo.com', telefone='32911110000')
+    log = conversar(tel, persona)
+    cid = cid_de(log)
+    h1 = (ultimo(log).get('handoff') or {}).get('motivo')
+    calado = enviar(tel, 'Oi? Alguém aí?', nome='Teste') if cid else {}
+    log.append({'lead': 'Oi? Alguém aí?', 'mari': calado.get('resposta'), 'r': calado})
+    fechou = sql(f"select public._mari_fechar_ciclo('{cid}', 'teste: conversa resolvida') as r", escrita=True)[0]['r'] if cid else {}
+    if isinstance(fechou, str):
+        fechou = json.loads(fechou)
+    log = depois(tel, log, ['Oi, voltei! Já tá tudo certo com o meu pedido? Quando vai ser a instalação?'])
+    resp = log[-1]['mari'] or ''
+    c = sql(f"select status, handoff_motivo, ciclo_anterior ->> 'motivo' as anterior, ciclos_encerrados from mari_conversas where id = '{cid}'")[0] if cid else {}
+    ok = [('1º handoff dados_completos', h1 == 'dados_completos'),
+          ('em handoff a Mari fica calada', not calado.get('resposta')),
+          ('ciclo fechado', bool(fechou) and fechou.get('fechado') is True),
+          ('depois do ciclo fechado a Mari responde', bool(resp)),
+          ('não pediu CEP nem CPF de novo', not re.search(r'\bcep\b|\bcpf\b', norm(resp))),
+          ('não mandou a lista de novo', not tem_lista(resp)),
+          ('não prometeu data de instalação', not re.search(r'\b\d{1,2}/\d{1,2}\b|amanha|segunda|terca|quarta|quinta|sexta|sabado', norm(resp))),
+          ('ciclo anterior guardado (dados_completos)', c.get('anterior') == 'dados_completos' and int(c.get('ciclos_encerrados') or 0) >= 1)]
+    return ok, log, 'regular'
+
+
+def c32():
+    # B4: venda não criada por duplicidade (mesmo CPF já tem venda ativa) → o handoff devolve a venda que já existe.
+    cpf = cpf_valido_de('951357852' if ENSAIO else '951357850')
+    p1 = P(nome='Fabio Teste Lopes', cpf=cpf, cep_msg=f'36070-480, número {N18(5)}', numero=N18(5),
+           email='fabio.teste@exemplo.com', telefone='32900001111')
+    log1 = conversar(PREFIXO + '032', p1)
+    v1 = sql(f"select venda_id from mari_conversas where id = '{cid_de(log1)}'")[0]['venda_id'] if cid_de(log1) else None
+    p2 = dict(p1, cep_msg=f'36070-480, número {N18(6)}', numero=N18(6))
+    log2 = conversar(PREFIXO + '033', p2)
+    h2 = ultimo(log2).get('handoff') or {}
+    ok = [('1ª venda criada', bool(v1)),
+          ('2º handoff dados_completos', h2.get('motivo') == 'dados_completos'),
+          ('2ª venda NÃO criada (duplicidade)', h2.get('ok') is False and 'duplicidade' in norm(h2.get('motivo_recusa'))),
+          ('devolve a venda que já existe', bool(v1) and h2.get('venda_existente_id') == v1)]
+    return ok, log1 + log2, 'regular'
+
+
 REPETICAO = {}
 
 
@@ -970,9 +1117,15 @@ CENARIOS = {
     25: ('v4 — portal indisponível → fala por cidade', c25),
     26: ('v4 — "e a biometria?" → link por aqui pelo nosso time', c26),
     27: ('v4 — CEP/rua digitados errado → confirma, refaz, venda segue', c27),
+    28: ('v5 — lista espaçada + condições exatas', c28),
+    29: ('v5 — cartão: "Anotado!" + manhã/tarde, sem link de pagamento', c29),
+    30: ('v5 — "como pago?" → a cobrança é da própria Nio', c30),
+    31: ('v5 — conversa resolvida e reaberta → a Mari volta com o histórico', c31),
+    32: ('v5 — venda não criada (duplicidade) → devolve a venda existente', c32),
 }
 TOM = {15, 16, 17, 18, 19, 20, 21}   # v3+ (desde 05/11 também na produção)
 VENDA_REMOTA = {22, 23, 24, 25, 26, 27}  # prompt v4 (--ensaio, ou produção com --v4). Critério da parte E: ≥ 24/27
+PROMPT18 = {28, 29, 30, 31, 32}          # prompt v5 (--ensaio, ou produção com --v5). Vermelho em regra = não publica
 
 
 def rodar(n):
@@ -1025,7 +1178,7 @@ def main():
         i = args.index('--workers')
         workers = int(args[i + 1])
         del args[i:i + 2]
-    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if V4 or n not in VENDA_REMOTA]
+    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if (V4 or n not in VENDA_REMOTA) and (V5 or n not in PROMPT18)]
     carregar_planos()
     print('teardown inicial:', teardown())
     os.makedirs(SAIDA, exist_ok=True)

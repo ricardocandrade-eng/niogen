@@ -38,16 +38,29 @@ const NOME = {
   ja_cliente_nio: 'já é cliente Nio', recusa_compra: 'recusou a compra', fora_de_area: 'fora da área', sem_cobertura: 'sem cobertura',
   interesse_caindo: 'interesse caindo', multiplos_decisores: 'mais de um decisor', sem_contato: 'sem contato',
 };
+// Prompt 18 (C8): a revenda não cobra nem manda link de pagamento — o próximo passo do humano é só o link da biometria.
+// O briefing vem do modelo; o prompt v5 já proíbe, e isto tira o resto ("enviar o link de biometria e de pagamento").
+const semPagamento = (t) => String(t || '')
+  .replace(/\s*(?:,|\be\b|\bou\b)\s*(?:o\s+|um\s+)?(?:link\s+)?(?:de|do)\s+pagamento(?:\s+seguro)?/gi, '')
+  .replace(/\blinks?\s+de\s+pagamento(?:\s+seguro)?/gi, 'link da biometria');
+
+// Prompt 18 (B4): dados completos e venda NÃO criada (duplicidade ou outro erro) → a nota começa com o aviso e traz o
+// link da venda que já existe, para o backoffice decidir.
+const naoCriada = motivo === 'dados_completos' && !h.venda_id && h.ok === false;
+const existente = h.venda_existente_id || null;
 const nota = [
+  naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}` : null,
+  naoCriada && existente ? `Venda que já existe: ${NIOGEN}#venda=${existente}` : null,
   `MARI → BACKOFFICE · ${NOME[motivo] || motivo || 'handoff'}`,
-  briefing || '(sem briefing gravado — ver a conversa)',
-  vendaId ? `${NIOGEN}#venda=${vendaId}` : null,
+  semPagamento(briefing) || '(sem briefing gravado — ver a conversa)',
+  // B3: a nota termina com o link da ficha no NIOGEN.
+  vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,
 ].filter(Boolean).join('\n\n');
 
 return [{ json: {
   conta: e.config?.CHATWOOT_NIO_ACCOUNT,
   conversa: e.chatwootConversationId,
-  labels, nota, tipo, motivo, vendaId,
+  labels, nota, tipo, motivo, vendaId, naoCriada, vendaExistenteId: existente,
   atribuirTime: tipo === 'venda' || tipo === 'humano',
   teamId: TIME_BACKOFFICE,
 } }];

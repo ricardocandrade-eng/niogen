@@ -1,4 +1,4 @@
-// NIOGEN | n8n/mari/n02_entrada.js — nó "2 · Entrada" do workflow mari_principal (04/11/2026)
+// NIOGEN | n8n/mari/n02_entrada.js — nó "2 · Entrada" do workflow mari_principal (04/11/2026; resolvida → 2v em 05/11, prompt 18)
 // Normaliza a entrada (rota de teste ou webhook do Chatwoot), aplica o interruptor de modo
 // (staticData._modoMari = 'teste' | 'chatwoot'), comandos admin da rota de teste, detecção de mídia
 // e rate limit. Sem texto de negócio e sem segredo.
@@ -67,10 +67,18 @@ if (ex('1 · Webhook Mari teste')) {
   if (!/^sha256=[0-9a-f]{64}$/.test(sig)) throw new Error('[1c] Formato de assinatura inválido — requisição bloqueada.');
 
   const b = wb.body || {};
-  if (b.event && b.event !== 'message_created') return [];   // status/updated: o guard lê a conversa ao vivo
   const contaId = String(b.account?.id ?? b.account_id ?? '');
   const caixaId = String(b.inbox?.id ?? b.inbox_id ?? b.conversation?.inbox_id ?? '');
   if (contaId !== CONFIG.CHATWOOT_NIO_ACCOUNT || caixaId !== CONFIG.CHATWOOT_NIO_INBOX) return [];
+  // Prompt 18 (A): conversa RESOLVIDA no Chatwoot encerra o ciclo da Mari (handoff fechado, histórico mantido) — o nó
+  // 2v chama mari_encerrar_ciclo. Reaberta sem dono, a Mari volta sabendo o histórico; com dono/time/nao-contatar,
+  // o guard 2h continua calando. No evento de status o corpo É a conversa (id, status, inbox_id).
+  if (b.event === 'conversation_status_changed') {
+    const cid = String(b.id ?? b.conversation?.id ?? '');
+    if (b.status !== 'resolved' || !cid) return [];
+    return [{ json: { encerrar: false, registrar: 'resolvida', modo: 'chatwoot', canal: 'whatsapp', chatwootConversationId: cid } }];
+  }
+  if (b.event && b.event !== 'message_created') return [];   // conversation_updated etc.: o guard lê a conversa ao vivo
 
   const p = b.payload || b;
   const msg = p.message || p;
