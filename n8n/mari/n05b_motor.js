@@ -183,7 +183,13 @@ const push = (role, content) => {
   if (last && last.role === role) last.content += '\n' + t;
   else msgs.push({ role, content: t });
 };
-for (const h of historico) push(h.papel === 'lead' ? 'user' : 'assistant', h.texto);
+// Fala do consultor humano (atendimento pelo Chatwoot) entra como 'assistant', marcada, para a Mari saber o que
+// a equipe já disse ao cliente quando a conversa volta para ela.
+for (const h of historico) {
+  if (h.papel === 'lead') push('user', h.texto);
+  else if (h.papel === 'humano') push('assistant', `[Mensagem do consultor da equipe, enviada enquanto ele atendia]\n${h.texto}`);
+  else push('assistant', h.texto);
+}
 push('user', cons.mensagem);
 while (msgs.length && msgs[0].role !== 'user') msgs.shift();
 

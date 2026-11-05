@@ -8,6 +8,8 @@ const e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};
 let saida;
 if (j.saida) {
   saida = j.saida;
+} else if (ex('2r · Supabase registrar calado')) {
+  saida = { ...(($('2h · Guard humano').first().json || {}).saida || { silencio: true }), registrado: j.ignorado === false };
 } else if (ex('10b · Supabase salvar turno')) {
   const s = $('10 · Salvar turno').first().json;
   const r = s.r || {};
@@ -37,8 +39,10 @@ if (j.saida) {
   saida = { erro: 'saída não identificada' };
 }
 
+// Quem decide o caminho de saída é o GATILHO, não o modo: execução da rota de teste sempre responde
+// pelo 12t (inclusive os comandos admin com o modo em 'chatwoot'); execução do Chatwoot envia pelo 12c.
 return [{ json: {
-  modo: e.modo || 'teste',
+  modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',
   saida,
   resposta: saida.resposta || '',
   chatwootConversationId: e.chatwootConversationId || null,

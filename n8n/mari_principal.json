@@ -29,7 +29,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "mari-chatwoot",
-        "responseMode": "onReceived",
+        "responseMode": "responseNode",
         "options": {}
       },
       "name": "1c · Webhook Chatwoot",
@@ -40,13 +40,26 @@
         200
       ],
       "id": "81088b9a-b1bb-5c2e-b98a-9b4147914fcd",
-      "disabled": true,
       "webhookId": "540012bb-351f-5772-a0b9-55746ab1e96b",
-      "notes": "MODO CHATWOOT — desligado. Ligar só na virada de modo (ver INFRA §6)."
+      "notes": "MODO CHATWOOT — webhook de conta do Chatwoot \"Nio Atendimento\". Origem validada no nó 2 · Entrada (header x-chatwoot-signature + conta/caixa da Nio). Só processa com staticData._modoMari = chatwoot."
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n02_entrada.js — nó \"2 · Entrada\" do workflow mari_principal (04/11/2026)\n// Normaliza a entrada (rota de teste ou webhook do Chatwoot), aplica o interruptor de modo\n// (staticData._modoMari = 'teste' | 'chatwoot'), comandos admin da rota de teste, detecção de mídia\n// e rate limit. Sem texto de negócio e sem segredo.\n\nconst sd = $getWorkflowStaticData('global');\nif (!sd._modoMari) sd._modoMari = 'teste';\nconst modo = sd._modoMari;\n\n// Preencher na virada para 'chatwoot' (conta/caixa próprias da Nio — nada da conta da Vero).\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '',\n  CHATWOOT_NIO_INBOX: '',\n  MAX_CHAMADAS_HORA: 300,\n};\n\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst fim = (saida) => [{ json: { encerrar: true, saida } }];\n\nconst MIDIA_SO = new Set(['audio', 'voice', 'video', 'sticker', 'document', 'file', 'attachment']);\n\nlet entrada;\n\nif (ex('1 · Webhook Mari teste')) {\n  const body = $('1 · Webhook Mari teste').first().json.body || {};\n\n  // Comandos admin (só pela rota de teste, que já exige o header secreto).\n  if (body.admin) {\n    const cmd = String(body.admin).toLowerCase().trim();\n    if (cmd === 'modo teste' || cmd === 'modo chatwoot') {\n      sd._modoMari = cmd.split(' ')[1];\n      return fim({ admin: true, modo: sd._modoMari });\n    }\n    if (cmd === 'status') return fim({ admin: true, modo: sd._modoMari, chamadas_ultima_hora: (sd._apiCalls || []).length });\n    return fim({ admin: true, erro: 'comando desconhecido (use: modo teste | modo chatwoot | status)' });\n  }\n\n  if (modo !== 'teste') return fim({ erro: `modo atual é '${modo}' — rota de teste desligada` });\n\n  const tel = String(body.telefone || '').replace(/\\D/g, '');\n  if (!/^\\d{10,15}$/.test(tel)) return fim({ erro: 'telefone inválido (só dígitos, com DDI)' });\n\n  let texto = String(body.texto || '').trim();\n  const midia = String(body.midia || '').toLowerCase().trim();\n  if (midia) {\n    if (midia === 'image' || midia === 'imagem') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n    else if (midia === 'location' || midia === 'localizacao') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n    else if (!texto) texto = `[MIDIA:${MIDIA_SO.has(midia) ? midia : 'attachment'}]`;\n  }\n  if (!texto) return fim({ erro: 'texto vazio' });\n\n  entrada = {\n    canal: 'teste', telefone: tel, nome: String(body.nome || '').trim(), texto,\n    origem: body.origem || 'teste', chatwootConversationId: null,\n  };\n} else if (ex('1c · Webhook Chatwoot')) {\n  if (modo !== 'chatwoot') return [];\n  const wb = $('1c · Webhook Chatwoot').first().json;\n  const b = wb.body || wb;\n  const p = b.payload || b;\n  const msg = p.message || p;\n  const conv = p.conversation || {};\n  const sender = msg.sender || conv.meta?.sender || p.sender || {};\n  const tipo = msg.message_type ?? p.message_type;\n  const entrante = tipo === 0 || tipo === 'incoming' || (msg.sender_type || p.sender?.type) === 'contact';\n  if (!entrante || msg.private) return [];\n  const convId = String(conv.id || msg.conversation_id || p.conversation_id || '');\n  if (!convId) return [];\n  const att = (msg.attachments || p.attachments || [])[0] || {};\n  const ft = String(att.file_type || '').toLowerCase();\n  let texto = String(msg.content || p.content || '').trim();\n  if (ft === 'image') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n  else if (ft === 'location') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n  else if (ft && !texto) texto = `[MIDIA:${MIDIA_SO.has(ft) ? ft : 'attachment'}]`;\n  if (!texto) return [];\n  entrada = {\n    canal: 'whatsapp', telefone: String(sender.phone_number || '').replace(/\\D/g, ''),\n    nome: String(sender.name || '').trim(), texto,\n    origem: null, chatwootConversationId: convId,\n  };\n  if (!/^\\d{10,15}$/.test(entrada.telefone)) return [];\n} else {\n  return [];\n}\n\n// Rate limit (orçamento de chamadas ao Claude por hora, padrão Renata).\nsd._apiCalls = (sd._apiCalls || []).filter((t) => Date.now() - t < 3600000);\nif (sd._apiCalls.length >= CONFIG.MAX_CHAMADAS_HORA) {\n  return fim({ erro: `orçamento esgotado (${sd._apiCalls.length}/${CONFIG.MAX_CHAMADAS_HORA} por hora)` });\n}\nsd._apiCalls.push(Date.now());\n\nreturn [{ json: { encerrar: false, modo, config: CONFIG, ...entrada } }];\n"
+        "respondWith": "noData",
+        "options": {}
+      },
+      "name": "1r · OK Chatwoot",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        110,
+        300
+      ],
+      "id": "4b81097b-257e-5687-8dfe-9ecfb6d3ebbd"
+    },
+    {
+      "parameters": {
+        "jsCode": "// NIOGEN | n8n/mari/n02_entrada.js — nó \"2 · Entrada\" do workflow mari_principal (04/11/2026)\n// Normaliza a entrada (rota de teste ou webhook do Chatwoot), aplica o interruptor de modo\n// (staticData._modoMari = 'teste' | 'chatwoot'), comandos admin da rota de teste, detecção de mídia\n// e rate limit. Sem texto de negócio e sem segredo.\n\nconst sd = $getWorkflowStaticData('global');\nif (!sd._modoMari) sd._modoMari = 'teste';\nconst modo = sd._modoMari;\n\n// Conta/caixa próprias da Nio no Chatwoot (\"Nio Atendimento\", WhatsApp Cloud do 31 2888-1265).\n// Nada da conta da Vero — a validação abaixo descarta qualquer evento de outra conta/caixa.\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '195428',\n  CHATWOOT_NIO_INBOX: '153431',\n  MAX_CHAMADAS_HORA: 300,\n};\n\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst fim = (saida) => [{ json: { encerrar: true, saida } }];\n\nconst MIDIA_SO = new Set(['audio', 'voice', 'video', 'sticker', 'document', 'file', 'attachment']);\n\nlet entrada;\n\nif (ex('1 · Webhook Mari teste')) {\n  const body = $('1 · Webhook Mari teste').first().json.body || {};\n\n  // Comandos admin (só pela rota de teste, que já exige o header secreto).\n  if (body.admin) {\n    const cmd = String(body.admin).toLowerCase().trim();\n    if (cmd === 'modo teste' || cmd === 'modo chatwoot') {\n      sd._modoMari = cmd.split(' ')[1];\n      return fim({ admin: true, modo: sd._modoMari });\n    }\n    if (cmd === 'status') return fim({ admin: true, modo: sd._modoMari, chamadas_ultima_hora: (sd._apiCalls || []).length });\n    return fim({ admin: true, erro: 'comando desconhecido (use: modo teste | modo chatwoot | status)' });\n  }\n\n  // A rota de teste funciona nos dois modos (bateria): canal 'teste', resposta só no corpo HTTP,\n  // nunca passa pelo Chatwoot (o 2m e o 11 seguem o gatilho, não o interruptor).\n\n  const tel = String(body.telefone || '').replace(/\\D/g, '');\n  if (!/^\\d{10,15}$/.test(tel)) return fim({ erro: 'telefone inválido (só dígitos, com DDI)' });\n\n  let texto = String(body.texto || '').trim();\n  const midia = String(body.midia || '').toLowerCase().trim();\n  if (midia) {\n    if (midia === 'image' || midia === 'imagem') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n    else if (midia === 'location' || midia === 'localizacao') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n    else if (!texto) texto = `[MIDIA:${MIDIA_SO.has(midia) ? midia : 'attachment'}]`;\n  }\n  if (!texto) return fim({ erro: 'texto vazio' });\n\n  entrada = {\n    canal: 'teste', telefone: tel, nome: String(body.nome || '').trim(), texto,\n    origem: body.origem || 'teste', chatwootConversationId: null,\n  };\n} else if (ex('1c · Webhook Chatwoot')) {\n  if (modo !== 'chatwoot') return [];\n  const wb = $('1c · Webhook Chatwoot').first().json;\n\n  // Validação de origem (padrão no0 da Renata). O n8n 1.94 não entrega o corpo bruto ao Code, então o\n  // HMAC não é recalculado: exige o header de assinatura do Chatwoot bem formado e, depois, conta e caixa\n  // exatamente as da Nio. Sem assinatura = erro (vai para mari_erros); outra conta/caixa = descarte calado.\n  const sig = String((wb.headers || {})['x-chatwoot-signature'] || '');\n  if (!sig) throw new Error('[1c] Header x-chatwoot-signature ausente — requisição bloqueada.');\n  if (!/^sha256=[0-9a-f]{64}$/.test(sig)) throw new Error('[1c] Formato de assinatura inválido — requisição bloqueada.');\n\n  const b = wb.body || {};\n  if (b.event && b.event !== 'message_created') return [];   // status/updated: o guard lê a conversa ao vivo\n  const contaId = String(b.account?.id ?? b.account_id ?? '');\n  const caixaId = String(b.inbox?.id ?? b.inbox_id ?? b.conversation?.inbox_id ?? '');\n  if (contaId !== CONFIG.CHATWOOT_NIO_ACCOUNT || caixaId !== CONFIG.CHATWOOT_NIO_INBOX) return [];\n\n  const p = b.payload || b;\n  const msg = p.message || p;\n  const conv = p.conversation || {};\n  const sender = msg.sender || conv.meta?.sender || p.sender || {};\n  const tipo = msg.message_type ?? p.message_type;\n  const entrante = tipo === 0 || tipo === 'incoming' || (msg.sender_type || p.sender?.type) === 'contact';\n  const convId = String(conv.id || msg.conversation_id || p.conversation_id || '');\n  if (!convId || msg.private) return [];\n\n  // Fala do consultor no Chatwoot (saída, não privada, de um usuário): vira turno 'humano' no histórico da Mari,\n  // sem resposta. O eco do envio da própria Mari tem o mesmo formato (mesmo usuário do token) — quem o separa é\n  // o mari_registrar_turno (texto igual a uma fala da Mari nos últimos 10 min = eco, ignorado).\n  const saida = tipo === 1 || tipo === 'outgoing';\n  if (saida) {\n    if (String(sender.type || msg.sender_type || '').toLowerCase() !== 'user') return [];\n    const textoH = String(msg.content || p.content || '').trim();\n    const contato = conv.meta?.sender || {};\n    const telH = String(contato.phone_number || conv.contact_inbox?.source_id || '').replace(/\\D/g, '');\n    if (!textoH || !/^\\d{10,15}$/.test(telH)) return [];\n    return [{ json: { encerrar: false, registrar: 'humano', modo: 'chatwoot', canal: 'whatsapp', telefone: telH,\n      nome: String(contato.name || '').trim(), texto: textoH, chatwootConversationId: convId } }];\n  }\n  if (!entrante) return [];\n  const att = (msg.attachments || p.attachments || [])[0] || {};\n  const ft = String(att.file_type || '').toLowerCase();\n  let texto = String(msg.content || p.content || '').trim();\n  if (ft === 'image') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n  else if (ft === 'location') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\\n');\n  else if (ft && !texto) texto = `[MIDIA:${MIDIA_SO.has(ft) ? ft : 'attachment'}]`;\n  if (!texto) return [];\n  entrada = {\n    canal: 'whatsapp', telefone: String(sender.phone_number || '').replace(/\\D/g, ''),\n    nome: String(sender.name || '').trim(), texto,\n    origem: null, chatwootConversationId: convId,\n  };\n  if (!/^\\d{10,15}$/.test(entrada.telefone)) return [];\n} else {\n  return [];\n}\n\n// Rate limit (orçamento de chamadas ao Claude por hora, padrão Renata).\nsd._apiCalls = (sd._apiCalls || []).filter((t) => Date.now() - t < 3600000);\nif (sd._apiCalls.length >= CONFIG.MAX_CHAMADAS_HORA) {\n  return fim({ erro: `orçamento esgotado (${sd._apiCalls.length}/${CONFIG.MAX_CHAMADAS_HORA} por hora)` });\n}\nsd._apiCalls.push(Date.now());\n\n// modo DESTA execução: 'teste' (rota de teste) ou 'chatwoot' (webhook do Chatwoot, só com o interruptor em chatwoot).\nconst modoExec = entrada.canal === 'teste' ? 'teste' : 'chatwoot';\nreturn [{ json: { encerrar: false, modo: modoExec, config: CONFIG, ...entrada } }];\n"
       },
       "name": "2 · Entrada",
       "type": "n8n-nodes-base.code",
@@ -100,6 +113,67 @@
           },
           "conditions": [
             {
+              "id": "9ea7dbd6-6ccf-5eec-95d6-6d71a8731b73",
+              "leftValue": "={{ $json.registrar === 'humano' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "2x · Fala humana?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        550,
+        350
+      ],
+      "id": "f9064961-e0c5-5578-a1e2-c8fad4a0e4cb"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_registrar_turno",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'humano', p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2y · Supabase registrar humano",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        770,
+        550
+      ],
+      "id": "721d8fab-c851-5ce3-aa3d-08d9b47f2ac2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
               "id": "4a6a6271-f828-5e93-8d00-1b7c0e19c123",
               "leftValue": "={{ $json.modo === 'chatwoot' }}",
               "rightValue": "",
@@ -127,6 +201,8 @@
       "parameters": {
         "method": "GET",
         "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "options": {
           "timeout": 10000
         }
@@ -139,9 +215,14 @@
         300
       ],
       "id": "c269aa5e-bbe8-57ba-80ac-de0d8fa081d4",
-      "disabled": true,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
       "onError": "continueRegularOutput",
-      "notes": "MODO CHATWOOT — desligado. Credencial \"Chatwoot Nio\" (api_access_token) a criar; conta/caixa no nó 2 · Entrada."
+      "notes": "MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial \"Chatwoot Nio\"."
     },
     {
       "parameters": {
@@ -188,6 +269,34 @@
         200
       ],
       "id": "ee4a238c-c0eb-5843-add8-78445acee4eb"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_registrar_turno",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'lead', p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2r · Supabase registrar calado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        100
+      ],
+      "id": "96b3c2f9-8dc0-5e4b-b5cd-d5988170479f",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
     },
     {
       "parameters": {
@@ -522,7 +631,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n05b_motor.js — nó \"5b · Motor\" do mari_principal (04/11/2026)\n// Monta o payload do Claude: preenche {{ESTADO_ATUAL}}, {{INTERNAL_DATA}}, {{HORARIO_COMERCIAL}} e\n// {{DATA_HORA_ATUAL}} no texto do nó \"5a · Conteúdo Mari\" a partir do BANCO (mari_contexto: conversa,\n// área/cluster, config_planos do cluster, DFV). Normaliza a alternância user/assistant.\n// O motor não tem texto de comportamento: só rótulos de estado e formatação dos planos.\n\nconst MODEL = 'claude-sonnet-5';\nconst MAX_TOKENS = 1536;\n\nconst db = $('4b · Supabase contexto').first().json;\nconst prep = $('4 · Preparar').first().json;\nconst conteudo = $('5a · Conteúdo Mari').first().json;\nconst conv = db.conversa || {};\nconst planos = Array.isArray(db.planos) ? db.planos : [];\nconst cons = prep.consolidado || {};\nconst dados = conv.dados || {};\n\n// ── relógio de Brasília e horário do contrato (seg–sex 9–21, sáb 10–16, nunca domingo) ──\nconst agora = new Date();\nconst partes = Object.fromEntries(new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/Sao_Paulo', weekday: 'short', hour: 'numeric', hour12: false,\n}).formatToParts(agora).map((p) => [p.type, p.value]));\nconst hora = Number(partes.hour) % 24;\nconst dia = partes.weekday; // Mon..Sun\nconst dentroHorario = (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(dia) && hora >= 9 && hora < 21)\n  || (dia === 'Sat' && hora >= 10 && hora < 16);\nconst dataHora = agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst horarioTxt = dentroHorario\n  ? 'HORARIO_COMERCIAL: true — prazo do consultor: \"em até 2 horas\"'\n  : 'HORARIO_COMERCIAL: false — prazo do consultor: \"no próximo horário de atendimento\"';\n\n// ── validações determinísticas ──\nfunction cpfValido(v) {\n  const d = String(v || '').replace(/\\D/g, '');\n  if (d.length !== 11 || /^(\\d)\\1{10}$/.test(d)) return false;\n  const dv = (n) => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };\n  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);\n}\nconst emailValido = (e) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(String(e || ''));\nconst telValido = (t) => /^\\d{10,11}$/.test(String(t || '').replace(/\\D/g, '').replace(/^55(?=\\d{10,11}$)/, ''));\n\n// ── formatação dos planos (INTERNAL DATA) ──\nconst R = (v) => {\n  if (v === null || v === undefined || v === '') return null;\n  const n = Number(v);\n  return Number.isInteger(n) ? `R$${n}` : `R$${n.toFixed(2).replace('.', ',')}`;\n};\nconst nomeCurto = (n) => String(n || '').replace(/\\s*\\(.*?\\)\\s*/g, ' ').replace(/^Nio Empresas /, 'Nio ').replace(/\\s+\\d.*$/, '').trim();\nfunction txt5g(p) {\n  const s = String(p.internet_5g || '');\n  if (!s) return null;\n  const gb = (s.match(/(\\d+\\s*GB)/i) || [])[1] || s;\n  const cham = /chamadas/i.test(s) ? ' com chamadas ilimitadas' : '';\n  return /2\\s*chips/i.test(s) ? `2 chips com ${gb} de internet 5G cada${cham}` : `${gb} de internet 5G${cham}`;\n}\nfunction inclusos(p) {\n  return (p.inclusos || [])\n    .filter((i) => !/ponto extra mesh/i.test(i))\n    .map((i) => i.replace(/\\s(\\d+)\\s*meses$/i, ' por $1 meses'));\n}\nconst seg = conv.segmento === 'empresas' ? 'empresas' : 'varejo';\nconst cluster = conv.cluster || null;\nconst btu = cluster === 'btu';\nconst principais = planos.filter((p) => p.portfolio === seg && ['regular', 'oferta50'].includes(p.variante)).sort((a, b) => a.preco - b.preco);\n\nfunction linhaPlano(p, semFidelidade) {\n  const campos = [\n    `codigo: ${p.codigo}`,\n    `nome: ${nomeCurto(p.nome)}${semFidelidade ? ' (versão sem fidelidade)' : ''}`,\n    `internet: ${p.velocidade_mb >= 1000 ? `${p.velocidade_mb / 1000} Giga` : `${p.velocidade_mb} Mega`}`,\n    `wifi: ${p.wifi || '—'}`,\n  ];\n  const vem = [txt5g(p), ...inclusos(p)].filter(Boolean);\n  if (vem.length) campos.push(`já vem com: ${vem.join(' + ')}`);\n  campos.push(`preco: ${R(p.preco)}/mês`);\n  if (!btu) campos.push(p.preco_cartao != null ? `preco_cartao: ${R(p.preco_cartao)}/mês` : 'preco_cartao: — (mesmo preço no cartão)');\n  if (semFidelidade) campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)} inteira na 1ª fatura`);\n  else campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)}, isenta com ${p.isencao_meses} meses`);\n  return '- ' + campos.join(' | ');\n}\n\nlet internalData;\nif (conv.dentro_area === false) {\n  internalData = `(A cidade ${conv.cidade || 'do cliente'} está FORA da área de atuação — não há planos. Siga o Passo 2: fora_de_area.)`;\n} else if (!cluster) {\n  internalData = '(Cidade ainda não identificada pelo CEP — NÃO apresente planos nem preços; peça o CEP e o número.)';\n} else if (!principais.length) {\n  internalData = '(Nenhum plano ativo para esta cidade e segmento — não invente; handoff pedido_humano.)';\n} else {\n  // As duas tabelas da cidade vão sempre: se o cliente disser NESTA mensagem que é empresa (CNPJ/MEI),\n  // a Mari já usa a de Empresas no mesmo turno (o segmento só é gravado depois da resposta).\n  const doPortfolio = (pf, variantes) => planos.filter((p) => p.portfolio === pf && variantes.includes(p.variante)).sort((a, b) => a.preco - b.preco);\n  const secao = (pf, titulo) => {\n    const pr = doPortfolio(pf, ['regular', 'oferta50']);\n    const sf = doPortfolio(pf, ['nfid', 'oferta50_nfid']);\n    if (!pr.length) return [`${titulo}: (não há planos nesta cidade)`];\n    return [\n      `${titulo} — apresente nesta ordem, até 3 por bloco:`,\n      ...pr.map((p) => linhaPlano(p, false)),\n      `${titulo} — versão sem fidelidade (NÃO oferecer; só se o cliente pedir zero compromisso):`,\n      ...(sf.length ? sf.map((p) => linhaPlano(p, true)) : ['- (não há versão sem fidelidade)']),\n    ];\n  };\n  internalData = [\n    `tabela_cidade: ${btu ? 'BTU — preço ÚNICO em todos os meios de pagamento (não fale em cartão mais barato nem em desconto)' : 'REGULAR — dois preços: boleto/débito (preco) e cartão de crédito (preco_cartao)'}`,\n    `segmento_atual: ${seg === 'empresas' ? 'Empresas (CNPJ)' : 'Varejo (pessoa física, CPF)'} — use SÓ a seção do segmento do cliente; se ele acabou de dizer que é para empresa/CNPJ/MEI, use já a seção PLANOS EMPRESAS`,\n    '',\n    ...secao('varejo', 'PLANOS VAREJO (pessoa física, CPF)'),\n    '',\n    ...secao('empresas', 'PLANOS EMPRESAS (CNPJ, MEI ou não)'),\n  ].join('\\n');\n}\n\n// ── ESTADO_ATUAL ──\nconst historico = Array.isArray(cons.historico) ? cons.historico : [];\nconst primeira = historico.length === 0;\nconst end = conv.endereco_cep || null;\nconst planoSel = planos.find((p) => p.codigo === conv.plano_escolhido) || null;\nconst cpfOk = dados.cpf ? cpfValido(dados.cpf) : null;\nconst faltando = [];\nif (!dados.nome) faltando.push('nome');\nif (!dados.cpf || !cpfOk) faltando.push('cpf');\nif (!dados.telefone || !telValido(dados.telefone)) faltando.push('telefone');\nif (!dados.email || !emailValido(dados.email)) faltando.push('email');\nif (!conv.forma_pagamento) faltando.push('pagamento');\nif (!conv.visita_preferencia) faltando.push('visita');\nconst formaTxt = { boleto: 'boleto', dacc: 'débito automático', cartao: 'cartão de crédito' }[conv.forma_pagamento] || null;\n\nconst L = [];\nL.push(`primeira_mensagem: ${primeira ? 'sim' : 'nao'}`);\nL.push(`status_conversa: ${conv.status}`);\nL.push(`etapa: ${conv.etapa}`);\nL.push(`telefone_whatsapp: ${String(conv.telefone || '').replace(/^55/, '')}`);\nL.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);\nL.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);\nL.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (dados.complemento_ok ? 'não tem' : '—')} | complemento_respondido: ${conv.complemento || dados.complemento_ok ? 'sim' : 'nao'}`);\nL.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);\nL.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);\nL.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);\nif (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {\n  // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.\n  // Retorno = data do cancelamento + 31 dias = hoje + (31 − N), no calendário de Brasília.\n  const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora); // AAAA-MM-DD\n  const base = new Date(`${hojeSP}T12:00:00Z`);\n  const tabela = [];\n  for (let n = 0; n <= 30; n++) {\n    const d = new Date(base.getTime() + (31 - n) * 86400000).toISOString().slice(0, 10);\n    tabela.push(`${n}→${d.slice(8, 10)}/${d.slice(5, 7)} (${d})`);\n  }\n  L.push(`tabela_retorno_cancelamento (cancelou há N dias → nova adesão a partir de; já calculada — copie, não faça conta): ${tabela.join(' · ')}`);\n}\nL.push(`elegibilidade: ${conv.elegibilidade || 'não perguntada'}`);\nL.push(`segmento: ${seg}${seg === 'empresas' ? ` | mei: ${conv.mei === true ? 'sim' : conv.mei === false ? 'nao' : 'não perguntado'}` : ''}`);\nL.push(`plano_escolhido: ${planoSel ? `${planoSel.codigo} — ${nomeCurto(planoSel.nome)} — ${R(planoSel.preco)}${!btu && planoSel.preco_cartao != null ? ` (cartão ${R(planoSel.preco_cartao)})` : ''}` : '—'}`);\nif (planoSel && conv.forma_pagamento) {\n  // Preço da forma já escolhida (cartão em cidade Regular = preco_cartao), calculado aqui — o modelo só copia.\n  const noCartao = conv.forma_pagamento === 'cartao' && !btu && planoSel.preco_cartao != null;\n  L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);\n}\nL.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);\nL.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; visita=${conv.visita_preferencia || '—'}`);\nL.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);\nif (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);\nconst estadoTxt = L.join('\\n');\n\n// ── system: parte fixa (cacheável) + parte dinâmica ──\nconst corte = conteudo.promptBase.indexOf('## AGORA E HORARIO_COMERCIAL');\nconst fixo = corte > 0 ? conteudo.promptBase.slice(0, corte) : conteudo.promptBase;\nconst dinamico = (corte > 0 ? conteudo.promptBase.slice(corte) : '')\n  .replace('{{DATA_HORA_ATUAL}}', dataHora)\n  .replace('{{HORARIO_COMERCIAL}}', horarioTxt)\n  .replace('{{ESTADO_ATUAL}}', estadoTxt)\n  .replace('{{INTERNAL_DATA}}', internalData);\nconst system = [{ type: 'text', text: fixo, cache_control: { type: 'ephemeral' } }];\nif (dinamico) system.push({ type: 'text', text: dinamico });\n\n// ── mensagens: histórico do banco + mensagem nova; alternância user/assistant ──\nconst msgs = [];\nconst push = (role, content) => {\n  const t = String(content || '').trim();\n  if (!t) return;\n  const last = msgs[msgs.length - 1];\n  if (last && last.role === role) last.content += '\\n' + t;\n  else msgs.push({ role, content: t });\n};\nfor (const h of historico) push(h.papel === 'lead' ? 'user' : 'assistant', h.texto);\npush('user', cons.mensagem);\nwhile (msgs.length && msgs[0].role !== 'user') msgs.shift();\n\nreturn [{ json: {\n  model: MODEL, maxTokens: MAX_TOKENS, system, messages: msgs,\n  ctx: {\n    conversaId: conv.id, t0: Date.now(), promptVersao: conteudo.promptVersao,\n    cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,\n    planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao })),\n    conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,\n      elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,\n      visita_preferencia: conv.visita_preferencia, dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,\n      nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },\n    turnoIds: cons.turno_ids || [],\n    estado: estadoTxt,\n  },\n} }];\n"
+        "jsCode": "// NIOGEN | n8n/mari/n05b_motor.js — nó \"5b · Motor\" do mari_principal (04/11/2026)\n// Monta o payload do Claude: preenche {{ESTADO_ATUAL}}, {{INTERNAL_DATA}}, {{HORARIO_COMERCIAL}} e\n// {{DATA_HORA_ATUAL}} no texto do nó \"5a · Conteúdo Mari\" a partir do BANCO (mari_contexto: conversa,\n// área/cluster, config_planos do cluster, DFV). Normaliza a alternância user/assistant.\n// O motor não tem texto de comportamento: só rótulos de estado e formatação dos planos.\n\nconst MODEL = 'claude-sonnet-5';\nconst MAX_TOKENS = 1536;\n\nconst db = $('4b · Supabase contexto').first().json;\nconst prep = $('4 · Preparar').first().json;\nconst conteudo = $('5a · Conteúdo Mari').first().json;\nconst conv = db.conversa || {};\nconst planos = Array.isArray(db.planos) ? db.planos : [];\nconst cons = prep.consolidado || {};\nconst dados = conv.dados || {};\n\n// ── relógio de Brasília e horário do contrato (seg–sex 9–21, sáb 10–16, nunca domingo) ──\nconst agora = new Date();\nconst partes = Object.fromEntries(new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/Sao_Paulo', weekday: 'short', hour: 'numeric', hour12: false,\n}).formatToParts(agora).map((p) => [p.type, p.value]));\nconst hora = Number(partes.hour) % 24;\nconst dia = partes.weekday; // Mon..Sun\nconst dentroHorario = (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(dia) && hora >= 9 && hora < 21)\n  || (dia === 'Sat' && hora >= 10 && hora < 16);\nconst dataHora = agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });\nconst horarioTxt = dentroHorario\n  ? 'HORARIO_COMERCIAL: true — prazo do consultor: \"em até 2 horas\"'\n  : 'HORARIO_COMERCIAL: false — prazo do consultor: \"no próximo horário de atendimento\"';\n\n// ── validações determinísticas ──\nfunction cpfValido(v) {\n  const d = String(v || '').replace(/\\D/g, '');\n  if (d.length !== 11 || /^(\\d)\\1{10}$/.test(d)) return false;\n  const dv = (n) => { let s = 0; for (let i = 0; i < n; i++) s += Number(d[i]) * (n + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; };\n  return dv(9) === Number(d[9]) && dv(10) === Number(d[10]);\n}\nconst emailValido = (e) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(String(e || ''));\nconst telValido = (t) => /^\\d{10,11}$/.test(String(t || '').replace(/\\D/g, '').replace(/^55(?=\\d{10,11}$)/, ''));\n\n// ── formatação dos planos (INTERNAL DATA) ──\nconst R = (v) => {\n  if (v === null || v === undefined || v === '') return null;\n  const n = Number(v);\n  return Number.isInteger(n) ? `R$${n}` : `R$${n.toFixed(2).replace('.', ',')}`;\n};\nconst nomeCurto = (n) => String(n || '').replace(/\\s*\\(.*?\\)\\s*/g, ' ').replace(/^Nio Empresas /, 'Nio ').replace(/\\s+\\d.*$/, '').trim();\nfunction txt5g(p) {\n  const s = String(p.internet_5g || '');\n  if (!s) return null;\n  const gb = (s.match(/(\\d+\\s*GB)/i) || [])[1] || s;\n  const cham = /chamadas/i.test(s) ? ' com chamadas ilimitadas' : '';\n  return /2\\s*chips/i.test(s) ? `2 chips com ${gb} de internet 5G cada${cham}` : `${gb} de internet 5G${cham}`;\n}\nfunction inclusos(p) {\n  return (p.inclusos || [])\n    .filter((i) => !/ponto extra mesh/i.test(i))\n    .map((i) => i.replace(/\\s(\\d+)\\s*meses$/i, ' por $1 meses'));\n}\nconst seg = conv.segmento === 'empresas' ? 'empresas' : 'varejo';\nconst cluster = conv.cluster || null;\nconst btu = cluster === 'btu';\nconst principais = planos.filter((p) => p.portfolio === seg && ['regular', 'oferta50'].includes(p.variante)).sort((a, b) => a.preco - b.preco);\n\nfunction linhaPlano(p, semFidelidade) {\n  const campos = [\n    `codigo: ${p.codigo}`,\n    `nome: ${nomeCurto(p.nome)}${semFidelidade ? ' (versão sem fidelidade)' : ''}`,\n    `internet: ${p.velocidade_mb >= 1000 ? `${p.velocidade_mb / 1000} Giga` : `${p.velocidade_mb} Mega`}`,\n    `wifi: ${p.wifi || '—'}`,\n  ];\n  const vem = [txt5g(p), ...inclusos(p)].filter(Boolean);\n  if (vem.length) campos.push(`já vem com: ${vem.join(' + ')}`);\n  campos.push(`preco: ${R(p.preco)}/mês`);\n  if (!btu) campos.push(p.preco_cartao != null ? `preco_cartao: ${R(p.preco_cartao)}/mês` : 'preco_cartao: — (mesmo preço no cartão)');\n  if (semFidelidade) campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)} inteira na 1ª fatura`);\n  else campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)}, isenta com ${p.isencao_meses} meses`);\n  return '- ' + campos.join(' | ');\n}\n\nlet internalData;\nif (conv.dentro_area === false) {\n  internalData = `(A cidade ${conv.cidade || 'do cliente'} está FORA da área de atuação — não há planos. Siga o Passo 2: fora_de_area.)`;\n} else if (!cluster) {\n  internalData = '(Cidade ainda não identificada pelo CEP — NÃO apresente planos nem preços; peça o CEP e o número.)';\n} else if (!principais.length) {\n  internalData = '(Nenhum plano ativo para esta cidade e segmento — não invente; handoff pedido_humano.)';\n} else {\n  // As duas tabelas da cidade vão sempre: se o cliente disser NESTA mensagem que é empresa (CNPJ/MEI),\n  // a Mari já usa a de Empresas no mesmo turno (o segmento só é gravado depois da resposta).\n  const doPortfolio = (pf, variantes) => planos.filter((p) => p.portfolio === pf && variantes.includes(p.variante)).sort((a, b) => a.preco - b.preco);\n  const secao = (pf, titulo) => {\n    const pr = doPortfolio(pf, ['regular', 'oferta50']);\n    const sf = doPortfolio(pf, ['nfid', 'oferta50_nfid']);\n    if (!pr.length) return [`${titulo}: (não há planos nesta cidade)`];\n    return [\n      `${titulo} — apresente nesta ordem, até 3 por bloco:`,\n      ...pr.map((p) => linhaPlano(p, false)),\n      `${titulo} — versão sem fidelidade (NÃO oferecer; só se o cliente pedir zero compromisso):`,\n      ...(sf.length ? sf.map((p) => linhaPlano(p, true)) : ['- (não há versão sem fidelidade)']),\n    ];\n  };\n  internalData = [\n    `tabela_cidade: ${btu ? 'BTU — preço ÚNICO em todos os meios de pagamento (não fale em cartão mais barato nem em desconto)' : 'REGULAR — dois preços: boleto/débito (preco) e cartão de crédito (preco_cartao)'}`,\n    `segmento_atual: ${seg === 'empresas' ? 'Empresas (CNPJ)' : 'Varejo (pessoa física, CPF)'} — use SÓ a seção do segmento do cliente; se ele acabou de dizer que é para empresa/CNPJ/MEI, use já a seção PLANOS EMPRESAS`,\n    '',\n    ...secao('varejo', 'PLANOS VAREJO (pessoa física, CPF)'),\n    '',\n    ...secao('empresas', 'PLANOS EMPRESAS (CNPJ, MEI ou não)'),\n  ].join('\\n');\n}\n\n// ── ESTADO_ATUAL ──\nconst historico = Array.isArray(cons.historico) ? cons.historico : [];\nconst primeira = historico.length === 0;\nconst end = conv.endereco_cep || null;\nconst planoSel = planos.find((p) => p.codigo === conv.plano_escolhido) || null;\nconst cpfOk = dados.cpf ? cpfValido(dados.cpf) : null;\nconst faltando = [];\nif (!dados.nome) faltando.push('nome');\nif (!dados.cpf || !cpfOk) faltando.push('cpf');\nif (!dados.telefone || !telValido(dados.telefone)) faltando.push('telefone');\nif (!dados.email || !emailValido(dados.email)) faltando.push('email');\nif (!conv.forma_pagamento) faltando.push('pagamento');\nif (!conv.visita_preferencia) faltando.push('visita');\nconst formaTxt = { boleto: 'boleto', dacc: 'débito automático', cartao: 'cartão de crédito' }[conv.forma_pagamento] || null;\n\nconst L = [];\nL.push(`primeira_mensagem: ${primeira ? 'sim' : 'nao'}`);\nL.push(`status_conversa: ${conv.status}`);\nL.push(`etapa: ${conv.etapa}`);\nL.push(`telefone_whatsapp: ${String(conv.telefone || '').replace(/^55/, '')}`);\nL.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);\nL.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);\nL.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (dados.complemento_ok ? 'não tem' : '—')} | complemento_respondido: ${conv.complemento || dados.complemento_ok ? 'sim' : 'nao'}`);\nL.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);\nL.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);\nL.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);\nif (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {\n  // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.\n  // Retorno = data do cancelamento + 31 dias = hoje + (31 − N), no calendário de Brasília.\n  const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora); // AAAA-MM-DD\n  const base = new Date(`${hojeSP}T12:00:00Z`);\n  const tabela = [];\n  for (let n = 0; n <= 30; n++) {\n    const d = new Date(base.getTime() + (31 - n) * 86400000).toISOString().slice(0, 10);\n    tabela.push(`${n}→${d.slice(8, 10)}/${d.slice(5, 7)} (${d})`);\n  }\n  L.push(`tabela_retorno_cancelamento (cancelou há N dias → nova adesão a partir de; já calculada — copie, não faça conta): ${tabela.join(' · ')}`);\n}\nL.push(`elegibilidade: ${conv.elegibilidade || 'não perguntada'}`);\nL.push(`segmento: ${seg}${seg === 'empresas' ? ` | mei: ${conv.mei === true ? 'sim' : conv.mei === false ? 'nao' : 'não perguntado'}` : ''}`);\nL.push(`plano_escolhido: ${planoSel ? `${planoSel.codigo} — ${nomeCurto(planoSel.nome)} — ${R(planoSel.preco)}${!btu && planoSel.preco_cartao != null ? ` (cartão ${R(planoSel.preco_cartao)})` : ''}` : '—'}`);\nif (planoSel && conv.forma_pagamento) {\n  // Preço da forma já escolhida (cartão em cidade Regular = preco_cartao), calculado aqui — o modelo só copia.\n  const noCartao = conv.forma_pagamento === 'cartao' && !btu && planoSel.preco_cartao != null;\n  L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);\n}\nL.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);\nL.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; visita=${conv.visita_preferencia || '—'}`);\nL.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);\nif (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);\nconst estadoTxt = L.join('\\n');\n\n// ── system: parte fixa (cacheável) + parte dinâmica ──\nconst corte = conteudo.promptBase.indexOf('## AGORA E HORARIO_COMERCIAL');\nconst fixo = corte > 0 ? conteudo.promptBase.slice(0, corte) : conteudo.promptBase;\nconst dinamico = (corte > 0 ? conteudo.promptBase.slice(corte) : '')\n  .replace('{{DATA_HORA_ATUAL}}', dataHora)\n  .replace('{{HORARIO_COMERCIAL}}', horarioTxt)\n  .replace('{{ESTADO_ATUAL}}', estadoTxt)\n  .replace('{{INTERNAL_DATA}}', internalData);\nconst system = [{ type: 'text', text: fixo, cache_control: { type: 'ephemeral' } }];\nif (dinamico) system.push({ type: 'text', text: dinamico });\n\n// ── mensagens: histórico do banco + mensagem nova; alternância user/assistant ──\nconst msgs = [];\nconst push = (role, content) => {\n  const t = String(content || '').trim();\n  if (!t) return;\n  const last = msgs[msgs.length - 1];\n  if (last && last.role === role) last.content += '\\n' + t;\n  else msgs.push({ role, content: t });\n};\n// Fala do consultor humano (atendimento pelo Chatwoot) entra como 'assistant', marcada, para a Mari saber o que\n// a equipe já disse ao cliente quando a conversa volta para ela.\nfor (const h of historico) {\n  if (h.papel === 'lead') push('user', h.texto);\n  else if (h.papel === 'humano') push('assistant', `[Mensagem do consultor da equipe, enviada enquanto ele atendia]\\n${h.texto}`);\n  else push('assistant', h.texto);\n}\npush('user', cons.mensagem);\nwhile (msgs.length && msgs[0].role !== 'user') msgs.shift();\n\nreturn [{ json: {\n  model: MODEL, maxTokens: MAX_TOKENS, system, messages: msgs,\n  ctx: {\n    conversaId: conv.id, t0: Date.now(), promptVersao: conteudo.promptVersao,\n    cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,\n    planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao })),\n    conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,\n      elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,\n      visita_preferencia: conv.visita_preferencia, dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,\n      nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },\n    turnoIds: cons.turno_ids || [],\n    estado: estadoTxt,\n  },\n} }];\n"
       },
       "name": "5b · Motor",
       "type": "n8n-nodes-base.code",
@@ -891,7 +1000,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n11_saida.js — nó \"11 · Saída\" do mari_principal (04/11/2026)\n// Ponto único de saída de todos os caminhos. Monta o corpo devolvido pela rota de teste\n// (modo 'teste') ou a mensagem a enviar pelo Chatwoot (modo 'chatwoot').\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst j = $input.first().json || {};\nconst e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};\n\nlet saida;\nif (j.saida) {\n  saida = j.saida;\n} else if (ex('10b · Supabase salvar turno')) {\n  const s = $('10 · Salvar turno').first().json;\n  const r = s.r || {};\n  const h = ex('9 · Handoff') ? $('9 · Handoff').first().json : null;\n  saida = {\n    resposta: r.texto,\n    conversa_id: r.conversaId,\n    etapa: r.handoff ? 'handoff' : (r.upd && r.upd.etapa) || null,\n    handoff: r.handoff ? { motivo: r.handoff.motivo, ...(h || {}) } : null,\n    tags: r.tags || {},\n    upd: r.upd || {},\n    modelo: r.modelo,\n    tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,\n    corrigido: r.violacoesCorrigidas || null,\n    erro: r.erro ? r.erro.mensagem : null,\n    prompt: r.promptVersao || null,\n  };\n} else if (ex('7f · Supabase abortar')) {\n  saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };\n} else if (j.esgotado) {\n  saida = { erro: 'conversa ocupada por mais de 45 s (lock)' };\n} else if (j.silencio === true && j.conversa_id) {\n  saida = { silencio: true, status: j.status, conversa_id: j.conversa_id, motivo: 'conversa em handoff — o humano conduz' };\n} else if (j.resultado) {\n  saida = { resultado: j.resultado, status: j.status || null };\n} else {\n  saida = { erro: 'saída não identificada' };\n}\n\nreturn [{ json: {\n  modo: e.modo || 'teste',\n  saida,\n  resposta: saida.resposta || '',\n  chatwootConversationId: e.chatwootConversationId || null,\n  config: e.config || {},\n} }];\n"
+        "jsCode": "// NIOGEN | n8n/mari/n11_saida.js — nó \"11 · Saída\" do mari_principal (04/11/2026)\n// Ponto único de saída de todos os caminhos. Monta o corpo devolvido pela rota de teste\n// (modo 'teste') ou a mensagem a enviar pelo Chatwoot (modo 'chatwoot').\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst j = $input.first().json || {};\nconst e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};\n\nlet saida;\nif (j.saida) {\n  saida = j.saida;\n} else if (ex('2r · Supabase registrar calado')) {\n  saida = { ...(($('2h · Guard humano').first().json || {}).saida || { silencio: true }), registrado: j.ignorado === false };\n} else if (ex('10b · Supabase salvar turno')) {\n  const s = $('10 · Salvar turno').first().json;\n  const r = s.r || {};\n  const h = ex('9 · Handoff') ? $('9 · Handoff').first().json : null;\n  saida = {\n    resposta: r.texto,\n    conversa_id: r.conversaId,\n    etapa: r.handoff ? 'handoff' : (r.upd && r.upd.etapa) || null,\n    handoff: r.handoff ? { motivo: r.handoff.motivo, ...(h || {}) } : null,\n    tags: r.tags || {},\n    upd: r.upd || {},\n    modelo: r.modelo,\n    tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,\n    corrigido: r.violacoesCorrigidas || null,\n    erro: r.erro ? r.erro.mensagem : null,\n    prompt: r.promptVersao || null,\n  };\n} else if (ex('7f · Supabase abortar')) {\n  saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };\n} else if (j.esgotado) {\n  saida = { erro: 'conversa ocupada por mais de 45 s (lock)' };\n} else if (j.silencio === true && j.conversa_id) {\n  saida = { silencio: true, status: j.status, conversa_id: j.conversa_id, motivo: 'conversa em handoff — o humano conduz' };\n} else if (j.resultado) {\n  saida = { resultado: j.resultado, status: j.status || null };\n} else {\n  saida = { erro: 'saída não identificada' };\n}\n\n// Quem decide o caminho de saída é o GATILHO, não o modo: execução da rota de teste sempre responde\n// pelo 12t (inclusive os comandos admin com o modo em 'chatwoot'); execução do Chatwoot envia pelo 12c.\nreturn [{ json: {\n  modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',\n  saida,\n  resposta: saida.resposta || '',\n  chatwootConversationId: e.chatwootConversationId || null,\n  config: e.config || {},\n} }];\n"
       },
       "name": "11 · Saída",
       "type": "n8n-nodes-base.code",
@@ -987,6 +1096,8 @@
       "parameters": {
         "method": "POST",
         "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ content: $json.resposta, message_type: 'outgoing', private: false }) }}",
@@ -1002,8 +1113,13 @@
         400
       ],
       "id": "87acfb19-cfbf-5799-b45b-98a4edfd0e75",
-      "disabled": true,
-      "notes": "MODO CHATWOOT — desligado. Credencial \"Chatwoot Nio\" a criar."
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "notes": "MODO CHATWOOT — envio pela API do Chatwoot (bolha na conversa). Credencial \"Chatwoot Nio\"."
     },
     {
       "parameters": {},
@@ -1081,6 +1197,17 @@
       "main": [
         [
           {
+            "node": "1r · OK Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1r · OK Chatwoot": {
+      "main": [
+        [
+          {
             "node": "2 · Entrada",
             "type": "main",
             "index": 0
@@ -1104,6 +1231,24 @@
         [
           {
             "node": "11 · Saída",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "2x · Fala humana?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2x · Fala humana?": {
+      "main": [
+        [
+          {
+            "node": "2y · Supabase registrar humano",
             "type": "main",
             "index": 0
           }
@@ -1161,7 +1306,7 @@
       "main": [
         [
           {
-            "node": "11 · Saída",
+            "node": "2r · Supabase registrar calado",
             "type": "main",
             "index": 0
           }
@@ -1169,6 +1314,17 @@
         [
           {
             "node": "3a · Supabase entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2r · Supabase registrar calado": {
+      "main": [
+        [
+          {
+            "node": "11 · Saída",
             "type": "main",
             "index": 0
           }

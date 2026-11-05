@@ -46,6 +46,7 @@ SB = 'https://zlrfwbkblytnokuexjti.supabase.co'      # Supabase Nio (não é o d
 CRED_SUPABASE = 'Supabase Nio (service role)'
 CRED_CLAUDE = 'Claude API Nio'
 CRED_TESTE = 'MARI_TESTE_SECRET'
+CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token (conta "Nio Atendimento")
 HEADER_TESTE = 'X-Mari-Secret'
 
 
@@ -153,6 +154,7 @@ def build(ids):
     sb_cred = {'supabaseApi': {'id': cred.get('supabase', ''), 'name': CRED_SUPABASE}}
     cl_cred = {'anthropicApi': {'id': cred.get('claude', ''), 'name': CRED_CLAUDE}}
     te_cred = {'httpHeaderAuth': {'id': cred.get('teste', ''), 'name': CRED_TESTE}}
+    cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}
 
     nodes = []
     pos = {}
@@ -203,19 +205,34 @@ def build(ids):
         'responseMode': 'responseNode', 'options': {}}, 0, 0,
         credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari-teste')))
     add('1c · Webhook Chatwoot', 'n8n-nodes-base.webhook', 2, {
-        'httpMethod': 'POST', 'path': 'mari-chatwoot', 'responseMode': 'onReceived', 'options': {}}, 0, 200,
-        disabled=True, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari-chatwoot')),
-        notes='MODO CHATWOOT — desligado. Ligar só na virada de modo (ver INFRA §6).')
+        'httpMethod': 'POST', 'path': 'mari-chatwoot', 'responseMode': 'responseNode', 'options': {}}, 0, 200,
+        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/mari-chatwoot')),
+        notes='MODO CHATWOOT — webhook de conta do Chatwoot "Nio Atendimento". Origem validada no nó 2 · Entrada '
+              '(header x-chatwoot-signature + conta/caixa da Nio). Só processa com staticData._modoMari = chatwoot.')
+    # O n8n recusa webhook "onReceived" num workflow que tem Respond to Webhook (o 12t da rota de teste):
+    # o 1c responde por este nó, na hora (200 sem corpo), e a execução segue para o 2 · Entrada.
+    add('1r · OK Chatwoot', 'n8n-nodes-base.respondToWebhook', 1.1, {
+        'respondWith': 'noData', 'options': {}}, 110, 300)
     code('2 · Entrada', 220, 100)
     iff('2e · Encerrar?', '={{ $json.encerrar === true }}', 440, 100)
+    # Fala do consultor no Chatwoot → turno 'humano' no histórico (sem resposta; eco da Mari descartado no banco).
+    iff('2x · Fala humana?', "={{ $json.registrar === 'humano' }}", 550, 350)
+    rpc('2y · Supabase registrar humano', 'mari_registrar_turno',
+        "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'humano', "
+        "p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 770, 550)
     iff('2m · Modo chatwoot?', "={{ $json.modo === 'chatwoot' }}", 660, 200)
     add('2g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET',
         'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
-        'options': {'timeout': 10000}}, 880, 300, disabled=True, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — desligado. Credencial "Chatwoot Nio" (api_access_token) a criar; conta/caixa no nó 2 · Entrada.')
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'options': {'timeout': 10000}}, 880, 300, credentials=cw_cred, onError='continueRegularOutput',
+        notes='MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial "Chatwoot Nio".')
     code('2h · Guard humano', 1100, 200)
     iff('2i · Humano?', '={{ $json.humano === true }}', 1320, 200)
+    # Mari calada (humano/time/resolvida): a fala do cliente entra no histórico mesmo assim, sem resposta.
+    rpc('2r · Supabase registrar calado', 'mari_registrar_turno',
+        "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'lead', "
+        "p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 1540, 100)
 
     rpc('3a · Supabase entrada', 'mari_entrada',
         "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_canal: $json.canal, "
@@ -273,10 +290,11 @@ def build(ids):
     add('12c · Chatwoot enviar', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST',
         'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}/messages",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ content: $json.resposta, message_type: 'outgoing', private: false }) }}",
-        'options': {'timeout': 15000}}, 7260, 400, disabled=True,
-        notes='MODO CHATWOOT — desligado. Credencial "Chatwoot Nio" a criar.')
+        'options': {'timeout': 15000}}, 7260, 400, credentials=cw_cred,
+        notes='MODO CHATWOOT — envio pela API do Chatwoot (bolha na conversa). Credencial "Chatwoot Nio".')
 
     # ── erros ──
     add('E · Error Trigger', 'n8n-nodes-base.errorTrigger', 1, {}, 0, 1000)
@@ -291,15 +309,19 @@ def build(ids):
     # conexões: (origem, saída, destino)
     ligações = [
         ('1 · Webhook Mari teste', 0, '2 · Entrada'),
-        ('1c · Webhook Chatwoot', 0, '2 · Entrada'),
+        ('1c · Webhook Chatwoot', 0, '1r · OK Chatwoot'),
+        ('1r · OK Chatwoot', 0, '2 · Entrada'),
         ('2 · Entrada', 0, '2e · Encerrar?'),
         ('2e · Encerrar?', 0, '11 · Saída'),
-        ('2e · Encerrar?', 1, '2m · Modo chatwoot?'),
+        ('2e · Encerrar?', 1, '2x · Fala humana?'),
+        ('2x · Fala humana?', 0, '2y · Supabase registrar humano'),
+        ('2x · Fala humana?', 1, '2m · Modo chatwoot?'),
         ('2m · Modo chatwoot?', 0, '2g · Chatwoot conversa'),
         ('2m · Modo chatwoot?', 1, '2h · Guard humano'),
         ('2g · Chatwoot conversa', 0, '2h · Guard humano'),
         ('2h · Guard humano', 0, '2i · Humano?'),
-        ('2i · Humano?', 0, '11 · Saída'),
+        ('2i · Humano?', 0, '2r · Supabase registrar calado'),
+        ('2r · Supabase registrar calado', 0, '11 · Saída'),
         ('2i · Humano?', 1, '3a · Supabase entrada'),
         ('3a · Supabase entrada', 0, '3b · Silêncio?'),
         ('3b · Silêncio?', 0, '11 · Saída'),
