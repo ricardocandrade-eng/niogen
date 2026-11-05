@@ -44,7 +44,8 @@ ALVOS = {
     # v3 em produção desde 05/11 (aprovação do Ricardo: "Sim, vire"); v2 = histórico.
     'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'workflow_id',
                  'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
-    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v3.md', 'versao': 'mari_v3', 'id_key': 'ensaio_workflow_id',
+    # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
+    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v4.md', 'versao': 'mari_v4', 'id_key': 'ensaio_workflow_id',
                'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
 }
 ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'

@@ -89,7 +89,9 @@ const PROIBIDAS = [
 ];
 // v3 (Bloco 2, itens 4 e 5) — só para o prompt v3 (a v2 usa ✅ 🎯 📍 💰 1️⃣ de propósito).
 // Expressão de robô → pede reescrita. Emoji → o motor corrige sozinho (sem gastar outra chamada) e conta.
-const V3 = String(ctx.promptVersao || '').startsWith('mari_v3');
+const VER = Number((String(ctx.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
+const V3 = VER >= 3;
+const V4 = VER >= 4;   // venda remota (05/11): instalação no lugar da visita, viabilidade oficial
 const FRASES_ROBO = [['prezad', '"Prezado"'], ['informamos', '"Informamos"'], ['gostaria de', '"Gostaria de"'],
   ['fico a disposicao', '"Fico à disposição"'], ['estou aqui para ajudar', '"Estou aqui para ajudar"'],
   ['como posso te ajudar hoje', '"Como posso te ajudar hoje?"'], ['certamente', '"Certamente"'], ['excelente pergunta', '"Excelente pergunta"']];
@@ -98,6 +100,9 @@ function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
   if (V3) FRASES_ROBO.filter(([k]) => n.includes(k)).forEach(([, r]) => v.push(`usou a expressão de robô ${r}`));
+  // v4 (venda remota, guard-rail 24): nada de visita/presencial e nenhum link — link de biometria/pagamento é do nosso time.
+  if (V4 && /visit[ao]|presencial/.test(n)) v.push('falou em visita/presencial (a venda é remota: biometria por link, o técnico só instala)');
+  if (V4 && /https?:\/\/|www\./.test(n)) v.push('mandou um link (link de biometria ou pagamento é do nosso time, nunca da Mari)');
   // Guard-rail 23 (afrouxado 05/11): a sugestão de upgrade vem DEPOIS da confirmação da escolha com o valor do plano
   // (a confirmação sorteada da conversa) — o 1º "R$" da resposta tem de vir antes do "por mais R$".
   if (V3 && temTag('UPSELL_OFERECIDO') && /por mais r\$/.test(n) && n.indexOf('r$') >= n.indexOf('por mais r$')) {
@@ -175,7 +180,9 @@ if (pag) {
   else if (/boleto/.test(pag)) upd.forma_pagamento = 'boleto';
 }
 const visita = d.visita || hy.visita_preferencia;
-if (visita && visita !== '—') upd.visita_preferencia = visita;
+if (visita && visita !== '—' && !/^null$/i.test(visita)) upd.visita_preferencia = visita;   // v1–v3
+const inst = d.instalacao || hy.instalacao_preferencia;
+if (inst && inst !== '—' && !/^null$/i.test(inst)) upd.instalacao_preferencia = inst;           // v4+
 
 if (tags.endereco) {
   const e = kv(tags.endereco);
@@ -229,7 +236,8 @@ if (Object.keys(dados).length) upd.dados = dados;
 // ── etapa (determinística, a partir do estado + atualizações) ──
 const m = { ...c, ...upd, dados: { ...(c.dados || {}), ...dados } };
 const cpfOk = (v) => { const x = String(v || '').replace(/\D/g, ''); if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); };
-const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento && m.visita_preferencia;
+const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento
+  && (V4 ? m.instalacao_preferencia : m.visita_preferencia);
 if (!m.cep || !m.numero || !(m.complemento || m.dados.complemento_ok)) upd.etapa = (m.cep || m.numero) ? 'endereco' : 'abertura';
 else if (!m.elegibilidade) upd.etapa = 'elegibilidade';
 else if (!m.plano_escolhido) upd.etapa = 'planos';
@@ -255,8 +263,8 @@ if (motivo) {
   const notaDfv = {
     viavel: 'DFV viável',
     viavel_predio: 'DFV viável (prédio) — conferir a unidade',
-    endereco_ocupado: 'DFV indica Nio ativo no endereço — confirmar com o cliente e no APP antes da visita',
-  }[c.dfv_resultado] || (c.cidade && norm(c.cidade) === 'juiz de fora' ? 'DFV: conferir manualmente antes da visita' : 'DFV: sem base para a cidade — conferir manualmente');
+    endereco_ocupado: 'DFV indica Nio ativo no endereço — confirmar com o cliente e no portal antes de abrir o pedido',
+  }[c.dfv_resultado] || (c.cidade && norm(c.cidade) === 'juiz de fora' ? 'DFV: conferir manualmente antes de abrir o pedido' : 'DFV: sem base para a cidade — conferir manualmente');
   const briefing = [hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
     tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, notaDfv].filter(Boolean).join('\n');
   handoff = {
@@ -265,6 +273,10 @@ if (motivo) {
       dados, briefing,
       forma_pagamento: upd.forma_pagamento || c.forma_pagamento || null,
       visita_preferencia: upd.visita_preferencia || c.visita_preferencia || null,
+      instalacao_preferencia: upd.instalacao_preferencia || c.instalacao_preferencia || null,
+      nio_viab_resultado: c.nio_viab_resultado || null,
+      nio_viab_velocidade: c.nio_viab_velocidade || null,
+      nio_viab_interesse_id: c.nio_viab_interesse_id || null,
       agendamento_retorno: upd.agendamento_retorno || null,
       yaml: handoffYaml,
     },
@@ -273,7 +285,9 @@ if (motivo) {
   if (!texto) {
     const prazo = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
     texto = {
-      dados_completos: `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
+      dados_completos: V4
+        ? `Pronto, anotado! Agora o nosso time abre o seu pedido e te manda aqui mesmo, ${prazo}, o link da biometria — é rapidinho, você faz pelo celular. Depois a gente confirma a data da instalação por aqui 😊`
+        : `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
       recusa_compra: 'Sem problema! Se mudar de ideia, é só me chamar aqui. Foi um prazer conversar com você 😊',
       fora_de_area: 'Por enquanto a gente atende só algumas cidades de Minas 😕 Pra sua cidade, o televendas da Nio ajuda: 0800 031 0453.',
       ja_cliente_nio: 'Como o endereço já tem Nio, é direto com eles: App Nio ou 0800 001 1000 😊',

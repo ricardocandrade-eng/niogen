@@ -30,6 +30,10 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # --ensaio: workflow mari_principal_v3 (rota própria) e telefones 5500000003xxx — a limpeza não toca nas
 # conversas 5500000000xxx (as 6 de revisão da tela Mari ficam).
 ENSAIO = '--ensaio' in sys.argv
+# Desde 05/11 a produção também está na v3+ (v3 no ar; v4 depois da parte E do prompt 15): as checagens de tom e
+# emoji valem nas duas rotas. V4 = venda remota (instalação no lugar da visita, guard-rail 24, Bloco 9):
+# no ensaio sempre; na produção com --v4 (depois de virar ALVOS['producao'] para a v4).
+V4 = ENSAIO or '--v4' in sys.argv
 URL = 'https://n8n.ofertasverointernet.com.br/webhook/' + ('mari-teste-v3' if ENSAIO else 'mari-teste')
 PREFIXO = '5500000003' if ENSAIO else '5500000000'
 SAIDA = os.path.join(REPO, 'tests', 'saida')
@@ -171,7 +175,7 @@ def checar_global(resp, cluster, baloes=None):
     falhas = []
     t = resp or ''
     n = norm(t)
-    if ENSAIO:
+    if True:   # v3+ nas duas rotas
         for e in EMOJI_PROIBIDOS:
             if e in t:
                 falhas.append(f'emoji proibido {e}')
@@ -192,6 +196,14 @@ def checar_global(resp, cluster, baloes=None):
     for p in PROIBIDAS:
         if p in n:
             falhas.append(f'palavra proibida "{p}"')
+    if V4:
+        # Venda remota (guard-rail 24): nada de visita/presencial e nenhum link vindo da Mari.
+        if re.search(r'\bvisit|presencial|consultor vai ate', n):
+            falhas.append('falou em visita/presencial (venda remota)')
+        if re.search(r'https?://|www\.', n):
+            falhas.append('mandou link (biometria/pagamento é do nosso time)')
+        if re.search(r'credito (foi )?(aprovad|negad)|biometria (deu certo|aprovad|validad)', n):
+            falhas.append('falou de resultado de crédito/biometria')
     if '*' in t:
         falhas.append('asterisco')
     for b in (baloes or [t]):
@@ -255,6 +267,8 @@ class Lead:
             return p['telefone']
         if 'forma de pagamento' in n or ('boleto' in n and 'cartao' in n and '?' in mari) or 'prefere pagar' in n or ('pagar' in n and '?' in mari):
             return p.get('pagamento', 'Cartão de crédito')
+        if 'instalacao' in n and ('manha' in n or 'tarde' in n or 'periodo' in n) and '?' in mari and not resumo(mari):
+            return p.get('instalacao', p.get('visita', 'De manhã'))
         if ('visita' in n and ('dia' in n or 'periodo' in n or 'manha' in n)) or 'melhor dia' in n or 'passar ai' in n:
             return p.get('visita', 'Sexta-feira de manhã')
         if tem_lista(mari) or re.search(r'qual (dos|deles|te agrad|combina|voce prefer|prefere)', n):
@@ -546,7 +560,7 @@ def c13():
     prox = ' '.join((t['mari'] or '') for t in log[i_cartao:i_cartao + 2]) if i_cartao is not None else ''
     txt_resumo = next((f for f in falas if resumo(f)), '')
     l_plano = next((l for l in txt_resumo.split('\n') if 'Plano:' in l), '')
-    l_visita = next((l for l in txt_resumo.split('\n') if 'Visita:' in l), '')
+    l_visita = next((l for l in txt_resumo.split('\n') if 'Visita:' in l or 'Instalação:' in l), '')
     v = venda_da_conversa(cid)
     i_vero = next((i for i, t in enumerate(log) if t['lead'].startswith('Tenho Vero')), None)
     ok = [('acolhida + planos na mesma mensagem', i_vero is not None and tem_lista(log[i_vero]['mari'] or '')),
@@ -554,7 +568,8 @@ def c13():
           ('confirmação no preço do cartão (R$95)', 'R$95' in resp_cartao and 'R$110' not in resp_cartao),
           ('não parou: condições + nome/CPF logo em seguida', condicoes(prox) and 'nome completo' in norm(prox)),
           ('resumo com um preço só (R$95 no cartão)', 'R$95' in l_plano and 'R$110' not in l_plano),
-          ('visita "hoje à tarde" anotada', 'hoje' in norm(l_visita)),
+          ('preferência "hoje à tarde" anotada' if V4 else 'visita "hoje à tarde" anotada',
+           ('tarde' in norm(l_visita)) if V4 else ('hoje' in norm(l_visita))),
           ('sem regra de antecedência inventada', not any('anteced' in norm(f) for f in falas)),
           ('não comenta o concorrente', not any(re.search(r'\bvero\b', norm(f)) for f in falas)),
           ('venda criada no cartão, R$95', bool(v) and v['forma_pagamento'] == 'cartao' and float(v['valor_mensal'] or 0) == 95.0)]
@@ -737,6 +752,125 @@ def c21():
     return ok, log, 'regular'
 
 
+# ─────────────────────────── venda remota (prompt v4, prompt nº 15 parte E) ───────────────────────────
+# O nível A (viabilidade oficial pelo portal) está em espera (login = SSO Microsoft): o motor manda sempre
+# "indisponivel". Para exercitar o Bloco 9, os cenários 22–24 GRAVAM o resultado na conversa de teste logo depois do
+# endereço (simulam o que o workflow nio_portal_viabilidade faria). Só conversas do prefixo de teste.
+
+def injetar_viab(cid, resultado, vel=None):
+    v = f"'{vel}'" if vel else 'null'
+    sql(f"update public.mari_conversas set nio_viab_resultado = '{resultado}', nio_viab_velocidade = {v}, "
+        f"nio_viab_em = now() where id = '{cid}' and telefone like '{PREFIXO}%'", escrita=True)
+
+
+def conversar_viab(tel, persona, resultado, vel=None, primeira='Oi, quero saber da internet da Nio', max_turnos=18):
+    """Como conversar(), mas grava a viabilidade oficial quando a Mari pede o complemento (endereço completo)."""
+    lead = Lead(persona)
+    log = []
+    msg = primeira
+    injetado = False
+    for _ in range(max_turnos):
+        r = enviar(tel, msg, nome=persona.get('nome_contato', 'Teste'))
+        log.append({'lead': msg, 'mari': r.get('resposta'), 'r': r})
+        if r.get('handoff') or (r.get('erro') and not r.get('resposta')):
+            break
+        fala = r.get('resposta') or ''
+        if not injetado and 'complemento' in norm(fala) and r.get('conversa_id'):
+            injetar_viab(r['conversa_id'], resultado, vel)
+            injetado = True
+        msg = lead.responder(fala)
+    return log, injetado
+
+
+def venda_v4(cid):
+    if not cid:
+        return None
+    r = sql(f"select v.nio_viab_resultado, v.nio_viab_velocidade, v.instalacao_preferencia, v.biometria_status, v.observacoes "
+            f"from mari_conversas c join vendas v on v.id = c.venda_id where c.id = '{cid}'")
+    return r[0] if r else None
+
+
+def briefing(cid):
+    r = sql(f"select handoff_briefing from mari_conversas where id = '{cid}'")
+    return (r[0].get('handoff_briefing') if r else '') or ''
+
+
+def c22():
+    persona = P(nome='Lucia Teste Prado', cpf=cpf_valido_de('741852963'), cep_msg='36013-260, número 420', numero='420',
+                email='lucia.teste@exemplo.com', telefone='32977776666', instalacao='De manhã')
+    log, inj = conversar_viab(PREFIXO + '022', persona, 'viavel', '1GB')
+    r = ultimo(log); cid = cid_de(log)
+    falas = todas_falas(log)
+    lista = next((f for f in falas if tem_lista(f)), '')
+    desp = (r.get('resposta') or '')
+    v = venda_v4(cid)
+    ok = [('viabilidade gravada depois do endereço', inj),
+          ('lista abre com "atende o seu endereço"', 'atende o seu endereco' in norm(lista)),
+          ('pediu a preferência manhã/tarde da instalação', any('instalacao' in norm(f) and ('manha' in norm(f) or 'tarde' in norm(f)) for f in falas)),
+          ('resumo com a linha Instalação', any(resumo(f) and 'Instalação:' in f for f in falas)),
+          ('despedida fala do link da biometria pelo time', 'link' in norm(desp) and 'biometria' in norm(desp)),
+          ('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
+          ('venda com viabilidade oficial e preferência', bool(v) and v['nio_viab_resultado'] == 'viavel' and bool(v['instalacao_preferencia'])),
+          ('venda nasce com biometria "não enviada"', bool(v) and v['biometria_status'] == 'nao_enviada'),
+          ('briefing com o próximo passo do portal', 'portal pap' in norm(briefing(cid)))]
+    return ok, log, 'regular'
+
+
+def c23():
+    persona = P(nome='Marcos Teste Lima', cpf=cpf_valido_de('852963741'), cep_msg='36070-480, número 921', numero='921',
+                elegibilidade='Não, aqui ninguém tem Nio. O morador antigo é que tinha, acho')
+    log, inj = conversar_viab(PREFIXO + '023', persona, 'posse', max_turnos=8)
+    r = ultimo(log); cid = cid_de(log)
+    falas = todas_falas(log)
+    b = norm(briefing(cid))
+    ok = [('viabilidade gravada depois do endereço', inj),
+          ('perguntou se já tem Nio', any('ja tem nio' in norm(f) for f in falas)),
+          ('nenhuma lista de planos', not any(tem_lista(f) for f in falas)),
+          ('handoff pedido_humano', (r.get('handoff') or {}).get('motivo') == 'pedido_humano'),
+          ('briefing fala de posse/Nio no endereço', 'posse' in b or 'nio ativo' in b),
+          ('sem venda criada', venda_da_conversa(cid) is None)]
+    return ok, log, 'regular'
+
+
+def c24():
+    persona = P(nome='Sonia Teste Dias', cep_msg='36070-480, número 933', numero='933',
+                padrao='Pode anotar sim, por favor')
+    log, inj = conversar_viab(PREFIXO + '024', persona, 'sem_viabilidade', max_turnos=6)
+    r = ultimo(log); cid = cid_de(log)
+    falas = todas_falas(log)
+    ok = [('viabilidade gravada depois do endereço', inj),
+          ('avisou que a fibra não chegou no endereço', any('ainda nao chegou' in norm(f) or 'nao chegou fibra' in norm(f) for f in falas)),
+          ('não perguntou elegibilidade', not any('ja tem nio' in norm(f) for f in falas)),
+          ('nenhuma lista de planos', not any(tem_lista(f) for f in falas)),
+          ('handoff sem_cobertura', (r.get('handoff') or {}).get('motivo') == 'sem_cobertura'),
+          ('sem venda criada', venda_da_conversa(cid) is None)]
+    return ok, log, 'regular'
+
+
+def c25():
+    tel = PREFIXO + '025'
+    log = ate_lista(tel, P(cep_msg='36070-480, número 945', numero='945'), 'Oi! Quero internet')
+    cid = cid_de(log)
+    lista = next((t['mari'] for t in log if tem_lista(t['mari'] or '')), '') or ''
+    c = sql(f"select nio_viab_resultado from mari_conversas where id = '{cid}'") if cid else []
+    ok = [('chegou na lista', bool(lista)),
+          ('estado sem viabilidade oficial (indisponível)', bool(c) and c[0].get('nio_viab_resultado') in (None, 'indisponivel')),
+          ('fala da cidade (Juiz de Fora), não do endereço', 'juiz de fora' in norm(lista) and 'atende o seu endereco' not in norm(lista))]
+    return ok, log, 'regular'
+
+
+def c26():
+    tel = PREFIXO + '026'
+    log = ate_lista(tel, P(cep_msg='36070-480, número 957', numero='957'), 'Oi, boa tarde')
+    log = depois(tel, log, ['Quero o 1', 'E a biometria, como faço? Alguém precisa vir aqui em casa antes?'])
+    resp = norm(log[-1]['mari'] or '')
+    ok = [('respondeu à pergunta da biometria', len(log) >= 2 and bool(resp)),
+          ('link vem pelo nosso time, por aqui', 'link' in resp and ('time' in resp or 'equipe' in resp)),
+          ('não precisa ir ninguém antes / técnico só instala', 'instal' in resp or 'nao precisa' in resp),
+          ('não mandou link nem resultado (guard-rail 24)', 'http' not in resp and 'aprovad' not in resp)]
+    return ok, log, 'regular'
+
+
 REPETICAO = {}
 
 
@@ -762,8 +896,14 @@ CENARIOS = {
     19: ('Tom — "ok" solto depois da lista', c19),
     20: ('Tom — "achei caro" (preco_dia)', c20),
     21: ('Anti-repetição — 10 conversas, abertura e confirmação', c21),
+    22: ('v4 — viável oficial (36013-260/420) até o handoff', c22),
+    23: ('v4 — posse → "não tenho" → humano com nota, sem planos', c23),
+    24: ('v4 — sem viabilidade → interesse anotado (sem_cobertura)', c24),
+    25: ('v4 — portal indisponível → fala por cidade', c25),
+    26: ('v4 — "e a biometria?" → link por aqui pelo nosso time', c26),
 }
-TOM = {15, 16, 17, 18, 19, 20, 21}   # só fazem sentido no prompt v3 (--ensaio)
+TOM = {15, 16, 17, 18, 19, 20, 21}   # v3+ (desde 05/11 também na produção)
+VENDA_REMOTA = {22, 23, 24, 25, 26}  # prompt v4 (--ensaio, ou produção com --v4)
 
 
 def rodar(n):
@@ -786,16 +926,14 @@ def rodar(n):
         # (b) guard-rail 23: a sugestão de upgrade vem depois da confirmação da escolha. v2: "Ótima escolha" literal;
         #     v3 (afrouxado 05/11): confirmação com o valor do plano (1º "R$" antes do "por mais R$").
         upsell = 'por mais r$' in f and ((t['r'].get('tags') or {}).get('upsell_oferecido') or 'so pra voce saber' in f)
-        if upsell and ENSAIO and f.find('r$') >= f.find('por mais r$'):
+        if upsell and f.find('r$') >= f.find('por mais r$'):
             glob.append(f'turno {i}: sugestão de upgrade sem confirmar antes a escolha com o valor')
-        elif upsell and not ENSAIO and not (0 <= f.find('otima escolha') < max(f.find('por mais'), 0)):
-            glob.append(f'turno {i}: sugestão de upgrade sem "Ótima escolha" antes')
     # LGPD (decisão pendente a): a 1ª fala que pede o CPF traz a linha curta.
     pede_cpf = next((t['mari'] for t in log if t['mari'] and 'cpf' in norm(t['mari'])
                      and ('me passa' in norm(t['mari']) or 'nome completo' in norm(t['mari']))), None)
     if pede_cpf is not None and 'seus dados' not in norm(pede_cpf):
         glob.append('LGPD: 1º pedido de CPF sem a linha de LGPD')
-    if ENSAIO and n != 21:
+    if n != 21:
         # Regra de emoji da v3: cliente sem emoji → a Mari usa no máximo 2 na conversa (a resposta fixa de mídia,
         # do motor, fica fora da conta).
         cliente = sum(len(emojis(t['lead'])) for t in log)
@@ -818,7 +956,7 @@ def main():
         i = args.index('--workers')
         workers = int(args[i + 1])
         del args[i:i + 2]
-    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if ENSAIO or n not in TOM]
+    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if V4 or n not in VENDA_REMOTA]
     carregar_planos()
     print('teardown inicial:', teardown())
     os.makedirs(SAIDA, exist_ok=True)

@@ -10,6 +10,9 @@ const MAX_TOKENS = 1536;
 const db = $('4b · Supabase contexto').first().json;
 const prep = $('4 · Preparar').first().json;
 const conteudo = $('5a · Conteúdo Mari').first().json;
+// Versão do prompt (mari_v3, mari_v4…): v3+ = jeito de falar/balões/emoji; v4+ = venda remota (instalação no lugar da visita).
+const VER = Number((String(conteudo.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
+const V4 = VER >= 4;
 const conv = db.conversa || {};
 const planos = Array.isArray(db.planos) ? db.planos : [];
 const cons = prep.consolidado || {};
@@ -140,7 +143,7 @@ if (!dados.cpf || !cpfOk) faltando.push('cpf');
 if (!dados.telefone || !telValido(dados.telefone)) faltando.push('telefone');
 if (!dados.email || !emailValido(dados.email)) faltando.push('email');
 if (!conv.forma_pagamento) faltando.push('pagamento');
-if (!conv.visita_preferencia) faltando.push('visita');
+if (!(conv.instalacao_preferencia || conv.visita_preferencia)) faltando.push(V4 ? 'instalacao' : 'visita');
 const formaTxt = { boleto: 'boleto', dacc: 'débito automático', cartao: 'cartão de crédito' }[conv.forma_pagamento] || null;
 
 const L = [];
@@ -154,6 +157,13 @@ L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (da
 L.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);
 L.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);
 L.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);
+if (V4) {
+  // Viabilidade oficial do portal da Nio (nível A). Em espera desde 05/11 (login BO = SSO Microsoft): sem consulta,
+  // o estado diz "indisponivel" e a Mari segue a fala por cidade + DFV (Bloco 9 do prompt v4).
+  const nv = conv.nio_viab_resultado || 'indisponivel';
+  L.push(`nio_viab_resultado (viabilidade oficial do endereço, uso interno, nunca citar): ${nv}${conv.nio_viab_velocidade ? ` | velocidade_maxima: ${conv.nio_viab_velocidade}` : ''}`
+    + (nv === 'indisponivel' ? ' (sem resultado oficial: fluxo normal com planos e cobertura pela cidade — nunca diga que a fibra não chegou)' : ''));
+}
 if (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {
   // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.
   // Retorno = data do cancelamento + 31 dias = hoje + (31 − N), no calendário de Brasília.
@@ -175,14 +185,14 @@ if (planoSel && conv.forma_pagamento) {
   L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
 }
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
-L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; visita=${conv.visita_preferencia || '—'}`);
+L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || '—'}` : `visita=${conv.visita_preferencia || '—'}`}`);
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
 // v3 (regra de emoji): quantos emojis a Mari já usou e se o cliente usa — o 7 · Extrair aplica o teto.
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
 const nEmoji = (s) => (String(s || '').match(EMOJI_RE) || []).length;
 const emojiMari = historico.filter((h) => h.papel === 'mari').reduce((a, h) => a + nEmoji(h.texto), 0);
 const emojiCliente = historico.filter((h) => h.papel === 'lead').reduce((a, h) => a + nEmoji(h.texto), 0) + nEmoji(cons.mensagem);
-const v3 = String(conteudo.promptVersao || '').startsWith('mari_v3');
+const v3 = VER >= 3;
 if (v3) {
   // Variação fixa por conversa (1–6), do id: conversas independentes não sabem umas das outras e, sem isto,
   // o modelo abre e confirma sempre pelo exemplo nº 1 (bateria 04/11: 7/10 aberturas e 9/10 confirmações iguais).
@@ -260,7 +270,9 @@ return [{ json: {
     planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao })),
     conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,
       elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,
-      visita_preferencia: conv.visita_preferencia, dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
+      visita_preferencia: conv.visita_preferencia, instalacao_preferencia: conv.instalacao_preferencia,
+      nio_viab_resultado: conv.nio_viab_resultado, nio_viab_velocidade: conv.nio_viab_velocidade, nio_viab_interesse_id: conv.nio_viab_interesse_id,
+      dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
