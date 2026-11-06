@@ -37,6 +37,10 @@ V4 = ENSAIO or '--v4' in sys.argv
 # V5 = prompt nº 18 (formato, condições exatas, pagamento é da Nio, retomada): ensaio sempre; produção com --v5.
 V5 = ENSAIO or '--v5' in sys.argv
 V4 = V4 or V5
+# V6 = prompt 19 (o link da biometria é disparado pela própria Nio, por WhatsApp e e-mail): ensaio sempre; produção com --v6.
+V6 = ENSAIO or '--v6' in sys.argv
+V5 = V5 or V6
+V4 = V4 or V6
 URL = 'https://n8n.ofertasverointernet.com.br/webhook/' + ('mari-teste-v3' if ENSAIO else 'mari-teste')
 PREFIXO = '5500000003' if ENSAIO else '5500000000'
 SAIDA = os.path.join(REPO, 'tests', 'saida')
@@ -186,6 +190,17 @@ def pag_revenda(n):
     return bool(re.search(PAGAMENTO_REVENDA, n))
 
 
+def manda_link_nosso(n):
+    """v6: frase em que a Mari ou o nosso time promete mandar o link (o link da biometria é da própria Nio)."""
+    for f in re.split(r'[.?!\n]+', n):
+        if (re.search(r'\b(mand|envi|encaminh)\w*\b.{0,50}\blink\b', f)
+                and re.search(r'\b(nosso time|nossa equipe|o time|a gente|eu|vou|o consultor|nosso consultor|nos)\b', f)
+                and not re.search(r'\bnio\b.{0,25}\b(mand|envi|dispar)\w*', f) and not re.search(r'\b(pela|da) (propria )?nio\b', f)
+                and not re.search(r'\b(nao|nunca)\b.{0,30}\b(mand|envi)', f)):
+            return True
+    return False
+
+
 def bloco_condicoes(meses=12, taxa='R$ 540'):
     """Texto exato do Ricardo (05/11 16h33); varejo = 12 meses. Empresas = 24; sem fidelidade = taxa na 1ª fatura."""
     linha = (f'• Taxa de instalação ({taxa}) ZERO ao manter o plano por {meses} meses.' if meses
@@ -254,6 +269,8 @@ def checar_global(resp, cluster, baloes=None):
         # Adendo do Ricardo (05/11 10h05): a viabilidade nunca nega venda.
         if re.search(NEGA_COBERTURA, n):
             falhas.append('negou ou insinuou falta de cobertura')
+    if V6 and manda_link_nosso(n):
+        falhas.append('disse que a Mari / o nosso time manda o link da biometria (é da própria Nio)')
     if V5:
         # Prompt 18 (C5–C8): parágrafos com linha em branco; condições = texto exato; pagamento é da Nio.
         if pag_revenda(n):
@@ -872,7 +889,9 @@ def c22():
           ('lista abre com "atende o seu endereço"', 'atende o seu endereco' in norm(lista)),
           ('pediu a preferência manhã/tarde da instalação', any('instalacao' in norm(f) and ('manha' in norm(f) or 'tarde' in norm(f)) for f in falas)),
           ('resumo com a linha Instalação', any(resumo(f) and 'Instalação:' in f for f in falas)),
-          ('despedida fala do link da biometria pelo time', 'link' in norm(desp) and 'biometria' in norm(desp)),
+          (('despedida: a própria Nio manda o link (WhatsApp e e-mail)', 'propria nio' in norm(desp) and 'whatsapp' in norm(desp)
+            and 'link da biometria' in norm(desp)) if V6 else
+           ('despedida fala do link da biometria pelo time', 'link' in norm(desp) and 'biometria' in norm(desp))),
           ('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
           ('venda com viabilidade oficial e preferência', bool(v) and v['nio_viab_resultado'] == 'viavel' and bool(v['instalacao_preferencia'])),
           ('venda nasce com biometria "não enviada"', bool(v) and v['biometria_status'] == 'nao_enviada'),
@@ -935,7 +954,9 @@ def c26():
     log = depois(tel, log, ['Quero o 1', 'E a biometria, como faço? Alguém precisa vir aqui em casa antes?'])
     resp = norm(log[-1]['mari'] or '')
     ok = [('respondeu à pergunta da biometria', len(log) >= 2 and bool(resp)),
-          ('link vem pelo nosso time, por aqui', 'link' in resp and ('time' in resp or 'equipe' in resp)),
+          (('link chega pela própria Nio (WhatsApp e e-mail)', 'propria nio' in resp and 'whatsapp' in resp
+            and ('e-mail' in resp or 'email' in resp)) if V6 else
+           ('link vem pelo nosso time, por aqui', 'link' in resp and ('time' in resp or 'equipe' in resp))),
           ('não precisa ir ninguém antes / técnico só instala', 'instal' in resp or 'nao precisa' in resp),
           ('não mandou link nem resultado (guard-rail 24)', 'http' not in resp and 'aprovad' not in resp)]
     return ok, log, 'regular'
@@ -1034,7 +1055,8 @@ def c29():
           ('nenhuma fala com link de pagamento / cobrança pela revenda', not any(pag_revenda(norm(f)) for f in todas_falas(log))),
           ('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
           ('💚 no cumprimento da 1ª mensagem', '💚' in ((log[0]['mari'] or '').split('\n\n')[0] if log else '')),
-          ('despedida começa com 💚', (r.get('resposta') or '').startswith('💚')),
+          (('💚 no fim do 1º parágrafo da despedida', (r.get('resposta') or '').split('\n\n')[0].rstrip().endswith('💚')) if V6 else
+           ('despedida começa com 💚', (r.get('resposta') or '').startswith('💚'))),
           ('briefing sem link de pagamento (só o link da biometria)', bool(b) and 'link da biometria' in b
            and not re.search(r'link (de |do )?pagamento|(e|ou) (o )?(link )?(de|do) pagamento|pagamento seguro', b))]
     return ok, log, 'regular'
@@ -1099,6 +1121,69 @@ def c32():
     return ok, log1 + log2, 'regular'
 
 
+
+def c33():
+    # Prompt 19: despedida dados_completos nova — três parágrafos, 💚 no fim do 1º, a própria Nio manda o link.
+    tel = PREFIXO + '034'
+    persona = P(nome='Gabriela Teste Pinto', cpf=cpf_valido_de('357159486' if ENSAIO else '357159480'),
+                cep_msg=f'36070-480, número {N18(7)}', numero=N18(7), email='gabriela.teste@exemplo.com', telefone='32912123434')
+    log = conversar(tel, persona)
+    r = ultimo(log); cid = cid_de(log)
+    desp = r.get('resposta') or ''
+    ps = [x.strip() for x in desp.split('\n\n')]
+    p2 = norm(ps[1]) if len(ps) > 1 else ''
+    b = norm(briefing(cid)) if cid else ''
+    v = venda_v4(cid)
+    ok = [('handoff dados_completos', (r.get('handoff') or {}).get('motivo') == 'dados_completos'),
+          ('três parágrafos', len(ps) == 3),
+          ('1º: "Pronto, Gabriela, anotado! 💚"', bool(ps) and bool(re.match(r'^Pronto, Gabriela[^\n]*anotado! 💚$', ps[0]))),
+          ('2º: o nosso time abre o pedido + prazo', 'abre o seu pedido' in p2 and ('em ate 2 horas' in p2 or 'no proximo horario de atendimento' in p2)),
+          ('2º: a própria Nio manda o link por WhatsApp e por e-mail', 'propria nio' in p2 and 'whatsapp' in p2 and 'e-mail' in p2),
+          ('3º: data da instalação por aqui', len(ps) > 2 and 'data da instalacao' in norm(ps[2])),
+          ('sem "te manda aqui mesmo … o link"', 'te manda aqui mesmo' not in norm(desp) and not manda_link_nosso(norm(desp))),
+          ('nota: registrar o nº → a Nio dispara o link → avisar o cliente',
+           'registrar o n' in b and 'a nio dispara o link da biometria' in b and 'avisar o cliente' in b and 'mandar o link' not in b),
+          ('venda nasce com biometria "não enviada"', bool(v) and v['biometria_status'] == 'nao_enviada')]
+    return ok, log, 'regular'
+
+
+def c34():
+    # Prompt 19: "vocês vão me mandar o link?" no meio da venda → ele chega pela própria Nio, por WhatsApp e e-mail.
+    tel = PREFIXO + '035'
+    log = ate_lista(tel, P(cep_msg=f'36070-480, número {N18(8)}', numero=N18(8)), 'Oi, boa noite')
+    log = depois(tel, log, ['Quero o 1', 'Vocês vão me mandar o link da biometria por aqui?'])
+    resp = norm(log[-1]['mari'] or '')
+    ok = [('respondeu', bool(resp)),
+          ('ele chega pela própria Nio', 'propria nio' in resp),
+          ('por WhatsApp e e-mail', 'whatsapp' in resp and ('e-mail' in resp or 'email' in resp)),
+          ('não promete mandar o link nem manda link', not manda_link_nosso(resp) and 'http' not in resp)]
+    return ok, log, 'regular'
+
+
+def c35():
+    # Prompt 19: venda registrada, ciclo fechado (resolvida) → "cadê o link?" → própria Nio + spam + consultor.
+    tel = PREFIXO + '036'
+    persona = P(nome='Helena Teste Prado', cpf=cpf_valido_de('468135792' if ENSAIO else '468135790'),
+                cep_msg=f'36070-480, número {N18(9)}', numero=N18(9), email='helena.teste@exemplo.com', telefone='32956567878')
+    log = conversar(tel, persona)
+    cid = cid_de(log)
+    h1 = (ultimo(log).get('handoff') or {}).get('motivo')
+    fechou = sql(f"select public._mari_fechar_ciclo('{cid}', 'teste: conversa resolvida') as r", escrita=True)[0]['r'] if cid else {}
+    if isinstance(fechou, str):
+        fechou = json.loads(fechou)
+    log = depois(tel, log, ['Oi! Cadê o link da biometria? Ainda não chegou nada aqui'])
+    r = log[-1]['r']
+    resp = norm(log[-1]['mari'] or '')
+    ok = [('1º handoff dados_completos', h1 == 'dados_completos'),
+          ('ciclo fechado', bool(fechou) and fechou.get('fechado') is True),
+          ('o link chega pela própria Nio, por WhatsApp e e-mail', 'propria nio' in resp and 'whatsapp' in resp),
+          ('confere o spam', 'spam' in resp),
+          ('passa pro consultor (pedido_humano)', (r.get('handoff') or {}).get('motivo') == 'pedido_humano'),
+          ('não promete mandar o link', not manda_link_nosso(resp) and 'http' not in resp),
+          ('não pediu CEP nem CPF de novo', not re.search(r'\bcep\b|\bcpf\b', resp))]
+    return ok, log, 'regular'
+
+
 REPETICAO = {}
 
 
@@ -1135,10 +1220,14 @@ CENARIOS = {
     30: ('v5 — "como pago?" → a cobrança é da própria Nio', c30),
     31: ('v5 — conversa resolvida e reaberta → a Mari volta com o histórico', c31),
     32: ('v5 — venda não criada (duplicidade) → devolve a venda existente', c32),
+    33: ('v6 — despedida nova: a própria Nio manda o link (3 parágrafos, 💚)', c33),
+    34: ('v6 — "vocês vão me mandar o link?" → chega pela própria Nio', c34),
+    35: ('v6 — retomada: "cadê o link?" → própria Nio + spam + consultor', c35),
 }
 TOM = {15, 16, 17, 18, 19, 20, 21}   # v3+ (desde 05/11 também na produção)
 VENDA_REMOTA = {22, 23, 24, 25, 26, 27}  # prompt v4 (--ensaio, ou produção com --v4). Critério da parte E: ≥ 24/27
 PROMPT18 = {28, 29, 30, 31, 32}          # prompt v5 (--ensaio, ou produção com --v5). Vermelho em regra = não publica
+PROMPT19 = {33, 34, 35}                  # prompt v6 (--ensaio, ou produção com --v6). Vermelho em regra = não publica
 
 
 def rodar(n):
@@ -1191,7 +1280,7 @@ def main():
         i = args.index('--workers')
         workers = int(args[i + 1])
         del args[i:i + 2]
-    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if (V4 or n not in VENDA_REMOTA) and (V5 or n not in PROMPT18)]
+    sel = [int(a) for a in args if a.isdigit()] or [n for n in CENARIOS if (V4 or n not in VENDA_REMOTA) and (V5 or n not in PROMPT18) and (V6 or n not in PROMPT19)]
     carregar_planos()
     print('teardown inicial:', teardown())
     os.makedirs(SAIDA, exist_ok=True)

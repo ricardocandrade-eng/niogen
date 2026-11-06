@@ -38,11 +38,14 @@ const NOME = {
   ja_cliente_nio: 'já é cliente Nio', recusa_compra: 'recusou a compra', fora_de_area: 'fora da área', sem_cobertura: 'sem cobertura',
   interesse_caindo: 'interesse caindo', multiplos_decisores: 'mais de um decisor', sem_contato: 'sem contato',
 };
-// Prompt 18 (C8): a revenda não cobra nem manda link de pagamento — o próximo passo do humano é só o link da biometria.
-// O briefing vem do modelo; o prompt v5 já proíbe, e isto tira o resto ("enviar o link de biometria e de pagamento").
+// Prompt 18 (C8): a revenda não cobra nem manda link de pagamento.
+// Prompt 19: o link da biometria também não é nosso — a própria Nio dispara (WhatsApp + e-mail) na hora do pedido.
+// O briefing vem do modelo; o prompt v6 já proíbe, e isto tira o resto ("enviar o link de biometria e de pagamento").
 const semPagamento = (t) => String(t || '')
   .replace(/\s*(?:,|\be\b|\bou\b)\s*(?:o\s+|um\s+)?(?:link\s+)?(?:de|do)\s+pagamento(?:\s+seguro)?/gi, '')
-  .replace(/\blinks?\s+de\s+pagamento(?:\s+seguro)?/gi, 'link da biometria');
+  .replace(/\b(?:enviar|mandar|encaminhar)\s+(?:ao\s+cliente\s+|para\s+o\s+cliente\s+|pro\s+cliente\s+)?(?:o\s+)?links?\s+(?:de|da|do)\s+(?:biometria|pagamento)(?:\s+seguro)?/gi,
+    'avisar o cliente do link da biometria que a Nio dispara')
+  .replace(/\blinks?\s+de\s+pagamento(?:\s+seguro)?/gi, 'link da biometria (da Nio)');
 
 // Prompt 18 (B4): dados completos e venda NÃO criada (duplicidade ou outro erro) → a nota começa com o aviso e traz o
 // link da venda que já existe, para o backoffice decidir.

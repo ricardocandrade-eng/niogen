@@ -123,6 +123,14 @@ const PROIBIDAS = [
 const VER = Number((String(ctx.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
 const V3 = VER >= 3;
 const V4 = VER >= 4;   // venda remota (05/11): instalação no lugar da visita, viabilidade oficial
+const V6 = VER >= 6;   // prompt 19 (05/11): o link da biometria é disparado pela própria Nio (WhatsApp + e-mail)
+// v6: frase em que a Mari (ou "o nosso time") promete mandar o link. Liberado: "a própria Nio te manda o link" e negações.
+function mandaLinkNosso(n) {
+  return n.split(/[.?!\n]+/).some((f) => /\b(mand|envi|encaminh)\w*\b.{0,50}\blink\b/.test(f)
+    && /\b(nosso time|nossa equipe|o time|a gente|eu|vou|o consultor|nosso consultor|nos)\b/.test(f)
+    && !/\bnio\b.{0,25}\b(mand|envi|dispar)\w*/.test(f) && !/\b(pela|da) (propria )?nio\b/.test(f)
+    && !/\b(nao|nunca)\b.{0,30}\b(mand|envi)/.test(f));
+}
 const FRASES_ROBO = [['prezad', '"Prezado"'], ['informamos', '"Informamos"'], ['gostaria de', '"Gostaria de"'],
   ['fico a disposicao', '"Fico à disposição"'], ['estou aqui para ajudar', '"Estou aqui para ajudar"'],
   ['como posso te ajudar hoje', '"Como posso te ajudar hoje?"'], ['certamente', '"Certamente"'], ['excelente pergunta', '"Excelente pergunta"']];
@@ -133,7 +141,9 @@ function violacoesDe(t) {
   if (V3) FRASES_ROBO.filter(([k]) => n.includes(k)).forEach(([, r]) => v.push(`usou a expressão de robô ${r}`));
   // v4 (venda remota, guard-rail 24): nada de visita/presencial e nenhum link — link de biometria/pagamento é do nosso time.
   if (V4 && /visit[ao]|presencial/.test(n)) v.push('falou em visita/presencial (a venda é remota: biometria por link, o técnico só instala)');
-  if (V4 && /https?:\/\/|www\./.test(n)) v.push('mandou um link (link de biometria ou pagamento é do nosso time, nunca da Mari)');
+  if (V4 && /https?:\/\/|www\./.test(n)) v.push(V6 ? 'mandou um link (a Mari nunca manda link: o da biometria chega pela própria Nio, por WhatsApp e e-mail)'
+    : 'mandou um link (link de biometria ou pagamento é do nosso time, nunca da Mari)');
+  if (V6 && mandaLinkNosso(n)) v.push('disse que a Mari ou o nosso time manda o link da biometria (guard-rail 24: ele chega pela própria Nio, por WhatsApp e e-mail, assim que o pedido é aberto)');
   // Adendo 05/11 10h05: a viabilidade nunca nega venda — nenhuma fala que negue ou insinue falta de cobertura.
   if (V4 && /nao atende (o seu|seu|esse|aí|ai)|ainda nao chegou|nao chegou (a )?fibra|sem viabilidade|sem cobertura|nao tem (cobertura|fibra)|fibra .{0,20}chegar na sua rua/.test(n)) {
     v.push('negou ou insinuou falta de cobertura (proibido: a viabilidade nunca nega venda; fale da cidade e siga o fluxo)');
@@ -364,7 +374,9 @@ if (motivo) {
   if (!texto) {
     const prazo = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
     texto = {
-      dados_completos: V4
+      dados_completos: V6
+        ? `Pronto, anotado!\n\nAgora o nosso time abre o seu pedido, ${prazo}. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.`
+        : V4
         ? `Pronto, anotado! Agora o nosso time abre o seu pedido e te manda aqui mesmo, ${prazo}, o link da biometria — é rapidinho, você faz pelo celular. Depois a gente confirma a data da instalação por aqui 😊`
         : `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
       recusa_compra: 'Sem problema! Se mudar de ideia, é só me chamar aqui. Foi um prazer conversar com você 😊',
@@ -377,7 +389,13 @@ if (motivo) {
 // Balões finais: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
 let baloesFinais = baloes.length && baloes.join('\n\n') === texto ? baloes : (texto ? [texto] : []);
 // 💚 na despedida: todo handoff começa com o coração ("💚 Pronto, Ricardo, anotado!").
-if (VER >= 5 && handoff && baloesFinais.length && !baloesFinais[0].startsWith(CORACAO)) {
+// v6 (prompt 19): a despedida dados_completos leva o 💚 no fim do 1º parágrafo ("Pronto, Ricardo, anotado! 💚").
+if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
+  const ps = baloesFinais[0].split('\n\n');
+  if (!ps[0].endsWith(CORACAO)) ps[0] = `${ps[0]} ${CORACAO}`;
+  baloesFinais = [ps.join('\n\n'), ...baloesFinais.slice(1)];
+  texto = baloesFinais.join('\n\n');
+} else if (VER >= 5 && handoff && baloesFinais.length && !baloesFinais[0].startsWith(CORACAO)) {
   baloesFinais = [`${CORACAO} ${baloesFinais[0]}`, ...baloesFinais.slice(1)];
   texto = baloesFinais.join('\n\n');
 }
