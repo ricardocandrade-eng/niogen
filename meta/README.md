@@ -38,7 +38,7 @@ termina conferindo que tudo ficou `PAUSED`.
 | Trava | Como ficou |
 |---|---|
 | Token só com `ads_*` não lê nem anuncia pela página | token do `Nio_API` com `ads_management`, `ads_read`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads` |
-| Página precisa estar atribuída ao `Nio_API` | página **Nio Internet · Dharma Telecom** `1421228191072269`, atribuída com tarefa de anúncios |
+| Página precisa estar atribuída ao `Nio_API` | página **Mari Nio Internet** (antes "Nio Internet · Dharma Telecom") `1421228191072269`, atribuída com tarefa de anúncios |
 | WhatsApp da Mari ligado à página | feito no BM: Contas do WhatsApp → Perfil do telefone (2888-1265) → Facebook → Gerenciar. O campo `whatsapp_number` da página **não** mostra esse vínculo; a prova é o conjunto aceitar `whatsapp_phone_number` |
 | "criativo criado por app em modo de desenvolvimento" (subcode 1885183) | app **NIOGEN publicado** (modo ativo), com a política em `docs/privacidade.html` |
 | "conta do Instagram ausente" (subcode 1772103) no anúncio | `instagram_user_id` no criativo: primeiro a conta "da página" `17841423276547518`; desde 06/11 o **@mari.nio.internet** `17841411489935097` (BM → Perfis do Instagram → Conectar ativos: página + CA; Atribuir pessoas: `Nio_API`). A Central de Contas recusou o @ novo ("não se qualifica") — pelo BM funcionou |
@@ -65,7 +65,7 @@ página, app ou número da Vero.
 ## `publicar_credibilidade.py` — posts e stories de credibilidade de JF (prompt 21)
 
 Publica os 9 posts no feed do Instagram **@mari.nio.internet** (`17841411489935097`) e da página
-**Nio Internet · Dharma Telecom** (`1421228191072269`), na ordem 09 → 01 (o 01 fica no topo da grade), e os
+**Mari Nio Internet** (antes "Nio Internet · Dharma Telecom") (`1421228191072269`), na ordem 09 → 01 (o 01 fica no topo da grade), e os
 4 stories no Instagram (clientes, dúvidas, cobertura, planos). Stories da página só com `--fb-stories`.
 
 | Arquivo | O que é |

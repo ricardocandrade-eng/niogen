@@ -3,7 +3,7 @@
 NIOGEN | meta/publicar_credibilidade.py
 Gerado em 06/11/2026 (America/Sao_Paulo) — Claude Code, prompt 21
 Resumo: publica pela Graph API os 9 posts de credibilidade de JF no Instagram @mari.nio.internet e na página
-        "Nio Internet · Dharma Telecom", e os 4 stories no Instagram (stories da página só com --fb-stories).
+        "Mari Nio Internet", e os 4 stories no Instagram (stories da página só com --fb-stories).
         Idempotente: o que já tem id em meta/credibilidade_ids.json (ou legenda idêntica já publicada) é pulado.
 
 Modos:
@@ -38,7 +38,7 @@ ENTRADA = os.path.join(REPO, 'meta', 'credibilidade_nov26.json')
 SAIDA = os.path.join(REPO, 'meta', 'credibilidade_ids.json')
 MIDIA = os.path.join(REPO, 'docs', 'midia', 'credibilidade_nov26')
 
-PAGINA = '1421228191072269'            # Nio Internet · Dharma Telecom
+PAGINA = '1421228191072269'            # Mari Nio Internet (antes "Mari Nio Internet", renomeada em 06/11)
 IG_ID = '17841411489935097'            # @mari.nio.internet
 ESCOPOS = ['instagram_basic', 'instagram_content_publish', 'pages_manage_posts',
            'pages_read_engagement', 'pages_show_list']
