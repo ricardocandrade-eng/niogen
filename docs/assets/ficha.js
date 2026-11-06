@@ -6,6 +6,9 @@
  * Gravação: os mesmos updates de antes (vendas / contatos_cliente) com os mesmos campos; as travas são do banco (triggers)
  * e a mensagem do RAISE volta como toast. Nada de regra de negócio aqui.
  * 06/11 (prompt 25): cartão da CONFERÊNCIA DE QUALIDADE (só origem parceiro_pap), origem "Parceiro PAP · nome" e "Gerar lançamentos".
+ * 06/11 (prompt 27): cartão VIABILIDADE com o portal PAP na frente (Consultar no portal · Registrar resultado; DFV vira "pista")
+ * e cartão DADOS PARA O PORTAL PAP (campos na ordem das etapas do Novo Pedido, copiar por campo e Copiar tudo; em
+ * eventos_venda só o fato "dados copiados"). Os dois aparecem em Qualificado e em Saída.
  * Depende de app.js (NG). Uso: <script src="assets/ficha.js"></script>; NGFicha.abrir(id) · NGFicha.aoMudar(fn) · NGFicha.pagina(el, id).
  */
 (function () {
@@ -118,6 +121,10 @@
       titulo = 'Instalada sem comissão configurada para o parceiro';
       cor = 'warn';
       texto = `${NG.fmtDataHora(e.criado_em)} · configure o valor do plano em Configurações › Programa Parceiro e use "Gerar lançamentos"`;
+    } else if (e.tipo === 'portal_dados_copiados') {
+      // Prompt 27: só o fato (quem, quando) — o conteúdo copiado nunca é gravado.
+      titulo = 'Dados copiados para o portal PAP';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -158,6 +165,9 @@
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
     const v = rv.data;
+    // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela.
+    const rx27 = await NG.sb.from('vendas').select('nio_viab_por, ponto_referencia').eq('id', id).maybeSingle();
+    if (rx27.data) Object.assign(v, rx27.data);
     let nomeCurto = null;
     if (v.plano_id) {
       const rp = await NG.sb.from('config_planos').select('nome_curto').eq('id', v.plano_id).maybeSingle();
@@ -206,7 +216,7 @@
   const BOTAO = {
     pedido: 'Registrar venda', portal: 'Registrar o pedido do portal', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
     dfv: 'Consultar cobertura', sem_cobertura: 'Encerrar sem cobertura', agendar: 'Agendar instalação',
-    reagendar: 'Reagendar', docs: 'Registrar envio dos documentos',
+    reagendar: 'Reagendar', docs: 'Registrar envio dos documentos', viab: 'Registrar resultado do portal',
   };
   // Bloco ligado a cada passo (é o único que abre sozinho).
   const BLOCO_DO_PASSO = {
@@ -245,7 +255,7 @@
   // Formulários (faixa do próximo passo, "Mover para…" e "Editar" dos blocos). Cada um grava o que a tela antiga gravava.
   const FORMS = {
     // Qualificado → Vendido (era o modal "Registrar venda": pedido + biometria; a trava do banco confere DFV e o resto).
-    pedido: (v) => formWrap('pedido', 'Registrar venda', 'Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link). A viabilidade (portal ou DFV, &lt; 7 dias) o banco confere.',
+    pedido: (v) => formWrap('pedido', 'Registrar venda', 'Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link). O banco confere também a viabilidade do portal (Viável, &lt; 7 dias) — o DFV não libera.',
       `<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status === 'validada' ? 'validada' : v.biometria_status)}</select></label></div>`, 'Registrar venda'),
     // Venda remota: o nosso time abre o pedido no portal e roda o crédito. Prompt 19: o link da biometria é disparado pela
@@ -284,6 +294,15 @@
       'A venda vai para Saída com este motivo e o parceiro vê só o motivo da lista. Suspeita de fraude: avise o Ricardo na hora.', formMotivoConf(), 'Reprovar e encerrar'),
     conf_devolver: () => formWrap('conf_devolver', 'Devolver ao parceiro',
       'A venda volta ao parceiro com o motivo da lista para ele corrigir e reenviar. Continua em Qualificado.', formMotivoConf(), 'Devolver ao parceiro'),
+    // Viabilidade do portal (prompt 27): os 4 estados; "Não consultado" apaga o registro. Abre dentro do cartão Viabilidade.
+    viab: (v) => formWrap('viab', 'Registrar o resultado do portal', 'O que o portal PAP respondeu na consulta de viabilidade (etapa 2 do Novo Pedido). Só "Viável" libera a venda; "Sem viabilidade" ou "não encontrado" = tente variações de CEP, rua e número antes de encerrar.',
+      `<div class="grade2"><label class="campo">Resultado no portal<select name="viab" autofocus>${NG.opcoes(NG.VIAB_PORTAL_REGISTRO, ['viavel', 'sem_viabilidade', 'nao_encontrado'].includes(v.nio_viab_resultado) ? v.nio_viab_resultado : '', 'Não consultado')}</select></label>
+       <label class="campo">Velocidade máxima (opcional)<input type="text" name="vel" value="${esc(v.nio_viab_velocidade || '')}" placeholder="1GB"></label>
+       <label class="campo">Interesse no portal (opcional)<input type="text" name="interesse" value="${esc(v.nio_viab_interesse_id || '')}" autocomplete="off"></label>
+       <label class="campo">Como a Nio cadastrou o endereço (opcional)<input type="text" name="endp" value="${esc(v.nio_viab_endereco_portal || '')}"></label></div>`, 'Registrar resultado'),
+    // Referência (o portal exige na etapa 2). Não entra em trava: o backoffice registra quando o cliente passar.
+    ref: (v) => formWrap('ref', 'Ponto de referência', 'Peça ao cliente um ponto de referência perto da casa (o portal exige na etapa 2).',
+      `<label class="campo">Referência<input type="text" name="ref" value="${esc(v.ponto_referencia || '')}" maxlength="200" autocomplete="off" autofocus></label>`, 'Salvar referência'),
     // Mover para Aguardando pelo seletor (era o modal de NG.moverStatus: só a data).
     mover_aguardando: (v) => formWrap('mover_aguardando', 'Mover para Aguardando instalação', 'Informe a data combinada com o cliente.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
@@ -334,6 +353,10 @@
     },
     async bio_status(fd) {
       return gravar({ biometria_status: fd.get('biometria') || null, credito_resultado: fd.get('credito') || null }, 'Biometria e crédito atualizados');
+    },
+    async viab(fd) { return SALVAR.ed_viab(fd); },
+    async ref(fd) {
+      return gravar({ ponto_referencia: String(fd.get('ref') || '').trim() || null }, 'Referência registrada');
     },
     async ed_viab(fd) {
       const r = fd.get('viab') || null;
@@ -515,6 +538,119 @@
     await gravar({ dfv_dispensado: true, dfv_dispensa_motivo: motivo }, 'Consulta do DFV dispensada');
   }
 
+  // ---------- viabilidade pelo portal + dados para o portal (prompt 27) ----------
+  const FORMS_NO_CARTAO = ['viab', 'ref'];   // abrem dentro dos cartões, não na faixa do próximo passo
+  const mostraCartoesPortal = (v) => ['0_qualificado', 'saida'].includes(v.status);
+  const cepNumero = (v) => [NG.fmtCep(v.cep), v.numero || ''].filter(Boolean).join(' ').trim();
+
+  // Pista do DFV numa frase (sem cor de alerta): nunca decide a venda.
+  function pistaDfv(v) {
+    const foto = v.dfv_particao ? NG.fmtDiaISO(v.dfv_particao).slice(0, 5) : '03/11';
+    const fr = {
+      viavel: 'Viável — a foto da Nio mostra porta livre neste endereço. O portal confirma.',
+      viavel_predio: 'Viável prédio — o prédio é atendido; a unidade só o portal confirma.',
+      sem_viabilidade: v.dfv_resultado === 'endereco_ocupado'
+        ? 'Indica Nio no endereço — pode ser outra unidade ou cliente antigo; o portal confere a posse.'
+        : 'Sem porta livre na foto — pode ter mudado; o portal decide.',
+      nao_encontrado: 'Não achou o endereço — pode ser sem cobertura ou endereço fora da foto da Nio; o portal decide.',
+    }[v.dfv_viabilidade];
+    return { foto, txt: fr || (v.dfv_dispensado ? 'Dispensado pelo admin.' : 'Não consultado.') };
+  }
+
+  function cartaoViabilidade(v) {
+    if (!mostraCartoesPortal(v)) return '';
+    const r = v.nio_viab_resultado;
+    const estado = r ? (NG.VIAB_NIO[r] || r) : 'Não consultado';
+    const cls = r === 'viavel' ? (NG.portalViavel(v) ? 'cf-aprovada' : 'cf-pendente') : r ? 'cf-reprovada' : 'cf-pendente';
+    const quem = v.nio_viab_por ? (d.usuarios.find((u) => u.id === v.nio_viab_por) || {}).nome : null;
+    const quando = r && v.nio_viab_em ? `${NG.fmtDataHora(v.nio_viab_em)}${quem ? ` · ${quem}` : v.nio_viab_origem === 'manual' ? '' : ' · automático'}` : '';
+    const vencida = r === 'viavel' && !NG.portalViavel(v);
+    const pd = pistaDfv(v);
+    const form = formAtivo === 'viab' ? FORMS.viab(v) : '';
+    const fechada = v.status === 'saida';
+    return `<section class="conf-card portal-card" aria-label="Viabilidade">
+      <h3>Viabilidade ${NG.dicaTxt(NG.ajuda.viab_portal)}</h3>
+      <div class="d-l"><span>Portal PAP</span><b><span class="pill ${cls}">${esc(estado)}</span>${quando ? ` <small class="apagado">${esc(quando)}</small>` : ''}</b></div>
+      ${vencida ? '<div class="faixa amarelo">Viável há mais de 7 dias: consulte de novo antes de registrar a venda.</div>' : ''}
+      ${r && r !== 'viavel' && !fechada ? '<span class="nota-campo">Sem viabilidade ou endereço não encontrado: tente variações de CEP, rua e número no portal antes de encerrar.</span>' : ''}
+      ${!fechada && !form ? `<div class="conf-botoes">
+        <a class="btn ${r === 'viavel' ? '' : 'btn-acc'}" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>
+        <button type="button" class="btn" data-f="viab-form" title="${esc(NG.ajuda.viab_registrar)}">Registrar resultado</button></div>` : ''}
+      ${form}
+      <div class="pista-dfv" title="${esc(NG.ajuda.dfv_pista)}"><span>Pista do DFV (foto da Nio de ${esc(pd.foto)})</span> ${esc(pd.txt)}</div>
+    </section>`;
+  }
+
+  // Campos na ordem das etapas do Novo Pedido. [rótulo, valor, obrigatório, só conferência]
+  function camposPortal(v) {
+    const adics = d.adics.map((a) => `${(a.config_adicionais || {}).nome || '?'} × ${a.qtd}`).join(', ');
+    return [
+      ['Etapa 2 · Viabilidade', [
+        ['CEP', v.cep ? NG.fmtCep(v.cep) : '', true],
+        ['Número', v.numero || '', true],
+        ['Complemento', v.complemento || '', false],
+        ['Referência', v.ponto_referencia || '', true],
+        ['Rua (conferir)', v.logradouro || '', false, true],
+        ['Bairro (conferir)', v.bairro || '', false, true],
+        ['Cidade (conferir)', [v.cidade, v.uf].filter(Boolean).join('/'), false, true],
+      ]],
+      ['Etapa 3 · Cliente', [
+        [NG.soDigitos(v.cliente_cpf_cnpj).length === 14 ? 'CNPJ' : 'CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '', true],
+        ['Nome (o portal traz da Receita — conferir)', v.cliente_nome || '', true, true],
+      ]],
+      ['Etapa 4 · Contato', [
+        ['Telefone', v.cliente_whatsapp ? fmtTel(v.cliente_whatsapp) : '', true],
+        ['E-mail', v.cliente_email || '', true],
+      ]],
+      ['Etapa 5 · Oferta', [
+        ['Plano', v.plano_nome || '', true],
+        ['Adicionais', adics || 'nenhum', false],
+        ['Forma de pagamento', FORMAS[v.forma_pagamento] || '', true],
+      ]],
+      ['Etapa 7 · Agendamento', [
+        ['Período preferido e observação', v.instalacao_preferencia || '', true],
+      ]],
+    ];
+  }
+  const FALTA = { CEP: 'o CEP', Número: 'o número', Referência: 'a referência', CPF: 'o CPF', CNPJ: 'o CNPJ', Telefone: 'o telefone', 'E-mail': 'o e-mail',
+    Plano: 'o plano', 'Forma de pagamento': 'a forma de pagamento', 'Período preferido e observação': 'o período preferido' };
+  const rotCurto = (rot) => rot.replace(/ \(.*\)$/, '');
+  function textoPortal(v) {
+    return camposPortal(v).flatMap(([, cs]) => cs.map(([rot, val]) => `${rotCurto(rot)}: ${val || '—'}`)).join('\n');
+  }
+
+  function cartaoPortal(v) {
+    if (!mostraCartoesPortal(v)) return '';
+    let i = 0;
+    const secoes = camposPortal(v).map(([etapa, cs]) => `<div class="pp-etapa"><div class="f-sub">${esc(etapa)}</div>${cs.map(([rot, val, obrig, conf]) => {
+      const idx = i++;
+      const falta = !val && obrig;
+      const valor = val ? `<span class="${conf ? 'apagado' : 'mono'}">${esc(val)}</span>` : falta ? `<span class="bad-txt">falta ${esc(FALTA[rotCurto(rot)] || rotCurto(rot).toLowerCase())}</span>` : '<span class="apagado">—</span>';
+      const extra = rot === 'Referência' && v.status !== 'saida' && formAtivo !== 'ref' ? ` <button type="button" class="btn btn-sm" data-f="ref-form">${val ? 'Editar' : 'Registrar'}</button>` : '';
+      return `<div class="pp-linha${falta ? ' falta' : ''}"><span class="pp-rot">${esc(rot)}</span><span class="pp-val">${valor}${extra}</span>
+        ${val ? `<button type="button" class="btn btn-sm pp-copiar" data-f="copiar-campo" data-i="${idx}" aria-label="Copiar ${esc(rotCurto(rot))}" title="Copiar ${esc(rotCurto(rot))}">⧉</button>` : '<span></span>'}</div>`;
+    }).join('')}</div>`).join('');
+    const faltam = camposPortal(v).flatMap(([, cs]) => cs).filter(([, val, obrig]) => obrig && !val).length;
+    return `<section class="conf-card portal-card" aria-label="Dados para o portal PAP">
+      <h3>Dados para o portal PAP ${NG.dicaTxt(NG.ajuda.portal_dados)} ${faltam ? `<span class="pill cf-reprovada">${faltam} ${faltam === 1 ? 'falta' : 'faltam'}</span>` : '<span class="pill cf-aprovada">completo</span>'}</h3>
+      ${secoes}
+      ${formAtivo === 'ref' ? FORMS.ref(v) : ''}
+      <div class="conf-botoes"><button type="button" class="btn btn-acc" data-f="copiar-tudo">Copiar tudo</button>
+        <span class="nota-campo">Um campo por linha, "Rótulo: valor". O que falta vai como "—".</span></div>
+    </section>`;
+  }
+
+  // Só o fato vai para eventos_venda (quem e quando) — nunca o conteúdo copiado. No máximo 1 registro a cada 10 min por venda.
+  let ultimaCopia = { id: null, em: 0 };
+  async function registrarCopia(oQue) {
+    if (ultimaCopia.id === d.v.id && Date.now() - ultimaCopia.em < 600000) return;
+    ultimaCopia = { id: d.v.id, em: Date.now() };
+    await NG.sb.from('eventos_venda').insert({ venda_id: d.v.id, tipo: 'portal_dados_copiados', detalhe: { o_que: oQue } });
+  }
+  async function copiar(texto, ok) {
+    try { await navigator.clipboard.writeText(texto); NG.toast(ok, 'ok'); return true; } catch (e) { NG.toast('Não deu para copiar — selecione e copie à mão.', 'bad'); return false; }
+  }
+
   // ---------- desenho ----------
   const DESTINOS = [['0_qualificado', 'Qualificado'], ['1_vendido', 'Vendido'], ['2_aguardando_instalacao', 'Aguardando instalação'],
     ['3_instalado', 'Instalado'], ['saida', 'Saída']];   // Ativo não: vem da importação do OSAB
@@ -550,8 +686,12 @@
     let nota = '';
     if (pr.resolver === 'invalida') nota = 'Venda inválida não conta para meta nem comissão e pode gerar multa ou estorno (tolerância zero). Avise o Ricardo.';
     else if (v.status === '1_vendido') nota = 'Contrato: instalação agendada em até 4 h depois da venda.';
-    else if (pr.resolver === 'dfv') nota = NG.TEXTOS_DFV.trava;
+    else if (pr.resolver === 'dfv' || pr.resolver === 'viab') nota = NG.TEXTOS_DFV.trava;
     const botoes = [];
+    // Viabilidade (prompt 27): 1º consultar no portal (abre e copia "CEP número"), depois registrar o resultado.
+    if (pr.resolver === 'viab') {
+      botoes.push(`<a class="btn btn-acc" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>`);
+    }
     if (pr.resolver && BOTAO[pr.resolver]) {
       const forte = pr.nivel === 'bad' || pr.nivel === 'warn' || ['pedido', 'portal', 'agendar', 'docs'].includes(pr.resolver);
       const rot = pr.resolver === 'sem_cobertura' && v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : BOTAO[pr.resolver];
@@ -561,7 +701,7 @@
     if (v.status === '0_qualificado' && pr.resolver !== 'pedido' && pr.resolver !== 'sem_cobertura') {
       botoes.push('<button type="button" class="btn btn-ghost" data-resolver="pedido">Registrar venda</button>');
     }
-    const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') ? FORMS[formAtivo](v) : '';
+    const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') && !FORMS_NO_CARTAO.includes(formAtivo) ? FORMS[formAtivo](v) : '';
     return `<section class="f-prox ${pr.nivel || 'dim'}" aria-label="Próximo passo">
         <div class="f-prox-txt"><span class="f-rot">Próximo passo</span><b>${esc(pr.txt || '—')}</b>${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}</div>
         ${botoes.length && !form ? `<div class="f-prox-bts">${botoes.join('')}</div>` : ''}
@@ -644,31 +784,24 @@
       },
       {
         id: 'endereco', titulo: 'Endereço e viabilidade',
-        resumo: [[v.logradouro, v.numero].filter(Boolean).join(', ') || 'sem endereço', dfvRot].join(' · '),
+        resumo: [[v.logradouro, v.numero].filter(Boolean).join(', ') || 'sem endereço',
+          `portal: ${v.nio_viab_resultado ? (NG.VIAB_NIO[v.nio_viab_resultado] || v.nio_viab_resultado).toLowerCase() : 'não consultado'}`, `pista ${dfvRot}`].join(' · '),
         corpo: () => `${linha('Endereço', esc([v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ') || '—'))}
           ${linha('Bairro · cidade', esc([v.bairro, [v.cidade, v.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || '—'))}
           ${linha('CEP', `<span class="mono">${esc(v.cep || '—')}</span>`)}
+          ${linha('Referência', v.ponto_referencia ? esc(v.ponto_referencia) : '<span class="bad-txt">falta (o portal exige)</span>')}
           ${linha('Área de atuação', v.trava_area === true ? '<span class="ok-txt">dentro ✓</span>' : v.trava_area === false ? '<span class="bad-txt">fora</span>' : 'não verificada')}
           ${linha('Viabilidade Nio (portal)', v.nio_viab_resultado ? `<span class="${v.nio_viab_resultado === 'viavel' ? 'ok-txt' : 'warn-txt'}">${esc(NG.VIAB_NIO[v.nio_viab_resultado] || v.nio_viab_resultado)}</span>${esc([v.nio_viab_velocidade ? ` · até ${v.nio_viab_velocidade}` : '', v.nio_viab_origem ? ` · ${v.nio_viab_origem === 'manual' ? 'registrada à mão' : v.nio_viab_origem}` : '', v.nio_viab_em ? ` · ${NG.fmtDataHora(v.nio_viab_em)}` : ''].join(''))}` : 'não registrada')}
           ${v.nio_viab_endereco_portal ? linha('Como a Nio cadastrou', esc(v.nio_viab_endereco_portal)) : ''}
           ${v.nio_viab_interesse_id ? linha('Interesse no portal', `<span class="mono">${esc(v.nio_viab_interesse_id)}</span>`) : ''}
           ${v.nio_viab_resultado && v.nio_viab_resultado !== 'viavel' ? '<span class="nota-campo">Portal ≠ viável não nega a venda: confira variações de CEP, rua e número no portal antes de encerrar.</span>' : ''}
-          ${linha('Cobertura (DFV)', `${NG.seloDfv(v) || esc(dfvRot)}`)}
+          ${linha('Pista do DFV', `<span title="${esc(NG.ajuda.dfv_pista)}">${esc(pistaDfv(v).txt)}</span>`)}
           <span class="nota-campo">${v.dfv_consultado_em ? `Última consulta ${esc(NG.fmtDataHora(v.dfv_consultado_em))}${v.dfv_dias != null ? ` · há ${esc(v.dfv_dias)} d` : ''}` : 'Ainda não consultado'} · ${esc(NG.TEXTOS_DFV.trava)}</span>
           ${v.dfv_dispensado ? `<span class="nota-campo">Dispensado pelo admin: ${esc(v.dfv_dispensa_motivo || '')}</span>` : ''}`,
-        rotuloEditar: 'Registrar viabilidade / DFV',
-        editar: () => `<form class="f-formulario" data-form="ed_viab" novalidate>
-          <div class="f-sub">Viabilidade oficial (portal PAP)</div>
-          <div class="grade2"><label class="campo">Resultado no portal<select name="viab">${NG.opcoes(NG.VIAB_NIO, v.nio_viab_resultado, 'não registrada')}</select></label>
-          <label class="campo">Velocidade máxima<input type="text" name="vel" value="${esc(v.nio_viab_velocidade || '')}" placeholder="1GB"></label>
-          <label class="campo">Interesse no portal<input type="text" name="interesse" value="${esc(v.nio_viab_interesse_id || '')}" autocomplete="off"></label>
-          <label class="campo">Como a Nio cadastrou o endereço<input type="text" name="endp" value="${esc(v.nio_viab_endereco_portal || '')}"></label></div>
-          <span class="nota-campo">"Consultar na Nio (oficial)" automático está em espera: o login do portal é SSO Microsoft e a Nio ainda não liberou usuário de integração. Até lá, quem consulta no portal registra o resultado aqui (vale para a trava 0 → 1 por 7 dias).</span>
-          <div class="f-form-acoes"><a class="btn btn-ghost" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener">Abrir no portal PAP ↗</a>
-            <button type="button" class="btn btn-ghost" disabled title="Em espera: falta usuário de integração da Nio (05/11)">Consultar na Nio (oficial)</button>
-            <button type="submit" class="btn btn-acc">Salvar viabilidade do portal</button></div></form>
-        <div class="dfv-bloco" data-dfv>
-          <div class="f-sub">Base DFV (segunda opinião)</div>
+        rotuloEditar: 'Consultar a pista do DFV',
+        // Prompt 27: a viabilidade oficial se registra no cartão "Viabilidade" (topo da ficha); aqui fica só a pista do DFV.
+        editar: () => `<div class="dfv-bloco" data-dfv>
+          <div class="f-sub">Base DFV (pista — não decide a venda)</div>
           <div data-dfv-campos>${NG.dfvCampos(v)}</div>
           <div class="f-form-acoes">
             <button type="button" class="btn btn-ghost" data-f="cancelar">Cancelar</button>
@@ -791,6 +924,8 @@
       ${cabecalho(v)}
       <div class="f-corpo">
         ${faixaProximo(v, pr)}
+        ${cartaoViabilidade(v)}
+        ${cartaoPortal(v)}
         ${cartaoConferencia(v)}
         ${linhaDoTempo(v)}
         ${blocos(v).map((b) => {
@@ -865,6 +1000,10 @@
         }
         formAtivo = qual === 'reagendar' ? 'agendar' : qual;
         render();
+        if (FORMS_NO_CARTAO.includes(formAtivo)) {
+          const f = raiz.querySelector(`[data-form="${formAtivo}"]`);
+          if (f) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
         return;
       }
       const b = ev.target.closest('[data-f]');
@@ -881,6 +1020,25 @@
       if (acao === 'copiar-endereco') {
         const t = enderecoPortal(d.v);
         try { await navigator.clipboard.writeText(t); NG.toast('Endereço copiado para colar no portal', 'ok'); } catch (e) { NG.toast(t); }
+        return;
+      }
+      // Prompt 27: "Consultar no portal" é um link (abre a aba nova sozinho); aqui só copia "CEP número" para colar na busca.
+      if (acao === 'consultar-portal') { copiar(cepNumero(d.v), `Copiado "${cepNumero(d.v)}" — cole na viabilidade do portal`); return; }
+      if (acao === 'viab-form' || acao === 'ref-form') {
+        formAtivo = acao === 'viab-form' ? 'viab' : 'ref';
+        render();
+        const f = raiz.querySelector(`[data-form="${formAtivo}"]`);
+        if (f) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      if (acao === 'copiar-campo') {
+        const todos = camposPortal(d.v).flatMap(([, cs]) => cs);
+        const c = todos[Number(b.dataset.i)];
+        if (c && c[1] && await copiar(c[1], `${rotCurto(c[0])} copiado`)) registrarCopia('campo');
+        return;
+      }
+      if (acao === 'copiar-tudo') {
+        if (await copiar(textoPortal(d.v), 'Dados copiados — cole no portal campo a campo')) registrarCopia('tudo');
         return;
       }
       if (acao === 'copiar-tel') {
