@@ -19,7 +19,7 @@ declare
   pl_outro bigint;  pr_outro numeric;
   mesh     bigint;
   pa uuid; pb uuid; pc uuid;
-  va uuid; vb uuid; vc uuid; vd uuid; ve uuid; vf uuid; vg uuid;
+  va uuid; vh uuid; vb uuid; vc uuid; vd uuid; ve uuid; vf uuid; vg uuid;
   pontos_a numeric; pontos_b numeric;
   x jsonb; n int; num numeric; d date; t text; ok boolean; pag bigint;
   hoje date := (now() at time zone 'America/Sao_Paulo')::date;
@@ -152,6 +152,25 @@ begin
   r := r || jsonb_build_object('t', '17 origens existentes aceitas (rua, instagram)', 'ok',
         (select count(*) from public.vendas where id in (vd, ve) and conferencia_status is null) = 2);
 
+  -- (a) insert com 'aprovada' sai 'pendente' (0044); (b) venda de parceiro não muda de origem/parceiro (0044)
+  insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_whatsapp, segmento, status, cep, numero, bairro, cidade, uf, plano_id, forma_pagamento, conferencia_status)
+  values ('parceiro_pap', pa, 'Insert Aprovado Teste', '32988880006', 'PF', '0_qualificado', '36010000', '600', 'Centro', 'Juiz de Fora', 'MG', pl_outro, 'boleto', 'aprovada') returning id into vh;
+  r := r || jsonb_build_object('t', '56 insert com conferência aprovada nasce pendente', 'ok',
+        (select conferencia_status = 'pendente' and conferencia_prazo_ate is not null from public.vendas where id = vh));
+  begin
+    update public.vendas set origem = 'rua', parceiro_id = null, conferencia_status = null where id = vh;
+    r := r || jsonb_build_object('t', '57 parceiro_pap → rua limpando parceiro/conferência é barrado', 'ok', false);
+  exception when others then
+    r := r || jsonb_build_object('t', '57 parceiro_pap → rua limpando parceiro/conferência é barrado', 'ok',
+          sqlerrm like 'Origem e parceiro de uma venda de parceiro não mudam%', 'msg', sqlerrm);
+  end;
+  begin
+    update public.vendas set parceiro_id = pb where id = vh;
+    r := r || jsonb_build_object('t', '58 trocar o parceiro da venda é barrado', 'ok', false);
+  exception when others then
+    r := r || jsonb_build_object('t', '58 trocar o parceiro da venda é barrado', 'ok', sqlerrm like 'Origem e parceiro%');
+  end;
+
   -- ── 4. instalação confirmada → pontos e pagamentos (A: diário, cartão + Wi-Fi Total) ──
   update public.vendas set status = '2_aguardando_instalacao' where id = va;
   select count(*) into n from public.pontos_lancamentos where parceiro_id = pa;
@@ -200,9 +219,10 @@ begin
 
   -- ── 5. B: quinzenal, boleto, multiplicador 1,2 e incentivo ──
   insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_cpf_cnpj, cliente_whatsapp, segmento, status, cep, logradouro, numero, bairro, cidade, uf,
-                             plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo, conferencia_status)
+                             plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo)
   values ('parceiro_pap', pb, 'Joao Pereira Teste', '39053344705', '32988880002', 'PF', '0_qualificado', '36010000', 'Rua dos Testes', '200', 'Centro', 'Juiz de Fora', 'MG',
-          pl_outro, 'boleto', true, 'teste automatizado', 'aprovada') returning id into vb;
+          pl_outro, 'boleto', true, 'teste automatizado') returning id into vb;
+  update public.vendas set conferencia_status = 'aprovada' where id = vb;
   insert into public.venda_adicionais (venda_id, adicional_id, qtd) values (vb, mesh, 1);
   update public.vendas set status = '1_vendido', nio_pedido = 'TESTE-PAP-B', biometria_status = 'validada' where id = vb;
   update public.vendas set status = '2_aguardando_instalacao' where id = vb;
@@ -225,6 +245,15 @@ begin
         and public.proximo_dia_util(date '2026-10-30') = date '2026-11-03');
 
   -- ── 6. apuração: maior degrau, uma vez só ──
+  update public.config_parceiros set degraus = '[]'::jsonb;
+  begin
+    x := public.apurar_premios_parceiros(date '2026-09-01');
+    r := r || jsonb_build_object('t', '59 apuração com degraus vazios dá erro', 'ok', false);
+  exception when others then
+    r := r || jsonb_build_object('t', '59 apuração com degraus vazios dá erro', 'ok', sqlerrm like 'Degraus do programa não configurados%', 'msg', sqlerrm);
+  end;
+  r := r || jsonb_build_object('t', '60 ...e não grava linha em parceiro_apuracoes', 'ok',
+        (select count(*) from public.parceiro_apuracoes where competencia = date '2026-09-01') = 0);
   update public.config_parceiros set degraus = jsonb_build_array(
     jsonb_build_object('pontos', floor(pontos_a) - 10, 'premio', 300),
     jsonb_build_object('pontos', floor(pontos_a) - 1,  'premio', 500),
@@ -245,8 +274,9 @@ begin
   r := r || jsonb_build_object('t', '33 prêmio vence no dia 5 do mês seguinte', 'ok', d = date '2026-11-05', 'vence_em', d);
 
   -- instalação confirmada tarde (outubro já apurado) → pontos valem no mês da confirmação
-  insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_whatsapp, segmento, status, cep, numero, bairro, cidade, uf, plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo, conferencia_status)
-  values ('parceiro_pap', pa, 'Ana Tardia Teste', '32988880003', 'PF', '0_qualificado', '36010000', '300', 'Centro', 'Juiz de Fora', 'MG', pl_outro, 'boleto', true, 'teste automatizado', 'aprovada') returning id into vc;
+  insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_whatsapp, segmento, status, cep, numero, bairro, cidade, uf, plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo)
+  values ('parceiro_pap', pa, 'Ana Tardia Teste', '32988880003', 'PF', '0_qualificado', '36010000', '300', 'Centro', 'Juiz de Fora', 'MG', pl_outro, 'boleto', true, 'teste automatizado') returning id into vc;
+  update public.vendas set conferencia_status = 'aprovada' where id = vc;
   update public.vendas set status = '1_vendido', nio_pedido = 'TESTE-PAP-C', biometria_status = 'validada' where id = vc;
   update public.vendas set status = '2_aguardando_instalacao' where id = vc;
   update public.vendas set nio_situacao = 'Concluído', nio_venda_valida = true, instalado_em = '2026-10-28 10:00-03' where id = vc;
@@ -258,8 +288,9 @@ begin
 
   -- comissão sem valor configurado: sem pagamento + evento
   delete from public.parceiro_comissao where parceiro_id is null and plano_id = pl_outro;
-  insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_whatsapp, segmento, status, cep, numero, bairro, cidade, uf, plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo, conferencia_status)
-  values ('parceiro_pap', pa, 'Sem Comissao Teste', '32988880004', 'PF', '0_qualificado', '36010000', '400', 'Centro', 'Juiz de Fora', 'MG', pl_outro, 'boleto', true, 'teste automatizado', 'aprovada') returning id into vf;
+  insert into public.vendas (origem, parceiro_id, cliente_nome, cliente_whatsapp, segmento, status, cep, numero, bairro, cidade, uf, plano_id, forma_pagamento, dfv_dispensado, dfv_dispensa_motivo)
+  values ('parceiro_pap', pa, 'Sem Comissao Teste', '32988880004', 'PF', '0_qualificado', '36010000', '400', 'Centro', 'Juiz de Fora', 'MG', pl_outro, 'boleto', true, 'teste automatizado') returning id into vf;
+  update public.vendas set conferencia_status = 'aprovada' where id = vf;
   update public.vendas set status = '1_vendido', nio_pedido = 'TESTE-PAP-F', biometria_status = 'validada' where id = vf;
   update public.vendas set status = '2_aguardando_instalacao' where id = vf;
   update public.vendas set nio_situacao = 'Concluído', nio_venda_valida = true, instalado_em = '2026-11-03 10:00-03' where id = vf;
@@ -331,9 +362,10 @@ begin
   r := r || jsonb_build_object('t', '46 meus_pontos e meus_pagamentos respondem', 'ok',
         exists (select 1 from public.parceiro_meus_pontos()) and exists (select 1 from public.parceiro_meus_pagamentos()),
         'pontos', (select jsonb_agg(to_jsonb(p)) from public.parceiro_meus_pontos() p));
-  r := r || jsonb_build_object('t', '47 checar endereço: igual → em_atendimento; outro → livre', 'ok',
+  r := r || jsonb_build_object('t', '47 checar endereço (critério do sistema): mesmo CEP+número, qualquer complemento → em_atendimento; outro número → livre', 'ok',
         public.parceiro_checar_endereco('36010-000', '100', 'ap 101') = 'em_atendimento'
-        and public.parceiro_checar_endereco('36010-000', '100', 'ap 202') = 'livre'
+        and public.parceiro_checar_endereco('36010-000', '100', 'ap 102') = 'em_atendimento'
+        and public.parceiro_checar_endereco('36010-000', '100', null) = 'em_atendimento'
         and public.parceiro_checar_endereco('36010-000', '7777', null) = 'livre');
 
   -- RLS como o parceiro (authenticated, fora de usuarios): não lê tabelas internas
