@@ -1,0 +1,72 @@
+{
+  "conta": "act_764071346694892",
+  "graph": "v24.0",
+  "pagina_id": "1421228191072269",
+  "whatsapp": "+553128881265",
+  "waba": "1419511943295487",
+  "imagens": {
+    "M1_1x1": "aed205a2ae1297889ec2bf9243cf6025",
+    "M1_9x16": "456ae153c95eabfb595159f81825364f",
+    "G1_1x1": "58ecc92af9ae894c5b07be0cb1d32326",
+    "G1_9x16": "b62a7ba5e3afe875f6736f9d435c0723",
+    "M2_1x1": "2827c62e87358162cfcdb3397d160b8d",
+    "M2_9x16": "df5da54ef67b7610ed04f2069dbc5bba",
+    "G2_1x1": "12fdf5fe4a4a6437124e729004ed67f0",
+    "G2_9x16": "88ab26422d7707d5b7e5802c32b85606"
+  },
+  "campanha": {
+    "id": "120257703177650211",
+    "nome": "NIO_JF_C1_MSG_nov26"
+  },
+  "conjuntos": {
+    "CJ_A_altopadrao": {
+      "id": "120257703178290211",
+      "raio_km": 2
+    },
+    "CJ_B_medio": {
+      "id": "120257703179130211",
+      "raio_km": 1.5
+    }
+  },
+  "criativos": {
+    "AD_M1_preco2030": {
+      "id": "1666228485292112",
+      "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
+    },
+    "AD_G1_preco2030": {
+      "id": "1469059699620427",
+      "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
+    },
+    "AD_M2_troca": {
+      "id": "1141546458461098",
+      "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
+    },
+    "AD_G2_cobertura": {
+      "id": "1183873924165632",
+      "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
+    }
+  },
+  "anuncios": {
+    "CJ_A_altopadrao": {
+      "AD_M1_preco2030": "120257703594270211",
+      "AD_G1_preco2030": "120257703599330211",
+      "AD_M2_troca": "120257703603190211",
+      "AD_G2_cobertura": "120257703608220211"
+    },
+    "CJ_B_medio": {
+      "AD_M1_preco2030": "120257703612890211",
+      "AD_G1_preco2030": "120257703616780211",
+      "AD_M2_troca": "120257703620370211",
+      "AD_G2_cobertura": "120257703624500211"
+    }
+  },
+  "anotacoes": [
+    "CJ_B_medio: raio 1,5 km aceito pela API (não precisou subir para 2 km).",
+    "Conjuntos aceitos com promoted_object.whatsapp_phone_number = +553128881265 (vínculo feito no BM).",
+    "Mensagem pronta (page_welcome_message em asset_feed_spec.additional_data) e 9x16 por posicionamento aceitos.",
+    "Melhorias automáticas: a API só aceita OPT_OUT de IMAGE_ANIMATION, TEXT_OVERLAY_TRANSLATION, IG_VIDEO_NATIVE_SUBTITLE, PROFILE_CARD (entre outras de catálogo); otimização de texto não está na lista — conferir na prévia antes de ativar.",
+    "1ª leva de criativos sem Instagram (1853530752465677, 1774595217140627, 956607784196117, 1445910596889214) renomeada para *_descartado, sem uso."
+  ],
+  "atualizado_em": "2026-11-06T00:30:35-03:00",
+  "instagram": "17841423276547518 (conta da página)"
+}
