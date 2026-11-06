@@ -61,3 +61,34 @@ $s = Read-Host 'Token Meta Nio' -AsSecureString; [Environment]::SetEnvironmentVa
 
 Ativar nada · criar pixel/dataset ou público personalizado · usar dado de cliente (Nio ou Vero) · usar token,
 página, app ou número da Vero.
+
+## `publicar_credibilidade.py` — posts e stories de credibilidade de JF (prompt 21)
+
+Publica os 9 posts no feed do Instagram **@mari.nio.internet** (`17841411489935097`) e da página
+**Nio Internet · Dharma Telecom** (`1421228191072269`), na ordem 09 → 01 (o 01 fica no topo da grade), e os
+4 stories no Instagram (clientes, dúvidas, cobertura, planos). Stories da página só com `--fb-stories`.
+
+| Arquivo | O que é |
+|---|---|
+| `meta/credibilidade_nov26.json` | `arquivo`, `legenda`, `ordem` — legenda **literal** de `credibilidade_nov26/textos_credibilidade_061126_0915.md` (Drive). Não reescrever aqui: muda lá e regera |
+| `docs/midia/credibilidade_nov26/*.jpg` | as 13 peças com URL pública no Pages. **JPEG**, não PNG: a API do Instagram só aceita JPEG por `image_url` |
+| `meta/credibilidade_ids.json` | id do container, da mídia do IG e do post da página, com data, hora e permalink. O que tem id é pulado |
+
+```bash
+python meta/publicar_credibilidade.py              # = --dry-run: URLs (200 image/jpeg?), escopos e a lista
+python meta/publicar_credibilidade.py --conferir   # só leitura: legenda publicada × JSON nos dois feeds
+python meta/publicar_credibilidade.py --publicar   # só com o OK do Ricardo na sessão
+```
+
+- Instagram: `POST /{ig}/media` → espera `status_code = FINISHED` → `POST /{ig}/media_publish`; 60 s entre posts do feed.
+- Página: `POST /{página}/photos` (`url`, `message`, `published=true`) com o token da página, tirado em memória.
+- Idempotência dupla: id no `credibilidade_ids.json` **ou** legenda idêntica já publicada (adota o id) → não publica de novo.
+- Erro em um item: para e mostra. Exceção: stories da página recusados por permissão são registrados e o resto segue.
+- A API não põe adesivo de link nem cria destaque, e o story some em 24 h: **o Ricardo monta os destaques no app logo depois**.
+- Recusa legenda com "sem fidelidade", desconto, Dharma, Vero, CNPJ, data de instalação ou "grátis" fora de
+  "Instalação grátis com 12 meses de permanência".
+
+**Escopos do token** (`META_ACCESS_TOKEN_NIO`, `Nio_API`, app NIOGEN): além dos `ads_*`, `pages_show_list`,
+`pages_read_engagement` e `pages_manage_ads`, precisa de **`instagram_basic`, `instagram_content_publish` e
+`pages_manage_posts`**. O script confere por `GET /me/permissions` (o `debug_token` recusa token de system user
+sem token de app) e não publica se faltar algum.
