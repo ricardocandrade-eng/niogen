@@ -3,12 +3,15 @@
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
  * 06/11 (prompt 25): Parceiros PAP (Vendas) e Pagamentos a parceiros (Financeiro) — só admin/backoffice, somem para o vendedor.
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
+ * 06/11 (prompt 27): contadores em "Mari · IA" (conversas aguardando humano — v_mari_aguardando_humano; vermelho se alguma
+ * passou de 15 min em horário de contato) e em "Vendas" (novas em Qualificado desde a última visita — usuario_vistos — mais as
+ * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
   'use strict';
 
-  const VERSAO = 'v1.2 · 06/11';
+  const VERSAO = 'v1.3 · 06/11';
 
   const MENU = [
     ['Gestão', [
@@ -16,7 +19,7 @@
       { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
     ]],
     ['Vendas', [
-      { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
+      { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html', badge: 'vendas' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
@@ -24,7 +27,7 @@
       { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
     ]],
     ['Mari', [
-      { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
     ['Financeiro', [
@@ -94,6 +97,77 @@
     const { count } = await NG.sb.from('v_instalacoes').select('id', { count: 'exact', head: true }).eq('coluna', 'agendar');
     const b = nav.querySelector('[data-badge="agendar"]');
     if (b && count) { b.textContent = count; b.hidden = false; }
+
+    // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
+    // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
+    tituloBase = document.title.replace(/^\(\d+\)\s*/, '');
+    if (pagina === 'vendas') {
+      // Abriu Vendas = viu as novas. "Visto em" fica no banco (por usuário), não no navegador.
+      await NG.sb.from('usuario_vistos').upsert({ usuario_id: u.id, tela: 'vendas', visto_em: new Date().toISOString() }, { onConflict: 'usuario_id,tela' });
+    }
+    await avisos(nav);
+    setInterval(() => avisos(nav), 60000);
+  }
+
+  // ---------- contadores do menu (prompt 27) ----------
+  let tituloBase = '';
+  // Horário do contrato (seg–sex 9–21, sáb 10–16): o atraso de 15 min só conta dentro dele.
+  function noHorario(d) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: NG.TZ, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
+    const h = Number(p.hour) % 24;
+    if (p.weekday === 'Sun') return false;
+    return p.weekday === 'Sat' ? h >= 10 && h < 16 : h >= 9 && h < 21;
+  }
+  function pinta(nav, chave, n, cls, titulo) {
+    const el = nav.querySelector(`[data-badge="${chave}"]`);
+    if (!el) return;
+    el.textContent = n || '';
+    el.hidden = !n;
+    el.className = `badge${cls ? ` ${cls}` : ''}`;
+    el.title = titulo;
+    const item = el.closest('.nav-item');
+    if (item) item.title = n ? titulo : '';
+  }
+  async function avisos(nav) {
+    const u = NG.usuario || {};
+    let total = 0;
+    try {
+      if (['admin', 'backoffice'].includes(u.perfil) && nav.querySelector('[data-badge="mari"]')) {
+        const { data, error } = await NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead');
+        if (!error) {
+          const lista = data || [];
+          const agora = new Date();
+          const atrasada = noHorario(agora) && lista.some((a) => (agora - new Date(a.ult_lead)) > 15 * 60000);
+          pinta(nav, 'mari', lista.length, atrasada ? 'alerta' : 'info',
+            `${lista.length} ${lista.length === 1 ? 'conversa esperando' : 'conversas esperando'} alguém do time${atrasada ? ' — alguma há mais de 15 min' : ''}. ${NG.ajuda.menu_mari}`);
+          total += lista.length;
+        }
+      }
+      if (nav.querySelector('[data-badge="vendas"]')) {
+        const [rv, rc, rs] = await Promise.all([
+          NG.sb.from('v_funil').select('*').neq('status', 'saida').limit(2000),
+          NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
+          NG.sb.from('usuario_vistos').select('visto_em').eq('tela', 'vendas').maybeSingle(),
+        ]);
+        if (!rv.error) {
+          const ult = NG.ultimosContatos(rc.data || []);
+          const visto = rs.data ? new Date(rs.data.visto_em) : null;
+          const ids = new Set();
+          let novas = 0, acao = 0;
+          (rv.data || []).forEach((v) => {
+            const nova = v.status === '0_qualificado' && (!visto || new Date(v.criado_em) > visto);
+            const precisa = !!NG.proximoPasso(v, ult[v.id]).acao;
+            if (nova) novas += 1;
+            if (precisa) acao += 1;
+            if (nova || precisa) ids.add(v.id);
+          });
+          pinta(nav, 'vendas', ids.size, novas ? 'alerta' : 'info',
+            `${novas} ${novas === 1 ? 'venda nova' : 'vendas novas'} em Qualificado desde a sua última visita · ${acao} ${acao === 1 ? 'precisa' : 'precisam'} de ação. ${NG.ajuda.menu_vendas}`);
+          total += ids.size;
+        }
+      }
+    } catch (e) { /* aviso do menu nunca derruba a tela */ }
+    document.title = total ? `(${total}) ${tituloBase}` : tituloBase;
   }
 
   // Celular (≤ 760 px): o menu fica atrás do ☰ numa barra fina no topo; abre por cima da tela e fecha com

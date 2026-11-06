@@ -3,7 +3,10 @@
      4 KPIs do período, abas com "Precisam de ação", busca + Cidade/Etapa/Origem + Período (padrão Hoje), lista em largura
      total com UMA situação e o próximo passo, detalhe em gaveta (conversa, dados, handoff, cadência, links, erros);
      no celular, cartões + botão flutuante. SÓ LEITURA: nenhum botão muda a Mari. Admin e backoffice; vendedor não vê.
-     Dados: mari_conversas (RLS admin/backoffice), v_mari_cadencia, mari_turnos, mari_erros, config_planos, vendas. -->
+     Dados: mari_conversas (RLS admin/backoffice), v_mari_cadencia, mari_turnos, mari_erros, config_planos, vendas.
+     06/11 (prompt 27): situação vem da VENDA quando a conversa tem venda (etapa ou "Saída · motivo"); coluna e filtro do
+     status do Chatwoot (A resolver / Resolvida · atribuída a · etiquetas — 0048, gravado pelo n8n/carga única);
+     "cliente esperando o time" pela v_mari_aguardando_humano; explicação ao passar o mouse em tudo (NG.ajuda). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -15,12 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-5">
-<script src="config.js?v=061126-5"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-6">
+<script src="config.js?v=061126-6"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-5"></script>
-<script src="assets/sidebar.js?v=061126-5"></script>
-<script src="assets/ficha.js?v=061126-5"></script>
+<script src="assets/app.js?v=061126-6"></script>
+<script src="assets/sidebar.js?v=061126-6"></script>
+<script src="assets/ficha.js?v=061126-6"></script>
 </head>
 <body>
 <div class="app">
@@ -44,6 +47,7 @@
       <select class="sel" id="f-cidade" aria-label="Cidade"></select>
       <select class="sel" id="f-etapa" aria-label="Etapa"></select>
       <select class="sel" id="f-origem" aria-label="Origem"></select>
+      <select class="sel" id="f-cw" aria-label="Status no Chatwoot" title="Status da conversa no Chatwoot: A resolver (aberta ou pendente) ou Resolvida."></select>
       <span id="f-periodo"></span>
       <label class="check-mini" id="lbl-testes" hidden><input type="checkbox" id="f-testes"> mostrar testes</label>
       <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
@@ -53,15 +57,16 @@
       <div class="rolagem">
         <table class="tab">
           <thead><tr>
-            <th data-ord="contato">Contato</th>
-            <th data-ord="local">Local</th>
-            <th data-ord="situacao">Situação</th>
-            <th data-ord="plano">Plano</th>
-            <th data-ord="valor" data-dir="desc" class="num">Valor</th>
-            <th>Próximo passo</th>
-            <th data-ord="ultima" data-dir="desc">Última mensagem</th>
+            <th data-ord="contato" data-ajuda="col_contato">Contato</th>
+            <th data-ord="local" data-ajuda="col_local">Local</th>
+            <th data-ord="situacao" data-ajuda="col_situacao">Situação</th>
+            <th data-ord="chatwoot" data-ajuda="col_chatwoot">Chatwoot</th>
+            <th data-ord="plano" data-ajuda="col_plano">Plano</th>
+            <th data-ord="valor" data-dir="desc" class="num" data-ajuda="col_valor">Valor</th>
+            <th data-ajuda="col_proximo">Próximo passo</th>
+            <th data-ord="ultima" data-dir="desc" data-ajuda="col_ultima">Última mensagem</th>
           </tr></thead>
-          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
       <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a conversa</span></div>
@@ -120,12 +125,18 @@
   const fEtapa = document.getElementById('f-etapa');
   const fOrigem = document.getElementById('f-origem');
   const fTestes = document.getElementById('f-testes');
+  const fCw = document.getElementById('f-cw');
   document.getElementById('lbl-testes').hidden = !ADMIN;
   NG.preencherSelect(fEtapa, Object.entries(ETAPAS_MARI), 'Todas as etapas');
   NG.preencherSelect(fOrigem, Object.entries(ORIGENS_MARI), 'Todas as origens');
+  NG.preencherSelect(fCw, [['aresolver', 'A resolver'], ['resolvida', 'Resolvidas']], 'Chatwoot: todas');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'hoje', aoMudar: render });
+  // Explicação ao passar o mouse (NG.ajuda): cabeçalhos e filtros.
+  document.querySelectorAll('[data-ajuda]').forEach((el) => { el.title = NG.ajuda[el.dataset.ajuda] || ''; });
+  fEtapa.title = NG.ajuda.etapa;
+  fOrigem.title = NG.ajuda.origem;
 
-  let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, aba = 'todas';
+  let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, vendasDe = {}, aguardando = {}, aba = 'todas';
   const ord = { chave: 'ultima', dir: -1 };
 
   if (CHATWOOT_NIO_ACCOUNT) {
@@ -140,7 +151,8 @@
   // ------------------------------------------------------------------ dados
   const COLS = 'id, telefone, nome_contato, nome_confiavel, canal, origem, status, etapa, cep, numero, complemento, endereco_cep, cidade, uf, cluster, '
     + 'elegibilidade, dfv_resultado, plano_escolhido, forma_pagamento, visita_preferencia, instalacao_preferencia, nio_viab_resultado, dados, handoff_motivo, handoff_em, handoff_briefing, venda_id, '
-    + 'chatwoot_conversation_id, humano_atribuido, nao_contatar, agendamento_retorno, ultima_msg_lead_at, ultima_msg_mari_at, created_at, updated_at';
+    + 'chatwoot_conversation_id, humano_atribuido, nao_contatar, agendamento_retorno, ultima_msg_lead_at, ultima_msg_mari_at, created_at, updated_at, '
+    + 'chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, chatwoot_sync_em';
 
   async function carregar() {
     const [rc, rk, rp, re] = await Promise.all([
@@ -156,6 +168,14 @@
     cad = Object.fromEntries(((rk.error ? [] : rk.data) || []).map((c) => [c.conversa_id, c]));
     planos = Object.fromEntries((rp.data || []).map((p) => [p.codigo, p]));
     erros = re.data || [];
+    // Prompt 27: a situação de quem já tem venda vem da venda; "cliente esperando o time" vem da view (0048).
+    const comVenda = [...new Set(convs.map((c) => c.venda_id).filter(Boolean))];
+    const [rvv, rag] = await Promise.all([
+      comVenda.length ? NG.sb.from('vendas').select('id, status, motivo_saida').in('id', comVenda.slice(0, 500)) : Promise.resolve({ data: [] }),
+      NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead'),
+    ]);
+    vendasDe = Object.fromEntries((rvv.data || []).map((v) => [v.id, v]));
+    aguardando = rag.error ? {} : Object.fromEntries((rag.data || []).map((a) => [a.id, a.ult_lead]));
     // humano já respondeu depois do handoff? (só para quem está esperando humano)
     const esperando = convs.filter((c) => c.status === 'handoff_realizado' && c.handoff_motivo !== 'dados_completos').map((c) => c.id);
     humanoDepois = {};
@@ -204,8 +224,14 @@
     return d.length >= 11 ? `•••.${d.slice(3, 6)}.•••-••` : '•••';
   }
 
-  // Situação: UMA pílula por linha.
+  // Situação: UMA pílula por linha. Com venda (prompt 27): a etapa da venda ou "Saída · motivo" — nunca o estado velho da Mari.
   function situacao(c) {
+    const v = c.venda_id ? vendasDe[c.venda_id] : null;
+    if (v) {
+      if (v.status === 'saida') return { id: 'encerrada', cls: 'm-fim', txt: `Saída · ${v.motivo_saida || 'sem motivo'}`, ajuda: 'sit_venda' };
+      const et = NG.STATUS_MAP[v.status];
+      return { id: 'qualificada', cls: 'm-ok', txt: et ? (et.curto || et.nome || v.status) : v.status, ajuda: 'sit_venda', venda: v.status };
+    }
     if (c.status === 'ativo') return { id: 'andamento', cls: 'm-and', txt: `Em andamento: ${ETAPAS_MARI[c.etapa] || c.etapa}` };
     if (c.status === 'handoff_realizado') {
       if (c.handoff_motivo === 'dados_completos') return { id: 'qualificada', cls: 'm-ok', txt: 'Qualificada' };
@@ -237,6 +263,16 @@
   // cinza = aguardando o cliente.
   function proximo(c) {
     const s = situacao(c);
+    // Prompt 27: cliente escreveu depois do handoff e ninguém do time respondeu (A resolver no Chatwoot).
+    if (aguardando[c.id]) {
+      const m = minutos(aguardando[c.id]);
+      return { txt: `Cliente esperando o time · ${ha(aguardando[c.id])}`, nivel: m > 15 && noHorario(new Date()) ? 'bad' : 'warn', acao: true };
+    }
+    if (s.venda) {
+      if (s.venda === '0_qualificado') return { txt: 'Venda criada · consultar o portal e abrir o pedido (em Vendas)', nivel: 'dim' };
+      return { txt: `Venda em ${s.txt} · seguir em Vendas`, nivel: 'dim' };
+    }
+    if (s.id === 'encerrada' && c.venda_id) return { txt: '', nivel: 'dim' };
     if (s.id === 'humano') {
       if (humanoDepois[c.id]) return { txt: 'Humano já respondeu', nivel: 'dim' };
       const m = minutos(c.handoff_em);
@@ -273,6 +309,7 @@
       (!fCidade.value || c.cidade === fCidade.value) &&
       (!fEtapa.value || c.etapa === fEtapa.value) &&
       (!fOrigem.value || c.origem === fOrigem.value) &&
+      (!fCw.value || (fCw.value === 'aresolver' ? ['open', 'pending'].includes(c.chatwoot_status) : c.chatwoot_status === 'resolved')) &&
       (!q || [nomeDe(c), c.nome_contato, bairroDe(c), c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [c.telefone, c.cep].some((x) => NG.soDigitos(x).includes(qd)))));
   }
@@ -282,6 +319,7 @@
     contato: (c) => contatoDe(c).toLowerCase(),
     local: (c) => localDe(c).toLowerCase(),
     situacao: (c) => SIT_ORD[situacao(c).id] ?? 9,
+    chatwoot: (c) => ({ open: 0, pending: 0, snoozed: 1, resolved: 2 })[c.chatwoot_status] ?? 3,
     plano: (c) => (plano(c) ? plano(c).nome_curto || plano(c).nome : ''),
     valor: (c) => valorDe(c),
     ultima: (c) => new Date(ultimaDe(c)).getTime(),
@@ -321,7 +359,22 @@
     ], aba, (id) => { aba = id; render(); });
   }
 
-  const pilula = (c) => { const s = situacao(c); return `<span class="pill ${s.cls}">${esc(s.txt)}</span>`; };
+  const AJUDA_SIT = { andamento: 'sit_andamento', qualificada: 'sit_qualificada', humano: 'sit_humano', encerrada: 'sit_encerrada' };
+  const pilula = (c) => { const s = situacao(c); return `<span class="pill ${s.cls} com-ajuda" title="${esc(NG.ajuda[s.ajuda || AJUDA_SIT[s.id]] || '')}">${esc(s.txt)}</span>`; };
+  // Status do Chatwoot (0048): chip A resolver/Resolvida + atribuída a + etiquetas, cada um com a explicação no mouse.
+  const CW = { open: ['A resolver', 'cw-aberta', 'cw_aresolver'], pending: ['A resolver', 'cw-aberta', 'cw_aresolver'],
+    resolved: ['Resolvida', 'cw-resolvida', 'cw_resolvida'], snoozed: ['Adiada', 'cw-adiada', 'cw_adiada'] };
+  const atribuidaDe = (c) => [c.chatwoot_agente, c.chatwoot_time].filter(Boolean).join(' · ');
+  function chatwootCel(c, comEtiquetas = true) {
+    if (!c.chatwoot_conversation_id) return '<span class="apagado" title="Conversa da rota de teste: não existe no Chatwoot.">—</span>';
+    if (!c.chatwoot_status) return `<span class="apagado" title="${esc('Status do Chatwoot ainda não lido para esta conversa.')}">não lido</span>`;
+    const [txt, cls, aj] = CW[c.chatwoot_status] || [c.chatwoot_status, '', ''];
+    const atr = atribuidaDe(c);
+    const et = (c.chatwoot_etiquetas || []);
+    return `<div class="cw"><span><span class="pill ${cls} com-ajuda" title="${esc(NG.ajuda[aj] || '')}">${esc(txt)}</span></span>
+      <small class="com-ajuda" title="${esc(NG.ajuda.cw_atribuida)}">${esc(atr ? `com ${atr}` : 'ninguém atribuído')}</small>
+      ${comEtiquetas && et.length ? `<span class="etiquetas">${et.map((e) => `<span class="chip" title="${esc(NG.ajuda.cw_etiquetas)}">${esc(e)}</span>`).join('')}</span>` : ''}</div>`;
+  }
   const planoTxt = (c) => { const p = plano(c); return p ? p.nome_curto || p.nome : '—'; };
   const filtradas = () => NG.ordenar(base().filter((c) => naAba(c, aba)), CHAVES, ord);
 
@@ -333,21 +386,23 @@
     tbody.innerHTML = lista.length ? lista.map((c) => {
       const v = valorDe(c);
       return `<tr class="clicavel ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
-        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(c.origem === 'teste' ? '' : ORIGENS_MARI[c.origem] || c.origem || '')}</small></td>
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small class="com-ajuda" title="${esc(NG.ajuda.origem)}">${esc(c.origem === 'teste' ? '' : ORIGENS_MARI[c.origem] || c.origem || '')}</small></td>
         <td class="apagado">${esc(localDe(c) || '—')}</td>
         <td>${pilula(c)}</td>
+        <td>${chatwootCel(c)}</td>
         <td class="plano-c"><b>${esc(planoTxt(c))}</b><small>${esc(FORMA[c.forma_pagamento] || '')}</small></td>
         <td class="num">${v == null ? '—' : esc(NG.fmtMoeda(v))}</td>
         <td>${NG.proxPasso(proximo(c))}</td>
         <td class="apagado">${esc(ha(ultimaDe(c)))}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="7" class="vazio">Nenhuma conversa neste filtro</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="vazio">Nenhuma conversa neste filtro</td></tr>';
     cartoesEl.innerHTML = lista.length ? lista.map((c) => {
       const v = valorDe(c);
       return `<button type="button" class="cartao ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}">
         <div class="cli"><b>${esc(contatoDe(c))}</b><small>${esc([localDe(c), ha(ultimaDe(c))].filter(Boolean).join(' · '))}</small></div>
         <div class="valor">${v == null ? '—' : esc(NG.fmtMoeda(v))}</div>
         <div class="l2">${pilula(c)}<span>${esc(planoTxt(c))}</span></div>
+        ${c.chatwoot_status ? `<div class="l2">${chatwootCel(c, false)}</div>` : ''}
         <div class="l2">${NG.proxPasso(proximo(c))}</div>
       </button>`;
     }).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
@@ -355,14 +410,16 @@
   }
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
-  [fBusca, fCidade, fEtapa, fOrigem, fTestes].forEach((el) => el.addEventListener('input', render));
+  [fBusca, fCidade, fEtapa, fOrigem, fCw, fTestes].forEach((el) => el.addEventListener('input', render));
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(tr.dataset.id); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(tr.dataset.id); });
   cartoesEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
 
   // CSV: sem CPF, telefone mascarado.
   document.getElementById('exportar').addEventListener('click', () => {
-    const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Situação', (c) => situacao(c).txt], ['Etapa', (c) => ETAPAS_MARI[c.etapa] || c.etapa],
+    const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Situação', (c) => situacao(c).txt],
+      ['Chatwoot', (c) => (CW[c.chatwoot_status] || [''])[0]], ['Atribuída a', atribuidaDe], ['Etiquetas', (c) => (c.chatwoot_etiquetas || []).join(', ')],
+      ['Etapa', (c) => ETAPAS_MARI[c.etapa] || c.etapa],
       ['Origem', (c) => ORIGENS_MARI[c.origem] || c.origem], ['Bairro', bairroDe], ['Cidade', (c) => c.cidade], ['Plano', planoTxt], ['Forma', (c) => FORMA[c.forma_pagamento] || ''],
       ['Valor', valorDe], ['Próximo passo', (c) => proximo(c).txt], ['Abertura', (c) => NG.fmtDataHora(c.created_at)], ['Última mensagem', (c) => NG.fmtDataHora(ultimaDe(c))]];
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
@@ -441,8 +498,13 @@
         ${linha('Instalação (preferência)', esc(c.instalacao_preferencia || c.visita_preferencia || '—'))}
         ${c.nio_viab_resultado ? linha('Viabilidade Nio (portal)', esc(NG.VIAB_NIO[c.nio_viab_resultado] || c.nio_viab_resultado)) : ''}
         ${linha('Elegibilidade', esc(ELEG_TXT[c.elegibilidade] || c.elegibilidade || '—'))}
-        ${linha('DFV', esc(DFV_TXT[c.dfv_resultado] || c.dfv_resultado || 'não consultado'))}
+        <div class="d-l com-ajuda" title="${esc(NG.ajuda.dfv_pista)}"><span>Pista do DFV ${NG.dicaTxt(NG.ajuda.dfv_pista)}</span><b>${esc(DFV_TXT[c.dfv_resultado] || c.dfv_resultado || 'não consultado')}</b></div>
       </section>
+      ${c.chatwoot_conversation_id ? `<section class="d-sec"><h3>Chatwoot</h3>
+        <div class="d-l"><span>Status ${NG.dicaTxt(NG.ajuda[(CW[c.chatwoot_status] || [])[2]] || NG.ajuda.cw_aresolver)}</span><b>${chatwootCel(c, false)}</b></div>
+        <div class="d-l"><span>Etiquetas ${NG.dicaTxt(NG.ajuda.cw_etiquetas)}</span><b>${(c.chatwoot_etiquetas || []).length ? `<span class="etiquetas">${c.chatwoot_etiquetas.map((e) => `<span class="chip">${esc(e)}</span>`).join('')}</span>` : '—'}</b></div>
+        ${linha('Lido em', esc(c.chatwoot_sync_em ? `${NG.fmtDataHora(c.chatwoot_sync_em)} (${ha(c.chatwoot_sync_em)})` : 'ainda não lido'))}
+      </section>` : ''}
       ${c.handoff_motivo ? `<section class="d-sec"><h3>Handoff</h3>
         ${linha('Motivo', esc(MOTIVOS[c.handoff_motivo] || c.handoff_motivo))}
         ${linha('Quando', esc(NG.fmtDataHora(c.handoff_em)))}

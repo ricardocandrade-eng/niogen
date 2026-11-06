@@ -917,3 +917,30 @@ label.cartao { cursor: pointer; }
   .cfg-linha.tres { grid-template-columns: minmax(0, 1fr) 110px; }
   .cfg-linha.tres > :nth-child(2) { grid-column: 1; }
 }
+
+/* ---------- 06/11 (prompt 27): ficha — Viabilidade pelo portal e Dados para o portal PAP ---------- */
+.portal-card .d-l b { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pista-dfv { font-size: 12px; color: var(--muted); line-height: 1.45; cursor: help; }
+.pista-dfv span { font-family: var(--dm); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+.pp-etapa { display: flex; flex-direction: column; gap: 2px; }
+.pp-linha { display: grid; grid-template-columns: minmax(110px, 38%) minmax(0, 1fr) 36px; gap: 8px; align-items: center; min-height: 34px; border-bottom: 1px solid var(--border); }
+.pp-linha:last-child { border-bottom: 0; }
+.pp-rot { font-size: 12px; color: var(--muted); }
+.pp-val { font-size: 13px; overflow-wrap: anywhere; display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pp-linha.falta .pp-rot { color: var(--bad-fg); }
+.pp-copiar { min-width: 32px; padding: 2px 6px; }
+@media (max-width: 760px) { .pp-linha { grid-template-columns: minmax(0, 1fr) 40px; } .pp-rot { grid-column: 1 / -1; margin-top: 6px; } }
+
+/* ---------- 06/11 (prompt 27): tela Mari — status do Chatwoot ---------- */
+.cw { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cw small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.pill.cw-aberta { background: var(--warn-bg); color: var(--warn-fg); }
+.pill.cw-resolvida { background: var(--surface-dim); color: var(--muted); border: 1px solid var(--border); }
+.pill.cw-adiada { background: var(--info-bg); color: var(--info-fg); }
+.etiquetas { display: flex; gap: 4px; flex-wrap: wrap; }
+.etiquetas .chip { font-size: 10px; padding: 2px 6px; cursor: help; }
+.com-ajuda { cursor: help; }
+
+/* ---------- 06/11 (prompt 27): menu lateral — contadores ---------- */
+.nav-item .badge.alerta { background: var(--bad-dot); }
+.nav-item .badge.info { background: var(--info-fg); }

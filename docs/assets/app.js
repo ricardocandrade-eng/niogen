@@ -78,6 +78,49 @@
   // ≠ viável = conferir manualmente no portal (variações de CEP/rua/número); quem decide sem cobertura é o humano.
   const VIAB_NIO = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado', posse: 'Endereço já tem Nio (posse)', indisponivel: 'Portal não respondeu' };
   const PORTAL_PAP_NOVO_PEDIDO = 'https://pap.niointernet.com.br/administrativo/novo-pedido';
+  // 06/11 (prompt 27): os 4 estados que o backoffice registra na ficha ("Não consultado" = nada gravado).
+  const VIAB_PORTAL_REGISTRO = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado' };
+  const fmtCep = (c) => { const d = String(c || '').replace(/\D/g, ''); return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : (d || '?'); };
+  // Trava 0 → 1 (0048): só o portal libera — Viável e com menos de 7 dias.
+  const portalViavel = (v) => !!v && v.nio_viab_resultado === 'viavel' && !!v.nio_viab_em && (Date.now() - new Date(v.nio_viab_em)) < 7 * 86400000;
+
+  // ---------- ajuda ao passar o mouse (prompt 27) ----------
+  // Um único dicionário: o que é e o que fazer. Tela Mari, ficha e menu usam daqui (title= + ⓘ via NG.dicaTxt).
+  const ajuda = {
+    // situação da conversa
+    sit_andamento: 'Em andamento: a Mari ainda está conversando com o cliente. Nada a fazer — acompanhe pela conversa.',
+    sit_qualificada: 'Qualificada: a Mari juntou os dados e passou para o time (a venda nasceu em 0 · Qualificado). Próximo passo: consultar a viabilidade no portal e abrir o pedido.',
+    sit_humano: 'Precisa de humano: a Mari parou e pediu alguém do time (pedido do cliente, objeção, urgência, cliente Nio reclamando). Responda pelo Chatwoot.',
+    sit_encerrada: 'Encerrada: a conversa terminou sem venda (recusa, fora de área, sem contato…). Nada a fazer, a não ser que o cliente volte.',
+    sit_venda: 'A situação vem da venda que a Mari criou: a etapa atual dela em Vendas (Qualificado, Vendido…) ou a Saída com o motivo. Abra a venda para ver o próximo passo.',
+    // Chatwoot
+    cw_aresolver: 'A resolver: a conversa está aberta no Chatwoot (aberta ou pendente). Alguém do time precisa responder ou resolver.',
+    cw_resolvida: 'Resolvida: a conversa foi fechada no Chatwoot. Se o cliente escrever de novo, ela reabre e a Mari volta a atender.',
+    cw_adiada: 'Adiada: a conversa foi adiada (snooze) no Chatwoot e volta sozinha na data marcada.',
+    cw_atribuida: 'Quem está com a conversa no Chatwoot (agente e/ou time). Sem ninguém atribuído, a Mari responde; com alguém, ela fica quieta.',
+    cw_etiquetas: 'Etiquetas da conversa no Chatwoot. handoff = a Mari passou para o time · handoff-venda = dados completos, abrir o pedido · handoff-humano = alguém precisa responder já · nao-contatar = a Mari e a cadência param.',
+    cw_sync: 'Quando o NIOGEN leu o status do Chatwoot pela última vez.',
+    // colunas e indicadores da tela Mari
+    col_contato: 'Nome que o cliente informou (ou o telefone mascarado) e a origem da conversa (anúncio, Instagram, Facebook…).',
+    col_local: 'Bairro e cidade do endereço que o cliente passou.',
+    col_situacao: 'Uma situação por conversa. Com venda criada, é a etapa da venda; sem venda, é o ponto em que a Mari está.',
+    col_chatwoot: 'Status no Chatwoot (A resolver / Resolvida), quem está atribuído e as etiquetas.',
+    col_plano: 'Plano e forma de pagamento que o cliente escolheu na conversa.',
+    col_valor: 'Valor mensal do plano na forma de pagamento escolhida (tabela vigente).',
+    col_proximo: 'O que fazer agora. Vermelho = atrasado ou com erro · amarelo = hoje · cinza = esperando o cliente.',
+    col_ultima: 'Há quanto tempo foi a última mensagem (do cliente ou da Mari).',
+    etapa: 'Etapa da Mari na conversa: abertura → endereço → elegibilidade → planos → coleta → resumo → handoff. Retomada = o time devolveu a conversa para ela.',
+    origem: 'De onde o cliente veio: (IG) = link do Instagram, (FB) = botão da página, "Vi o anúncio" = Meta Ads, sem marca = direto.',
+    dfv_pista: 'DFV = foto da base da Nio (03/11). É só uma pista: "não achou" pode ser endereço escrito diferente. Quem decide a viabilidade é o portal PAP.',
+    // ficha · viabilidade e portal
+    viab_portal: 'Viabilidade oficial: o resultado da consulta do endereço no portal PAP (etapa 2 do Novo Pedido). Só "Viável" com menos de 7 dias libera a venda.',
+    viab_consultar: 'Abre o portal PAP numa aba nova e copia "CEP número" para colar na busca de viabilidade.',
+    viab_registrar: 'Depois de consultar no portal, registre aqui o que ele respondeu. Fica gravado com a data e quem registrou.',
+    portal_dados: 'Tudo o que o portal pede no Novo Pedido, na ordem das etapas. Copie campo a campo ou tudo de uma vez. Em vermelho = falta (peça ao cliente antes de abrir o pedido).',
+    // menu lateral
+    menu_mari: 'Conversas esperando alguém do time: handoff da Mari, A resolver no Chatwoot e a última mensagem é do cliente. Vermelho = alguma passou de 15 min em horário de contato.',
+    menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação.',
+  };
   const opcoes = (mapa, atual, vazio = '—') => `<option value="">${vazio}</option>${Object.entries(mapa).map(([k, t]) => `<option value="${k}" ${atual === k ? 'selected' : ''}>${t}</option>`).join('')}`;
   const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice' };
 
@@ -213,7 +256,8 @@
   };
   const TEXTOS_DFV = {
     regra: 'O portal PAP dá a palavra final (viabilidade oficial no pedido). Nunca dizer ao cliente "cobertura confirmada" com base no DFV.',
-    trava: 'Para registrar a venda (0 → 1), a viabilidade tem que estar Viável — a oficial do portal ou a do DFV (Viável ou Viável prédio) — com menos de 7 dias.',
+    // 06/11 (prompt 27, 0048): quem decide é o PORTAL. O DFV é pista — não libera nem nega a venda.
+    trava: 'Para registrar a venda (0 → 1) vale só a viabilidade do portal PAP: Viável, com menos de 7 dias. O DFV é só uma pista — não libera nem nega a venda.',
     como: 'Usuário PARCEIRO · senhas com o Ricardo · filtre UF, município e CEP',
     opcoes: {
       nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de abrir o pedido no portal.',
@@ -740,7 +784,7 @@
         if (v.credito_resultado === 'negado') return { txt: 'Crédito negado no portal · encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
         if (v.biometria_status === 'validada') {
           if (!v.nio_pedido) return { txt: 'Biometria validada · falta o nº do pedido', nivel: 'warn', acao: true, resolver: 'pedido' };
-          if (v.viab_ok === false) return { txt: 'Biometria validada · viabilidade vencida', nivel: 'warn', acao: true, resolver: 'dfv' };
+          if (!portalViavel(v)) return { txt: 'Biometria validada · registrar a viabilidade do portal (Viável)', nivel: 'warn', acao: true, resolver: 'viab' };
           return { txt: 'Biometria validada · registrar a venda', nivel: 'warn', acao: true, resolver: 'pedido' };
         }
         if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
@@ -752,18 +796,19 @@
         if (hCred != null && hCred > 24) return { txt: `Crédito pendente há ${fmtHoras(hCred)} · reconsultar no portal`, nivel: 'warn', acao: true, resolver: 'portal' };
         if (hBio != null && hBio > 24) return { txt: `Link da Nio há ${fmtHoras(hBio)} sem biometria · avisar o cliente`, nivel: 'warn', acao: true, resolver: 'bio_status' };
         if (v.biometria_status === 'pendente') return { txt: `Pedido aberto · ${linkNio}`, nivel: 'ok', resolver: 'bio_status' };
+        // 06/11 (prompt 27): o 1º passo é SEMPRE o portal. O DFV não entra no próximo passo (é pista, fica na ficha).
+        if (!v.nio_pedido && !portalViavel(v)) {
+          const onde = `CEP ${fmtCep(v.cep)}${v.numero ? `, nº ${v.numero}` : ''}${v.complemento ? ` · ${v.complemento}` : ''}`;
+          if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
+            return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/nº ou encerrar`, nivel: 'warn', acao: true, resolver: 'viab' };
+          }
+          if (v.nio_viab_resultado === 'viavel') return { txt: `Viabilidade do portal vencida (> 7 dias) · consultar de novo (${onde})`, nivel: 'warn', acao: true, resolver: 'viab' };
+          return { txt: `Consultar a viabilidade no portal (${onde})`, nivel: 'warn', acao: true, resolver: 'viab' };
+        }
         const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
         const h = (Date.now() - new Date(ult)) / 3600000;
         if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
-        // Viabilidade só aparece quando bloqueia a venda (trava 0 → 1: oficial do portal ou DFV viável < 7 d, ou dispensa).
-        if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado) && !v.viab_ok) {
-          return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/número`, nivel: 'warn', acao: true, resolver: 'dfv' };
-        }
-        if (!(v.viab_ok ?? v.dfv_ok) && !v.dfv_dispensado) {
-          if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: `DFV: ${v.dfv_resultado === 'endereco_ocupado' ? 'indica Nio no endereço' : DFV_OPCOES[v.dfv_viabilidade].toLowerCase()} · conferir no portal`, nivel: 'warn', acao: true, resolver: 'dfv' };
-          return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true, resolver: 'dfv' };
-        }
-        return { txt: 'Abrir pedido no portal e registrar o nº (a Nio manda o link)', nivel: 'ok', resolver: 'portal' };
+        return { txt: 'Abrir o pedido no portal e registrar o nº (a Nio manda o link)', nivel: 'warn', acao: true, resolver: 'portal' };
       }
       case '1_vendido': {
         const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
@@ -866,6 +911,7 @@
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
+    VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
