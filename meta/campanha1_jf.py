@@ -33,7 +33,7 @@ IMAGENS_DIR = r'C:\Users\ricar\Meu Drive\Projetos Claude\dharmapro-nio\criativos
 
 CONTA = 'act_764071346694892'          # CA | Nio Internet 01 – Ricardo (BRL)
 WHATSAPP_MARI = '+553128881265'        # número da Mari na WABA Nio 1419511943295487
-INSTAGRAM_ID = '17841423276547518'     # conta do Instagram "da página" (page-backed) da Nio Internet · Dharma Telecom
+INSTAGRAM_ID = '17841411489935097'     # @mari.nio.internet (do BM Dharma, ligado à página e à CA em 06/11; antes: conta "da página" 17841423276547518)
 VERSOES = ['v24.0', 'v25.0', 'v26.0', 'v23.0']
 STATUS = 'PAUSED'                      # nunca muda: quem ativa é o Ricardo
 
@@ -276,8 +276,9 @@ def nome_criativo(ad):
     # criativo não se edita: cada correção ganha nome novo e a leva anterior vira *_descartado
     #   1ª leva (sem sufixo): sem conta do Instagram → anúncio recusado
     #   _ig: regra do 1x1 sem posições → não casava com nenhum feed (só stories/reels)
-    #   _v2: Instagram da página + posições explícitas
-    return f'CR_{ad["name"]}_v2'
+    #   _v2: Instagram "da página" + posições explícitas
+    #   _v3: @mari.nio.internet + posições explícitas
+    return f'CR_{ad["name"]}_v3'
 
 
 # ─────────────────────────────── principal ───────────────────────────────

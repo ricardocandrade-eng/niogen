@@ -15,7 +15,7 @@ Plano: `docs/META_ADS_campanha1_JF_051126_2230.md` (pasta do Drive). Cria, se ai
 | Campanha | `NIO_JF_C1_MSG_nov26` | `OUTCOME_ENGAGEMENT` · CBO R$ 70/dia · `LOWEST_COST_WITHOUT_CAP` |
 | Conjunto A | `CJ_A_altopadrao` | WhatsApp · `CONVERSATIONS` · pino -21.765/-43.348, raio 2 km · 25–65 |
 | Conjunto B | `CJ_B_medio` | pino -21.735/-43.350, raio 1,5 km (2 km se a API recusar) · 25–65 |
-| 4 criativos | `CR_AD_*_v2` | 1x1 no feed + 9x16 em stories/reels; CTA `WHATSAPP_MESSAGE`; mensagem pronta; melhorias automáticas que a API aceita desligar (animação, tradução de texto, legenda, cartão de perfil) desligadas; Instagram = conta "da página" |
+| 4 criativos | `CR_AD_*_v3` | 1x1 no feed + 9x16 em stories/reels; CTA `WHATSAPP_MESSAGE`; mensagem pronta; melhorias automáticas que a API aceita desligar (animação, tradução de texto, legenda, cartão de perfil) desligadas; Instagram = **@mari.nio.internet** |
 | 8 anúncios | `AD_M1_preco2030` · `AD_G1_preco2030` · `AD_M2_troca` · `AD_G2_cobertura` em cada conjunto | |
 
 Quando a API recusa uma variante (raio, número do WhatsApp no `promoted_object`, 9x16, mensagem pronta,
@@ -41,7 +41,7 @@ termina conferindo que tudo ficou `PAUSED`.
 | Página precisa estar atribuída ao `Nio_API` | página **Nio Internet · Dharma Telecom** `1421228191072269`, atribuída com tarefa de anúncios |
 | WhatsApp da Mari ligado à página | feito no BM: Contas do WhatsApp → Perfil do telefone (2888-1265) → Facebook → Gerenciar. O campo `whatsapp_number` da página **não** mostra esse vínculo; a prova é o conjunto aceitar `whatsapp_phone_number` |
 | "criativo criado por app em modo de desenvolvimento" (subcode 1885183) | app **NIOGEN publicado** (modo ativo), com a política em `docs/privacidade.html` |
-| "conta do Instagram ausente" (subcode 1772103) no anúncio | `instagram_user_id` = conta "da página" `17841423276547518` no criativo. Quando o Instagram próprio existir, criar criativos novos com ele |
+| "conta do Instagram ausente" (subcode 1772103) no anúncio | `instagram_user_id` no criativo: primeiro a conta "da página" `17841423276547518`; desde 06/11 o **@mari.nio.internet** `17841411489935097` (BM → Perfis do Instagram → Conectar ativos: página + CA; Atribuir pessoas: `Nio_API`). A Central de Contas recusou o @ novo ("não se qualifica") — pelo BM funcionou |
 | `degrees_of_freedom_spec`: só aceita as chaves que a API lista no erro | ver `OPT_OUT` no script |
 | `?ids=` descontinuado | conferência de status objeto a objeto |
 | Regra do 1x1 só com `publisher_platforms` não casa com nenhum feed (prévia "0 regras para MOBILE_FEED_STANDARD") | posições listadas explicitamente; criativo trocado nos anúncios existentes (`_v2`). Audience Network outstream é só vídeo e fica sem regra |
