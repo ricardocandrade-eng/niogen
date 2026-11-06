@@ -15,7 +15,7 @@ Plano: `docs/META_ADS_campanha1_JF_051126_2230.md` (pasta do Drive). Cria, se ai
 | Campanha | `NIO_JF_C1_MSG_nov26` | `OUTCOME_ENGAGEMENT` · CBO R$ 70/dia · `LOWEST_COST_WITHOUT_CAP` |
 | Conjunto A | `CJ_A_altopadrao` | WhatsApp · `CONVERSATIONS` · pino -21.765/-43.348, raio 2 km · 25–65 |
 | Conjunto B | `CJ_B_medio` | pino -21.735/-43.350, raio 1,5 km (2 km se a API recusar) · 25–65 |
-| 4 criativos | `CR_AD_*_ig` | 1x1 no feed + 9x16 em stories/reels; CTA `WHATSAPP_MESSAGE`; mensagem pronta; melhorias automáticas que a API aceita desligar (animação, tradução de texto, legenda, cartão de perfil) desligadas; Instagram = conta "da página" |
+| 4 criativos | `CR_AD_*_v2` | 1x1 no feed + 9x16 em stories/reels; CTA `WHATSAPP_MESSAGE`; mensagem pronta; melhorias automáticas que a API aceita desligar (animação, tradução de texto, legenda, cartão de perfil) desligadas; Instagram = conta "da página" |
 | 8 anúncios | `AD_M1_preco2030` · `AD_G1_preco2030` · `AD_M2_troca` · `AD_G2_cobertura` em cada conjunto | |
 
 Quando a API recusa uma variante (raio, número do WhatsApp no `promoted_object`, 9x16, mensagem pronta,
@@ -44,6 +44,8 @@ termina conferindo que tudo ficou `PAUSED`.
 | "conta do Instagram ausente" (subcode 1772103) no anúncio | `instagram_user_id` = conta "da página" `17841423276547518` no criativo. Quando o Instagram próprio existir, criar criativos novos com ele |
 | `degrees_of_freedom_spec`: só aceita as chaves que a API lista no erro | ver `OPT_OUT` no script |
 | `?ids=` descontinuado | conferência de status objeto a objeto |
+| Regra do 1x1 só com `publisher_platforms` não casa com nenhum feed (prévia "0 regras para MOBILE_FEED_STANDARD") | posições listadas explicitamente; criativo trocado nos anúncios existentes (`_v2`). Audience Network outstream é só vídeo e fica sem regra |
+| Limite de chamadas da conta (code 17/2446079) depois de muitas prévias | esperar ~5 min |
 
 ### Token
 

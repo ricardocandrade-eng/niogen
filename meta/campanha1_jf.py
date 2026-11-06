@@ -239,8 +239,15 @@ def payloads_criativo(ad, page_id, h1, h9, ig=INSTAGRAM_ID):
                  'customization_spec': {'publisher_platforms': ['facebook', 'instagram'],
                                         'facebook_positions': ['story', 'facebook_reels'],
                                         'instagram_positions': ['story', 'reels']}},
+                # regra só com publisher_platforms não casa com nenhum feed (prévia: "0 regras para MOBILE_FEED_STANDARD"):
+                # as posições têm de vir explícitas
                 {'priority': 2, 'image_label': {'name': 'img_1x1'},
-                 'customization_spec': {'publisher_platforms': ['facebook', 'instagram', 'audience_network', 'messenger']}},
+                 'customization_spec': {'publisher_platforms': ['facebook', 'instagram', 'audience_network', 'messenger'],
+                                        'facebook_positions': ['feed', 'right_hand_column', 'marketplace', 'video_feeds',
+                                                               'search', 'profile_feed', 'instream_video', 'notification'],
+                                        'instagram_positions': ['stream', 'explore', 'explore_home', 'profile_feed', 'ig_search'],
+                                        'audience_network_positions': ['classic', 'instream_video', 'rewarded_video'],
+                                        'messenger_positions': ['messenger_home']}},
             ],
         }
         if welcome:
@@ -266,8 +273,11 @@ def payloads_criativo(ad, page_id, h1, h9, ig=INSTAGRAM_ID):
 
 
 def nome_criativo(ad):
-    # sufixo _ig: a 1ª leva (05/11) saiu sem conta do Instagram e a Meta recusou o anúncio; criativo não se edita
-    return f'CR_{ad["name"]}_ig'
+    # criativo não se edita: cada correção ganha nome novo e a leva anterior vira *_descartado
+    #   1ª leva (sem sufixo): sem conta do Instagram → anúncio recusado
+    #   _ig: regra do 1x1 sem posições → não casava com nenhum feed (só stories/reels)
+    #   _v2: Instagram da página + posições explícitas
+    return f'CR_{ad["name"]}_v2'
 
 
 # ─────────────────────────────── principal ───────────────────────────────
@@ -499,13 +509,20 @@ def criar(a, conta, versao):
         sid = conjuntos.get(cj['name'], {}).get('id')
         if not sid:
             continue
-        ads_ex = listar(f'{sid}/ads', 'id,name,effective_status')
+        ads_ex = listar(f'{sid}/ads', 'id,name,effective_status,creative{id}')
         anuncios.setdefault(cj['name'], {})
         for ad in ANUNCIOS:
             x = por_nome(ads_ex, ad['name'])
             if x:
                 anuncios[cj['name']][ad['name']] = x['id']
-                print(f'  {cj["name"]}/{ad["name"]}: já existe {x["id"]} · {x["effective_status"]}')
+                quer = criativos.get(ad['name'], {}).get('id')
+                tem = x.get('creative', {}).get('id')
+                if quer and tem != quer and not dry:
+                    api('POST', x['id'], {'creative': {'creative_id': quer}})      # status não muda (segue PAUSED)
+                    print(f'  {cj["name"]}/{ad["name"]}: já existe {x["id"]} · criativo trocado {tem} → {quer}')
+                else:
+                    print(f'  {cj["name"]}/{ad["name"]}: já existe {x["id"]} · {x["effective_status"]}'
+                          + (f' · trocaria criativo {tem} → {quer}' if quer and tem != quer else ''))
             elif dry:
                 print(f'  criaria {cj["name"]}/{ad["name"]}')
             else:

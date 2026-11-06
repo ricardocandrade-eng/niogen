@@ -30,19 +30,19 @@
   },
   "criativos": {
     "AD_M1_preco2030": {
-      "id": "1666228485292112",
+      "id": "1180415050980239",
       "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
     },
     "AD_G1_preco2030": {
-      "id": "1469059699620427",
+      "id": "4688789288112392",
       "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
     },
     "AD_M2_troca": {
-      "id": "1141546458461098",
+      "id": "1556295329595074",
       "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
     },
     "AD_G2_cobertura": {
-      "id": "1183873924165632",
+      "id": "1919738152723308",
       "variante": "1x1 feed + 9x16 stories/reels, com mensagem pronta · melhorias automáticas OFF"
     }
   },
@@ -65,8 +65,10 @@
     "Conjuntos aceitos com promoted_object.whatsapp_phone_number = +553128881265 (vínculo feito no BM).",
     "Mensagem pronta (page_welcome_message em asset_feed_spec.additional_data) e 9x16 por posicionamento aceitos.",
     "Melhorias automáticas: a API só aceita OPT_OUT de IMAGE_ANIMATION, TEXT_OVERLAY_TRANSLATION, IG_VIDEO_NATIVE_SUBTITLE, PROFILE_CARD (entre outras de catálogo); otimização de texto não está na lista — conferir na prévia antes de ativar.",
-    "1ª leva de criativos sem Instagram (1853530752465677, 1774595217140627, 956607784196117, 1445910596889214) renomeada para *_descartado, sem uso."
+    "1ª leva de criativos sem Instagram (1853530752465677, 1774595217140627, 956607784196117, 1445910596889214) renomeada para *_descartado, sem uso.",
+    "2ª leva (_ig) tinha a regra do 1x1 só com publisher_platforms → não casava com nenhum feed (prévia: \"0 regras para MOBILE_FEED_STANDARD\"). _v2 lista as posições; os 8 anúncios trocaram de criativo (06/11). Leva _ig e 2 criativos de teste (1126153520125572, 1458676486210885) viraram *_descartado.",
+    "Prévia _v2 ok em 12 formatos (feeds, stories, reels, explore, marketplace, Messenger, coluna da direita). AUDIENCE_NETWORK_OUTSTREAM_VIDEO segue sem regra: formato só de vídeo, anúncio de imagem não entra."
   ],
-  "atualizado_em": "2026-11-06T00:30:35-03:00",
+  "atualizado_em": "2026-11-06T00:41:24-03:00",
   "instagram": "17841423276547518 (conta da página)"
 }
