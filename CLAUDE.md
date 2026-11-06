@@ -115,6 +115,13 @@ Decisão pendente: quadro Trello próprio "NIOGEN" ou lista dentro do quadro "Gr
 Tabela de planos, área de atuação, régua da Mari, templates, regras do contrato: a mudança atualiza **na mesma sessão** o Supabase (config), o prompt/base
 da Mari, o `INFRA.md` e o Diário. Conflito entre duas fontes não vira lista — pergunta ao Ricardo e corrige todos os lugares.
 
+### 13. Mudou o sistema, muda o guia do backoffice no mesmo passo
+Toda mudança que altera o que o backoffice vê ou faz — Mari (falas, guard, handoff, retomada), nota/etiquetas/times/automações
+do Chatwoot, telas e avisos do NIOGEN ligados à venda, portal PAP, biometria, pagamento, cadência, contrato — atualiza **na mesma
+sessão** `docs/BACKOFFICE_chatwoot_com_a_mari_051126_1045.md` (pasta `dharmapro-nio` no Drive — não é o `docs/` do site; com linha `rev.` no cabeçalho). Vale para o Cowork e para o Claude Code:
+**todo prompt do Code (regra 9) traz o item "atualizar o guia do backoffice"** ou diz explicitamente "guia do backoffice: sem impacto".
+Nada está "pronto" com o guia desatualizado.
+
 ---
 
 ## Regras de conteúdo da Mari (valem para prompt, base e templates)
@@ -122,6 +129,7 @@ da Mari, o `INFRA.md` e o Diário. Conflito entre duas fontes não vira lista �
 - Fala só da tabela vigente. Nunca desconto, prazo, benefício ou promessa de data de instalação.
 - Informa limitações do produto. Pede LGPD curta. Valida CEP (cobertura + área), CPF, telefone confirmado.
 - Cliente Nio reclamando, luto, urgência, pedido de desconto → **humano agora**.
+- **Venda remota (05/11):** não existe visita nem biometria em campo. Pedido pelo portal PAP (BO), link da biometria **disparado pela Nio** (e-mail + WhatsApp) na hora do pedido — nós não mandamos link, instalação agendada pelo nosso time. A Mari coleta preferência de período, nunca promete data. Viabilidade oficial pelo portal (n8n, nível A) antes dos planos; DFV é fallback.
 - Cadência de lead: 24h · D3 · ligação do vendedor · D7 · D15. Régua de pagamento: **D−2 · D0 · D+5**, só fatura em aberto. Depois do D+5, vendedor liga (15 dias perde o M-10).
 - Sempre dentro de 2 contatos/dia e 15/mês; nunca domingo ou feriado.
 - Template com marca Nio → aprovação da Nio antes da Meta.

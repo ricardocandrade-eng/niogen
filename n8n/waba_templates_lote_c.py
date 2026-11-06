@@ -8,7 +8,7 @@
 # WABA Nio: 1419511943295487 (nunca a da Vero). Lotes A e B não são tocados; nio_confirmacao_visita fica como está.
 #
 # Uso:  python n8n/waba_templates_lote_c.py            # dry-run: mostra o que mandaria
-#       python n8n/waba_templates_lote_c.py --enviar   # submete (só os que ainda não têm meta_id)
+#       python n8n/waba_templates_lote_c.py --enviar   # submete (só os que ainda não têm meta_id) — C1 v2 só com o OK do Ricardo
 #       python n8n/waba_templates_lote_c.py --status   # consulta o status na Meta e atualiza o banco
 #       python n8n/waba_templates_lote_c.py --reenviar nio_lembrete_biometria   # edita um template rejeitado (mesmo id)
 
@@ -28,12 +28,11 @@ WABA_NIO = '1419511943295487'
 GRAPH = 'https://graph.facebook.com/v21.0'
 
 LOTE_C = [
-    {'nome': 'nio_lembrete_biometria',
-     # 0026: rejeitado com o link no corpo (INCORRECT_CATEGORY) → corpo sem link + botão de URL dinâmico (Ricardo, 05/11).
-     'corpo': 'Oi, {{1}}! É a Mari, da Nio 👋\n\nSeu pedido de internet está quase pronto: só falta a biometria pelo celular, que leva uns 2 minutos. É só tocar em "Fazer a biometria" aqui embaixo.\n\nSe tiver qualquer dificuldade, me chama por aqui que o nosso time ajuda 😊',
+    {'nome': 'nio_lembrete_biometria_v2',
+     # 0032 (prompt 19): o link da biometria é disparado pela própria Nio (WhatsApp + e-mail) na hora do pedido — não há
+     # link nosso para um botão. O C1 com botão (nio_lembrete_biometria, id 1086217114410209) fica "NÃO USAR" (DISABLED).
+     'corpo': 'Oi, {{1}}! É a Mari, da Nio 👋\n\nSeu pedido de internet já foi aberto e só falta a biometria. A própria Nio te mandou o link por WhatsApp e por e-mail; se não achar o e-mail, confere também a caixa de spam.\n\nÉ rapidinho, você faz pelo celular. Se tiver qualquer dificuldade, me chama por aqui que o nosso time ajuda 😊',
      'exemplo': ['Ana'],
-     'botao_url': {'texto': 'Fazer a biometria', 'url': 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/{{1}}',
-                   'exemplo': 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/11uugb2uoh3k8s'},
      'botoes': ['Preciso de ajuda']},
     {'nome': 'nio_instalacao_agendada',
      'corpo': 'Oi, {{1}}! É a Mari, da Nio. Sua instalação está agendada:\n\nDia: {{2}}\nPeríodo: {{3}}\nEndereço: {{4}}\n\nO técnico da Nio vai até aí; é importante ter alguém maior de idade em casa. Se precisar remarcar, me avisa por aqui 😊',
@@ -95,11 +94,11 @@ def payload(t):
 
 def main():
     banco = {r['nome']: r for r in sql("select nome, corpo, meta_id, status from public.config_templates_waba "
-                                       "where nome in ('nio_lembrete_biometria', 'nio_instalacao_agendada', 'nio_lembrete_instalacao')")}
+                                       "where nome in ('nio_lembrete_biometria_v2', 'nio_instalacao_agendada', 'nio_lembrete_instalacao')")}
     for t in LOTE_C:
         b = banco.get(t['nome'])
         if not b:
-            raise SystemExit(f"{t['nome']} não está em config_templates_waba (aplique a migration 0025 antes).")
+            raise SystemExit(f"{t['nome']} não está em config_templates_waba (aplique as migrations 0025/0032 antes).")
         if b['corpo'] != t['corpo']:
             raise SystemExit(f"{t['nome']}: texto do banco diverge do script — corrigir antes (regra 12).")
 
