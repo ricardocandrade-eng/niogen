@@ -242,29 +242,33 @@ def venda_teste(n, **c):
 
 
 def t12():
-    # biometria por link enviada qua 11/11 10h → D+1 (qui 12/11) lembrete; D+3 (sáb 14/11) humano liga.
-    LINK = 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/teste15abc'
-    sql(venda_teste(15, biometria_status="'pendente'", biometria_link=f"'{LINK}'",
-                    biometria_link_enviado_em="'2026-11-11 10:00-03'")
+    # 0032 (prompt 19): o link da biometria é da Nio — registrar o pedido (qua 11/11 10h) = biometria pendente e a
+    # contagem parte dali → D+1 (qui 12/11) lembrete C1 v2 (sem link); D+3 (sáb 14/11) humano liga.
+    sql(venda_teste(15, nio_pedido="'TESTE-CAD-15'", nio_pedido_em="'2026-11-11 10:00-03'")
         + conv(15, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(115)}'", nome_contato="'Bia Teste'",
                nome_confiavel='true', ultima_msg_lead_at="'2026-11-11 09:30-03'")
         + turno(15, 'mari', '2026-11-11 09:31-03', 'Pronto, anotado!'))
+    v = sql(f"select biometria_status, biometria_link_enviado_em = nio_pedido_em as conta_do_pedido from public.vendas where id = '{uid(115)}'")[0]
     a0 = um(sql(avaliar(15, '2026-11-11 15:00-03')))
-    a1 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela fechada → template C1 (PENDING até a Meta aprovar)
+    a1 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela fechada → template C1 v2 (PENDING até a Meta aprovar)
     sql(f"update public.mari_conversas set ultima_msg_lead_at = '2026-11-12 10:00-03' where id = '{uid(15)}'")
-    a2 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela aberta → texto livre com o link
-    ok2 = a2 and a2['proximo_passo'] == 'BIO1' and a2['pode_enviar'] and a2['acao'] == 'texto' and LINK in (a2['texto'] or '')
+    a2 = um(sql(avaliar(15, '2026-11-12 10:30-03')))   # janela aberta → texto livre, o mesmo texto, sem link
+    t2 = norm(a2 and a2['texto'])
+    ok2 = (a2 and a2['proximo_passo'] == 'BIO1' and a2['pode_enviar'] and a2['acao'] == 'texto'
+           and 'propria nio' in t2 and 'whatsapp' in t2 and 'spam' in t2 and 'http' not in t2)
     if ok2:
         sql(f"select public.mari_cadencia_registrar('{uid(15)}', 'BIO1', true, null, '2026-11-12 10:30-03', $${a2['texto']}$$, null)")
     a3 = um(sql(avaliar(15, '2026-11-14 10:30-03')))
-    ok = (a0 and a0['proximo_passo'] == 'BIO1' and not a0['pode_enviar']
-          and a1 and a1['proximo_passo'] == 'BIO1' and a1['template'] == 'nio_lembrete_biometria' and a1['params'][1] == 'teste15abc' and 'Fazer a biometria' in (a1['texto'] or '')
+    ok = (v['biometria_status'] == 'pendente' and v['conta_do_pedido']
+          and a0 and a0['proximo_passo'] == 'BIO1' and not a0['pode_enviar']
+          and a1 and a1['proximo_passo'] == 'BIO1' and a1['template'] == 'nio_lembrete_biometria_v2' and a1['params'] == ['Bia']
+          and 'http' not in norm(a1['texto'])
           and ok2
           and a3 and a3['proximo_passo'] == 'BIO3' and not a3['pode_enviar'] and a3['ligar_sugerido'])
-    checa('12 · biometria pendente: D+1 lembrete com o link; D+3 → humano liga (nunca automático)', bool(ok),
-          f"11/11 15h: {a0 and a0['bloqueio']} · 12/11 sem janela: {a1 and a1['template']} ({a1 and a1['bloqueio']}) · "
-          f"12/11 na janela: {a2 and a2['acao']} pode={a2 and a2['pode_enviar']} · 14/11: {a3 and a3['proximo_passo']} "
-          f"ligar={a3 and a3['ligar_sugerido']} ({a3 and a3['bloqueio']})")
+    checa('12 · pedido registrado → biometria pendente; D+1 lembrete C1 v2 (sem link); D+3 → humano liga', bool(ok),
+          f"venda: {v} · 11/11 15h: {a0 and a0['bloqueio']} · 12/11 sem janela: {a1 and a1['template']} {a1 and a1['params']} "
+          f"({a1 and a1['bloqueio']}) · 12/11 na janela: {a2 and a2['acao']} pode={a2 and a2['pode_enviar']} · "
+          f"14/11: {a3 and a3['proximo_passo']} ligar={a3 and a3['ligar_sugerido']} ({a3 and a3['bloqueio']})")
 
 
 def t13():
@@ -289,7 +293,7 @@ def t13():
 
 
 def t14():
-    # 0027: atendente manda o link da biometria no Chatwoot → o NIOGEN grava sozinho na venda da conversa.
+    # 0027 (fallback desde a 0032): SEM pedido registrado, o link colado no Chatwoot ainda marca a venda.
     base = 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/'
     tel = f'{PREFIXO}917'
     sql(venda_teste(17, biometria_status="'nao_enviada'")
@@ -314,14 +318,46 @@ def t14():
     ok = (r0 is None and r1 == 'link registrado' and v1['biometria_status'] == 'pendente' and v1['biometria_link'] == base + 'abc17'
           and v1['biometria_link_enviado_em'] and r2 == 'mesmo link já registrado' and r3 == 'link trocado (reenvio)'
           and v3['biometria_link'] == base + 'novo17' and int(ev) == 2 and r4 == 'venda já passou da biometria')
-    checa('14 · link da biometria mandado no Chatwoot → gravado na venda (reenvio troca; validada não mexe)', bool(ok),
+    checa('14 · fallback sem pedido: link colado no Chatwoot → gravado na venda (reenvio troca; validada não mexe)', bool(ok),
           f"sem link: {r0} · 1º: {r1} ({v1['biometria_status']}) · repetido: {r2} · novo: {r3} · eventos: {ev} · validada: {r4}")
 
+
+def t15():
+    # 0032: registrar o nº do pedido na ficha → biometria pendente, contagem da hora do pedido; link colado DEPOIS no
+    # Chatwoot só fica como referência (não muda status nem contagem).
+    base = 'https://ged360.niointernet.com.br/brprontopdv/pdv-mobile/biometria/login/'
+    tel = f'{PREFIXO}918'
+    sql(venda_teste(18, biometria_status="'nao_enviada'")
+        + conv(18, status="'handoff_realizado'", etapa="'handoff'", venda_id=f"'{uid(118)}'"))
+
+    def venda():
+        return sql(f"select biometria_status, biometria_link, nio_pedido_em, biometria_link_enviado_em from public.vendas where id = '{uid(118)}'")[0]
+
+    def humano(txt):
+        r = sql(f"select public.mari_registrar_turno('{tel}', 'Atendente', $${txt}$$, 'humano', 'teste') as r")
+        return (r[0]['r'] or {}).get('biometria_link')
+
+    v0 = venda()
+    sql(f"update public.vendas set nio_pedido = 'TESTE-CAD-18' where id = '{uid(118)}'")
+    v1 = venda()
+    r1 = humano(f'A Nio te mandou este link: {base}abc18')
+    v2 = venda()
+    r2 = humano(f'Outro: {base}xyz18')
+    v3 = venda()
+    ok = (v0['biometria_status'] == 'nao_enviada' and not v0['nio_pedido_em']
+          and v1['biometria_status'] == 'pendente' and v1['nio_pedido_em'] and v1['biometria_link_enviado_em'] == v1['nio_pedido_em']
+          and r1 == 'link guardado (o pedido já define a contagem)' and v2['biometria_link'] == base + 'abc18'
+          and v2['biometria_link_enviado_em'] == v1['biometria_link_enviado_em'] and v2['biometria_status'] == 'pendente'
+          and r2 == 'pedido já registrado (link não muda a contagem)' and v3['biometria_link'] == base + 'abc18'
+          and v3['biometria_link_enviado_em'] == v1['biometria_link_enviado_em'])
+    checa('15 · nº do pedido na ficha → pendente e contagem da hora do pedido; link colado depois não muda nada', bool(ok),
+          f"antes: {v0['biometria_status']} · pedido: {v1['biometria_status']} conta={v1['biometria_link_enviado_em'] == v1['nio_pedido_em']} · "
+          f"link depois: {r1} · 2º link: {r2} · contagem intacta={v3['biometria_link_enviado_em'] == v1['biometria_link_enviado_em']}")
 
 if __name__ == '__main__':
     print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
     try:
-        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14):
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14, t15):
             try:
                 t()
             except Exception as e:
