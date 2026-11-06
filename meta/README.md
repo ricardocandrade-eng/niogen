@@ -47,6 +47,33 @@ termina conferindo que tudo ficou `PAUSED`.
 | Regra do 1x1 só com `publisher_platforms` não casa com nenhum feed (prévia "0 regras para MOBILE_FEED_STANDARD") | posições listadas explicitamente; criativo trocado nos anúncios existentes (`_v2`). Audience Network outstream é só vídeo e fica sem regra |
 | Limite de chamadas da conta (code 17/2446079) depois de muitas prévias | esperar ~5 min |
 
+### Criativo por posicionamento — v4 e a trava (prompt 25, 06/11)
+
+Em 06/11 o `AD_M1_preco2030` apareceu nos Stories do Instagram com a **1x1 ampliada e cortada**: as regras da v3 não tinham
+fallback nem cobriam `profile_reels`, `reels_overlay`, `messenger story`, `whatsapp status`. Desde o v4 (`CR_AD_*_v4`, anúncios `AD_*_v4`):
+
+- **Regra 1 — 9x16:** `facebook [story, facebook_reels, facebook_reels_overlay]` · `instagram [story, reels, profile_reels, reels_overlay]` ·
+  `messenger [story]` · `whatsapp [status]` (constante `REGRA_VERTICAL`).
+- **Regra 2 — fallback 1x1:** sem `customization_spec` de posição (= todo o resto). `--layout 3` insere antes dela os feeds
+  explícitos da v3 (plano B se a prévia dos feeds não casar com o fallback puro).
+- Melhorias automáticas todas `OPT_OUT` (as 4 de antes + `image_auto_crop`, `adapt_to_placement`, `image_uncrop`, `pac_relaxation`,
+  `text_optimizations`); se a API recusar as chaves extras, cai para as 4 e anota.
+- **`validar_criativo(spec, dimensoes)`** roda antes de **todo** `POST /adcreatives` (`criar_criativo` é o único caminho) e recusa:
+  menos de 2 versões, 9x16 ≠ 1080×1920 (ou 1x1 ≠ 1080×1080), regra vertical que não cubra a lista, falta de fallback (ou fallback
+  antes da vertical), qualquer recurso automático `OPT_IN` / ausente. Teste offline: `python tests/meta_validar_criativo_testes.py`.
+
+```bash
+python meta/recriar_criativos_v4.py --offline          # plano + trava, sem token
+python meta/recriar_criativos_v4.py --page-id 1421228191072269   # cria criativos/anúncios v4 PAUSED + prévias (prova)
+python meta/recriar_criativos_v4.py --ativar-v4        # só com a prova das prévias OK no JSON
+python meta/recriar_criativos_v4.py --pausar-v3        # só depois dos v4 ACTIVE (v3 nunca é apagado)
+python meta/recriar_criativos_v4.py --insights         # 24 h depois: gasto/impressões por plataforma × posição
+```
+
+Prova: `GET /{ad}/previews` em `INSTAGRAM_STORY`, `FACEBOOK_STORY_MOBILE`, `INSTAGRAM_REELS`, `FACEBOOK_REELS_MOBILE` (esperado 9x16) e
+nos feeds (esperado 1x1); o HTML fica em `meta/_previas/` (**fora do git**) e o resultado em `previas` no `campanha1_jf_ids.json`.
+Prévia que não dá para identificar vira "?" e **bloqueia** `--ativar-v4`. O JSON passa a guardar os IDs v3 em `legado._v3`.
+
 ### Token
 
 `META_ACCESS_TOKEN_NIO` (app **NIOGEN**, system user `Nio_API`, `ads_read` + `ads_management`). O script lê, nessa
