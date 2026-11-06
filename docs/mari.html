@@ -18,12 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-6">
-<script src="config.js?v=061126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-7">
+<script src="config.js?v=061126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-6"></script>
-<script src="assets/sidebar.js?v=061126-6"></script>
-<script src="assets/ficha.js?v=061126-6"></script>
+<script src="assets/app.js?v=061126-7"></script>
+<script src="assets/sidebar.js?v=061126-7"></script>
+<script src="assets/ficha.js?v=061126-7"></script>
 </head>
 <body>
 <div class="app">
@@ -200,14 +200,17 @@
 
   // ------------------------------------------------------------------ regras de apresentação
   const ehTeste = (c) => c.canal === 'teste' || String(c.telefone || '').startsWith(PREFIXO_TESTE);
+  // 06/11 (Ricardo): nome como está na Mari/Chatwoot — o que o cliente informou ou, antes disso, o do perfil do WhatsApp.
+  // Nada mascarado na tela (telefone e CPF inteiros); a tela continua só para admin e backoffice.
   const nomeDe = (c) => {
-    const n = (c.dados && c.dados.nome) || (c.nome_confiavel ? c.nome_contato : null);
+    const n = (c.dados && c.dados.nome) || c.nome_contato;
     return n ? String(n).trim() : null;
   };
   function telMascara(t) {
     const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
-    if (d.length < 10) return d ? `••••${d.slice(-4)}` : '—';
-    return `${d.slice(0, 2)} ${d.slice(2, 3)}••••-${d.slice(-4)}`;
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return d || '—';
   }
   const contatoDe = (c) => nomeDe(c) || telMascara(c.telefone);
   const bairroDe = (c) => (c.endereco_cep && c.endereco_cep.bairro) || null;
@@ -220,8 +223,7 @@
   function cpfMascara(cpf) {
     const d = String(cpf || '').replace(/\D/g, '');
     if (!d) return '—';
-    if (ADMIN) return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
-    return d.length >= 11 ? `•••.${d.slice(3, 6)}.•••-••` : '•••';
+    return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
   }
 
   // Situação: UMA pílula por linha. Com venda (prompt 27): a etapa da venda ou "Saída · motivo" — nunca o estado velho da Mari.
@@ -415,7 +417,7 @@
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(tr.dataset.id); });
   cartoesEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
 
-  // CSV: sem CPF, telefone mascarado.
+  // CSV: sem CPF; telefone inteiro (06/11, Ricardo: nada mascarado).
   document.getElementById('exportar').addEventListener('click', () => {
     const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Situação', (c) => situacao(c).txt],
       ['Chatwoot', (c) => (CW[c.chatwoot_status] || [''])[0]], ['Atribuída a', atribuidaDe], ['Etiquetas', (c) => (c.chatwoot_etiquetas || []).join(', ')],

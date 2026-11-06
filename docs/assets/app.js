@@ -101,7 +101,7 @@
     cw_etiquetas: 'Etiquetas da conversa no Chatwoot. handoff = a Mari passou para o time · handoff-venda = dados completos, abrir o pedido · handoff-humano = alguém precisa responder já · nao-contatar = a Mari e a cadência param.',
     cw_sync: 'Quando o NIOGEN leu o status do Chatwoot pela última vez.',
     // colunas e indicadores da tela Mari
-    col_contato: 'Nome que o cliente informou (ou o telefone mascarado) e a origem da conversa (anúncio, Instagram, Facebook…).',
+    col_contato: 'Nome que o cliente informou à Mari ou, antes disso, o nome do perfil do WhatsApp (sem nome, o telefone), e a origem da conversa (anúncio, Instagram, Facebook…).',
     col_local: 'Bairro e cidade do endereço que o cliente passou.',
     col_situacao: 'Uma situação por conversa. Com venda criada, é a etapa da venda; sem venda, é o ponto em que a Mari está.',
     col_chatwoot: 'Status no Chatwoot (A resolver / Resolvida), quem está atribuído e as etiquetas.',
