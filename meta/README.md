@@ -54,7 +54,7 @@ fallback nem cobriam `profile_reels`, `reels_overlay`, `messenger story`, `whats
 
 - **Regra 1 — 9x16:** `facebook [story, facebook_reels, facebook_reels_overlay]` · `instagram [story, reels, profile_reels, reels_overlay]` ·
   `messenger [story]` · `whatsapp [status]` (constante `REGRA_VERTICAL`).
-- **Regra 2 — fallback 1x1:** sem `customization_spec` de posição (= todo o resto). `--layout 3` insere antes dela os feeds
+- **Regra 2 — fallback 1x1:** sem nenhuma posição (= todo o resto), só com `{age_min:13, age_max:65}`: a Meta recusa a regra totalmente sem `customization_spec` (1487390) e aceita assim. `--layout 3` insere antes dela os feeds
   explícitos da v3 (plano B se a prévia dos feeds não casar com o fallback puro).
 - Melhorias automáticas todas `OPT_OUT` (as 4 de antes + `image_auto_crop`, `adapt_to_placement`, `image_uncrop`, `pac_relaxation`,
   `text_optimizations`); se a API recusar as chaves extras, cai para as 4 e anota.
@@ -72,7 +72,7 @@ python meta/recriar_criativos_v4.py --insights         # 24 h depois: gasto/impr
 
 Prova: `GET /{ad}/previews` em `INSTAGRAM_STORY`, `FACEBOOK_STORY_MOBILE`, `INSTAGRAM_REELS`, `FACEBOOK_REELS_MOBILE` (esperado 9x16) e
 nos feeds (esperado 1x1); o HTML fica em `meta/_previas/` (**fora do git**) e o resultado em `previas` no `campanha1_jf_ids.json`.
-Prévia que não dá para identificar vira "?" e **bloqueia** `--ativar-v4`. O JSON passa a guardar os IDs v3 em `legado._v3`.
+O HTML da prévia é só o shell de um app JS (a imagem é desenhada no navegador): a prova real abre o `preview_iframe.php` no navegador e mede as `<img>` (feito em 06/11: Stories/Reels 1080×1920, feeds 1:1). Prévia que o script não consegue identificar vira "?" e **bloqueia** `--ativar-v4`. A Meta descarta `whatsapp_positions` (a regra vale para todo o WhatsApp); `conferir_regras_gravadas` lê de volta o que ela guardou. O JSON passa a guardar os IDs v3 em `legado._v3`.
 
 ### Token
 

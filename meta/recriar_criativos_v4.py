@@ -173,6 +173,38 @@ def comparar_com_v3(saida):
                 print(f'     ! {caminho} difere do v3 — conferir antes de ativar')
 
 
+def conferir_regras_gravadas(saida):
+    """A trava valida o que ENVIAMOS; aqui se lê o que a Meta GUARDOU (ela descartou whatsapp_positions em 06/11).
+    Plataforma em publisher_platforms sem lista *_positions = vale para todas as posições dela (cobre)."""
+    ok = True
+    for nome, cr in saida.get('criativos', {}).items():
+        r = c.api('GET', cr['id'], {'fields': 'asset_feed_spec{asset_customization_rules},degrees_of_freedom_spec'})
+        regras = r['asset_feed_spec']['asset_customization_rules']
+        vert = next((x for x in regras if x['image_label']['name'] == 'img_9x16'), None)
+        fb = [x for x in regras if x['image_label']['name'] == 'img_1x1' and
+              not any(k.endswith('_positions') or k == 'publisher_platforms' for k in x.get('customization_spec', {}))]
+        spec = (vert or {}).get('customization_spec', {})
+        problemas = []
+        for plat in c.REGRA_VERTICAL['publisher_platforms']:
+            if plat not in spec.get('publisher_platforms', []):
+                problemas.append(f'{plat} fora de publisher_platforms')
+            elif f'{plat}_positions' in spec:
+                faltam = set(c.REGRA_VERTICAL.get(f'{plat}_positions', [])) - set(spec[f'{plat}_positions'])
+                if faltam:
+                    problemas.append(f'{plat}: faltam {sorted(faltam)}')
+        if not fb:
+            problemas.append('fallback 1x1 não foi guardado')
+        feats = r['degrees_of_freedom_spec']['creative_features_spec']
+        ligados = [k for k, v in feats.items() if v.get('enroll_status') != 'OPT_OUT']
+        if ligados:
+            problemas.append(f'recursos fora de OPT_OUT: {ligados}')
+        sem_lista = [p for p in c.REGRA_VERTICAL['publisher_platforms'] if f'{p}_positions' not in spec]
+        print(f'  {nome}: ' + ('guardado como enviado' + (f' (sem lista de posições, vale para todas: {sem_lista})' if sem_lista else '')
+                               if not problemas else 'PROBLEMAS — ' + '; '.join(problemas)))
+        ok = ok and not problemas
+    return ok
+
+
 def ids_v(saida, versao):
     if versao == 'v4':
         return {i: f'{cj}/{n}{c.SUFIXO}' for cj, d in saida.get('anuncios', {}).items() for n, i in d.items()}

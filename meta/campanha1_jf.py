@@ -111,14 +111,17 @@ class ErroMeta(Exception):
 
 
 def ler_token():
-    v = os.environ.get('META_ACCESS_TOKEN_NIO')
-    if not v and sys.platform == 'win32':
+    v = None
+    if sys.platform == 'win32':
+        # variável de usuário primeiro: um processo já aberto (terminal, app) guarda a cópia ANTIGA do ambiente
+        # e continua usando o token rotacionado/revogado até ser reiniciado (06/11: "Bad signature" com token novo salvo)
         import winreg
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Environment') as h:
                 v = winreg.QueryValueEx(h, 'META_ACCESS_TOKEN_NIO')[0]
         except OSError:
             v = None
+    v = v or os.environ.get('META_ACCESS_TOKEN_NIO')
     if not v:
         env = os.path.join(REPO, '.env')
         if os.path.exists(env):
@@ -253,7 +256,9 @@ def regras_posicionamento(layout=2):
     r = [{'priority': 1, 'image_label': {'name': 'img_9x16'}, 'customization_spec': copy.deepcopy(REGRA_VERTICAL)}]
     if layout == 3:
         r.append({'priority': 2, 'image_label': {'name': 'img_1x1'}, 'customization_spec': copy.deepcopy(REGRA_FEEDS_1X1)})
-    r.append({'priority': len(r) + 1, 'image_label': {'name': 'img_1x1'}})
+    # A Meta recusa (1487390, "tente novamente mais tarde") regra SEM customization_spec; com só a faixa de idade, aceita —
+    # e é como ela mesma guarda as regras (age_min 13 / age_max 65 = sem restrição de idade). Nenhuma posição = "o resto".
+    r.append({'priority': len(r) + 1, 'image_label': {'name': 'img_1x1'}, 'customization_spec': {'age_min': 13, 'age_max': 65}})
     return r
 
 
