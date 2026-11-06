@@ -1,4 +1,5 @@
-// NIOGEN | n8n/mari/n02_entrada.js — nó "2 · Entrada" do workflow mari_principal (04/11/2026; resolvida → 2v em 05/11, prompt 18)
+// NIOGEN | n8n/mari/n02_entrada.js — nó "2 · Entrada" do workflow mari_principal (04/11/2026; resolvida → 2v em 05/11, prompt 18;
+//   origem pela mensagem pronta (IG)/(FB)/anúncio em 06/11, 0033)
 // Normaliza a entrada (rota de teste ou webhook do Chatwoot), aplica o interruptor de modo
 // (staticData._modoMari = 'teste' | 'chatwoot'), comandos admin da rota de teste, detecção de mídia
 // e rate limit. Sem texto de negócio e sem segredo.
@@ -19,6 +20,17 @@ const ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } 
 const fim = (saida) => [{ json: { encerrar: true, saida } }];
 
 const MIDIA_SO = new Set(['audio', 'voice', 'video', 'sticker', 'document', 'file', 'attachment']);
+
+// Origem pela mensagem pronta (06/11, migration 0033): link da bio do Instagram termina em "(IG)", botão da página do
+// Facebook em "(FB)", anúncio da campanha 1 começa com "Vi o anúncio" (INFRA §7). Sem marca = null → o banco grava 'direto'.
+// O banco só usa a origem na conversa nova ou numa conversa ainda 'direto' — nunca troca uma origem já conhecida.
+const origemDoTexto = (t) => {
+  const s = String(t || '');
+  if (/\(IG\)|vim pelo instagram/i.test(s)) return 'instagram';
+  if (/\(FB\)|vim pela p[áa]gina do facebook/i.test(s)) return 'facebook';
+  if (/vi o an[úu]ncio/i.test(s)) return 'meta_ads';
+  return null;
+};
 
 let entrada;
 
@@ -53,7 +65,8 @@ if (ex('1 · Webhook Mari teste')) {
 
   entrada = {
     canal: 'teste', telefone: tel, nome: String(body.nome || '').trim(), texto,
-    origem: body.origem || 'teste', chatwootConversationId: null,
+    // origem 'auto' = a bateria testa a leitura da mensagem pronta (sem marca → 'direto').
+    origem: body.origem === 'auto' ? (origemDoTexto(texto) || 'direto') : (body.origem || 'teste'), chatwootConversationId: null,
   };
 } else if (ex('1c · Webhook Chatwoot')) {
   if (modo !== 'chatwoot') return [];
@@ -113,7 +126,7 @@ if (ex('1 · Webhook Mari teste')) {
   entrada = {
     canal: 'whatsapp', telefone: String(sender.phone_number || '').replace(/\D/g, ''),
     nome: String(sender.name || '').trim(), texto,
-    origem: null, chatwootConversationId: convId,
+    origem: origemDoTexto(texto), chatwootConversationId: convId,
   };
   if (!/^\d{10,15}$/.test(entrada.telefone)) return [];
 } else {

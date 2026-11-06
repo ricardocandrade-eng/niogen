@@ -47,7 +47,7 @@
   const etapaDe = (status) => ETAPAS.find((e) => e.status.includes(status)) || { id: '', nome: status || '—', status: [] };
 
   const ORIGENS = {
-    meta_ads: 'Meta Ads · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
+    meta_ads: 'Meta Ads · Mari', instagram: 'Instagram · Mari', facebook: 'Facebook · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
     indicacao: 'Indicação', site: 'Site', outro: 'Evento / outro',
   };
   const FORMAS = { boleto: 'Boleto', cartao: 'Cartão', dacc: 'DACC' };
