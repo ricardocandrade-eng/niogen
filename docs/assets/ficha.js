@@ -5,6 +5,7 @@
  * resolve o passo (o formulário abre DENTRO da ficha) · linha do tempo das etapas · blocos recolhíveis com resumo de uma linha.
  * Gravação: os mesmos updates de antes (vendas / contatos_cliente) com os mesmos campos; as travas são do banco (triggers)
  * e a mensagem do RAISE volta como toast. Nada de regra de negócio aqui.
+ * 06/11 (prompt 25): cartão da CONFERÊNCIA DE QUALIDADE (só origem parceiro_pap), origem "Parceiro PAP · nome" e "Gerar lançamentos".
  * Depende de app.js (NG). Uso: <script src="assets/ficha.js"></script>; NGFicha.abrir(id) · NGFicha.aoMudar(fn) · NGFicha.pagina(el, id).
  */
 (function () {
@@ -108,6 +109,15 @@
       // 0027: link do portal colado na conversa do Chatwoot (fallback desde a 0032: com pedido registrado, só referência).
       titulo = dt.so_referencia ? 'Link da biometria guardado (Chatwoot)' : dt.reenvio ? 'Link da biometria reenviado (Chatwoot)' : 'Link da biometria colado (Chatwoot)';
       texto = `${NG.fmtDataHora(e.criado_em)} · gravado automaticamente da conversa · ${dt.so_referencia ? 'só referência (a contagem é do pedido)' : 'biometria pendente (sem pedido registrado)'}`;
+    } else if (e.tipo === 'conferencia') {
+      // Conferência de qualidade da venda de parceiro (0038). A observação é INTERNA: nunca vai para o parceiro.
+      titulo = `Conferência · ${NG.CONFERENCIA_STATUS[dt.para] || dt.para}`;
+      cor = ['reprovada', 'devolvida'].includes(dt.para) ? 'bad' : dt.para === 'pendente' ? 'warn' : '';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.motivo ? ' · ' + esc(NG.MOTIVOS_CONFERENCIA[dt.motivo] || dt.motivo) : ''}${dt.obs ? ' · obs. interna: ' + esc(dt.obs) : ''}`;
+    } else if (e.tipo === 'parceiro_sem_comissao') {
+      titulo = 'Instalada sem comissão configurada para o parceiro';
+      cor = 'warn';
+      texto = `${NG.fmtDataHora(e.criado_em)} · configure o valor do plano em Configurações › Programa Parceiro e use "Gerar lançamentos"`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -142,7 +152,7 @@
       ['admin', 'backoffice'].includes(perfil)
         ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
-      NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo').eq('venda_id', id).order('em', { ascending: false }).limit(30),
+      NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
@@ -154,7 +164,32 @@
       nomeCurto = (rp.data || {}).nome_curto || null;
     }
     const nomeDe = Object.fromEntries(ru.map((u) => [u.id, u.nome]));
+    // Venda de parceiro (admin/backoffice): máximo de tentativas, comissão configurada e se o lançamento já saiu.
+    let parc = null;
+    if (v.origem === 'parceiro_pap' && ['admin', 'backoffice'].includes(perfil)) {
+      // Obs. interna, quem e quando aprovou não estão em v_funil (só prazo, status e motivo): lê da tabela.
+      const rx = await NG.sb.from('vendas').select('conferencia_obs, conferencia_em, conferencia_por').eq('id', id).maybeSingle();
+      if (rx.data) Object.assign(v, rx.data);
+      const [rcfg, rcom, rpag] = await Promise.all([
+        NG.sb.from('config_parceiros').select('conferencia_max_tentativas').maybeSingle(),
+        v.plano_id ? NG.sb.from('parceiro_comissao').select('parceiro_id, valor').eq('plano_id', v.plano_id) : Promise.resolve({ data: [] }),
+        NG.sb.from('parceiro_pagamentos').select('id, tipo, status').eq('venda_id', id),
+      ]);
+      const linhasCom = (rcom.data || []).filter((x) => x.parceiro_id === v.parceiro_id || x.parceiro_id === null);
+      const doParc = linhasCom.find((x) => x.parceiro_id === v.parceiro_id);
+      const padrao = linhasCom.find((x) => x.parceiro_id === null);
+      const valor = doParc ? Number(doParc.valor) : padrao ? Number(padrao.valor) : null;
+      parc = {
+        max: (rcfg.data || {}).conferencia_max_tentativas || 3,
+        comissaoValor: valor,
+        temPagamentoComissao: (rpag.data || []).some((x) => x.tipo === 'comissao'),
+      };
+    }
+    const abertura = [...(re.data || [])].reverse().find((e) => e.tipo === 'conferencia' && (e.detalhe || {}).para === 'pendente');
+    const desde = abertura ? new Date(abertura.criado_em) : new Date(v.criado_em);
+    const semResposta = (rk.data || []).filter((c) => c.toque === 'CONF_SEM_RESPOSTA' && new Date(c.em) >= desde).length;
     return {
+      parc, semResposta,
       v,
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
       lim: rl.data || { hoje: 0, mes: 0 },
@@ -205,6 +240,8 @@
   const formWrap = (id, titulo, texto, corpo, rotulo) => `<form class="f-formulario" data-form="${id}" novalidate>
       <h3>${esc(titulo)}</h3>${texto ? `<p>${texto}</p>` : ''}${corpo}${acoesForm(rotulo || 'Salvar')}</form>`;
 
+  const formMotivoConf = () => `<label class="campo">Motivo (o parceiro vê este texto)<select name="motivo_conf"><option value="">Escolher o motivo…</option>${Object.entries(NG.MOTIVOS_CONFERENCIA).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('')}</select></label>
+      <label class="campo">Observação interna <span class="nota-campo">(não aparece para o parceiro)</span><textarea name="obs_conf" maxlength="500"></textarea></label>`;
   // Formulários (faixa do próximo passo, "Mover para…" e "Editar" dos blocos). Cada um grava o que a tela antiga gravava.
   const FORMS = {
     // Qualificado → Vendido (era o modal "Registrar venda": pedido + biometria; a trava do banco confere DFV e o resto).
@@ -242,6 +279,11 @@
     sem_cobertura: (v) => formWrap('sem_cobertura', v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : 'Encerrar: sem cobertura',
       v.dfv_resultado === 'endereco_ocupado' ? 'Use só se o cliente confirmou que já tem Nio (vender seria estorno 100 %). A venda vai para Saída "Já é cliente Nio".'
         : 'Use só depois de conferir no portal (com variações de CEP, rua e número) que não há viabilidade. A venda vai para Saída "Sem cobertura" e volta para a fila em 90 dias.', '', 'Encerrar'),
+    // Conferência de qualidade (venda de parceiro): motivo da lista fechada (0038) + observação INTERNA.
+    conf_reprovar: () => formWrap('conf_reprovar', 'Reprovar a venda do parceiro',
+      'A venda vai para Saída com este motivo e o parceiro vê só o motivo da lista. Suspeita de fraude: avise o Ricardo na hora.', formMotivoConf(), 'Reprovar e encerrar'),
+    conf_devolver: () => formWrap('conf_devolver', 'Devolver ao parceiro',
+      'A venda volta ao parceiro com o motivo da lista para ele corrigir e reenviar. Continua em Qualificado.', formMotivoConf(), 'Devolver ao parceiro'),
     // Mover para Aguardando pelo seletor (era o modal de NG.moverStatus: só a data).
     mover_aguardando: (v) => formWrap('mover_aguardando', 'Mover para Aguardando instalação', 'Informe a data combinada com o cliente.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
@@ -251,7 +293,13 @@
   // ---------- gravação ----------
   async function gravar(campos, msgOk) {
     const { error } = await NG.sb.from('vendas').update(campos).eq('id', d.v.id);
-    if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+    if (error) {
+      NG.toast(NG.msgErro(error), 'bad');
+      // A trava da conferência é do banco; a ficha só explica, em faixa amarela dentro do cartão da conferência.
+      if (d.v.origem === 'parceiro_pap' && /confer[eê]ncia/i.test(NG.msgErro(error))) { d.avisoBanco = NG.msgErro(error); render(); }
+      return false;
+    }
+    if (d) { d.avisoBanco = null; d.avisoTent = null; }
     NG.toast(msgOk, 'ok');
     formAtivo = null;
     edicao = null;
@@ -337,6 +385,8 @@
       const volta = NG.diaSP(new Date(Date.now() + 90 * 86400000));
       return gravar({ status: 'saida', motivo_saida: 'Sem cobertura', interesse_futuro_em: volta }, `Saída "Sem cobertura" · volta em ${NG.fmtDiaISO(volta)}`);
     },
+    async conf_reprovar(fd) { return confSalvar(fd, 'reprovada'); },
+    async conf_devolver(fd) { return confSalvar(fd, 'devolvida'); },
     async mover_aguardando(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
       return gravar({ status: '2_aguardando_instalacao', instalacao_agendada_para: quandoDe(fd), instalacao_turno: turnoDe(fd) }, `${NG.primeiroNome(d.v.cliente_nome)} → ${STATUS_MAP['2_aguardando_instalacao'].curto}`);
@@ -385,6 +435,73 @@
     },
   };
 
+  // ---------- conferência de qualidade (venda de parceiro) ----------
+  async function confSalvar(fd, para) {
+    const motivo = fd.get('motivo_conf');
+    if (!motivo) { NG.toast('Escolha o motivo da lista: reprovar ou devolver sem motivo não é permitido.', 'bad'); return false; }
+    const obsNova = String(fd.get('obs_conf') || '').trim();
+    const campos = { conferencia_status: para, conferencia_motivo: motivo };
+    if (obsNova) campos.conferencia_obs = [d.v.conferencia_obs, obsNova].filter(Boolean).join('\n');
+    if (para === 'reprovada') { campos.status = 'saida'; campos.motivo_saida = `Reprovada na conferência: ${NG.MOTIVOS_CONFERENCIA[motivo]}`; }
+    return gravar(campos, para === 'reprovada' ? 'Venda reprovada e encerrada' : 'Venda devolvida ao parceiro');
+  }
+  async function confTentativa(atendeu) {
+    const sel = raiz.querySelector('[data-conf-canal]');
+    const { data, error } = await NG.sb.rpc('parceiro_conferencia_tentativa', {
+      p_venda: d.v.id, p_canal: sel ? sel.value : 'ligacao', p_atendeu: atendeu, p_resumo: null });
+    if (error) { d.avisoTent = NG.msgErro(error); render(); return; }   // horário/teto do contrato: nada foi gravado
+    d.avisoTent = null;
+    NG.toast(data && data.devolvida ? `${data.sem_resposta} tentativas sem resposta: devolvida ao parceiro` : atendeu ? 'Tentativa registrada: cliente atendeu' : `Tentativa registrada: sem resposta (${data ? data.sem_resposta : '?'} de ${data ? data.max : '?'})`, 'ok');
+    await recarregar();
+    ouvintes.forEach((f) => { try { f(d && d.v); } catch (e) { /* tela que ouve */ } });
+  }
+  async function confGerar() {
+    const { data, error } = await NG.sb.rpc('parceiro_lancar_instalacao_admin', { p_venda: d.v.id });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(data && data.lancado ? `Lançamentos gerados: ${data.pontos_novos} de pontos · ${data.pagamentos_novos} de pagamento` : `Nada gerado: ${(data || {}).motivo || 'sem motivo'}`, data && data.lancado ? 'ok' : 'bad');
+    await recarregar();
+  }
+
+  // Cartão da conferência: só venda de parceiro. Admin e backoffice agem; o resto só lê o estado.
+  function cartaoConferencia(v) {
+    if (v.origem !== 'parceiro_pap') return '';
+    const perfil = (NG.usuario || {}).perfil;
+    const pode = ['admin', 'backoffice'].includes(perfil);
+    const st = v.conferencia_status;
+    const prazo = v.conferencia_prazo_ate ? new Date(v.conferencia_prazo_ate) : null;
+    const estourou = st === 'pendente' && prazo && prazo.getTime() < Date.now();
+    const max = (d.parc || {}).max || 3;
+    const quem = v.conferencia_por ? (d.usuarios.find((u) => u.id === v.conferencia_por) || {}).nome : null;
+    const instaladaConfirmada = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)
+      && v.nio_situacao === 'Concluído' && v.nio_venda_valida === true && !!v.instalado_em;
+    const semLancar = pode && d.parc && instaladaConfirmada && !d.parc.temPagamentoComissao;
+    const form = formAtivo && formAtivo.startsWith('conf_') && FORMS[formAtivo] ? FORMS[formAtivo](v) : '';
+    const botoes = pode && st === 'pendente' && !form ? `<div class="conf-botoes">
+        <select class="sel" data-conf-canal aria-label="Canal da tentativa"><option value="ligacao">Ligação</option><option value="whatsapp">WhatsApp</option></select>
+        <button type="button" class="btn" data-f="conf-tent-ok">Tentativa — atendeu</button>
+        <button type="button" class="btn" data-f="conf-tent-nao">Tentativa — sem resposta</button></div>
+      <div class="conf-botoes">
+        <button type="button" class="btn btn-acc" data-f="conf-aprovar">Aprovar</button>
+        <button type="button" class="btn" data-f="conf-form-reprovar">Reprovar</button>
+        <button type="button" class="btn" data-f="conf-form-devolver">Devolver ao parceiro</button></div>` : '';
+    return `<section class="conf-card${estourou ? ' atrasada' : ''}" aria-label="Conferência de qualidade">
+      <h3>Conferência de qualidade <span class="pill cf-${esc(st || 'pendente')}">${esc(NG.CONFERENCIA_STATUS[st] || st || '—')}</span></h3>
+      ${linha('Parceiro', esc(v.parceiro_nome || '—'))}
+      ${st === 'pendente' ? linha('Prazo', prazo ? `<span class="${estourou ? 'bad-txt' : ''}">${esc(NG.fmtDataHora(prazo))}${estourou ? ' · estourado' : ''}</span>` : '—') : ''}
+      ${st === 'pendente' ? linha('Sem resposta', esc(`${d.semResposta} de ${max} desde a última abertura`)) : ''}
+      ${linha('Teto do cliente', esc(`hoje ${d.lim.hoje} de 2 · mês ${d.lim.mes} de 15`))}
+      ${v.conferencia_motivo ? linha('Motivo', esc(NG.MOTIVOS_CONFERENCIA[v.conferencia_motivo] || v.conferencia_motivo)) : ''}
+      ${v.conferencia_obs ? linha('Observação interna', `${esc(v.conferencia_obs)} <small class="apagado">· não aparece para o parceiro</small>`) : ''}
+      ${st === 'aprovada' && v.conferencia_em ? linha('Aprovada em', esc(`${NG.fmtDataHora(v.conferencia_em)}${quem ? ' · ' + quem : ''}`)) : ''}
+      ${st !== 'aprovada' && v.status === '0_qualificado' ? '<div class="faixa amarelo">Enquanto a conferência não for aprovada, o banco não deixa a venda passar de Qualificado.</div>' : ''}
+      ${d.avisoBanco ? `<div class="faixa amarelo">${esc(d.avisoBanco)}</div>` : ''}
+      ${d.avisoTent ? `<div class="faixa amarelo">${esc(d.avisoTent)} (nada foi gravado)</div>` : ''}
+      ${botoes}${form}
+      ${semLancar ? `<div class="faixa amarelo">${d.parc.comissaoValor ? 'Instalação confirmada, mas a comissão do parceiro ainda não foi lançada.' : 'Instalada sem comissão configurada para este plano: configure em Configurações › Programa Parceiro.'}
+          ${perfil === 'admin' ? '<button type="button" class="btn btn-sm" data-f="conf-gerar">Gerar lançamentos</button>' : '<span class="nota-campo">O admin gera os lançamentos.</span>'}</div>` : ''}
+    </section>`;
+  }
+
   // DFV (bloco Endereço em edição): o mesmo "Salvar consulta" e "Dispensar (admin)" da venda.html.
   async function salvarDfv() {
     const dados = NG.dfvLer(raiz.querySelector('[data-dfv-campos]'));
@@ -419,7 +536,7 @@
       <div class="f-linha1"><h2>${esc(v.cliente_nome)}</h2>${modo === 'gaveta' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div>
       ${local ? `<div class="f-local">${esc(local)}</div>` : ''}
       <div class="f-linha3">
-        <div class="f-meta">${NG.pilulaEtapa(v.status)}<span>${esc((ORIGENS[v.origem] || v.origem || '—') + ref)}</span><span>· ${esc(v.vendedor_nome || 'sem vendedor')}</span></div>
+        <div class="f-meta">${NG.pilulaEtapa(v.status)}<span>${esc(NG.origemTxt(v) + ref)}</span><span>· ${esc(v.vendedor_nome || 'sem vendedor')}</span></div>
         <div class="f-ctl">
           <select class="sel" data-mover aria-label="Mover para outra etapa"><option value="">Mover para…</option>${ops.map(([st, nome]) => `<option value="${st}">${esc(nome)}</option>`).join('')}</select>
           <div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
@@ -444,7 +561,7 @@
     if (v.status === '0_qualificado' && pr.resolver !== 'pedido' && pr.resolver !== 'sem_cobertura') {
       botoes.push('<button type="button" class="btn btn-ghost" data-resolver="pedido">Registrar venda</button>');
     }
-    const form = formAtivo && FORMS[formAtivo] ? FORMS[formAtivo](v) : '';
+    const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') ? FORMS[formAtivo](v) : '';
     return `<section class="f-prox ${pr.nivel || 'dim'}" aria-label="Próximo passo">
         <div class="f-prox-txt"><span class="f-rot">Próximo passo</span><b>${esc(pr.txt || '—')}</b>${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}</div>
         ${botoes.length && !form ? `<div class="f-prox-bts">${botoes.join('')}</div>` : ''}
@@ -674,6 +791,7 @@
       ${cabecalho(v)}
       <div class="f-corpo">
         ${faixaProximo(v, pr)}
+        ${cartaoConferencia(v)}
         ${linhaDoTempo(v)}
         ${blocos(v).map((b) => {
           const aberto = abertos.has(b.id);
@@ -782,6 +900,10 @@
         render();
         return;
       }
+      if (acao === 'conf-tent-ok' || acao === 'conf-tent-nao') { b.disabled = true; await confTentativa(acao === 'conf-tent-ok'); return; }
+      if (acao === 'conf-aprovar') { b.disabled = true; const ok = await gravar({ conferencia_status: 'aprovada' }, 'Conferência aprovada'); if (!ok && b.isConnected) b.disabled = false; return; }
+      if (acao === 'conf-form-reprovar' || acao === 'conf-form-devolver') { formAtivo = acao === 'conf-form-reprovar' ? 'conf_reprovar' : 'conf_devolver'; render(); return; }
+      if (acao === 'conf-gerar') { b.disabled = true; await confGerar(); return; }
       if (acao === 'dfv-salvar') { b.disabled = true; await salvarDfv(); b.disabled = false; return; }
       if (acao === 'dfv-dispensar') { await dispensarDfv(); }
     });

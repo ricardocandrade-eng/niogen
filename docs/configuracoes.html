@@ -2,7 +2,9 @@
 <!-- NIOGEN | docs/configuracoes.html | 03/11/2026 · 05/11 rodada noturna — Configurações no padrão de telas (só admin e backoffice).
      Importação: relatórios da Nio como lista + histórico com status em pílula; prévia, aplicar e detalhes em gaveta.
      A leitura (NGOsab/NGDfv), a prévia obrigatória e o aplicar_osab são os mesmos de antes; a base DFV segue com carga pelo CLI.
-     Tabela vigente: planos, adicionais, bônus e área como listas padrão (busca, ordenação, cartões no celular), só leitura. -->
+     Tabela vigente: planos, adicionais, bônus e área como listas padrão (busca, ordenação, cartões no celular), só leitura.
+     06/11 (prompt 25): aba "Programa Parceiro" (#parceiro) — degraus, incentivo quinzenal, boas-vindas, SLA da conferência, apuração,
+     comissão padrão por plano e termo do programa. Edição só admin; valores em branco até o Ricardo preencher (a tela não sugere número). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -14,14 +16,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-2">
-<script src="config.js?v=061126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=061126-2"></script>
-<script src="assets/sidebar.js?v=061126-2"></script>
-<script src="assets/osab.js?v=061126-2"></script>
-<script src="assets/dfv.js?v=061126-2"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/osab.js?v=061126-5"></script>
+<script src="assets/dfv.js?v=061126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -68,6 +70,12 @@
         <div class="rodape-lista"><span id="h-contagem"></span><span>Nada sobrescreve dado digitado · o OSAB nunca rebaixa status</span></div>
       </section>
       <div class="cartoes" id="historico-c"></div>
+    </section>
+
+    <!-- Programa Parceiro -->
+    <section id="parceiro" class="secao" hidden>
+      <div class="faixa cinza" id="parc-ro" hidden>Você é backoffice: vê a configuração do programa, mas só o admin altera.</div>
+      <div id="parc-conteudo"><span class="carregando">Carregando…</span></div>
     </section>
 
     <!-- Tabela vigente -->
@@ -539,24 +547,214 @@
   });
   document.getElementById('tabela').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { const d = ev.target.closest('tr[data-det]'); if (d) d.click(); } });
 
-  // ---------------------------------------------------------- abas (Importação · Tabela vigente)
-  let aba = location.hash === '#tabela' ? 'tabela' : 'conteudo';
+  // ---------------------------------------------------------- Programa Parceiro PAP (prompt 25)
+  // config_parceiros (linha única), parceiro_comissao com parceiro_id nulo (padrão por plano) e termos_programa (só insert).
+  // Nenhum valor é sugerido: tudo nasce em branco e o Ricardo preenche. Backoffice lê, não grava (o RLS já barra).
+  const ehAdmin = eu.perfil === 'admin';
+  let PC = null;
+  let degraus = [];
+  const numOuNull = (v) => { const t = String(v ?? '').trim().replace(',', '.'); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; };
+  const dis = ehAdmin ? '' : 'disabled';
+  async function carregarParceiro() {
+    const hoje = NG.diaSP();
+    const [rc, rcom, rpl, rt] = await Promise.all([
+      NG.sb.from('config_parceiros').select('*').maybeSingle(),
+      NG.sb.from('parceiro_comissao').select('*').is('parceiro_id', null),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('termos_programa').select('*').order('vigente_desde', { ascending: false }),
+    ]);
+    const erro = [rc, rcom, rpl, rt].find((r) => r.error);
+    if (erro) { document.getElementById('parc-conteudo').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro.error))}</div>`; return; }
+    PC = {
+      cfg: rc.data || {},
+      comissao: rcom.data || [],
+      planos: (rpl.data || []).filter((p) => p.vigencia_inicio <= hoje && (!p.vigencia_fim || p.vigencia_fim >= hoje)),
+      termos: rt.data || [],
+    };
+    degraus = (PC.cfg.degraus || []).map((x) => ({ pontos: x.pontos, premio: x.premio }));
+    document.getElementById('parc-ro').hidden = ehAdmin;
+    renderParceiro();
+    renderAbas();
+  }
+  function degrausHtml() {
+    return degraus.map((d, i) => `<div class="cfg-degrau" data-i="${i}">
+        <label class="campo">Pontos no mês<input type="number" min="1" step="1" data-g="pontos" value="${d.pontos ?? ''}" ${dis}></label>
+        <label class="campo">Prêmio (R$)<input type="number" min="0" step="0.01" data-g="premio" value="${d.premio ?? ''}" ${dis}></label>
+        ${ehAdmin ? `<button type="button" class="btn btn-sm" data-pc="del-degrau" data-i="${i}" aria-label="Remover o degrau">Remover</button>` : '<span></span>'}</div>`).join('')
+      || '<span class="nota-campo">Nenhum degrau configurado: a apuração do dia 5 não roda até haver ao menos um.</span>';
+  }
+  function renderParceiro() {
+    if (!PC) return;
+    const c = PC.cfg;
+    const campo = (rot, nome, val, extra = '', dica = '') => `<label class="campo">${esc(rot)}${dica ? ` <span class="nota-campo">${esc(dica)}</span>` : ''}<input type="number" name="${nome}" value="${val ?? ''}" ${extra} ${dis}></label>`;
+    const vigente = c.termo_versao_vigente;
+    document.getElementById('parc-conteudo').innerHTML = `
+      <form id="form-cfg" class="secao" novalidate>
+        <div class="cfg-bloco"><h3>Degraus de pontos do mês</h3>
+          <p>1 real contratado = 1 ponto, no mês da instalação confirmada. Vale só o maior degrau atingido; o prêmio é apurado e pago no dia da apuração do mês seguinte.</p>
+          <div id="degraus">${degrausHtml()}</div>
+          ${ehAdmin ? '<div><button type="button" class="btn btn-sm" data-pc="add-degrau">＋ Adicionar degrau</button></div>' : ''}</div>
+        <div class="cfg-bloco"><h3>Incentivo quinzenal e boas-vindas</h3>
+          <p>O incentivo vale para quem escolhe pagamento quinzenal (cada parceiro pode ter valor próprio na gaveta dele). Em branco = não existe.</p>
+          <div class="cfg-grade">
+            ${campo('Incentivo, R$ por venda', 'inc_valor', c.incentivo_quinzenal_valor, 'step="0.01" min="0"')}
+            ${campo('Multiplicador de pontos', 'inc_mult', c.incentivo_quinzenal_multiplicador, 'step="0.01" min="1"', '(mínimo 1)')}
+            ${campo('Boas-vindas, R$ na 1ª venda instalada', 'bv_valor', c.bonus_boas_vindas_valor, 'step="0.01" min="0"')}
+            ${campo('Prazo das boas-vindas, em dias', 'bv_prazo', c.bonus_boas_vindas_prazo_dias, 'step="1" min="1"', '(contados da aprovação)')}</div></div>
+        <div class="cfg-bloco"><h3>Conferência e calendário</h3>
+          <p>O prazo da conferência conta só dentro do horário de contato do contrato. Quinzenal: instalações de 1–15 pagas no 1º dia; de 16–fim, no 2º dia do mês seguinte.</p>
+          <div class="cfg-grade">
+            ${campo('SLA da conferência, em horas', 'sla', c.sla_conferencia_horas, 'step="1" min="1" required')}
+            ${campo('Máximo de tentativas sem resposta', 'max_t', c.conferencia_max_tentativas, 'step="1" min="1" required')}
+            ${campo('Dia da apuração dos prêmios', 'dia_ap', c.dia_apuracao, 'step="1" min="1" max="28" required')}
+            ${campo('Quinzenal · 1º pagamento (dia 16–28)', 'qz1', (c.quinzenal_dias || [])[0], 'step="1" min="16" max="28" required')}
+            ${campo('Quinzenal · 2º pagamento (dia 1–15)', 'qz2', (c.quinzenal_dias || [])[1], 'step="1" min="1" max="15" required')}</div></div>
+        ${ehAdmin ? '<div class="cfg-acoes"><button type="submit" class="btn btn-acc">Salvar configuração do programa</button></div>' : ''}
+      </form>
+
+      <div class="cfg-bloco" id="bloco-comissao"><h3>Comissão padrão por plano</h3>
+        <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (gaveta dele). Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
+        <div id="lista-comissao">${PC.planos.map((pl) => {
+          const l = PC.comissao.find((x) => x.plano_id === pl.id);
+          return `<div class="cfg-linha"><div>${esc(pl.nome_curto || pl.nome)}<small>${esc(pl.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(pl.cluster || '')} · cliente paga ${esc(NG.fmtMoeda(pl.preco))}</small></div>
+            <input type="number" step="0.01" min="0" data-plano="${pl.id}" value="${l ? l.valor : ''}" aria-label="Comissão padrão de ${esc(pl.nome_curto || pl.nome)}" ${dis}></div>`;
+        }).join('') || '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
+        ${ehAdmin ? '<div class="cfg-acoes"><button type="button" class="btn btn-acc" data-pc="salvar-comissao">Salvar comissão padrão</button></div>' : ''}</div>
+
+      <div class="cfg-bloco" id="bloco-termo"><h3>Termo do programa</h3>
+        <p>Cada versão é só-insert (regra nova = versão nova e novo aceite do parceiro no login). O texto vem do Cowork; esta tela não traz texto pronto.</p>
+        <div class="cfg-termos">${PC.termos.map((t) => `<div class="t"><div><details><summary><b>${esc(t.versao)}</b> · desde ${esc(NG.fmtDataAno(t.vigente_desde))}${t.versao === vigente ? ' <span class="chip ok">vigente</span>' : ''}</summary>
+            <div class="nota-campo" style="white-space:pre-wrap;margin-top:6px">${esc(t.texto)}</div></details></div></div>`).join('') || '<span class="nota-campo">Nenhuma versão cadastrada ainda.</span>'}</div>
+        ${ehAdmin ? `<label class="campo">Versão vigente<select id="termo-vigente"><option value="">— nenhuma —</option>${PC.termos.map((t) => `<option value="${esc(t.versao)}" ${t.versao === vigente ? 'selected' : ''}>${esc(t.versao)}</option>`).join('')}</select></label>
+          <div class="cfg-acoes"><button type="button" class="btn" data-pc="definir-termo">Definir como vigente</button></div>
+          <form id="form-termo" class="secao" novalidate><h3>Nova versão</h3>
+            <label class="campo">Nome da versão <input type="text" name="versao" maxlength="40" autocomplete="off"></label>
+            <label class="campo">Texto do termo<textarea name="texto"></textarea></label>
+            <div class="cfg-acoes"><button type="submit" class="btn">Cadastrar nova versão</button></div></form>` : ''}</div>`;
+  }
+  function lerDegraus() {
+    const out = [];
+    for (const row of document.querySelectorAll('#degraus .cfg-degrau')) {
+      const pontos = numOuNull(row.querySelector('[data-g=pontos]').value), premio = numOuNull(row.querySelector('[data-g=premio]').value);
+      if (pontos == null && premio == null) continue;                  // linha em branco: descartada
+      if (pontos == null || premio == null || Number.isNaN(pontos) || Number.isNaN(premio) || pontos <= 0 || premio < 0) return { erro: 'Cada degrau precisa de pontos (maior que zero) e prêmio (zero ou mais).' };
+      out.push({ pontos, premio });
+    }
+    out.sort((a, b) => a.pontos - b.pontos);
+    for (let i = 1; i < out.length; i++) if (out[i].pontos === out[i - 1].pontos) return { erro: 'Há dois degraus com os mesmos pontos.' };
+    return { degraus: out };
+  }
+  async function salvarConfig(ev) {
+    ev.preventDefault();
+    if (!ehAdmin) return;
+    const f = ev.target.elements;
+    const g = lerDegraus();
+    if (g.erro) { NG.toast(g.erro, 'bad'); return; }
+    const n = (nome) => numOuNull(f[nome].value);
+    const intOuNull = (nome) => { const v = n(nome); return v == null ? null : Math.trunc(v); };
+    const obj = {
+      degraus: g.degraus,
+      incentivo_quinzenal_valor: n('inc_valor'), incentivo_quinzenal_multiplicador: n('inc_mult'),
+      bonus_boas_vindas_valor: n('bv_valor'), bonus_boas_vindas_prazo_dias: intOuNull('bv_prazo'),
+      sla_conferencia_horas: intOuNull('sla'), conferencia_max_tentativas: intOuNull('max_t'), dia_apuracao: intOuNull('dia_ap'),
+      quinzenal_dias: [intOuNull('qz1'), intOuNull('qz2')],
+    };
+    if ([obj.incentivo_quinzenal_valor, obj.incentivo_quinzenal_multiplicador, obj.bonus_boas_vindas_valor, obj.bonus_boas_vindas_prazo_dias].some((x) => Number.isNaN(x))
+      || obj.quinzenal_dias.some((x) => x == null || Number.isNaN(x)) || [obj.sla_conferencia_horas, obj.conferencia_max_tentativas, obj.dia_apuracao].some((x) => x == null || Number.isNaN(x))) {
+      NG.toast('Confira os números: SLA, tentativas, dia da apuração e os dois dias do quinzenal são obrigatórios.', 'bad'); return;
+    }
+    if (obj.incentivo_quinzenal_multiplicador != null && obj.incentivo_quinzenal_multiplicador < 1) { NG.toast('O multiplicador de pontos é no mínimo 1.', 'bad'); return; }
+    if ((obj.bonus_boas_vindas_valor == null) !== (obj.bonus_boas_vindas_prazo_dias == null)) { NG.toast('Boas-vindas: preencha o valor e o prazo juntos (ou deixe os dois em branco).', 'bad'); return; }
+    const bt = ev.target.querySelector('[type=submit]');
+    bt.disabled = true;
+    const { error } = await NG.sb.from('config_parceiros').update(obj).eq('id', true);
+    bt.disabled = false;
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Configuração do programa salva', 'ok');
+    await carregarParceiro();
+  }
+  async function salvarComissaoPadrao(botao) {
+    if (!ehAdmin) return;
+    const ops = [];
+    for (const inp of document.querySelectorAll('#lista-comissao input[data-plano]')) {
+      const planoId = Number(inp.dataset.plano);
+      const v = numOuNull(inp.value);
+      if (Number.isNaN(v) || (v != null && v < 0)) { NG.toast('Há um valor de comissão inválido.', 'bad'); return; }
+      const atual = PC.comissao.find((x) => x.plano_id === planoId);
+      if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
+      else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: null, plano_id: planoId, valor: v }));
+      else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+    }
+    if (!ops.length) { NG.toast('Nada mudou.', 'ok'); return; }
+    botao.disabled = true;
+    const rs = await Promise.all(ops);
+    botao.disabled = false;
+    const e = rs.find((r) => r.error);
+    if (e) NG.toast(NG.msgErro(e.error), 'bad'); else NG.toast(`${ops.length} comissão(ões) padrão salva(s)`, 'ok');
+    await carregarParceiro();
+  }
+  document.getElementById('parceiro').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-pc]');
+    if (!b || !ehAdmin) return;
+    const a = b.dataset.pc;
+    if (a === 'add-degrau' || a === 'del-degrau') {
+      const l = lerDegrausBruto();
+      if (a === 'add-degrau') l.push({ pontos: null, premio: null }); else l.splice(Number(b.dataset.i), 1);
+      degraus = l;
+      document.getElementById('degraus').innerHTML = degrausHtml();
+    } else if (a === 'salvar-comissao') await salvarComissaoPadrao(b);
+    else if (a === 'definir-termo') {
+      const v = document.getElementById('termo-vigente').value || null;
+      b.disabled = true;
+      const { error } = await NG.sb.from('config_parceiros').update({ termo_versao_vigente: v }).eq('id', true);
+      b.disabled = false;
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+      NG.toast(v ? `Termo ${v} definido como vigente` : 'Nenhum termo vigente', 'ok');
+      await carregarParceiro();
+    }
+  });
+  // Mantém o que já foi digitado nas linhas ao adicionar/remover (lê os inputs como estão, sem validar).
+  function lerDegrausBruto() {
+    return [...document.querySelectorAll('#degraus .cfg-degrau')].map((row) => ({ pontos: row.querySelector('[data-g=pontos]').value, premio: row.querySelector('[data-g=premio]').value }));
+  }
+  document.getElementById('parceiro').addEventListener('submit', async (ev) => {
+    if (ev.target.id === 'form-cfg') return salvarConfig(ev);
+    if (ev.target.id === 'form-termo') {
+      ev.preventDefault();
+      if (!ehAdmin) return;
+      const f = ev.target.elements;
+      const versao = f.versao.value.trim(), texto = f.texto.value.trim();
+      if (!versao || !texto) { NG.toast('Informe o nome da versão e o texto do termo.', 'bad'); return; }
+      const { error } = await NG.sb.from('termos_programa').insert({ versao, texto });
+      if (error) { NG.toast(/duplicate|unique|termos_programa_pkey/i.test(NG.msgErro(error)) ? 'Já existe uma versão com esse nome.' : NG.msgErro(error), 'bad'); return; }
+      NG.toast(`Versão ${versao} cadastrada`, 'ok');
+      await carregarParceiro();
+    }
+  });
+
+  // ---------------------------------------------------------- abas (Importação · Tabela vigente · Programa Parceiro)
+  const HASH_ABA = { tabela: '#tabela', parceiro: '#parceiro' };
+  let aba = location.hash === '#tabela' ? 'tabela' : location.hash === '#parceiro' ? 'parceiro' : 'conteudo';
   function renderAbas() {
     NG.abasPilulas(document.getElementById('abas'), [
       { id: 'conteudo', nome: 'Importação', n: historico.length },
       { id: 'tabela', nome: 'Tabela vigente', n: T ? T.planos.filter((p) => p.ativo).length : 0 },
-    ], aba, (id) => { aba = id; history.replaceState(null, '', id === 'tabela' ? '#tabela' : location.pathname); mostrarAba(); });
+      { id: 'parceiro', nome: 'Programa Parceiro', n: PC ? PC.comissao.length : 0 },
+    ], aba, (id) => { aba = id; history.replaceState(null, '', HASH_ABA[id] || location.pathname); mostrarAba(); });
   }
   function mostrarAba() {
     renderAbas();
     document.getElementById('conteudo').hidden = aba !== 'conteudo';
     document.getElementById('tabela').hidden = aba !== 'tabela';
+    document.getElementById('parceiro').hidden = aba !== 'parceiro';
     if (aba === 'tabela' && !tabelaCarregada) carregarTabela();
+    if (aba === 'parceiro' && !PC) carregarParceiro();
   }
   mostrarAba();
 
   await carregarHistorico();
   if (!tabelaCarregada) carregarTabela();   // contagem da aba Tabela vigente já certa
+  if (!PC) carregarParceiro();               // idem para o Programa Parceiro
 })();
 </script>
 </body>

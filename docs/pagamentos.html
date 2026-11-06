@@ -1,0 +1,334 @@
+<!doctype html>
+<!-- NIOGEN | docs/pagamentos.html | 06/11/2026 — Claude Code (prompt nº 25, etapa 2 do Programa Parceiro PAP). Pagamentos a parceiros no padrão de telas.
+     4 KPIs (Vence hoje · Atrasados · Próximos 7 dias · Pagos no mês), abas Hoje e atrasados · Próximos · Pagos · Todos, filtro por parceiro e tipo.
+     Marcar pago (só admin): sobe o comprovante para o bucket PRIVADO comprovantes_parceiros (<parceiro_id>/<pagamento_id>_<arquivo>), grava
+     comprovante_path e status 'pago'; desabilitado com o motivo quando o titular do Pix não foi conferido. Ver comprovante = URL assinada curta.
+     Apurar prêmios do mês (só admin) chama apurar_premios_parceiros; "degraus não configurados" vira faixa amarela com atalho. Backoffice só vê. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Pagamentos a parceiros · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/ficha.js?v=061126-5"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="pagamentos"></nav>
+  <main class="main">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A tela Pagamentos a parceiros é só para admin e backoffice.</div>
+    <header class="cab" id="cab">
+      <div>
+        <h1>Pagamentos a parceiros</h1>
+        <div class="sub" id="sub">Comissão, incentivo, prêmio de degrau e boas-vindas · só instalação confirmada pela Nio</div>
+      </div>
+      <div class="cab-acoes">
+        <button type="button" class="btn acao-principal" id="btn-apurar" hidden>Apurar prêmios do mês</button>
+      </div>
+    </header>
+
+    <div class="faixa amarelo" id="faixa-apuracao" role="status" hidden></div>
+    <section class="kpis quatro" id="kpis" aria-label="Resumo dos pagamentos"></section>
+    <div id="abas"></div>
+
+    <div class="barra-filtros">
+      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar" placeholder="Buscar por parceiro"></label>
+      <select class="sel" id="f-parceiro" aria-label="Parceiro"></select>
+      <select class="sel" id="f-tipo" aria-label="Tipo"></select>
+    </div>
+
+    <section class="lista padrao" aria-label="Lista de pagamentos">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr>
+            <th data-ord="parceiro">Parceiro</th>
+            <th data-ord="tipo">Tipo</th>
+            <th data-ord="vence">Vence</th>
+            <th data-ord="valor" data-dir="desc" class="num">Valor</th>
+            <th data-ord="situacao">Situação</th>
+            <th>Próximo passo</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir o pagamento</span></div>
+    </section>
+    <div class="cartoes" id="cartoes" aria-label="Lista de pagamentos"></div>
+  </main>
+</div>
+
+<aside class="gaveta" id="gaveta-pag" aria-label="Pagamento" aria-hidden="true">
+  <div class="g-cab"><div><h2 id="d-titulo">Pagamento</h2><p id="d-sub"></p></div><button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button></div>
+  <div class="g-corpo" id="d-corpo"></div>
+  <div class="g-pe"><div class="g-botoes" id="d-botoes"></div></div>
+</aside>
+
+<aside class="gaveta" id="gaveta-apurar" aria-label="Apurar prêmios" aria-hidden="true">
+  <div class="g-cab"><div><h2>Apurar prêmios do mês</h2><p>Gera o prêmio do maior degrau atingido por parceiro, com vencimento no dia da apuração do mês seguinte.</p></div><button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button></div>
+  <div class="g-corpo" id="ap-corpo"></div>
+  <div class="g-pe"><div class="g-botoes"><button type="button" class="btn btn-ghost" data-fechar>Fechar</button><button type="button" class="btn btn-acc" id="ap-rodar">Apurar</button></div></div>
+</aside>
+
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.getElementById('cab').hidden = true;
+    return;
+  }
+  const ehAdmin = eu.perfil === 'admin';
+  if (ehAdmin) document.getElementById('btn-apurar').hidden = false;
+
+  const moeda = (v) => (v == null ? '—' : NG.fmtMoeda(v));
+  const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
+  const hojeSP = () => NG.diaSP();
+  const seteDias = () => NG.somaDias(hojeSP(), 7);
+
+  let G = [], P = {}, APAGAR = {};
+  async function carregar() {
+    const [rg, rp, rap] = await Promise.all([
+      NG.sb.from('parceiro_pagamentos').select('*').order('vence_em', { ascending: true }).limit(5000),
+      NG.sb.from('parceiros').select('id, nome, status, forma_pagamento, pix_chave, pix_titular_conferido_em'),
+      NG.sb.from('v_parceiro_a_pagar').select('*'),
+    ]);
+    const erro = [rg, rp, rap].find((r) => r.error);
+    if (erro) { document.getElementById('tbody').innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(erro.error))}</td></tr>`; NG.toast(NG.msgErro(erro.error), 'bad'); return; }
+    G = rg.data || [];
+    P = Object.fromEntries((rp.data || []).map((x) => [x.id, x]));
+    APAGAR = Object.fromEntries((rap.data || []).map((x) => [x.pagamento_id, x]));
+    const manter = (sel, valores, todos) => { const a = sel.value; NG.preencherSelect(sel, valores, todos); sel.value = valores.some(([v]) => v === a) ? a : ''; };
+    manter(fParceiro, Object.values(P).sort((a, b) => a.nome.localeCompare(b.nome)).map((x) => [x.id, x.nome]), 'Todos os parceiros');
+    render();
+  }
+
+  // ---------- situação ----------
+  // pago · cancelado · atrasado (previsto, vencido antes de hoje) · hoje · proximo (≤ 7 dias) · futuro
+  function situacao(g) {
+    if (g.status === 'pago') return 'pago';
+    if (g.status === 'cancelado') return 'cancelado';
+    const h = hojeSP();
+    if (g.vence_em < h) return 'atrasado';
+    if (g.vence_em === h) return 'hoje';
+    return 'proximo';
+  }
+  const SIT_TXT = { pago: 'Pago', cancelado: 'Cancelado', atrasado: 'Atrasado', hoje: 'Vence hoje', proximo: 'Previsto' };
+  function podePagar(g) {
+    const p = P[g.parceiro_id] || {};
+    if (!p.pix_chave) return { ok: false, motivo: 'o parceiro não tem chave Pix cadastrada' };
+    if (!p.pix_titular_conferido_em) return { ok: false, motivo: 'titular do Pix não conferido (confira na tela Parceiros PAP)' };
+    return { ok: true };
+  }
+  function proximo(g) {
+    const s = situacao(g);
+    if (s === 'pago') return { txt: `Pago ${NG.fmtData(g.pago_em)}${g.comprovante_path ? ' · com comprovante' : ''}`, nivel: 'dim' };
+    if (s === 'cancelado') return { txt: 'Cancelado', nivel: 'dim' };
+    const pp = podePagar(g);
+    if (!pp.ok) return { txt: `Barrado: ${pp.motivo}`.slice(0, 80), nivel: 'bad', acao: true };
+    if (s === 'atrasado') return { txt: `Pagar · atrasado ${Math.max(1, NG.diasEntre(g.vence_em + 'T12:00:00-03:00', hojeSP() + 'T12:00:00-03:00'))} d`, nivel: 'bad', acao: true };
+    if (s === 'hoje') return { txt: 'Pagar hoje', nivel: 'warn', acao: true };
+    return { txt: `Vence ${NG.fmtDiaISO(g.vence_em).slice(0, 5)}`, nivel: 'ok' };
+  }
+
+  // ---------- lista ----------
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  const fBusca = document.getElementById('f-busca');
+  const fParceiro = document.getElementById('f-parceiro');
+  const fTipo = document.getElementById('f-tipo');
+  NG.preencherSelect(fTipo, Object.entries(NG.PAGAMENTO_TIPO), 'Todos os tipos');
+  let aba = 'hoje';
+  const ord = { chave: 'vence', dir: 1 };
+  const ABAS = [['hoje', 'Hoje e atrasados'], ['proximos', 'Próximos'], ['pagos', 'Pagos'], ['todos', 'Todos']];
+  const naAba = (g, a) => {
+    const s = situacao(g);
+    if (a === 'hoje') return s === 'hoje' || s === 'atrasado';
+    if (a === 'proximos') return s === 'proximo';
+    if (a === 'pagos') return s === 'pago';
+    return true;
+  };
+  const CHAVES = {
+    parceiro: (g) => (P[g.parceiro_id] || {}).nome || '',
+    tipo: (g) => NG.PAGAMENTO_TIPO[g.tipo],
+    vence: (g) => g.vence_em,
+    valor: (g) => Number(g.valor),
+    situacao: (g) => ['atrasado', 'hoje', 'proximo', 'pago', 'cancelado'].indexOf(situacao(g)),
+  };
+  function base() {
+    const q = fBusca.value.trim().toLowerCase();
+    return G.filter((g) => (!fParceiro.value || g.parceiro_id === fParceiro.value) && (!fTipo.value || g.tipo === fTipo.value)
+      && (!q || ((P[g.parceiro_id] || {}).nome || '').toLowerCase().includes(q)));
+  }
+  function renderKpis() {
+    const h = hojeSP(), s7 = seteDias(), mes = h.slice(0, 7);
+    const prev = G.filter((g) => g.status === 'previsto');
+    const venceHoje = prev.filter((g) => g.vence_em === h);
+    const atras = prev.filter((g) => g.vence_em < h);
+    const prox = prev.filter((g) => g.vence_em > h && g.vence_em <= s7);
+    const pagos = G.filter((g) => g.status === 'pago' && g.pago_em && NG.diaSP(g.pago_em).slice(0, 7) === mes);
+    const soma = (l) => l.reduce((t, g) => t + Number(g.valor), 0);
+    const barrados = [...venceHoje, ...atras].filter((g) => !podePagar(g).ok).length;
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Vence hoje', val: esc(moeda(soma(venceHoje))), cls: venceHoje.length ? 'warn' : '', nota: `${NG.fmtNum(venceHoje.length)} ${venceHoje.length === 1 ? 'pagamento' : 'pagamentos'}` }),
+      NG.kpi({ rot: 'Atrasados', val: esc(moeda(soma(atras))), cls: atras.length ? 'bad' : '', nota: atras.length ? `${NG.fmtNum(atras.length)} ${atras.length === 1 ? 'pagamento' : 'pagamentos'}${barrados ? ` · ${NG.fmtNum(barrados)} barrados no Pix` : ''}` : 'nenhum' }),
+      NG.kpi({ rot: 'Próximos 7 dias', val: esc(moeda(soma(prox))), nota: `${NG.fmtNum(prox.length)} ${prox.length === 1 ? 'pagamento' : 'pagamentos'}` }),
+      NG.kpi({ rot: 'Pagos no mês', val: esc(moeda(soma(pagos))), nota: `${NG.fmtNum(pagos.length)} ${pagos.length === 1 ? 'pagamento' : 'pagamentos'}` }),
+    ].join('');
+  }
+  function render() {
+    const b = base();
+    renderKpis();
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: b.filter((g) => naAba(g, id)).length, alerta: id === 'hoje' })), aba, (id) => { aba = id; render(); });
+    const lista = NG.ordenar(b.filter((g) => naAba(g, aba)), CHAVES, ord);
+    tbody.innerHTML = lista.length ? lista.map((g) => {
+      const s = situacao(g);
+      return `<tr class="clicavel" data-id="${g.id}" tabindex="0" title="Abrir o pagamento">
+        <td class="cli"><b>${esc((P[g.parceiro_id] || {}).nome || '—')}</b><small>${esc(NG.PARCEIRO_FORMA[(P[g.parceiro_id] || {}).forma_pagamento] || '')}</small></td>
+        <td>${esc(NG.PAGAMENTO_TIPO[g.tipo])}</td>
+        <td class="apagado">${esc(NG.fmtDiaISO(g.vence_em))}</td>
+        <td class="num">${esc(moeda(g.valor))}</td>
+        <td><span class="pill pg-${s === 'atrasado' ? 'atrasado' : g.status}">${esc(SIT_TXT[s])}</span></td>
+        <td>${NG.proxPasso(proximo(g))}</td></tr>`;
+    }).join('') : `<tr><td colspan="6" class="vazio">Nenhum pagamento neste filtro</td></tr>`;
+    cartoesEl.innerHTML = lista.length ? lista.map((g) => `<a class="cartao" href="#pagamento=${g.id}" data-id="${g.id}">
+        <div class="cli"><b>${esc((P[g.parceiro_id] || {}).nome || '—')}</b><small>${esc(NG.PAGAMENTO_TIPO[g.tipo])} · vence ${esc(NG.fmtDiaISO(g.vence_em).slice(0, 5))}</small></div>
+        <div class="valor">${esc(moeda(g.valor))}</div>
+        <div class="l2"><span class="pill pg-${situacao(g) === 'atrasado' ? 'atrasado' : g.status}">${esc(SIT_TXT[situacao(g)])}</span></div>
+        <div class="l2">${NG.proxPasso(proximo(g))}</div></a>`).join('') : '<div class="vazio">Nenhum pagamento neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'pagamento' : 'pagamentos'} no filtro`;
+  }
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  [fBusca, fParceiro, fTipo].forEach((el) => el.addEventListener('input', render));
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(Number(tr.dataset.id)); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(Number(tr.dataset.id)); });
+  cartoesEl.addEventListener('click', (ev) => { const a = ev.target.closest('a[data-id]'); if (a) { ev.preventDefault(); abrir(Number(a.dataset.id)); } });
+
+  // ---------- gaveta do pagamento ----------
+  const gav = document.getElementById('gaveta-pag');
+  const dCorpo = document.getElementById('d-corpo');
+  const dBotoes = document.getElementById('d-botoes');
+  let aberto = null;
+  const nomeArquivo = (n) => String(n || 'comprovante').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80);
+
+  function abrir(id) {
+    const g = G.find((x) => x.id === id);
+    if (!g) return;
+    aberto = id;
+    const p = P[g.parceiro_id] || {};
+    const s = situacao(g);
+    const pp = podePagar(g);
+    document.getElementById('d-titulo').textContent = `${NG.PAGAMENTO_TIPO[g.tipo]} · ${moeda(g.valor)}`;
+    document.getElementById('d-sub').textContent = `${p.nome || '—'} · vence ${NG.fmtDiaISO(g.vence_em)}`;
+    dCorpo.innerHTML = `${linha('Parceiro', esc(p.nome || '—'))}
+      ${linha('Tipo', esc(NG.PAGAMENTO_TIPO[g.tipo]))}${linha('Valor', `<span class="mono">${esc(moeda(g.valor))}</span>`)}
+      ${linha('Competência', esc(NG.fmtDiaISO(g.competencia).slice(3)))}${linha('Vence em', esc(NG.fmtDiaISO(g.vence_em)))}
+      ${linha('Situação', `<span class="pill pg-${g.status}">${esc(SIT_TXT[s])}</span>`)}
+      ${linha('Chave Pix', `<span class="mono">${esc(g.pix_chave_snapshot || p.pix_chave || '—')}</span>`)}
+      ${linha('Titular do Pix', p.pix_titular_conferido_em ? '<span class="ok-txt">conferido ✓</span>' : '<span class="bad-txt">não conferido</span>')}
+      ${g.obs ? linha('Observação', esc(g.obs)) : ''}
+      ${g.venda_id ? linha('Venda', `<a href="#venda=${esc(g.venda_id)}">abrir a venda</a>`) : ''}
+      ${g.status === 'pago' ? `${linha('Pago em', esc(NG.fmtDataHora(g.pago_em)))}${linha('Comprovante', g.comprovante_path ? '<button type="button" class="btn btn-sm" id="ver-comp">Ver comprovante</button>' : 'sem comprovante')}` : ''}
+      ${g.status === 'previsto' && ehAdmin ? `<form class="f-formulario" id="form-pagar" novalidate><h3>Marcar como pago</h3>
+          <p>Pague pelo Pix para a chave acima e anexe o comprovante (imagem ou PDF). Ele fica num bucket privado; ninguém abre sem sessão.</p>
+          ${pp.ok ? '' : `<div class="faixa amarelo">Barrado: ${esc(pp.motivo)}.</div>`}
+          <label class="campo">Comprovante<input type="file" name="arquivo" accept="image/*,application/pdf" ${pp.ok ? '' : 'disabled'}></label></form>` : ''}
+      ${g.status === 'previsto' && !ehAdmin ? '<div class="faixa cinza">Só o admin marca pagamento. Pagamento a parceiro é feito com o Ricardo.</div>' : ''}`;
+    dBotoes.innerHTML = `<button type="button" class="btn btn-ghost" data-fechar>Fechar</button>${g.status === 'previsto' && ehAdmin
+      ? `<button type="button" class="btn btn-acc" id="btn-pagar" ${pp.ok ? '' : 'disabled'} title="${pp.ok ? '' : esc('Barrado: ' + pp.motivo)}">Marcar pago</button>` : ''}`;
+    NG.gaveta.abrir(gav, { foco: false, aoFechar: () => { aberto = null; } });
+    const ver = document.getElementById('ver-comp');
+    if (ver) ver.addEventListener('click', () => verComprovante(g));
+    const bp = document.getElementById('btn-pagar');
+    if (bp) bp.addEventListener('click', () => marcarPago(g, bp));
+  }
+
+  // Comprovante: URL assinada de 60 s. Nunca pública.
+  async function verComprovante(g) {
+    const { data, error } = await NG.sb.storage.from('comprovantes_parceiros').createSignedUrl(g.comprovante_path, 60);
+    if (error || !data) { NG.toast(NG.msgErro(error) || 'Não foi possível abrir o comprovante.', 'bad'); return; }
+    window.open(data.signedUrl, '_blank', 'noopener');
+  }
+
+  async function marcarPago(g, botao) {
+    const pp = podePagar(g);
+    if (!pp.ok) { NG.toast(`Pagamento barrado: ${pp.motivo}.`, 'bad'); return; }
+    const arq = document.querySelector('#form-pagar input[type=file]').files[0];
+    if (!arq) { NG.toast('Anexe o comprovante do Pix antes de marcar como pago.', 'bad'); return; }
+    if (arq.size > 10 * 1024 * 1024) { NG.toast('O comprovante passa de 10 MB.', 'bad'); return; }
+    botao.disabled = true;
+    const caminho = `${g.parceiro_id}/${g.id}_${nomeArquivo(arq.name)}`;
+    const up = await NG.sb.storage.from('comprovantes_parceiros').upload(caminho, arq, { upsert: false, contentType: arq.type || undefined });
+    if (up.error) { NG.toast(`Não subiu o comprovante: ${NG.msgErro(up.error)}`, 'bad'); botao.disabled = false; return; }
+    const { error } = await NG.sb.from('parceiro_pagamentos').update({ status: 'pago', comprovante_path: caminho }).eq('id', g.id);
+    if (error) {
+      await NG.sb.storage.from('comprovantes_parceiros').remove([caminho]);   // não deixa comprovante órfão
+      NG.toast(NG.msgErro(error), 'bad');
+      botao.disabled = false;
+      return;
+    }
+    NG.toast('Pagamento marcado como pago', 'ok');
+    NG.gaveta.fechar();
+    await carregar();
+  }
+
+  // ---------- apurar prêmios ----------
+  const faixaAp = document.getElementById('faixa-apuracao');
+  const gApurar = document.getElementById('gaveta-apurar');
+  const apCorpo = document.getElementById('ap-corpo');
+  function mesAnterior() {
+    const h = hojeSP();
+    const d = new Date(`${h.slice(0, 8)}01T12:00:00-03:00`);
+    d.setUTCMonth(d.getUTCMonth() - 1);
+    return NG.diaSP(d).slice(0, 7);
+  }
+  document.getElementById('btn-apurar').addEventListener('click', () => {
+    apCorpo.innerHTML = `<label class="campo">Mês a apurar<input type="month" id="ap-mes" value="${mesAnterior()}" max="${mesAnterior()}"></label>
+      <span class="nota-campo">Só meses já terminados. Rodar duas vezes o mesmo mês não duplica. Sem degraus configurados a apuração não roda (e o mês não é marcado como apurado).</span>
+      <div id="ap-resultado"></div>`;
+    NG.gaveta.abrir(gApurar, { foco: false });
+  });
+  document.getElementById('ap-rodar').addEventListener('click', async (ev) => {
+    const bt = ev.currentTarget;   // currentTarget some depois do await
+    const mes = document.getElementById('ap-mes').value;
+    const res = document.getElementById('ap-resultado');
+    if (!mes) { NG.toast('Escolha o mês.', 'bad'); return; }
+    bt.disabled = true;
+    const { data, error } = await NG.sb.rpc('apurar_premios_parceiros', { p_competencia: `${mes}-01` });
+    bt.disabled = false;
+    if (error) {
+      const m = NG.msgErro(error);
+      const aviso = /degraus/i.test(m)
+        ? `${esc(m)} <a href="configuracoes.html#parceiro">Configurar os degraus →</a>` : esc(m);
+      res.innerHTML = `<div class="faixa amarelo">${aviso}</div>`;
+      faixaAp.innerHTML = aviso;
+      faixaAp.hidden = false;
+      return;
+    }
+    faixaAp.hidden = true;
+    res.innerHTML = `<div class="faixa verde">Apuração de ${esc(mes.split('-').reverse().join('/'))}: ${NG.fmtNum(data.parceiros_com_pontos)} parceiro(s) com pontos · ${NG.fmtNum(data.premios_novos)} prêmio(s) novo(s) · vencimento ${esc(NG.fmtDiaISO(data.vence_em))}.</div>
+      ${(data.detalhe || []).map((x) => linha((P[x.parceiro_id] || {}).nome || '—', esc(`${NG.fmtNum(x.pontos)} pts · degrau ${NG.fmtNum(x.degrau)} · ${moeda(x.premio)}${x.novo ? '' : ' (já existia)'}`))).join('')}`;
+    NG.toast('Apuração concluída', 'ok');
+    await carregar();
+  });
+
+  NGFicha.aoMudar(() => carregar());
+  const qs = new URLSearchParams(location.search);
+  await carregar();
+  if (qs.get('parceiro')) { fParceiro.value = qs.get('parceiro'); aba = 'todos'; render(); }
+  NGFicha.iniciar();
+})();
+</script>
+</body>
+</html>

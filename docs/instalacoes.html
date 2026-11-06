@@ -15,12 +15,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-2">
-<script src="config.js?v=061126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-2"></script>
-<script src="assets/sidebar.js?v=061126-2"></script>
-<script src="assets/ficha.js?v=061126-2"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/ficha.js?v=061126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -40,6 +40,7 @@
 
     <div class="barra-filtros">
       <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar instalação" placeholder="Buscar por nome, CPF/CNPJ, telefone, pedido ou bairro"></label>
+      <select class="sel" id="f-origem" aria-label="Origem"></select>
       <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
       <select class="sel" id="f-bairro" aria-label="Bairro"></select>
       <span id="f-periodo" title="O período vale para as instaladas (data da instalação); o que está pendente aparece sempre"></span>
@@ -54,9 +55,10 @@
             <th data-ord="quando">Quando</th>
             <th data-ord="plano">Plano</th>
             <th data-ord="vendedor" class="col-media">Vendedor</th>
+            <th data-ord="origem" class="col-media">Origem</th>
             <th>Próximo passo</th>
           </tr></thead>
-          <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+          <tbody id="tbody"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
       <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a ficha</span></div>
@@ -79,6 +81,8 @@
   const cartoesEl = document.getElementById('cartoes');
   const fBusca = document.getElementById('f-busca');
   const fVendedor = document.getElementById('f-vendedor');
+  const fOrigem = document.getElementById('f-origem');
+  NG.preencherSelect(fOrigem, Object.entries(NG.ORIGENS), 'Todas as origens');
   const fBairro = document.getElementById('f-bairro');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   let vendas = [], nomeCurto = {}, ultimoContato = {};
@@ -92,7 +96,7 @@
       NG.sb.from('config_planos').select('id, nome_curto'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
     ]);
-    if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="5" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
+    if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
     vendas = rv.data || [];
     nomeCurto = Object.fromEntries((rp.data || []).map((p) => [p.id, p.nome_curto]));
     ultimoContato = NG.ultimosContatos(rc.data);
@@ -134,6 +138,7 @@
     return vendas.filter((v) =>
       (situacao(v) !== 'instalada' || NG.noPeriodo(v.instalado_em, p)) &&
       (!fVendedor.value || v.vendedor_id === fVendedor.value) &&
+      (!fOrigem.value || v.origem === fOrigem.value) &&
       (!fBairro.value || v.bairro === fBairro.value) &&
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
@@ -158,12 +163,13 @@
     quando: (v) => quandoOrd(v),
     plano: (v) => planoCurto(v),
     vendedor: (v) => v.vendedor_nome || '',
+    origem: (v) => NG.origemTxt(v),
   };
 
   function renderKpis() {
     const hoje = NG.diaSP();
     const p = per.valor();
-    const doFiltro = vendas.filter((v) => (!fVendedor.value || v.vendedor_id === fVendedor.value) && (!fBairro.value || v.bairro === fBairro.value));
+    const doFiltro = vendas.filter((v) => (!fVendedor.value || v.vendedor_id === fVendedor.value) && (!fOrigem.value || v.origem === fOrigem.value) && (!fBairro.value || v.bairro === fBairro.value));
     const agendar = doFiltro.filter((v) => situacao(v) === 'agendar');
     const mais4 = agendar.filter((v) => horasSemAgenda(v) > 4).length;
     const hojeL = doFiltro.filter((v) => situacao(v) === 'hoje');
@@ -200,15 +206,16 @@
         <td class="plano-c"><b>${esc(q.txt)}</b><small>${esc(q.sub)}</small></td>
         <td class="plano-c"><b>${esc(planoCurto(v))}</b><small>${esc(formaTxt(v))}</small></td>
         <td class="col-media">${esc(v.vendedor_nome || '—')}</td>
+        <td class="apagado col-media">${esc(NG.origemTxt(v))}</td>
         <td>${NG.proxPasso(proximo(v))}</td>
       </tr>`;
-    }).join('') : `<tr><td colspan="5" class="vazio">Nenhuma instalação neste filtro</td></tr>`;
+    }).join('') : `<tr><td colspan="6" class="vazio">Nenhuma instalação neste filtro</td></tr>`;
     cartoesEl.innerHTML = lista.length ? lista.map((v) => {
       const q = quandoTxt(v);
       return `<a class="cartao" href="#venda=${v.id}">
         <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(v.bairro || v.cidade || '—')}</small></div>
         <div class="valor">${esc(q.txt)}</div>
-        <div class="l2"><span>${esc(planoCurto(v))}</span>${q.sub ? `<span>· ${esc(q.sub)}</span>` : ''}</div>
+        <div class="l2"><span>${esc(planoCurto(v))}</span>${q.sub ? `<span>· ${esc(q.sub)}</span>` : ''}${v.origem === 'parceiro_pap' ? `<span>· ${esc(NG.origemTxt(v))}</span>` : ''}</div>
         <div class="l2">${NG.proxPasso(proximo(v))}</div>
       </a>`;
     }).join('') : '<div class="vazio">Nenhuma instalação neste filtro</div>';
@@ -216,7 +223,7 @@
   }
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
-  [fBusca, fVendedor, fBairro].forEach((el) => el.addEventListener('input', render));
+  [fBusca, fVendedor, fOrigem, fBairro].forEach((el) => el.addEventListener('input', render));
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) NG.abrirVenda(tr.dataset.id, ev.ctrlKey || ev.metaKey); });
   tbody.addEventListener('auxclick', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.button === 1) NG.abrirVenda(tr.dataset.id, true); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') NG.abrirVenda(tr.dataset.id); });
@@ -225,9 +232,9 @@
     const SIT = { agendar: 'A agendar', hoje: 'Hoje', proximos: 'Próximos dias', atrasada: 'Atrasada', instalada: 'Instalada' };
     const linhas = NG.ordenar(base().filter((v) => naAba(v, aba)), CHAVES, ord);
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
-    const cab = ['Cliente', 'Situação', 'Agendada para', 'Instalada em', 'Plano', 'Vendedor', 'Bairro', 'Cidade', 'Pedido Nio', 'Pendência Nio'];
+    const cab = ['Cliente', 'Situação', 'Agendada para', 'Instalada em', 'Plano', 'Vendedor', 'Origem', 'Bairro', 'Cidade', 'Pedido Nio', 'Pendência Nio'];
     const csv = [cab.map(q).join(';')].concat(linhas.map((v) => [v.cliente_nome, SIT[situacao(v)], v.instalacao_agendada_para ? NG.fmtDataHora(v.instalacao_agendada_para) : '',
-      v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '', planoCurto(v), v.vendedor_nome, v.bairro, v.cidade, v.nio_pedido,
+      v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '', planoCurto(v), v.vendedor_nome, NG.origemTxt(v), v.bairro, v.cidade, v.nio_pedido,
       [v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')].map(q).join(';'))).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));

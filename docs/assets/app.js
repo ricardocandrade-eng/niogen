@@ -48,8 +48,26 @@
 
   const ORIGENS = {
     meta_ads: 'Meta Ads · Mari', instagram: 'Instagram · Mari', facebook: 'Facebook · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
-    indicacao: 'Indicação', site: 'Site', outro: 'Evento / outro',
+    indicacao: 'Indicação', site: 'Site', outro: 'Evento / outro', parceiro_pap: 'Parceiro PAP',
   };
+  // Origem para exibir: "Parceiro PAP · <nome>" (o nome vem de v_funil.parceiro_nome; o vendedor não lê a tabela parceiros e vê só "Parceiro PAP").
+  const origemTxt = (v) => {
+    if (!v) return '—';
+    if (v.origem === 'parceiro_pap') return v.parceiro_nome ? `Parceiro PAP · ${v.parceiro_nome}` : 'Parceiro PAP';
+    return ORIGENS[v.origem] || v.origem || '—';
+  };
+  // ---------- Programa Parceiro PAP (prompt 25): rótulos únicos das telas ----------
+  const PARCEIRO_STATUS = { aguardando: 'Aguardando aprovação', ativo: 'Ativo', suspenso: 'Suspenso', desligado: 'Desligado' };
+  const PARCEIRO_FORMA = { diario: 'Diário', quinzenal: 'Quinzenal' };
+  // Lista fechada da conferência (check vendas_conferencia_motivo_check, 0038). O parceiro vê estes rótulos (F4).
+  const MOTIVOS_CONFERENCIA = {
+    cliente_nao_confirmou: 'Cliente não confirmou a compra', cliente_nao_atende: 'Cliente não atende', dados_divergentes: 'Dados divergentes',
+    sem_cobertura: 'Sem cobertura', fora_da_area: 'Fora da área de atuação', ja_cliente_nio: 'Já é cliente Nio',
+    ja_tem_pedido_nio: 'Já tem pedido na Nio', cancelou_30d: 'Cancelou a Nio há menos de 30 dias', suspeita_fraude: 'Suspeita de fraude', outro: 'Outro motivo',
+  };
+  const CONFERENCIA_STATUS = { pendente: 'Em conferência', aprovada: 'Aprovada', reprovada: 'Reprovada', devolvida: 'Devolvida ao parceiro' };
+  const PAGAMENTO_TIPO = { comissao: 'Comissão', incentivo_quinzenal: 'Incentivo quinzenal', premio_degrau: 'Prêmio de degrau', bonus_boas_vindas: 'Bônus de boas-vindas' };
+  const PAGAMENTO_STATUS = { previsto: 'Previsto', pago: 'Pago', cancelado: 'Cancelado' };
   const FORMAS = { boleto: 'Boleto', cartao: 'Cartão', dacc: 'DACC' };
   const SEGMENTOS = { PF: 'PF · Varejo', MEI: 'PJ · MEI', NMEI: 'PJ · NMEI' };
   // Venda remota (05/11): não existe biometria em campo. A própria Nio manda o LINK ao cliente (WhatsApp + e-mail) na hora
@@ -132,7 +150,9 @@
     if (!e) return 'Erro desconhecido';
     const m = e.message || String(e);
     if (/duplicate key.*nio_pedido/i.test(m)) return 'Esse nº de pedido já está em outra venda.';
-    if (/row-level security/i.test(m)) return 'Sem permissão para essa venda.';
+    if (/parceiros_cpf_unico/i.test(m)) return 'Já existe um parceiro com esse CPF.';
+    if (/parceiros_whatsapp_unico/i.test(m)) return 'Já existe um parceiro com esse WhatsApp.';
+    if (/row-level security/i.test(m)) return 'Sem permissão para essa venda ou operação.';
     return m;
   }
   function toast(texto, tipo) {
@@ -699,6 +719,18 @@
     if ((v.nio_pendencia_cod || v.nio_pendencia_desc) && ATIVAS_INST.includes(v.status)) {
       return { txt: `Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`.slice(0, 70), nivel: 'bad', acao: true, resolver: 'reagendar' };
     }
+    // Venda de parceiro (prompt 25): a conferência de qualidade vem antes de qualquer outro passo. Enquanto não estiver aprovada o
+    // banco não deixa passar de Qualificado (trigger vendas_antes_conferencia); aqui só dizemos o que fazer e até quando.
+    if (v.origem === 'parceiro_pap' && v.status === '0_qualificado' && v.conferencia_status && v.conferencia_status !== 'aprovada') {
+      if (v.conferencia_status === 'pendente') {
+        const prazo = v.conferencia_prazo_ate ? new Date(v.conferencia_prazo_ate) : null;
+        if (!prazo) return { txt: 'Conferir a venda do parceiro', nivel: 'warn', acao: true, resolver: 'conferencia' };
+        if (prazo.getTime() < Date.now()) return { txt: `Conferência atrasada · era até ${diaSP(prazo) === hoje ? fmtHora(prazo) : fmtDataHora(prazo)}`, nivel: 'bad', acao: true, resolver: 'conferencia' };
+        return { txt: `Conferir até ${diaSP(prazo) === hoje ? fmtHora(prazo) : fmtDataHora(prazo)}`, nivel: diaSP(prazo) === hoje ? 'warn' : 'ok', acao: true, resolver: 'conferencia' };
+      }
+      if (v.conferencia_status === 'devolvida') return { txt: `Devolvida ao parceiro · ${MOTIVOS_CONFERENCIA[v.conferencia_motivo] || 'motivo'}`.slice(0, 70), nivel: 'dim' };
+      if (v.conferencia_status === 'reprovada') return { txt: `Reprovada na conferência · ${MOTIVOS_CONFERENCIA[v.conferencia_motivo] || 'motivo'}`.slice(0, 70), nivel: 'dim' };
+    }
     switch (v.status) {
       case '0_qualificado': {
         // Venda remota (05/11): pedido no portal → link da biometria → validada → Vendido. Alertas: link há > 24 h sem
@@ -832,6 +864,7 @@
   }
 
   window.NG = {
+    origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,

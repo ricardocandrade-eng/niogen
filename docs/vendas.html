@@ -14,13 +14,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-2">
-<script src="config.js?v=061126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-2"></script>
-<script src="assets/sidebar.js?v=061126-2"></script>
-<script src="assets/ficha.js?v=061126-2"></script>
-<script src="assets/novavenda.js?v=061126-2"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/ficha.js?v=061126-5"></script>
+<script src="assets/novavenda.js?v=061126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -47,6 +47,7 @@
     <div class="barra-filtros">
       <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar venda" placeholder="Buscar por nome, CPF/CNPJ, telefone, pedido ou bairro"></label>
       <select class="sel" id="f-origem" aria-label="Origem"></select>
+      <select class="sel" id="f-parceiro" aria-label="Parceiro PAP" hidden></select>
       <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
       <span id="f-periodo"></span>
       <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
@@ -96,6 +97,7 @@
   const fBusca = document.getElementById('f-busca');
   const fOrigem = document.getElementById('f-origem');
   const fVendedor = document.getElementById('f-vendedor');
+  const fParceiro = document.getElementById('f-parceiro');
   NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas as origens');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   let vendas = [], metas = [], ultimoContato = {}, nomeCurto = {};
@@ -137,6 +139,13 @@
   NG.carregarUsuarios().then((us) => {
     NG.preencherSelect(fVendedor, us.map((u) => [u.id, u.nome]), 'Todos os vendedores');
   });
+  // Seletor de parceiro: aparece quando a origem é Parceiro PAP (a tabela parceiros só abre para admin/backoffice).
+  if (['admin', 'backoffice'].includes(eu.perfil)) {
+    NG.sb.from('parceiros').select('id, nome').order('nome').then(({ data }) => {
+      NG.preencherSelect(fParceiro, (data || []).map((p) => [p.id, p.nome]), 'Todos os parceiros');
+    });
+  }
+  const sincParceiro = () => { fParceiro.hidden = fOrigem.value !== 'parceiro_pap' || fParceiro.options.length < 2; if (fParceiro.hidden) fParceiro.value = ''; };
 
   async function carregarLista() {
     const [rv, rc, rp, rm] = await Promise.all([
@@ -176,6 +185,7 @@
     return vendas.filter((v) =>
       NG.noPeriodo(v.criado_em, p) &&
       (!fOrigem.value || v.origem === fOrigem.value) &&
+      (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
       (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value) &&
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
@@ -185,7 +195,7 @@
     cliente: (v) => v.cliente_nome || '',
     etapa: (v) => ETAPA_IDX[NG.etapaDe(v.status).id] ?? 99,
     plano: (v) => planoCurto(v),
-    origem: (v) => ORIGENS[v.origem] || v.origem || '',
+    origem: (v) => NG.origemTxt(v),
     vendedor: (v) => v.vendedor_nome || '',
     entrou: (v) => new Date(v.criado_em).getTime(),
     comissao: (v) => comissaoDe(v),
@@ -196,7 +206,7 @@
     // KPIs do período escolhido (com origem e vendedor). Vendidas contam pela data da venda (pedido + biometria validada),
     // não pela data de entrada da lista.
     const p = per.valor();
-    const doFiltro = vendas.filter((v) => (!fOrigem.value || v.origem === fOrigem.value) &&
+    const doFiltro = vendas.filter((v) => (!fOrigem.value || v.origem === fOrigem.value) && (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
       (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
     const V = doFiltro.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
     const n = (s) => V.filter((v) => s.includes(v.status)).length;
@@ -245,7 +255,7 @@
         <td>${NG.pilulaEtapa(v.status)}</td>
         <td>${NG.proxPasso(pr)}</td>
         <td class="plano-c"><b>${esc(planoCurto(v))}</b><small>${esc(formaTxt(v))}</small></td>
-        <td class="apagado col-media">${esc(ORIGENS[v.origem] || v.origem || '—')}</td>
+        <td class="apagado col-media">${esc(NG.origemTxt(v))}</td>
         <td class="col-media">${esc(v.vendedor_nome || '—')}</td>
         <td class="apagado">${esc(NG.quando(v.criado_em))}</td>
         <td class="num">${esc(fmtCom(v))}</td>
@@ -277,6 +287,7 @@
   ];
   // Origem em uma palavra no cartão.
   const ORIGEM_CURTA = { meta_ads: 'Meta', fila_vero: 'Fila Vero', rua: 'Rua', indicacao: 'Indicação', site: 'Site', outro: 'Evento' };
+  const origemCurta = (v) => (v.origem === 'parceiro_pap' ? NG.origemTxt(v) : ORIGEM_CURTA[v.origem] || v.origem);
   const URGENCIA = { bad: 0, warn: 1 };
   const ehFuturo = (v) => !!v.interesse_futuro_em;
   let foraAberto = etapaIni === 'saida';
@@ -291,7 +302,7 @@
   }
 
   function qcard(v, pr) {
-    const sub = [planoCurto(v), ORIGEM_CURTA[v.origem] || v.origem].filter(Boolean).join(' · ');
+    const sub = [planoCurto(v), origemCurta(v)].filter(Boolean).join(' · ');
     return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}">
       <b>${esc(v.cliente_nome)}</b><small>${esc(sub)}</small>${NG.proxPasso(pr)}</a>`;
   }
@@ -366,7 +377,7 @@
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
-  [fBusca, fOrigem, fVendedor].forEach((el) => el.addEventListener('input', render));
+  [fBusca, fOrigem, fParceiro, fVendedor].forEach((el) => el.addEventListener('input', () => { if (el === fOrigem) sincParceiro(); render(); }));
   // Linha → ficha da venda em gaveta (#venda=<id>); Ctrl/⌘ ou botão do meio → nova aba já com a ficha aberta.
   const abrirVenda = (tr, novaAba) => NG.abrirVenda(tr.dataset.id, novaAba);
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirVenda(tr, ev.ctrlKey || ev.metaKey); });
@@ -374,7 +385,7 @@
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrirVenda(tr, false); });
 
   document.getElementById('exportar').addEventListener('click', () => {
-    const cols = [['cliente_nome', 'Cliente'], ['status', 'Status'], ['plano_nome', 'Plano'], ['origem', 'Origem'], ['vendedor_nome', 'Vendedor'],
+    const cols = [['cliente_nome', 'Cliente'], ['status', 'Status'], ['plano_nome', 'Plano'], ['origem', 'Origem'], ['parceiro_nome', 'Parceiro PAP'], ['vendedor_nome', 'Vendedor'],
       ['cidade', 'Cidade'], ['bairro', 'Bairro'], ['nio_pedido', 'Pedido Nio'], ['criado_em', 'Entrou'], ['comissao_prevista', 'Comissão prevista'], ['comissao_paga', 'Comissão paga']];
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
     const csv = [cols.map((c) => q(c[1])).join(';')].concat(filtradas().map((v) => cols.map((c) => q(v[c[0]])).join(';'))).join('\r\n');

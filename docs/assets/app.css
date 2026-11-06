@@ -877,3 +877,43 @@ label.cartao { cursor: pointer; }
   .cartao .fat10 i { width: 13px; height: 13px; flex-basis: 13px; }
 }
 .cartao .valor.neg { color: var(--bad-fg); } .cartao .valor.pos { color: var(--ok-fg); }
+
+/* ---------- Programa Parceiro PAP (prompt 25, 06/11) ---------- */
+.pill.p-aguardando, .pill.pg-previsto, .pill.cf-pendente { background: var(--warn-bg); color: var(--warn-fg); }
+.pill.p-ativo, .pill.pg-pago, .pill.cf-aprovada { background: var(--ok-bg); color: var(--ok-fg); }
+.pill.p-suspenso, .pill.cf-devolvida, .pill.pg-atrasado { background: var(--bad-bg); color: var(--bad-fg); }
+.pill.p-desligado, .pill.pg-cancelado { background: var(--surface-dim); color: var(--muted); border: 1px solid var(--border); }
+.pill.cf-reprovada { background: var(--bad-bg); color: var(--bad-fg); }
+.tab td.num, .tab th.num { text-align: right; font-family: var(--mono); }
+.tab td.num-s { text-align: right; }
+.f-bloco .tab { width: 100%; font-size: 13px; }
+.f-bloco .tab th, .f-bloco .tab td { padding: 6px 8px; }
+.cfg-linha { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.cfg-linha:last-child { border-bottom: 0; }
+.cfg-linha small { display: block; color: var(--muted); font-size: 11px; }
+.cfg-linha input { min-height: 38px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0 10px; width: 100%; }
+.cfg-linha input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.cfg-linha.tres { grid-template-columns: minmax(0, 1fr) 90px 150px; }
+.cfg-degrau { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: end; }
+.cfg-bloco { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+.cfg-bloco h3 { margin: 0; font-size: 14px; }
+.cfg-bloco > p { margin: 0; font-size: 12px; color: var(--muted); }
+.cfg-bloco input[type=number], .cfg-bloco input[type=text], .cfg-bloco textarea, .cfg-bloco select { min-height: 40px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0 10px; width: 100%; }
+.cfg-bloco textarea { padding: 8px 10px; min-height: 120px; resize: vertical; }
+.cfg-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.cfg-grade .campo input { min-height: 40px; background: var(--bg); }
+.cfg-acoes { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.cfg-termos { display: flex; flex-direction: column; }
+.cfg-termos .t { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.cfg-termos .t:last-child { border-bottom: 0; }
+.margem-tab td.num, .margem-tab th.num { text-align: right; white-space: nowrap; }
+.rolagem-s { overflow-x: auto; }
+.conf-card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); }
+.conf-card.atrasada { border-color: var(--bad-border); }
+.conf-card h3 { margin: 0; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.conf-botoes { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.conf-botoes .sel { min-height: 40px; }
+@media (max-width: 760px) {
+  .cfg-linha.tres { grid-template-columns: minmax(0, 1fr) 110px; }
+  .cfg-linha.tres > :nth-child(2) { grid-column: 1; }
+}

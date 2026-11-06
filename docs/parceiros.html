@@ -1,0 +1,580 @@
+<!doctype html>
+<!-- NIOGEN | docs/parceiros.html | 06/11/2026 — Claude Code (prompt nº 25, etapa 2 do Programa Parceiro PAP). Tela Parceiros PAP no padrão de telas.
+     4 KPIs (Ativos · Aguardando aprovação · Vendas em conferência · A pagar hoje), abas Todos · Precisam de ação · Ativos · Suspensos · Desligados,
+     lista com situação, forma, vendas e pontos do mês, % reprovadas e próximo passo; gaveta do parceiro em blocos (dados + conferência do titular do Pix,
+     status com motivo, forma de pagamento e incentivos, comissão por plano, indicadores, extrato de pontos com ajuste, pagamentos, vendas).
+     Admin escreve; backoffice só vê (o RLS já barra e a tela esconde os botões). Layout: docs/PADRAO_TELAS_NIOGEN_041126_1225.md. Nenhum número sugerido. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Parceiros PAP · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/ficha.js?v=061126-5"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="parceiros"></nav>
+  <main class="main com-fab">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A tela Parceiros PAP é só para admin e backoffice.</div>
+    <header class="cab" id="cab">
+      <div>
+        <h1>Parceiros PAP</h1>
+        <div class="sub" id="sub">Programa Parceiro PAP</div>
+      </div>
+      <div class="cab-acoes">
+        <button type="button" class="btn btn-acc acao-principal" id="btn-novo" hidden>＋ Novo parceiro</button>
+      </div>
+    </header>
+
+    <section class="kpis quatro" id="kpis" aria-label="Resumo do programa"></section>
+    <div id="abas"></div>
+
+    <div class="barra-filtros">
+      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar parceiro" placeholder="Buscar por nome, CPF ou WhatsApp"></label>
+    </div>
+
+    <section class="lista padrao" aria-label="Lista de parceiros">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr>
+            <th data-ord="nome">Parceiro</th>
+            <th data-ord="situacao">Situação</th>
+            <th data-ord="forma" class="col-media">Pagamento</th>
+            <th data-ord="vendas" data-dir="desc" class="num">Vendas no mês</th>
+            <th data-ord="pontos" data-dir="desc" class="num">Pontos do mês</th>
+            <th data-ord="reprov" data-dir="desc" class="num">% reprovadas</th>
+            <th>Próximo passo</th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir o parceiro</span></div>
+    </section>
+    <div class="cartoes" id="cartoes" aria-label="Lista de parceiros"></div>
+  </main>
+</div>
+<button type="button" class="fab" id="fab" aria-label="Novo parceiro" hidden>＋</button>
+
+<!-- Novo parceiro -->
+<aside class="gaveta" id="gaveta-novo" aria-label="Novo parceiro" aria-hidden="true">
+  <form class="g-form" id="form-novo" novalidate>
+    <div class="g-cab">
+      <div><h2>Novo parceiro</h2><p>Nasce "Aguardando aprovação": só envia venda depois de aprovado.</p></div>
+      <button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button>
+    </div>
+    <div class="g-corpo">
+      <label class="campo">Nome completo<input type="text" name="nome" required autocomplete="off"></label>
+      <div class="grade2">
+        <label class="campo">CPF<input type="text" name="cpf" inputmode="numeric" placeholder="000.000.000-00" autocomplete="off"><span class="erro" data-erro-cpf></span></label>
+        <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="(32) 90000-0000" autocomplete="off"></label>
+      </div>
+      <label class="campo">Chave Pix <span class="nota-campo">(opcional agora; tem que ser do mesmo CPF)</span><input type="text" name="pix" autocomplete="off"></label>
+      <div class="campo"><span>Forma de pagamento</span>
+        <div class="seg" role="radiogroup" aria-label="Forma de pagamento">
+          <label><input type="radio" name="forma" value="diario" checked>Diário</label>
+          <label><input type="radio" name="forma" value="quinzenal">Quinzenal</label>
+        </div></div>
+      <span class="nota-campo">A comissão por plano, os degraus e o incentivo se configuram depois (Configurações › Programa Parceiro e a gaveta do parceiro). Esta tela não sugere valores.</span>
+    </div>
+    <div class="g-pe"><div class="g-botoes"><button type="button" class="btn btn-ghost" data-fechar>Cancelar</button><button type="submit" class="btn btn-acc">Cadastrar parceiro</button></div></div>
+  </form>
+</aside>
+
+<!-- Gaveta do parceiro -->
+<aside class="gaveta larga" id="gaveta-parc" aria-label="Parceiro" aria-hidden="true"><div class="ficha-raiz" id="parc-raiz"></div></aside>
+
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.getElementById('cab').hidden = true;
+    return;
+  }
+  const ehAdmin = eu.perfil === 'admin';
+  if (ehAdmin) { document.getElementById('btn-novo').hidden = false; document.getElementById('fab').hidden = false; }
+
+  // ---------- formatação ----------
+  const fmtCpf = (c) => { const s = NG.soDigitos(c); return s.length === 11 ? `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 9)}-${s.slice(9)}` : s || '—'; };
+  const fmtTel = (t) => {
+    let s = NG.soDigitos(t);
+    if (s.startsWith('55') && s.length > 11) s = s.slice(2);
+    if (s.length === 11) return `(${s.slice(0, 2)}) ${s.slice(2, 7)}-${s.slice(7)}`;
+    if (s.length === 10) return `(${s.slice(0, 2)}) ${s.slice(2, 6)}-${s.slice(6)}`;
+    return s || '—';
+  };
+  const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
+  const mesISO = () => `${NG.diaSP().slice(0, 8)}01`;
+  const fmtMes = (iso) => { const [a, m] = String(iso).slice(0, 7).split('-'); return `${m}/${a}`; };
+  const numOuNull = (v) => { const t = String(v ?? '').trim().replace(',', '.'); if (t === '') return null; const n = Number(t); return Number.isFinite(n) ? n : NaN; };
+  const moeda = (v) => (v == null ? '—' : NG.fmtMoeda(v));
+  const CONFIRMADA = (v) => ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status) && v.nio_situacao === 'Concluído' && v.nio_venda_valida === true && !!v.instalado_em;
+
+  // ---------- dados ----------
+  let P = [], PTS = {}, IND = {}, APAGAR = [], VENDAS = [], COM = [], PLANOS = [], CFG = {}, PAG = [], USUARIOS = {};
+  async function carregar() {
+    const hoje = NG.diaSP();
+    const [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg, ru] = await Promise.all([
+      NG.sb.from('parceiros').select('*').order('nome'),
+      NG.sb.from('v_parceiro_pontos_mes').select('*').eq('competencia', mesISO()),
+      NG.sb.from('v_parceiro_indicadores').select('*'),
+      NG.sb.from('v_parceiro_a_pagar').select('*'),
+      NG.sb.from('vendas').select('id, parceiro_id, status, criado_em, cliente_nome, cidade, plano_id, conferencia_status, conferencia_prazo_ate, nio_situacao, nio_venda_valida, instalado_em').not('parceiro_id', 'is', null).order('criado_em', { ascending: false }).limit(5000),
+      NG.sb.from('parceiro_comissao').select('*'),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('config_parceiros').select('*').maybeSingle(),
+      NG.sb.from('parceiro_pagamentos').select('id, parceiro_id, tipo, venda_id, competencia, status, valor, vence_em, pago_em, comprovante_path').order('vence_em', { ascending: false }).limit(5000),
+      NG.carregarUsuarios(),
+    ]);
+    const erro = [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg].find((r) => r.error);
+    if (erro) { document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro.error))}</td></tr>`; NG.toast(NG.msgErro(erro.error), 'bad'); return; }
+    P = rp.data || [];
+    PTS = Object.fromEntries((rpts.data || []).map((x) => [x.parceiro_id, x]));
+    IND = Object.fromEntries((rind.data || []).map((x) => [x.parceiro_id, x]));
+    APAGAR = rap.data || [];
+    VENDAS = rv.data || [];
+    COM = rcom.data || [];
+    PLANOS = (rpl.data || []).filter((p) => p.vigencia_inicio <= hoje && (!p.vigencia_fim || p.vigencia_fim >= hoje));
+    CFG = rcfg.data || {};
+    PAG = rpg.data || [];
+    USUARIOS = Object.fromEntries((ru || []).map((u) => [u.id, u.nome]));
+    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+    document.getElementById('sub').textContent = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} · vendedores externos aprovados pelo Ricardo · conferência de qualidade antes de ativar`;
+    render();
+  }
+
+  // Valor da comissão: o do parceiro, senão o padrão, senão nulo (sem comissão configurada).
+  const comissaoDe = (parceiroId, planoId) => {
+    const a = COM.find((x) => x.parceiro_id === parceiroId && x.plano_id === planoId);
+    const b = COM.find((x) => x.parceiro_id === null && x.plano_id === planoId);
+    return a ? Number(a.valor) : b ? Number(b.valor) : null;
+  };
+  const planoNome = (id) => { const p = PLANOS.find((x) => x.id === id); return p ? (p.nome_curto || p.nome) : '—'; };
+
+  // Situação de cada parceiro: vendas, pontos, pendências.
+  function resumo(p) {
+    const vs = VENDAS.filter((v) => v.parceiro_id === p.id);
+    const mes = mesISO();
+    const noMes = vs.filter((v) => NG.diaSP(v.criado_em).slice(0, 7) === mes.slice(0, 7)).length;
+    const emConf = vs.filter((v) => v.conferencia_status === 'pendente');
+    const atrasadas = emConf.filter((v) => v.conferencia_prazo_ate && new Date(v.conferencia_prazo_ate) < new Date());
+    const semComissao = vs.filter((v) => CONFIRMADA(v) && !PAG.some((g) => g.venda_id === v.id && g.tipo === 'comissao') && !(comissaoDe(p.id, v.plano_id) > 0));
+    return { vs, noMes, emConf, atrasadas, semComissao };
+  }
+  function proximo(p) {
+    const r = resumo(p);
+    if (p.status === 'aguardando') return { txt: 'Aprovar o cadastro', nivel: 'warn', acao: true };
+    if (p.status === 'desligado') return { txt: p.status_motivo ? `Desligado · ${p.status_motivo}`.slice(0, 70) : 'Desligado', nivel: 'dim' };
+    if (p.status === 'suspenso' && !p.pix_chave) return { txt: `Suspenso${p.status_motivo ? ' · ' + p.status_motivo : ''}`.slice(0, 70), nivel: 'dim' };
+    if (!p.pix_chave) return { txt: 'Cadastrar a chave Pix', nivel: 'warn', acao: true };
+    if (!p.pix_titular_conferido_em) return { txt: 'Conferir o titular do Pix', nivel: 'warn', acao: true };
+    if (r.semComissao.length) return { txt: `Configurar a comissão do plano (${planoNome(r.semComissao[0].plano_id)})`, nivel: 'warn', acao: true };
+    if (r.atrasadas.length) return { txt: `${r.atrasadas.length} ${r.atrasadas.length === 1 ? 'venda' : 'vendas'} para conferir · atrasada`, nivel: 'bad' };
+    if (r.emConf.length) return { txt: `${r.emConf.length} ${r.emConf.length === 1 ? 'venda' : 'vendas'} em conferência`, nivel: 'ok' };
+    if (p.status === 'suspenso') return { txt: `Suspenso${p.status_motivo ? ' · ' + p.status_motivo : ''}`.slice(0, 70), nivel: 'dim' };
+    return { txt: 'Sem pendências', nivel: 'dim' };
+  }
+
+  // ---------- lista ----------
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  const fBusca = document.getElementById('f-busca');
+  let aba = 'todos';
+  const ord = { chave: 'nome', dir: 1 };
+  const ABAS = [['todos', 'Todos'], ['acao', 'Precisam de ação'], ['ativos', 'Ativos'], ['suspensos', 'Suspensos'], ['desligados', 'Desligados']];
+  const SIT_IDX = { aguardando: 0, ativo: 1, suspenso: 2, desligado: 3 };
+  const naAba = (p, a) => (a === 'todos' ? true : a === 'acao' ? !!proximo(p).acao : a === 'ativos' ? p.status === 'ativo' : a === 'suspensos' ? p.status === 'suspenso' : p.status === 'desligado');
+  const CHAVES = {
+    nome: (p) => p.nome,
+    situacao: (p) => SIT_IDX[p.status],
+    forma: (p) => p.forma_pagamento,
+    vendas: (p) => resumo(p).noMes,
+    pontos: (p) => Number((PTS[p.id] || {}).pontos || 0),
+    reprov: (p) => ((IND[p.id] || {}).pct_reprovadas == null ? null : Number(IND[p.id].pct_reprovadas)),
+  };
+  function base() {
+    const q = fBusca.value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    return P.filter((p) => !q || p.nome.toLowerCase().includes(q) || (qd.length >= 3 && (NG.soDigitos(p.cpf).includes(qd) || NG.soDigitos(p.whatsapp).includes(qd))));
+  }
+  function renderKpis() {
+    const n = (s) => P.filter((p) => p.status === s).length;
+    const pend = VENDAS.filter((v) => v.conferencia_status === 'pendente');
+    const prazos = pend.filter((v) => v.conferencia_prazo_ate).map((v) => new Date(v.conferencia_prazo_ate).getTime()).sort((a, b) => a - b);
+    const atrasadas = prazos.filter((t) => t < Date.now()).length;
+    const aPagar = APAGAR.reduce((s, x) => s + Number(x.valor || 0), 0);
+    const hojeN = APAGAR.filter((x) => x.situacao === 'hoje').length;
+    const atrasN = APAGAR.length - hojeN;
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Ativos', val: NG.fmtNum(n('ativo')), nota: `${NG.fmtNum(n('suspenso'))} suspensos · ${NG.fmtNum(n('desligado'))} desligados` }),
+      NG.kpi({ rot: 'Aguardando aprovação', val: NG.fmtNum(n('aguardando')), cls: n('aguardando') ? 'warn' : '', nota: n('aguardando') ? 'cadastros para o Ricardo aprovar' : 'nenhum cadastro esperando' }),
+      NG.kpi({ rot: 'Vendas em conferência', val: NG.fmtNum(pend.length), cls: atrasadas ? 'bad' : pend.length ? 'warn' : '',
+        nota: !pend.length ? 'nenhuma esperando' : atrasadas ? `a mais atrasada: há ${NG.fmtHoras((Date.now() - prazos[0]) / 3600000)} do prazo` : `a mais próxima vence ${esc(NG.fmtDataHora(new Date(prazos[0])))}`,
+        dica: 'Vendas de parceiro em Qualificado com a conferência de qualidade pendente. O prazo é o SLA configurado, contado só no horário de contato do contrato.' }),
+      NG.kpi({ rot: 'A pagar hoje', val: esc(moeda(aPagar)), cls: atrasN ? 'bad' : aPagar ? 'warn' : '',
+        nota: APAGAR.length ? `${NG.fmtNum(hojeN)} vencem hoje · ${NG.fmtNum(atrasN)} atrasados` : 'nada vencido', dica: 'Pagamentos previstos que vencem hoje ou já venceram (view v_parceiro_a_pagar). Marcar pago é na tela Pagamentos a parceiros.' }),
+    ].join('');
+  }
+  function render() {
+    const b = base();
+    renderKpis();
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: b.filter((p) => naAba(p, id)).length, alerta: id === 'acao' })), aba, (id) => { aba = id; render(); });
+    const lista = NG.ordenar(b.filter((p) => naAba(p, aba)), CHAVES, ord);
+    tbody.innerHTML = lista.length ? lista.map((p) => {
+      const r = resumo(p), pt = PTS[p.id] || {}, ind = IND[p.id] || {}, pr = proximo(p);
+      return `<tr class="clicavel" data-id="${p.id}" tabindex="0" title="Abrir o parceiro">
+        <td class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></td>
+        <td><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span></td>
+        <td class="col-media">${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])}</td>
+        <td class="num">${NG.fmtNum(r.noMes)}</td>
+        <td class="num">${NG.fmtNum(pt.pontos || 0)}${pt.degrau_pontos != null ? `<small class="apagado"> · degrau ${NG.fmtNum(pt.degrau_pontos)}</small>` : ''}</td>
+        <td class="num">${ind.pct_reprovadas == null ? '—' : esc(String(ind.pct_reprovadas).replace('.', ',')) + ' %'}</td>
+        <td>${NG.proxPasso(pr)}</td>
+      </tr>`;
+    }).join('') : `<tr><td colspan="7" class="vazio">Nenhum parceiro neste filtro</td></tr>`;
+    cartoesEl.innerHTML = lista.length ? lista.map((p) => {
+      const r = resumo(p), pt = PTS[p.id] || {};
+      return `<a class="cartao" href="#parceiro=${p.id}" data-id="${p.id}">
+        <div class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></div>
+        <div class="valor">${NG.fmtNum(pt.pontos || 0)} pts</div>
+        <div class="l2"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])} · ${NG.fmtNum(r.noMes)} no mês</span></div>
+        <div class="l2">${NG.proxPasso(proximo(p))}</div>
+      </a>`;
+    }).join('') : '<div class="vazio">Nenhum parceiro neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'parceiro' : 'parceiros'} no filtro`;
+  }
+  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  fBusca.addEventListener('input', render);
+  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirParceiro(tr.dataset.id); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrirParceiro(tr.dataset.id); });
+  cartoesEl.addEventListener('click', (ev) => { const a = ev.target.closest('a[data-id]'); if (a) { ev.preventDefault(); abrirParceiro(a.dataset.id); } });
+
+  // ================================================================== novo parceiro
+  const gNovo = document.getElementById('gaveta-novo');
+  const fNovo = document.getElementById('form-novo');
+  const abrirNovo = () => { fNovo.reset(); fNovo.querySelector('[data-erro-cpf]').textContent = ''; NG.gaveta.abrir(gNovo, { foco: false }); setTimeout(() => fNovo.elements.nome.focus(), 300); };
+  document.getElementById('btn-novo').addEventListener('click', abrirNovo);
+  document.getElementById('fab').addEventListener('click', abrirNovo);
+  fNovo.elements.cpf.addEventListener('change', () => {
+    const v = fNovo.elements.cpf.value;
+    fNovo.querySelector('[data-erro-cpf]').textContent = v && !NG.documentoValido(NG.soDigitos(v).length === 11 ? v : '0') ? 'CPF inválido' : '';
+  });
+  fNovo.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const f = fNovo.elements;
+    const nome = f.nome.value.trim();
+    const cpf = NG.soDigitos(f.cpf.value);
+    let zap = NG.soDigitos(f.whatsapp.value);
+    if (!nome) { NG.toast('Informe o nome completo.', 'bad'); return; }
+    if (cpf.length !== 11 || !NG.documentoValido(cpf)) { NG.toast('CPF inválido (o dígito não confere).', 'bad'); return; }
+    if (zap.length < 10) { NG.toast('WhatsApp inválido: informe DDD + número.', 'bad'); return; }
+    if (!zap.startsWith('55')) zap = '55' + zap;
+    const bt = fNovo.querySelector('[type=submit]');
+    bt.disabled = true;
+    const { data, error } = await NG.sb.from('parceiros').insert({ nome, cpf, whatsapp: zap, pix_chave: f.pix.value.trim() || null, forma_pagamento: f.forma.value }).select('id').single();
+    bt.disabled = false;
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`${nome} cadastrado · aguardando aprovação`, 'ok');
+    NG.gaveta.fechar();
+    await carregar();
+    abrirParceiro(data.id);
+  });
+
+  // ================================================================== gaveta do parceiro
+  const gParc = document.getElementById('gaveta-parc');
+  const raiz = document.getElementById('parc-raiz');
+  let idAtual = null, abertos = new Set(['dados']), formStatus = null, extra = { lanc: null };
+  const parcAtual = () => P.find((x) => x.id === idAtual);
+
+  async function abrirParceiro(id) {
+    idAtual = id;
+    abertos = new Set(['dados']);
+    formStatus = null;
+    extra = { lanc: null };
+    history.replaceState(null, '', `${location.pathname}${location.search}#parceiro=${id}`);
+    renderParc();
+    NG.gaveta.abrir(gParc, { foco: false, aoFechar: () => { idAtual = null; history.replaceState(null, '', `${location.pathname}${location.search}`); } });
+    carregarLancamentos();
+  }
+  async function carregarLancamentos() {
+    const id = idAtual;
+    const r = await NG.sb.from('pontos_lancamentos').select('id, competencia, tipo, venda_id, valor_base, multiplicador, pontos, obs, criado_em').eq('parceiro_id', id).order('criado_em', { ascending: false }).limit(60);
+    if (id !== idAtual) return;
+    extra.lanc = r.data || [];
+    renderParc();
+  }
+  async function recarregarTudo() { await carregar(); if (idAtual) { renderParc(); carregarLancamentos(); } }
+
+  const BLOCO_ESTADOS = () => abertos;
+  function bloco(id, titulo, resumoTxt, corpo) {
+    const aberto = BLOCO_ESTADOS().has(id);
+    return `<section class="f-bloco${aberto ? ' aberto' : ''}" data-bloco="${id}">
+      <button type="button" class="f-bloco-cab" data-p="bloco" aria-expanded="${aberto}"><b>${esc(titulo)}</b><span>${esc(resumoTxt)}</span></button>
+      <div class="f-bloco-corpo">${aberto ? corpo() : ''}</div></section>`;
+  }
+
+  function renderParc() {
+    const p = parcAtual();
+    if (!p) { raiz.innerHTML = ''; return; }
+    const r = resumo(p), pt = PTS[p.id] || {}, ind = IND[p.id] || {};
+    const corpoRolagem = raiz.querySelector('.f-corpo');
+    const rol = corpoRolagem ? corpoRolagem.scrollTop : 0;
+    const pr = proximo(p);
+    raiz.innerHTML = `<div class="ficha f-gaveta">
+      <header class="f-cab">
+        <div class="f-linha1"><h2>${esc(p.nome)}</h2><button type="button" class="g-fechar" data-p="fechar" aria-label="Fechar">×</button></div>
+        <div class="f-local">${esc(fmtTel(p.whatsapp))} · CPF ${esc(fmtCpf(p.cpf))}</div>
+        <div class="f-linha3"><div class="f-meta"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])}</span>
+          <span>· ${esc(NG.fmtNum(pt.pontos || 0))} pontos em ${esc(fmtMes(mesISO()))}</span></div></div>
+      </header>
+      <div class="f-corpo">
+        <section class="f-prox ${pr.nivel || 'dim'}" aria-label="Próximo passo"><div class="f-prox-txt"><span class="f-rot">Próximo passo</span><b>${esc(pr.txt)}</b></div></section>
+        ${!ehAdmin ? '<div class="faixa cinza">Você é backoffice: vê o parceiro, mas só o admin altera dados, status, comissão e pagamentos.</div>' : ''}
+        ${bloco('dados', 'Dados e Pix', p.pix_titular_conferido_em ? 'titular do Pix conferido' : p.pix_chave ? 'titular do Pix NÃO conferido' : 'sem chave Pix', () => blocoDados(p))}
+        ${bloco('status', 'Situação', NG.PARCEIRO_STATUS[p.status] + (p.status_motivo ? ` · ${p.status_motivo}` : ''), () => blocoStatus(p))}
+        ${bloco('pagamento', 'Forma de pagamento e incentivo', `${NG.PARCEIRO_FORMA[p.forma_pagamento]}${p.incentivo_valor_override != null || p.multiplicador_override != null ? ' · com ajuste do parceiro' : ''}`, () => blocoPagamento(p))}
+        ${bloco('comissao', 'Comissão por plano', `${COM.filter((x) => x.parceiro_id === p.id).length} plano(s) com valor próprio`, () => blocoComissao(p))}
+        ${bloco('indicadores', 'Indicadores', ind.pct_reprovadas == null ? 'sem vendas enviadas' : `${String(ind.pct_reprovadas).replace('.', ',')} % reprovadas`, () => blocoIndicadores(ind))}
+        ${bloco('pontos', 'Extrato de pontos', `${NG.fmtNum(pt.pontos || 0)} no mês${pt.degrau_pontos != null ? ` · degrau ${NG.fmtNum(pt.degrau_pontos)}` : ''}`, () => blocoPontos(p, pt))}
+        ${bloco('pagamentos', 'Pagamentos do parceiro', `${PAG.filter((g) => g.parceiro_id === p.id && g.status === 'previsto').length} previstos`, () => blocoPagamentos(p))}
+        ${bloco('vendas', 'Vendas do parceiro', `${r.vs.length} no total · ${r.emConf.length} em conferência`, () => blocoVendas(r))}
+      </div></div>`;
+    const c = raiz.querySelector('.f-corpo');
+    if (c) c.scrollTop = rol;
+  }
+
+  // ----- Dados e Pix -----
+  function blocoDados(p) {
+    const conf = p.pix_titular_conferido_em
+      ? `<div class="faixa verde">Titular conferido em ${esc(NG.fmtDataHora(p.pix_titular_conferido_em))}${p.pix_titular_conferido_por ? ' · ' + esc(USUARIOS[p.pix_titular_conferido_por] || '') : ''}. Trocar a chave Pix zera esta conferência.</div>`
+      : `<div class="faixa amarelo">Sem conferir o titular da chave Pix, nenhum pagamento a este parceiro sai (o banco barra). Confira no app do banco que a chave é do mesmo CPF do parceiro e só então marque abaixo.
+          ${ehAdmin ? `<button type="button" class="btn btn-sm" data-p="pix-ok" ${p.pix_chave ? '' : 'disabled title="Grave a chave Pix antes de conferir"'}>Conferi: a chave Pix é do mesmo CPF</button>` : ''}</div>`;
+    if (!ehAdmin) {
+      return `${linha('Nome', esc(p.nome))}${linha('CPF', `<span class="mono">${esc(fmtCpf(p.cpf))}</span>`)}${linha('WhatsApp', esc(fmtTel(p.whatsapp)))}
+        ${linha('Chave Pix', `<span class="mono">${esc(p.pix_chave || '—')}</span>`)}${conf}${linha('Cadastro', esc(NG.fmtDataAno(p.criado_em)))}`;
+    }
+    return `<form class="f-formulario" data-form="dados" novalidate>
+        <label class="campo">Nome completo<input type="text" name="nome" value="${esc(p.nome)}" required></label>
+        <div class="grade2"><label class="campo">CPF<input type="text" name="cpf" inputmode="numeric" value="${esc(fmtCpf(p.cpf))}"></label>
+        <label class="campo">WhatsApp<input type="tel" name="whatsapp" value="${esc(fmtTel(p.whatsapp))}"></label></div>
+        <label class="campo">Chave Pix <span class="nota-campo">(do mesmo CPF; trocar a chave zera a conferência do titular)</span><input type="text" name="pix" value="${esc(p.pix_chave || '')}" autocomplete="off"></label>
+        <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar dados</button></div></form>
+      ${conf}
+      ${linha('Cadastro', esc(NG.fmtDataAno(p.criado_em)))}`;
+  }
+
+  // ----- Situação -----
+  function blocoStatus(p) {
+    const info = `${linha('Situação', `<span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span>`)}
+      ${p.status_motivo ? linha('Motivo', esc(p.status_motivo)) : ''}
+      ${linha('Desde', esc(NG.fmtDataHora(p.status_em)) + (p.status_por ? ' · ' + esc(USUARIOS[p.status_por] || '') : ''))}
+      ${p.aprovado_em ? linha('Aprovado em', esc(NG.fmtDataAno(p.aprovado_em)) + (p.aprovado_por ? ' · ' + esc(USUARIOS[p.aprovado_por] || '') : '')) : ''}`;
+    if (!ehAdmin || p.status === 'desligado') return info + (p.status === 'desligado' ? '<span class="nota-campo">Desligado não envia venda nova e recebe o que já instalou.</span>' : '');
+    if (formStatus) {
+      const txt = formStatus === 'suspenso' ? 'Suspender' : 'Desligar';
+      return `${info}<form class="f-formulario" data-form="status" novalidate>
+        <h3>${txt} o parceiro</h3>
+        <p>${formStatus === 'suspenso' ? 'Suspenso não envia venda nova; o que já instalou continua pago.' : 'Desligado não envia venda nova e recebe o que já instalou. Não há estorno no programa: o controle é este.'}</p>
+        <label class="campo">Motivo (obrigatório)<textarea name="motivo" maxlength="300" required></textarea></label>
+        <div class="f-form-acoes"><button type="button" class="btn btn-ghost" data-p="status-cancelar">Cancelar</button><button type="submit" class="btn btn-acc">${txt}</button></div></form>`;
+    }
+    const bts = [];
+    if (p.status === 'aguardando') bts.push('<button type="button" class="btn btn-acc" data-p="aprovar">Aprovar cadastro</button>');
+    if (p.status === 'suspenso') bts.push('<button type="button" class="btn btn-acc" data-p="reativar">Reativar</button>');
+    if (p.status === 'ativo' || p.status === 'aguardando') bts.push(p.status === 'ativo' ? '<button type="button" class="btn" data-p="status-suspender">Suspender…</button>' : '');
+    bts.push('<button type="button" class="btn" data-p="status-desligar">Desligar…</button>');
+    return `${info}<div class="f-form-acoes">${bts.filter(Boolean).join('')}</div>
+      ${p.status === 'aguardando' ? '<span class="nota-campo">Aprovar é aguardando → ativo. Depois confira o titular do Pix e configure a comissão para o primeiro pagamento sair.</span>' : ''}`;
+  }
+
+  // ----- Forma de pagamento e incentivo -----
+  function blocoPagamento(p) {
+    const padV = CFG.incentivo_quinzenal_valor, padM = CFG.incentivo_quinzenal_multiplicador;
+    const rotPad = (v, m) => (v == null ? 'padrão: não configurado' : `padrão: ${m ? m : moeda(v)}`);
+    if (!ehAdmin) {
+      return `${linha('Forma', esc(NG.PARCEIRO_FORMA[p.forma_pagamento]))}${linha('Incentivo (R$ por venda)', esc(p.incentivo_valor_override != null ? moeda(p.incentivo_valor_override) : 'padrão'))}
+        ${linha('Multiplicador de pontos', esc(p.multiplicador_override != null ? String(p.multiplicador_override).replace('.', ',') : 'padrão'))}`;
+    }
+    return `<form class="f-formulario" data-form="pagamento" novalidate>
+      <div class="campo"><span>Forma de pagamento <span class="nota-campo">(diário: 1 dia útil após a instalação confirmada · quinzenal: dias ${esc((CFG.quinzenal_dias || [20, 5]).join(' e '))})</span></span>
+        <div class="seg" role="radiogroup" aria-label="Forma de pagamento">
+          <label><input type="radio" name="forma" value="diario" ${p.forma_pagamento === 'diario' ? 'checked' : ''}>Diário</label>
+          <label><input type="radio" name="forma" value="quinzenal" ${p.forma_pagamento === 'quinzenal' ? 'checked' : ''}>Quinzenal</label></div></div>
+      <div class="grade2">
+        <label class="campo">Incentivo quinzenal, R$ por venda <span class="nota-campo">(vazio = ${esc(rotPad(padV, null))})</span><input type="number" step="0.01" min="0" name="inc" value="${p.incentivo_valor_override ?? ''}"></label>
+        <label class="campo">Multiplicador de pontos <span class="nota-campo">(vazio = ${padM == null ? 'padrão: não configurado' : 'padrão: ' + esc(String(padM).replace('.', ','))}; mínimo 1)</span><input type="number" step="0.01" min="1" name="mult" value="${p.multiplicador_override ?? ''}"></label></div>
+      <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar</button></div></form>`;
+  }
+
+  // ----- Comissão por plano -----
+  function blocoComissao(p) {
+    const linhas = PLANOS.map((pl) => {
+      const meu = COM.find((x) => x.parceiro_id === p.id && x.plano_id === pl.id);
+      const pad = COM.find((x) => x.parceiro_id === null && x.plano_id === pl.id);
+      return `<div class="cfg-linha tres"><div>${esc(pl.nome_curto || pl.nome)}<small>${esc(pl.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(pl.cluster || '')} · ${esc(moeda(pl.preco))}</small></div>
+        <span class="nota-campo">${pad ? 'padrão ' + esc(moeda(pad.valor)) : 'sem padrão'}</span>
+        ${ehAdmin ? `<input type="number" step="0.01" min="0" data-plano="${pl.id}" value="${meu ? meu.valor : ''}" aria-label="Comissão deste parceiro para ${esc(pl.nome_curto || pl.nome)}" placeholder="padrão">` : `<b>${meu ? esc(moeda(meu.valor)) : '—'}</b>`}</div>`;
+    }).join('');
+    return `<span class="nota-campo">Valor fixo por plano, sem estorno. Vazio = vale o padrão (Configurações › Programa Parceiro). Sem nenhum dos dois, a instalação confirmada não gera pagamento e deixa o aviso "instalada sem comissão".</span>
+      <div data-form-comissao>${linhas || '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
+      ${ehAdmin ? '<div class="f-form-acoes"><button type="button" class="btn btn-acc" data-p="salvar-comissao">Salvar comissões deste parceiro</button></div>' : ''}`;
+  }
+
+  // ----- Indicadores -----
+  function blocoIndicadores(i) {
+    if (!i || !i.parceiro_id) return '<span class="nota-campo">Sem dados.</span>';
+    const pc = (x) => (x == null ? '—' : String(x).replace('.', ',') + ' %');
+    return `${linha('Enviadas', NG.fmtNum(i.enviadas))}${linha('Aprovadas', NG.fmtNum(i.aprovadas))}${linha('Reprovadas', `${NG.fmtNum(i.reprovadas)} · ${pc(i.pct_reprovadas)}`)}
+      ${linha('Devolvidas', NG.fmtNum(i.devolvidas))}${linha('Em conferência', NG.fmtNum(i.em_conferencia))}
+      ${linha('Instaladas (confirmadas)', NG.fmtNum(i.instaladas))}${linha('Cancelamento em 30 dias', `${NG.fmtNum(i.cancel_30d)} · ${pc(i.pct_cancel_30d)}`)}
+      ${linha('Vendas indevidas (Nio)', NG.fmtNum(i.indevidas))}${linha('Suspeita de fraude', NG.fmtNum(i.fraude))}
+      <span class="nota-campo">Sinais para o Ricardo decidir suspender ou desligar. Inadimplência da 1ª fatura entra quando a Adimplência for aplicada.</span>`;
+  }
+
+  // ----- Extrato de pontos -----
+  const TIPO_PONTO = { plano: 'Plano', adicional: 'Adicional', ajuste: 'Ajuste manual' };
+  function blocoPontos(p, pt) {
+    const l = extra.lanc;
+    const termometro = pt.proximo_degrau_pontos != null ? `faltam ${NG.fmtNum(pt.faltam_pontos)} para o degrau de ${NG.fmtNum(pt.proximo_degrau_pontos)}` : (pt.degrau_pontos != null ? 'no maior degrau configurado' : 'degraus não configurados');
+    const tab = l == null ? '<span class="carregando">Carregando…</span>' : l.length ? `<div class="rolagem-s"><table class="tab"><thead><tr><th>Mês</th><th>Tipo</th><th class="num">Pontos</th><th>Obs.</th></tr></thead><tbody>${l.map((x) => `<tr>
+        <td>${esc(fmtMes(x.competencia))}</td><td>${esc(TIPO_PONTO[x.tipo] || x.tipo)}</td><td class="num">${esc(String(x.pontos).replace('.', ','))}</td>
+        <td class="apagado">${x.venda_id ? `<a href="#venda=${esc(x.venda_id)}">venda</a>` : ''}${x.obs ? ' ' + esc(x.obs) : ''}</td></tr>`).join('')}</tbody></table></div>` : '<span class="nota-campo">Nenhum lançamento: pontos só nascem de instalação confirmada pela Nio (OSAB).</span>';
+    return `${linha('Mês atual', `${NG.fmtNum(pt.pontos || 0)} pontos · ${esc(termometro)}`)}
+      ${tab}
+      ${ehAdmin ? `<form class="f-formulario" data-form="ajuste" novalidate><h3>Ajuste manual de pontos</h3>
+        <p>O extrato é só-insert: um ajuste não se apaga. Para corrigir um erro, lance outro ajuste com sinal contrário.</p>
+        <div class="grade2"><label class="campo">Mês<input type="month" name="mes" value="${mesISO().slice(0, 7)}" required></label>
+        <label class="campo">Pontos (pode ser negativo)<input type="number" step="0.01" name="pontos" required></label></div>
+        <label class="campo">Observação (obrigatória)<input type="text" name="obs" maxlength="300" required></label>
+        <div class="f-form-acoes"><button type="submit" class="btn">Lançar ajuste</button></div></form>` : ''}`;
+  }
+
+  // ----- Pagamentos do parceiro -----
+  function blocoPagamentos(p) {
+    const l = PAG.filter((g) => g.parceiro_id === p.id);
+    return l.length ? `<div class="rolagem-s"><table class="tab"><thead><tr><th>Tipo</th><th>Vence</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody>${l.slice(0, 40).map((g) => `<tr>
+        <td>${esc(NG.PAGAMENTO_TIPO[g.tipo])}</td><td>${esc(NG.fmtDiaISO(g.vence_em))}</td><td class="num">${esc(moeda(g.valor))}</td>
+        <td><span class="pill pg-${g.status}">${esc(NG.PAGAMENTO_STATUS[g.status])}</span></td></tr>`).join('')}</tbody></table></div>
+      <a class="btn btn-sm" href="pagamentos.html?parceiro=${esc(p.id)}">Abrir em Pagamentos a parceiros</a>`
+      : '<span class="nota-campo">Nenhum pagamento ainda: nasce na instalação confirmada pela Nio.</span>';
+  }
+
+  // ----- Vendas -----
+  function blocoVendas(r) {
+    if (!r.vs.length) return '<span class="nota-campo">Nenhuma venda enviada ainda.</span>';
+    return `<div class="rolagem-s"><table class="tab"><thead><tr><th>Cliente</th><th>Etapa</th><th>Conferência</th></tr></thead><tbody>${r.vs.slice(0, 20).map((v) => `<tr>
+      <td><a href="#venda=${esc(v.id)}">${esc(NG.primeiroNome(v.cliente_nome))}</a><small class="apagado"> · ${esc(planoNome(v.plano_id))}</small></td>
+      <td>${NG.pilulaEtapa(v.status)}</td><td><span class="pill cf-${esc(v.conferencia_status || 'pendente')}">${esc(NG.CONFERENCIA_STATUS[v.conferencia_status] || '—')}</span></td></tr>`).join('')}</tbody></table></div>
+      ${r.vs.length > 20 ? `<span class="nota-campo">Mostrando 20 de ${r.vs.length}. O resto está em Vendas, filtrando por origem Parceiro PAP.</span>` : ''}`;
+  }
+
+  // ----- ações -----
+  async function atualizarParceiro(campos, msg) {
+    const { error } = await NG.sb.from('parceiros').update(campos).eq('id', idAtual);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+    NG.toast(msg, 'ok');
+    formStatus = null;
+    await recarregarTudo();
+    return true;
+  }
+  raiz.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-p]');
+    if (!b) return;
+    const acao = b.dataset.p;
+    const p = parcAtual();
+    if (acao === 'fechar') { NG.gaveta.fechar(); return; }
+    if (acao === 'bloco') { const id = b.closest('[data-bloco]').dataset.bloco; if (abertos.has(id)) abertos.delete(id); else abertos.add(id); renderParc(); return; }
+    if (!p || !ehAdmin) return;
+    if (acao === 'pix-ok') { b.disabled = true; await atualizarParceiro({ pix_titular_conferido_em: new Date().toISOString(), pix_titular_conferido_por: eu.id }, 'Titular do Pix conferido'); return; }
+    if (acao === 'aprovar') { b.disabled = true; await atualizarParceiro({ status: 'ativo' }, `${p.nome} aprovado`); return; }
+    if (acao === 'reativar') { b.disabled = true; await atualizarParceiro({ status: 'ativo', status_motivo: null }, `${p.nome} reativado`); return; }
+    if (acao === 'status-suspender') { formStatus = 'suspenso'; renderParc(); return; }
+    if (acao === 'status-desligar') { formStatus = 'desligado'; renderParc(); return; }
+    if (acao === 'status-cancelar') { formStatus = null; renderParc(); return; }
+    if (acao === 'salvar-comissao') { b.disabled = true; await salvarComissao(p); b.disabled = false; }
+  });
+  raiz.addEventListener('submit', async (ev) => {
+    const form = ev.target.closest('[data-form]');
+    if (!form) return;
+    ev.preventDefault();
+    const p = parcAtual();
+    if (!p || !ehAdmin) return;
+    const f = form.elements;
+    const bt = form.querySelector('[type=submit]');
+    if (bt) bt.disabled = true;
+    let ok = false;
+    try {
+      if (form.dataset.form === 'dados') {
+        const cpf = NG.soDigitos(f.cpf.value);
+        let zap = NG.soDigitos(f.whatsapp.value);
+        if (!f.nome.value.trim()) { NG.toast('O nome é obrigatório.', 'bad'); return; }
+        if (cpf.length !== 11 || !NG.documentoValido(cpf)) { NG.toast('CPF inválido (o dígito não confere).', 'bad'); return; }
+        if (zap.length < 10) { NG.toast('WhatsApp inválido: informe DDD + número.', 'bad'); return; }
+        if (!zap.startsWith('55')) zap = '55' + zap;
+        const pix = f.pix.value.trim() || null;
+        ok = await atualizarParceiro({ nome: f.nome.value.trim(), cpf, whatsapp: zap, pix_chave: pix }, pix !== p.pix_chave && p.pix_titular_conferido_em ? 'Dados salvos · chave Pix mudou: confira o titular de novo' : 'Dados salvos');
+      } else if (form.dataset.form === 'status') {
+        const motivo = f.motivo.value.trim();
+        if (!motivo) { NG.toast(`Informe o motivo para ${formStatus === 'suspenso' ? 'suspender' : 'desligar'}.`, 'bad'); return; }
+        ok = await atualizarParceiro({ status: formStatus, status_motivo: motivo }, formStatus === 'suspenso' ? `${p.nome} suspenso` : `${p.nome} desligado`);
+      } else if (form.dataset.form === 'pagamento') {
+        const inc = numOuNull(f.inc.value), mult = numOuNull(f.mult.value);
+        if (Number.isNaN(inc) || (inc != null && inc < 0)) { NG.toast('Incentivo inválido.', 'bad'); return; }
+        if (Number.isNaN(mult) || (mult != null && mult < 1)) { NG.toast('O multiplicador de pontos é no mínimo 1.', 'bad'); return; }
+        ok = await atualizarParceiro({ forma_pagamento: f.forma.value, incentivo_valor_override: inc, multiplicador_override: mult }, 'Forma de pagamento e incentivo salvos');
+      } else if (form.dataset.form === 'ajuste') {
+        const pontos = numOuNull(f.pontos.value);
+        const obs = f.obs.value.trim();
+        if (pontos == null || Number.isNaN(pontos) || pontos === 0) { NG.toast('Informe os pontos do ajuste (diferente de zero).', 'bad'); return; }
+        if (!obs) { NG.toast('A observação do ajuste é obrigatória.', 'bad'); return; }
+        const { error } = await NG.sb.from('pontos_lancamentos').insert({ parceiro_id: p.id, competencia: `${f.mes.value}-01`, tipo: 'ajuste', valor_base: pontos, multiplicador: 1, pontos, obs });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+        NG.toast('Ajuste lançado no extrato', 'ok');
+        await recarregarTudo();
+        ok = true;
+      }
+    } finally { if (!ok && bt && bt.isConnected) bt.disabled = false; }
+  });
+
+  // Comissão por plano do parceiro: compara com o que existe e faz insert / update / delete (índice único parcial não aceita upsert).
+  async function salvarComissao(p) {
+    const inputs = [...raiz.querySelectorAll('[data-form-comissao] input[data-plano]')];
+    const ops = [];
+    for (const inp of inputs) {
+      const planoId = Number(inp.dataset.plano);
+      const v = numOuNull(inp.value);
+      if (Number.isNaN(v) || (v != null && v < 0)) { NG.toast('Há um valor de comissão inválido.', 'bad'); return; }
+      const atual = COM.find((x) => x.parceiro_id === p.id && x.plano_id === planoId);
+      if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
+      else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: p.id, plano_id: planoId, valor: v }));
+      else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+    }
+    if (!ops.length) { NG.toast('Nada mudou.', 'ok'); return; }
+    const rs = await Promise.all(ops);
+    const e = rs.find((r) => r.error);
+    if (e) { NG.toast(NG.msgErro(e.error), 'bad'); } else NG.toast(`${ops.length} comissão(ões) salva(s)`, 'ok');
+    await recarregarTudo();
+  }
+
+  NGFicha.aoMudar(() => recarregarTudo());
+  await carregar();
+  const m = location.hash.match(/^#parceiro=([0-9a-f-]{36})$/i);
+  if (m && P.some((x) => x.id === m[1])) abrirParceiro(m[1]);
+  NGFicha.iniciar();
+})();
+</script>
+</body>
+</html>

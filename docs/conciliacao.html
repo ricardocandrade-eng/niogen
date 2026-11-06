@@ -7,7 +7,9 @@
      não envia nada à Nio). Rodapé do ciclo: NF a emitir (a NF só depois do pedido da Nio; processamento em até 10 dias úteis).
      Dados: views v_conciliacao + v_conciliacao_ciclos e tabela nio_contestacoes (rascunho
      supabase/rascunhos/0022_adimplencia_conciliacao_RASCUNHO.sql — NÃO aplicado). Sem as views: estado vazio + chave "dados de exemplo"
-     (assets/exemplos/conciliacao_exemplo.json, faixa amarela EXEMPLO). Admin e backoffice; vendedor não vê. -->
+     (assets/exemplos/conciliacao_exemplo.json, faixa amarela EXEMPLO). Admin e backoffice; vendedor não vê.
+     06/11 (prompt 25): bloco "Margem por canal" (v_margem_canal) no fim da tela — comissão Nio prevista/paga × pago e previsto a parceiros.
+     Independe das views da conciliação (que ainda não existem): aparece mesmo com a tela em estado vazio. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -19,12 +21,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-2">
-<script src="config.js?v=061126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-5">
+<script src="config.js?v=061126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-2"></script>
-<script src="assets/sidebar.js?v=061126-2"></script>
-<script src="assets/ficha.js?v=061126-2"></script>
+<script src="assets/app.js?v=061126-5"></script>
+<script src="assets/sidebar.js?v=061126-5"></script>
+<script src="assets/ficha.js?v=061126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -85,6 +87,20 @@
 
       <div class="rodape-info rodape-ciclo" id="rodape-ciclo"></div>
     </div>
+
+    <section class="secao" id="margem" aria-label="Margem por canal" hidden>
+      <h2 class="secao-tit">Margem por canal</h2>
+      <section class="lista">
+        <div class="rolagem-s">
+          <table class="tab margem-tab">
+            <thead><tr><th>Canal</th><th class="num">Vendas</th><th class="num">Comissão Nio prevista</th><th class="num">Comissão Nio paga</th>
+              <th class="num">Pago a parceiros</th><th class="num">Previsto a parceiros</th><th class="num">Margem paga</th><th class="num">Margem prevista</th></tr></thead>
+            <tbody id="margem-corpo"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span>Margem = comissão da Nio − o que foi pago (ou previsto) ao parceiro. Só o canal Parceiro PAP tem custo de parceiro; nos outros, as colunas de parceiros mostram "—" e a margem é a própria comissão.</span></div>
+      </section>
+    </section>
   </main>
 </div>
 
@@ -525,6 +541,29 @@
   fExemplo.checked = exemplo;
   await carregar();
   NGFicha.iniciar();
+})();
+</script>
+<script>
+// Margem por canal (prompt 25): lê v_margem_canal, que já existe; não depende das views da conciliação.
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) return;
+  const sec = document.getElementById('margem');
+  const corpo = document.getElementById('margem-corpo');
+  sec.hidden = false;
+  const { data, error } = await NG.sb.from('v_margem_canal').select('*');
+  if (error) { corpo.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+  const m = (v) => NG.fmtMoeda(v);
+  const linhas = (data || []).slice().sort((a, b) => (b.origem === 'parceiro_pap') - (a.origem === 'parceiro_pap') || Number(b.vendas) - Number(a.vendas));
+  corpo.innerHTML = linhas.length ? linhas.map((r) => {
+    const par = r.origem === 'parceiro_pap';
+    const neg = (v) => (Number(v) < 0 ? ' class="num bad-txt"' : ' class="num"');
+    return `<tr><td>${esc(NG.ORIGENS[r.origem] || r.origem)}</td><td class="num">${NG.fmtNum(r.vendas)}</td>
+      <td class="num">${esc(m(r.comissao_nio_prevista))}</td><td class="num">${esc(m(r.comissao_nio_paga))}</td>
+      <td class="num">${par ? esc(m(r.parceiros_pago)) : '—'}</td><td class="num">${par ? esc(m(r.parceiros_previsto)) : '—'}</td>
+      <td${neg(r.margem_paga)}>${esc(m(r.margem_paga))}</td><td${neg(r.margem_prevista)}>${esc(m(r.margem_prevista))}</td></tr>`;
+  }).join('') : '<tr><td colspan="8" class="vazio">Sem vendas ainda</td></tr>';
 })();
 </script>
 </body>

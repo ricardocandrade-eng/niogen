@@ -1,13 +1,14 @@
 /* NIOGEN | docs/assets/sidebar.js | 03/11/2026 · 04/11 menu ☰ no celular · 05/11 telas "em breve" abrem embreve.html
  * 05/11 (prompt 14b): Adimplência e Conciliação saíram de "em breve" — só admin/backoffice (vendedor não vê o item).
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
+ * 06/11 (prompt 25): Parceiros PAP (Vendas) e Pagamentos a parceiros (Financeiro) — só admin/backoffice, somem para o vendedor.
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
   'use strict';
 
-  const VERSAO = 'v1.1 · 05/11';
+  const VERSAO = 'v1.2 · 06/11';
 
   const MENU = [
     ['Gestão', [
@@ -17,6 +18,7 @@
     ['Vendas', [
       { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
+      { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura (DFV)', href: 'cobertura.html' },
       { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
@@ -28,6 +30,7 @@
     ['Financeiro', [
       { id: 'adimplencia', ico: '◇', nome: 'Adimplência', href: 'adimplencia.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conciliacao', ico: '◆', nome: 'Conciliação', href: 'conciliacao.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'pagamentos', ico: '◈', nome: 'Pagamentos a parceiros', href: 'pagamentos.html', perfis: ['admin', 'backoffice'], esconder: true },
     ]],
     ['Sistema', [
       { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },

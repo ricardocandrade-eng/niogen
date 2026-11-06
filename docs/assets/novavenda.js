@@ -73,6 +73,8 @@
           <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
           <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
           <label class="campo" id="campo-ref" hidden style="grid-column:1/-1">Quem indicou<input type="text" name="origem_ref"></label>
+          <label class="campo" id="campo-parceiro" hidden style="grid-column:1/-1">Parceiro PAP (só ativos)<select name="parceiro_id"><option value="">Escolher o parceiro…</option></select>
+            <span class="nota-campo" id="nota-parceiro">A venda nasce em conferência de qualidade: a Dharma liga para o cliente antes de seguir. Nada de pedido, biometria ou "Registrar venda" agora.</span></label>
         </div>
         <span class="nota-campo">PJ · NMEI recebe o bônus NMEI por cima da comissão.</span>
         <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
@@ -179,6 +181,18 @@
     const corpoEl = $('g-corpo');
 
     const hoje = NG.diaSP();
+    // Programa Parceiro PAP (prompt 25): só admin/backoffice lançam venda de parceiro (a tabela parceiros não abre para o vendedor).
+    const lancaParceiro = ['admin', 'backoffice'].includes(eu.perfil);
+    let parceirosAtivos = [];
+    if (lancaParceiro) {
+      const rpar = await NG.sb.from('parceiros').select('id, nome').eq('status', 'ativo').order('nome');
+      parceirosAtivos = rpar.data || [];
+      const selOri = gavetaEl.querySelector('select[name="origem"]');
+      selOri.insertAdjacentHTML('beforeend', '<option value="parceiro_pap">Parceiro PAP</option>');
+      gavetaEl.querySelector('select[name="parceiro_id"]').insertAdjacentHTML('beforeend',
+        parceirosAtivos.map((p) => `<option value="${esc(p.id)}">${esc(p.nome)}</option>`).join(''));
+      if (!parceirosAtivos.length) gavetaEl.querySelector('#nota-parceiro').textContent = 'Nenhum parceiro ativo: aprove um cadastro em Parceiros PAP antes.';
+    }
     const [{ data: planos }, { data: areas }, { data: adicionais }, { data: bonus }] = await Promise.all([
       NG.sb.from('config_planos').select('*').eq('ativo', true).lte('vigencia_inicio', hoje).order('preco'),
       NG.sb.from('config_area').select('*').eq('ativo', true),
@@ -509,10 +523,13 @@
       ];
       const foraArea = estado.area === false ? 'cidade fora da área' : 'endereço';
       const faltaQ = [];
+      const ehParceiro = F.origem.value === 'parceiro_pap';
+      if (ehParceiro && !F.parceiro_id.value) faltaQ.push('parceiro');
       if (!pronto[0]) faltaQ.push(foraArea);
       if (!pronto[1]) faltaQ.push(docTxt && !docOk ? 'CPF/CNPJ válido' : 'cliente');
       if (!pronto[2]) faltaQ.push('plano');
       const faltaV = [];
+      if (ehParceiro) faltaV.push('conferência de qualidade do parceiro (a Dharma aprova antes)');
       if (!pronto[0]) faltaV.push(foraArea);
       if (!dfvOk()) faltaV.push('cobertura');
       if (!F.nome.value.trim() || !F.whatsapp.value.trim() || !F.contato_ok.checked) faltaV.push('cliente');
@@ -582,7 +599,11 @@
     $('planos-op').addEventListener('change', renderResumo);
     $('adicionais').addEventListener('change', renderResumo);
     F.nfid.addEventListener('change', renderResumo);
-    F.origem.addEventListener('change', () => { $('campo-ref').hidden = F.origem.value !== 'indicacao'; });
+    F.origem.addEventListener('change', () => {
+      $('campo-ref').hidden = F.origem.value !== 'indicacao';
+      $('campo-parceiro').hidden = F.origem.value !== 'parceiro_pap';
+      if (F.origem.value !== 'parceiro_pap') F.parceiro_id.value = '';
+    });
     form.addEventListener('input', atualizar);
     form.addEventListener('change', atualizar);
     form.addEventListener('submit', (ev) => ev.preventDefault());
@@ -601,6 +622,8 @@
         status,
         origem: F.origem.value,
         origem_ref: F.origem.value === 'indicacao' ? (F.origem_ref.value.trim() || null) : null,
+        // Venda de parceiro: o banco força a conferência pendente e só aceita parceiro ativo (vendas_antes_conferencia).
+        parceiro_id: F.origem.value === 'parceiro_pap' ? (F.parceiro_id.value || null) : null,
         cliente_nome: F.nome.value.trim(),
         cliente_cpf_cnpj: NG.soDigitos(F.doc.value) || null,
         cliente_whatsapp: NG.soDigitos(F.whatsapp.value) || null,
@@ -637,6 +660,7 @@
       $('endereco').hidden = true;
       $('doc-erro').textContent = '';
       $('campo-ref').hidden = true;
+      $('campo-parceiro').hidden = true;
       montarDfv();
       renderPlanos();
       irPara(1);
