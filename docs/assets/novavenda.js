@@ -123,11 +123,11 @@
       <!-- 5 · Pedido no portal e biometria por link (venda remota, 05/11: não existe biometria em campo) -->
       <section class="passo-g" data-passo="5" hidden>
         <h3>Pedido no portal e biometria</h3>
-        <p class="ajuda">O pedido é aberto no portal PAP (perfil BO); o cliente faz a biometria por um link no celular. É o que transforma qualificado em vendido.</p>
+        <p class="ajuda">O pedido é aberto no portal PAP (perfil BO); ao concluir o pedido, a própria Nio manda ao cliente o link da biometria (WhatsApp + e-mail) e ele faz pelo celular. É o que transforma qualificado em vendido.</p>
         <div class="f-form-acoes"><a class="btn btn-ghost" href="https://pap.niointernet.com.br/administrativo/novo-pedido" target="_blank" rel="noopener">Abrir no portal PAP ↗</a></div>
         <div class="grade2">
           <label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" placeholder="obrigatório p/ Vendido" autocomplete="off"></label>
-          <label class="campo">Biometria (link)<select name="biometria"><option value="">Escolher…</option><option value="nao_enviada">Link ainda não enviado</option><option value="pendente">Link enviado · pendente</option><option value="com_risco">Com risco</option><option value="validada">Validada</option></select></label>
+          <label class="campo">Biometria (link)<select name="biometria"><option value="">Escolher…</option><option value="nao_enviada">Sem pedido (link ainda não saiu)</option><option value="pendente">Pendente (link enviado pela Nio)</option><option value="com_risco">Com risco</option><option value="validada">Validada</option></select></label>
           <label class="campo">Instalação · preferência<select name="inst_pref"><option value="">—</option><option value="manhã">Manhã</option><option value="tarde">Tarde</option></select></label>
         </div>
         <div class="faixa amarelo">Biometria validada: agendar a instalação em até 4 h (indicador do contrato).</div>

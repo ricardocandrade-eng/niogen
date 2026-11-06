@@ -52,9 +52,9 @@
   };
   const FORMAS = { boleto: 'Boleto', cartao: 'Cartão', dacc: 'DACC' };
   const SEGMENTOS = { PF: 'PF · Varejo', MEI: 'PJ · MEI', NMEI: 'PJ · NMEI' };
-  // Venda remota (05/11): não existe biometria em campo. O portal PAP manda um LINK ao cliente e mostra
-  // Pendente · com Risco · Validada. "Não enviada" = o link ainda não saiu.
-  const BIOMETRIA = { nao_enviada: 'link não enviado', pendente: 'pendente (link enviado)', com_risco: 'com risco', validada: 'validada' };
+  // Venda remota (05/11): não existe biometria em campo. A própria Nio manda o LINK ao cliente (WhatsApp + e-mail) na hora
+  // em que o pedido é aberto no portal (prompt 19); o portal mostra Pendente · com Risco · Validada. "Não enviada" = sem pedido.
+  const BIOMETRIA = { nao_enviada: 'sem pedido (link ainda não saiu)', pendente: 'pendente (link enviado pela Nio)', com_risco: 'com risco', validada: 'validada' };
   const CREDITO = { pendente: 'pendente (24 h)', aprovado: 'aprovado', so_cartao: 'aprovado só no cartão', negado: 'negado' };
   // Viabilidade oficial do portal (nível A em espera: hoje registrada à mão na ficha). Nunca nega venda sozinha (05/11 10h05):
   // ≠ viável = conferir manualmente no portal (variações de CEP/rua/número); quem decide sem cobertura é o humano.
@@ -712,10 +712,14 @@
           return { txt: 'Biometria validada · registrar a venda', nivel: 'warn', acao: true, resolver: 'pedido' };
         }
         if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
-        if (hBio != null && hBio > 72) return { txt: `Link da biometria há ${fmtHoras(hBio)} · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
+        // Prompt 19: o link é da Nio e sai na hora do pedido — a contagem (horas_biometria_pendente) parte do nº do pedido.
+        const linkNio = v.biometria_link_enviado_em
+          ? `link enviado pela Nio ${diaSP(v.biometria_link_enviado_em) === diaSP() ? fmtHora(v.biometria_link_enviado_em) : fmtDataHora(v.biometria_link_enviado_em)}`
+          : 'link enviado pela Nio';
+        if (hBio != null && hBio > 72) return { txt: `Link da Nio há ${fmtHoras(hBio)} sem biometria · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
         if (hCred != null && hCred > 24) return { txt: `Crédito pendente há ${fmtHoras(hCred)} · reconsultar no portal`, nivel: 'warn', acao: true, resolver: 'portal' };
-        if (hBio != null && hBio > 24) return { txt: `Link da biometria há ${fmtHoras(hBio)} sem validar`, nivel: 'warn', acao: true, resolver: 'bio_status' };
-        if (v.biometria_status === 'pendente') return { txt: `Aguardando a biometria (link${hBio != null ? ` há ${fmtHoras(hBio)}` : ' enviado'})`, nivel: 'ok', resolver: 'bio_status' };
+        if (hBio != null && hBio > 24) return { txt: `Link da Nio há ${fmtHoras(hBio)} sem biometria · avisar o cliente`, nivel: 'warn', acao: true, resolver: 'bio_status' };
+        if (v.biometria_status === 'pendente') return { txt: `Pedido aberto · ${linkNio}`, nivel: 'ok', resolver: 'bio_status' };
         const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
         const h = (Date.now() - new Date(ult)) / 3600000;
         if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
@@ -727,7 +731,7 @@
           if (['sem_viabilidade', 'nao_encontrado'].includes(v.dfv_viabilidade)) return { txt: `DFV: ${v.dfv_resultado === 'endereco_ocupado' ? 'indica Nio no endereço' : DFV_OPCOES[v.dfv_viabilidade].toLowerCase()} · conferir no portal`, nivel: 'warn', acao: true, resolver: 'dfv' };
           return { txt: v.dfv_viabilidade === 'nao_consultado' ? 'Consultar cobertura (DFV)' : 'DFV vencido · consultar de novo', nivel: 'warn', acao: true, resolver: 'dfv' };
         }
-        return { txt: 'Abrir pedido no portal e enviar o link da biometria', nivel: 'ok', resolver: 'portal' };
+        return { txt: 'Abrir pedido no portal e registrar o nº (a Nio manda o link)', nivel: 'ok', resolver: 'portal' };
       }
       case '1_vendido': {
         const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);

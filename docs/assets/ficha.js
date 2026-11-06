@@ -105,9 +105,9 @@
       cor = 'warn';
       texto = `${NG.fmtDataHora(e.criado_em)}${quem} · ${esc(dt.motivo || '')}`;
     } else if (e.tipo === 'biometria_link') {
-      // 0027: o atendente mandou o link do portal na conversa do Chatwoot e o NIOGEN gravou sozinho.
-      titulo = dt.reenvio ? 'Link da biometria reenviado (Chatwoot)' : 'Link da biometria enviado (Chatwoot)';
-      texto = `${NG.fmtDataHora(e.criado_em)} · gravado automaticamente da conversa · biometria pendente`;
+      // 0027: link do portal colado na conversa do Chatwoot (fallback desde a 0032: com pedido registrado, só referência).
+      titulo = dt.so_referencia ? 'Link da biometria guardado (Chatwoot)' : dt.reenvio ? 'Link da biometria reenviado (Chatwoot)' : 'Link da biometria colado (Chatwoot)';
+      texto = `${NG.fmtDataHora(e.criado_em)} · gravado automaticamente da conversa · ${dt.so_referencia ? 'só referência (a contagem é do pedido)' : 'biometria pendente (sem pedido registrado)'}`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -169,7 +169,7 @@
 
   // ---------- próximo passo: botão e formulário que resolvem ----------
   const BOTAO = {
-    pedido: 'Registrar venda', portal: 'Pedido no portal e link da biometria', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
+    pedido: 'Registrar venda', portal: 'Registrar o pedido do portal', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
     dfv: 'Consultar cobertura', sem_cobertura: 'Encerrar sem cobertura', agendar: 'Agendar instalação',
     reagendar: 'Reagendar', docs: 'Registrar envio dos documentos',
   };
@@ -211,14 +211,15 @@
     pedido: (v) => formWrap('pedido', 'Registrar venda', 'Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link). A viabilidade (portal ou DFV, &lt; 7 dias) o banco confere.',
       `<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status === 'validada' ? 'validada' : v.biometria_status)}</select></label></div>`, 'Registrar venda'),
-    // Venda remota: o nosso time abre o pedido no portal, roda o crédito e manda o link da biometria pela conversa.
-    portal: (v) => formWrap('portal', 'Pedido no portal e link da biometria',
-      'Abra o pedido no portal PAP (perfil BO) com o endereço abaixo, rode a análise de crédito e mande ao cliente, por esta conversa, o link da biometria que o portal gera. Nunca conclua pedido com CPF de teste.',
+    // Venda remota: o nosso time abre o pedido no portal e roda o crédito. Prompt 19: o link da biometria é disparado pela
+    // própria Nio (WhatsApp + e-mail) na hora do pedido — salvar o nº do pedido marca a biometria pendente e a contagem
+    // 24/72 h e o D+1 partem dali (trigger vendas_antes_biometria, 0032). O backoffice só avisa o cliente na conversa.
+    portal: (v) => formWrap('portal', 'Pedido no portal',
+      'Abra o pedido no portal PAP (perfil BO) com o endereço abaixo e rode a análise de crédito. Ao concluir o pedido, a própria Nio manda ao cliente o link da biometria por WhatsApp e por e-mail — nós não mandamos link. Salve aqui o nº do pedido (a contagem de 24/72 h começa agora) e avise o cliente na conversa. Nunca conclua pedido com CPF de teste.',
       `${botoesPortal}<span class="nota-campo mono">${esc(enderecoPortal(v))}</span>
        <div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
-       <label class="campo">Link da biometria (opcional — vai no lembrete D+1)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>
-       <label class="check"><input type="checkbox" name="enviado" ${v.biometria_status && v.biometria_status !== 'nao_enviada' ? '' : 'checked'}> Link da biometria enviado ao cliente agora</label>`, 'Salvar'),
+       <label class="campo">Link da biometria (opcional — só referência; quem manda é a Nio)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>`, 'Salvar'),
     bio_status: (v) => formWrap('bio_status', 'Biometria e crédito', 'O portal mostra a biometria como Pendente, com Risco ou Validada (Consulta OS). Validada + nº do pedido libera "Registrar venda".',
       `${botoesPortal}<div class="grade2"><label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status)}</select></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>`, 'Salvar'),
@@ -277,13 +278,11 @@
       const campos = {
         nio_pedido: String(fd.get('pedido') || '').trim() || null,
         credito_resultado: fd.get('credito') || null,
-        biometria_link: link || null,
+        biometria_link: link || v.biometria_link || null,
       };
-      if (fd.get('enviado') && (!v.biometria_status || v.biometria_status === 'nao_enviada')) {
-        campos.biometria_status = 'pendente';
-        campos.biometria_link_enviado_em = new Date().toISOString();
-      }
-      return gravar(campos, campos.biometria_status ? 'Pedido registrado · link da biometria enviado' : 'Pedido no portal atualizado');
+      // Biometria pendente e a contagem: o banco carimba na hora em que o nº do pedido entra (0032).
+      const pedidoNovo = campos.nio_pedido && campos.nio_pedido !== (v.nio_pedido || null);
+      return gravar(campos, pedidoNovo ? 'Pedido registrado · a Nio manda o link da biometria ao cliente' : 'Pedido no portal atualizado');
     },
     async bio_status(fd) {
       return gravar({ biometria_status: fd.get('biometria') || null, credito_resultado: fd.get('credito') || null }, 'Biometria e crédito atualizados');
@@ -577,13 +576,16 @@
       },
       {
         id: 'pedido', titulo: 'Pedido e biometria',
-        resumo: [v.nio_pedido ? `Pedido #${v.nio_pedido}` : 'sem pedido no portal', `biometria ${NG.BIOMETRIA[v.biometria_status] || 'link não enviado'}`,
+        resumo: [v.nio_pedido ? `Pedido #${v.nio_pedido}` : 'sem pedido no portal',
+          v.biometria_status === 'pendente' && v.biometria_link_enviado_em
+            ? `pedido aberto · link enviado pela Nio ${NG.fmtDataHora(v.biometria_link_enviado_em)}`
+            : `biometria ${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}`,
           v.credito_resultado ? `crédito ${NG.CREDITO[v.credito_resultado]}` : null].filter(Boolean).join(' · '),
         corpo: () => `${linha('Nº do pedido (portal)', `<span class="mono">${esc(v.nio_pedido || '—')}</span>`)}
           ${linha('Contrato Nio', `<span class="mono">${esc(v.nio_contrato || '—')}</span>`)}
           ${linha('Interesse no portal', `<span class="mono">${esc(v.nio_viab_interesse_id || '—')}</span>`)}
           ${linha('Análise de crédito', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ' · ' + NG.fmtDataHora(v.credito_em) : ''}` : '—'))}
-          ${linha('Biometria (link)', esc(`${NG.BIOMETRIA[v.biometria_status] || 'link não enviado'}${v.biometria_link_enviado_em ? ' · link ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
+          ${linha('Biometria (link da Nio)', esc(`${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}${v.biometria_link_enviado_em ? ' · link enviado pela Nio ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
           ${linha('Vendida em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '—'))}
           ${linha('Vendedor', esc(v.vendedor_nome || '—'))}
           ${v.status === '0_qualificado' ? botoesPortal : ''}
