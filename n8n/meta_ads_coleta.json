@@ -1,0 +1,226 @@
+{
+  "name": "meta_ads_coleta",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4c5afb79-3edc-5995-a173-b493dcb74748"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-meta-ads-coleta",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1w · Rodar agora (teste)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "1c09d38e-6cec-5028-af1e-b2311395393c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "f756e085-3342-5f9a-897c-dc6f405d9d92"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "level",
+              "value": "ad"
+            },
+            {
+              "name": "time_increment",
+              "value": "1"
+            },
+            {
+              "name": "time_range",
+              "value": "={{ JSON.stringify({ since: $now.setZone('America/Sao_Paulo').minus({ days: 2 }).toFormat('yyyy-MM-dd'), until: $now.setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }) }}"
+            },
+            {
+              "name": "fields",
+              "value": "date_start,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,reach,clicks,actions"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Meta insights",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "96f3b6bc-1a41-553f-8bea-99260a5e8c34",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892/ads",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "3 · Meta anúncios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "b1b3ef62-12cc-579d-b547-8eebb84bc0d1",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_ads_gravar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_insights: $('2 · Meta insights').first().json.data || [], p_anuncios: $json.data || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "4 · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "17d715d6-b394-5f9d-bf11-70b5a7c837c5",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1 · A cada 15 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Meta insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1w · Rodar agora (teste)": {
+      "main": [
+        [
+          {
+            "node": "2 · Meta insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Meta insights": {
+      "main": [
+        [
+          {
+            "node": "3 · Meta anúncios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Meta anúncios": {
+      "main": [
+        [
+          {
+            "node": "4 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}

@@ -2,7 +2,11 @@
 <!-- NIOGEN | docs/metaads.html | 03/11/2026 · 05/11 rodada noturna — Meta Ads › Bairros prioritários no padrão de telas.
      KPIs, abas por situação (Todos · Marcados · Aprovação ≥ 50 % · < 50 %), busca + marcar os N primeiros + raio mínimo,
      tabela padrão ordenável com marcação, cartões no celular; o conjunto para o Gerenciador de Anúncios abre em gaveta.
-     Fonte: v_dfv_bairros (base DFV da Nio no Supabase). Sem API da Meta: Campanhas e Leads seguem "em breve". -->
+     Fonte: v_dfv_bairros (base DFV da Nio no Supabase).
+     06/11 (depois do prompt 22): vista "Desempenho" (padrão), do mockup MetaAds.dc.html — período, 5 KPIs (gasto × verba do mês,
+     conversas da Meta, qualificadas pela Mari, vendas com biometria, fora da área), anúncios por campanha/conjunto e o dia a dia.
+     Fonte: meta_ads_diario + meta_ads_anuncios (n8n meta_ads_coleta, a cada 15 min) e v_meta_ads_dia (migration 0034).
+     Só leitura: nada aqui pausa, ativa ou muda verba. "Bairros prioritários" virou a 2ª vista, sem mudança de comportamento. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -14,11 +18,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=061126-2">
-<script src="config.js?v=061126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=061126-3">
+<script src="config.js?v=061126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=061126-2"></script>
-<script src="assets/sidebar.js?v=061126-2"></script>
+<script src="assets/app.js?v=061126-3"></script>
+<script src="assets/sidebar.js?v=061126-3"></script>
 </head>
 <body>
 <div class="app">
@@ -26,12 +30,58 @@
   <main class="main com-fab">
     <header class="cab">
       <div>
-        <h1>Meta Ads · Bairros prioritários</h1>
+        <h1 id="titulo">Meta Ads</h1>
         <div class="sub" id="sub">Carregando…</div>
       </div>
-      <div class="cab-acoes"><button type="button" class="btn btn-acc acao-principal" id="ver-conjunto">Conjunto para o Gerenciador</button></div>
+      <div class="cab-acoes">
+        <span id="f-periodo"></span>
+        <button type="button" class="btn btn-acc acao-principal" id="ver-conjunto" hidden>Conjunto para o Gerenciador</button>
+      </div>
     </header>
+    <div id="vistas" aria-label="Vista"></div>
 
+    <div id="vista-desempenho" class="vista">
+      <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
+      <section class="lista padrao" aria-labelledby="t-anuncios">
+        <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-anuncios" class="secao-tit">Campanhas e anúncios</h2></div>
+        <div class="rolagem">
+          <table class="tab">
+            <thead><tr>
+              <th>Anúncio</th>
+              <th>Status</th>
+              <th class="num">Gasto</th>
+              <th class="num col-media">Impressões</th>
+              <th class="num col-media">Cliques</th>
+              <th class="num">Conversas</th>
+              <th class="num">R$/conversa</th>
+            </tr></thead>
+            <tbody id="tbody-ads"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span id="atualizado"></span><span>Conversas = iniciadas no WhatsApp, contadas pela Meta</span></div>
+      </section>
+      <section class="lista padrao" aria-labelledby="t-dias">
+        <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-dias" class="secao-tit">Dia a dia · Meta × Mari × vendas</h2></div>
+        <div class="rolagem">
+          <table class="tab">
+            <thead><tr>
+              <th>Dia</th>
+              <th class="num">Gasto</th>
+              <th class="num">Conversas Meta</th>
+              <th class="num">Conversas Mari</th>
+              <th class="num col-media">Com CEP</th>
+              <th class="num col-media">Fora da área</th>
+              <th class="num">Qualificadas</th>
+              <th class="num">Vendas (biometria ok)</th>
+            </tr></thead>
+            <tbody id="tbody-dias"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span>Mari = conversas com origem "anúncio" (mensagem pronta "Vi o anúncio"); qualificada = passou para o time (handoff)</span><span>Por anúncio só depois da atribuição pelo ad_id</span></div>
+      </section>
+    </div>
+
+    <div id="vista-bairros" class="vista" hidden>
     <section class="kpis quatro" id="kpis" aria-label="Resumo dos bairros"></section>
 
     <div id="abas"></div>
@@ -70,9 +120,10 @@
         Centro = média das fachadas; raio = 1,5 × a dispersão delas. Bairro com aprovação abaixo de 50 % fica marcado: não comprar lead barato lá (75 % do churn do canal é involuntário) —
         vai para o PAP de rua com o DFV na mão. Fonte: base DFV da Nio no Supabase, recalculada a cada carga.</span>
     </details>
+    </div>
   </main>
 </div>
-<button type="button" class="fab" id="fab" aria-label="Conjunto para o Gerenciador">⧉</button>
+<button type="button" class="fab" id="fab" aria-label="Conjunto para o Gerenciador" hidden>⧉</button>
 
 <aside class="gaveta" id="gaveta-conj" aria-label="Conjunto para o Gerenciador de Anúncios" aria-hidden="true">
   <div class="g-cab"><div><h2>Conjunto para o Gerenciador</h2><p>Localização › Inserir em massa / soltar alfinete: um bairro por linha (lat, lon, raio).</p></div>
@@ -89,15 +140,158 @@
   await NG.exigirLogin();
   NGSidebar.montar();
 
+  // ───────────── vistas: Desempenho (padrão) · Bairros prioritários ─────────────
+  const SUB = { desempenho: 'Carregando…', bairros: 'Carregando…' };
+  const setSub = (v, txt) => { SUB[v] = txt; if (vista === v) document.getElementById('sub').textContent = txt; };
+  let vista = new URLSearchParams(location.search).get('vista') === 'bairros' ? 'bairros' : 'desempenho';
+  let bairrosIniciado = false;
+  function abrirVista(v) {
+    vista = v;
+    NG.abasPilulas(document.getElementById('vistas'), [
+      { id: 'desempenho', nome: 'Desempenho', n: nAnuncios },
+      { id: 'bairros', nome: 'Bairros prioritários', n: nBairros },
+    ], vista, abrirVista);
+    document.getElementById('vista-desempenho').hidden = v !== 'desempenho';
+    document.getElementById('vista-bairros').hidden = v !== 'bairros';
+    document.getElementById('f-periodo').hidden = v !== 'desempenho';
+    document.getElementById('ver-conjunto').hidden = v !== 'bairros';
+    document.getElementById('fab').hidden = v !== 'bairros';
+    document.getElementById('titulo').textContent = v === 'bairros' ? 'Meta Ads · Bairros prioritários' : 'Meta Ads';
+    document.getElementById('sub').textContent = SUB[v];
+    const u = new URL(location.href);
+    if (v === 'bairros') u.searchParams.set('vista', 'bairros'); else u.searchParams.delete('vista');
+    history.replaceState(null, '', u);
+    if (v === 'bairros' && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); }
+  }
+  let nAnuncios = null, nBairros = null;
+
+  // ───────────── Desempenho ─────────────
+  const VERBA_MES = 2000;   // verba de Meta Ads de nov/2026 (INFRA §7)
+  const STATUS_AD = {
+    ACTIVE: ['ok', 'Ativo'], PAUSED: ['dim', 'Pausado'], CAMPAIGN_PAUSED: ['dim', 'Campanha pausada'], ADSET_PAUSED: ['dim', 'Conjunto pausado'],
+    IN_PROCESS: ['info', 'Processando'], PENDING_REVIEW: ['info', 'Em análise'], PREAPPROVED: ['info', 'Pré-aprovado'],
+    DISAPPROVED: ['bad', 'Recusado'], WITH_ISSUES: ['bad', 'Com problema'], PENDING_BILLING_INFO: ['warn', 'Pagamento pendente'],
+    ARCHIVED: ['dim', 'Arquivado'], DELETED: ['dim', 'Apagado'],
+  };
+  const chipStatus = (s) => { const [c, t] = STATUS_AD[s] || ['dim', s || '—']; return `<span class="chip ${c}">${esc(t)}</span>`; };
+  const porConversa = (g, n) => (n > 0 ? NG.fmtMoeda(Math.round((g / n) * 100) / 100) : '—');
+  const pctTxt = (a, b) => (b > 0 ? `${NG.fmtNum((a / b) * 100)} %` : '—');
+  const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => carregarDesempenho() });
+
+  async function carregarDesempenho() {
+    const p = per.valor();
+    let qDiario = NG.sb.from('meta_ads_diario').select('*');
+    if (p.de) qDiario = qDiario.gte('dia', p.de);
+    if (p.ate) qDiario = qDiario.lte('dia', p.ate);
+    const [rDiario, rAds, rDias] = await Promise.all([
+      qDiario, NG.sb.from('meta_ads_anuncios').select('*'), NG.sb.from('v_meta_ads_dia').select('*').order('dia', { ascending: false }),
+    ]);
+    const erro = rDiario.error || rAds.error || rDias.error;
+    if (erro) {
+      document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`;
+      document.getElementById('tbody-dias').innerHTML = '<tr><td colspan="8" class="vazio">—</td></tr>';
+      setSub('desempenho', 'Conta Nio · não deu para ler o desempenho');
+      return;
+    }
+    const diario = rDiario.data || [];
+    const ads = rAds.data || [];
+    const noPer = (d) => (!p.de || d >= p.de) && (!p.ate || d <= p.ate);
+    const dias = (rDias.data || []).filter((r) => noPer(r.dia));
+    const mes = NG.diaSP().slice(0, 8) + '01';
+    const gastoMes = soma((rDias.data || []).filter((r) => r.dia >= mes), 'gasto');
+
+    // KPIs (mockup: o número que manda é o custo por venda com biometria, não o custo por conversa)
+    const gasto = soma(dias, 'gasto');
+    const convMeta = soma(dias, 'conversas_meta');
+    const convMari = soma(dias, 'conversas_mari');
+    const qualif = soma(dias, 'qualificadas');
+    const vendasBio = soma(dias, 'vendas_biometria');
+    const vendas = soma(dias, 'vendas');
+    const fora = soma(dias, 'fora_area');
+    document.getElementById('kpis-d').innerHTML = [
+      NG.kpi({ rot: `Gasto · ${per.rotulo}`, val: NG.fmtMoeda(gasto), pct: (gastoMes / VERBA_MES) * 100,
+        nota: `${NG.fmtMoeda(gastoMes)} de ${NG.fmtMoeda(VERBA_MES)} no mês`, cls: gastoMes > VERBA_MES ? 'bad' : '' }),
+      NG.kpi({ rot: 'Conversas iniciadas', val: NG.fmtNum(convMeta), nota: `${porConversa(gasto, convMeta)} por conversa (Meta)`,
+        dica: 'Conversas no WhatsApp contadas pela Meta (janela de 7 dias do clique). A Mari conta as dela à parte, na tabela do dia a dia.' }),
+      NG.kpi({ rot: 'Qualificadas pela Mari', val: `${NG.fmtNum(qualif)} <small>${pctTxt(qualif, convMari)}</small>`,
+        nota: `${porConversa(gasto, qualif)} por qualificada · ${NG.fmtNum(convMari)} na Mari`,
+        dica: 'Conversa da Mari com origem "anúncio" que chegou ao handoff para o time.' }),
+      NG.kpi({ rot: 'Vendas (biometria ok)', val: NG.fmtNum(vendasBio),
+        nota: `${porConversa(gasto, vendasBio)} por venda · ${NG.fmtNum(vendas)} venda${vendas === 1 ? '' : 's'} no funil`,
+        dica: 'Vendas com origem "anúncio" e biometria aprovada, pelo dia em que a venda foi criada. É este custo que decide.' }),
+      NG.kpi({ rot: 'Fora da área', val: `${NG.fmtNum(fora)} <small>${pctTxt(fora, convMari)}</small>`, cls: fora > 0 ? 'warn' : '',
+        nota: fora > 0 ? 'público largo demais? conferir o raio' : 'nenhuma conversa fora da área' }),
+    ].join('');
+
+    // Anúncios por campanha › conjunto (inclui os sem entrega no período)
+    const linhas = new Map();
+    ads.forEach((a) => linhas.set(a.ad_id, { ...a, gasto: 0, impressoes: 0, cliques: 0, conversas: 0 }));
+    diario.forEach((d) => {
+      const l = linhas.get(d.ad_id) || { ad_id: d.ad_id, ad_nome: d.ad_nome, adset_id: d.adset_id, adset_nome: d.adset_nome,
+        campanha_id: d.campanha_id, campanha_nome: d.campanha_nome, status_efetivo: null, gasto: 0, impressoes: 0, cliques: 0, conversas: 0 };
+      l.gasto += Number(d.gasto || 0); l.impressoes += d.impressoes || 0; l.cliques += d.cliques || 0; l.conversas += d.conversas || 0;
+      linhas.set(d.ad_id, l);
+    });
+    const todas = [...linhas.values()].filter((l) => l.gasto > 0 || !['ARCHIVED', 'DELETED'].includes(l.status_efetivo));
+    nAnuncios = todas.filter((l) => l.status_efetivo === 'ACTIVE').length;
+    const grupos = new Map();
+    todas.forEach((l) => {
+      const k = `${l.campanha_nome || '—'}\u0000${l.adset_nome || '—'}`;
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(l);
+    });
+    const chaves = [...grupos.keys()].sort();
+    document.getElementById('tbody-ads').innerHTML = chaves.length ? chaves.map((k) => {
+      const [camp, conj] = k.split('\u0000');
+      const ls = grupos.get(k).sort((a, b) => b.gasto - a.gasto || String(a.ad_nome).localeCompare(String(b.ad_nome)));
+      const g = soma(ls, 'gasto'), c = soma(ls, 'conversas');
+      return `<tr class="apagado"><td colspan="7" style="font-size:12px;background:var(--surface-2)"><b>${esc(camp)}</b> › ${esc(conj)}
+          · ${NG.fmtMoeda(g)} · ${NG.fmtNum(c)} conversa${c === 1 ? '' : 's'}</td></tr>`
+        + ls.map((l) => `<tr>
+          <td class="cli"><b>${esc(l.ad_nome || l.ad_id)}</b><small class="mono">${esc(l.ad_id)}</small></td>
+          <td>${chipStatus(l.status_efetivo)}</td>
+          <td class="num">${NG.fmtMoeda(l.gasto)}</td>
+          <td class="num col-media">${NG.fmtNum(l.impressoes)}</td>
+          <td class="num col-media">${NG.fmtNum(l.cliques)}</td>
+          <td class="num">${NG.fmtNum(l.conversas)}</td>
+          <td class="num">${porConversa(l.gasto, l.conversas)}</td>
+        </tr>`).join('');
+    }).join('') : '<tr><td colspan="7" class="vazio">Nenhum anúncio coletado ainda — a coleta roda a cada 15 min.</td></tr>';
+
+    // Dia a dia
+    document.getElementById('tbody-dias').innerHTML = dias.length ? dias.map((r) => `<tr>
+        <td>${NG.fmtDiaISO(r.dia)}</td>
+        <td class="num">${NG.fmtMoeda(r.gasto)}</td>
+        <td class="num">${NG.fmtNum(r.conversas_meta)}</td>
+        <td class="num">${NG.fmtNum(r.conversas_mari)}</td>
+        <td class="num col-media">${NG.fmtNum(r.com_cep)}</td>
+        <td class="num col-media">${r.fora_area ? `<span class="chip warn">${NG.fmtNum(r.fora_area)}</span>` : '0'}</td>
+        <td class="num">${NG.fmtNum(r.qualificadas)}</td>
+        <td class="num">${NG.fmtNum(r.vendas_biometria)}${r.vendas > r.vendas_biometria ? ` <small class="apagado">de ${NG.fmtNum(r.vendas)}</small>` : ''}</td>
+      </tr>`).join('') : '<tr><td colspan="8" class="vazio">Nada no período.</td></tr>';
+
+    const ult = diario.concat(ads).reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
+    document.getElementById('atualizado').textContent = ult ? `Atualizado ${NG.fmtDataHora(ult)} · coleta a cada 15 min` : 'Coleta a cada 15 min';
+    const ativas = new Set(todas.filter((l) => l.status_efetivo === 'ACTIVE').map((l) => l.campanha_nome));
+    setSub('desempenho', `Conta Nio · ${ativas.size ? `${[...ativas].join(', ')} ativa${ativas.size > 1 ? 's' : ''}` : 'nenhuma campanha ativa'}`
+      + ' · o número que manda é o custo por venda com biometria');
+    if (vista === 'desempenho') abrirVista('desempenho');
+  }
+
+  // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a vista abre) ─────────────
+  async function iniciarBairros() {
   const tbody = document.getElementById('tbody');
   const { data, error } = await NG.sb.from('v_dfv_bairros').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA');
-  if (error) { tbody.innerHTML = `<tr><td colspan="9" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; document.getElementById('sub').textContent = 'Juiz de Fora'; return; }
+  if (error) { tbody.innerHTML = `<tr><td colspan="9" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; setSub('bairros', 'Juiz de Fora'); return; }
   const bairros = (data || []).sort((a, b) => Number(b.score) - Number(a.score));
   bairros.forEach((b, i) => { b._pos = i + 1; });
-  if (!bairros.length) { tbody.innerHTML = '<tr><td colspan="9" class="vazio">Base DFV ainda não carregada.</td></tr>'; document.getElementById('sub').textContent = 'Juiz de Fora'; return; }
+  if (!bairros.length) { tbody.innerHTML = '<tr><td colspan="9" class="vazio">Base DFV ainda não carregada.</td></tr>'; setSub('bairros', 'Juiz de Fora'); return; }
+  nBairros = bairros.length;
+  abrirVista(vista);
 
   const totalLivre = bairros.reduce((s, b) => s + (b.hp_livre || 0), 0);
-  document.getElementById('sub').textContent = `Juiz de Fora · base DFV de ${NG.fmtDiaISO(bairros[0].particao)} · Campanhas e Leads: em breve (API da Meta)`;
+  setSub('bairros', `Juiz de Fora · base DFV de ${NG.fmtDiaISO(bairros[0].particao)} · marque os bairros e cole o conjunto no Gerenciador`);
 
   const pc = (v) => (v == null ? '—' : `${NG.fmtNum(Number(v) * 100)} %`);
   const marcados = new Set();
@@ -204,6 +398,10 @@
 
   bairros.filter((b) => !baixo(b)).slice(0, 7).forEach((b) => marcados.add(b.bairro));
   render();
+  }
+
+  abrirVista(vista);
+  carregarDesempenho();
 })();
 </script>
 </body>

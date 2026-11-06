@@ -3,9 +3,11 @@
     "supabase": "p59RBqdhm80tQqJq",
     "claude": "7TR9FOfOVcCzLYi0",
     "teste": "uDwozyxJcB1mghWw",
-    "chatwoot": "Ti7TJGxc6OMDWmkb"
+    "chatwoot": "Ti7TJGxc6OMDWmkb",
+    "meta_ads": "6gZXxn959udw7E6c"
   },
   "workflow_id": "Nsb1dcL3HWQpKSav",
   "cadencia_workflow_id": "efPnlQ1P4UoiNcFG",
-  "ensaio_workflow_id": "W4kh8PoiJ50VwLLN"
+  "ensaio_workflow_id": "W4kh8PoiJ50VwLLN",
+  "meta_ads_workflow_id": "YtpDXBBkIkZQXWt2"
 }

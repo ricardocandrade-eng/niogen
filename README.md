@@ -26,7 +26,9 @@ Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmap
 | Detalhe da venda | `docs/venda.html?id=` |
 | Base DFV da Nio (`nio_hp`, `dfv_consultar`, `aplicar_dfv`, `v_dfv_bairros`, `v_dfv_resumo`, consulta automática na venda) | `supabase/migrations/0011_dfv_nivel3.sql` |
 | Carga da base DFV pelo CLI (gera SQL fora do repo) | `supabase/scripts/dfv_carga.py` |
-| Meta Ads › Bairros prioritários | `docs/metaads.html` |
+| Meta Ads › Desempenho (padrão) e Bairros prioritários (`?vista=bairros`) | `docs/metaads.html` |
+| Desempenho da Meta Ads (`meta_ads_diario`, `meta_ads_anuncios`, `meta_ads_gravar`, `v_meta_ads_dia`) | `supabase/migrations/0034_meta_ads_desempenho.sql` |
+| Coleta dos insights da Meta a cada 15 min (n8n `meta_ads_coleta`, só leitura na Meta) | `n8n/deploy_meta_ads.py` · export `n8n/meta_ads_coleta.json` |
 | Contrato do RPC `dfv_consultar` para a Mari (n8n) | `n8n/RPC_dfv_consultar_031126_2130.md` |
 
 Telas do menu que ainda não existem aparecem desabilitadas ("em breve"). Mari, n8n, importação dos relatórios da Nio e Meta Ads vêm nos próximos prompts.
