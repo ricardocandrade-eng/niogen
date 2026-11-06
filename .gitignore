@@ -17,3 +17,6 @@ desktop.ini
 n8n/backups/
 tests/saida/
 __pycache__/
+
+# prova das prévias da Meta (HTML com URL assinada; fora do git)
+meta/_previas/

@@ -14,10 +14,12 @@ Token: META_ACCESS_TOKEN_NIO (variável de ambiente, variável de usuário do Wi
 O token nunca é impresso, gravado ou logado. Nada é ativado por este script: status é sempre PAUSED.
 """
 import argparse
+import copy
 import datetime as dt
 import glob
 import json
 import os
+import struct
 import sys
 import urllib.error
 import urllib.parse
@@ -72,6 +74,21 @@ PROIBIDO = ['sem fidelidade', 'desconto', 'instala amanhã', 'instalação em', 
 
 # Melhorias automáticas do Meta que reescrevem texto/imagem: opt-out (a IA do Meta não conhece a tabela vigente).
 OPT_OUT = ['image_animation', 'text_overlay_translation', 'ig_video_native_subtitle', 'profile_card']
+# Prompt 25: corte/ampliação automática e Advantage+ criativo também ficam OFF. A API de 05/11 só listou as 4 de cima
+# como aceitas; tenta-se a lista completa primeiro e, se a API recusar as chaves extras, cai para a curta (anotado).
+OPT_OUT_CORTE = ['image_auto_crop', 'adapt_to_placement', 'image_uncrop', 'pac_relaxation', 'text_optimizations']
+
+# Prompt 25 (06/11): cada posicionamento com a sua arte. Posições VERTICAIS recebem a 9x16; o resto cai no fallback 1x1.
+# Sem fallback, posição que não casa com regra nenhuma recebe a 1ª imagem (1x1) e a Meta amplia/corta (Stories de 06/11).
+REGRA_VERTICAL = {
+    'publisher_platforms': ['facebook', 'instagram', 'messenger', 'whatsapp'],
+    'facebook_positions': ['story', 'facebook_reels', 'facebook_reels_overlay'],
+    'instagram_positions': ['story', 'reels', 'profile_reels', 'reels_overlay'],
+    'messenger_positions': ['story'],
+    'whatsapp_positions': ['status'],
+}
+TAMANHO = {'1x1': (1080, 1080), '9x16': (1080, 1920)}
+SUFIXO = '_v4'                         # sufixo do criativo (CR_<anúncio>_v4) e do anúncio (<anúncio>_v4)
 
 GRAPH = None
 TOKEN = None
@@ -220,55 +237,49 @@ def payload_conjunto(cj, campanha_id, page_id, raio, com_wpp):
     }
 
 
-def payloads_criativo(ad, page_id, h1, h9, ig=INSTAGRAM_ID):
-    """Variantes em ordem de preferência: (descricao, payload)."""
+REGRA_FEEDS_1X1 = {   # só no layout 3 (prova de 05/11: posições explícitas casam com os feeds); o fallback vem depois
+    'publisher_platforms': ['facebook', 'instagram', 'audience_network', 'messenger'],
+    'facebook_positions': ['feed', 'right_hand_column', 'marketplace', 'video_feeds',
+                           'search', 'profile_feed', 'instream_video', 'notification'],
+    'instagram_positions': ['stream', 'explore', 'explore_home', 'profile_feed', 'ig_search'],
+    'audience_network_positions': ['classic', 'instream_video', 'rewarded_video'],
+    'messenger_positions': ['messenger_home'],
+}
+
+
+def regras_posicionamento(layout=2):
+    """Regra 1: 9x16 em todas as posições verticais. Última regra: fallback 1x1 SEM customization_spec (= "o resto").
+    layout 2 (padrão, prompt 25): vertical + fallback. layout 3: vertical + feeds explícitos + fallback."""
+    r = [{'priority': 1, 'image_label': {'name': 'img_9x16'}, 'customization_spec': copy.deepcopy(REGRA_VERTICAL)}]
+    if layout == 3:
+        r.append({'priority': 2, 'image_label': {'name': 'img_1x1'}, 'customization_spec': copy.deepcopy(REGRA_FEEDS_1X1)})
+    r.append({'priority': len(r) + 1, 'image_label': {'name': 'img_1x1'}})
+    return r
+
+
+def payloads_criativo(ad, page_id, h1, h9, ig=INSTAGRAM_ID, layout=2):
+    """Variantes em ordem de preferência: (descricao, payload). Todas passam por validar_criativo antes do POST;
+    nenhuma abre mão de 9x16 + fallback, mensagem pronta ou opt-out (variante que enfraquece isso não existe mais)."""
     nome = nome_criativo(ad)
     oss = {'page_id': page_id, 'instagram_user_id': ig} if ig else {'page_id': page_id}
     link = 'https://api.whatsapp.com/send'
-    cta = {'type': 'WHATSAPP_MESSAGE', 'value': {'app_destination': 'WHATSAPP'}}
-    dof = {'creative_features_spec': {k: {'enroll_status': 'OPT_OUT'} for k in OPT_OUT}}
 
-    def afs(welcome):
-        spec = {
+    def afs():
+        return {
             'images': [{'hash': h1, 'adlabels': [{'name': 'img_1x1'}]}, {'hash': h9, 'adlabels': [{'name': 'img_9x16'}]}],
             'bodies': [{'text': ad['texto']}], 'titles': [{'text': ad['titulo']}],
             'link_urls': [{'website_url': link}], 'call_to_action_types': ['WHATSAPP_MESSAGE'],
             'ad_formats': ['SINGLE_IMAGE'], 'optimization_type': 'PLACEMENT',
-            'asset_customization_rules': [
-                {'priority': 1, 'image_label': {'name': 'img_9x16'},
-                 'customization_spec': {'publisher_platforms': ['facebook', 'instagram'],
-                                        'facebook_positions': ['story', 'facebook_reels'],
-                                        'instagram_positions': ['story', 'reels']}},
-                # regra só com publisher_platforms não casa com nenhum feed (prévia: "0 regras para MOBILE_FEED_STANDARD"):
-                # as posições têm de vir explícitas
-                {'priority': 2, 'image_label': {'name': 'img_1x1'},
-                 'customization_spec': {'publisher_platforms': ['facebook', 'instagram', 'audience_network', 'messenger'],
-                                        'facebook_positions': ['feed', 'right_hand_column', 'marketplace', 'video_feeds',
-                                                               'search', 'profile_feed', 'instream_video', 'notification'],
-                                        'instagram_positions': ['stream', 'explore', 'explore_home', 'profile_feed', 'ig_search'],
-                                        'audience_network_positions': ['classic', 'instream_video', 'rewarded_video'],
-                                        'messenger_positions': ['messenger_home']}},
-            ],
+            'asset_customization_rules': regras_posicionamento(layout),
+            'additional_data': {'page_welcome_message': welcome_json()},
         }
-        if welcome:
-            spec['additional_data'] = {'page_welcome_message': welcome_json()}
-        return {'name': nome, 'object_story_spec': dict(oss), 'asset_feed_spec': spec}
 
-    def simples(welcome):
-        ld = {'image_hash': h1, 'message': ad['texto'], 'name': ad['titulo'], 'link': link, 'call_to_action': cta}
-        if welcome:
-            ld['page_welcome_message'] = welcome_json()
-        return {'name': nome, 'object_story_spec': {**oss, 'link_data': ld}}
-
-    base = [('1x1 feed + 9x16 stories/reels, com mensagem pronta', afs(True)),
-            ('1x1 feed + 9x16 stories/reels, sem mensagem pronta', afs(False)),
-            ('só 1x1, com mensagem pronta', simples(True)),
-            ('só 1x1, sem mensagem pronta', simples(False))]
     out = []
-    for desc, p in base:
-        out.append((desc + ' · melhorias automáticas OFF', {**p, 'degrees_of_freedom_spec': dof}))
-    for desc, p in base:
-        out.append((desc + ' · melhorias automáticas NÃO desligadas', p))
+    for desc, chaves in (('opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)', OPT_OUT + OPT_OUT_CORTE),
+                         ('opt-out curto (só as 4 que a API de 05/11 aceitou)', OPT_OUT)):
+        dof = {'creative_features_spec': {k: {'enroll_status': 'OPT_OUT'} for k in chaves}}
+        out.append((f'1x1 fallback + 9x16 vertical (layout {layout}), mensagem pronta · {desc}',
+                    {'name': nome, 'object_story_spec': dict(oss), 'asset_feed_spec': afs(), 'degrees_of_freedom_spec': dof}))
     return out
 
 
@@ -277,8 +288,119 @@ def nome_criativo(ad):
     #   1ª leva (sem sufixo): sem conta do Instagram → anúncio recusado
     #   _ig: regra do 1x1 sem posições → não casava com nenhum feed (só stories/reels)
     #   _v2: Instagram "da página" + posições explícitas
-    #   _v3: @mari.nio.internet + posições explícitas
-    return f'CR_{ad["name"]}_v3'
+    #   _v3: @mari.nio.internet + posições explícitas (sem fallback: Stories de 06/11 receberam a 1x1 ampliada)
+    #   _v4: 9x16 em TODAS as verticais + fallback 1x1 + trava validar_criativo (prompt 25)
+    return f'CR_{ad["name"]}{SUFIXO}'
+
+
+def nome_anuncio(ad):
+    return f'{ad["name"]}{SUFIXO}'
+
+
+# ─────────────────────────────── trava (prompt 25) ───────────────────────────────
+
+class CriativoReprovado(Exception):
+    """validar_criativo recusou o envio — nada foi mandado à Meta."""
+
+
+def dimensoes_png(caminho):
+    """(largura, altura) lidas do cabeçalho IHDR do PNG — sem Pillow."""
+    with open(caminho, 'rb') as f:
+        b = f.read(24)
+    if b[:8] != b'\x89PNG\r\n\x1a\n':
+        raise CriativoReprovado(f'{os.path.basename(caminho)}: não é PNG')
+    return struct.unpack('>II', b[16:24])
+
+
+def validar_criativo(spec, dimensoes):
+    """Recusa (CriativoReprovado) o payload de POST /adcreatives que repetiria o erro de 06/11. Chamar ANTES de todo POST.
+    spec = payload do criativo; dimensoes = {hash_da_imagem: (largura, altura)} (lidas do arquivo local, não da Meta).
+    Confere: (1) 1x1 e 9x16 presentes, cada uma no tamanho exato; (2) regra vertical cobre toda a lista de REGRA_VERTICAL;
+    (3) há regra de fallback (1x1 sem posição) e ela vem depois da vertical; (4) nenhum recurso automático em OPT_IN."""
+    erros = []
+    afs = spec.get('asset_feed_spec') or {}
+
+    # 1. imagens
+    por_rotulo = {}
+    for im in afs.get('images', []):
+        for lab in im.get('adlabels', []):
+            por_rotulo[lab.get('name')] = im.get('hash')
+    for rot, fmt in (('img_1x1', '1x1'), ('img_9x16', '9x16')):
+        h = por_rotulo.get(rot)
+        if not h:
+            erros.append(f'falta a versão {fmt} (rótulo {rot}) — todo anúncio de imagem leva 1x1 e 9x16')
+            continue
+        dim = dimensoes.get(h)
+        if dim is None:
+            erros.append(f'tamanho da {fmt} ({h}) não informado — não dá para provar {TAMANHO[fmt][0]}×{TAMANHO[fmt][1]}')
+        elif tuple(dim) != TAMANHO[fmt]:
+            erros.append(f'a {fmt} tem {dim[0]}×{dim[1]}, o exigido é {TAMANHO[fmt][0]}×{TAMANHO[fmt][1]}')
+    if len(afs.get('images', [])) < 2:
+        erros.append('menos de 2 imagens no criativo')
+
+    # 2. regra vertical
+    regras = sorted(afs.get('asset_customization_rules', []), key=lambda r: r.get('priority', 999))
+    vert = [r for r in regras if (r.get('image_label') or {}).get('name') == 'img_9x16']
+    if not vert:
+        erros.append('nenhuma regra usa a 9x16')
+    else:
+        cobertas = {}
+        for r in vert:
+            for k, v in (r.get('customization_spec') or {}).items():
+                cobertas.setdefault(k, set()).update(v)
+        for k, exigidas in REGRA_VERTICAL.items():
+            faltam = sorted(set(exigidas) - cobertas.get(k, set()))
+            if faltam:
+                erros.append(f'regra vertical não cobre {k}: faltam {", ".join(faltam)}')
+
+    # 3. fallback: regra da 1x1 sem nenhuma posição, depois da vertical
+    def sem_posicao(r):
+        cs = r.get('customization_spec') or {}
+        return not any(k.endswith('_positions') or k == 'publisher_platforms' for k in cs)
+    fb = [r for r in regras if (r.get('image_label') or {}).get('name') == 'img_1x1' and sem_posicao(r)]
+    if not fb:
+        erros.append('falta a regra de fallback (1x1 sem customization_spec de posição): posição não coberta receberia a 1ª imagem ampliada')
+    elif vert and min(r.get('priority', 999) for r in fb) <= min(r.get('priority', 999) for r in vert):
+        erros.append('o fallback precisa ter prioridade MAIOR (vir depois) que a regra vertical')
+
+    # 4. recursos automáticos
+    feats = (spec.get('degrees_of_freedom_spec') or {}).get('creative_features_spec')
+    if not feats:
+        erros.append('degrees_of_freedom_spec ausente: sem ele a Meta liga as melhorias automáticas por padrão')
+    else:
+        for k, v in feats.items():
+            if (v or {}).get('enroll_status') != 'OPT_OUT':
+                erros.append(f'recurso automático {k} não está OPT_OUT ({(v or {}).get("enroll_status")})')
+    for k in spec.get('contextual_multi_ads') or {}:
+        erros.append(f'contextual_multi_ads.{k}: Advantage+ criativo não é permitido')
+
+    if erros:
+        raise CriativoReprovado(f'{spec.get("name", "?")}: criativo recusado pela trava —\n  ' + '\n  '.join(erros))
+    return True
+
+
+def dimensoes_por_hash(hashes, pasta):
+    """{hash: (l, a)} de cada imagem, lidas dos PNGs locais do Drive (chave do dict 'hashes' = '<img>_<formato>')."""
+    out = {}
+    for chave, h in hashes.items():
+        cod, fmt = chave.rsplit('_', 1)
+        out[h] = dimensoes_png(arquivo_imagem(pasta, cod, fmt))
+    return out
+
+
+def arquivar_versao_anterior(saida):
+    """Se o JSON ainda guarda os criativos/anúncios de outra versão (ex.: v3), move para saida['legado'] — histórico, nunca apagado."""
+    atual = saida.get('versao_criativos', '_v3')
+    if atual == SUFIXO:
+        return
+    saida.setdefault('legado', {})[atual] = {'criativos': saida.pop('criativos', {}), 'anuncios': saida.pop('anuncios', {})}
+    saida['versao_criativos'] = SUFIXO
+
+
+def criar_criativo(conta, spec, dimensoes):
+    """ÚNICO caminho para POST /adcreatives neste repo: valida antes de enviar."""
+    validar_criativo(spec, dimensoes)
+    return api('POST', f'{conta}/adcreatives', spec)
 
 
 # ─────────────────────────────── principal ───────────────────────────────
@@ -304,7 +426,7 @@ def gravar_saida(d):
         f.write('\n')
 
 
-def plano_offline(pasta):
+def plano_offline(pasta, layout=2):
     print('\n== PLANO (sem token: nada foi consultado na Meta) ==')
     print(f'Conta {CONTA} · tudo {STATUS}')
     for ad in ANUNCIOS:
@@ -315,11 +437,16 @@ def plano_offline(pasta):
         p = payload_conjunto(cj, '<CAMPANHA_ID>', '<PAGE_ID>', cj['raios'][0], True)
         print(f'\nConjunto {cj["name"]} (raios tentados: {cj["raios"]} km):', json.dumps(p, ensure_ascii=False))
     for ad in ANUNCIOS:
-        desc, p = payloads_criativo(ad, '<PAGE_ID>', f'<hash {ad["img"]}_1x1>', f'<hash {ad["img"]}_9x16>')[0]
-        print(f'\nCriativo {nome_criativo(ad)} (1ª variante: {desc}):', json.dumps(p, ensure_ascii=False)[:900], '…')
+        h1, h9 = f'<hash {ad["img"]}_1x1>', f'<hash {ad["img"]}_9x16>'
+        desc, p = payloads_criativo(ad, '<PAGE_ID>', h1, h9, layout=layout)[0]
+        dims = {h1: dimensoes_png(arquivo_imagem(pasta, ad['img'], '1x1')), h9: dimensoes_png(arquivo_imagem(pasta, ad['img'], '9x16'))}
+        validar_criativo(p, dims)          # a trava roda também no plano: criativo reprovado nem chega à Meta
+        print(f'\nCriativo {nome_criativo(ad)} (1ª variante: {desc}) · trava OK ({dims[h1]} / {dims[h9]}):')
+        print('  regras:', json.dumps(p['asset_feed_spec']['asset_customization_rules'], ensure_ascii=False))
+        print('  degrees_of_freedom_spec:', json.dumps(p['degrees_of_freedom_spec'], ensure_ascii=False))
     for cj in CONJUNTOS:
         for ad in ANUNCIOS:
-            print(f'Anúncio {ad["name"]} em {cj["name"]} → criativo {nome_criativo(ad)} · {STATUS}')
+            print(f'Anúncio {nome_anuncio(ad)} em {cj["name"]} → criativo {nome_criativo(ad)} · {STATUS}')
 
 
 def descobrir(conta_info):
@@ -364,13 +491,16 @@ def main():
     ap.add_argument('--descobrir', action='store_true')
     ap.add_argument('--page-id')
     ap.add_argument('--imagens', default=IMAGENS_DIR)
+    ap.add_argument('--layout', type=int, choices=(2, 3), default=2,
+                    help='2 = vertical + fallback (prompt 25); 3 = vertical + feeds explícitos + fallback')
+    ap.add_argument('--offline', action='store_true', help='plano sem consultar a Meta (ignora o token)')
     a = ap.parse_args()
 
     checar_textos()
-    TOKEN = ler_token()
+    TOKEN = None if a.offline else ler_token()
     if not TOKEN:
-        if a.dry_run:
-            plano_offline(a.imagens)
+        if a.dry_run or a.offline:
+            plano_offline(a.imagens, a.layout)
             return
         raise SystemExit('META_ACCESS_TOKEN_NIO ausente (variável de ambiente / de usuário / .env). Nada feito.')
 
@@ -384,7 +514,7 @@ def main():
     if a.descobrir or (a.dry_run and not a.page_id):
         existentes()
         if a.dry_run:
-            plano_offline(a.imagens)
+            plano_offline(a.imagens, a.layout)
         return
     if not a.page_id:
         raise SystemExit('Informe --page-id (confirmado com o Ricardo). Rode --descobrir para listar as páginas.')
@@ -484,6 +614,7 @@ def criar(a, conta, versao):
 
     # 4. criativos
     print('\n4. Criativos')
+    arquivar_versao_anterior(saida)        # v3 → saida['legado']['_v3']; os IDs v4 entram limpos em criativos/anuncios
     cr_ex = listar(f'{CONTA}/adcreatives', 'id,name,status')
     criativos = saida.get('criativos', {})
     for ad in ANUNCIOS:
@@ -497,7 +628,10 @@ def criar(a, conta, versao):
             print(f'  criaria {nome}')
             continue
         h1, h9 = hashes[f'{ad["img"]}_1x1'], hashes[f'{ad["img"]}_9x16']
-        tent = [(d, lambda p=p: api('POST', f'{CONTA}/adcreatives', p)) for d, p in payloads_criativo(ad, page_id, h1, h9)]
+        dims = dimensoes_por_hash(hashes, a.imagens)
+        # criar_criativo = validar_criativo + POST; CriativoReprovado não é ErroMeta: aborta tudo, nada vai à Meta
+        tent = [(d, lambda p=p: criar_criativo(CONTA, p, dims))
+                for d, p in payloads_criativo(ad, page_id, h1, h9, layout=getattr(a, 'layout', 2))]
         r, desc = tentar(tent, nome, notas)
         criativos[ad['name']] = {'id': r['id'], 'variante': desc}
         print(f'  {nome}: criado {r["id"]} ({desc})')
@@ -505,6 +639,7 @@ def criar(a, conta, versao):
 
     # 5. anúncios
     print('\n5. Anúncios')
+    novos = []
     anuncios = saida.get('anuncios', {})
     for cj in CONJUNTOS:
         sid = conjuntos.get(cj['name'], {}).get('id')
@@ -513,7 +648,7 @@ def criar(a, conta, versao):
         ads_ex = listar(f'{sid}/ads', 'id,name,effective_status,creative{id}')
         anuncios.setdefault(cj['name'], {})
         for ad in ANUNCIOS:
-            x = por_nome(ads_ex, ad['name'])
+            x = por_nome(ads_ex, nome_anuncio(ad))
             if x:
                 anuncios[cj['name']][ad['name']] = x['id']
                 quer = criativos.get(ad['name'], {}).get('id')
@@ -527,24 +662,24 @@ def criar(a, conta, versao):
             elif dry:
                 print(f'  criaria {cj["name"]}/{ad["name"]}')
             else:
-                r = api('POST', f'{CONTA}/ads', {'name': ad['name'], 'adset_id': sid, 'status': STATUS,
+                r = api('POST', f'{CONTA}/ads', {'name': nome_anuncio(ad), 'adset_id': sid, 'status': STATUS,
                                                  'creative': {'creative_id': criativos[ad['name']]['id']}})
                 anuncios[cj['name']][ad['name']] = r['id']
-                print(f'  {cj["name"]}/{ad["name"]}: criado {r["id"]}')
+                novos.append(r['id'])
+                print(f'  {cj["name"]}/{nome_anuncio(ad)}: criado {r["id"]}')
     saida['anuncios'] = anuncios
 
     if dry:
         print('\n(dry-run: nada criado, nada gravado)')
         return
 
-    # 6. prova: tudo PAUSED
+    # 6. prova: os anúncios desta rodada ficaram PAUSED (campanha e conjuntos já existentes não são tocados aqui)
     print('\n6. Conferência de status')
-    ids = [saida['campanha']['id']] + [v['id'] for v in conjuntos.values()] + \
-          [i for d in anuncios.values() for i in d.values()]
+    ids = list(dict.fromkeys(novos + [i for d in anuncios.values() for i in d.values()]))
     r = {i: api('GET', i, {'fields': 'name,status,effective_status'}) for i in ids}   # ?ids= foi descontinuado
-    ativos = [f'{v["name"]} ({k})' for k, v in r.items() if v.get('status') != 'PAUSED']
+    ativos = [f'{v["name"]} ({k})' for k, v in r.items() if k in novos and v.get('status') != 'PAUSED']
     for k, v in r.items():
-        print(f'  {v["name"]:<20} {k} · {v["status"]} / {v.get("effective_status")}')
+        print(f'  {v["name"]:<24} {k} · {v["status"]} / {v.get("effective_status")}')
     saida['anotacoes'] = notas
     gravar_saida(saida)
     print(f'\nIDs em {os.path.relpath(SAIDA, REPO)}')
