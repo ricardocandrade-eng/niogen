@@ -1213,7 +1213,7 @@ CENARIOS = {
     23: ('v4 — posse → "não tenho" → fluxo normal + nota', c23),
     24: ('v4 — sem viabilidade → fluxo normal, nunca nega (nota no handoff)', c24),
     25: ('v4 — portal indisponível → fala por cidade', c25),
-    26: ('v4 — "e a biometria?" → link por aqui pelo nosso time', c26),
+    26: ('v4/v6 — "e a biometria?" → o link chega pela própria Nio (v6)', c26),
     27: ('v4 — CEP/rua digitados errado → confirma, refaz, venda segue', c27),
     28: ('v5 — lista espaçada + condições exatas', c28),
     29: ('v5 — cartão: "Anotado!" + manhã/tarde, sem link de pagamento', c29),
