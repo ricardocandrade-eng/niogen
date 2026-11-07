@@ -42,7 +42,8 @@
   .saude-col { display: flex; flex-direction: column; gap: calc(12px + var(--f, 0px) / 10); min-width: 0; }
   .bloco { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); min-width: 0; }
   .bloco.cresce { flex: 1; }
-  .bloco.cresce > .lista-folga { display: flex; flex-direction: column; }
+  /* a sobra que a folga (--f) não absorveu (pequena) se reparte entre as linhas, sem buraco no pé da coluna */
+  .bloco.cresce > .lista-folga { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
   /* --f: folga extra conforme a altura da janela (0 em ~720 px; ~270 px numa tela de 990 px; teto 360 px) */
   .saude { --f: clamp(0px, calc(100vh - 700px), 380px); }
   .saude-col h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
