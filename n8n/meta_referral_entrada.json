@@ -1,0 +1,142 @@
+{
+  "name": "meta_referral_entrada",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "niogen-meta-webhook-nio",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "1g · Verificação Meta (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ae4b19d9-53cc-5089-a989-924518dd5947",
+      "webhookId": "ff4878b2-4206-5421-9994-5f8de5961975"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.mode'] === 'subscribe' ? ($json.query['hub.challenge'] || '') : '' }}",
+        "options": {}
+      },
+      "name": "2g · Devolver challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "ee8bf357-e76b-576d-af32-be12bd56bed9"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-meta-webhook-nio",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "1p · Webhook Meta (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "5fe2084f-7c4e-547c-b084-d20a24929a39",
+      "webhookId": "367962e2-ae7c-5a35-a858-6773ebb9a7c1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só as mudanças \"messages\" do número da Mari que tenham pelo menos 1 mensagem com referral.\n// Status de entrega/leitura e mensagens sem referral não seguem (nada é gravado).\nconst corpo = $input.first().json.body || {};\nconst saida = [];\nfor (const e of corpo.entry || []) {\n  for (const c of e.changes || []) {\n    const v = c.value || {};\n    if (c.field !== 'messages' || !Array.isArray(v.messages)) continue;\n    if (String(v.metadata?.phone_number_id || '') !== '1342993658907403') continue;\n    const comRef = v.messages.filter((m) => m && m.referral);\n    if (!comRef.length) continue;\n    saida.push({ json: { value: { metadata: v.metadata, messages: comRef.map((m) => ({\n      id: m.id, from: m.from, timestamp: m.timestamp, referral: m.referral })) } } });\n  }\n}\nreturn saida;"
+      },
+      "name": "2p · Extrair referral",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        220
+      ],
+      "id": "36dd0e2a-5be6-5ba9-aac2-048872341eed"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_referral_gravar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_value: $json.value }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3p · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        220
+      ],
+      "id": "ba9eb1ec-7a10-54ee-9066-66a08b10af36",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "1g · Verificação Meta (GET)": {
+      "main": [
+        [
+          {
+            "node": "2g · Devolver challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1p · Webhook Meta (POST)": {
+      "main": [
+        [
+          {
+            "node": "2p · Extrair referral",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2p · Extrair referral": {
+      "main": [
+        [
+          {
+            "node": "3p · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

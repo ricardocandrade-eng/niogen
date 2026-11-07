@@ -345,7 +345,8 @@
 
   // ───────────── Saúde da campanha (07/11) ─────────────
   // Regras do agente (doc da campanha 1 §7.1) aplicadas ao que já existe; limites em config_meta_ads_regras (0054/0055).
-  // R1 e R3 dependem de saber de qual anúncio veio cada conversa (ad_id): enquanto não houver, aparecem "sem dado".
+  // R1 e R3 usam o anúncio de cada conversa (v_mari_conversa_anuncio, 0057 — referral pela cópia do webhook no app NIOGEN).
+  // Sem nenhuma conversa atribuída ainda, aparecem "aguardando o 1º referral".
   const NOME_POSIC = {
     'whatsapp|status': 'Status do WhatsApp', 'instagram|feed': 'Feed do Instagram', 'instagram|instagram_stories': 'Stories do Instagram',
     'instagram|instagram_reels': 'Reels do Instagram', 'instagram|instagram_explore': 'Explorar do Instagram', 'instagram|instagram_explore_grid_home': 'Explorar do Instagram',
@@ -366,14 +367,15 @@
     const seteAtras = (() => { const d = new Date(`${NG.diaSP()}T12:00:00-03:00`); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
     let qPosDia = NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto, cliques_link');
     if (p.de) qPosDia = qPosDia.gte('dia', p.de < seteAtras ? p.de : seteAtras); else qPosDia = qPosDia.gte('dia', '2000-01-01');
-    const [rCfg, rPos, rPosDia, rTudo, rConv, rVendas, rConj] = await Promise.all([
+    const [rCfg, rPos, rPosDia, rTudo, rConv, rVendas, rConj, rAtrib] = await Promise.all([
       NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'),
       NG.sb.from('v_meta_ads_posicionamento_7d').select('*'),
       qPosDia,
-      NG.sb.from('meta_ads_diario').select('ad_id, ad_nome, adset_nome, campanha_id, campanha_nome, gasto, conversas'),
+      NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas'),
       qConv,
       NG.sb.from('vendas').select('id, status, motivo_saida, biometria_status').eq('origem', 'meta_ads'),
       NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056; sem ela, cai no histórico
+      NG.sb.from('v_mari_conversa_anuncio').select('ad_id, adset_id, referral_em, cep, dentro_area, venda_id, venda_status, biometria_status'),  // 0057
     ]);
     const erro = rCfg.error || rPos.error || rPosDia.error || rTudo.error;
     const alvoA = document.getElementById('s-alertas');
@@ -392,6 +394,31 @@
     const convTotal = [...porAd.values()].reduce((s, a) => s + a.conversas, 0);
     const cpcTotal = convTotal ? gastoTotal / convTotal : null;
     const maiorAd = [...porAd.values()].sort((a, b) => b.gasto - a.gasto)[0];
+
+    // atribuição por anúncio (0057): CEP válido por anúncio (R1) e vendas com biometria por conjunto (R3)
+    const atrib = rAtrib.error ? null : (rAtrib.data || []);
+    const cepOk = new Map(), conjGasto = new Map(), conjVendas = new Map(), conjNome = new Map();
+    (rTudo.data || []).forEach((d) => {
+      conjGasto.set(d.adset_id, (conjGasto.get(d.adset_id) || 0) + Number(d.gasto || 0));
+      conjNome.set(d.adset_id, d.adset_nome);
+    });
+    (atrib || []).forEach((a) => {
+      if (a.cep && a.dentro_area === true) cepOk.set(a.ad_id, (cepOk.get(a.ad_id) || 0) + 1);
+      if (a.biometria_status === 'aprovada') conjVendas.set(a.adset_id, (conjVendas.get(a.adset_id) || 0) + 1);
+    });
+    const temAtrib = !!(atrib && atrib.length);
+    // R1 conta o gasto só desde a 1ª conversa atribuída: antes disso nenhuma conversa tinha anúncio, e o anúncio
+    // pareceria "sem CEP" sem ser.
+    const inicioAtrib = temAtrib ? atrib.reduce((m, a) => (a.referral_em < m ? a.referral_em : m), atrib[0].referral_em).slice(0, 10) : null;
+    const gastoDesde = new Map();
+    (rTudo.data || []).filter((d) => inicioAtrib && d.dia >= inicioAtrib)
+      .forEach((d) => gastoDesde.set(d.ad_id, (gastoDesde.get(d.ad_id) || 0) + Number(d.gasto || 0)));
+    // R1: entre os anúncios ainda sem CEP válido, o que mais gastou desde o início da atribuição
+    const r1Ad = [...porAd.entries()].filter(([id]) => !cepOk.get(id)).map(([id, a]) => ({ id, ...a, gastoAtrib: gastoDesde.get(id) || 0 }))
+      .sort((a, b) => b.gastoAtrib - a.gastoAtrib)[0];
+    // R3: conjunto com mais vendas atribuídas (até 3 vendas mostra quanto falta para avaliar)
+    const r3 = [...conjGasto.entries()].map(([id, g]) => ({ id, nome: conjNome.get(id), gasto: g, vendas: conjVendas.get(id) || 0 }))
+      .sort((a, b) => (b.vendas - a.vendas) || (b.gasto - a.gasto))[0];
 
     // posicionamentos: último dia com gasto (posicionamento que parou de receber verba = excluído ou sem entrega)
     const ultDia = (rPosDia.data || []).reduce((m, r) => (r.dia > m ? r.dia : m), '');
@@ -436,6 +463,10 @@
       al.push({ cls: 'warn', t: 'Custo por conversa acima do limite', f: `${NG.fmtMoeda(cpcTotal)} por conversa com ${NG.fmtMoeda(gastoTotal)} gastos (limite ${NG.fmtMoeda(L.campanha_custo_conversa_max)})`, pr: 'R4 → juntar num conjunto só com os 2–3 melhores anúncios' });
     if (gastoTotal >= L.campanha_gasto_avaliar && convTotal === 0)
       al.push({ cls: 'bad', t: 'Nenhuma conversa', f: `${NG.fmtMoeda(gastoTotal)} gastos sem conversa`, pr: 'R4 → rever criativo e público' });
+    if (temAtrib && r1Ad && r1Ad.gastoAtrib >= L.anuncio_gasto_pausa)
+      al.push({ cls: 'bad', t: `${r1Ad.nome} sem CEP válido`, f: `${NG.fmtMoeda(r1Ad.gastoAtrib)} desde ${NG.fmtDiaISO(inicioAtrib)} · ${r1Ad.conj || ''}`, pr: 'R1 → pausar o anúncio' });
+    if (temAtrib && r3 && r3.vendas >= 3 && r3.gasto / r3.vendas > L.conjunto_custo_venda_max)
+      al.push({ cls: 'warn', t: `${r3.nome}: venda cara`, f: `${NG.fmtMoeda(r3.gasto / r3.vendas)} por venda com biometria (${r3.vendas} vendas)`, pr: 'R3 → rever público e raio do conjunto' });
     if (q && q.total && (q.jaCliente + q.semCob) > 0)
       al.push({ cls: 'warn', t: `${q.jaCliente + q.semCob} de ${q.total} conversa${q.total > 1 ? 's' : ''} sem aproveitamento`,
         f: [q.jaCliente && `${q.jaCliente} já cliente Nio`, q.semCob && `${q.semCob} sem cobertura`].filter(Boolean).join(' · ') + ` · ${per.rotulo}`,
@@ -454,12 +485,20 @@
     const fracPos = piorPos ? Math.min(Number(piorPos.fatia_gasto) / L.posic_fatia_min, Number(piorPos.gasto) / L.posic_gasto_min) : 0;
     const fase1 = gastoTotal < L.campanha_gasto_avaliar;
     document.getElementById('s-gatilhos').innerHTML = [
-      gat('R1', 'Anúncio sem CEP válido → pausar', maiorAd ? `${NG.fmtMoeda(maiorAd.gasto)} / ${NG.fmtMoeda(L.anuncio_gasto_pausa)}` : '—',
-        maiorAd ? maiorAd.gasto / L.anuncio_gasto_pausa : 0,
-        maiorAd ? `maior gasto: ${esc(maiorAd.nome)} (${esc(maiorAd.conj || '')}) · o CEP por anúncio espera o ad_id` : 'sem gasto ainda'),
+      !atrib ? gat('R1', 'Anúncio sem CEP válido → pausar', 'sem acesso', 0, 'só admin e backoffice leem a atribuição', true)
+        : !temAtrib ? gat('R1', 'Anúncio sem CEP válido → pausar', 'aguardando', 0,
+          `nenhuma conversa com anúncio identificado ainda (cópia do webhook no app NIOGEN) · maior gasto hoje: ${esc(maiorAd?.nome || '—')}`, true)
+        : gat('R1', 'Anúncio sem CEP válido → pausar', r1Ad ? `${NG.fmtMoeda(r1Ad.gastoAtrib)} / ${NG.fmtMoeda(L.anuncio_gasto_pausa)}` : '—',
+          r1Ad ? r1Ad.gastoAtrib / L.anuncio_gasto_pausa : 0,
+          r1Ad ? `${esc(r1Ad.nome)} (${esc(r1Ad.conj || '')}) · 0 CEP válido · gasto desde ${NG.fmtDiaISO(inicioAtrib)}` : 'todos os anúncios com CEP válido'),
       gat('R2', 'Posicionamento sem conversa → tirar', piorPos ? `${NG.fmtNum(Number(piorPos.fatia_gasto) * 100)} % / ${NG.fmtNum(L.posic_fatia_min * 100)} %` : '—', fracPos,
         piorPos ? `pior ativo: ${esc(nomePosic(piorPos))}, ${NG.fmtMoeda(piorPos.gasto)} (dispara com ≥ ${NG.fmtMoeda(L.posic_gasto_min)} e ≥ ${NG.fmtNum(L.posic_fatia_min * 100)} %)` : 'nenhum posicionamento ativo sem conversa'),
-      gat('R3', 'Conjunto com venda cara → rever', 'sem dado', 0, `custo por venda por conjunto (limite ${NG.fmtMoeda(L.conjunto_custo_venda_max)}) espera o ad_id`, true),
+      !temAtrib ? gat('R3', 'Conjunto com venda cara → rever', atrib ? 'aguardando' : 'sem acesso', 0,
+          `custo por venda por conjunto (limite ${NG.fmtMoeda(L.conjunto_custo_venda_max)}) começa com a 1ª conversa atribuída`, true)
+        : r3 && r3.vendas >= 3 ? gat('R3', 'Conjunto com venda cara → rever', `${NG.fmtMoeda(r3.gasto / r3.vendas)} / ${NG.fmtMoeda(L.conjunto_custo_venda_max)}`,
+          (r3.gasto / r3.vendas) / L.conjunto_custo_venda_max, `${esc(r3.nome)} · ${NG.fmtNum(r3.vendas)} vendas com biometria`)
+        : gat('R3', 'Conjunto com venda cara → rever', `${NG.fmtNum(r3 ? r3.vendas : 0)} / 3 vendas`, r3 ? r3.vendas / 3 : 0,
+          `${esc(r3?.nome || '—')} · avalia o custo por venda depois de 3 vendas com biometria`, false, ''),
       gat('R4', fase1 ? 'Campanha: 1ª avaliação' : 'Campanha: custo por conversa', fase1 ? `${NG.fmtMoeda(gastoTotal)} / ${NG.fmtMoeda(L.campanha_gasto_avaliar)}`
         : `${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} / ${NG.fmtMoeda(L.campanha_custo_conversa_max)}`,
         fase1 ? gastoTotal / L.campanha_gasto_avaliar : (cpcTotal != null ? cpcTotal / L.campanha_custo_conversa_max : 1),
