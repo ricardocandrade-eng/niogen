@@ -534,6 +534,16 @@ if (V7 && !erro && tags.carrossel) {
     // Não pode carrossel (BTU, Empresas, sem config) ou preço divergente → lista em texto agora.
     const lt = listaTexto();
     if (lt) { baloesFinais = [...baloesFinais, lt]; texto = baloesFinais.join('\n\n'); }
+    else if (!divergentes.length) {
+      // Rede de segurança (teste real 06/11, conversa #1): o modelo pediu o carrossel mas o estado não tem cluster/planos
+      // (CEP nunca confirmado). Antes a frase "Olha as opções:" saía sozinha, sem nada depois, e nada era registrado.
+      // Agora: tira o convite vazio, pede o CEP e deixa o rastro em mari_erros.
+      const ult = baloesFinais.length - 1;
+      if (ult >= 0) baloesFinais[ult] = baloesFinais[ult].replace(/\s*Olha as op[cç][õo]es:?\s*$/i, '').trim();
+      baloesFinais = [...baloesFinais.filter(Boolean), 'Só falta confirmar o seu CEP pra eu te mostrar as opções certinhas 😊 Qual é o CEP?'];
+      texto = baloesFinais.join('\n\n');
+      erro = erro || { no: '7 · Extrair', mensagem: 'carrossel_sem_cluster', payload: { cidade: tags.cidade_detectada || null, cep: (ctx.conversa || {}).cep || null } };
+    }
     if (divergentes.length) erro = erro || { no: '7 · Extrair', mensagem: 'carrossel_preco_divergente', payload: { planos: divergentes.map((k) => k.plano_codigo) } };
   }
 }

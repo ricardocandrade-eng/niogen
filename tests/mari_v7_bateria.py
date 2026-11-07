@@ -193,7 +193,27 @@ def cen_j(c):   # cidade BTU → lista em texto
     c.exige(re.search(r'(?m)^\s*1\)', r.get('resposta') or ''), '(j) sem a lista em texto')
 
 
-CENARIOS = {'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j)}
+def cen_k(c):   # teste real de 06/11 22h57 (conversa #1): rua + cidade em mensagens separadas, "Escrevi acima", "Isso"
+    c.diz('Oi, quero saber da internet da Nio')
+    c.diz('Não sei o CEP')
+    c.diz('Rua dos Artistas, 123')
+    c.diz('Juiz de Fora')
+    c.diz('Escrevi acima')
+    c.diz('Isso')
+    c.diz('Apto 403')
+    c.diz('Edificio Dom Paschoal')
+    r = c.diz('Nenhuma, estou me mudando pra esse apto')
+    resp = (r.get('resposta') or '').strip()
+    it = r.get('interativo') or {}
+    c.exige(it.get('tipo') == 'carrossel', f'(k) não mandou o carrossel: «{resp[:160]}»')
+    # nunca "Olha as opções:" pendurado sem o carrossel nem a lista
+    c.exige(it or not re.search(r'olha as op[cç][õo]es:?\s*$', resp, re.I), '(k) frase "Olha as opções:" sem nada depois')
+    rows = sql(f"select cep, cidade, cluster from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36035130', f'(k) o CEP da opção confirmada não foi gravado: {rows}')
+    c.exige(rows and rows[0].get('cluster'), f'(k) cluster vazio: {rows}')
+
+
+CENARIOS = {'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 if __name__ == '__main__':
     if not SEGREDO:

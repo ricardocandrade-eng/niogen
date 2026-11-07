@@ -122,6 +122,21 @@ if (!out.p_cep && etapaEndereco) {
     const soltos = [...new Set([...String(ultMari.texto || '').matchAll(/\bCEP\s*(\d{5})-?(\d{3})\b/gi)].map((x) => x[1] + x[2]))];
     if (soltos.length === 1) ceps = [[null, '1', soltos[0].slice(0, 5), soltos[0].slice(5)]];
   }
+  // Teste real 06/11 22h57 (conversa #1): a Mari mostrou "1) Rua dos Artistas · … · CEP 36035-130", o cliente respondeu
+  // "Escrevi acima", a Mari confirmou "Seu endereço é Rua dos Artistas, 123, …, Juiz de Fora/MG?" (SEM o CEP) e o
+  // "Isso" não achou CEP na última fala → CEP/cidade/cluster nunca gravados → sem planos. Procura a opção única
+  // nas falas anteriores da Mari (várias opções = precisa de escolha explícita, não adivinha).
+  if (!ceps.length && !conv.cep) {
+    const maris = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-5, -1).reverse();
+    for (const h of maris) {
+      const t = String(h.texto || '');
+      const lst = [...t.matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)];
+      const sol = [...new Set([...t.matchAll(/\bCEP\s*(\d{5})-?(\d{3})\b/gi)].map((x) => x[1] + x[2]))];
+      if (lst.length === 1) { ceps = lst; break; }
+      if (lst.length > 1) break;
+      if (sol.length === 1) { ceps = [[null, '1', sol[0].slice(0, 5), sol[0].slice(5)]]; break; }
+    }
+  }
   // Uma opção só e o cliente disse "sim / é essa / isso" = a opção 1.
   const afirma = ceps.length === 1 && /^(sim|isso|essa|e essa|é essa|exato|essa mesma|é essa mesma|correto|certo)\b/i.test(msg.trim());
   if ((esc || afirma) && ceps.length) {
