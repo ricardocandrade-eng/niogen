@@ -8,8 +8,10 @@
   const CFG = window.NIOGEN_CONFIG || {};
   const ETAPAS = ['Identificação PDV', 'Consulta de viabilidade', 'Cadastro do cliente', 'Contato', 'Pagamento e ofertas', 'Resumo', 'Abrir OS'];
   const PREENCHE = [1, 2, 3, 4];     // etapas que a extensão preenche; 5 só destaca; 6 e 7 só checklist
-  // Matrículas PAP conhecidas do PDV 1069521 (INFRA §3). Só serve de atalho quando o vendedor da venda não tem matrícula no banco.
-  const MATRICULAS = [['TT837725', 'Joysse'], ['TT837726', 'Eliseu']];
+  // Decisão do Ricardo (06/11): TODO pedido sai com a matrícula TT837725 (Joysse), PDV 1069521 — não depende do vendedor da venda
+  // nem de usuarios.matricula_pap, e não há escolha no painel.
+  const MATRICULA_PAP = 'TT837725';
+  const MATRICULA_NOME = 'Joysse';
   const CHECKLIST = ['Velocidade e o que vem incluso', 'Forma de pagamento', 'Valor mensal fixo até jan/2030', 'Regra da taxa de habilitação',
     'Regra de vencimento', 'Informações técnicas obrigatórias', 'Data da instalação', 'App Nio', 'Sumário/Regulamento'];
   const TXT_ESTADO = {
@@ -141,7 +143,7 @@
   const FORMAS = { boleto: ['Boleto', ['boleto', 'boleto bancario']], cartao: ['Cartão', ['cartao de credito', 'cartao', 'credito']], dacc: ['DACC (débito em conta)', ['debito em conta', 'debito automatico', 'dacc']] };
 
   // ------------------------------------------------------------------ o que cada etapa mostra e o que a extensão escreve
-  const matriculaDaVenda = () => (S.dados && S.dados.pdv && S.dados.pdv.matricula) || S.matricula || '';
+  const matriculaDaVenda = () => MATRICULA_PAP;
   const faltaDe = (d) => ({ falta: true, rot: d });
 
   // linhas de exibição: [rótulo, valor, obrigatório, só conferência]
@@ -149,7 +151,7 @@
     const d = S.dados; if (!d) return [];
     const v = d.viabilidade, c = d.cliente, k = d.contato, o = d.oferta;
     switch (n) {
-      case 1: return [['UF', d.pdv.uf, true], ['PDV', `${d.pdv.codigo} - ${d.pdv.nome}`, true], ['Matrícula do vendedor', matriculaDaVenda(), true]];
+      case 1: return [['UF', d.pdv.uf, true], ['PDV', `${d.pdv.codigo} - ${d.pdv.nome}`, true], ['Matrícula do vendedor', `${MATRICULA_PAP} · ${MATRICULA_NOME}`, true, true]];
       case 2: return [['CEP', fmtCep(v.cep), true], ['Número', v.numero || '', true], ['Complemento', v.complemento || '', false],
         ['Referência', v.referencia || '', true], ['Rua (conferir)', v.logradouro || '', false, true], ['Bairro (conferir)', v.bairro || '', false, true],
         ['Cidade (conferir)', [v.cidade, v.uf].filter(Boolean).join('/'), false, true]];
@@ -244,7 +246,6 @@
 
   async function preencherEtapa(n) {
     const campos = camposDaEtapa(n);
-    if (n === 1 && !matriculaDaVenda()) { aviso('Falta a matrícula do vendedor: escolha uma abaixo.', 'bad'); desenha(); return; }
     S.ocupado = true; aviso(''); desenha();
     try {
       const r = await mandar({ tipo: 'preencher', campos });
@@ -294,11 +295,13 @@
   }
 
   function telaFila() {
+    // A matrícula é sempre a TT837725: o "falta a matrícula do vendedor" que a RPC ainda devolve (0050) não vale.
+    const faltasDe = (x) => (x.faltas || []).filter((f) => f !== 'a matrícula do vendedor');
     const itens = (S.fila || []).map((x) => h('button', { class: 'item', type: 'button', onclick: () => abreVenda(x) },
       h('b', {}, x.cliente_nome || '—'),
       h('span', { class: 'meta' }, [x.bairro, x.cidade].filter(Boolean).join(' · ') || 'sem endereço'),
       h('span', { class: 'meta' }, x.plano_nome || 'sem plano'),
-      x.faltas && x.faltas.length ? h('span', { class: 'chip bad' }, `falta ${x.faltas.join(', ')}`) : h('span', { class: 'chip ok' }, 'dados completos')));
+      faltasDe(x).length ? h('span', { class: 'chip bad' }, `falta ${faltasDe(x).join(', ')}`) : h('span', { class: 'chip ok' }, 'dados completos')));
     return [
       h('div', { class: 'card' },
         h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('h2', { style: 'flex:1' }, 'Prontas para o portal'),
@@ -318,10 +321,7 @@
     const corpo = linhas.map(([rot, val, obrig, conf, nota]) => {
       const sem = !val && obrig;
       const vEl = val ? h('span', { class: `val${conf ? ' conf' : ''}` }, val) : sem ? h('span', { class: 'val falta' }, 'falta') : h('span', { class: 'val conf' }, nota || '—');
-      const extra = n === 1 && rot === 'Matrícula do vendedor' && !val
-        ? h('select', { id: 'sel-mat', onchange: (ev) => { S.matricula = ev.target.value; desenha(); } },
-          h('option', { value: '' }, 'escolher…'), MATRICULAS.map(([m, nome]) => h('option', { value: m }, `${m} · ${nome}`))) : null;
-      return h('div', { class: 'linha' }, h('span', { class: 'rot' }, rot), h('span', {}, vEl, extra ? h('div', {}, extra) : null), h('span'));
+      return h('div', { class: 'linha' }, h('span', { class: 'rot' }, rot), h('span', {}, vEl), h('span'));
     });
     const resultados = (S.resultados[n] || []).map((r) => {
       const [t, cls] = TXT_ESTADO[r.estado] || [r.estado, 'warn'];

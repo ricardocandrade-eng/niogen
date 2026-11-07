@@ -19,7 +19,7 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 
 | Etapa | A extensão faz |
 |---|---|
-| 1 Identificação PDV | UF · PDV `1069521 - DHARMA TELECOM LTDA` · matrícula do vendedor (escolhe a opção da lista) |
+| 1 Identificação PDV | UF · PDV `1069521 - DHARMA TELECOM LTDA` · matrícula **sempre `TT837725` (Joysse)** — decisão do Ricardo, 06/11 (escolhe a opção da lista) |
 | 2 Viabilidade | CEP · número (ou "Sem número") · referência · complemento. **Para antes de Buscar** |
 | 3 Cadastro | CPF/CNPJ. **Para antes de Buscar**. Nascimento e nome da mãe: não coletamos |
 | 4 Contato | celular (2×) · e-mail (2×). Aceite de WhatsApp: nunca marca |
@@ -34,5 +34,5 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 - `eventos_venda` guarda só o fato: `portal_extensao_preenchido` (etapa, nº de campos), `portal_extensao_destacado` e `pedido_aberto_portal`. Nunca o conteúdo.
 - Avisos do portal ("já existe outro pedido", "Celular já utilizado anteriormente", "Endereço fora da área") aparecem no painel; a extensão não sugere seguir.
 
-## Banco (migration `0050_portal_extensao.sql`)
-`usuarios.matricula_pap` · `portal_prontas()` · `dados_portal(venda)` · `portal_gravar_pedido(venda, pedido)` — todas `SECURITY INVOKER` (vale o RLS de quem está logado).
+## Banco (migration `0051_portal_extensao.sql`)
+`portal_prontas()` · `dados_portal(venda)` · `portal_gravar_pedido(venda, pedido)` — todas `SECURITY INVOKER` (vale o RLS de quem está logado).

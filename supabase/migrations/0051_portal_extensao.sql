@@ -1,21 +1,14 @@
--- NIOGEN | supabase/migrations/0050_portal_extensao.sql | 06/11/2026 — Claude Code (prompt 28)
+-- NIOGEN | supabase/migrations/0051_portal_extensao.sql | 06/11/2026 — Claude Code (prompt 28)
 -- Resumo: o que a extensão do Chrome "NIOGEN no Portal" lê e grava. Tudo SECURITY INVOKER: vale o RLS de quem está logado
 -- (admin e backoffice veem tudo; vendedor só as vendas dele). Nada de service role na extensão.
---   1. usuarios.matricula_pap: matrícula do vendedor no portal PAP (etapa 1 do Novo Pedido; TT837725, TT837726…).
+--   1. (removido) matrícula do vendedor: por decisão do Ricardo (06/11) todo pedido sai com a matrícula TT837725 (Joysse), então
+--      dados_portal devolve sempre essa matrícula e não existe usuarios.matricula_pap.
 --   2. portal_prontas(): a fila "Prontas para o portal" = Qualificado (0) sem nº de pedido — o mesmo estágio em que a ficha
 --      mostra os cartões "Viabilidade" e "Dados para o portal PAP" (prompt 27). Devolve só o resumo e o que falta.
 --   3. dados_portal(venda): o bloco "Dados para o portal PAP" em JSON, na ordem das etapas do Novo Pedido.
 --   4. portal_gravar_pedido(venda, pedido): grava o nº do pedido digitado pelo humano e registra o evento pedido_aberto_portal
 --      (o evento guarda só o fato — nunca o número nem dado do cliente).
--- Numeração: 0045 continua reservada ao prompt 23 (API de Conversões).
-
--- ---------------------------------------------------------------- 1. matrícula do vendedor no portal
-alter table public.usuarios add column if not exists matricula_pap text;
-alter table public.usuarios drop constraint if exists usuarios_matricula_pap_check;
-alter table public.usuarios add constraint usuarios_matricula_pap_check
-  check (matricula_pap is null or matricula_pap ~ '^[A-Za-z]{2}[0-9]{4,8}$');
-comment on column public.usuarios.matricula_pap is
-  'Matrícula do vendedor no portal PAP da Nio (campo "matrícula do vendedor" da etapa 1 do Novo Pedido). Ex.: TT837725.';
+-- Numeração: 0045 continua reservada ao prompt 23 (API de Conversões); 0050 é da cadência v7 (outra sessão).
 
 -- ---------------------------------------------------------------- 2. fila "Prontas para o portal"
 create or replace function public.portal_prontas()
@@ -47,13 +40,11 @@ as $$
            case when coalesce(btrim(v.cliente_email), '') = '' then 'o e-mail' end,
            case when v.plano_id is null then 'o plano' end,
            case when v.forma_pagamento is null then 'a forma de pagamento' end,
-           case when coalesce(btrim(v.instalacao_preferencia), '') = '' then 'o período preferido' end,
-           case when coalesce(btrim(u.matricula_pap), '') = '' then 'a matrícula do vendedor' end
+           case when coalesce(btrim(v.instalacao_preferencia), '') = '' then 'o período preferido' end
          ], null),
          v.criado_em
     from public.vendas v
     left join public.config_planos p on p.id = v.plano_id
-    left join public.usuarios u on u.id = v.vendedor_id
    where public.meu_perfil() is not null
      and v.status = '0_qualificado'
      and coalesce(btrim(v.nio_pedido), '') = ''
@@ -74,8 +65,6 @@ as $$
 declare
   v      public.vendas%rowtype;
   plano  text;
-  mat    text;
-  vnome  text;
   adics  jsonb;
   doc    text;
 begin
@@ -89,7 +78,6 @@ begin
   end if;
 
   select p.nome into plano from public.config_planos p where p.id = v.plano_id;
-  select u.matricula_pap, u.nome into mat, vnome from public.usuarios u where u.id = v.vendedor_id;
   select coalesce(jsonb_agg(jsonb_build_object('nome', a.nome, 'qtd', va.qtd) order by a.nome), '[]'::jsonb)
     into adics
     from public.venda_adicionais va
@@ -106,8 +94,8 @@ begin
       'uf', 'MG',
       'codigo', '1069521',
       'nome', 'DHARMA TELECOM LTDA',
-      'matricula', nullif(btrim(coalesce(mat, '')), ''),
-      'vendedor', vnome),
+      'matricula', 'TT837725',
+      'vendedor', 'Joysse'),
     'viabilidade', jsonb_build_object(
       'cep', nullif(btrim(coalesce(v.cep, '')), ''),
       'numero', nullif(btrim(coalesce(v.numero, '')), ''),
