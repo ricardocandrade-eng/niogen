@@ -77,6 +77,15 @@
   .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .5; }
   .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
   .pl .num b { color: var(--text); font-weight: 600; }
+  /* Janela baixa (notebook, ~700 px): mesma estrutura, espaçamentos menores, para os KPIs + a Saúde caberem sem rolar. */
+  @media (max-height: 780px) and (min-width: 901px) {
+    .saude { gap: 10px; padding: 12px 16px; }
+    .saude-col { gap: 12px; } .bloco { gap: 6px; } .saude-grade { gap: 12px 20px; }
+    #s-alertas { gap: 6px; } .al { padding: 7px 10px; gap: 1px 8px; }
+    .gat { padding: 4px 0; } .gat .trilho { height: 4px; }
+    .fe { padding: 5px 8px; } .fe .n { font-size: 15px; } .funil-faixa { gap: 5px; }
+    .posic { gap: 3px; } .pl { font-size: 12px; } .pl .barra { height: 8px; }
+  }
   @media (max-width: 900px) {
     .saude-grade { grid-template-columns: minmax(0, 1fr); }
     .cab-acoes #vistas { width: 100%; }
