@@ -1,0 +1,384 @@
+{
+  "name": "agente_trafego_snapshot",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0,30 7-23 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 30 min (07h–23h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5367bb9a-0c34-5f45-b04d-5da243d49d00"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-agente-trafego-snapshot",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "1w · Rodar agora (teste)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "4954f794-17ca-5c29-9fa3-16b271e87ed8",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "d70c4983-a3cb-5c10-81e4-3af49d656a7f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/agente_trafego_retrato",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"p_dias\": 14}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Supabase retrato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "b25c6655-233f-57a0-ad4f-6fd452ac8616",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// O retrato vem pronto do banco (agente_trafego_retrato). Aqui só vira texto e ganha os 2 nomes de arquivo.\nconst r = $input.first().json;\nif (!r || !r.gerado_em || !r.totais) throw new Error('retrato vazio ou sem totais — nada foi gravado');\nconst txt = JSON.stringify(r, null, 2);\nconst dia = $now.setZone('America/Sao_Paulo').toFormat('ddMMyy');\nreturn ['funil_agente_trafego.json', `funil_agente_trafego_${dia}.json`]\n  .map((nome) => ({ json: { nome, conteudo: txt } }));"
+      },
+      "name": "3 · Preparar arquivos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "aa1de719-5ca4-5ebe-8755-3f9fbda9dea1"
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "timeout": 30000
+        },
+        "method": "GET",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name = '\" + $json.nome + \"' and '1Xmwr5XHs-0nUYkkV2XyzEbL-6YnBDj9Q' in parents and trashed = false\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,modifiedTime)"
+            },
+            {
+              "name": "spaces",
+              "value": "drive"
+            }
+          ]
+        }
+      },
+      "name": "4 · Drive procurar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "6da94a3e-2771-5c5f-ae89-45dbe27995f7",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aPnrkEhc9IzKXm7g",
+          "name": "Google Drive Nio (agente de tráfego)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Achou o arquivo na pasta → troca só o conteúdo (mesmo ID). Não achou → cria com multipart (metadados + conteúdo).\nconst p = $('3 · Preparar arquivos').item.json;\nconst id = (($json.files || [])[0] || {}).id;\nif (id) {\n  return { json: { nome: p.nome, acao: 'atualizado', metodo: 'PATCH',\n    url: `https://www.googleapis.com/upload/drive/v3/files/${id}?uploadType=media&fields=id,name,modifiedTime`, tipo: 'application/json; charset=UTF-8', corpo: p.conteudo } };\n}\nconst b = `niogen_${Date.now()}`;\nconst meta = JSON.stringify({ name: p.nome, parents: ['1Xmwr5XHs-0nUYkkV2XyzEbL-6YnBDj9Q'], mimeType: 'application/json' });\nconst corpo = `--${b}\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n${meta}\\r\\n`\n  + `--${b}\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n${p.conteudo}\\r\\n--${b}--`;\nreturn { json: { nome: p.nome, acao: 'criado', metodo: 'POST',\n  url: 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,modifiedTime', tipo: `multipart/related; boundary=${b}`, corpo } };"
+      },
+      "name": "5 · Montar gravação",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "98df1a4d-3b55-543c-bd4b-e754df011683"
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "timeout": 30000
+        },
+        "method": "={{ $json.metodo }}",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "={{ $json.tipo }}",
+        "body": "={{ $json.corpo }}"
+      },
+      "name": "6 · Drive gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        100
+      ],
+      "id": "371dee84-2196-5cb4-b054-17b6a57cb307",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aPnrkEhc9IzKXm7g",
+          "name": "Google Drive Nio (agente de tráfego)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "timeout": 30000
+        },
+        "method": "GET",
+        "url": "https://www.googleapis.com/drive/v3/files",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ \"name contains 'funil_agente_trafego_' and '1Xmwr5XHs-0nUYkkV2XyzEbL-6YnBDj9Q' in parents and trashed = false and modifiedTime < '\" + $now.minus({ days: 30 }).toUTC().toISO() + \"'\" }}"
+            },
+            {
+              "name": "fields",
+              "value": "files(id,name,modifiedTime)"
+            },
+            {
+              "name": "pageSize",
+              "value": "100"
+            }
+          ]
+        }
+      },
+      "name": "7 · Drive diários antigos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "dff88082-0503-500b-a78d-81bce758932b",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aPnrkEhc9IzKXm7g",
+          "name": "Google Drive Nio (agente de tráfego)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só os diários (funil_agente_trafego_DDMMAA.json) com mais de 30 dias; o arquivo principal nunca entra.\nconst arqs = $input.first().json.files || [];\nreturn arqs.filter((f) => /^funil_agente_trafego_\\d{6}\\.json$/.test(f.name || ''))\n  .map((f) => ({ json: { id: f.id, nome: f.name, modificado: f.modifiedTime } }));"
+      },
+      "name": "8 · Diários a apagar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "48e50e22-5cc3-586a-aa48-586fa956d366"
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleDriveOAuth2Api",
+        "options": {
+          "timeout": 30000
+        },
+        "method": "PATCH",
+        "url": "={{ \"https://www.googleapis.com/drive/v3/files/\" + $json.id }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"trashed\": true}"
+      },
+      "name": "9 · Drive lixeira",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        100
+      ],
+      "id": "f0678e04-59df-584a-9503-d43e29817ba3",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "aPnrkEhc9IzKXm7g",
+          "name": "Google Drive Nio (agente de tráfego)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "1 · A cada 30 min (07h–23h)": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase retrato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1w · Rodar agora (teste)": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase retrato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase retrato": {
+      "main": [
+        [
+          {
+            "node": "3 · Preparar arquivos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Preparar arquivos": {
+      "main": [
+        [
+          {
+            "node": "4 · Drive procurar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Drive procurar": {
+      "main": [
+        [
+          {
+            "node": "5 · Montar gravação",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Montar gravação": {
+      "main": [
+        [
+          {
+            "node": "6 · Drive gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Drive gravar": {
+      "main": [
+        [
+          {
+            "node": "7 · Drive diários antigos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Drive diários antigos": {
+      "main": [
+        [
+          {
+            "node": "8 · Diários a apagar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Diários a apagar": {
+      "main": [
+        [
+          {
+            "node": "9 · Drive lixeira",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}
