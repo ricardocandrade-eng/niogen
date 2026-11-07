@@ -27,6 +27,51 @@
   /* As vistas embrulham os blocos da tela: repetem o espaçamento do .main (gap 18px) que o wrapper anulava. */
   .vista { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
   .vista[hidden] { display: none; }
+
+  /* Saúde da campanha (07/11): bater o olho e saber o que está acontecendo, o que pede ação e o que está perto de pedir. */
+  .saude-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .semaforo { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; background: var(--muted); box-shadow: 0 0 0 4px var(--surface-2); }
+  .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
+  .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
+  .saude-grade { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+  .saude-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .saude-col h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
+  .al::before { content: ''; grid-row: 1 / span 2; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
+  .al.bad { background: var(--bad-bg); border-color: var(--bad-border); } .al.bad::before { background: var(--bad-dot); }
+  .al.warn { background: var(--warn-bg); border-color: var(--warn-border); } .al.warn::before { background: var(--warn-dot); }
+  .al.dim { opacity: .75; }
+  .al b { font-size: 13px; font-weight: 600; } .al.bad b { color: var(--bad-fg); } .al.warn b { color: var(--warn-fg); }
+  .al span { font-size: 12px; color: var(--muted); grid-column: 2; }
+  .al .prop { color: var(--text); }
+  .gat { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .gat:last-child { border-bottom: 0; }
+  .gat .cod { font-family: var(--dm); font-size: 11px; color: var(--muted); }
+  .gat .nome { font-size: 13px; } .gat .val { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .gat .trilho { grid-column: 2 / -1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .gat .trilho i { display: block; height: 100%; background: var(--link); }
+  .gat .trilho i.warn { background: var(--warn-dot); } .gat .trilho i.bad { background: var(--bad-dot); }
+  .gat small { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
+  .gat.sem-dado .nome, .gat.sem-dado .val { color: var(--muted); }
+  .funil-faixa { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
+  .fe { padding: 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
+  .fe .n { font-family: var(--mono); font-size: 18px; font-weight: 600; display: block; }
+  .fe .r { font-size: 11px; color: var(--muted); display: block; line-height: 1.3; }
+  .fe .t { font-size: 11px; color: var(--muted); font-family: var(--dm); display: block; margin-top: 4px; }
+  .fe.zero .n { color: var(--bad-fg); }
+  .posic { display: flex; flex-direction: column; gap: 6px; }
+  .pl { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 150px; gap: 10px; align-items: center; font-size: 12px; }
+  .pl .barra { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .pl .barra i { display: block; height: 100%; background: var(--link); }
+  .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .55; }
+  .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); }
+  .pl .num b { color: var(--text); font-weight: 600; }
+  .saude-rodape { font-size: 11px; color: var(--muted); display: flex; gap: 6px 16px; flex-wrap: wrap; }
+  @media (max-width: 900px) {
+    .saude-grade { grid-template-columns: minmax(0, 1fr); }
+    .funil-faixa { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .pl { grid-template-columns: minmax(0, 1fr) 110px; } .pl .barra { grid-column: 1 / -1; grid-row: 2; }
+  }
 </style>
 </head>
 <body>
@@ -46,6 +91,18 @@
     <div id="vistas" aria-label="Vista"></div>
 
     <div id="vista-desempenho" class="vista">
+      <section class="painel" aria-labelledby="t-saude" id="saude">
+        <div class="saude-cab"><span class="semaforo" id="s-sinal" aria-hidden="true"></span><h2 id="t-saude">Saúde da campanha</h2>
+          <span class="resumo" id="s-resumo">Carregando…</span></div>
+        <div class="saude-grade">
+          <div class="saude-col"><h3>Precisam de ação agora</h3><div id="s-alertas"><div class="carregando">Carregando…</div></div></div>
+          <div class="saude-col"><h3>Gatilhos do agente · quanto falta</h3><div id="s-gatilhos"></div></div>
+        </div>
+        <div class="saude-col"><h3 id="t-funil">Funil · anúncio → venda</h3><div class="funil-faixa" id="s-funil"></div></div>
+        <div class="saude-col"><h3>Para onde vai a verba · posicionamentos, últimos 7 dias</h3><div class="posic" id="s-posic"></div></div>
+        <div class="saude-rodape"><span>Tudo aqui é leitura: pausar, tirar posicionamento ou mudar verba é ordem do Ricardo.</span>
+          <span>Rascunhos do Gerenciador não aparecem (a API da Meta não mostra) — conferir lá.</span><span id="s-atualizado"></span></div>
+      </section>
       <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
       <section class="lista padrao" aria-labelledby="t-anuncios">
         <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-anuncios" class="secao-tit">Campanhas e anúncios</h2></div>
@@ -282,6 +339,174 @@
     setSub('desempenho', `Conta Nio · ${ativas.size ? `${[...ativas].join(', ')} ativa${ativas.size > 1 ? 's' : ''}` : 'nenhuma campanha ativa'}`
       + ' · o número que manda é o custo por venda com biometria');
     if (vista === 'desempenho') abrirVista('desempenho');
+    carregarSaude(p, dias, ads);
+  }
+
+  // ───────────── Saúde da campanha (07/11) ─────────────
+  // Regras do agente (doc da campanha 1 §7.1) aplicadas ao que já existe; limites em config_meta_ads_regras (0054/0055).
+  // R1 e R3 dependem de saber de qual anúncio veio cada conversa (ad_id): enquanto não houver, aparecem "sem dado".
+  const NOME_POSIC = {
+    'whatsapp|status': 'Status do WhatsApp', 'instagram|feed': 'Feed do Instagram', 'instagram|instagram_stories': 'Stories do Instagram',
+    'instagram|instagram_reels': 'Reels do Instagram', 'instagram|instagram_explore': 'Explorar do Instagram', 'instagram|instagram_explore_grid_home': 'Explorar do Instagram',
+    'instagram|instagram_profile_feed': 'Perfil do Instagram', 'facebook|feed': 'Feed do Facebook', 'facebook|facebook_stories': 'Stories do Facebook',
+    'facebook|facebook_reels': 'Reels do Facebook', 'facebook|facebook_reels_overlay': 'Sobreposição nos Reels (FB)', 'facebook|marketplace': 'Marketplace',
+    'facebook|search': 'Busca do Facebook', 'facebook|instream_video': 'Vídeo in-stream (FB)', 'facebook|facebook_notification': 'Notificações do Facebook',
+    'facebook|facebook_profile_feed': 'Perfil do Facebook', 'audience_network|an_classic': 'Audience Network', 'audience_network|rewarded_video': 'Audience Network (vídeo)',
+  };
+  const nomePosic = (r) => NOME_POSIC[`${r.plataforma}|${r.posicao}`] || `${r.plataforma} · ${r.posicao}`;
+  const barraPct = (v) => `${Math.max(0, Math.min(100, v * 100)).toFixed(0)}%`;
+
+  async function carregarSaude(p, dias, ads) {
+    let qConv = NG.sb.from('mari_conversas').select('created_at, cep, dentro_area, elegibilidade, handoff_motivo, handoff_em, venda_id').eq('origem', 'meta_ads');
+    if (p.de) qConv = qConv.gte('created_at', `${p.de}T00:00:00-03:00`);
+    if (p.ate) qConv = qConv.lte('created_at', `${p.ate}T23:59:59-03:00`);
+    const seteAtras = (() => { const d = new Date(`${NG.diaSP()}T12:00:00-03:00`); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
+    let qPosDia = NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto, cliques_link');
+    if (p.de) qPosDia = qPosDia.gte('dia', p.de < seteAtras ? p.de : seteAtras); else qPosDia = qPosDia.gte('dia', '2000-01-01');
+    const [rCfg, rPos, rPosDia, rTudo, rConv, rVendas, rConj] = await Promise.all([
+      NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'),
+      NG.sb.from('v_meta_ads_posicionamento_7d').select('*'),
+      qPosDia,
+      NG.sb.from('meta_ads_diario').select('ad_id, ad_nome, adset_nome, campanha_id, campanha_nome, gasto, conversas'),
+      qConv,
+      NG.sb.from('vendas').select('id, status, motivo_saida, biometria_status').eq('origem', 'meta_ads'),
+      NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056; sem ela, cai no histórico
+    ]);
+    const erro = rCfg.error || rPos.error || rPosDia.error || rTudo.error;
+    const alvoA = document.getElementById('s-alertas');
+    if (erro) { alvoA.innerHTML = `<div class="vazio-curto">${esc(NG.msgErro(erro))}</div>`; document.getElementById('s-resumo').textContent = 'não deu para ler'; return; }
+    const L = Object.fromEntries((rCfg.data || []).map((c) => [c.chave, Number(c.valor)]));
+    const conv = rConv.error ? null : (rConv.data || []);          // RLS: só admin/backoffice leem a Mari
+    const vendasPorId = new Map((rVendas.error ? [] : rVendas.data || []).map((v) => [v.id, v]));
+
+    // campanha inteira (desde o início): gasto e conversas por anúncio
+    const porAd = new Map();
+    (rTudo.data || []).forEach((d) => {
+      const a = porAd.get(d.ad_id) || { nome: d.ad_nome, conj: d.adset_nome, gasto: 0, conversas: 0 };
+      a.gasto += Number(d.gasto || 0); a.conversas += d.conversas || 0; porAd.set(d.ad_id, a);
+    });
+    const gastoTotal = [...porAd.values()].reduce((s, a) => s + a.gasto, 0);
+    const convTotal = [...porAd.values()].reduce((s, a) => s + a.conversas, 0);
+    const cpcTotal = convTotal ? gastoTotal / convTotal : null;
+    const maiorAd = [...porAd.values()].sort((a, b) => b.gasto - a.gasto)[0];
+
+    // posicionamentos: último dia com gasto (posicionamento que parou de receber verba = excluído ou sem entrega)
+    const ultDia = (rPosDia.data || []).reduce((m, r) => (r.dia > m ? r.dia : m), '');
+    const ultGasto = new Map();
+    (rPosDia.data || []).forEach((r) => {
+      const k = `${r.plataforma}|${r.posicao}`;
+      if (Number(r.gasto) > 0 && (!ultGasto.has(k) || r.dia > ultGasto.get(k))) ultGasto.set(k, r.dia);
+    });
+    // Tirado = a plataforma não está configurada em nenhum conjunto ativo (meta_ads_conjuntos, 0056). Conjunto com
+    // publisher_platforms vazio é automático (tudo vale). Sem a tabela, cai no histórico: sem gasto desde antes do último dia.
+    const conjAtivos = rConj.error ? null : (rConj.data || []).filter((c) => c.status_efetivo === 'ACTIVE');
+    const plataformasOn = conjAtivos && conjAtivos.length && !conjAtivos.some((c) => !(c.publisher_platforms || []).length)
+      ? new Set(conjAtivos.flatMap((c) => c.publisher_platforms)) : null;
+    const tirado = (r) => !!(plataformasOn && !plataformasOn.has(r.plataforma));
+    const semVerba = (r) => { const u = ultGasto.get(`${r.plataforma}|${r.posicao}`); return !!(u && ultDia && u < ultDia); };
+    const parou = (r) => tirado(r) || semVerba(r);
+    const motivoParou = (r) => (tirado(r) ? 'tirado dos conjuntos' : `sem verba desde ${NG.fmtDiaISO(ultGasto.get(`${r.plataforma}|${r.posicao}`))}`);
+    const pos = (rPos.data || []).slice().sort((a, b) => Number(b.gasto) - Number(a.gasto));
+
+    // qualidade (R5), no período do filtro
+    let q = null;
+    if (conv) {
+      const jaCliente = conv.filter((c) => c.handoff_motivo === 'ja_cliente_nio').length;
+      const semCob = conv.filter((c) => c.dentro_area === false || c.elegibilidade === 'fora_area'
+        || (c.venda_id && vendasPorId.get(c.venda_id)?.motivo_saida === 'Sem cobertura')).length;
+      const comCep = conv.filter((c) => c.cep).length;
+      const dentro = conv.filter((c) => c.cep && c.dentro_area === true).length;
+      const qualif = conv.filter((c) => c.handoff_em && c.handoff_motivo !== 'ja_cliente_nio').length;
+      q = { total: conv.length, jaCliente, semCob, comCep, dentro, qualif, aprov: Math.max(0, conv.length - jaCliente - semCob) };
+    }
+
+    // ── alertas
+    const al = [];
+    pos.filter((r) => r.alerta).forEach((r) => {
+      const fato = `${NG.fmtMoeda(r.gasto)} · ${NG.fmtNum(Number(r.fatia_gasto) * 100)} % da verba em 7 dias · 0 conversas`;
+      if (parou(r)) al.push({ cls: 'dim', t: `${nomePosic(r)} — ${motivoParou(r)}`, f: fato, pr: 'Resolvido. Sai daqui quando o gasto dele sair da janela de 7 dias.' });
+      else al.push({ cls: 'bad', t: `${nomePosic(r)} come verba sem conversa`, f: fato, pr: 'R2 → tirar o posicionamento dos conjuntos (meta/campanha1_jf.py --posicionamentos)' });
+    });
+    const problema = ads.filter((a) => ['DISAPPROVED', 'WITH_ISSUES', 'PENDING_BILLING_INFO'].includes(a.status_efetivo));
+    if (problema.length) al.push({ cls: 'bad', t: `${problema.length} anúncio${problema.length > 1 ? 's' : ''} com problema na Meta`, f: problema.map((a) => a.ad_nome).join(', '), pr: 'Conferir no Gerenciador' });
+    if (gastoTotal >= L.campanha_gasto_avaliar && cpcTotal != null && cpcTotal > L.campanha_custo_conversa_max)
+      al.push({ cls: 'warn', t: 'Custo por conversa acima do limite', f: `${NG.fmtMoeda(cpcTotal)} por conversa com ${NG.fmtMoeda(gastoTotal)} gastos (limite ${NG.fmtMoeda(L.campanha_custo_conversa_max)})`, pr: 'R4 → juntar num conjunto só com os 2–3 melhores anúncios' });
+    if (gastoTotal >= L.campanha_gasto_avaliar && convTotal === 0)
+      al.push({ cls: 'bad', t: 'Nenhuma conversa', f: `${NG.fmtMoeda(gastoTotal)} gastos sem conversa`, pr: 'R4 → rever criativo e público' });
+    if (q && q.total && (q.jaCliente + q.semCob) > 0)
+      al.push({ cls: 'warn', t: `${q.jaCliente + q.semCob} de ${q.total} conversa${q.total > 1 ? 's' : ''} sem aproveitamento`,
+        f: [q.jaCliente && `${q.jaCliente} já cliente Nio`, q.semCob && `${q.semCob} sem cobertura`].filter(Boolean).join(' · ') + ` · ${per.rotulo}`,
+        pr: 'R5 → aviso: conferir raio × base DFV (fato, não causa)' });
+    const ordem = { bad: 0, warn: 1, dim: 2 };
+    al.sort((a, b) => ordem[a.cls] - ordem[b.cls]);
+    alvoA.innerHTML = (al.some((a) => a.cls !== 'dim') ? '' : '<div class="vazio-curto">Nada pendente agora ✓</div>')
+      + al.map((a) => `<div class="al ${a.cls}"><b>${esc(a.t)}</b><span>${esc(a.f)}</span><span class="prop">${esc(a.pr)}</span></div>`).join('');
+
+    // ── gatilhos (quanto falta)
+    const corBarra = (f) => (f >= 1 ? 'bad' : f >= 0.7 ? 'warn' : '');
+    const gat = (cod, nome, val, frac, nota, semDado, cor) => `<div class="gat${semDado ? ' sem-dado' : ''}"><span class="cod">${cod}</span><span class="nome">${esc(nome)}</span>
+      <span class="val">${val}</span>${semDado ? '' : `<span class="trilho"><i class="${cor ?? corBarra(frac)}" style="width:${barraPct(frac)}"></i></span>`}<small>${nota}</small></div>`;
+    const ativosPos = pos.filter((r) => !parou(r) && r.conversas === 0);
+    const piorPos = ativosPos.sort((a, b) => Number(b.fatia_gasto) - Number(a.fatia_gasto))[0];
+    const fracPos = piorPos ? Math.min(Number(piorPos.fatia_gasto) / L.posic_fatia_min, Number(piorPos.gasto) / L.posic_gasto_min) : 0;
+    const fase1 = gastoTotal < L.campanha_gasto_avaliar;
+    document.getElementById('s-gatilhos').innerHTML = [
+      gat('R1', 'Anúncio sem CEP válido → pausar', maiorAd ? `${NG.fmtMoeda(maiorAd.gasto)} / ${NG.fmtMoeda(L.anuncio_gasto_pausa)}` : '—',
+        maiorAd ? maiorAd.gasto / L.anuncio_gasto_pausa : 0,
+        maiorAd ? `maior gasto: ${esc(maiorAd.nome)} (${esc(maiorAd.conj || '')}) · o CEP por anúncio espera o ad_id` : 'sem gasto ainda'),
+      gat('R2', 'Posicionamento sem conversa → tirar', piorPos ? `${NG.fmtNum(Number(piorPos.fatia_gasto) * 100)} % / ${NG.fmtNum(L.posic_fatia_min * 100)} %` : '—', fracPos,
+        piorPos ? `pior ativo: ${esc(nomePosic(piorPos))}, ${NG.fmtMoeda(piorPos.gasto)} (dispara com ≥ ${NG.fmtMoeda(L.posic_gasto_min)} e ≥ ${NG.fmtNum(L.posic_fatia_min * 100)} %)` : 'nenhum posicionamento ativo sem conversa'),
+      gat('R3', 'Conjunto com venda cara → rever', 'sem dado', 0, `custo por venda por conjunto (limite ${NG.fmtMoeda(L.conjunto_custo_venda_max)}) espera o ad_id`, true),
+      gat('R4', fase1 ? 'Campanha: 1ª avaliação' : 'Campanha: custo por conversa', fase1 ? `${NG.fmtMoeda(gastoTotal)} / ${NG.fmtMoeda(L.campanha_gasto_avaliar)}`
+        : `${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} / ${NG.fmtMoeda(L.campanha_custo_conversa_max)}`,
+        fase1 ? gastoTotal / L.campanha_gasto_avaliar : (cpcTotal != null ? cpcTotal / L.campanha_custo_conversa_max : 1),
+        fase1 ? `cedo para julgar · hoje ${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} por conversa (bom ≤ ${NG.fmtMoeda(L.conversa_custo_meta)})` : `desde o início · ${NG.fmtNum(convTotal)} conversas`,
+        false, fase1 ? '' : undefined),
+      q ? gat('R5', 'Conversas aproveitáveis', `${NG.fmtNum(q.aprov)} / ${NG.fmtNum(q.total)}`, q.total ? (q.total - q.aprov) / q.total : 0,
+        `${per.rotulo} · fora: já cliente Nio, sem cobertura`) : gat('R5', 'Conversas aproveitáveis', 'sem acesso', 0, 'só admin e backoffice leem as conversas da Mari', true),
+    ].join('');
+
+    // ── funil do período
+    const imp = soma(dias, 'impressoes');
+    const clLink = (rPosDia.data || []).filter((r) => (!p.de || r.dia >= p.de) && (!p.ate || r.dia <= p.ate)).reduce((s, r) => s + (r.cliques_link || 0), 0);
+    const cMeta = soma(dias, 'conversas_meta');
+    const vBio = soma(dias, 'vendas_biometria');
+    // 3º elemento = base do % (passo anterior). A Mari conta conversas por um critério diferente da Meta (mensagem pronta
+    // "Vi o anúncio", inclusive testes), então o passo "na Mari" não tem % sobre o da Meta.
+    const passos = [
+      ['Impressões', imp, null], ['Cliques no link', clLink, imp], ['Conversas (Meta)', cMeta, clLink],
+      ['Conversas na Mari', q ? q.total : soma(dias, 'conversas_mari'), 0], ['Com CEP', q ? q.comCep : soma(dias, 'com_cep'), null],
+      ['Dentro da área (DFV)', q ? q.dentro : null, null], ['Qualificadas', q ? q.qualif : soma(dias, 'qualificadas'), null], ['Venda c/ biometria', vBio, null],
+    ];
+    passos.forEach((ps, i) => { if (ps[2] === null && i > 0) ps[2] = passos[i - 1][1]; });
+    document.getElementById('t-funil').textContent = `Funil · anúncio → venda · ${per.rotulo}`;
+    document.getElementById('s-funil').innerHTML = passos.map(([r, n, ant], i) => `<div class="fe${n === 0 && i > 0 ? ' zero' : ''}">
+      <span class="n">${n == null ? '—' : NG.fmtNum(n)}</span><span class="r">${esc(r)}</span>
+      <span class="t">${i === 0 || n == null || !ant ? '&nbsp;' : `${NG.fmtNum((n / ant) * 100)} %`}</span></div>`).join('');
+
+    // ── posicionamentos (7 dias)
+    const maxG = Math.max(1, ...pos.map((r) => Number(r.gasto)));
+    document.getElementById('s-posic').innerHTML = pos.length ? pos.filter((r) => Number(r.gasto) >= 0.5 || r.conversas > 0).map((r) => `<div class="pl${r.alerta && !parou(r) ? ' alerta-on' : ''}${parou(r) ? ' parado' : ''}">
+        <span>${esc(nomePosic(r))}${parou(r) ? ` <small class="apagado">· ${esc(tirado(r) ? 'tirado' : 'sem verba')}</small>` : ''}</span>
+        <span class="barra" title="${NG.fmtNum(Number(r.fatia_gasto) * 100)} % do gasto"><i style="width:${barraPct(Number(r.gasto) / maxG)}"></i></span>
+        <span class="num"><b>${NG.fmtMoeda(r.gasto)}</b> · ${NG.fmtNum(r.conversas)} conv${r.custo_conversa ? ` · ${NG.fmtMoeda(r.custo_conversa)}` : ''}</span></div>`).join('')
+      : '<div class="vazio-curto">Sem dados por posicionamento ainda — a coleta roda a cada 15 min.</div>';
+
+    // ── semáforo + resumo
+    const emAnalise = ads.filter((a) => ['PENDING_REVIEW', 'IN_PROCESS', 'PREAPPROVED'].includes(a.status_efetivo)).length;
+    const ativos = ads.filter((a) => a.status_efetivo === 'ACTIVE').length;
+    const nBad = al.filter((a) => a.cls === 'bad').length, nWarn = al.filter((a) => a.cls === 'warn').length;
+    const sinal = nBad ? 'bad' : (nWarn || emAnalise || fase1 || (cpcTotal != null && cpcTotal > L.conversa_custo_meta)) ? 'warn' : 'ok';
+    document.getElementById('s-sinal').className = `semaforo ${sinal}`;
+    document.getElementById('s-sinal').title = { ok: 'Tudo dentro dos limites', warn: 'Atenção', bad: 'Precisa de ação' }[sinal];
+    document.getElementById('s-resumo').textContent = [
+      nBad ? `${nBad} alerta${nBad > 1 ? 's' : ''} pedindo ação` : nWarn ? `${nWarn} ponto${nWarn > 1 ? 's' : ''} de atenção` : 'nenhum alerta',
+      fase1 ? `cedo para julgar (${NG.fmtMoeda(gastoTotal)} de ${NG.fmtMoeda(L.campanha_gasto_avaliar)})` : `${NG.fmtMoeda(gastoTotal)} gastos`,
+      `${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} por conversa (bom ≤ ${NG.fmtMoeda(L.conversa_custo_meta)})`,
+      emAnalise ? `${emAnalise} anúncio${emAnalise > 1 ? 's' : ''} em análise na Meta` : `${ativos} anúncio${ativos === 1 ? '' : 's'} no ar`,
+    ].join(' · ');
+    const ultP = pos.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
+    document.getElementById('s-atualizado').textContent = ultP ? `Posicionamentos atualizados ${NG.fmtDataHora(ultP)}` : '';
   }
 
   // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a vista abre) ─────────────

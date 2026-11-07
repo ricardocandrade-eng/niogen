@@ -46,6 +46,8 @@ CAMPOS_INSIGHTS = ','.join(['date_start', 'ad_id', 'ad_name', 'adset_id', 'adset
 CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}'
 CAMPOS_POSIC = ','.join(['date_start', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                          'spend', 'impressions', 'clicks', 'inline_link_clicks', 'actions'])
+CAMPOS_CONJ = ('id,name,effective_status,campaign_id,campaign{name},targeting{publisher_platforms,facebook_positions,'
+               'instagram_positions,whatsapp_positions,audience_network_positions,messenger_positions}')
 
 
 def build(ids):
@@ -100,6 +102,15 @@ def build(ids):
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ p_insights: $json.data || [] }) }}",
         'options': {'timeout': 20000}}, 1200, 100, credentials=sb_cred)
+    # 07/11 (migration 0056): o posicionamento CONFIGURADO de cada conjunto — sem isso, um posicionamento já tirado
+    # seguia como alerta ativo enquanto houvesse gasto dele nos 7 dias da janela.
+    graph('7 · Meta conjuntos', 'adsets', [('fields', CAMPOS_CONJ), ('limit', '200')], 1440, 100)
+    add('8 · Supabase conjuntos', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{SB}/rest/v1/rpc/meta_ads_gravar_conjuntos',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ p_conjuntos: $json.data || [] }) }}",
+        'options': {'timeout': 20000}}, 1680, 100, credentials=sb_cred)
 
     ligacoes = [
         ('1 · A cada 15 min', 0, '2 · Meta insights'),
@@ -108,6 +119,8 @@ def build(ids):
         ('3 · Meta anúncios', 0, '4 · Supabase gravar'),
         ('4 · Supabase gravar', 0, '5 · Meta posicionamentos'),
         ('5 · Meta posicionamentos', 0, '6 · Supabase posicionamentos'),
+        ('6 · Supabase posicionamentos', 0, '7 · Meta conjuntos'),
+        ('7 · Meta conjuntos', 0, '8 · Supabase conjuntos'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}
