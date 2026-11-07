@@ -14,7 +14,7 @@
 #   python n8n/deploy_meta_referral.py criar        # cria e ATIVA o workflow (precisa estar no ar para a verificação da Meta)
 #   python n8n/deploy_meta_referral.py estrutura    # PUT do workflow inteiro, backup antes
 #   python n8n/deploy_meta_referral.py simular      # POST de um webhook falso com referral (telefone de teste) e mostra o retorno
-#   python n8n/deploy_meta_referral.py permissoes   # confere se o META_ACCESS_TOKEN_NIO (app NIOGEN) tem whatsapp_business_management
+#   python n8n/deploy_meta_referral.py permissoes   # confere se o META_TOKEN_NIOGEN_WABA (app NIOGEN) tem whatsapp_business_management
 #   python n8n/deploy_meta_referral.py inscrever    # inscreve o app NIOGEN na WABA Nio com override para este workflow
 #   python n8n/deploy_meta_referral.py conferir     # lista os apps inscritos na WABA (Renata Digital deve continuar lá)
 #   python n8n/deploy_meta_referral.py desinscrever # tira SÓ o app NIOGEN da WABA (o token é do NIOGEN) — volta ao estado de antes
@@ -45,7 +45,8 @@ CALLBACK = f'{dm.N8N}/webhook/{ROTA}'
 GRAPH = 'https://graph.facebook.com/v24.0'
 WABA = '1419511943295487'                  # WABA Nio "Revendedor Autorizado Nio"
 PHONE_ID_MARI = '1342993658907403'         # +55 31 2888-1265
-TOKEN_ENV = 'META_ACCESS_TOKEN_NIO'        # system user Nio_API no app NIOGEN (precisa de whatsapp_business_management)
+TOKEN_ENV = 'META_TOKEN_NIOGEN_WABA'       # 07/11: token do system user Nio_API no app NIOGEN com whatsapp_business_management
+TOKEN_ENV_ANTIGO = 'META_ACCESS_TOKEN_NIO' # o de anúncios — só se o novo não existir (ele não tem permissão de WhatsApp)
 APP_NIOGEN = '1443153697173022'
 
 EXTRAIR = r"""
@@ -190,9 +191,9 @@ def cmd_simular():
 
 
 def _meta(method, path, params=None):
-    tok = dm.env_usuario(TOKEN_ENV)
+    tok = dm.env_usuario(TOKEN_ENV) or dm.env_usuario(TOKEN_ENV_ANTIGO)
     if not tok:
-        raise SystemExit(f'{TOKEN_ENV} ausente.')
+        raise SystemExit(f'{TOKEN_ENV} ausente (variável de usuário do Windows).')
     url = f'{GRAPH}/{path}'
     data = None
     if method == 'GET' and params:
