@@ -51,13 +51,38 @@
     el.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
+  // Os nomes pelos quais um campo se apresenta. No portal real (conferido em 06/11 com o diagnóstico do Ricardo) o campo vem com
+  // placeholder=" " e o texto visível é um <label> IRMÃO logo depois do input (<input name="cep"> + <label>Endereço ou CEP</label>);
+  // só alguns têm placeholder de verdade ("Endereço de instalação"). Por isso: placeholder (se não for em branco), aria-label,
+  // <label> associado, irmão de texto imediato e o pai quando ele só tem aquele campo.
+  function nomesDoCampo(el) {
+    const out = new Set();
+    const add = (s) => { const n = normPh(s); if (n) out.add(n); };
+    const ph = el.getAttribute('placeholder');
+    if (ph && ph.trim()) add(ph);
+    add(el.getAttribute('aria-label'));
+    if (el.labels) for (const l of el.labels) add(l.textContent);
+    for (const irmao of [el.nextElementSibling, el.previousElementSibling]) {
+      if (irmao && !irmao.matches('input, textarea, select, button') && !irmao.querySelector('input, textarea, select, button')) {
+        const t = irmao.textContent;
+        if (t && t.length <= 60) add(t);
+      }
+    }
+    const pai = el.parentElement;
+    if (pai && pai.querySelectorAll('input, textarea').length === 1) {
+      const t = pai.textContent;
+      if (t && t.length <= 60) add(t);
+    }
+    return out;
+  }
+
   function acharCampo(placeholders) {
     const alvos = placeholders.map(normPh);
     const campos = document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), textarea');
     for (const el of campos) {
       if (!visivel(el)) continue;
-      const ph = normPh(el.getAttribute('placeholder') || el.getAttribute('aria-label') || '');
-      if (ph && alvos.includes(ph)) return el;
+      const nomes = nomesDoCampo(el);
+      if (alvos.some((a) => nomes.has(a))) return el;
     }
     return null;
   }
@@ -224,8 +249,8 @@
   }
   function detectarEtapa() {
     const phs = new Set();
-    for (const el of document.querySelectorAll('input:not([type="hidden"]), textarea')) {
-      if (visivel(el)) { const p = normPh(el.getAttribute('placeholder') || ''); if (p) phs.add(p); }
+    for (const el of document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), textarea')) {
+      if (visivel(el)) nomesDoCampo(el).forEach((n) => phs.add(n));
     }
     const textos = textosCurtos();
     const tem = (frag) => { for (const t of textos) if (t.includes(frag)) return true; return false; };
