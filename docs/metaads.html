@@ -170,7 +170,7 @@
             <tbody id="tbody-dias"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
           </table>
         </div>
-        <div class="rodape-lista"><span>Mari = conversas com origem "anúncio" (mensagem pronta "Vi o anúncio"); qualificada = passou para o time (handoff)</span><span>Por anúncio só depois da atribuição pelo ad_id</span></div>
+        <div class="rodape-lista"><span>Mari = conversas com origem "anúncio" (mensagem pronta "Vi o anúncio"); qualificada = passou para o time com dados completos</span><span>Por anúncio só depois da atribuição pelo ad_id</span></div>
       </section>
     </div>
 
@@ -312,7 +312,7 @@
         dica: 'Conversas no WhatsApp contadas pela Meta (janela de 7 dias do clique). A Mari conta as dela à parte, na tabela do dia a dia.' }),
       NG.kpi({ rot: 'Qualificadas pela Mari', val: `${NG.fmtNum(qualif)} <small>${pctTxt(qualif, convMari)}</small>`,
         nota: `${porConversa(gasto, qualif)} por qualificada · ${NG.fmtNum(convMari)} na Mari`,
-        dica: 'Conversa da Mari com origem "anúncio" que chegou ao handoff para o time.' }),
+        dica: 'Conversa da Mari com origem "anúncio" que passou para o time com os dados completos (handoff dados_completos — a Mari criou a venda em 0 · Qualificado). Desistência e já cliente Nio não contam.' }),
       NG.kpi({ rot: 'Vendas (biometria ok)', val: NG.fmtNum(vendasBio),
         nota: `${porConversa(gasto, vendasBio)} por venda · ${NG.fmtNum(vendas)} venda${vendas === 1 ? '' : 's'} no funil`,
         dica: 'Vendas com origem "anúncio" e biometria aprovada, pelo dia em que a venda foi criada. É este custo que decide.' }),
@@ -513,7 +513,8 @@
         || (c.venda_id && vendasPorId.get(c.venda_id)?.motivo_saida === 'Sem cobertura')).length;
       const comCep = conv.filter((c) => c.cep).length;
       const dentro = conv.filter((c) => c.cep && c.dentro_area === true).length;
-      const qualif = conv.filter((c) => c.handoff_em && c.handoff_motivo !== 'ja_cliente_nio').length;
+      // 07/11 (Ricardo): mesmo critério da tela Mari e do arquivo do Agente de Tráfego — só handoff com dados completos.
+      const qualif = conv.filter((c) => c.handoff_motivo === 'dados_completos').length;
       q = { total: conv.length, jaCliente, semCob, comCep, dentro, qualif, aprov: Math.max(0, conv.length - jaCliente - semCob) };
     }
 
