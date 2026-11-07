@@ -38,7 +38,7 @@
   .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
   .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
   .saude-cab .info { font-size: 11px; color: var(--muted); cursor: help; white-space: nowrap; }
-  .saude-grade { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; }
+  .saude-grade { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px 22px; }
   .saude-col { display: flex; flex-direction: column; gap: calc(12px + var(--f, 0px) / 10); min-width: 0; }
   .bloco { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); min-width: 0; }
   .bloco.cresce { flex: 1; }
@@ -47,7 +47,7 @@
   /* --f: folga extra conforme a altura da janela (0 em ~720 px; ~270 px numa tela de 990 px; teto 360 px) */
   .saude { --f: clamp(0px, calc(100vh - 700px), 380px); }
   .saude-col h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  #s-alertas { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); }
+  #s-alertas { display: flex; flex-direction: column; justify-content: flex-start !important; gap: calc(6px + var(--f, 0px) / 35); }
   .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(1px + var(--f, 0px) / 90) 10px; padding: calc(7px + var(--f, 0px) / 25) 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
   .al::before { content: ''; grid-row: 1 / span 3; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
   .al.bad { background: var(--bad-bg); border-color: var(--bad-border); } .al.bad::before { background: var(--bad-dot); }
@@ -65,13 +65,6 @@
   .gat .trilho i.warn { background: var(--warn-dot); } .gat .trilho i.bad { background: var(--bad-dot); }
   .gat small { grid-column: 2 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gat.sem-dado .nome, .gat.sem-dado .val { color: var(--muted); }
-  .funil-faixa { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(5px + var(--f, 0px) / 55); }
-  .fe { padding: calc(5px + var(--f, 0px) / 20) 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0;
-        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 6px; align-items: baseline; }
-  .fe .n { font-family: var(--mono); font-size: calc(15px + var(--f, 0px) / 40); font-weight: 600; }
-  .fe .t { font-size: 11px; color: var(--muted); font-family: var(--dm); text-align: right; }
-  .fe .r { grid-column: 1 / -1; font-size: 11px; color: var(--muted); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fe.zero .n { color: var(--bad-fg); }
   .posic { gap: calc(3px + var(--f, 0px) / 20); }
   .pl { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: calc(12px + var(--f, 0px) / 160); }
   .pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -80,7 +73,26 @@
   .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .5; }
   .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
   .pl .num b { color: var(--text); font-weight: 600; }
+  /* Funil visual (07/11): fita que afina etapa a etapa, uma cor por fase (rampa ordinal azul validada no fundo escuro:
+     #9ec5f4 Meta Ads · #3987e5 Mari · #184f95 Venda — dataviz/validate_palette --ordinal, tudo PASS). Texto sempre em tinta
+     de texto, nunca na cor da série. Espessura em escala log (impressões aos milhares, vendas às unidades). */
+  .funil-vis { gap: 6px; padding: calc(10px + var(--f, 0px) / 40) 16px; --f: clamp(0px, calc(100vh - 700px), 380px); }
+  .fv-cab { display: flex; align-items: center; gap: 8px; }
+  .fv-cab h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .fv-cab .info { font-size: 11px; color: var(--muted); cursor: help; }
+  .fv { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); column-gap: 0; row-gap: 3px; }
+  .fv-fase { font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+             padding: 0 8px 3px; border-bottom: 2px solid var(--fase); margin: 0 3px; }
+  .fv-et { padding: 4px 8px 0; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 6px; align-items: baseline; }
+  .fv-et b { font-family: var(--mono); font-size: calc(17px + var(--f, 0px) / 40); font-weight: 600; color: var(--text); }
+  .fv-et i { font-style: normal; font-family: var(--dm); font-size: 11px; color: var(--muted); text-align: right; }
+  .fv-et small { grid-column: 1 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fv-et.zero b { color: var(--bad-fg); }
+  .fv-fita { grid-column: 1 / -1; width: 100%; height: calc(30px + var(--f, 0px) / 10); display: block; }
+  .fv-fita polygon { transition: opacity .15s; } .fv-fita polygon:hover { opacity: .8; }
   @media (max-width: 900px) {
+    .fv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .fv-fase, .fv-fita { display: none; }
     .saude-grade { grid-template-columns: minmax(0, 1fr); }
     .cab-acoes #vistas { width: 100%; }
     .saude { min-height: 0 !important; }
@@ -105,19 +117,19 @@
 
     <div id="vista-desempenho" class="vista">
       <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
+      <section class="painel funil-vis" aria-labelledby="t-funil">
+        <div class="fv-cab"><h3 id="t-funil">Funil · anúncio → venda</h3>
+          <span class="info" title="Espessura da fita em escala logarítmica (de milhares de impressões a poucas vendas). O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
+        <div class="fv" id="fv" role="img" aria-label="Funil do anúncio à venda"></div>
+      </section>
       <section class="painel saude" aria-labelledby="t-saude" id="saude">
         <div class="saude-cab"><span class="semaforo" id="s-sinal" aria-hidden="true"></span><h2 id="t-saude">Saúde da campanha</h2>
           <span class="resumo" id="s-resumo">Carregando…</span>
           <span class="info" id="s-atualizado" title="Tudo aqui é leitura. Ações (pausar, tirar posicionamento, verba) o Claude Code/Cowork faz e avisa (CLAUDE.md regra 16). Rascunhos do Gerenciador não aparecem: a API da Meta não mostra.">ⓘ</span></div>
         <div class="saude-grade">
-          <div class="saude-col">
-            <div class="bloco"><h3>Precisam de ação agora</h3><div id="s-alertas"><div class="carregando">Carregando…</div></div></div>
-            <div class="bloco cresce"><h3>Para onde vai a verba · posicionamentos, 7 dias</h3><div class="posic lista-folga" id="s-posic"></div></div>
-          </div>
-          <div class="saude-col">
-            <div class="bloco cresce"><h3>Gatilhos do agente · quanto falta</h3><div class="lista-folga" id="s-gatilhos"></div></div>
-            <div class="bloco"><h3 id="t-funil">Funil · anúncio → venda</h3><div class="funil-faixa" id="s-funil"></div></div>
-          </div>
+          <div class="saude-col"><div class="bloco cresce"><h3>Precisam de ação agora</h3><div class="lista-folga" id="s-alertas"><div class="carregando">Carregando…</div></div></div></div>
+          <div class="saude-col"><div class="bloco cresce"><h3>Gatilhos do agente · quanto falta</h3><div class="lista-folga" id="s-gatilhos"></div></div></div>
+          <div class="saude-col"><div class="bloco cresce"><h3>Para onde vai a verba · posicionamentos, 7 dias</h3><div class="posic lista-folga" id="s-posic"></div></div></div>
         </div>
       </section>
       <section class="lista padrao" aria-labelledby="t-anuncios">
@@ -386,6 +398,29 @@
   }
   addEventListener('resize', esticarSaude);
 
+  // Funil visual: números em cima, fita embaixo (trapézios que afinam até a etapa seguinte, 2 px de vão entre eles).
+  const FASES = [{ nome: 'Meta Ads', de: 0, ate: 3, cor: '#9ec5f4' }, { nome: 'Mari', de: 3, ate: 7, cor: '#3987e5' },
+    { nome: 'Venda', de: 7, ate: 8, cor: '#184f95' }];
+  function desenharFunil(passos) {
+    const el = document.getElementById('fv');
+    const n = passos.length, W = 1000, H = 40, meio = H / 2;
+    const max = Math.max(1, ...passos.map(([, v]) => Number(v) || 0));
+    const alt = (v) => (v == null ? 2 : Math.max(2, (Math.log10(Number(v) + 1) / Math.log10(max + 1)) * (H - 2)));
+    const fase = (i) => FASES.find((f) => i >= f.de && i < f.ate);
+    const larg = W / n, vao = 2.5;
+    const fita = passos.map(([r, v, ant], i) => {
+      const h0 = alt(v), h1 = i < n - 1 ? alt(passos[i + 1][1]) : h0;
+      const x0 = i * larg + vao, x1 = (i + 1) * larg - vao;
+      const pts = [[x0, meio - h0 / 2], [x1, meio - h1 / 2], [x1, meio + h1 / 2], [x0, meio + h0 / 2]].map((q) => q.map((c) => c.toFixed(1)).join(',')).join(' ');
+      const pct = i === 0 || v == null || !ant ? '' : ` · ${pctFunil((v / ant) * 100)} % da etapa anterior`;
+      return `<polygon points="${pts}" fill="${fase(i).cor}"><title>${esc(fase(i).nome)} · ${esc(r)}: ${v == null ? '—' : NG.fmtNum(v)}${pct}</title></polygon>`;
+    }).join('');
+    el.innerHTML = FASES.map((f) => `<span class="fv-fase" style="grid-column:${f.de + 1} / ${f.ate + 1}; --fase:${f.cor}">${esc(f.nome)}</span>`).join('')
+      + passos.map(([r, v, ant], i) => `<div class="fv-et${v === 0 && i > 0 ? ' zero' : ''}" title="${esc(`${fase(i).nome} · ${r}`)}">
+          <b>${v == null ? '—' : NG.fmtNum(v)}</b><i>${i === 0 || v == null || !ant ? '' : `${pctFunil((v / ant) * 100)} %`}</i><small>${esc(r)}</small></div>`).join('')
+      + `<svg class="fv-fita" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="false">${fita}</svg>`;
+  }
+
   async function carregarSaude(p, dias, ads) {
     let qConv = NG.sb.from('mari_conversas').select('created_at, cep, dentro_area, elegibilidade, handoff_motivo, handoff_em, venda_id').eq('origem', 'meta_ads');
     if (p.de) qConv = qConv.gte('created_at', `${p.de}T00:00:00-03:00`);
@@ -548,9 +583,7 @@
     ];
     passos.forEach((ps, i) => { if (ps[2] === null && i > 0) ps[2] = passos[i - 1][1]; });
     document.getElementById('t-funil').textContent = `Funil · anúncio → venda · ${per.rotulo}`;
-    document.getElementById('s-funil').innerHTML = passos.map(([r, n, ant], i) => `<div class="fe${n === 0 && i > 0 ? ' zero' : ''}">
-      <span class="n">${n == null ? '—' : NG.fmtNum(n)}</span>
-      <span class="t">${i === 0 || n == null || !ant ? '' : `${pctFunil((n / ant) * 100)} %`}</span><span class="r" title="${esc(r)}">${esc(r)}</span></div>`).join('');
+    desenharFunil(passos);
 
     // ── posicionamentos (7 dias)
     const maxG = Math.max(1, ...pos.map((r) => Number(r.gasto)));
