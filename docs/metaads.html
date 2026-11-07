@@ -47,6 +47,9 @@
   /* --f: folga extra conforme a altura da janela (0 em ~720 px; ~270 px numa tela de 990 px; teto 360 px) */
   .saude { --f: clamp(0px, calc(100vh - 700px), 380px); }
   .saude-col h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  /* os cartões de alerta crescem até preencher a coluna (texto centralizado, pode quebrar linha) — sem vão embaixo */
+  #s-alertas > .al { flex: 1 1 0; max-height: 170px; align-content: center; }
+  #s-alertas > .al span { white-space: normal; }
   #s-alertas { display: flex; flex-direction: column; justify-content: flex-start !important; gap: calc(6px + var(--f, 0px) / 35); }
   .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(1px + var(--f, 0px) / 90) 10px; padding: calc(7px + var(--f, 0px) / 25) 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
   .al::before { content: ''; grid-row: 1 / span 3; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
@@ -88,7 +91,7 @@
   .fv-et i { font-style: normal; font-family: var(--dm); font-size: 11px; color: var(--muted); text-align: right; }
   .fv-et small { grid-column: 1 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fv-et.zero b { color: var(--bad-fg); }
-  .fv-fita { grid-column: 1 / -1; width: 100%; height: calc(30px + var(--f, 0px) / 10); display: block; }
+  .fv-fita { grid-column: 1 / -1; width: 100%; height: calc(34px + var(--f, 0px) / 10); display: block; margin-top: 2px; }
   .fv-fita polygon { transition: opacity .15s; } .fv-fita polygon:hover { opacity: .8; }
   @media (max-width: 900px) {
     .fv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -119,7 +122,7 @@
       <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
       <section class="painel funil-vis" aria-labelledby="t-funil">
         <div class="fv-cab"><h3 id="t-funil">Funil · anúncio → venda</h3>
-          <span class="info" title="Espessura da fita em escala logarítmica (de milhares de impressões a poucas vendas). O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
+          <span class="info" title="Espessura da fita em escala logarítmica suavizada (de milhares de impressões a poucas vendas): mostra a ordem, não a proporção exata — os números valem. O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
         <div class="fv" id="fv" role="img" aria-label="Funil do anúncio à venda"></div>
       </section>
       <section class="painel saude" aria-labelledby="t-saude" id="saude">
@@ -405,7 +408,8 @@
     const el = document.getElementById('fv');
     const n = passos.length, W = 1000, H = 40, meio = H / 2;
     const max = Math.max(1, ...passos.map(([, v]) => Number(v) || 0));
-    const alt = (v) => (v == null ? 2 : Math.max(2, (Math.log10(Number(v) + 1) / Math.log10(max + 1)) * (H - 2)));
+    // log suavizado (expoente 0,6): mantém a ordem e deixa o afunilamento visível nas etapas pequenas
+    const alt = (v) => (v == null || !Number(v) ? 2 : Math.max(3, Math.pow(Math.log10(Number(v) + 1) / Math.log10(max + 1), 0.6) * (H - 2)));
     const fase = (i) => FASES.find((f) => i >= f.de && i < f.ate);
     const larg = W / n, vao = 2.5;
     const fita = passos.map(([r, v, ant], i) => {
