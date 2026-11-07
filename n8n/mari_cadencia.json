@@ -1034,5 +1034,10 @@
     "saveManualExecutions": true,
     "timezone": "America/Sao_Paulo",
     "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false,
+  "staticData": {
+    "_cadenciaAtiva": false,
+    "_modoCadencia": "teste"
   }
 }
