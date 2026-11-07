@@ -28,50 +28,55 @@
   .vista { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
   .vista[hidden] { display: none; }
 
-  /* Saúde da campanha (07/11): bater o olho e saber o que está acontecendo, o que pede ação e o que está perto de pedir. */
-  .saude-cab { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .semaforo { width: 14px; height: 14px; border-radius: 50%; flex: 0 0 14px; background: var(--muted); box-shadow: 0 0 0 4px var(--surface-2); }
+  /* Saúde da campanha (07/11). Layout compacto (07/11 tarde, pedido do Ricardo): numa janela de ~700 px de altura o
+     cabeçalho + os 5 KPIs + a Saúde inteira cabem sem rolar. Duas colunas: alertas + posicionamentos | gatilhos + funil. */
+  .cab-acoes #vistas { margin: 0; }
+  .saude { gap: 10px; padding: 12px 14px; }
+  .saude-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .semaforo { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 12px; background: var(--muted); box-shadow: 0 0 0 3px var(--surface-2); }
   .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
-  .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
-  .saude-grade { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
-  .saude-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .saude-col h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
-  .al::before { content: ''; grid-row: 1 / span 2; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
+  .saude-cab h2 { font-size: 14px; } .saude-cab .resumo { font-size: 12px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
+  .saude-cab .info { font-size: 11px; color: var(--muted); cursor: help; white-space: nowrap; }
+  .saude-grade { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 18px; }
+  .saude-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .saude-col h3 { margin: 0; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .saude-col h3:not(:first-child) { margin-top: 6px; }
+  #s-alertas { display: flex; flex-direction: column; gap: 6px; }
+  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 1px 8px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
+  .al::before { content: ''; grid-row: 1 / span 3; width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
   .al.bad { background: var(--bad-bg); border-color: var(--bad-border); } .al.bad::before { background: var(--bad-dot); }
   .al.warn { background: var(--warn-bg); border-color: var(--warn-border); } .al.warn::before { background: var(--warn-dot); }
-  .al.dim { opacity: .75; }
-  .al b { font-size: 13px; font-weight: 600; } .al.bad b { color: var(--bad-fg); } .al.warn b { color: var(--warn-fg); }
-  .al span { font-size: 12px; color: var(--muted); grid-column: 2; }
+  .al.dim { opacity: .7; }
+  .al b { font-size: 12.5px; font-weight: 600; } .al.bad b { color: var(--bad-fg); } .al.warn b { color: var(--warn-fg); }
+  .al span { font-size: 11.5px; color: var(--muted); grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .al .prop { color: var(--text); }
-  .gat { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .gat { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
   .gat:last-child { border-bottom: 0; }
-  .gat .cod { font-family: var(--dm); font-size: 11px; color: var(--muted); }
-  .gat .nome { font-size: 13px; } .gat .val { font-family: var(--mono); font-size: 12px; text-align: right; }
-  .gat .trilho { grid-column: 2 / -1; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .gat .cod { font-family: var(--dm); font-size: 10.5px; color: var(--muted); }
+  .gat .nome { font-size: 12.5px; } .gat .val { font-family: var(--mono); font-size: 11.5px; text-align: right; }
+  .gat .trilho { grid-column: 2 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
   .gat .trilho i { display: block; height: 100%; background: var(--link); }
   .gat .trilho i.warn { background: var(--warn-dot); } .gat .trilho i.bad { background: var(--bad-dot); }
-  .gat small { grid-column: 2 / -1; font-size: 11px; color: var(--muted); }
+  .gat small { grid-column: 2 / -1; font-size: 10.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gat.sem-dado .nome, .gat.sem-dado .val { color: var(--muted); }
-  .funil-faixa { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; }
-  .fe { padding: 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0; }
-  .fe .n { font-family: var(--mono); font-size: 18px; font-weight: 600; display: block; }
-  .fe .r { font-size: 11px; color: var(--muted); display: block; line-height: 1.3; }
-  .fe .t { font-size: 11px; color: var(--muted); font-family: var(--dm); display: block; margin-top: 4px; }
+  .funil-faixa { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+  .fe { padding: 5px 8px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0;
+        display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 6px; align-items: baseline; }
+  .fe .n { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .fe .t { font-size: 10.5px; color: var(--muted); font-family: var(--dm); text-align: right; }
+  .fe .r { grid-column: 1 / -1; font-size: 10.5px; color: var(--muted); line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fe.zero .n { color: var(--bad-fg); }
-  .posic { display: flex; flex-direction: column; gap: 6px; }
-  .pl { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 210px; gap: 10px; align-items: center; font-size: 12px; }
-  .pl .num { white-space: nowrap; }
-  .pl .barra { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .posic { display: flex; flex-direction: column; gap: 3px; }
+  .pl { display: grid; grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 11.5px; }
+  .pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pl .barra { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
   .pl .barra i { display: block; height: 100%; background: var(--link); }
-  .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .55; }
-  .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); }
+  .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .5; }
+  .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
   .pl .num b { color: var(--text); font-weight: 600; }
-  .saude-rodape { font-size: 11px; color: var(--muted); display: flex; gap: 6px 16px; flex-wrap: wrap; }
   @media (max-width: 900px) {
     .saude-grade { grid-template-columns: minmax(0, 1fr); }
-    .funil-faixa { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .pl { grid-template-columns: minmax(0, 1fr) 110px; } .pl .barra { grid-column: 1 / -1; grid-row: 2; }
+    .cab-acoes #vistas { width: 100%; }
   }
 </style>
 </head>
@@ -85,26 +90,29 @@
         <div class="sub" id="sub">Carregando…</div>
       </div>
       <div class="cab-acoes">
+        <div id="vistas" aria-label="Vista"></div>
         <span id="f-periodo"></span>
         <button type="button" class="btn btn-acc acao-principal" id="ver-conjunto" hidden>Conjunto para o Gerenciador</button>
       </div>
     </header>
-    <div id="vistas" aria-label="Vista"></div>
 
     <div id="vista-desempenho" class="vista">
-      <section class="painel" aria-labelledby="t-saude" id="saude">
-        <div class="saude-cab"><span class="semaforo" id="s-sinal" aria-hidden="true"></span><h2 id="t-saude">Saúde da campanha</h2>
-          <span class="resumo" id="s-resumo">Carregando…</span></div>
-        <div class="saude-grade">
-          <div class="saude-col"><h3>Precisam de ação agora</h3><div id="s-alertas"><div class="carregando">Carregando…</div></div></div>
-          <div class="saude-col"><h3>Gatilhos do agente · quanto falta</h3><div id="s-gatilhos"></div></div>
-        </div>
-        <div class="saude-col"><h3 id="t-funil">Funil · anúncio → venda</h3><div class="funil-faixa" id="s-funil"></div></div>
-        <div class="saude-col"><h3>Para onde vai a verba · posicionamentos, últimos 7 dias</h3><div class="posic" id="s-posic"></div></div>
-        <div class="saude-rodape"><span>Tudo aqui é leitura: pausar, tirar posicionamento ou mudar verba é ordem do Ricardo.</span>
-          <span>Rascunhos do Gerenciador não aparecem (a API da Meta não mostra) — conferir lá.</span><span id="s-atualizado"></span></div>
-      </section>
       <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
+      <section class="painel saude" aria-labelledby="t-saude" id="saude">
+        <div class="saude-cab"><span class="semaforo" id="s-sinal" aria-hidden="true"></span><h2 id="t-saude">Saúde da campanha</h2>
+          <span class="resumo" id="s-resumo">Carregando…</span>
+          <span class="info" id="s-atualizado" title="Tudo aqui é leitura. Ações (pausar, tirar posicionamento, verba) o Claude Code/Cowork faz e avisa (CLAUDE.md regra 16). Rascunhos do Gerenciador não aparecem: a API da Meta não mostra.">ⓘ</span></div>
+        <div class="saude-grade">
+          <div class="saude-col">
+            <h3>Precisam de ação agora</h3><div id="s-alertas"><div class="carregando">Carregando…</div></div>
+            <h3>Para onde vai a verba · posicionamentos, 7 dias</h3><div class="posic" id="s-posic"></div>
+          </div>
+          <div class="saude-col">
+            <h3>Gatilhos do agente · quanto falta</h3><div id="s-gatilhos"></div>
+            <h3 id="t-funil">Funil · anúncio → venda</h3><div class="funil-faixa" id="s-funil"></div>
+          </div>
+        </div>
+      </section>
       <section class="lista padrao" aria-labelledby="t-anuncios">
         <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-anuncios" class="secao-tit">Campanhas e anúncios</h2></div>
         <div class="rolagem">
@@ -474,12 +482,12 @@
     const ordem = { bad: 0, warn: 1, dim: 2 };
     al.sort((a, b) => ordem[a.cls] - ordem[b.cls]);
     alvoA.innerHTML = (al.some((a) => a.cls !== 'dim') ? '' : '<div class="vazio-curto">Nada pendente agora ✓</div>')
-      + al.map((a) => `<div class="al ${a.cls}"><b>${esc(a.t)}</b><span>${esc(a.f)}</span><span class="prop">${esc(a.pr)}</span></div>`).join('');
+      + al.map((a) => `<div class="al ${a.cls}" title="${esc(`${a.t} — ${a.f} — ${a.pr}`)}"><b>${esc(a.t)}</b><span>${esc(a.f)}</span><span class="prop">${esc(a.pr)}</span></div>`).join('');
 
     // ── gatilhos (quanto falta)
     const corBarra = (f) => (f >= 1 ? 'bad' : f >= 0.7 ? 'warn' : '');
     const gat = (cod, nome, val, frac, nota, semDado, cor) => `<div class="gat${semDado ? ' sem-dado' : ''}"><span class="cod">${cod}</span><span class="nome">${esc(nome)}</span>
-      <span class="val">${val}</span>${semDado ? '' : `<span class="trilho"><i class="${cor ?? corBarra(frac)}" style="width:${barraPct(frac)}"></i></span>`}<small>${nota}</small></div>`;
+      <span class="val">${val}</span>${semDado ? '' : `<span class="trilho"><i class="${cor ?? corBarra(frac)}" style="width:${barraPct(frac)}"></i></span>`}<small title="${String(nota).replace(/"/g, '&quot;')}">${nota}</small></div>`;
     const ativosPos = pos.filter((r) => !parou(r) && r.conversas === 0);
     const piorPos = ativosPos.sort((a, b) => Number(b.fatia_gasto) - Number(a.fatia_gasto))[0];
     const fracPos = piorPos ? Math.min(Number(piorPos.fatia_gasto) / L.posic_fatia_min, Number(piorPos.gasto) / L.posic_gasto_min) : 0;
@@ -523,15 +531,15 @@
     passos.forEach((ps, i) => { if (ps[2] === null && i > 0) ps[2] = passos[i - 1][1]; });
     document.getElementById('t-funil').textContent = `Funil · anúncio → venda · ${per.rotulo}`;
     document.getElementById('s-funil').innerHTML = passos.map(([r, n, ant], i) => `<div class="fe${n === 0 && i > 0 ? ' zero' : ''}">
-      <span class="n">${n == null ? '—' : NG.fmtNum(n)}</span><span class="r">${esc(r)}</span>
-      <span class="t">${i === 0 || n == null || !ant ? '&nbsp;' : `${pctFunil((n / ant) * 100)} %`}</span></div>`).join('');
+      <span class="n">${n == null ? '—' : NG.fmtNum(n)}</span>
+      <span class="t">${i === 0 || n == null || !ant ? '' : `${pctFunil((n / ant) * 100)} %`}</span><span class="r" title="${esc(r)}">${esc(r)}</span></div>`).join('');
 
     // ── posicionamentos (7 dias)
     const maxG = Math.max(1, ...pos.map((r) => Number(r.gasto)));
     document.getElementById('s-posic').innerHTML = pos.length ? pos.filter((r) => Number(r.gasto) >= 0.5 || r.conversas > 0).map((r) => `<div class="pl${r.alerta && !parou(r) ? ' alerta-on' : ''}${parou(r) ? ' parado' : ''}">
         <span>${esc(nomePosic(r))}${parou(r) ? ` <small class="apagado">· ${esc(tirado(r) ? 'tirado' : 'sem verba')}</small>` : ''}</span>
         <span class="barra" title="${NG.fmtNum(Number(r.fatia_gasto) * 100)} % do gasto"><i style="width:${barraPct(Number(r.gasto) / maxG)}"></i></span>
-        <span class="num"><b>${NG.fmtMoeda(r.gasto)}</b> · ${NG.fmtNum(r.conversas)} conv${r.custo_conversa ? ` · ${NG.fmtMoeda(r.custo_conversa)}` : ''}</span></div>`).join('')
+        <span class="num"><b>${NG.fmtMoeda(r.gasto)}</b> · ${NG.fmtNum(r.conversas)} conv</span></div>`).join('')
       : '<div class="vazio-curto">Sem dados por posicionamento ainda — a coleta roda a cada 15 min.</div>';
 
     // ── semáforo + resumo
@@ -548,7 +556,7 @@
       emAnalise ? `${emAnalise} anúncio${emAnalise > 1 ? 's' : ''} em análise na Meta` : `${ativos} anúncio${ativos === 1 ? '' : 's'} no ar`,
     ].join(' · ');
     const ultP = pos.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
-    document.getElementById('s-atualizado').textContent = ultP ? `Posicionamentos atualizados ${NG.fmtDataHora(ultP)}` : '';
+    document.getElementById('s-atualizado').textContent = ultP ? `ⓘ atualizado ${NG.fmtDataHora(ultP)}` : 'ⓘ';
   }
 
   // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a vista abre) ─────────────
