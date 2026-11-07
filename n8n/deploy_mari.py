@@ -19,7 +19,7 @@
 #
 # Ensaio barato (07/11): o ensaio usa a credencial "Claude API Nio — Testes" (workspace "Testes Mari", chave na variável
 # de usuário ANTHROPIC_API_KEY_TESTES; "credenciais --ensaio" cria) e o modelo/corte de histórico do ALVOS['ensaio'].
-#   --modelo haiku|sonnet   (só com --ensaio) troca o modelo do ensaio — padrão haiku; sonnet = validação final do tom
+#   --modelo haiku|sonnet   (só com --ensaio) troca o modelo do ensaio — padrão sonnet; haiku só para o que não depende de tag
 #   --historico N           (só com --ensaio) corta o histórico enviado ao Claude nas últimas N mensagens (0 = sem corte)
 # A produção sai byte a byte igual: os trechos "// @ensaio-inicio … // @ensaio-fim" dos .js saem do código da produção.
 
@@ -62,9 +62,9 @@ ALVOS = {
     # Ensaio na v7 (prompts 26 + 27 unificados: carrossel/botões, sem promessa de cobertura nem prazo) desde 06/11 ~22h.
     'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v7.md', 'versao': 'mari_v7', 'id_key': 'ensaio_workflow_id',
                'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False,
-               # 07/11: baterias baratas — Haiku testa o MOTOR (CEP, travas, botões, handoff); o tom se valida com
-               # --modelo sonnet, 1 cenário. Chave de testes própria (limite no workspace "Testes Mari").
-               'modelo': 'claude-haiku-5-5', 'historico': 0, 'cred_claude': 'claude_testes'},
+               # 07/11: chave de testes própria (limite no workspace "Testes Mari"). Modelo padrão = Sonnet (OK do Ricardo):
+               # o Haiku 5.5 não emite as tags do prompt (busca da rua, planos) — "--modelo haiku" só para o que não depende de tag.
+               'modelo': 'claude-sonnet-5', 'historico': 0, 'cred_claude': 'claude_testes'},
 }
 MODELOS = {'haiku': 'claude-haiku-5-5', 'sonnet': 'claude-sonnet-5'}
 ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'

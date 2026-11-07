@@ -26,7 +26,7 @@ num arquivo por versão, e é embutido no nó **"5a · Conteúdo Mari"** pelo sc
   | | produção | ensaio |
   |---|---|---|
   | credencial do Claude (nós 6/6r) | `Claude API Nio` | `Claude API Nio — Testes` (workspace "Testes Mari", limite US$ 30/mês) |
-  | modelo | `claude-sonnet-5` | `claude-haiku-5-5` · `--modelo sonnet` para validar o tom |
+  | modelo | `claude-sonnet-5` | `claude-sonnet-5` (padrão desde 07/11 ~01h37, OK do Ricardo) · `--modelo haiku` só para o que não depende de tag |
   | corte de histórico | sem corte | sem corte · `--historico N` mantém as últimas N mensagens |
   | `uso` por fala na rota de teste | não | sim (input / cache write / cache read / output + corte medido) |
 
