@@ -16,6 +16,12 @@
 #   python n8n/deploy_mari.py estrutura             # PUT do workflow inteiro (nós + conexões), backup antes
 #   python n8n/deploy_mari.py ativar | desativar    # liga/desliga o mari_principal (nada mais)
 #   python n8n/deploy_mari.py exportar              # baixa o estado atual e grava o export sanitizado
+#
+# Ensaio barato (07/11): o ensaio usa a credencial "Claude API Nio — Testes" (workspace "Testes Mari", chave na variável
+# de usuário ANTHROPIC_API_KEY_TESTES; "credenciais --ensaio" cria) e o modelo/corte de histórico do ALVOS['ensaio'].
+#   --modelo haiku|sonnet   (só com --ensaio) troca o modelo do ensaio — padrão haiku; sonnet = validação final do tom
+#   --historico N           (só com --ensaio) corta o histórico enviado ao Claude nas últimas N mensagens (0 = sem corte)
+# A produção sai byte a byte igual: os trechos "// @ensaio-inicio … // @ensaio-fim" dos .js saem do código da produção.
 
 import datetime
 import json
@@ -46,15 +52,21 @@ ALVOS = {
     # v5 (prompt nº 18) em produção desde 05/11 ~17h10 (bateria do ensaio verde nas regras; OK do Ricardo: "Sim, publique").
     # v6 (prompt 19: o link da biometria é da própria Nio) em produção desde 05/11 ~22h20 (ensaio 8/8 verde nas regras).
     # v7 (prompts 26 + 27 unificados) em produção desde 06/11 ~23h (ensaio 8/8 + teste real no celular; OK do Ricardo: 'Sim, troque').
+    # Regra 15: modelo, corte de histórico e credencial do Claude são config por alvo (nada solto no código).
     'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v7.md', 'versao': 'mari_v7', 'id_key': 'workflow_id',
-                 'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
+                 'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True,
+                 'modelo': 'claude-sonnet-5', 'historico': 0, 'cred_claude': 'claude'},
     # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
     # Ensaio na v5 (prompt nº 18: formato, condições exatas, pagamento é da Nio, retomada) desde 05/11 16h50.
     # Ensaio na v6 (prompt 19: o link da biometria é da própria Nio) desde 05/11 22h00.
     # Ensaio na v7 (prompts 26 + 27 unificados: carrossel/botões, sem promessa de cobertura nem prazo) desde 06/11 ~22h.
     'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v7.md', 'versao': 'mari_v7', 'id_key': 'ensaio_workflow_id',
-               'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
+               'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False,
+               # 07/11: baterias baratas — Haiku testa o MOTOR (CEP, travas, botões, handoff); o tom se valida com
+               # --modelo sonnet, 1 cenário. Chave de testes própria (limite no workspace "Testes Mari").
+               'modelo': 'claude-haiku-5-5', 'historico': 0, 'cred_claude': 'claude_testes'},
 }
+MODELOS = {'haiku': 'claude-haiku-5-5', 'sonnet': 'claude-sonnet-5'}
 ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'
 _A = ALVOS[ALVO]
 WF_NOME = _A['nome']
@@ -64,6 +76,28 @@ PROMPT_FILE = os.path.join(REPO, 'mari', _A['prompt'])
 PROMPT_VERSAO = _A['versao']
 ROTA_TESTE = _A['rota']
 COM_CHATWOOT = _A['chatwoot']
+
+
+def _flag(nome):
+    if nome not in sys.argv:
+        return None
+    i = sys.argv.index(nome)
+    if i + 1 >= len(sys.argv):
+        raise SystemExit(f'{nome} sem valor')
+    if ALVO != 'ensaio':
+        raise SystemExit(f'{nome} só vale com --ensaio — a produção não muda por flag.')
+    return sys.argv[i + 1]
+
+
+_m = _flag('--modelo')
+if _m is not None and _m not in MODELOS:
+    raise SystemExit(f'--modelo {_m}: use um de {sorted(MODELOS)}')
+MODELO = MODELOS[_m] if _m else _A['modelo']
+_h = _flag('--historico')
+if _h is not None and not _h.isdigit():
+    raise SystemExit('--historico N: N inteiro >= 0')
+HISTORICO = int(_h) if _h is not None else _A['historico']
+CRED_CLAUDE_KEY = _A['cred_claude']
 
 
 def semente(s):
@@ -76,6 +110,8 @@ SB = 'https://zlrfwbkblytnokuexjti.supabase.co'      # Supabase Nio (não é o d
 
 CRED_SUPABASE = 'Supabase Nio (service role)'
 CRED_CLAUDE = 'Claude API Nio'
+CRED_CLAUDE_TESTES = 'Claude API Nio — Testes'       # só o ensaio; chave do workspace "Testes Mari"
+ENV_CLAUDE_TESTES = 'ANTHROPIC_API_KEY_TESTES'
 CRED_TESTE = 'MARI_TESTE_SECRET'
 CRED_WABA = 'WABA Nio (Nio_API)'                      # v7: header Authorization: Bearer (system user Nio_API) — token só no n8n
 CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token (conta "Nio Atendimento")
@@ -151,9 +187,20 @@ def ler_prompt():
     return texto
 
 
+ENSAIO_BLOCO = re.compile(r'^[ \t]*// @ensaio-inicio[^\n]*\n.*?^[ \t]*// @ensaio-fim[^\n]*\n', re.S | re.M)
+
+
 def js(arquivo):
     with open(os.path.join(JS_DIR, arquivo), encoding='utf-8') as f:
         code = f.read()
+    # Trechos só do ensaio (medição de tokens, corte de histórico): saem inteiros do código da produção.
+    if ALVO == 'producao':
+        code = ENSAIO_BLOCO.sub('', code)
+    if arquivo == 'n05b_motor.js':
+        code = code.replace('__MODELO__', f"'{MODELO}'")
+        code = code.replace('__HIST_MAX__', str(HISTORICO))
+    if re.search(r'__(MODELO|HIST_MAX)__|@ensaio-(inicio|fim)' if ALVO == 'producao' else r'__(MODELO|HIST_MAX)__', code):
+        raise SystemExit(f'{arquivo}: placeholder ou marcador de ensaio sobrando — abortado.')
     if arquivo == 'n05a_conteudo.js':
         code = code.replace('__PROMPT_MARI__', json.dumps(ler_prompt(), ensure_ascii=False))
         code = code.replace('__PROMPT_VERSAO__', json.dumps(PROMPT_VERSAO))
@@ -188,7 +235,11 @@ CODE = {
 def build(ids):
     cred = ids.get('credenciais', {})
     sb_cred = {'supabaseApi': {'id': cred.get('supabase', ''), 'name': CRED_SUPABASE}}
-    cl_cred = {'anthropicApi': {'id': cred.get('claude', ''), 'name': CRED_CLAUDE}}
+    if CRED_CLAUDE_KEY == 'claude_testes' and not cred.get('claude_testes'):
+        raise SystemExit('credencial "Claude API Nio — Testes" ausente em mari_ids.json — rode "credenciais --ensaio". '
+                         'O ensaio nunca cai na credencial da produção.')
+    cl_cred = {'anthropicApi': {'id': cred.get(CRED_CLAUDE_KEY, ''),
+                                'name': CRED_CLAUDE_TESTES if CRED_CLAUDE_KEY == 'claude_testes' else CRED_CLAUDE}}
     te_cred = {'httpHeaderAuth': {'id': cred.get('teste', ''), 'name': CRED_TESTE}}
     cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}
     wa_cred = {'httpHeaderAuth': {'id': cred.get('waba', ''), 'name': CRED_WABA}}
@@ -602,6 +653,23 @@ def put(wf_id, wf):
 def cmd_credenciais():
     ids = ler_ids()
     cred = ids.setdefault('credenciais', {})
+    if ALVO == 'ensaio':
+        # Só a credencial de testes do Claude. O valor vem da variável de usuário e vai direto para o n8n:
+        # nunca impresso, logado ou gravado em arquivo. Sem a variável, para — nunca reaproveita a da produção.
+        if cred.get('claude_testes'):
+            print(f'já existe: {CRED_CLAUDE_TESTES} ({cred["claude_testes"]}) — nada a fazer')
+            return
+        chave = env_usuario(ENV_CLAUDE_TESTES)
+        if not chave:
+            raise SystemExit(f'{ENV_CLAUDE_TESTES} ausente (variável de usuário do Windows) — nada foi criado. '
+                             'Grave a chave do workspace "Testes Mari" e rode de novo.')
+        r = api('POST', '/credentials', {'name': CRED_CLAUDE_TESTES, 'type': 'anthropicApi',
+                                         'data': {'apiKey': chave, 'url': 'https://api.anthropic.com'}})
+        del chave
+        cred['claude_testes'] = r['id']
+        gravar_ids(ids)
+        print(f'criada: {CRED_CLAUDE_TESTES} ({r["id"]}) — valor lido de {ENV_CLAUDE_TESTES}, não exibido')
+        return
     if not cred.get('supabase'):
         r = api('POST', '/credentials', {'name': CRED_SUPABASE, 'type': 'supabaseApi',
                                          'data': {'host': SB, 'serviceRole': 'COLE_AQUI'}})
@@ -648,6 +716,7 @@ def cmd_criar():
 def cmd_codigo(dry):
     ids = ler_ids()
     wf = achar_wf(ids)
+    print(f'alvo: {WF_NOME} · modelo {MODELO} · histórico {HISTORICO or "sem corte"}')
     mudou = []
     for n in wf['nodes']:
         arq = CODE.get(n.get('name'))
@@ -674,6 +743,7 @@ def cmd_codigo(dry):
 
 def cmd_estrutura():
     ids = ler_ids()
+    print(f'alvo: {WF_NOME} · modelo {MODELO} · histórico {HISTORICO or "sem corte"} · credencial {CRED_CLAUDE_KEY}')
     atual = achar_wf(ids)
     backup(atual)
     ativo = atual.get('active')

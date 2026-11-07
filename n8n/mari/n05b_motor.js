@@ -4,7 +4,7 @@
 // área/cluster, config_planos do cluster, DFV). Normaliza a alternância user/assistant.
 // O motor não tem texto de comportamento: só rótulos de estado e formatação dos planos.
 
-const MODEL = 'claude-sonnet-5';
+const MODEL = __MODELO__;
 const MAX_TOKENS = 1536;
 
 const db = $('4b · Supabase contexto').first().json;
@@ -300,6 +300,23 @@ for (const h of historico) {
 }
 push('user', cons.mensagem);
 while (msgs.length && msgs[0].role !== 'user') msgs.shift();
+// @ensaio-inicio — corte de histórico (07/11). Config por alvo no deploy_mari.py (--historico N); fora do código da produção.
+// Mantém as últimas N mensagens (começando por uma do cliente); endereço, dados e plano seguem no ESTADO_ATUAL do system.
+// Sem corte (N = 0) só MEDE quanto um corte em HIST_MEDIR tiraria — a bateria converte em tokens de input novo.
+const HIST_MAX = __HIST_MAX__;
+const HIST_MEDIR = 6;
+const corteHist = (() => {
+  const n = HIST_MAX > 0 ? HIST_MAX : HIST_MEDIR;
+  let ini = Math.max(0, msgs.length - n);
+  while (ini > 0 && ini < msgs.length - 1 && msgs[ini].role !== 'user') ini++;
+  const fora = msgs.slice(0, ini);
+  const chars = (l) => l.reduce((a, m) => a + String(m.content || '').length, 0);
+  const info = { n, aplicado: HIST_MAX > 0, msgsTotal: msgs.length, msgsFora: fora.length,
+    charsMsgs: chars(msgs), charsFora: chars(fora), charsDinamico: dinamico.length };
+  if (HIST_MAX > 0 && fora.length) msgs.splice(0, fora.length);
+  return info;
+})();
+// @ensaio-fim
 
 // v7 (prompt 26, spec §4): botão "Detalhes <plano>" → texto fixo do cartão, SEM chamar o Claude (o 5f leva direto ao 7).
 let textoFixo = null;
@@ -333,5 +350,8 @@ return [{ json: {
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
     emojiMari, emojiCliente,
+    // @ensaio-inicio
+    corteHist,
+    // @ensaio-fim
   },
 } }];

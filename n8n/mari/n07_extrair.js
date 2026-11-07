@@ -39,6 +39,21 @@ if (Array.isArray(resp.content)) {
 const usage = resp.usage || {};
 const tokensIn = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0) || null;
 const tokensOut = usage.output_tokens || null;
+// @ensaio-inicio — medição por chamada (07/11): usage separado; no 7r soma a 1ª chamada (6 · Claude). Só a rota de teste devolve.
+const usoDe = (u) => ({ input_tokens: u.input_tokens || 0, cache_creation_input_tokens: u.cache_creation_input_tokens || 0,
+  cache_read_input_tokens: u.cache_read_input_tokens || 0, output_tokens: u.output_tokens || 0 });
+const uso = usoDe(usage);
+uso.chamadas = 1;
+if (tentativa === 2) {
+  try {
+    const u1 = usoDe(($('6 · Claude').first().json || {}).usage || {});
+    for (const k of Object.keys(u1)) uso[k] += u1[k];
+    uso.chamadas = 2;
+  } catch (e) { /* sem a 1ª chamada: fica só a da correção */ }
+}
+uso.modelo = resp.model || motor.model;
+uso.corteHist = ctx.corteHist || null;
+// @ensaio-fim
 
 // ── 2. tags ──
 const tag = (n) => { const m = bruto.match(new RegExp(`\\[${n}\\s*:\\s*([^\\]]*)\\]`, 'i')); return m ? m[1].trim() : null; };
@@ -710,6 +725,9 @@ return [{ json: {
   emojiAjustes: emojiAjustes.length ? emojiAjustes : null,
   modelo: resp.model || motor.model,
   tokensIn, tokensOut,
+  // @ensaio-inicio
+  uso,
+  // @ensaio-fim
   latenciaMs: Date.now() - ctx.t0,
   turnoIds: ctx.turnoIds,
   promptVersao: ctx.promptVersao,

@@ -9,7 +9,11 @@
 #   (g) Nio ativa aqui → handoff humano; (h) "tinha Oi" → segue com a pista; (i) "Detalhes Fibra" → texto fixo;
 #   (j) cidade BTU → lista em texto, sem carrossel.
 # Segredo: MARI_TESTE_SECRET (variável de usuário; nunca impresso). Teardown: mari_limpar_teste('5500000003').
-# Uso: python tests/mari_v7_bateria.py [a c d e g h i j] [--sem-teardown]
+# Uso: python tests/mari_v7_bateria.py <cenários…> [--max N] [--sem-teardown]
+#   Sem cenário NÃO roda nada (só lista) — bateria custa API: 1–2 cenários, uma vez (regra de 07/11).
+#   --max N limita o número de conversas. A limpeza (mari_limpar_teste) roda sempre no fim, também em erro/Ctrl+C.
+# Medição (07/11): o ensaio devolve o usage separado por fala ("uso", só na rota de teste); no fim sai a tabela de
+# tokens por tipo, % de cache_read, custo estimado por modelo e por conversa, e a economia estimada do corte de histórico.
 import json
 import os
 import re
@@ -57,6 +61,23 @@ def falar(tel, texto, nome='Teste V7'):
         return json.loads(r.read().decode() or '{}')
 
 
+# US$ por milhão de tokens (skill claude-api, cache de 06/10/2026): entrada, gravação no cache (5 min = 1,25×),
+# leitura do cache, saída. Haiku 5.5: tabela de prompt ≤ 100 mil tokens (o da Mari tem ~25 mil).
+PRECOS = {
+    'claude-haiku-5-5': {'in': 0.10, 'cw': 0.125, 'cr': 0.01, 'out': 0.50},
+    'claude-sonnet-5': {'in': 2.00, 'cw': 2.50, 'cr': 0.20, 'out': 10.00},
+}
+TIPOS = ('input_tokens', 'cache_creation_input_tokens', 'cache_read_input_tokens', 'output_tokens')
+
+
+def custo(u, modelo):
+    p = PRECOS.get(modelo)
+    if not p:
+        return None
+    return (u.get('input_tokens', 0) * p['in'] + u.get('cache_creation_input_tokens', 0) * p['cw']
+            + u.get('cache_read_input_tokens', 0) * p['cr'] + u.get('output_tokens', 0) * p['out']) / 1e6
+
+
 GLOBAL = [
     (r'\b(atende|chega|tem cobertura|tem fibra)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa)', 'prometeu cobertura no endereço'),
     (r'\btem cobertura\b|boa noticia', 'falou "tem cobertura"/"boa notícia"'),
@@ -73,7 +94,8 @@ class Conversa:
         r = falar(self.tel, texto)
         resp = r.get('resposta') or ''
         it = r.get('interativo')
-        self.log.append({'lead': texto, 'mari': resp, 'interativo': it, 'handoff': r.get('handoff'), 'erro': r.get('erro'), 'tags': r.get('tags')})
+        self.log.append({'lead': texto, 'mari': resp, 'interativo': it, 'handoff': r.get('handoff'), 'erro': r.get('erro'), 'tags': r.get('tags'),
+                         'uso': r.get('uso'), 'modelo': r.get('modelo')})
         alvo = norm(resp + '\n' + ((it or {}).get('corpo') or ''))
         # Igual ao filtro do 7 · Extrair: pergunta ou condicional ("pra eu ver se chega aí?") não é promessa.
         afirm = ' '.join(f for f in re.split(r'(?<=[.?!\n])', alvo)
@@ -88,6 +110,27 @@ class Conversa:
         if r.get('erro'):
             self.falha(f'erro: {r.get("erro")}')
         return r
+
+    def totais(self):
+        t = {k: 0 for k in TIPOS}
+        t.update(chamadas=0, custo=0.0, falas=len(self.log), modelos=set(), econ_tokens=0.0)
+        for f in self.log:
+            u = f.get('uso') or {}
+            if not u:
+                continue
+            for k in TIPOS:
+                t[k] += u.get(k, 0)
+            t['chamadas'] += u.get('chamadas', 1)
+            m = u.get('modelo') or f.get('modelo')
+            t['modelos'].add(m)
+            t['custo'] += custo(u, m) or 0
+            ch = u.get('corteHist') or {}
+            base = (ch.get('charsMsgs') or 0) + (ch.get('charsDinamico') or 0)
+            if base and ch.get('charsFora') and not ch.get('aplicado'):
+                # tokens/char medido nesta chamada (input novo ÷ texto novo) × texto que o corte tiraria
+                por_char = u.get('input_tokens', 0) / max(u.get('chamadas', 1), 1) / base
+                t['econ_tokens'] += ch['charsFora'] * por_char * u.get('chamadas', 1)
+        return t
 
     def falha(self, msg):
         self.falhas.append(msg)
@@ -252,25 +295,67 @@ def cen_l(c):   # teste real 07/11 00h11: sem CEP o cliente pressiona por planos
 
 CENARIOS = {'m': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
+def relatorio(res):
+    print('\n── tokens e custo (estimativa pelos preços da tabela PRECOS) ──')
+    print(f"{'conv':<5}{'modelo':<18}{'falas':>6}{'cham':>6}{'input':>9}{'c.write':>9}{'c.read':>10}{'output':>8}{'%cache':>8}{'US$':>9}")
+    g = {k: 0 for k in TIPOS}
+    g.update(chamadas=0, custo=0.0, econ_tokens=0.0)
+    for k, c in res.items():
+        t = c.totais()
+        ent = t['input_tokens'] + t['cache_creation_input_tokens'] + t['cache_read_input_tokens']
+        pc = f"{100 * t['cache_read_input_tokens'] / ent:.0f}%" if ent else '-'
+        mods = ','.join(sorted(m or '?' for m in t['modelos'])) or '?'
+        print(f"{k:<5}{mods[:17]:<18}{t['falas']:>6}{t['chamadas']:>6}{t['input_tokens']:>9}{t['cache_creation_input_tokens']:>9}"
+              f"{t['cache_read_input_tokens']:>10}{t['output_tokens']:>8}{pc:>8}{t['custo']:>9.4f}")
+        for x in g:
+            g[x] += t[x] if x in t else 0
+    ent = g['input_tokens'] + g['cache_creation_input_tokens'] + g['cache_read_input_tokens']
+    if ent:
+        print(f"total: {g['chamadas']} chamadas · input {g['input_tokens']} · c.write {g['cache_creation_input_tokens']} · "
+              f"c.read {g['cache_read_input_tokens']} ({100 * g['cache_read_input_tokens'] / ent:.0f}% da entrada) · "
+              f"output {g['output_tokens']} · US$ {g['custo']:.4f} · por conversa US$ {g['custo'] / max(len(res), 1):.4f}")
+        if g['econ_tokens']:
+            print(f"corte de histórico (medido, não aplicado): ~{g['econ_tokens']:.0f} tokens de input novo a menos "
+                  f"({100 * g['econ_tokens'] / max(g['input_tokens'], 1):.0f}% do input novo)")
+    else:
+        print('sem "uso" nas respostas — o alvo não devolve a medição (só o ensaio devolve)')
+
+
 if __name__ == '__main__':
     if not SEGREDO:
         sys.exit('MARI_TESTE_SECRET ausente')
-    escolha = [a for a in sys.argv[1:] if a in CENARIOS] or list(CENARIOS)
-    sql(f"select public.mari_limpar_teste('{PREFIXO}')", escrita=True)
-    res = {}
-    for k in escolha:
-        n, f = CENARIOS[k]
-        c = Conversa(k, n)
+    escolha = [a for a in sys.argv[1:] if a in CENARIOS]
+    if not escolha:
+        sys.exit('nenhum cenário escolhido — nada rodou (bateria custa API).\n'
+                 f'cenários: {" ".join(sorted(CENARIOS))}  ·  ex.: python tests/mari_v7_bateria.py c k --max 2')
+    if '--max' in sys.argv:
+        i = sys.argv.index('--max')
         try:
-            f(c)
-        except Exception as e:
-            c.falha(f'exceção: {e}')
-        res[k] = c
-        print(f"({k}) {'VERDE' if not c.falhas else 'FALHOU'}" + ''.join(f'\n    - {x}' for x in c.falhas))
-    os.makedirs(os.path.join(REPO, 'tests', 'saida'), exist_ok=True)
-    with open(os.path.join(REPO, 'tests', 'saida', 'mari_v7_bateria.json'), 'w', encoding='utf-8') as fh:
-        json.dump({k: {'falhas': c.falhas, 'log': c.log} for k, c in res.items()}, fh, ensure_ascii=False, indent=1)
-    if '--sem-teardown' not in sys.argv:
+            escolha = escolha[:int(sys.argv[i + 1])]
+        except (IndexError, ValueError):
+            sys.exit('--max N: N inteiro')
+    print(f'cenários: {" ".join(escolha)}')
+    res = {}
+    try:
         sql(f"select public.mari_limpar_teste('{PREFIXO}')", escrita=True)
+        for k in escolha:
+            n, f = CENARIOS[k]
+            c = Conversa(k, n)
+            res[k] = c
+            try:
+                f(c)
+            except Exception as e:
+                c.falha(f'exceção: {e}')
+            print(f"({k}) {'VERDE' if not c.falhas else 'FALHOU'}" + ''.join(f'\n    - {x}' for x in c.falhas))
+    finally:
+        # Sempre: grava o que houve e limpa os telefones de teste, também em erro ou Ctrl+C.
+        os.makedirs(os.path.join(REPO, 'tests', 'saida'), exist_ok=True)
+        with open(os.path.join(REPO, 'tests', 'saida', 'mari_v7_bateria.json'), 'w', encoding='utf-8') as fh:
+            json.dump({k: {'falhas': c.falhas, 'totais': {**c.totais(), 'modelos': sorted(m or '?' for m in c.totais()['modelos'])},
+                           'log': c.log} for k, c in res.items()}, fh, ensure_ascii=False, indent=1)
+        if '--sem-teardown' not in sys.argv:
+            sql(f"select public.mari_limpar_teste('{PREFIXO}')", escrita=True)
+            print('teardown: mari_limpar_teste ok')
+    relatorio(res)
     verdes = sum(1 for c in res.values() if not c.falhas)
     print(f'{verdes}/{len(res)} verdes')

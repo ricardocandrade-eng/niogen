@@ -23,6 +23,9 @@ if (j.saida) {
     upd: r.upd || {},
     modelo: r.modelo,
     tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,
+    // @ensaio-inicio
+    uso: r.uso || null,   // 07/11: usage separado + corte de histórico medido (só no ensaio, rota de teste)
+    // @ensaio-fim
     corrigido: r.violacoesCorrigidas || null,
     erro: r.erro ? r.erro.mensagem : null,
     prompt: r.promptVersao || null,

@@ -21,6 +21,19 @@ num arquivo por versão, e é embutido no nó **"5a · Conteúdo Mari"** pelo sc
 
 - **Produção** = workflow `mari_principal` (modo chatwoot no 31 2888-1265). Prompt definido em `ALVOS['producao']` do `n8n/deploy_mari.py`.
 - **Ensaio** = workflow `mari_principal_v3` (hoje com a **v4**): mesmo motor, prompt novo, só a rota `/webhook/mari-teste-v3` (sem o webhook do Chatwoot — não recebe nem manda nada para número real). Todo comando do deploy aceita `--ensaio`.
+- **Ensaio barato (07/11)** — config por alvo no `ALVOS` (regra 15):
+
+  | | produção | ensaio |
+  |---|---|---|
+  | credencial do Claude (nós 6/6r) | `Claude API Nio` | `Claude API Nio — Testes` (workspace "Testes Mari", limite US$ 30/mês) |
+  | modelo | `claude-sonnet-5` | `claude-haiku-5-5` · `--modelo sonnet` para validar o tom |
+  | corte de histórico | sem corte | sem corte · `--historico N` mantém as últimas N mensagens |
+  | `uso` por fala na rota de teste | não | sim (input / cache write / cache read / output + corte medido) |
+
+  - A credencial de testes nasce com `python n8n/deploy_mari.py credenciais --ensaio`, lendo a variável de usuário `ANTHROPIC_API_KEY_TESTES` (nunca impressa). Sem a variável, ou sem o ID em `mari_ids.json`, o ensaio para — nunca cai na credencial da produção. Trocar a credencial/modelo no n8n: `estrutura --ensaio` (`codigo --ensaio` troca só o código).
+  - Os trechos `// @ensaio-inicio … // @ensaio-fim` dos `.js` saem inteiros do código da produção, e `__MODELO__`/`__HIST_MAX__` são preenchidos pelo deploy. Prova de que a produção não mudou: `python n8n/deploy_mari.py codigo --dry-run` → "nada a fazer".
+  - Bateria: `python tests/mari_v7_bateria.py <cenários> [--max N]` — sem cenário não roda; no fim, tokens por tipo, % de cache, custo por conversa e a economia estimada do corte; a limpeza roda sempre (`finally`).
+  - ⚠️ 07/11: o Haiku 5.5 **não emite as tags** do prompt (busca da rua, planos) — os cenários que dependem delas (c, k) falham no Haiku e passam no Sonnet. Haiku só serve para o que não depende de tag.
 - **Virar a produção para a v3** (só depois do OK do Ricardo): em `ALVOS['producao']` trocar `prompt_mari_v2.md`/`mari_v2` por `prompt_mari_v3.md`/`mari_v3` → `npx supabase db push --remote` (aplica a `0021`, eco por balão) → `python n8n/deploy_mari.py estrutura` (backup antes) → teste real com o celular do Ricardo (balões chegando separados, sem eco virando fala de consultor) → Diário.
 
 Placeholders preenchidos pelo nó **"5b · Motor"** a cada turno:
