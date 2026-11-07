@@ -60,7 +60,8 @@
   .fe .t { font-size: 11px; color: var(--muted); font-family: var(--dm); display: block; margin-top: 4px; }
   .fe.zero .n { color: var(--bad-fg); }
   .posic { display: flex; flex-direction: column; gap: 6px; }
-  .pl { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 150px; gap: 10px; align-items: center; font-size: 12px; }
+  .pl { display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) 210px; gap: 10px; align-items: center; font-size: 12px; }
+  .pl .num { white-space: nowrap; }
   .pl .barra { height: 10px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
   .pl .barra i { display: block; height: 100%; background: var(--link); }
   .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .55; }
@@ -464,8 +465,8 @@
         fase1 ? gastoTotal / L.campanha_gasto_avaliar : (cpcTotal != null ? cpcTotal / L.campanha_custo_conversa_max : 1),
         fase1 ? `cedo para julgar · hoje ${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} por conversa (bom ≤ ${NG.fmtMoeda(L.conversa_custo_meta)})` : `desde o início · ${NG.fmtNum(convTotal)} conversas`,
         false, fase1 ? '' : undefined),
-      q ? gat('R5', 'Conversas aproveitáveis', `${NG.fmtNum(q.aprov)} / ${NG.fmtNum(q.total)}`, q.total ? (q.total - q.aprov) / q.total : 0,
-        `${per.rotulo} · fora: já cliente Nio, sem cobertura`) : gat('R5', 'Conversas aproveitáveis', 'sem acesso', 0, 'só admin e backoffice leem as conversas da Mari', true),
+      q ? gat('R5', 'Conversas aproveitáveis', `${NG.fmtNum(q.aprov)} / ${NG.fmtNum(q.total)}`, q.total ? q.aprov / q.total : 0,
+        `${per.rotulo} · fora: já cliente Nio, sem cobertura`, false, q.total && q.aprov / q.total < 0.5 ? 'warn' : '') :gat('R5', 'Conversas aproveitáveis', 'sem acesso', 0, 'só admin e backoffice leem as conversas da Mari', true),
     ].join('');
 
     // ── funil do período
