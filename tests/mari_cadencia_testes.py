@@ -354,10 +354,85 @@ def t15():
           f"antes: {v0['biometria_status']} · pedido: {v1['biometria_status']} conta={v1['biometria_link_enviado_em'] == v1['nio_pedido_em']} · "
           f"link depois: {r1} · 2º link: {r2} · contagem intacta={v3['biometria_link_enviado_em'] == v1['biometria_link_enviado_em']}")
 
+# ───────────── prompt 28 (0050 + 0052): F2 no mesmo dia, venda, interesse futuro, eco ─────────────
+
+def t16():
+    # Mari falou qua 14h → F1 15h (registrado) → F2 ~4 h depois da última fala da Mari (18h), no MESMO dia;
+    # depois do F2 o teto do dia (2 toques) segura qualquer outra coisa até amanhã.
+    sql(conv(19, ultima_msg_lead_at="'2026-11-11 14:00-03'", etapa="'elegibilidade'") + turno(19, 'mari', '2026-11-11 14:00-03', 'Qual operadora?')
+        + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 14:00-03' where id = '" + uid(19) + "';")
+    a1 = um(sql(avaliar(19, '2026-11-11 15:01-03')))
+    sql(f"select public.mari_cadencia_registrar('{uid(19)}', 'F1', true, null, '2026-11-11 15:01-03', $${a1 and a1['texto']}$$, null)")
+    a2a = um(sql(avaliar(19, '2026-11-11 17:50-03')))
+    a2 = um(sql(avaliar(19, '2026-11-11 18:00-03')))
+    ok_f2 = (a1 and a1['proximo_passo'] == 'F1' and a1['pode_enviar'] and 'operadora' in norm(a1['texto'])
+             and a2a and not a2a['pode_enviar'] and a2 and a2['proximo_passo'] == 'F2' and a2['pode_enviar'])
+    if ok_f2:
+        sql(f"select public.mari_cadencia_registrar('{uid(19)}', 'F2', true, null, '2026-11-11 18:00-03', $${a2['texto']}$$, null)")
+    a3 = um(sql(avaliar(19, '2026-11-11 20:30-03')))
+    ok = bool(ok_f2) and a3 and not a3['pode_enviar'] and a3['proximo_passo'] == 'D3' and int(a3['toques_hoje']) == 2
+    checa('16 · F1 em 1 h e F2 ~4 h depois da Mari, no mesmo dia; 2 toques/dia seguram o resto', bool(ok),
+          f"15h01: {a1 and a1['proximo_passo']} «{a1 and a1['texto']}» · 17h50: pode={a2a and a2a['pode_enviar']} · "
+          f"18h: {a2 and a2['proximo_passo']} pode={a2 and a2['pode_enviar']} «{a2 and a2['texto']}» · "
+          f"20h30: {a3 and a3['proximo_passo']} em {sp(a3 and a3['proximo_em'])}, toques hoje={a3 and a3['toques_hoje']}")
+
+
+def t17():
+    # venda em Saída (Sem cobertura): nada · venda criada (0 · Qualificado) com a conversa ativa: F1 sim, D3 nunca
+    sql(venda_teste(20, status="'saida'", motivo_saida="'Sem cobertura'")
+        + conv(20, ultima_msg_lead_at="'2026-11-11 14:00-03'", venda_id=f"'{uid(120)}'", etapa="'retomada'")
+        + turno(20, 'mari', '2026-11-11 14:00-03', 'x')
+        + venda_teste(21) + conv(21, ultima_msg_lead_at="'2026-11-11 14:00-03'", venda_id=f"'{uid(121)}'", etapa="'retomada'")
+        + turno(21, 'mari', '2026-11-11 14:00-03', 'x')
+        + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 14:00-03' where id in ('" + uid(20) + "','" + uid(21) + "');")
+    s = um(sql(avaliar(20, '2026-11-11 15:01-03')))
+    f1 = um(sql(avaliar(21, '2026-11-11 15:01-03')))
+    d3 = um(sql(avaliar(21, '2026-11-14 10:30-03')))
+    ok = s is None and f1 and f1['proximo_passo'] == 'F1' and f1['pode_enviar'] and d3 and not d3['pode_enviar'] \
+        and 'venda criada' in (d3['bloqueio'] or '')
+    checa('17 · venda em Saída → nada; venda criada → só F1/F2 (D3/D7/D15 e encerrar nunca)', bool(ok),
+          f"Saída: {'fora da cadência' if s is None else s['proximo_passo']} · venda criada 15h01: {f1 and f1['proximo_passo']} "
+          f"pode={f1 and f1['pode_enviar']} · D3: {d3 and d3['proximo_passo']} ({d3 and d3['bloqueio']})")
+
+
+def t18():
+    # Interesse futuro: telefone de teste nunca entra na lista do Chatwoot; mari_futuro_marcar grava a data e o evento
+    sql(venda_teste(22, status="'saida'", motivo_saida="'Interesse futuro (com data)'", interesse_futuro_em="'2026-12-10'")
+        + conv(22, canal="'whatsapp'", chatwoot_conversation_id="'999922'", venda_id=f"'{uid(122)}'", status="'encerrado_humano'"))
+    lista = sql("select r from public.mari_futuro_pendentes(20) r")
+    fora = not any((x['r'] or {}).get('conversa_id') == uid(22) for x in lista)
+    m = sql(f"select public.mari_futuro_marcar('{uid(22)}', '2026-12-10') as r")[0]['r']
+    c = sql(f"select etiqueta_futuro_para as p, etiqueta_futuro_em is not null as em from public.mari_conversas where id = '{uid(22)}'")[0]
+    ev = sql(f"select count(*) as n from public.eventos_venda where venda_id = '{uid(122)}' and tipo = 'chatwoot_etiqueta'")[0]['n']
+    ok = fora and m.get('ok') and str(c['p']) == '2026-12-10' and c['em'] and int(ev) == 1
+    checa('18 · interesse futuro: teste fora da lista do Chatwoot; marcar grava a data e o evento da venda', bool(ok),
+          f"fora da lista={fora} ({len(lista)} reais na lista) · marcar={m} · conversa={c} · eventos={ev}")
+
+
+def t19():
+    # Eco: o turno 'humano' com o texto da cadência (eco que chegou antes do registro) some no registrar
+    sql(conv(23, canal="'whatsapp'", ultima_msg_lead_at="'2026-11-11 14:00-03'") + turno(23, 'mari', '2026-11-11 14:00-03', 'x')
+        + turno(23, 'humano', '2026-11-11 15:01:02-03', 'Texto da cadencia teste')
+        + turno(23, 'humano', '2026-11-11 15:01:03-03', 'Fala real do consultor'))
+    r = sql(f"select public.mari_cadencia_registrar('{uid(23)}', 'F1', true, null, '2026-11-11 15:01-03', 'Texto da cadencia teste', null) as r")[0]['r']
+    h = sql(f"select texto from public.mari_turnos where conversa_id = '{uid(23)}' and papel = 'humano'")
+    ok = r.get('eco_removido') == 1 and [x['texto'] for x in h] == ['Fala real do consultor']
+    checa('19 · eco do envio que virou turno humano é apagado; fala real do consultor fica', bool(ok),
+          f"eco_removido={r.get('eco_removido')} · humanos que ficaram={[x['texto'] for x in h]}")
+
+
+def limpar_wa():
+    """t18/t19 usam canal 'whatsapp' com telefone de teste (o mari_limpar_teste só apaga canal 'teste')."""
+    return sql(f"""with alvo as (select id from public.mari_conversas where canal = 'whatsapp' and telefone like '{PREFIXO}9%'),
+        v as (delete from public.vendas where origem_ref in (select 'mari:' || id from alvo) returning 1),
+        c as (delete from public.mari_conversas where id in (select id from alvo) returning 1)
+        select (select count(*) from v) as vendas, (select count(*) from c) as conversas""")[0]
+
+
 if __name__ == '__main__':
-    print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
+    print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'], limpar_wa())
     try:
-        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14, t15):
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14, t15, t16, t17, t18, t19):
             try:
                 t()
             except Exception as e:
@@ -368,7 +443,7 @@ if __name__ == '__main__':
         if '--sem-teardown' in sys.argv:
             print("⚠️  --sem-teardown: as fixtures (datas futuras) ficaram no banco — limpe com mari_limpar_teste('55000000009')")
         else:
-            print('teardown final:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'])
+            print('teardown final:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'], limpar_wa())
             sobra = sql(f"""select
                 (select count(*) from public.mari_conversas where telefone like '{PREFIXO}9%') as conversas,
                 (select count(*) from public.contatos_cliente where telefone like '{PREFIXO}9%') as toques,
