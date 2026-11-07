@@ -228,6 +228,8 @@ def cmd_inscrever():
     cmd_permissoes()
     achar_wf(dm.ler_ids())
     print('antes:'); cmd_conferir()
+    # A Meta só aceita o override depois da inscrição simples (erro #100 em 07/11): 1º inscreve, 2º aponta o callback.
+    print('inscrição simples:', _meta('POST', f'{WABA}/subscribed_apps'))
     # O verify_token só serve para a Meta conferir o GET; o workflow devolve o challenge a qualquer GET de inscrição.
     r = _meta('POST', f'{WABA}/subscribed_apps', {'override_callback_uri': CALLBACK, 'verify_token': secrets.token_urlsafe(24)})
     print('inscrição:', r)
