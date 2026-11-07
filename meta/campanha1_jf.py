@@ -9,6 +9,8 @@ Modos:
   python meta/campanha1_jf.py --dry-run              mostra o que faria (sem token: só o plano; com token: + o que já existe)
   python meta/campanha1_jf.py --descobrir            só leitura: conta, páginas promovíveis, WhatsApp da página, o que já existe
   python meta/campanha1_jf.py --page-id <ID>         cria o que falta (imagens, campanha, 2 conjuntos, 4 criativos, 8 anúncios)
+  python meta/campanha1_jf.py --posicionamentos [--dry-run]   só troca os posicionamentos dos 2 conjuntos (07/11: sem
+                                                     Status do WhatsApp e sem Audience Network); status não muda
 
 Token: META_ACCESS_TOKEN_NIO (variável de ambiente, variável de usuário do Windows ou .env da raiz do clone — fora do git).
 O token nunca é impresso, gravado ou logado. Nada é ativado por este script: status é sempre PAUSED.
@@ -86,6 +88,16 @@ REGRA_VERTICAL = {
     'instagram_positions': ['story', 'reels', 'profile_reels', 'reels_overlay'],
     'messenger_positions': ['story'],
     'whatsapp_positions': ['status'],
+}
+# 07/11/2026 (ordem do Ricardo): posicionamentos MANUAIS, sem Status do WhatsApp e sem Audience Network.
+# Medido de 06/11 10h59 a 07/11: Status do WhatsApp levou R$ 41,76 de R$ 89,21 (47 %), CTR 0,28 %, 0 conversas;
+# Audience Network R$ 2,54, 0 conversas. As 2 conversas vieram do feed do Instagram. O resto fica como estava.
+POSICIONAMENTOS = {
+    'publisher_platforms': ['facebook', 'instagram'],
+    'facebook_positions': ['feed', 'instream_video', 'marketplace', 'story', 'search',
+                           'facebook_reels', 'facebook_reels_overlay', 'profile_feed', 'notification'],
+    'instagram_positions': ['stream', 'story', 'reels', 'explore_home', 'profile_feed'],
+    'device_platforms': ['mobile', 'desktop'],
 }
 TAMANHO = {'1x1': (1080, 1080), '9x16': (1080, 1920)}
 SUFIXO = '_v4'                         # sufixo do criativo (CR_<anúncio>_v4) e do anúncio (<anúncio>_v4)
@@ -236,8 +248,36 @@ def payload_conjunto(cj, campanha_id, page_id, raio, com_wpp):
                                                     'radius': raio, 'distance_unit': 'kilometer'}]},
             'age_min': 25, 'age_max': 65,
             'targeting_automation': {'advantage_audience': 0},   # idade 25–65 é limite, não sugestão
+            **copy.deepcopy(POSICIONAMENTOS),
         },
     }
+
+
+def aplicar_posicionamentos(dry_run):
+    """Troca SÓ os posicionamentos dos conjuntos que já existem (público, raio, idade e status ficam como estão)."""
+    camp = por_nome(listar(f'{CONTA}/campaigns', 'id,name,status,effective_status'), CAMPANHA['name'])
+    if not camp:
+        raise SystemExit(f'Campanha {CAMPANHA["name"]} não existe. Nada feito.')
+    lixo = ('page_types', 'dt_consolidation_state')
+    for s in listar(f'{camp["id"]}/adsets', 'id,name,status,effective_status,targeting'):
+        if s['name'] not in {c['name'] for c in CONJUNTOS}:
+            continue
+        t = {k: v for k, v in s.get('targeting', {}).items()
+             if not k.startswith('effective_') and k not in lixo and not k.endswith('_positions')
+             and k not in ('publisher_platforms', 'device_platforms')}
+        t.update(copy.deepcopy(POSICIONAMENTOS))
+        antes = s.get('targeting', {}).get('publisher_platforms', 'automático')
+        print(f'  {s["name"]} {s["id"]} ({s["status"]}): {antes} → {t["publisher_platforms"]}')
+        if dry_run:
+            continue
+        api('POST', s['id'], {'targeting': t})
+        r = api('GET', s['id'], {'fields': 'status,effective_status,targeting'})['targeting']
+        ok = r.get('publisher_platforms') == POSICIONAMENTOS['publisher_platforms'] and \
+            'whatsapp_positions' not in r and 'audience_network_positions' not in r
+        print(f'    conferido: {r.get("publisher_platforms")} · fb {r.get("facebook_positions")} · '
+              f'ig {r.get("instagram_positions")} · {"OK" if ok else "DIVERGENTE"}')
+        if not ok:
+            raise SystemExit('Posicionamento não ficou como o esperado. Parado.')
 
 
 REGRA_FEEDS_1X1 = {   # só no layout 3 (prova de 05/11: posições explícitas casam com os feeds); o fallback vem depois
@@ -499,6 +539,8 @@ def main():
     ap.add_argument('--layout', type=int, choices=(2, 3), default=2,
                     help='2 = vertical + fallback (prompt 25); 3 = vertical + feeds explícitos + fallback')
     ap.add_argument('--offline', action='store_true', help='plano sem consultar a Meta (ignora o token)')
+    ap.add_argument('--posicionamentos', action='store_true',
+                    help='só troca os posicionamentos dos 2 conjuntos existentes (POSICIONAMENTOS); com --dry-run só mostra')
     a = ap.parse_args()
 
     checar_textos()
@@ -514,6 +556,9 @@ def main():
         raise SystemExit(f'Conta {CONTA} não está em BRL ({conta.get("currency")}). Parado.')
     print(f'Graph {versao} · conta {CONTA} ok.')
 
+    if a.posicionamentos:
+        aplicar_posicionamentos(a.dry_run)
+        return
     if a.descobrir:
         descobrir(conta)
     if a.descobrir or (a.dry_run and not a.page_id):
