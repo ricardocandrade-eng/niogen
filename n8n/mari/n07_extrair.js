@@ -17,6 +17,16 @@ const resp = $input.first().json || {};
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+// v7 (prompt 26, spec §4): "Detalhes <plano>" — texto fixo do cartão, sem Claude e sem filtro (texto aprovado pelo Ricardo).
+if (resp.fixo && resp.fixo.texto) {
+  const tf = String(resp.fixo.texto);
+  return [{ json: {
+    corrigir: false, conversaId: ctx.conversaId, texto: tf, tags: { detalhes: resp.fixo.plano }, upd: {}, handoff: null, erro: null,
+    baloes: [tf], interativo: null, emojiAjustes: null, modelo: 'texto_fixo', tokensIn: null, tokensOut: null,
+    latenciaMs: Date.now() - ctx.t0, turnoIds: ctx.turnoIds, promptVersao: ctx.promptVersao, violacoes: null, violacoesCorrigidas: null,
+  } }];
+}
+
 // ── 1. texto (guard de thinking) ──
 let bruto = '';
 let erroApi = null;
@@ -66,12 +76,16 @@ const tags = {
   sinal_urgencia: tag('SINAL_URGENCIA'),
   agendamento_retorno: tag('AGENDAMENTO_RETORNO'),
   avaliacao: tag('AVALIACAO'),
+  // v7: carrossel e botões (o n8n monta a mensagem interativa) e a pista de Nio/Oi (prompt 27 A10)
+  carrossel: temTag('CARROSSEL_PLANOS') || null,
+  botoes: tag('BOTOES'),
+  pista_nio: tag('PISTA_NIO'),
   handoff: handoffYaml,
 };
 Object.keys(tags).forEach((k) => { if (tags[k] === null) delete tags[k]; });
 
 // ── 3. limpeza ──
-const NOMES_TAG = 'CIDADE_DETECTADA|ENDERECO|ELEGIBILIDADE|SEGMENTO|PLANO_ESCOLHIDO|UPSELL_OFERECIDO|DADOS_COLETADOS|SINAL_URGENCIA|AGENDAMENTO_RETORNO|AVALIACAO';
+const NOMES_TAG = 'CIDADE_DETECTADA|ENDERECO|ELEGIBILIDADE|SEGMENTO|PLANO_ESCOLHIDO|UPSELL_OFERECIDO|DADOS_COLETADOS|SINAL_URGENCIA|AGENDAMENTO_RETORNO|AVALIACAO|CARROSSEL_PLANOS|BOTOES|PISTA_NIO';
 let texto = bruto
   .replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '')
   .replace(new RegExp(`\\[(?:${NOMES_TAG})(?:\\s*:[^\\]]*)?\\]`, 'gi'), '')
@@ -124,6 +138,21 @@ const VER = Number((String(ctx.promptVersao || '').match(/mari_v(\d+)/) || [])[1
 const V3 = VER >= 3;
 const V4 = VER >= 4;   // venda remota (05/11): instalação no lugar da visita, viabilidade oficial
 const V6 = VER >= 6;   // prompt 19 (05/11): o link da biometria é disparado pela própria Nio (WhatsApp + e-mail)
+const V7 = VER >= 7;   // prompts 26 + 27 (06/11): carrossel/botões; sem promessa de cobertura nem de prazo
+// v7 (prompt 27 A1): quem decide a viabilidade é o PORTAL — antes dele, nenhuma promessa de cobertura no endereço.
+// Liberado: "A Nio atende [cidade]" (a cidade) e "a disponibilidade exata na sua rua o nosso time confirma…".
+function prometeCobertura(n) {
+  if (((ctx.conversa || {}).nio_viab_resultado) === 'viavel') return false;   // portal já disse viável (nível A)
+  return n.split(/[.?!\n]+/).some((f) =>
+    /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa|no seu predio|no seu bairro)/.test(f)
+    || /\btem cobertura\b|\bcobertura (no|na|pro|pra) (seu|sua)\b|(seu endereco|sua rua|sua casa) (e|esta|ta|fica) (atendid|coberto|coberta)/.test(f)
+    || (/\bboa noticia\b/.test(f) && /atende|cobertura|chega|disponivel/.test(f)));
+}
+// v7 (prompt 27 A8): prazo para abrir o pedido ou instalar não existe — "em até N horas/minutos", "hoje ainda".
+function prometePrazo(n) {
+  return n.split(/[.?!\n]+/).some((f) => /\b(pedido|instala|abr[ei]r|abert[oa]|ativa)/.test(f)
+    && /\bem ate \d+\s*(h\b|hora|horas|min|minuto|minutos)|\bhoje ainda\b|\bainda hoje\b|\bate amanha\b|\bamanha mesmo\b/.test(f));
+}
 // v6: frase em que a Mari (ou "o nosso time") promete mandar o link. Liberado: "a própria Nio te manda o link" e negações.
 function mandaLinkNosso(n) {
   return n.split(/[.?!\n]+/).some((f) => /\b(mand|envi|encaminh)\w*\b.{0,50}\blink\b/.test(f)
@@ -169,6 +198,8 @@ function violacoesDe(t) {
       v.push('escreveu as condições com as próprias palavras — use a marca [CONDICOES] sozinha num balão (o sistema põe o texto exato)');
     }
   }
+  if (V7 && prometeCobertura(n)) v.push('prometeu cobertura no endereço ("a Nio atende aí", "tem cobertura", "chega na sua rua"): proibido antes do portal — diga "A Nio atende [cidade] 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido."');
+  if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   if (t.includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {
     v.push('deixou um campo entre colchetes sem preencher (placeholder)');
@@ -210,7 +241,9 @@ const SELO_OK = '\u0001OK\u0001', SELO_AL = '\u0001AL\u0001';
 if (V4) {
   baloes = baloes.map((b) => b
     .replace(/(atende o seu endere[cç]o!?)[ \t]*✅️?/gi, (m, f) => `${f} ${SELO_OK}`)
-    .replace(/(atende (?:a[ií] em [^\n.!🎯]{2,40}?|a sua cidade)[.!]?)[ \t]*🎯/gi, (m, f) => `${f.trimEnd()} ${SELO_AL}`));
+    .replace(/(atende (?:a[ií] em [^\n.!🎯]{2,40}?|a sua cidade)[.!]?)[ \t]*🎯/gi, (m, f) => `${f.trimEnd()} ${SELO_AL}`)
+    // v7 (A1): "A Nio atende Juiz de Fora 🎯" — a fala liberada da cidade
+    .replace(/(a nio atende [^\n.!🎯]{2,40}?[.!]?)[ \t]*🎯/gi, (m, f) => `${f.trimEnd()} ${SELO_AL}`));
 }
 if (V3) {
   const limpa = (s) => s.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/^[ \t]+/gm, '').trim();
@@ -272,8 +305,18 @@ if (visita && visita !== '—' && !/^null$/i.test(visita)) upd.visita_preferenci
 const inst = d.instalacao || hy.instalacao_preferencia;
 if (inst && inst !== '—' && !/^null$/i.test(inst)) upd.instalacao_preferencia = inst;           // v4+
 
+// v7 (prompt 27): ponto de referência (o portal exige), operadora atual (A10) e a rua confirmada (A2).
+if (V7) {
+  const ref = d.referencia || hy.referencia || (tags.endereco ? kv(tags.endereco).referencia : null);
+  if (ref && ref !== '—' && !/^null$/i.test(ref)) dados.referencia = ref;
+  const op = d.operadora || d.operadora_atual || hy.operadora_atual;
+  if (op && op !== '—' && !/^null$/i.test(op)) dados.operadora_atual = op;
+  if (tags.pista_nio) dados.pista_nio = tags.pista_nio;
+}
 if (tags.endereco) {
   const e = kv(tags.endereco);
+  if (V7 && e.rua_confirmada) { dados.rua_confirmada = e.rua_confirmada; }
+  if (V7 && e.rua_informada) { dados.rua_informada = e.rua_informada; }
   if (e.numero && e.numero !== '—' && !/^(null|nenhum)$/i.test(e.numero)) upd.numero = e.numero.toUpperCase();
   if (e.complemento !== undefined) {
     const sem = /^(nenhum|nao|não|sem|n\/a|null|—|-)?$/i.test(e.complemento.trim());
@@ -340,8 +383,14 @@ let motivo = null;
 if (handoffYaml) {
   motivo = norm(hy.motivo_handoff || '').replace(/[^a-z_]/g, '');
   if (!MOTIVOS.includes(motivo)) motivo = 'pedido_humano';
+  // v7 (A10): a Mari NUNCA encerra por "já é cliente" — Nio ativa nesta unidade vira humano (com time).
+  if (V7 && motivo === 'ja_cliente_nio') motivo = 'pedido_humano';
 }
-if (!motivo && !erro) {
+// v7: "já tem Nio" deixa de ser trava (é pista); a elegibilidade fica ok e a conversa segue.
+if (V7 && ['ja_cliente', 'cancelou_30d'].includes(upd.elegibilidade)) upd.elegibilidade = 'ok';
+if (V7 && !motivo && !erro) {
+  if (upd.elegibilidade === 'fora_area') motivo = 'fora_de_area';
+} else if (!motivo && !erro) {
   // v4: fora da área só depois de a Mari confirmar a cidade com o cliente (o modelo emite [ELEGIBILIDADE: fora_area]).
   if ((!V4 && ctx.dentroArea === false) || upd.elegibilidade === 'fora_area') motivo = 'fora_de_area';
   else if (upd.elegibilidade === 'ja_cliente' || upd.elegibilidade === 'cancelou_30d') motivo = 'ja_cliente_nio';
@@ -354,8 +403,28 @@ if (motivo) {
     viavel_predio: 'DFV viável (prédio) — conferir a unidade',
     endereco_ocupado: 'DFV indica Nio ativo no endereço — confirmar com o cliente e no portal antes de abrir o pedido',
   }[c.dfv_resultado] || (c.cidade && norm(c.cidade) === 'juiz de fora' ? 'DFV: conferir manualmente antes de abrir o pedido' : 'DFV: sem base para a cidade — conferir manualmente');
-  const briefing = [hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
-    tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, notaDfv].filter(Boolean).join('\n');
+  // v7 (prompt 27 A7): a nota começa pelo PORTAL; o DFV é só pista; Nio/Oi citado vira pista para o backoffice.
+  let topo = [];
+  if (V7) {
+    const dd = { ...(c.dados || {}), ...dados };
+    const cepF = String(c.cep || '').replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2') || '?';
+    const comp = upd.complemento !== undefined ? upd.complemento : c.complemento;
+    const jf = norm(c.cidade) === 'juiz de fora';
+    const pista = {
+      viavel: 'Viável', viavel_predio: 'Viável prédio (a unidade o portal confirma)',
+      endereco_ocupado: 'indica Nio no endereço — conferir a posse no portal',
+      sem_porta_livre: 'sem porta livre na foto da Nio — o portal decide',
+    }[c.dfv_resultado] || (jf ? 'Não achou o endereço — pode ser sem cobertura ou endereço fora da foto da Nio; o portal decide'
+      : 'sem base do DFV para a cidade — o portal decide');
+    topo = [
+      `1º PASSO: consultar viabilidade no portal PAP — CEP ${cepF} · nº ${upd.numero || c.numero || '?'} · compl. ${comp || '—'} · ref. ${dd.referencia || '— (pedir ao cliente)'}`,
+      `DFV (pista): ${pista}`,
+      dd.rua_informada ? `Rua: o cliente escreveu «${dd.rua_informada}»${dd.rua_confirmada ? ` e confirmou «${dd.rua_confirmada}»` : ''} — conferir no portal` : null,
+      dd.pista_nio ? `PISTA: cliente citou Nio/Oi (${dd.pista_nio}) — conferir posse e recompra no portal (etapa 2)` : null,
+    ].filter(Boolean);
+  }
+  const briefing = [...topo, hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
+    tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, V7 ? null : notaDfv].filter(Boolean).join('\n');
   handoff = {
     motivo,
     lead: {
@@ -374,7 +443,9 @@ if (motivo) {
   if (!texto) {
     const prazo = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
     texto = {
-      dados_completos: V6
+      dados_completos: V7
+        ? 'Pronto, anotado!\n\nAgora o nosso time confere tudo no sistema da Nio e abre o seu pedido. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.'
+        : V6
         ? `Pronto, anotado!\n\nAgora o nosso time abre o seu pedido, ${prazo}. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.`
         : V4
         ? `Pronto, anotado! Agora o nosso time abre o seu pedido e te manda aqui mesmo, ${prazo}, o link da biometria — é rapidinho, você faz pelo celular. Depois a gente confirma a data da instalação por aqui 😊`
@@ -400,9 +471,80 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
   texto = baloesFinais.join('\n\n');
 }
 
+// ── 6. v7: CPF mascarado na fala da Mari (prompt 27 A6 — o banco guarda inteiro) ──
+if (V7) {
+  const mascara = (s) => s.split('\n').map((l) => (/cpf/i.test(l)
+    ? l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4') : l)).join('\n');
+  baloesFinais = baloesFinais.map(mascara);
+  texto = mascara(texto);
+}
+
+// ── 7. v7: mensagem interativa (prompt 26) — o n8n manda pela Graph API depois dos balões ──
+let interativo = null;
+const inter = ctx.inter || {};
+const txts = inter.textos || {};
+const moeda = (v) => Number(v).toFixed(2).replace('.', ',');
+function listaTexto() {
+  // Fallback do carrossel: a lista em texto do Passo 3 (mesmos números do banco).
+  const seg2 = upd.segmento || ctx.segmento;
+  const pls = (ctx.planos || []).filter((p) => p.portfolio === seg2 && !/nfid/i.test(p.variante || '')).sort((a, b) => a.preco - b.preco).slice(0, 4);
+  if (!pls.length) return '';
+  return pls.map((p, i) => `${i + 1}) ${String(p.nome).replace(/\s*\(.*?\)\s*/g, ' ').trim()} — R$${moeda(p.preco).replace(',00', '')} por mês`
+    + (!ctx.btu && p.preco_cartao != null ? ` (R$${moeda(p.preco_cartao).replace(',00', '')} no cartão)` : '')).join('\n\n')
+    + '\n\nQual te agrada mais?';
+}
+if (V7 && !erro && tags.carrossel) {
+  const cards = Array.isArray(inter.cartoes) ? inter.cartoes : [];
+  // Trava de preço (spec §3): os dois valores do texto do cartão têm de bater com config_planos.
+  const divergentes = cards.filter((k) => {
+    const v = [...String(k.texto_card).matchAll(/R\$\s*([\d.]+,\d{2})/g)].map((m) => Number(m[1].replace(/\./g, '').replace(',', '.')));
+    return v.length < 2 || v[0] !== Number(k.preco) || v[1] !== Number(k.preco_cartao);
+  });
+  if (ctx.carrossel && cards.length && !divergentes.length) {
+    const resumo = `carrossel: ${cards.map((k) => `${String(k.nome_curto || k.nome).split(' ')[0]} R$${Number(k.preco)}/${Number(k.preco_cartao)}`).join(' · ')}`;
+    interativo = {
+      tipo: 'carrossel', corpo: txts.carrossel_corpo || 'Essas são as ofertas especiais Nio!',
+      cartoes: cards.map((k) => ({ imagem: k.imagem_url, texto: k.texto_card, botoes: [
+        { id: `plano:${k.plano_codigo}:quero`, title: k.titulo_quero }, { id: `plano:${k.plano_codigo}:detalhes`, title: k.titulo_detalhes }] })),
+      resumo, fallbackTexto: listaTexto(),
+    };
+  } else {
+    // Não pode carrossel (BTU, Empresas, sem config) ou preço divergente → lista em texto agora.
+    const lt = listaTexto();
+    if (lt) { baloesFinais = [...baloesFinais, lt]; texto = baloesFinais.join('\n\n'); }
+    if (divergentes.length) erro = erro || { no: '7 · Extrair', mensagem: 'carrossel_preco_divergente', payload: { planos: divergentes.map((k) => k.plano_codigo) } };
+  }
+}
+if (V7 && !erro && tags.botoes) {
+  const chave = norm(tags.botoes).replace(/[^a-z_]/g, '');
+  const BOT = {
+    sim_nao: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }],
+    resumo: [{ id: 'resumo:ok', title: 'Sim, está certo' }, { id: 'resumo:corrigir', title: 'Corrigir' }],
+    pagamento: [{ id: 'pg:cartao', title: 'Cartão de crédito' }, { id: 'pg:boleto', title: 'Boleto bancário' }, { id: 'pg:debito', title: 'Débito automático' }],
+  }[chave];
+  if (BOT) {
+    let corpo = '';
+    if (chave === 'pagamento') {
+      const cod = upd.plano_escolhido || (c.plano_escolhido || null);
+      const pl = (ctx.planos || []).find((p) => p.codigo === cod);
+      corpo = pl && !ctx.btu && pl.preco_cartao != null && txts.pagamento_corpo
+        ? txts.pagamento_corpo.replace('{de}', moeda(pl.preco)).replace('{por}', moeda(pl.preco_cartao))
+        : (txts.pagamento_corpo_sem_desconto || 'Como você quer pagar?');
+    } else if (baloesFinais.length) {
+      corpo = baloesFinais[baloesFinais.length - 1];     // a pergunta vira o corpo da mensagem com botões
+      baloesFinais = baloesFinais.slice(0, -1);
+    }
+    if (corpo) interativo = { tipo: 'botoes', chave, corpo: corpo.slice(0, 1024), botoes: BOT,
+      resumo: `botões: ${BOT.map((x) => x.title).join(' / ')}`, fallbackTexto: corpo };
+  }
+}
+// O histórico (mari_turnos) guarda o que o cliente viu: texto + corpo interativo + resumo legível.
+if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
+
 return [{ json: {
   corrigir: false,
   conversaId: ctx.conversaId,
+  interativo,
   texto, tags, upd, handoff, erro,
   // Balões: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
   baloes: baloesFinais,

@@ -50,7 +50,8 @@ ALVOS = {
     # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
     # Ensaio na v5 (prompt nº 18: formato, condições exatas, pagamento é da Nio, retomada) desde 05/11 16h50.
     # Ensaio na v6 (prompt 19: o link da biometria é da própria Nio) desde 05/11 22h00.
-    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v6.md', 'versao': 'mari_v6', 'id_key': 'ensaio_workflow_id',
+    # Ensaio na v7 (prompts 26 + 27 unificados: carrossel/botões, sem promessa de cobertura nem prazo) desde 06/11 ~22h.
+    'ensaio': {'nome': 'mari_principal_v3', 'prompt': 'prompt_mari_v7.md', 'versao': 'mari_v7', 'id_key': 'ensaio_workflow_id',
                'export': 'mari_principal_v3.json', 'rota': 'mari-teste-v3', 'chatwoot': False},
 }
 ALVO = 'ensaio' if '--ensaio' in sys.argv else 'producao'
@@ -75,6 +76,7 @@ SB = 'https://zlrfwbkblytnokuexjti.supabase.co'      # Supabase Nio (não é o d
 CRED_SUPABASE = 'Supabase Nio (service role)'
 CRED_CLAUDE = 'Claude API Nio'
 CRED_TESTE = 'MARI_TESTE_SECRET'
+CRED_WABA = 'WABA Nio (Nio_API)'                      # v7: header Authorization: Bearer (system user Nio_API) — token só no n8n
 CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token (conta "Nio Atendimento")
 HEADER_TESTE = 'X-Mari-Secret'
 
@@ -177,6 +179,8 @@ CODE = {
     '11 · Saída': 'n11_saida.js',
     'E1 · Log erro': 'nE1_log_erro.js',
     '12a · Balões': 'n12a_baloes.js',
+    '12y · Montar interativo': 'n12y_interativo.js',          # v7 (prompts 26 + 27)
+    '12v · Resultado interativo': 'n12v_interativo_resultado.js',
 }
 
 
@@ -186,6 +190,7 @@ def build(ids):
     cl_cred = {'anthropicApi': {'id': cred.get('claude', ''), 'name': CRED_CLAUDE}}
     te_cred = {'httpHeaderAuth': {'id': cred.get('teste', ''), 'name': CRED_TESTE}}
     cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}
+    wa_cred = {'httpHeaderAuth': {'id': cred.get('waba', ''), 'name': CRED_WABA}}
 
     nodes = []
     pos = {}
@@ -200,14 +205,14 @@ def build(ids):
     def code(name, x, y):
         add(name, 'n8n-nodes-base.code', 2, {'jsCode': js(CODE[name])}, x, y)
 
-    def iff(name, expr, x, y):
+    def iff(name, expr, x, y, **extra):
         add(name, 'n8n-nodes-base.if', 2, {
             'conditions': {
                 'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'strict'},
                 'conditions': [{'id': str(uuid.uuid5(uuid.NAMESPACE_URL, name)), 'leftValue': expr, 'rightValue': '',
                                 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
                 'combinator': 'and'},
-            'options': {}}, x, y)
+            'options': {}}, x, y, **extra)
 
     def rpc(name, fn, body_expr, x, y, **extra):
         add(name, 'n8n-nodes-base.httpRequest', 4.2, {
@@ -247,6 +252,12 @@ def build(ids):
       add('1r · OK Chatwoot', 'n8n-nodes-base.respondToWebhook', 1.1, {
         'respondWith': 'noData', 'options': {}}, 110, 300)
     code('2 · Entrada', 220, 100)
+    # v7 (prompt 27 B2): status do Chatwoot (status, agente, time, etiquetas) em TODO evento já validado no 2 · Entrada,
+    # antes dos guards e sem mudar o fluxo da Mari. Evento só de conversa = só o status.
+    iff('2z · Só status?', '={{ $json.soStatus === true }}', 330, -100)
+    iff('2s · Tem status?', '={{ !!$json.cwStatus }}', 440, -200)
+    rpc('2t · Supabase status', 'mari_chatwoot_sync', '={{ JSON.stringify($json.cwStatus) }}', 660, -200,
+        onError='continueRegularOutput')
     iff('2e · Encerrar?', '={{ $json.encerrar === true }}', 440, 100)
     # Fala do consultor no Chatwoot → turno 'humano' no histórico (sem resposta; eco da Mari descartado no banco).
     iff('2x · Fala humana?', "={{ $json.registrar === 'humano' }}", 550, 350)
@@ -294,8 +305,13 @@ def build(ids):
     rpc('4b · Supabase contexto', 'mari_contexto',
         "={{ JSON.stringify({ p_conversa: $json.conversa_id, p_cep: $json.p_cep, p_numero: $json.p_numero, "
         "p_complemento: $json.p_complemento, p_viacep: $json.p_viacep }) }}", 3080, 400)
+    # v7 (prompt 26): carrossel e textos interativos (0047) num objeto só.
+    rpc('4c · Supabase interativo', 'mari_config_interativo', '={{ "{}" }}', 3190, 550,
+        onError='continueRegularOutput', alwaysOutputData=True)
     code('5a · Conteúdo Mari', 3300, 400)
     code('5b · Motor', 3520, 400)
+    # v7: "Detalhes <plano>" = texto fixo, sem o Claude (5f → 7 · Extrair).
+    iff('5f · Texto fixo?', '={{ !!$json.fixo }}', 3630, 250)
     claude('6 · Claude', 3740, 400)
     code('7 · Extrair', 3960, 400)
     iff('7d · Corrigir?', '={{ $json.corrigir === true }}', 4180, 400)
@@ -344,6 +360,15 @@ def build(ids):
         'jsonBody': "={{ JSON.stringify({ content: $('9d · Montar handoff Chatwoot').first().json.nota, message_type: 'outgoing', private: true }) }}",
         'options': {'timeout': 10000}}, 7480, -100, credentials=cw_cred, onError='continueRegularOutput',
         notes='Adendo 2 — nota PRIVADA com o briefing (o cliente não vê; o 2 · Entrada ignora mensagem privada).')
+    # v7 (prompt 27 A9): nome completo no contato do Chatwoot quando o atual não parece nome de pessoa.
+    iff('9j · Renomear contato?', "={{ !!$('9d · Montar handoff Chatwoot').first().json.renomear }}", 7590, -250)
+    add('9k · Chatwoot nome', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'PUT',
+        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/contacts/{{ $('9d · Montar handoff Chatwoot').first().json.renomear.id }}",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ name: $('9d · Montar handoff Chatwoot').first().json.renomear.name }) }}",
+        'options': {'timeout': 10000}}, 7700, -350, credentials=cw_cred, onError='continueRegularOutput')
     iff('9g · Atribuir time?', "={{ $('9d · Montar handoff Chatwoot').first().json.atribuirTime === true }}", 7700, -100)
     add('9h · Chatwoot time', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': CW + '/assignments',
@@ -371,6 +396,34 @@ def build(ids):
         'options': {'timeout': 15000}}, 7920, 500, credentials=cw_cred,
         notes='MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial "Chatwoot Nio".')
 
+    # ── v7 (prompts 26 + 27): carrossel / botões pela Graph API, depois dos balões ──
+    # Modo chatwoot: sempre que o 7 · Extrair montou um interativo. Rota de teste: só com enviar_real + "tel real" (ensaio).
+    iff('12x · Interativo?', "={{ $('11 · Saída').first().json.enviarInterativo === true }}", 8140, 300, executeOnce=True)
+    code('12y · Montar interativo', 8360, 300)
+    add('12z · WABA enviar', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.graph) }}',
+        'options': {'timeout': 20000}}, 8580, 300, credentials=wa_cred, onError='continueRegularOutput',
+        notes='Graph API (WABA Nio, phone_number_id 1342993658907403) — credencial "WABA Nio (Nio_API)". Nunca pelo Chatwoot.')
+    code('12v · Resultado interativo', 8800, 300)
+    iff('12h · Tem conversa?', "={{ !!$json.chatwootConversationId && ($json.conteudo || '').length > 0 }}", 9020, 200)
+    add('12n · Chatwoot interativo', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}/messages",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ content: $json.conteudo, message_type: 'outgoing', private: $json.privada }) }}",
+        'options': {'timeout': 15000}}, 9240, 200, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Enviado: NOTA PRIVADA "Mari enviou ...". Falhou: a lista/pergunta em texto, pública (spec §1).')
+    iff('12k · Falhou?', '={{ $json.ok === false }}', 9020, 450)
+    add('12e · Supabase erro interativo', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{SB}/rest/v1/mari_erros',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'Prefer', 'value': 'return=minimal'}]},
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.erroPayload) }}',
+        'options': {}}, 9240, 450, credentials=sb_cred, onError='continueRegularOutput')
+
     # ── erros ──
     add('E · Error Trigger', 'n8n-nodes-base.errorTrigger', 1, {}, 0, 1000)
     code('E1 · Log erro', 220, 1000)
@@ -386,7 +439,11 @@ def build(ids):
         ('1 · Webhook Mari teste', 0, '2 · Entrada'),
         ('1c · Webhook Chatwoot', 0, '1r · OK Chatwoot'),
         ('1r · OK Chatwoot', 0, '2 · Entrada'),
-        ('2 · Entrada', 0, '2e · Encerrar?'),
+        ('2 · Entrada', 0, '2z · Só status?'),
+        ('2z · Só status?', 0, '2t · Supabase status'),
+        ('2z · Só status?', 1, '2e · Encerrar?'),
+        ('2z · Só status?', 1, '2s · Tem status?'),
+        ('2s · Tem status?', 0, '2t · Supabase status'),
         ('2e · Encerrar?', 0, '11 · Saída'),
         ('2e · Encerrar?', 1, '2x · Fala humana?'),
         ('2x · Fala humana?', 0, '2y · Supabase registrar humano'),
@@ -417,9 +474,12 @@ def build(ids):
         ('4m · Só mídia?', 0, '2c · Mídia'),
         ('4m · Só mídia?', 1, '4b · Supabase contexto'),
         ('2c · Mídia', 0, '10 · Salvar turno'),
-        ('4b · Supabase contexto', 0, '5a · Conteúdo Mari'),
+        ('4b · Supabase contexto', 0, '4c · Supabase interativo'),
+        ('4c · Supabase interativo', 0, '5a · Conteúdo Mari'),
         ('5a · Conteúdo Mari', 0, '5b · Motor'),
-        ('5b · Motor', 0, '6 · Claude'),
+        ('5b · Motor', 0, '5f · Texto fixo?'),
+        ('5f · Texto fixo?', 0, '7 · Extrair'),
+        ('5f · Texto fixo?', 1, '6 · Claude'),
         ('6 · Claude', 0, '7 · Extrair'),
         ('7 · Extrair', 0, '7d · Corrigir?'),
         ('7d · Corrigir?', 0, '5c · Pedido de correção'),
@@ -442,18 +502,31 @@ def build(ids):
         ('9b · Supabase briefing', 0, '9d · Montar handoff Chatwoot'),
         ('9d · Montar handoff Chatwoot', 0, '9e · Chatwoot etiquetas'),
         ('9e · Chatwoot etiquetas', 0, '9f · Chatwoot nota'),
-        ('9f · Chatwoot nota', 0, '9g · Atribuir time?'),
+        ('9f · Chatwoot nota', 0, '9j · Renomear contato?'),
+        ('9j · Renomear contato?', 0, '9k · Chatwoot nome'),
+        ('9j · Renomear contato?', 1, '9g · Atribuir time?'),
+        ('9k · Chatwoot nome', 0, '9g · Atribuir time?'),
         ('9g · Atribuir time?', 0, '9h · Chatwoot time'),
         ('9g · Atribuir time?', 1, '11 · Saída'),
         ('9h · Chatwoot time', 0, '11 · Saída'),
         ('11 · Saída', 0, '11m · Modo teste?'),
         ('11m · Modo teste?', 0, '12t · Responder (teste)'),
+        ('11m · Modo teste?', 0, '12x · Interativo?'),
         ('11m · Modo teste?', 1, '11c · Tem resposta?'),
         ('11c · Tem resposta?', 0, '12a · Balões'),
+        ('11c · Tem resposta?', 1, '12x · Interativo?'),
+        ('12b · Um balão', 0, '12x · Interativo?'),
         ('12a · Balões', 0, '12b · Um balão'),
         ('12b · Um balão', 1, '12w · Digitando'),          # saída 1 = laço; saída 0 = acabou
         ('12w · Digitando', 0, '12c · Chatwoot enviar'),
         ('12c · Chatwoot enviar', 0, '12b · Um balão'),
+        ('12x · Interativo?', 0, '12y · Montar interativo'),
+        ('12y · Montar interativo', 0, '12z · WABA enviar'),
+        ('12z · WABA enviar', 0, '12v · Resultado interativo'),
+        ('12v · Resultado interativo', 0, '12h · Tem conversa?'),
+        ('12v · Resultado interativo', 0, '12k · Falhou?'),
+        ('12h · Tem conversa?', 0, '12n · Chatwoot interativo'),
+        ('12k · Falhou?', 0, '12e · Supabase erro interativo'),
         ('E · Error Trigger', 0, 'E1 · Log erro'),
         ('E1 · Log erro', 0, 'E2 · Supabase mari_erros'),
     ]

@@ -32,6 +32,36 @@ const origemDoTexto = (t) => {
   return null;
 };
 
+// v7 (prompts 26 + 27, 06/11): resposta de botão. O Chatwoot entrega o TÍTULO do botão como texto (o id da Meta não
+// chega). Plano B aprovado pelo Ricardo (06/11 18h42): títulos com o nome do plano. "Quero o Super" vira a fala
+// "Quero o plano Nio Super"; "Detalhes Super" / "Mais detalhes" o 5b · Motor responde com o texto fixo, sem o Claude.
+// Se um dia vier o id (plano:<codigo>:quero|detalhes), ele é usado.
+const PLANOS_BOTAO = { fibra: 'Fibra', essencial: 'Essencial', super: 'Super', ultra: 'Ultra' };
+function textoDoBotao(texto, botaoId) {
+  const id = String(botaoId || '');
+  const mid = id.match(/^plano:V-REG-([A-Z]+):(quero|detalhes)$/);
+  if (mid) {
+    const fam = { FIBRA: 'Fibra', ESS: 'Essencial', SUP: 'Super', ULT: 'Ultra' }[mid[1]];
+    if (fam) return mid[2] === 'quero' ? `Quero o plano Nio ${fam}` : `Detalhes ${fam}`;
+  }
+  const t = String(texto || '').trim();
+  const q = t.match(/^quero o (fibra|essencial|super|ultra)!?$/i);
+  if (q) return `Quero o plano Nio ${PLANOS_BOTAO[q[1].toLowerCase()]}`;
+  return t;
+}
+// Status do Chatwoot (0048, prompt 27 B2): lido em TODO evento já validado e gravado pelo 2t (mari_chatwoot_sync),
+// antes dos guards e sem mudar o fluxo da Mari.
+function statusDe(conv, convId) {
+  if (!conv || !convId) return null;
+  return {
+    p_chatwoot_conversation_id: String(convId),
+    p_status: conv.status || null,
+    p_agente: (conv.meta && conv.meta.assignee && conv.meta.assignee.name) || null,
+    p_time: (conv.meta && conv.meta.team && conv.meta.team.name) || null,
+    p_etiquetas: Array.isArray(conv.labels) ? conv.labels : [],
+  };
+}
+
 let entrada;
 
 if (ex('1 · Webhook Mari teste')) {
@@ -44,8 +74,11 @@ if (ex('1 · Webhook Mari teste')) {
       sd._modoMari = cmd.split(' ')[1];
       return fim({ admin: true, modo: sd._modoMari });
     }
-    if (cmd === 'status') return fim({ admin: true, modo: sd._modoMari, chamadas_ultima_hora: (sd._apiCalls || []).length });
-    return fim({ admin: true, erro: 'comando desconhecido (use: modo teste | modo chatwoot | status)' });
+    if (cmd === 'status') return fim({ admin: true, modo: sd._modoMari, chamadas_ultima_hora: (sd._apiCalls || []).length, tel_real: sd._telReal ? `…${sd._telReal.slice(-4)}` : null });
+    // v7: teste no celular do Ricardo pela rota de ensaio — só ESTE número recebe carrossel/botões de verdade (Graph API).
+    const tr = cmd.match(/^tel real (\d{12,13}|off)$/);
+    if (tr) { sd._telReal = tr[1] === 'off' ? null : tr[1]; return fim({ admin: true, tel_real: sd._telReal ? `…${sd._telReal.slice(-4)}` : null }); }
+    return fim({ admin: true, erro: 'comando desconhecido (use: modo teste | modo chatwoot | status | tel real <55DDDNUMERO> | tel real off)' });
   }
 
   // A rota de teste funciona nos dois modos (bateria): canal 'teste', resposta só no corpo HTTP,
@@ -54,7 +87,7 @@ if (ex('1 · Webhook Mari teste')) {
   const tel = String(body.telefone || '').replace(/\D/g, '');
   if (!/^\d{10,15}$/.test(tel)) return fim({ erro: 'telefone inválido (só dígitos, com DDI)' });
 
-  let texto = String(body.texto || '').trim();
+  let texto = textoDoBotao(body.texto, body.botao_id);
   const midia = String(body.midia || '').toLowerCase().trim();
   if (midia) {
     if (midia === 'image' || midia === 'imagem') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\n');
@@ -67,6 +100,8 @@ if (ex('1 · Webhook Mari teste')) {
     canal: 'teste', telefone: tel, nome: String(body.nome || '').trim(), texto,
     // origem 'auto' = a bateria testa a leitura da mensagem pronta (sem marca → 'direto').
     origem: body.origem === 'auto' ? (origemDoTexto(texto) || 'direto') : (body.origem || 'teste'), chatwootConversationId: null,
+    // Envio real (Graph API) só para o número liberado pelo admin "tel real" — nunca para outro.
+    enviarReal: body.enviar_real === true && !!sd._telReal && tel === sd._telReal,
   };
 } else if (ex('1c · Webhook Chatwoot')) {
   if (modo !== 'chatwoot') return [];
@@ -86,12 +121,16 @@ if (ex('1 · Webhook Mari teste')) {
   // Prompt 18 (A): conversa RESOLVIDA no Chatwoot encerra o ciclo da Mari (handoff fechado, histórico mantido) — o nó
   // 2v chama mari_encerrar_ciclo. Reaberta sem dono, a Mari volta sabendo o histórico; com dono/time/nao-contatar,
   // o guard 2h continua calando. No evento de status o corpo É a conversa (id, status, inbox_id).
-  if (b.event === 'conversation_status_changed') {
+  // Eventos de conversa (o corpo É a conversa): status do Chatwoot sempre; "resolvida" ainda fecha o ciclo (2v).
+  if (b.event === 'conversation_status_changed' || b.event === 'conversation_updated') {
     const cid = String(b.id ?? b.conversation?.id ?? '');
-    if (b.status !== 'resolved' || !cid) return [];
-    return [{ json: { encerrar: false, registrar: 'resolvida', modo: 'chatwoot', canal: 'whatsapp', chatwootConversationId: cid } }];
+    const cwStatus = statusDe(b.conversation || b, cid);
+    if (b.event === 'conversation_status_changed' && b.status === 'resolved' && cid) {
+      return [{ json: { encerrar: false, registrar: 'resolvida', modo: 'chatwoot', canal: 'whatsapp', chatwootConversationId: cid, cwStatus } }];
+    }
+    return cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
   }
-  if (b.event && b.event !== 'message_created') return [];   // conversation_updated etc.: o guard lê a conversa ao vivo
+  if (b.event && b.event !== 'message_created') return [];
 
   const p = b.payload || b;
   const msg = p.message || p;
@@ -100,35 +139,41 @@ if (ex('1 · Webhook Mari teste')) {
   const tipo = msg.message_type ?? p.message_type;
   const entrante = tipo === 0 || tipo === 'incoming' || (msg.sender_type || p.sender?.type) === 'contact';
   const convId = String(conv.id || msg.conversation_id || p.conversation_id || '');
-  if (!convId || msg.private) return [];
+  if (!convId) return [];
+  const cwStatus = statusDe(conv, convId);
+  if (msg.private) return cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
 
   // Fala do consultor no Chatwoot (saída, não privada, de um usuário): vira turno 'humano' no histórico da Mari,
   // sem resposta. O eco do envio da própria Mari tem o mesmo formato (mesmo usuário do token) — quem o separa é
   // o mari_registrar_turno (texto igual a uma fala da Mari nos últimos 10 min = eco, ignorado).
+  const soStatus = cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
   const saida = tipo === 1 || tipo === 'outgoing';
   if (saida) {
-    if (String(sender.type || msg.sender_type || '').toLowerCase() !== 'user') return [];
+    if (String(sender.type || msg.sender_type || '').toLowerCase() !== 'user') return soStatus;
     const textoH = String(msg.content || p.content || '').trim();
     const contato = conv.meta?.sender || {};
     const telH = String(contato.phone_number || conv.contact_inbox?.source_id || '').replace(/\D/g, '');
-    if (!textoH || !/^\d{10,15}$/.test(telH)) return [];
+    if (!textoH || !/^\d{10,15}$/.test(telH)) return soStatus;
     return [{ json: { encerrar: false, registrar: 'humano', modo: 'chatwoot', canal: 'whatsapp', telefone: telH,
-      nome: String(contato.name || '').trim(), texto: textoH, chatwootConversationId: convId } }];
+      nome: String(contato.name || '').trim(), texto: textoH, chatwootConversationId: convId, cwStatus } }];
   }
-  if (!entrante) return [];
+  if (!entrante) return soStatus;
   const att = (msg.attachments || p.attachments || [])[0] || {};
   const ft = String(att.file_type || '').toLowerCase();
-  let texto = String(msg.content || p.content || '').trim();
+  const ca = msg.content_attributes || p.content_attributes || {};
+  let texto = textoDoBotao(msg.content || p.content || '', ca.button_reply_id || ca.id || (ca.interactive && ca.interactive.id));
   if (ft === 'image') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\n');
   else if (ft === 'location') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\n');
   else if (ft && !texto) texto = `[MIDIA:${MIDIA_SO.has(ft) ? ft : 'attachment'}]`;
-  if (!texto) return [];
+  if (!texto) return soStatus;
   entrada = {
     canal: 'whatsapp', telefone: String(sender.phone_number || '').replace(/\D/g, ''),
     nome: String(sender.name || '').trim(), texto,
     origem: origemDoTexto(texto), chatwootConversationId: convId,
+    contatoId: sender.id ?? conv.meta?.sender?.id ?? null,   // v7 (A9): nome do contato no handoff
+    cwStatus,
   };
-  if (!/^\d{10,15}$/.test(entrada.telefone)) return [];
+  if (!/^\d{10,15}$/.test(entrada.telefone)) return soStatus;
 } else {
   return [];
 }

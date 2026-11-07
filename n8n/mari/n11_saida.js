@@ -30,6 +30,7 @@ if (j.saida) {
     // (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).
     baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.texto ? [r.texto] : [])),
     emoji_ajustes: r.emojiAjustes || null,
+    interativo: r.interativo || null,   // v7: carrossel/botões (enviado pela Graph API depois dos balões)
   };
   saida.atrasos = saida.baloes.map((b) => Math.min(6, Math.max(2, Math.round(b.length / 60))));
 } else if (ex('7f · Supabase abortar')) {
@@ -54,4 +55,8 @@ return [{ json: {
   atrasos: saida.atrasos || (saida.resposta ? [2] : []),
   chatwootConversationId: e.chatwootConversationId || null,
   config: e.config || {},
+  // v7: quem recebe a mensagem interativa — WhatsApp real (modo chatwoot) ou o celular liberado no ensaio ("tel real").
+  interativo: saida.interativo || null,
+  telefone: e.telefone || null,
+  enviarInterativo: !!saida.interativo && (e.modo === 'chatwoot' || e.enviarReal === true),
 } }];

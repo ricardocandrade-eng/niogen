@@ -76,6 +76,71 @@ if (cepAtual && (out.p_cep || !conv.numero)) {
   if (num) out.p_numero = num.toUpperCase();
 }
 
+// ── v7 (prompt 27, A2/A3): rua que o CLIENTE escreveu ──
+const normR = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const PREF = /^(rua|r|avenida|av|travessa|tv|alameda|al|estrada|est|praca|rodovia|rod|beco|largo)\.?\s+/;
+const PARADA = new Set(['de', 'da', 'do', 'dos', 'das', 'e']);
+const palavras = (s) => normR(s).replace(PREF, '').replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((w) => w && !PARADA.has(w));
+const RUA_RE = /\b(rua|r\.|avenida|av\.?|travessa|tv\.?|alameda|estrada|pra[cç]a|rodovia|beco)\s+([A-Za-zÀ-ÿ'.\s]{3,60}?)(?=\s*(?:,|;|\d|\bn[º°o.]|\bn[uú]mero|\bbairro|\bcep|$|\n|\.(?:\s|$)))/i;
+function ruaDoCliente() {
+  const fontes = [msg, ...(Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'lead').slice(-6).reverse().map((h) => h.texto)];
+  for (const t of fontes) {
+    const m = String(t || '').match(RUA_RE);
+    if (m) return `${m[1].replace(/\.$/, '')} ${m[2]}`.replace(/\s+/g, ' ').trim();
+  }
+  return null;
+}
+const lev1 = (a, b) => {   // distância ≤ 1 (erro de digitação)
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1 || Math.min(a.length, b.length) < 5) return false;
+  let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++d > 1) return false;
+    if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+  }
+  return d + (a.length - i) + (b.length - j) <= 1;
+};
+// Diverge = troca de palavra (Sebastião ANTÔNIO × Sebastião PEDRO) ou mais de 1 palavra faltando/sobrando.
+function ruaDiverge(cli, cep) {
+  const a = palavras(cli), b = palavras(cep);
+  if (!a.length || !b.length) return false;
+  const sobraA = a.filter((w) => !b.some((x) => lev1(w, x)));
+  const sobraB = b.filter((w) => !a.some((x) => lev1(w, x)));
+  return (sobraA.length > 0 && sobraB.length > 0) || sobraA.length + sobraB.length > 1;
+}
+const ruaCli = ruaDoCliente();
+const VIA = (cidade, rua) => `https://viacep.com.br/ws/MG/${encodeURIComponent(cidade)}/${encodeURIComponent(rua)}/json/`;
+
+// (A3) Escolha "1/2/3" de uma lista de ruas que a Mari ofereceu (cada opção traz o CEP): vira o CEP escolhido.
+if (!out.p_cep && etapaEndereco) {
+  const esc = msg.trim().toLowerCase().match(/^(?:a|o|op[cç][aã]o|n[º°o.]?)?\s*([1-3])\s*[.)!]?$|^(primeir|segund|terceir)[ao]$/);
+  const ultMari = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-1)[0];
+  if (esc && ultMari) {
+    const n = esc[1] ? Number(esc[1]) : { primeir: 1, segund: 2, terceir: 3 }[esc[2]];
+    const ceps = [...String(ultMari.texto || '').matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)];
+    const alvo = ceps.find((c) => Number(c[1]) === n);
+    if (alvo) { out.p_cep = alvo[2] + alvo[3]; out.cepDaLista = true; }
+  }
+}
+// (A3) Sem CEP, com rua: busca no ViaCEP pela rua na cidade (anúncio da campanha 1 = Juiz de Fora) — até 3 opções.
+if (!out.p_cep && !conv.cep && etapaEndereco && ruaCli) {
+  const cidade = conv.cidade
+    || (/juiz de fora|\bjf\b/i.test([msg, ...(r.historico || []).map((h) => h.texto)].join(' ')) ? 'Juiz de Fora' : null)
+    || (['meta_ads', 'instagram', 'facebook'].includes(conv.origem) ? 'Juiz de Fora' : null);
+  if (!cidade) out.ruaSemCidade = ruaCli;
+  else {
+    try {
+      const busca = palavras(ruaCli).join(' ');
+      const lst = busca.length >= 3 ? await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, busca), json: true, timeout: 6000 }) : [];
+      const vistos = new Set();
+      out.opcoesRua = (Array.isArray(lst) ? lst : []).filter((x) => x && x.cep && !vistos.has(x.cep) && vistos.add(x.cep)).slice(0, 3)
+        .map((x) => ({ logradouro: x.logradouro, bairro: x.bairro, cep: x.cep }));
+      if (!out.opcoesRua.length) { out.ruaNaoAchada = ruaCli; delete out.opcoesRua; }
+    } catch (e) { out.ruaNaoAchada = ruaCli; }
+  }
+}
+
 // (3) ViaCEP para CEP novo.
 if (out.p_cep && out.p_cep !== conv.cep) {
   try {
@@ -88,6 +153,13 @@ if (out.p_cep && out.p_cep !== conv.cep) {
   } catch (e) {
     out.viacepFalhou = true; // fail-open: segue sem o endereço; o prompt pergunta rua e bairro
   }
+}
+
+// (A2) Rua do CEP diferente da rua que o cliente escreveu: a Mari pergunta qual é antes de seguir (uma vez — depois
+// da resposta ela grava [ENDERECO: rua_confirmada=…]).
+const ruaCep = (out.p_viacep && out.p_viacep.logradouro) || (conv.endereco_cep && conv.endereco_cep.logradouro) || null;
+if (ruaCli && ruaCep && !out.cepDaLista && !((conv.dados || {}).rua_confirmada) && ruaDiverge(ruaCli, ruaCep)) {
+  out.ruaDivergente = { cliente: ruaCli, cep: ruaCep };
 }
 
 return [{ json: out }];

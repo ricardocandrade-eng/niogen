@@ -13,6 +13,11 @@ const conteudo = $('5a · Conteúdo Mari').first().json;
 // Versão do prompt (mari_v3, mari_v4…): v3+ = jeito de falar/balões/emoji; v4+ = venda remota (instalação no lugar da visita).
 const VER = Number((String(conteudo.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
 const V4 = VER >= 4;
+const V7 = VER >= 7;   // prompts 26 + 27: carrossel/botões, sem promessa de cobertura, rua divergente, referência, operadora
+// Carrossel e textos interativos (0047, nó 4c). Falhou a leitura → {} e a Mari cai na lista em texto.
+let inter = {};
+try { inter = $('4c · Supabase interativo').first().json || {}; } catch (e) { inter = {}; }
+const cartoes = Array.isArray(inter.cartoes) ? inter.cartoes : [];
 const conv = db.conversa || {};
 const planos = Array.isArray(db.planos) ? db.planos : [];
 const cons = prep.consolidado || {};
@@ -144,6 +149,7 @@ if (!dados.telefone || !telValido(dados.telefone)) faltando.push('telefone');
 if (!dados.email || !emailValido(dados.email)) faltando.push('email');
 if (!conv.forma_pagamento) faltando.push('pagamento');
 if (!(conv.instalacao_preferencia || conv.visita_preferencia)) faltando.push(V4 ? 'instalacao' : 'visita');
+if (V7 && !dados.referencia) faltando.push('referencia');   // o portal exige na etapa 2 (prompt 27 A5)
 const formaTxt = { boleto: 'boleto', dacc: 'débito automático', cartao: 'cartão de crédito' }[conv.forma_pagamento] || null;
 
 const L = [];
@@ -166,6 +172,14 @@ L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (da
 L.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);
 L.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);
 L.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);
+if (V7) {
+  if (prep.ruaDivergente) L.push(`rua_divergente: SIM — o cliente escreveu «${prep.ruaDivergente.cliente}», mas o CEP ${conv.cep || prep.p_cep || ''} é da «${prep.ruaDivergente.cep}». Pergunte qual é ANTES de seguir (Passo 2).`);
+  if (prep.opcoesRua) L.push(`opcoes_de_rua (busca pela rua que o cliente escreveu, sem CEP — ofereça numeradas, uma por linha, com o CEP): ${prep.opcoesRua.map((o, i) => `${i + 1}) ${o.logradouro} · ${o.bairro} · CEP ${o.cep}`).join(' | ')}`);
+  if (prep.ruaSemCidade) L.push(`rua_sem_cep: o cliente passou a rua «${prep.ruaSemCidade}» sem CEP e sem cidade — pergunte a cidade (ou o CEP).`);
+  if (prep.ruaNaoAchada) L.push(`rua_sem_cep: não achei a rua «${prep.ruaNaoAchada}» pelo nome — peça o CEP.`);
+  const podeCarrossel = seg === 'varejo' && cluster === 'regular' && cartoes.length > 0;
+  L.push(`planos_em_carrossel: ${podeCarrossel ? 'SIM — no Passo 3 escreva a frase de abertura e a marca [CARROSSEL_PLANOS] (sem listar os planos)' : 'NAO — lista em texto do Passo 3'}`);
+}
 if (V4) {
   // Viabilidade oficial do portal da Nio (nível A). Em espera desde 05/11 (login BO = SSO Microsoft): sem consulta,
   // o estado diz "indisponivel" e a Mari segue a fala por cidade + DFV (Bloco 9 do prompt v4).
@@ -173,7 +187,7 @@ if (V4) {
   L.push(`nio_viab_resultado (viabilidade oficial do endereço, uso interno, nunca citar): ${nv}${conv.nio_viab_velocidade ? ` | velocidade_maxima: ${conv.nio_viab_velocidade}` : ''}`
     + (['viavel', 'posse'].includes(nv) ? '' : ' (fluxo normal: planos e cobertura pela cidade — nunca diga nem insinue que o endereço não é atendido)'));
 }
-if (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d') {
+if (!V7 && (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d')) {   // v7: "já tem Nio" é pista, sem tabela de retorno
   // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.
   // Retorno = data do cancelamento + 31 dias = hoje + (31 − N), no calendário de Brasília.
   const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(agora); // AAAA-MM-DD
@@ -194,7 +208,8 @@ if (planoSel && conv.forma_pagamento) {
   L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
 }
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
-L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || '—'}` : `visita=${conv.visita_preferencia || '—'}`}`);
+L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || '—'}` : `visita=${conv.visita_preferencia || '—'}`}`
+  + (V7 ? `; referencia=${dados.referencia || '—'}; operadora_atual=${dados.operadora_atual || '—'}` : ''));
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
 // v3 (regra de emoji): quantos emojis a Mari já usou e se o cliente usa — o 7 · Extrair aplica o teto.
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
@@ -271,9 +286,21 @@ for (const h of historico) {
 push('user', cons.mensagem);
 while (msgs.length && msgs[0].role !== 'user') msgs.shift();
 
+// v7 (prompt 26, spec §4): botão "Detalhes <plano>" → texto fixo do cartão, SEM chamar o Claude (o 5f leva direto ao 7).
+let textoFixo = null;
+if (V7) {
+  const md = String(cons.mensagem || '').trim().match(/^detalhes (fibra|essencial|super|ultra)$/i);
+  const FAM = { fibra: 'V-REG-FIBRA', essencial: 'V-REG-ESS', super: 'V-REG-SUP', ultra: 'V-REG-ULT' };
+  const card = md && cartoes.find((k) => k.plano_codigo === FAM[md[1].toLowerCase()]);
+  if (card) textoFixo = { texto: card.texto_detalhes, plano: card.plano_codigo };
+}
+
 return [{ json: {
   model: MODEL, maxTokens: MAX_TOKENS, system, messages: msgs,
+  fixo: textoFixo,
   ctx: {
+    carrossel: V7 && seg === 'varejo' && cluster === 'regular' && cartoes.length > 0,
+    inter,
     conversaId: conv.id, t0: Date.now(), promptVersao: conteudo.promptVersao,
     cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,
     planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao,

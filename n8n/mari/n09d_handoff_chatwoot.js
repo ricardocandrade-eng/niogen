@@ -15,7 +15,10 @@ let conv = {};
 try { conv = $('2g · Chatwoot conversa').first().json || {}; } catch (err) { conv = {}; }
 
 const motivo = (b.handoff_motivo || s.r?.handoff?.motivo || '').trim();
-const briefing = String(b.handoff_briefing || '').trim();
+// v7 (prompt 27 A7): a nota começa pelo "1º PASSO: consultar viabilidade no portal" (posto pelo 7 · Extrair) e some
+// "DFV: conferir manualmente" / "portal: não consultado — conferir manualmente" (linhas antigas do banco).
+const briefing = String(b.handoff_briefing || '').split('\n')
+  .filter((l) => !/^\s*(Viabilidade Nio — |DFV: conferir manualmente|DFV: sem base)/.test(l)).join('\n').trim();
 const vendaId = h.venda_id || b.venda_id || null;
 
 const VENDA = ['dados_completos'];
@@ -60,7 +63,18 @@ const nota = [
   vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,
 ].filter(Boolean).join('\n\n');
 
+// v7 (prompt 27 A9): no handoff de dados completos, o contato do Chatwoot ganha o nome completo — só se o nome atual não
+// parecer nome de pessoa ("Família", emoji, vazio, número…). Nunca troca um nome de pessoa.
+const nomeAtual = String(e.nome || '').trim();
+let nomeNovo = null;
+try { nomeNovo = (s.r?.upd?.dados?.nome) || ((($('5b · Motor').first().json.ctx || {}).conversa || {}).dados || {}).nome || null; } catch (err) { nomeNovo = null; }
+const NAO_PESSOA = /^(fam[ií]lia|casa|eu|m[ãa]e|pai|amor|vida|cliente|whatsapp|contato|teste|oi|ol[áa]|\.+|-+)$/i;
+const pareceNome = (n) => /^[A-Za-zÀ-ÿ'´`.\- ]{3,}$/.test(n) && /[A-Za-zÀ-ÿ]{2,}/.test(n) && !NAO_PESSOA.test(n);
+const renomear = motivo === 'dados_completos' && e.contatoId && nomeNovo && !pareceNome(nomeAtual)
+  ? { id: e.contatoId, name: String(nomeNovo).trim() } : null;
+
 return [{ json: {
+  renomear,
   conta: e.config?.CHATWOOT_NIO_ACCOUNT,
   conversa: e.chatwootConversationId,
   labels, nota, tipo, motivo, vendaId, naoCriada, vendaExistenteId: existente,
