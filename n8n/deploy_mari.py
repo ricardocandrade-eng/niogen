@@ -45,7 +45,8 @@ ALVOS = {
     # v4 (venda remota) em produção desde 05/11 (bateria do ensaio 26/27, OK prévio do Ricardo: "As duas rodadas").
     # v5 (prompt nº 18) em produção desde 05/11 ~17h10 (bateria do ensaio verde nas regras; OK do Ricardo: "Sim, publique").
     # v6 (prompt 19: o link da biometria é da própria Nio) em produção desde 05/11 ~22h20 (ensaio 8/8 verde nas regras).
-    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v6.md', 'versao': 'mari_v6', 'id_key': 'workflow_id',
+    # v7 (prompts 26 + 27 unificados) em produção desde 06/11 ~23h (ensaio 8/8 + teste real no celular; OK do Ricardo: 'Sim, troque').
+    'producao': {'nome': 'mari_principal', 'prompt': 'prompt_mari_v7.md', 'versao': 'mari_v7', 'id_key': 'workflow_id',
                  'export': 'mari_principal.json', 'rota': 'mari-teste', 'chatwoot': True},
     # Ensaio na v4 (venda remota, prompt nº 15) desde 05/11; o nome do workflow continua mari_principal_v3.
     # Ensaio na v5 (prompt nº 18: formato, condições exatas, pagamento é da Nio, retomada) desde 05/11 16h50.
