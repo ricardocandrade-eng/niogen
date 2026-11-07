@@ -1035,9 +1035,9 @@
     "timezone": "America/Sao_Paulo",
     "errorWorkflow": "Nsb1dcL3HWQpKSav"
   },
-  "active": false,
+  "active": true,
   "staticData": {
-    "_cadenciaAtiva": false,
-    "_modoCadencia": "teste"
+    "_cadenciaAtiva": true,
+    "_modoCadencia": "chatwoot"
   }
 }
