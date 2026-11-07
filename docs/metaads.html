@@ -355,6 +355,8 @@
   };
   const nomePosic = (r) => NOME_POSIC[`${r.plataforma}|${r.posicao}`] || `${r.plataforma} · ${r.posicao}`;
   const barraPct = (v) => `${Math.max(0, Math.min(100, v * 100)).toFixed(0)}%`;
+  // taxa pequena (CTR 0,3 %) não pode virar "0 %": 1 casa abaixo de 10 %
+  const pctFunil = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 
   async function carregarSaude(p, dias, ads) {
     let qConv = NG.sb.from('mari_conversas').select('created_at, cep, dentro_area, elegibilidade, handoff_motivo, handoff_em, venda_id').eq('origem', 'meta_ads');
@@ -482,7 +484,7 @@
     document.getElementById('t-funil').textContent = `Funil · anúncio → venda · ${per.rotulo}`;
     document.getElementById('s-funil').innerHTML = passos.map(([r, n, ant], i) => `<div class="fe${n === 0 && i > 0 ? ' zero' : ''}">
       <span class="n">${n == null ? '—' : NG.fmtNum(n)}</span><span class="r">${esc(r)}</span>
-      <span class="t">${i === 0 || n == null || !ant ? '&nbsp;' : `${NG.fmtNum((n / ant) * 100)} %`}</span></div>`).join('');
+      <span class="t">${i === 0 || n == null || !ant ? '&nbsp;' : `${pctFunil((n / ant) * 100)} %`}</span></div>`).join('');
 
     // ── posicionamentos (7 dias)
     const maxG = Math.max(1, ...pos.map((r) => Number(r.gasto)));
