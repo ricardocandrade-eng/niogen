@@ -106,7 +106,10 @@ def build(ids):
     conns = {}
     for o, d in ligacoes:
         conns.setdefault(o, {'main': [[]]})['main'][0].append({'node': d, 'type': 'main', 'index': 0})
-    settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'none',
+    # 07/11 ~21h (Ricardo: "Sim, ligue"): sucesso SALVO de propósito, até a 1ª conversa de anúncio provar se a cópia do
+    # webhook chega e se traz o referral (meta_referrals seguia com 0 linhas). Guarda telefone e texto no n8n:
+    # voltar para 'none' assim que provar.
+    settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all',
                 'saveManualExecutions': True, 'timezone': 'America/Sao_Paulo'}
     if ids.get('workflow_id'):
         settings['errorWorkflow'] = ids['workflow_id']
