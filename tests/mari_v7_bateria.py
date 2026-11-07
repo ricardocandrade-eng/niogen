@@ -75,10 +75,13 @@ class Conversa:
         it = r.get('interativo')
         self.log.append({'lead': texto, 'mari': resp, 'interativo': it, 'handoff': r.get('handoff'), 'erro': r.get('erro'), 'tags': r.get('tags')})
         alvo = norm(resp + '\n' + ((it or {}).get('corpo') or ''))
+        # Igual ao filtro do 7 · Extrair: pergunta ou condicional ("pra eu ver se chega aí?") não é promessa.
+        afirm = ' '.join(f for f in re.split(r'(?<=[.?!\n])', alvo)
+                         if '?' not in f and not re.search(r'\b(ver|saber|confirmar|checar|conferir|olhar) se\b|\bse (a nio |a fibra |ela |a gente )?(chega|atende)\b', f))
         for rx, rot in GLOBAL:
-            if re.search(rx, alvo):
+            if re.search(rx, afirm if 'cobertura' in rot or 'boa' in rot else alvo):
                 self.falha(f'{rot}: «{resp[:120]}»')
-        if '*' in resp:
+        if '*' in re.sub(r'\d{3}\.\*{3}\.\*{3}-\d{2}', '', resp):   # o CPF mascarado (123.***.***-30) é esperado
             self.falha('asterisco')
         if (r.get('handoff') or {}).get('motivo') == 'ja_cliente_nio':
             self.falha('encerrou por já é cliente')

@@ -65,6 +65,15 @@ if (hm) {
   });
 }
 
+// v7: o modelo às vezes imita o resumo que o histórico guarda ("[botões: Cartão de crédito / …]", "[carrossel: …]") em vez
+// da marca. Vira a marca certa aqui e some do texto (bateria 06/11: o pagamento saiu sem botões por isso).
+const imitado = { botoes: null, carrossel: false };
+bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
+  const t = norm(x);
+  imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : /sim/.test(t) ? 'sim_nao' : null;
+  return '';
+}).replace(/\[carrossel:[^\]]*\]/gi, () => { imitado.carrossel = true; return ''; });
+
 const tags = {
   cidade_detectada: tag('CIDADE_DETECTADA'),
   endereco: tag('ENDERECO'),
@@ -77,8 +86,8 @@ const tags = {
   agendamento_retorno: tag('AGENDAMENTO_RETORNO'),
   avaliacao: tag('AVALIACAO'),
   // v7: carrossel e botões (o n8n monta a mensagem interativa) e a pista de Nio/Oi (prompt 27 A10)
-  carrossel: temTag('CARROSSEL_PLANOS') || null,
-  botoes: tag('BOTOES'),
+  carrossel: temTag('CARROSSEL_PLANOS') || imitado.carrossel || null,
+  botoes: tag('BOTOES') || imitado.botoes,
   pista_nio: tag('PISTA_NIO'),
   handoff: handoffYaml,
 };
@@ -143,7 +152,8 @@ const V7 = VER >= 7;   // prompts 26 + 27 (06/11): carrossel/botões; sem promes
 // Liberado: "A Nio atende [cidade]" (a cidade) e "a disponibilidade exata na sua rua o nosso time confirma…".
 function prometeCobertura(n) {
   if (((ctx.conversa || {}).nio_viab_resultado) === 'viavel') return false;   // portal já disse viável (nível A)
-  return n.split(/[.?!\n]+/).some((f) =>
+  // Pergunta ou condicional ("pra eu ver se a Nio chega aí", "chega aí?") não é promessa — só afirmação conta.
+  return n.split(/(?<=[.?!\n])/).filter((f) => !f.includes('?') && !/\b(ver|saber|confirmar|checar|conferir|olhar) se\b|\bse (a nio |a fibra |ela )?(chega|atende)\b/.test(f)).some((f) =>
     /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa|no seu predio|no seu bairro)/.test(f)
     || /\btem cobertura\b|\bcobertura (no|na|pro|pra) (seu|sua)\b|(seu endereco|sua rua|sua casa) (e|esta|ta|fica) (atendid|coberto|coberta)/.test(f)
     || (/\bboa noticia\b/.test(f) && /atende|cobertura|chega|disponivel/.test(f)));
@@ -200,7 +210,8 @@ function violacoesDe(t) {
   }
   if (V7 && prometeCobertura(n)) v.push('prometeu cobertura no endereço ("a Nio atende aí", "tem cobertura", "chega na sua rua"): proibido antes do portal — diga "A Nio atende [cidade] 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido."');
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
-  if (t.includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
+  // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
+  if (t.replace(/\d{3}\.?[*x•]{3}\.?[*x•]{3}-?\d{2}/gi, '').includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {
     v.push('deixou um campo entre colchetes sem preencher (placeholder)');
   }
@@ -473,8 +484,10 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
 
 // ── 6. v7: CPF mascarado na fala da Mari (prompt 27 A6 — o banco guarda inteiro) ──
 if (V7) {
+  // Inteiro → mascarado; e a máscara que o modelo inventar ("529.XXX.XXX-25", "•••") vira o padrão 123.***.***-30.
   const mascara = (s) => s.split('\n').map((l) => (/cpf/i.test(l)
-    ? l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4') : l)).join('\n');
+    ? l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4')
+      .replace(/\b(\d{3})\.?[x*•]{3}\.?[x*•]{3}-?(\d{2})\b/gi, '$1.***.***-$2') : l)).join('\n');
   baloesFinais = baloesFinais.map(mascara);
   texto = mascara(texto);
 }
@@ -515,8 +528,15 @@ if (V7 && !erro && tags.carrossel) {
     if (divergentes.length) erro = erro || { no: '7 · Extrair', mensagem: 'carrossel_preco_divergente', payload: { planos: divergentes.map((k) => k.plano_codigo) } };
   }
 }
+// Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
+if (V7 && !erro && !tags.botoes && baloesFinais.length && /confere os dados/.test(norm(baloesFinais[baloesFinais.length - 1]))
+  && /cpf:/.test(norm(baloesFinais[baloesFinais.length - 1]))) tags.botoes = 'resumo';
 if (V7 && !erro && tags.botoes) {
   const chave = norm(tags.botoes).replace(/[^a-z_]/g, '');
+  // Pagamento: a pergunta vem no corpo do sistema — a que o modelo escreveu sai (senão aparece duas vezes).
+  if (chave === 'pagamento') {
+    baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/quer pagar|forma de pagamento\?|como prefere pagar/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
+  }
   const BOT = {
     sim_nao: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }],
     resumo: [{ id: 'resumo:ok', title: 'Sim, está certo' }, { id: 'resumo:corrigir', title: 'Corrigir' }],

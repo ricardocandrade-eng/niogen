@@ -116,9 +116,11 @@ const VIA = (cidade, rua) => `https://viacep.com.br/ws/MG/${encodeURIComponent(c
 if (!out.p_cep && etapaEndereco) {
   const esc = msg.trim().toLowerCase().match(/^(?:a|o|op[cç][aã]o|n[º°o.]?)?\s*([1-3])\s*[.)!]?$|^(primeir|segund|terceir)[ao]$/);
   const ultMari = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-1)[0];
-  if (esc && ultMari) {
-    const n = esc[1] ? Number(esc[1]) : { primeir: 1, segund: 2, terceir: 3 }[esc[2]];
-    const ceps = [...String(ultMari.texto || '').matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)];
+  const ceps = ultMari ? [...String(ultMari.texto || '').matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)] : [];
+  // Uma opção só e o cliente disse "sim / é essa / isso" = a opção 1.
+  const afirma = ceps.length === 1 && /^(sim|isso|essa|e essa|é essa|exato|essa mesma|é essa mesma|correto|certo)\b/i.test(msg.trim());
+  if ((esc || afirma) && ceps.length) {
+    const n = afirma ? 1 : esc[1] ? Number(esc[1]) : { primeir: 1, segund: 2, terceir: 3 }[esc[2]];
     const alvo = ceps.find((c) => Number(c[1]) === n);
     if (alvo) { out.p_cep = alvo[2] + alvo[3]; out.cepDaLista = true; }
   }
@@ -131,8 +133,14 @@ if (!out.p_cep && !conv.cep && etapaEndereco && ruaCli) {
   if (!cidade) out.ruaSemCidade = ruaCli;
   else {
     try {
+      // O ViaCEP precisa do nome como está no cadastro ("Sebastião Pedro DA Silva"): tenta o nome inteiro sem o
+      // "Rua/Av."; sem resultado, tenta sem as palavras de ligação.
+      const inteiro = ruaCli.replace(/^(rua|r\.?|avenida|av\.?|travessa|tv\.?|alameda|estrada|pra[cç]a|rodovia|beco)\s+/i, '').trim();
       const busca = palavras(ruaCli).join(' ');
-      const lst = busca.length >= 3 ? await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, busca), json: true, timeout: 6000 }) : [];
+      let lst = inteiro.length >= 3 ? await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, inteiro), json: true, timeout: 6000 }) : [];
+      if ((!Array.isArray(lst) || !lst.length) && busca.length >= 3 && busca !== normR(inteiro)) {
+        lst = await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, busca), json: true, timeout: 6000 });
+      }
       const vistos = new Set();
       out.opcoesRua = (Array.isArray(lst) ? lst : []).filter((x) => x && x.cep && !vistos.has(x.cep) && vistos.add(x.cep)).slice(0, 3)
         .map((x) => ({ logradouro: x.logradouro, bairro: x.bairro, cep: x.cep }));
