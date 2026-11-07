@@ -210,6 +210,11 @@ function violacoesDe(t) {
     }
   }
   if (V7 && prometeCobertura(n)) v.push('prometeu cobertura no endereço ("a Nio atende aí", "tem cobertura", "chega na sua rua"): proibido antes do portal — diga "A Nio atende [cidade] 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido."');
+  // Teste real 07/11 00h11 (conversa #1): sem CEP/cidade o estado não tinha planos ("NÃO apresente planos nem preços") e,
+  // pressionado por "Não recebi nada", o modelo INVENTOU três planos e preços. Sem planos no estado, nenhum valor em R$ sai.
+  if (V7 && !(ctx.planos || []).length && /r\$\s*\d/.test(n)) {
+    v.push('citou preço sem ter planos no estado (a cidade ainda não foi identificada pelo CEP): não invente nomes nem valores — peça o CEP e o número');
+  }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
   if (t.replace(/\d{3}\.?[*x•]{3}\.?[*x•]{3}-?\d{2}/gi, '').includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');

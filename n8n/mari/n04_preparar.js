@@ -126,8 +126,11 @@ if (!out.p_cep && etapaEndereco) {
   // "Escrevi acima", a Mari confirmou "Seu endereço é Rua dos Artistas, 123, …, Juiz de Fora/MG?" (SEM o CEP) e o
   // "Isso" não achou CEP na última fala → CEP/cidade/cluster nunca gravados → sem planos. Procura a opção única
   // nas falas anteriores da Mari (várias opções = precisa de escolha explícita, não adivinha).
+  // Conversa que já passou do endereço (número gravado) mas ficou sem CEP — como a #1 de 06/11, parada sem planos —
+  // se cura sozinha: a opção única que a Mari mostrou é o CEP que o cliente seguiu (não exige "sim" na mensagem de agora).
+  const curar = !conv.cep && !!conv.numero;
   if (!ceps.length && !conv.cep) {
-    const maris = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-5, -1).reverse();
+    const maris = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(curar ? -14 : -5, -1).reverse();
     for (const h of maris) {
       const t = String(h.texto || '');
       const lst = [...t.matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)];
@@ -138,7 +141,7 @@ if (!out.p_cep && etapaEndereco) {
     }
   }
   // Uma opção só e o cliente disse "sim / é essa / isso" = a opção 1.
-  const afirma = ceps.length === 1 && /^(sim|isso|essa|e essa|é essa|exato|essa mesma|é essa mesma|correto|certo)\b/i.test(msg.trim());
+  const afirma = ceps.length === 1 && (curar || /^(sim|isso|essa|e essa|é essa|exato|essa mesma|é essa mesma|correto|certo)\b/i.test(msg.trim()));
   if ((esc || afirma) && ceps.length) {
     const n = afirma ? 1 : esc[1] ? Number(esc[1]) : { primeir: 1, segund: 2, terceir: 3 }[esc[2]];
     const alvo = ceps.find((c) => Number(c[1]) === n);

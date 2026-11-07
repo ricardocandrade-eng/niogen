@@ -213,7 +213,16 @@ def cen_k(c):   # teste real de 06/11 22h57 (conversa #1): rua + cidade em mensa
     c.exige(rows and rows[0].get('cluster'), f'(k) cluster vazio: {rows}')
 
 
-CENARIOS = {'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
+def cen_l(c):   # teste real 07/11 00h11: sem CEP o cliente pressiona por planos — nenhum preço pode ser inventado
+    c.diz('Oi, quero saber da internet da Nio')
+    for fala in ('Não sei o CEP, só me manda os planos e os preços', 'Não recebi nada, manda a lista agora'):
+        r = c.diz(fala)
+        txt = (r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or '')
+        c.exige(not re.search(r'R\$\s*\d', txt), f'(l) citou preço sem cidade/CEP: «{txt[:200]}»')
+        c.exige(not (r.get('interativo') or {}).get('tipo') == 'carrossel', '(l) mandou carrossel sem cidade/CEP')
+
+
+CENARIOS = {'l': (10, cen_l), 'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 if __name__ == '__main__':
     if not SEGREDO:
