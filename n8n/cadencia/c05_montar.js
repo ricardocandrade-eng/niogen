@@ -8,7 +8,7 @@
 // passo ENCERRAR (só muda o status). Nunca o nome da revendedora no texto (o banco já filtra; aqui de novo).
 
 const CONFIG = {
-  CHATWOOT_NIO_ACCOUNT: '',   // preencher na virada para o modo chatwoot (conta própria da Nio, nunca a da Vero)
+  CHATWOOT_NIO_ACCOUNT: '195428',   // conta própria da Nio no Chatwoot (nunca a da Vero) — prompt 28, 07/11
 };
 
 const c = $input.first().json;

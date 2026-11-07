@@ -4,6 +4,9 @@
 # backup antes de qualquer PUT e este script SÓ opera no workflow "mari_cadencia" (não lê para escrita nem o
 # mari_principal nem nada da Renata). A decisão de cada envio está no banco (mari_cadencia_candidatos);
 # o workflow só executa. Monta e fica DESLIGADO: inativo no n8n + kill switch staticData._cadenciaAtiva = false.
+# 07/11 (prompt 28): nós 6g/7 sem `disabled` (só rodam no modo chatwoot; no modo teste o 5s desvia antes), conta
+# Chatwoot 195428 no c05, e o ramo 9 (interesse futuro: etiqueta + nota privada, 0052) — também só no modo chatwoot.
+# Ligar continua sendo pela rota admin ({"admin":"modo chatwoot"} e {"admin":"ligar"}) + ativar no n8n, com o OK do Ricardo.
 #
 # Chave da API: N8N_API_KEY_NIO (ambiente ou variável de usuário do Windows). Nunca em arquivo.
 #
@@ -39,6 +42,9 @@ CODE = {
     '5 · Montar envio': 'c05_montar.js',
     '6h · Guard Chatwoot': 'c06_guard.js',
     '7r · Resultado': 'c07_resultado.js',
+    '9b · Itens futuro': 'c09b_futuro_itens.js',
+    '9d · Montar etiquetas': 'c09d_futuro_etiquetas.js',
+    '9h · Conferir': 'c09h_futuro_conferir.js',
 }
 
 
@@ -99,8 +105,8 @@ def build(ids):
         'method': 'GET',
         'url': '=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}',
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'options': {'timeout': 10000}}, 1760, 500, credentials=cw_cred, disabled=True, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — desligado. Credencial "Chatwoot Nio" (api_access_token) a preencher no painel.')
+        'options': {'timeout': 10000}}, 1760, 500, credentials=cw_cred, onError='continueRegularOutput',
+        notes='MODO CHATWOOT — guard: relê a conversa antes de enviar (só roda com _modoCadencia = chatwoot).')
     code('6h · Guard Chatwoot', 1980, 500)
     iff('6i · Parar escada?', '={{ $json.parar === true }}', 2200, 500)
     rpc('6p · Supabase parar', 'mari_cadencia_parar',
@@ -112,13 +118,45 @@ def build(ids):
         'url': "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $json.config.CHATWOOT_NIO_ACCOUNT + '/conversations/' + $json.chatwootConversationId + '/messages' }}",
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.corpo) }}',
-        'options': {'timeout': 15000}}, 2640, 700, credentials=cw_cred, disabled=True, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — desligado. Envio SEMPRE pela API do Chatwoot (bolha na conversa, resposta encadeada).')
+        'options': {'timeout': 15000}}, 2640, 700, credentials=cw_cred, onError='continueRegularOutput',
+        notes='MODO CHATWOOT — envio SEMPRE pela API do Chatwoot (bolha na conversa). Só roda com _modoCadencia = chatwoot.')
     code('7r · Resultado', 2860, 700)
     rpc('8 · Supabase registrar', 'mari_cadencia_registrar',
         '={{ JSON.stringify({ p_conversa: $json.conversaId, p_passo: $json.passo, '
         'p_ok: ($json.ok !== undefined ? $json.ok : !$json.erro), p_erro: $json.erro || null, '
         'p_texto: $json.texto || null, p_excecao: $json.excecao || null }) }}', 3080, 300)
+
+    # ── 9 · Interesse futuro (prompt 28, 0052): etiqueta interesse-futuro + nota privada, só no modo chatwoot ──
+    cw_base = "'https://app.chatwoot.com/api/v1/accounts/' + $json.conta + '/conversations/' + $json.cw"
+    iff('9 · Futuro? (modo chatwoot)', "={{ $('2 · Interruptor').first().json.modo === 'chatwoot' }}", 660, 900)
+    rpc('9a · Supabase futuro', 'mari_futuro_pendentes', '={{ JSON.stringify({ p_limite: 20 }) }}', 880, 900,
+        onError='continueRegularOutput')
+    code('9b · Itens futuro', 1100, 900)
+    add('9c · Chatwoot ler', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': '={{ ' + cw_base + ' }}',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'options': {'timeout': 10000}}, 1320, 900, credentials=cw_cred, onError='continueRegularOutput')
+    code('9d · Montar etiquetas', 1540, 900)
+    iff('9e · Etiquetar?', '={{ $json.ok === true }}', 1760, 900)
+    add('9f · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': '={{ ' + cw_base + " + '/labels' }}",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ labels: $json.labels }) }}',
+        'options': {'timeout': 10000}}, 1980, 900, credentials=cw_cred, onError='continueRegularOutput',
+        notes='POST /labels SUBSTITUI a lista: o 9d já mandou as atuais + interesse-futuro.')
+    add('9g · Chatwoot nota', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $('9d · Montar etiquetas').item.json.conta + "
+               "'/conversations/' + $('9d · Montar etiquetas').item.json.cw + '/messages' }}",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ content: $('9d · Montar etiquetas').item.json.nota, message_type: 'outgoing', private: true }) }}",
+        'options': {'timeout': 10000}}, 2200, 900, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Nota PRIVADA (o cliente não vê).')
+    code('9h · Conferir', 2420, 900)
+    iff('9i · Marcar?', '={{ $json.marcar === true }}', 2640, 900)
+    rpc('9j · Supabase marcar', 'mari_futuro_marcar',
+        '={{ JSON.stringify({ p_conversa: $json.conversaId, p_para: $json.voltaEm }) }}', 2860, 900)
 
     ligacoes = [
         ('1 · A cada 10 min', 0, '2 · Interruptor'),
@@ -142,6 +180,18 @@ def build(ids):
         ('7 · Chatwoot enviar', 0, '7r · Resultado'),
         ('7r · Resultado', 0, '8 · Supabase registrar'),
         ('8 · Supabase registrar', 0, '4 · Um por vez'),
+        # ramo 9 (interesse futuro) — roda depois do ramo principal (executionOrder v1)
+        ('2a · Admin?', 1, '9 · Futuro? (modo chatwoot)'),
+        ('9 · Futuro? (modo chatwoot)', 0, '9a · Supabase futuro'),
+        ('9a · Supabase futuro', 0, '9b · Itens futuro'),
+        ('9b · Itens futuro', 0, '9c · Chatwoot ler'),
+        ('9c · Chatwoot ler', 0, '9d · Montar etiquetas'),
+        ('9d · Montar etiquetas', 0, '9e · Etiquetar?'),
+        ('9e · Etiquetar?', 0, '9f · Chatwoot etiquetas'),
+        ('9f · Chatwoot etiquetas', 0, '9g · Chatwoot nota'),
+        ('9g · Chatwoot nota', 0, '9h · Conferir'),
+        ('9h · Conferir', 0, '9i · Marcar?'),
+        ('9i · Marcar?', 0, '9j · Supabase marcar'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}
