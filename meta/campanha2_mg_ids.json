@@ -1,0 +1,548 @@
+{
+  "cidades": {
+    "Juiz de Fora": {
+      "key": "257203",
+      "name": "Juiz de Fora",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Belo Horizonte": {
+      "key": "244661",
+      "name": "Belo Horizonte",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Betim": {
+      "key": "244810",
+      "name": "Betim",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Cataguases": {
+      "key": "248464",
+      "name": "Cataguases",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Conselheiro Lafaiete": {
+      "key": "249726",
+      "name": "Conselheiro Lafaiete",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Contagem": {
+      "key": "249756",
+      "name": "Contagem",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Divinópolis": {
+      "key": "250827",
+      "name": "Divinópolis",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Esmeraldas": {
+      "key": "251405",
+      "name": "Esmeraldas",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Ibirité": {
+      "key": "254870",
+      "name": "Ibirité",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Leopoldina": {
+      "key": "258196",
+      "name": "Leopoldina",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Nova Lima": {
+      "key": "261456",
+      "name": "Nova Lima",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Pouso Alegre": {
+      "key": "265543",
+      "name": "Pouso Alegre",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Ribeirão das Neves": {
+      "key": "266846",
+      "name": "Ribeirão das Neves",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Santa Luzia": {
+      "key": "268171",
+      "name": "Santa Luzia (Minas Gerais)",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Santa Rita do Sapucaí": {
+      "key": "268454",
+      "name": "Santa Rita do Sapucaí",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "São Lourenço": {
+      "key": "269747",
+      "name": "São Lourenço",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Sete Lagoas": {
+      "key": "270879",
+      "name": "Sete Lagoas",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Ubá": {
+      "key": "273163",
+      "name": "Ubá",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Varginha": {
+      "key": "273605",
+      "name": "Varginha",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Vespasiano": {
+      "key": "273969",
+      "name": "Vespasiano",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Araguari": {
+      "key": "242468",
+      "name": "Araguari",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Caxambu": {
+      "key": "248629",
+      "name": "Caxambu",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Coronel Fabriciano": {
+      "key": "249900",
+      "name": "Coronel Fabriciano",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Governador Valadares": {
+      "key": "254137",
+      "name": "Governador Valadares",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Ipatinga": {
+      "key": "255351",
+      "name": "Ipatinga",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Itabira": {
+      "key": "255557",
+      "name": "Itabira",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "João Monlevade": {
+      "key": "256846",
+      "name": "João Monlevade, Brazil",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Lavras": {
+      "key": "258144",
+      "name": "Lavras",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Montes Claros": {
+      "key": "260563",
+      "name": "Montes Claros",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Muriaé": {
+      "key": "260999",
+      "name": "Muriaé",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Paracatu": {
+      "key": "262488",
+      "name": "Paracatu",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Patrocínio": {
+      "key": "262968",
+      "name": "Patrocínio",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Poços de Caldas": {
+      "key": "264484",
+      "name": "Poços de Caldas",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Sabará": {
+      "key": "267444",
+      "name": "Sabará",
+      "region": "Minas Gerais",
+      "region_id": 449
+    },
+    "Timóteo": {
+      "key": "272495",
+      "name": "Timóteo",
+      "region": "Minas Gerais",
+      "region_id": 449
+    }
+  },
+  "anotacoes": [
+    "07/11 ~18h10: CJ_JF foi criado com daily_min_spend_target R$ 40, mas a Meta recusou ATIVAR o conjunto (code 100/1885648: gasto mínimo combinado maior que o orçamento da campanha; budget_remaining do dia = R$ 53,13). Mínimo retirado (0) para subir hoje; recolocar a partir de 08/11 (POST daily_min_spend_target=4000 no CJ_JF) se o Ricardo quiser."
+  ],
+  "atualizado_em": "2026-11-07T18:33:41-03:00",
+  "conta": "act_764071346694892",
+  "pagina_id": "1421228191072269",
+  "instagram_id": "17841411489935097",
+  "whatsapp": "+553128881265",
+  "imagens": {
+    "REG_H1_sobe_1x1": "c7dce25bef31fa561e54303d03148f2d",
+    "REG_H1_sobe_9x16": "5a1f5d9cd6c80debe85a103531c55188",
+    "REG_H2_porDia_1x1": "2fc35cf6f408dd122f07df5340299237",
+    "REG_H2_porDia_9x16": "8a36a4291a2f29b5ee6b38bfe040a0d9",
+    "REG_H3_caro_1x1": "3cc598eb818684c5568cf99cfc4bd5b1",
+    "REG_H3_caro_9x16": "621e6611520598ac3f5ba5cd402fc4d4",
+    "REG_H4_rua_1x1": "37f2cdd4a412ae6f7f029abd2c775bb4",
+    "REG_H4_rua_9x16": "9caf09d979167828092c73ceb8e4ea3c",
+    "REG_H5_giga_1x1": "6902ac0d8a503e07435abfcc1290d5ff",
+    "REG_H5_giga_9x16": "b65b4b074875a8f3232111dbf4e11032",
+    "REG_H6_trava_1x1": "c4fe9ad401bf3080e8e66c5a0de513e5",
+    "REG_H6_trava_9x16": "dfc20015d466774343f427022e265468",
+    "BTU_H1_metade_1x1": "ad779ae44089bd4e6b91a5a106d04dc8",
+    "BTU_H1_metade_9x16": "d79843d7304dc805429f3570caaca43e",
+    "BTU_H2_porDia_1x1": "edb64b8352983d53fb11199e1a21f9c4",
+    "BTU_H2_porDia_9x16": "5c9c47e1b96b7633f1961bc82504de96",
+    "BTU_H3_caro_1x1": "1f7e73e43f8530d084b13cc08c5b8bd1",
+    "BTU_H3_caro_9x16": "7b4502529f1d6a8ff861d12289cc3aa8",
+    "BTU_H4_rua_1x1": "194631847b32482e5693b233eb67686a",
+    "BTU_H4_rua_9x16": "450da903920f141104e68960a969a3dd",
+    "BTU_H5_giga_1x1": "31f76da571972d88d90f54f9ad1704c5",
+    "BTU_H5_giga_9x16": "225887569a2065e404f3ec77739a33ed",
+    "BTU_H6_trava_1x1": "8b8a30fe046726a5782e9cb3cbfae71b",
+    "BTU_H6_trava_9x16": "1df8a52401cd0b980a06fbd6f137ec0a"
+  },
+  "campanha": {
+    "id": "120257741846680211",
+    "nome": "NIO_MG_C2_MSG_nov26",
+    "orcamento_diario": 200.0
+  },
+  "conjuntos": {
+    "CJ_JF": {
+      "id": "120257741889280211",
+      "cidades": 1,
+      "variante": "sem gasto mínimo (retirado na ativação)"
+    },
+    "CJ_REGULAR": {
+      "id": "120257741890120211",
+      "cidades": 19,
+      "variante": "sem gasto mínimo"
+    },
+    "CJ_BTU": {
+      "id": "120257741891190211",
+      "cidades": 15,
+      "variante": "sem gasto mínimo"
+    }
+  },
+  "criativos": {
+    "AD_C2R_H1_sobe": {
+      "id": "1868752030946039",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2R_H2_porDia": {
+      "id": "1142189775175759",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2R_H3_caro": {
+      "id": "1434457825526116",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2R_H4_rua": {
+      "id": "29067301166212316",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2R_H5_giga": {
+      "id": "1673997551018390",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2R_H6_trava": {
+      "id": "2360045244770664",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H1_metade": {
+      "id": "1673625361027044",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H2_porDia": {
+      "id": "1793105355236625",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H3_caro": {
+      "id": "2345546962879993",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H4_rua": {
+      "id": "1637016397877918",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H5_giga": {
+      "id": "2177861559775507",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    },
+    "AD_C2B_H6_trava": {
+      "id": "2051489952312910",
+      "variante": "1x1 fallback + 9x16 vertical (layout 2), mensagem pronta · opt-out completo (animação, tradução, legenda, cartão, corte, adaptação, uncrop, PAC, texto)"
+    }
+  },
+  "anuncios": {
+    "CJ_JF": {
+      "AD_C2R_H1_sobe": "120257742000360211",
+      "AD_C2R_H2_porDia": "120257742000590211",
+      "AD_C2R_H3_caro": "120257742000960211",
+      "AD_C2R_H4_rua": "120257742001650211",
+      "AD_C2R_H5_giga": "120257742002460211",
+      "AD_C2R_H6_trava": "120257742002870211"
+    },
+    "CJ_REGULAR": {
+      "AD_C2R_H1_sobe": "120257742050550211",
+      "AD_C2R_H2_porDia": "120257742050670211",
+      "AD_C2R_H3_caro": "120257742050900211",
+      "AD_C2R_H4_rua": "120257742051030211",
+      "AD_C2R_H5_giga": "120257742051150211",
+      "AD_C2R_H6_trava": "120257742051280211"
+    },
+    "CJ_BTU": {
+      "AD_C2B_H1_metade": "120257742085210211",
+      "AD_C2B_H2_porDia": "120257742085270211",
+      "AD_C2B_H3_caro": "120257742085720211",
+      "AD_C2B_H4_rua": "120257742086010211",
+      "AD_C2B_H5_giga": "120257742087310211",
+      "AD_C2B_H6_trava": "120257742088150211"
+    }
+  },
+  "previas": {
+    "em": "2026-11-07T18:00:27-03:00",
+    "tudo_ok": true,
+    "por_anuncio": {
+      "120257742050550211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742050670211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742050900211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742051030211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742051150211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742051280211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742085210211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742085270211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742085720211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742086010211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742087310211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      },
+      "120257742088150211": {
+        "INSTAGRAM_STANDARD": {
+          "ok": true,
+          "texto": "imagem servida 1080×1080 (esperado 1x1)"
+        },
+        "INSTAGRAM_STORY": {
+          "ok": true,
+          "texto": "imagem servida 1080×1920 (esperado 9x16)"
+        }
+      }
+    },
+    "revisao": {
+      "120257742000360211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742000590211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742000960211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742001650211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742002460211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742002870211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742050550211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742050670211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742050900211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742051030211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742051150211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742051280211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742085210211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742085270211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742085720211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742086010211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742087310211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      },
+      "120257742088150211": {
+        "effective_status": "PAUSED",
+        "problema": null
+      }
+    }
+  },
+  "ativada_em": "2026-11-07T18:02:28-03:00",
+  "c1_pausada_em": "2026-11-07T18:33:41-03:00"
+}

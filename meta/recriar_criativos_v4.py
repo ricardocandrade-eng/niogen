@@ -94,7 +94,11 @@ def provar_previa(ad_id, rotulo, formato, esperado, hashes_do_anuncio):
     achou_hash = h_esp in pagina
     achou_errado = h_outro in pagina
     # proporção da imagem principal servida (a maior entre as <img>/background da prévia)
-    urls = re.findall(r'(?:src|href)="(https:[^"]+?\.(?:jpg|jpeg|png|webp)[^"]*)"', pagina) + \
+    # 07/11 (C2): a prévia nova traz a arte no JSON da página, com "\/" escapado e sem extensão
+    # (https://business.facebook.com/ads/image/?d=...). Essa vem primeiro; as <img>/background ficam de reserva.
+    plano = pagina.replace('\\/', '/')
+    urls = re.findall(r'https://business\.facebook\.com/ads/image/\?d=[A-Za-z0-9_\-]+', plano) + \
+           re.findall(r'(?:src|href)="(https:[^"]+?\.(?:jpg|jpeg|png|webp)[^"]*)"', pagina) + \
            re.findall(r'url\((?:&quot;|["\'])?(https:[^)"\'&]+?(?:\.jpg|\.jpeg|\.png|\.webp)[^)"\']*)', pagina)
     melhor = None
     for u in urls[:12]:

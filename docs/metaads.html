@@ -260,7 +260,7 @@
   let nAnuncios = null, nBairros = null;
 
   // ───────────── Desempenho ─────────────
-  const VERBA_MES = 2000;   // verba de Meta Ads de nov/2026 (INFRA §7)
+  let VERBA_MES = 2000;     // reserva; o valor vem de config_meta_ads_regras.verba_mes (0058, prompt 29)
   const STATUS_AD = {
     ACTIVE: ['ok', 'Ativo'], PAUSED: ['dim', 'Pausado'], CAMPAIGN_PAUSED: ['dim', 'Campanha pausada'], ADSET_PAUSED: ['dim', 'Conjunto pausado'],
     IN_PROCESS: ['info', 'Processando'], PENDING_REVIEW: ['info', 'Em análise'], PREAPPROVED: ['info', 'Pré-aprovado'],
@@ -278,9 +278,11 @@
     let qDiario = NG.sb.from('meta_ads_diario').select('*');
     if (p.de) qDiario = qDiario.gte('dia', p.de);
     if (p.ate) qDiario = qDiario.lte('dia', p.ate);
-    const [rDiario, rAds, rDias] = await Promise.all([
+    const [rDiario, rAds, rDias, rVerba] = await Promise.all([
       qDiario, NG.sb.from('meta_ads_anuncios').select('*'), NG.sb.from('v_meta_ads_dia').select('*').order('dia', { ascending: false }),
+      NG.sb.from('config_meta_ads_regras').select('valor').eq('parceiro_id', 'dharma').eq('chave', 'verba_mes').maybeSingle(),
     ]);
+    if (!rVerba.error && rVerba.data && Number(rVerba.data.valor) > 0) VERBA_MES = Number(rVerba.data.valor);
     const erro = rDiario.error || rAds.error || rDias.error;
     if (erro) {
       document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`;
