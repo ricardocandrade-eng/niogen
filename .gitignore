@@ -20,3 +20,6 @@ __pycache__/
 
 # prova das prévias da Meta (HTML com URL assinada; fora do git)
 meta/_previas/
+
+# extensão do Chrome (prompt 28): config local com a anon key, igual ao docs/config.js
+extensao/config.js
