@@ -85,6 +85,10 @@ if (hm) {
 const imitado = { botoes: null, carrossel: false };
 bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
   const t = norm(x);
+  // A marca DE VERDADE ([BOTOES:pagamento|resumo|sim_nao]) também casa com este padrão (o /i) e era apagada aqui — o
+  // pagamento nunca saía pela marca, só pelas travas. Conversa #5 (07/11 18h53): a Mari respondeu só "[BOTOES:pagamento]",
+  // a marca sumiu, o texto ficou vazio e o cliente ficou sem resposta. A marca certa fica para o tag('BOTOES').
+  if (/^\s*(pagamento|resumo|sim_nao)\s*$/.test(t)) return m;
   // Só pagamento e resumo: "Sim / Não" copiado caía em pergunta aberta (complemento + referência) — teste real 06/11.
   imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : null;
   return '';
@@ -647,6 +651,24 @@ if (V7 && !cpfOk(m.dados.cpf)) {
     upd.dados = { ...(upd.dados || {}), ...dados };
   }
 }
+// 07/11 (conversa #5): o modelo pediu o nome e confirmou o telefone sem emitir [DADOS_COLETADOS] — nome e telefone
+// nunca entraram no estado e a trava do pagamento (que exige o telefone) não disparou. O sistema registra pela pergunta
+// da Mari logo antes: "nome completo" + resposta só com o nome (2+ palavras) = o nome; "Só confirmando: 32 98454-2284?"
+// + "sim" = o telefone.
+{
+  const histC = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultMari = String((histC.filter((h) => h && h.papel === 'mari').pop() || {}).texto || '');
+  const msgC = String((prep.consolidado || {}).mensagem || '').trim();
+  if (V7 && !m.dados.nome && /nome completo|seu nome/.test(norm(ultMari))
+    && /^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){1,6}$/.test(msgC) && !/\b(sim|nao|ok|isso|oi|ola)\b/.test(norm(msgC))) {
+    dados.nome = msgC; m.dados.nome = msgC; upd.dados = { ...(upd.dados || {}), nome: msgC };
+  }
+  const telConf = ultMari.match(/confirmando:?\s*\(?(\d{2})\)?\s*(9?\d{4})[\s-]?(\d{4})\s*\?/i);
+  if (V7 && !m.dados.telefone && telConf && /^(sim|s|ss|isso|isso mesmo|exato|correto|certo|confirmo|esse mesmo|e esse|e sim|positivo)\b/.test(norm(msgC))) {
+    const tc = telConf.slice(1).join('');
+    dados.telefone = tc; m.dados.telefone = tc; upd.dados = { ...(upd.dados || {}), telefone: tc };
+  }
+}
 // Forma de pagamento tocada no botão (ou digitada) e não registrada pelo modelo — o sistema registra.
 if (V7 && !m.forma_pagamento) {
   const fm = norm((prep.consolidado || {}).mensagem).trim();
@@ -714,6 +736,11 @@ if (V7 && !erro && tags.botoes) {
 }
 // O histórico (mari_turnos) guarda o que o cliente viu: texto + corpo interativo + resumo legível.
 if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
+// Rede de segurança (conversa #5, 07/11): nada para mandar (sem texto, sem interativo, sem handoff) = cliente no vácuo.
+// Deixa o rastro em mari_erros com o que o modelo escreveu.
+if (!erro && !handoff && !interativo && !String(texto || '').trim()) {
+  erro = { no: '7 · Extrair', mensagem: 'resposta_vazia', payload: { bruto: String(bruto || '').slice(0, 300) } };
+}
 
 return [{ json: {
   corrigir: false,
