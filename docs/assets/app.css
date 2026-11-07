@@ -941,6 +941,17 @@ label.cartao { cursor: pointer; }
 .etiquetas .chip { font-size: 10px; padding: 2px 6px; cursor: help; }
 .com-ajuda { cursor: help; }
 
+/* ---------- 07/11 (prompt 28): bolinhas da cadência — acesa enviada · piscando próxima · apagada futura ---------- */
+.cad-bolas { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.cad-b { font-family: var(--dm); font-size: 10px; line-height: 1; padding: 3px 6px; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--muted); background: transparent; cursor: help; white-space: nowrap; }
+.cad-b.on { background: var(--ok-bg); border-color: var(--ok-fg); color: var(--ok-fg); }
+.cad-b.prox { background: var(--warn-bg); border-color: var(--warn-dot); color: var(--warn-fg); animation: cad-pisca 1.4s ease-in-out infinite; }
+.cad-b.off { opacity: .5; }
+.cad-b:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+@keyframes cad-pisca { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .cad-b.prox { animation: none; outline: 2px solid var(--warn-dot); } }
+.pill.m-futuro { background: var(--info-bg); color: var(--info-fg); }
+
 /* ---------- 06/11 (prompt 27): menu lateral — contadores ---------- */
 .nav-item .badge.alerta { background: var(--bad-dot); }
 .nav-item .badge.info { background: var(--info-fg); }

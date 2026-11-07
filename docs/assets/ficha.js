@@ -198,7 +198,20 @@
     const abertura = [...(re.data || [])].reverse().find((e) => e.tipo === 'conferencia' && (e.detalhe || {}).para === 'pendente');
     const desde = abertura ? new Date(abertura.criado_em) : new Date(v.criado_em);
     const semResposta = (rk.data || []).filter((c) => c.toque === 'CONF_SEM_RESPOSTA' && new Date(c.em) >= desde).length;
+    // Prompt 28: avisos automáticos da Mari para a venda (BIO1 · BIO3 · INSTALACAO · VESPERA) — só admin/backoffice.
+    const convId = ((rc.data || [])[0] || {}).id || null;
+    let cad = null;
+    if (convId) {
+      const [rkc, rtc, tpl] = await Promise.all([
+        NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', convId).maybeSingle(),
+        NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', convId).eq('papel', 'mari')
+          .not('tags->>cadencia', 'is', null).order('created_at'),
+        NG.tplCadencia(),
+      ]);
+      cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
+    }
     return {
+      cad,
       parc, semResposta,
       v,
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
@@ -747,6 +760,28 @@
     const ehAdmin = NG.usuario && NG.usuario.perfil === 'admin';
     const vendedores = d.usuarios.filter((u) => u.perfil !== 'backoffice');
 
+    // Prompt 28: bolinhas dos avisos da Mari (acesa = enviada · piscando = próxima · apagada = futura; texto no mouse).
+    const avisosMari = (codigos) => {
+      if (!d.cad) return '';
+      const nome = NG.nomeCadencia(v.cliente_nome);
+      const ag = v.instalacao_agendada_para;
+      const turnoTxt = (v.instalacao_turno || (ag && NG.janela(ag) === '13–17h' ? 'tarde' : 'manha')) === 'tarde';
+      const diaLongo = ag ? `${new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, weekday: 'long' }).format(new Date(ag))}, ${NG.fmtData(ag)}` : '';
+      const end = [v.logradouro, v.numero, v.complemento, v.bairro].map((x) => String(x || '').trim()).filter(Boolean).join(', ');
+      const t = d.cad.tpl;
+      const futuros = {
+        BIO1: NG.renderTpl(t.nio_lembrete_biometria_v2, [nome]),
+        BIO3: 'Não é mensagem: no D+3 do pedido sem biometria, o nosso time liga para o cliente (nunca automático).',
+        INSTALACAO: NG.renderTpl(t.nio_instalacao_agendada, [nome, diaLongo, turnoTxt ? 'tarde, 13h às 17h' : 'manhã, 8h às 12h', end]),
+        VESPERA: NG.renderTpl(t.nio_lembrete_instalacao, [nome, ag ? NG.fmtData(ag) : '', turnoTxt ? 'tarde' : 'manhã']),
+      };
+      const ROT = { BIO1: 'Lembrete da biometria (D+1 do pedido)', BIO3: 'D+3 sem biometria · o time liga', INSTALACAO: 'Aviso da instalação agendada (C2)', VESPERA: 'Véspera da instalação (C3)' };
+      const k = d.cad.k;
+      const proximo = k && codigos.includes(k.proximo_passo) ? { cod: k.proximo_passo, em: k.proximo_em, texto: k.texto, bloqueio: k.bloqueio } : null;
+      const html = NG.cadBolinhas(codigos.map((cod) => ({ cod, rot: ROT[cod] })), { enviados: d.cad.enviados, proximo, futuros });
+      return `<div class="d-l"><span>Avisos da Mari ${NG.dicaTxt(NG.ajuda.cad_avisos_venda)}</span><b>${html}</b></div>`;
+    };
+
     // M-10: apurado no 11º mês após a ativação (texto do contrato em NG.TEXTOS_COMISSAO.m10).
     let m10 = '—';
     if (vendida) {
@@ -836,6 +871,7 @@
           ${linha('Interesse no portal', `<span class="mono">${esc(v.nio_viab_interesse_id || '—')}</span>`)}
           ${linha('Análise de crédito', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ' · ' + NG.fmtDataHora(v.credito_em) : ''}` : '—'))}
           ${linha('Biometria (link da Nio)', esc(`${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}${v.biometria_link_enviado_em ? ' · link enviado pela Nio ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
+          ${avisosMari(['BIO1', 'BIO3'])}
           ${linha('Vendida em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '—'))}
           ${linha('Vendedor', esc(v.vendedor_nome || '—'))}
           ${v.status === '0_qualificado' ? botoesPortal : ''}
@@ -866,6 +902,7 @@
           return `${linha('Agendada para', esc(v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '—'))}
             ${v.biometria_validada_em ? linha('Biometria validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
             ${linha('Agendamento', h != null ? `${esc(NG.fmtHoras(h))} depois da venda · ${h <= 4 ? '<span class="ok-txt">dentro das 4 h</span>' : '<span class="warn-txt">fora das 4 h</span>'}` : v.status === '1_vendido' && v.horas_sem_agendamento != null ? `<span class="${Number(v.horas_sem_agendamento) > 4 ? 'bad-txt' : 'warn-txt'}">sem agendamento há ${esc(NG.fmtHoras(v.horas_sem_agendamento))}</span>` : '—')}
+            ${avisosMari(['INSTALACAO', 'VESPERA'])}
             ${linha('Preferência do cliente', esc(v.instalacao_preferencia || '—'))}
             ${v.instalacao_turno ? linha('Turno agendado no portal', esc(TURNO[v.instalacao_turno] || v.instalacao_turno)) : ''}
             ${linha('Instalada em', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}

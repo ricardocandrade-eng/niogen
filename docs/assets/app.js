@@ -117,6 +117,10 @@
     viab_consultar: 'Abre o portal PAP numa aba nova e copia "CEP número" para colar na busca de viabilidade.',
     viab_registrar: 'Depois de consultar no portal, registre aqui o que ele respondeu. Fica gravado com a data e quem registrou.',
     portal_dados: 'Tudo o que o portal pede no Novo Pedido, na ordem das etapas. Copie campo a campo ou tudo de uma vez. Em vermelho = falta (peça ao cliente antes de abrir o pedido).',
+    // cadência (prompt 28)
+    cad_bolinhas: 'Cadência da Mari: F1 (~1 h) e F2 (~4 h) no mesmo dia, dentro da janela de 24 h; depois D3, D7 e D15 por template. Acesa = enviada · piscando = próxima · apagada = futura. Passe o mouse em cada uma para ver o texto exato. Nunca mais de 2 toques por dia e 15 por mês; nunca domingo/feriado. Sem resposta 48 h depois do D15, a conversa SEM venda se encerra sozinha; venda criada nunca sai sozinha.',
+    cad_avisos_venda: 'Avisos automáticos da Mari para esta venda: BIO1 = lembrete da biometria no D+1 do pedido · BIO3 = no D+3 sem biometria o nosso time liga (não é mensagem) · INSTALACAO = aviso assim que a instalação é agendada · VESPERA = lembrete na véspera. Passe o mouse para ver o texto.',
+    interesse_futuro: 'Interesse futuro: a venda está em Saída e o cliente pediu para voltarmos a falar na data. A conversa ganha a etiqueta interesse-futuro no Chatwoot e uma nota privada com a data; o backoffice retoma por lá. A cadência não manda nada para ela.',
     // menu lateral
     menu_mari: 'Conversas esperando alguém do time: handoff da Mari, A resolver no Chatwoot e a última mensagem é do cliente. Vermelho = alguma passou de 15 min em horário de contato.',
     menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação.',
@@ -903,6 +907,52 @@
     return { abrir, fechar, get aberta() { return !!atual; } };
   })();
 
+  // ---------- bolinhas da cadência (prompt 28, 07/11) ----------
+  // Acesa = enviada (data) · piscando = próxima (dia e hora) · apagada = futura. Ao passar o mouse, o TEXTO exato:
+  // enviada = mari_turnos com tags.cadencia · próxima = v_mari_cadencia.texto (0050) · futura = corpo do template.
+  let tplCache = null;
+  async function tplCadencia() {
+    if (tplCache) return tplCache;
+    const { data, error } = await sb.from('config_templates_waba').select('nome, corpo');
+    if (error) return {};
+    tplCache = Object.fromEntries((data || []).map((t) => [t.nome, t.corpo || '']));
+    return tplCache;
+  }
+  const renderTpl = (corpo, params) => (corpo ? String(corpo).replace(/\{\{(\d+)\}\}/g, (m, n) => {
+    const p = (params || [])[Number(n) - 1];
+    return p == null || p === '' ? '…' : String(p);
+  }) : '');
+  // {{1}} igual ao banco (mari_cadencia_nome): 1º nome só se confiável; senão "tudo bem".
+  const nomeCadencia = (nome) => {
+    const p = String(nome || '').trim().split(/\s+/)[0];
+    return p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : 'tudo bem';
+  };
+  // turnos da Mari com tags.cadencia → { passo: { em, texto } } (o último de cada passo)
+  const cadEnviados = (turnos) => Object.fromEntries((turnos || [])
+    .filter((t) => t.tags && t.tags.cadencia)
+    .map((t) => [t.tags.cadencia, { em: t.created_at, texto: t.texto, simulado: !!t.tags.simulado }]));
+  // passos: [{ cod, rot }] · proximo: { cod, em, texto, bloqueio } · futuros: { cod: texto }
+  function cadBolinhas(passos, { enviados = {}, proximo = null, futuros = {} } = {}) {
+    const itens = passos.map(({ cod, rot }) => {
+      const env = enviados[cod];
+      let cls; let tit;
+      if (env) {
+        cls = 'on';
+        tit = `${rot} · enviada ${fmtDataHora(env.em)}${env.simulado ? ' (simulado)' : ''}\n\n${env.texto || '(sem texto gravado)'}`;
+      } else if (proximo && proximo.cod === cod) {
+        cls = 'prox';
+        const quando = proximo.em ? ` · ${fmtDiaSemana(proximo.em)} ${fmtDataHora(proximo.em)}` : '';
+        const bloq = proximo.bloqueio && proximo.bloqueio !== 'aguardando' ? `\n(${proximo.bloqueio})` : '';
+        tit = `${rot} · próxima${quando}${bloq}\n\n${proximo.texto || futuros[cod] || 'O texto exato aparece quando o banco tiver a migration 0050.'}`;
+      } else {
+        cls = 'off';
+        tit = `${rot} · futura\n\n${futuros[cod] || 'O texto depende da etapa da conversa na hora do envio.'}`;
+      }
+      return `<span class="cad-b ${cls}" title="${esc(tit)}" tabindex="0">${esc(cod)}</span>`;
+    });
+    return `<span class="cad-bolas com-ajuda" aria-label="Cadência da Mari">${itens.join('')}</span>`;
+  }
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -920,6 +970,7 @@
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
+    tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência
     get usuario() { return usuarioAtual; },
   };
 })();
