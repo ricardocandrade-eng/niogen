@@ -166,6 +166,91 @@
           "name": "Supabase Nio (service role)"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892/insights",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "level",
+              "value": "adset"
+            },
+            {
+              "name": "breakdowns",
+              "value": "publisher_platform,platform_position"
+            },
+            {
+              "name": "time_increment",
+              "value": "1"
+            },
+            {
+              "name": "time_range",
+              "value": "={{ JSON.stringify({ since: $now.setZone('America/Sao_Paulo').minus({ days: 2 }).toFormat('yyyy-MM-dd'), until: $now.setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') }) }}"
+            },
+            {
+              "name": "fields",
+              "value": "date_start,adset_id,adset_name,campaign_id,campaign_name,spend,impressions,clicks,inline_link_clicks,actions"
+            },
+            {
+              "name": "limit",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "5 · Meta posicionamentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "1c45208a-2c70-563b-980f-460becc11d54",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_ads_gravar_posicionamentos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_insights: $json.data || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "6 · Supabase posicionamentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        100
+      ],
+      "id": "8c6a31bd-0281-5349-95e4-4d74a648bc72",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
     }
   ],
   "connections": {
@@ -212,6 +297,28 @@
           }
         ]
       ]
+    },
+    "4 · Supabase gravar": {
+      "main": [
+        [
+          {
+            "node": "5 · Meta posicionamentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Meta posicionamentos": {
+      "main": [
+        [
+          {
+            "node": "6 · Supabase posicionamentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
@@ -222,5 +329,5 @@
     "timezone": "America/Sao_Paulo",
     "errorWorkflow": "Nsb1dcL3HWQpKSav"
   },
-  "active": false
+  "active": true
 }

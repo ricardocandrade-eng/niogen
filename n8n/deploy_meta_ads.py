@@ -3,6 +3,7 @@
 # Build e deploy do workflow n8n "meta_ads_coleta": a cada 15 min lê da Graph API os insights por anúncio e dia
 # (hoje e os 2 dias anteriores — a Meta ainda ajusta conversas atrasadas) e o status dos anúncios da CA
 # act_764071346694892, e grava no Supabase Nio por meta_ads_gravar (migration 0034). A tela Meta Ads › Desempenho lê dali.
+# 07/11: + conjunto × posicionamento × dia → meta_ads_gravar_posicionamentos (migration 0054), base do agente de Meta Ads.
 # SÓ LEITURA na Meta: nenhum nó pausa, ativa ou muda verba. Mesmo padrão do deploy_cadencia.py: backup antes de
 # qualquer PUT e este script só opera no workflow "meta_ads_coleta".
 #
@@ -43,6 +44,8 @@ ROTA = 'niogen-meta-ads-coleta'
 CAMPOS_INSIGHTS = ','.join(['date_start', 'ad_id', 'ad_name', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                             'spend', 'impressions', 'reach', 'clicks', 'actions'])
 CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}'
+CAMPOS_POSIC = ','.join(['date_start', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
+                         'spend', 'impressions', 'clicks', 'inline_link_clicks', 'actions'])
 
 
 def build(ids):
@@ -86,12 +89,25 @@ def build(ids):
         'jsonBody': "={{ JSON.stringify({ p_insights: $('2 · Meta insights').first().json.data || [], "
                     "p_anuncios: $json.data || [] }) }}",
         'options': {'timeout': 20000}}, 720, 100, credentials=sb_cred)
+    # 07/11 (migration 0054): conjunto × posicionamento × dia — o corte que mostrou o Status do WhatsApp comendo 47 %
+    # da verba sem conversa. Vem depois da gravação principal: se falhar, o desempenho por anúncio já foi gravado.
+    graph('5 · Meta posicionamentos', 'insights', [
+        ('level', 'adset'), ('breakdowns', 'publisher_platform,platform_position'), ('time_increment', '1'),
+        ('time_range', janela), ('fields', CAMPOS_POSIC), ('limit', '500')], 960, 100)
+    add('6 · Supabase posicionamentos', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{SB}/rest/v1/rpc/meta_ads_gravar_posicionamentos',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ p_insights: $json.data || [] }) }}",
+        'options': {'timeout': 20000}}, 1200, 100, credentials=sb_cred)
 
     ligacoes = [
         ('1 · A cada 15 min', 0, '2 · Meta insights'),
         ('1w · Rodar agora (teste)', 0, '2 · Meta insights'),
         ('2 · Meta insights', 0, '3 · Meta anúncios'),
         ('3 · Meta anúncios', 0, '4 · Supabase gravar'),
+        ('4 · Supabase gravar', 0, '5 · Meta posicionamentos'),
+        ('5 · Meta posicionamentos', 0, '6 · Supabase posicionamentos'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}
