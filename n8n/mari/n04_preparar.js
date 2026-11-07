@@ -145,7 +145,15 @@ if (!out.p_cep && etapaEndereco) {
   if ((esc || afirma) && ceps.length) {
     const n = afirma ? 1 : esc[1] ? Number(esc[1]) : { primeir: 1, segund: 2, terceir: 3 }[esc[2]];
     const alvo = ceps.find((c) => Number(c[1]) === n);
-    if (alvo) { out.p_cep = alvo[2] + alvo[3]; out.cepDaLista = true; }
+    if (alvo) {
+      out.p_cep = alvo[2] + alvo[3]; out.cepDaLista = true;
+      // Cura (conversa que já tinha número/complemento): gravar o CEP não pode apagar o que o cliente já deu
+      // (teste real 07/11 00h26: o CEP voltou mas número 123 e "Apto 403" viraram vazio).
+      if (curar) {
+        if (!out.p_numero && conv.numero) out.p_numero = String(conv.numero);
+        if (!out.p_complemento && conv.complemento) out.p_complemento = String(conv.complemento);
+      }
+    }
   }
 }
 // (A3) Sem CEP, com rua: busca no ViaCEP pela rua na cidade (anúncio da campanha 1 = Juiz de Fora) — até 3 opções.
