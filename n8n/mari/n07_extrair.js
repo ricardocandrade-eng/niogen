@@ -175,6 +175,44 @@ const FRASES_ROBO = [['prezad', '"Prezado"'], ['informamos', '"Informamos"'], ['
   ['fico a disposicao', '"Fico à disposição"'], ['estou aqui para ajudar', '"Estou aqui para ajudar"'],
   ['como posso te ajudar hoje', '"Como posso te ajudar hoje?"'], ['certamente', '"Certamente"'], ['excelente pergunta', '"Excelente pergunta"']];
 
+// Trava de valor/plano fora da tabela (07/11). Devolve o que não bate, para o pedido de reescrita.
+function foraDaTabela(t) {
+  const n = norm(t);
+  const pls = ctx.planos || [];
+  const cents = (v) => Math.round(Number(v) * 100);
+  const ok = new Set([cents(540)]);   // taxa padrão do bloco de condições
+  const add = (v) => { if (v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v))) ok.add(cents(v)); };
+  const boletos = [], cartoesP = [];
+  for (const p of pls) {
+    add(p.preco); add(p.preco_cartao); add(p.taxa_habilitacao);
+    if (p.preco != null) boletos.push(Number(p.preco));
+    if (p.preco_cartao != null) { cartoesP.push(Number(p.preco_cartao)); add(Number(p.preco) - Number(p.preco_cartao)); }
+    for (const v of [p.preco, p.preco_cartao]) {   // preco_dia do 5b · Motor: centavos para cima + "menos de R$N"
+      if (v === null || v === undefined) continue;
+      const c = Math.ceil(cents(v) / 30); ok.add(c); ok.add((Math.floor(c / 100) + 1) * 100);
+    }
+  }
+  [boletos, cartoesP].forEach((arr) => arr.forEach((a) => arr.forEach((b) => { if (a > b) add(a - b); })));   // upsell "por mais R$X"
+  // O que o próprio cliente escreveu ("pago R$ 120 hoje", "tenho 300 mega") pode voltar na fala.
+  const cons = prep.consolidado || {};
+  const doCliente = norm([cons.mensagem, ...(Array.isArray(cons.historico) ? cons.historico : []).filter((h) => h.papel === 'lead').map((h) => h.texto)].join(' '));
+  const RS = /r\$\s*(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?/g;
+  const valor = (m) => Number(m[1].replace(/\./g, '')) * 100 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0);
+  for (const m of doCliente.matchAll(RS)) ok.add(valor(m));
+  const fora = [];
+  for (const m of n.matchAll(RS)) if (!ok.has(valor(m))) fora.push(m[0].replace(/\s+/g, ''));
+  // Velocidades: "500 Mega" / "1 Giga" (GB é a internet 5G, não entra).
+  const vel = new Set(pls.map((p) => Number(p.velocidade_mb)).filter(Boolean));
+  const velCli = new Set([...doCliente.matchAll(/\b(\d{2,4})\s*(?:mega|mb\b|mbps)/g)].map((m) => Number(m[1])));
+  for (const m of n.matchAll(/\b(\d{2,4})\s*(?:mega|mb\b|mbps)/g)) if (!vel.has(Number(m[1])) && !velCli.has(Number(m[1]))) fora.push(m[0]);
+  for (const m of n.matchAll(/\b(\d)\s*giga\b/g)) if (!vel.has(Number(m[1]) * 1000)) fora.push(m[0]);
+  // Nome de plano: "Nio Turbo" não existe. Liberados os nomes da tabela (Fibra, Essencial, Super, Ultra, Empresas).
+  const familias = new Set(['fibra', 'essencial', 'super', 'ultra', 'empresas', 'internet']);
+  pls.forEach((p) => String(p.nome || '').split(/\s+/).forEach((w) => familias.add(norm(w))));
+  for (const m of String(t || '').matchAll(/\bNio\s+([A-ZÀ-Ú][a-zà-ú]{2,})/g)) if (!familias.has(norm(m[1]))) fora.push(`Nio ${m[1]}`);
+  return [...new Set(fora)];
+}
+
 function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
@@ -211,9 +249,17 @@ function violacoesDe(t) {
   }
   if (V7 && prometeCobertura(n)) v.push('prometeu cobertura no endereço ("a Nio atende aí", "tem cobertura", "chega na sua rua"): proibido antes do portal — diga "A Nio atende [cidade] 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido."');
   // Teste real 07/11 00h11 (conversa #1): sem CEP/cidade o estado não tinha planos ("NÃO apresente planos nem preços") e,
-  // pressionado por "Não recebi nada", o modelo INVENTOU três planos e preços. Sem planos no estado, nenhum valor em R$ sai.
-  if (V7 && !(ctx.planos || []).length && /r\$\s*\d/.test(n)) {
-    v.push('citou preço sem ter planos no estado (a cidade ainda não foi identificada pelo CEP): não invente nomes nem valores — peça o CEP e o número');
+  // pressionado por "Não recebi nada", o modelo INVENTOU três planos ("Nio Turbo, 500 Mega — R$99,90"). Trava geral (vale
+  // com ou sem planos no estado): todo valor em R$, toda velocidade e todo nome "Nio X" da resposta têm de existir na
+  // tabela da cidade (config_planos) — ou ser conta dela (diferença entre planos, desconto do cartão, preço por dia) ou
+  // algo que o próprio cliente escreveu.
+  if (V7) {
+    const fora = foraDaTabela(t);
+    if (fora.length) {
+      v.push((ctx.planos || []).length
+        ? `citou valor, velocidade ou plano que não existe na tabela desta cidade (${fora.join('; ')}): use só os planos e valores do [INTERNAL DATA], copiados como estão`
+        : `citou preço ou plano sem ter planos no estado (${fora.join('; ')}) — a cidade ainda não foi identificada pelo CEP: não invente nomes nem valores, peça o CEP e o número`);
+    }
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
@@ -329,6 +375,14 @@ if (V7) {
   const op = d.operadora || d.operadora_atual || hy.operadora_atual;
   if (op && op !== '—' && !/^null$/i.test(op)) dados.operadora_atual = op;
   if (tags.pista_nio) dados.pista_nio = tags.pista_nio;
+  // 07/11 (correção de raiz da conversa #1): as opções de rua mostradas ao cliente ficam guardadas na conversa — a escolha
+  // do próximo turno é resolvida contra elas (4 · Preparar), nunca contra o texto que a Mari escreveu.
+  const dc = c.dados || {};
+  if (prep.opcoesRua) dados.opcoes_rua = prep.opcoesRua;
+  else if (prep.limparOpcoes && dc.opcoes_rua) dados.opcoes_rua = null;
+  if (prep.opcoesRecusadas) dados.opcoes_rua_recusadas = prep.opcoesRecusadas === true ? 'sim' : prep.opcoesRecusadas;
+  if (prep.cepOrigem) dados.cep_origem = prep.cepOrigem;
+  else if (prep.p_cep) dados.cep_origem = 'digitado';   // CEP que o cliente escreveu (agora ou no histórico)
 }
 if (tags.endereco) {
   const e = kv(tags.endereco);
@@ -562,6 +616,22 @@ if (V7 && !m.dados.email) {
   const em = String((prep.consolidado || {}).mensagem || '').match(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i);
   if (em) { dados.email = em[0].toLowerCase(); upd.dados = { ...(upd.dados || {}), email: dados.email }; m.dados.email = dados.email; }
 }
+// 07/11 (bateria (a), 2 de 2): "Edson Teste da Silva, CPF 529.982.247-25" e o modelo não emitiu [DADOS_COLETADOS] —
+// nome e CPF só apareciam no handoff, e a trava do pagamento (que exige os dois) nunca disparava. CPF com dígito
+// verificador válido na mensagem do cliente = o CPF; o texto antes dele ("Nome, CPF …"), com 2+ palavras, = o nome.
+if (V7 && !cpfOk(m.dados.cpf)) {
+  const msgC = String((prep.consolidado || {}).mensagem || '');
+  const mc = msgC.match(/(?<!\d)(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})(?!\d)/);
+  if (mc && cpfOk(mc.slice(1).join(''))) {
+    dados.cpf = mc.slice(1).join(''); m.dados.cpf = dados.cpf;
+    const antes = msgC.slice(0, mc.index).replace(/[,;:.\-–]+/g, ' ')
+      .replace(/^\s*(?:o\s+)?meu\s+nome(?:\s+completo)?(?:\s+(?:é|e))?\s+/i, ' ')
+      .replace(/\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?cpf(?:\s+(?:é|e))?\s*$/i, ' ').replace(/^\s*cpf(?:\s+(?:é|e))?\s*$/i, ' ')
+      .replace(/\s+/g, ' ').trim();
+    if (!m.dados.nome && /^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){1,6}$/.test(antes)) { dados.nome = antes; m.dados.nome = antes; upd.nome_confiavel = true; }
+    upd.dados = { ...(upd.dados || {}), ...dados };
+  }
+}
 // Forma de pagamento tocada no botão (ou digitada) e não registrada pelo modelo — o sistema registra.
 if (V7 && !m.forma_pagamento) {
   const fm = norm((prep.consolidado || {}).mensagem).trim();
@@ -569,13 +639,31 @@ if (V7 && !m.forma_pagamento) {
     : /^(debito|debito automatico|dacc)\b/.test(fm) ? 'dacc' : null;
   if (f) { upd.forma_pagamento = f; m.forma_pagamento = f; }
 }
-// Trava do pagamento (bateria 06/11): nome, CPF, telefone e e-mail completos e sem forma de pagamento = a próxima pergunta
-// é o pagamento — se o modelo pulou para "manhã ou tarde", essa pergunta sai e entram os botões de pagamento.
-if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email
-  && !baloesFinais.some((b) => /confere os dados/.test(norm(b)))) {
+// Trava do pagamento (bateria 06/11; 07/11): plano escolhido, telefone e e-mail completos e sem forma de pagamento = a
+// próxima pergunta é o pagamento (ordem do Passo 4). Dispara quando a Mari não perguntou nada ("Anotado o e-mail!") ou
+// pulou para "manhã ou tarde" (essa pergunta sai). Se ela está pedindo outra coisa (o CPF que falta…), não dispara.
+const ultimaFala = norm(baloesFinais[baloesFinais.length - 1] || '');
+const outraPergunta = ultimaFala.includes('?') && !/manha ou (a )?tarde|instalacao, voce prefere/.test(ultimaFala);
+if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && m.dados.telefone && m.dados.email
+  && !outraPergunta && !baloesFinais.some((b) => /confere os dados/.test(norm(b)))) {
   baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/manha ou (a )?tarde|instalacao, voce prefere/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
   tags.botoes = 'pagamento';
   texto = baloesFinais.join('\n\n');
+}
+// 07/11 (cenário (a) instável na bateria: "forma de pagamento sem os botões"): plano escolhido, sem forma de pagamento e a
+// Mari PERGUNTOU a forma em texto, sem a marca → os botões de pagamento entram (a pergunta escrita sai logo abaixo).
+// Pergunta de pagamento = frase com "como quer pagar"/"forma de pagamento", ou pergunta com 2 das 3 formas
+// ("cartão ou boleto?"). Uma forma só ("…R$125 no cartão). Quer?", o upsell) não conta.
+const ehPerguntaPag = (f) => {
+  const x = norm(f);
+  return /quer pagar|forma de pagamento|como (voce )?(prefere|quer|vai) pagar|prefere pagar/.test(x)
+    || (x.includes('?') && ['cartao', 'boleto', 'debito'].filter((k) => x.includes(k)).length >= 2);
+};
+const frases = (b) => b.split(/\n\n|(?<=[.!?])\s+/);
+if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && baloesFinais.length
+  && !tags.upsell_oferecido && !/por mais r\$/.test(norm(texto))
+  && !baloesFinais.some((b) => /confere os dados/.test(norm(b))) && frases(baloesFinais[baloesFinais.length - 1]).some(ehPerguntaPag)) {
+  tags.botoes = 'pagamento';
 }
 // Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
 if (V7 && !erro && !tags.botoes && baloesFinais.length && /confere os dados/.test(norm(baloesFinais[baloesFinais.length - 1]))
@@ -584,7 +672,9 @@ if (V7 && !erro && tags.botoes) {
   const chave = norm(tags.botoes).replace(/[^a-z_]/g, '');
   // Pagamento: a pergunta vem no corpo do sistema — a que o modelo escreveu sai (senão aparece duas vezes).
   if (chave === 'pagamento') {
-    baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/quer pagar|forma de pagamento\?|como prefere pagar/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
+    // Só a FRASE da pergunta sai (a reação "Show, anotado o e-mail." fica).
+    baloesFinais = baloesFinais.map((b) => b.split('\n\n').map((p) => p.split(/(?<=[.!?])\s+/).filter((f) => !ehPerguntaPag(f)).join(' ').trim())
+      .filter(Boolean).join('\n\n')).filter((b) => b.trim());
   }
   const BOT = {
     sim_nao: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }],

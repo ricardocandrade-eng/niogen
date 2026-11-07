@@ -177,8 +177,19 @@ if (V7) {
   if (prep.opcoesRua) L.push(`opcoes_de_rua (busca pela rua que o cliente escreveu, sem CEP — ofereça numeradas, uma por linha, com o CEP): ${prep.opcoesRua.map((o, i) => `${i + 1}) ${o.logradouro} · ${o.bairro} · CEP ${o.cep}`).join(' | ')}`);
   if (prep.ruaSemCidade) L.push(`rua_sem_cep: o cliente passou a rua «${prep.ruaSemCidade}» sem CEP e sem cidade — pergunte a cidade (ou o CEP).`);
   if (prep.ruaNaoAchada) L.push(`rua_sem_cep: não achei a rua «${prep.ruaNaoAchada}» pelo nome — peça o CEP.`);
+  // 07/11 (correção de raiz da conversa #1): CEP achado pela rua já está gravado — a Mari só confirma, mostrando o CEP.
+  if (prep.cepDaBusca) L.push(`cep_achado_pela_rua: SIM — busquei a rua «${prep.cepDaBusca.rua}» e achei UMA opção só, já gravada: ${prep.cepDaBusca.logradouro} · ${prep.cepDaBusca.bairro} · CEP ${prep.cepDaBusca.cep}. Na confirmação do endereço (Passo 2) escreva a rua, o bairro E o CEP; não peça o CEP. Se o cliente disser que não é, peça o CEP certo.`);
+  if (prep.ruaPedeNumero) L.push(`rua_sem_cep: a rua «${prep.ruaPedeNumero}» tem vários CEPs, um por faixa de número — pergunte o número da casa (ou o CEP) antes de seguir; não ofereça opções de CEP.`);
+  if (prep.opcoesRecusadasRua) L.push(`opcoes_de_rua_recusadas: o cliente disse que nenhuma das opções da rua «${prep.opcoesRecusadasRua}» é a dele — peça o CEP (não ofereça as mesmas opções de novo).`);
   const podeCarrossel = seg === 'varejo' && cluster === 'regular' && cartoes.length > 0;
   L.push(`planos_em_carrossel: ${podeCarrossel ? 'SIM — no Passo 3 escreva a frase de abertura e a marca [CARROSSEL_PLANOS] (sem listar os planos)' : 'NAO — lista em texto do Passo 3'}`);
+  // 07/11: o histórico que o modelo lê não traz o carrossel (a marca sai, ver semMarcaInterativo) — sem isto ele dizia
+  // "os planos que te mandei" sem o cliente ter recebido nada (teste real, conversa #1). Verdade do sistema, não do modelo.
+  const viuCarrossel = historico.some((h) => h.papel === 'mari' && /\[carrossel:/i.test(String(h.texto || '')));
+  const viuLista = historico.some((h) => h.papel === 'mari' && /^\s*\d\)\s[^\n]*R\$\s*\d/m.test(String(h.texto || '')));
+  L.push(`planos_mostrados: ${viuCarrossel || viuLista
+    ? `SIM (${viuCarrossel ? 'carrossel' : 'lista em texto'}) — o cliente já recebeu os planos; repita só se ele pedir ou disser que não viu`
+    : 'NAO — o cliente ainda NÃO recebeu nenhum plano nesta conversa: nunca diga que já mandou planos, imagens ou opções'}`);
 }
 if (V4) {
   // Viabilidade oficial do portal da Nio (nível A). Em espera desde 05/11 (login BO = SSO Microsoft): sem consulta,
@@ -308,7 +319,8 @@ return [{ json: {
     conversaId: conv.id, t0: Date.now(), promptVersao: conteudo.promptVersao,
     cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,
     planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao,
-      taxa_habilitacao: p.taxa_habilitacao, isencao_meses: p.isencao_meses })),   // 0030/prompt 18: bloco [CONDICOES] do 7 · Extrair
+      taxa_habilitacao: p.taxa_habilitacao, isencao_meses: p.isencao_meses,
+      velocidade_mb: p.velocidade_mb })),   // 0030/prompt 18: bloco [CONDICOES]; 07/11: trava de valor/plano fora da tabela (7 · Extrair)
     conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,
       elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,
       visita_preferencia: conv.visita_preferencia, instalacao_preferencia: conv.instalacao_preferencia,

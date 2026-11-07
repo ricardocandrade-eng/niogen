@@ -104,7 +104,9 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     r = c.diz('36092-272')
     c.exige('pedro' in norm(r.get('resposta')) and 'antonio' in norm(r.get('resposta')), '(a) não perguntou qual rua (CEP da Sebastião Pedro × Sebastião Antônio)')
     r = c.diz('É essa mesma do CEP, número 2')
-    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or 'endereco e' in norm(r.get('resposta')):
+    # a Mari confirma o endereço ("Seu endereço é…?", "…, nº 2, Barreira do Triunfo. Confere certinho?") → "Sim"
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or 'endereco e' in norm(r.get('resposta')) \
+            or ('?' in (r.get('resposta') or '') and 'referencia' not in norm(r.get('resposta'))):
         r = c.diz('Sim')
     c.exige('referencia' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) não pediu o ponto de referência')
     r = c.diz('Não tem complemento. Referência: perto da escola estadual')
@@ -130,13 +132,39 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     c.exige('confere tudo no sistema da nio' in norm(r.get('resposta')), '(a) despedida sem "confere tudo no sistema da Nio"')
 
 
-def cen_c(c):   # só rua, sem CEP → opções numeradas com CEP
+def cen_c(c):   # só rua, sem CEP → opção única: CEP gravado na hora e mostrado na confirmação (07/11)
     c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
     r = c.diz('Moro na Rua Sebastião Pedro da Silva, número 2')
-    c.exige(re.search(r'\d{5}-?\d{3}', r.get('resposta') or ''), f'(c) não ofereceu a rua com o CEP: «{(r.get("resposta") or "")[:160]}»')
-    r = c.diz('1')
+    resp = r.get('resposta') or ''
+    conf = norm(resp + ' ' + ((r.get('interativo') or {}).get('corpo') or ''))
+    c.exige('sebastiao pedro' in conf and ('triunfo' in conf or re.search(r'\d{5}-?\d{3}', conf)), f'(c) não confirmou a rua achada pelo CEP: «{resp[:160]}»')
+    rows = sql(f"select cep, numero from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36092272', f'(c) o CEP da busca (opção única) não foi gravado na hora: {rows}')
+    c.exige(rows and str(rows[0].get('numero') or '') == '2', f'(c) o número dado junto da rua não foi gravado: {rows}')
+    c.diz('1' if re.search(r'(?m)^\s*1\)', resp) else 'Sim')
     rows = sql(f"select cep from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
-    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36092272', f'(c) a escolha "1" não virou o CEP da opção: {rows}')
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36092272', f'(c) o CEP mudou depois da confirmação: {rows}')
+
+
+def cen_m(c):   # 07/11: rua longa (26 CEPs no ViaCEP, um por faixa de número) → sem número a Mari pede o número;
+    # com "2000" o sistema acha o CEP da faixa (36015-510, lado par 1584–2200) sem chutar opções
+    c.diz('Oi, quero saber da internet da Nio')
+    r = c.diz('Moro na Avenida Barão do Rio Branco, em Juiz de Fora')
+    resp = norm(r.get('resposta'))
+    c.exige('numero' in resp, f'(m) não pediu o número da casa: «{resp[:200]}»')
+    c.exige(not re.search(r'(?m)^\s*2\)', r.get('resposta') or ''), f'(m) chutou opções de CEP sem o número: «{resp[:200]}»')
+    c.diz('2000')
+    rows = sql(f"select cep, numero from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36015510', f'(m) o CEP da faixa do 2000 não foi gravado: {rows}')
+    c.exige(rows and str(rows[0].get('numero') or '') == '2000', f'(m) número da casa não gravado: {rows}')
+
+
+def cen_n(c):   # 07/11: a Mari nunca diz que já mandou planos que o cliente não recebeu
+    c.diz('Oi, quero saber da internet da Nio')
+    r = c.diz('Não recebi as imagens dos planos que você mandou')
+    txt = norm((r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or ''))
+    c.exige(not re.search(r'(planos|imagens|opcoes) que (te |eu )?mand', txt), f'(n) disse que já tinha mandado planos: «{txt[:200]}»')
+    c.exige(not re.search(r'r\$\s*\d', txt), f'(n) citou preço sem CEP: «{txt[:200]}»')
 
 
 def ate_planos(c, cep, num, operadora='Uso a Vivo'):
@@ -222,7 +250,7 @@ def cen_l(c):   # teste real 07/11 00h11: sem CEP o cliente pressiona por planos
         c.exige(not (r.get('interativo') or {}).get('tipo') == 'carrossel', '(l) mandou carrossel sem cidade/CEP')
 
 
-CENARIOS = {'l': (10, cen_l), 'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
+CENARIOS = {'m': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 if __name__ == '__main__':
     if not SEGREDO:
