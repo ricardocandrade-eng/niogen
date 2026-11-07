@@ -251,6 +251,75 @@
           "name": "Supabase Nio (service role)"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892/adsets",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "id,name,effective_status,campaign_id,campaign{name},targeting{publisher_platforms,facebook_positions,instagram_positions,whatsapp_positions,audience_network_positions,messenger_positions}"
+            },
+            {
+              "name": "limit",
+              "value": "200"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "7 · Meta conjuntos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "e851f034-6769-5268-b896-61482ab2e0c7",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_ads_gravar_conjuntos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_conjuntos: $json.data || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "8 · Supabase conjuntos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "6228f3fe-2f9a-52ea-aa88-ef8c77df5561",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
     }
   ],
   "connections": {
@@ -314,6 +383,28 @@
         [
           {
             "node": "6 · Supabase posicionamentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Supabase posicionamentos": {
+      "main": [
+        [
+          {
+            "node": "7 · Meta conjuntos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Meta conjuntos": {
+      "main": [
+        [
+          {
+            "node": "8 · Supabase conjuntos",
             "type": "main",
             "index": 0
           }
