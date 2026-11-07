@@ -32,20 +32,22 @@
      a Saúde ocupa a altura livre da janela (min-height posto pelo JS) e a sobra vira folga DENTRO das listas
      (posicionamentos e gatilhos se espalham), nunca buraco vazio. "Campanhas e anúncios" fica abaixo da dobra. */
   .cab-acoes #vistas { margin: 0; }
-  .saude { gap: 14px; padding: 16px 18px; }
+  .saude { gap: calc(10px + var(--f, 0px) / 25); padding: calc(12px + var(--f, 0px) / 35) 16px; }
   .saude-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .semaforo { width: 13px; height: 13px; border-radius: 50%; flex: 0 0 13px; background: var(--muted); box-shadow: 0 0 0 3px var(--surface-2); }
   .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
   .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
   .saude-cab .info { font-size: 11px; color: var(--muted); cursor: help; white-space: nowrap; }
   .saude-grade { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px 24px; }
-  .saude-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .bloco { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .saude-col { display: flex; flex-direction: column; gap: calc(12px + var(--f, 0px) / 10); min-width: 0; }
+  .bloco { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); min-width: 0; }
   .bloco.cresce { flex: 1; }
-  .bloco.cresce > .lista-folga { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+  .bloco.cresce > .lista-folga { display: flex; flex-direction: column; }
+  /* --f: folga extra conforme a altura da janela (0 em ~720 px; ~270 px numa tela de 990 px; teto 360 px) */
+  .saude { --f: clamp(0px, calc(100vh - 700px), 380px); }
   .saude-col h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  #s-alertas { display: flex; flex-direction: column; gap: 8px; }
-  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
+  #s-alertas { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); }
+  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(1px + var(--f, 0px) / 90) 10px; padding: calc(7px + var(--f, 0px) / 25) 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
   .al::before { content: ''; grid-row: 1 / span 3; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
   .al.bad { background: var(--bad-bg); border-color: var(--bad-border); } .al.bad::before { background: var(--bad-dot); }
   .al.warn { background: var(--warn-bg); border-color: var(--warn-border); } .al.warn::before { background: var(--warn-dot); }
@@ -53,39 +55,30 @@
   .al b { font-size: 13px; font-weight: 600; } .al.bad b { color: var(--bad-fg); } .al.warn b { color: var(--warn-fg); }
   .al span { font-size: 12px; color: var(--muted); grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .al .prop { color: var(--text); }
-  .gat { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 3px 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .gat { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: calc(2px + var(--f, 0px) / 60) 10px; align-items: center; padding: calc(4px + var(--f, 0px) / 20) 0; border-bottom: 1px solid var(--border); }
   .gat:last-child { border-bottom: 0; }
   .gat .cod { font-family: var(--dm); font-size: 11px; color: var(--muted); }
-  .gat .nome { font-size: 13px; } .gat .val { font-family: var(--mono); font-size: 12px; text-align: right; }
-  .gat .trilho { grid-column: 2 / -1; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+  .gat .nome { font-size: calc(13px + var(--f, 0px) / 180); } .gat .val { font-family: var(--mono); font-size: 12px; text-align: right; }
+  .gat .trilho { grid-column: 2 / -1; height: calc(4px + var(--f, 0px) / 110); border-radius: 3px; background: var(--surface-2); overflow: hidden; }
   .gat .trilho i { display: block; height: 100%; background: var(--link); }
   .gat .trilho i.warn { background: var(--warn-dot); } .gat .trilho i.bad { background: var(--bad-dot); }
   .gat small { grid-column: 2 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gat.sem-dado .nome, .gat.sem-dado .val { color: var(--muted); }
-  .funil-faixa { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-  .fe { padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0;
+  .funil-faixa { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: calc(5px + var(--f, 0px) / 55); }
+  .fe { padding: calc(5px + var(--f, 0px) / 20) 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); min-width: 0;
         display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 6px; align-items: baseline; }
-  .fe .n { font-family: var(--mono); font-size: 17px; font-weight: 600; }
+  .fe .n { font-family: var(--mono); font-size: calc(15px + var(--f, 0px) / 40); font-weight: 600; }
   .fe .t { font-size: 11px; color: var(--muted); font-family: var(--dm); text-align: right; }
   .fe .r { grid-column: 1 / -1; font-size: 11px; color: var(--muted); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fe.zero .n { color: var(--bad-fg); }
-  .posic { gap: 5px; }
-  .pl { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; }
+  .posic { gap: calc(3px + var(--f, 0px) / 20); }
+  .pl { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: calc(12px + var(--f, 0px) / 160); }
   .pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pl .barra { height: 9px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .pl .barra { height: calc(8px + var(--f, 0px) / 55); border-radius: 5px; background: var(--surface-2); overflow: hidden; }
   .pl .barra i { display: block; height: 100%; background: var(--link); }
   .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .5; }
   .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
   .pl .num b { color: var(--text); font-weight: 600; }
-  /* Janela baixa (notebook, ~700 px): mesma estrutura, espaçamentos menores, para os KPIs + a Saúde caberem sem rolar. */
-  @media (max-height: 780px) and (min-width: 901px) {
-    .saude { gap: 10px; padding: 12px 16px; }
-    .saude-col { gap: 12px; } .bloco { gap: 6px; } .saude-grade { gap: 12px 20px; }
-    #s-alertas { gap: 6px; } .al { padding: 7px 10px; gap: 1px 8px; }
-    .gat { padding: 4px 0; } .gat .trilho { height: 4px; }
-    .fe { padding: 5px 8px; } .fe .n { font-size: 15px; } .funil-faixa { gap: 5px; }
-    .posic { gap: 3px; } .pl { font-size: 12px; } .pl .barra { height: 8px; }
-  }
   @media (max-width: 900px) {
     .saude-grade { grid-template-columns: minmax(0, 1fr); }
     .cab-acoes #vistas { width: 100%; }
