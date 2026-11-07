@@ -116,7 +116,12 @@ const VIA = (cidade, rua) => `https://viacep.com.br/ws/MG/${encodeURIComponent(c
 if (!out.p_cep && etapaEndereco) {
   const esc = msg.trim().toLowerCase().match(/^(?:a|o|op[cç][aã]o|n[º°o.]?)?\s*([1-3])\s*[.)!]?$|^(primeir|segund|terceir)[ao]$/);
   const ultMari = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-1)[0];
-  const ceps = ultMari ? [...String(ultMari.texto || '').matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)] : [];
+  let ceps = ultMari ? [...String(ultMari.texto || '').matchAll(/^\s*([1-3])\)[^\n]*?(\d{5})-?(\d{3})/gm)] : [];
+  // Opção única escrita em frase ("…, CEP 36092-272. É esse endereço mesmo?") também vale como opção 1.
+  if (!ceps.length && ultMari && !conv.cep) {
+    const soltos = [...new Set([...String(ultMari.texto || '').matchAll(/\bCEP\s*(\d{5})-?(\d{3})\b/gi)].map((x) => x[1] + x[2]))];
+    if (soltos.length === 1) ceps = [[null, '1', soltos[0].slice(0, 5), soltos[0].slice(5)]];
+  }
   // Uma opção só e o cliente disse "sim / é essa / isso" = a opção 1.
   const afirma = ceps.length === 1 && /^(sim|isso|essa|e essa|é essa|exato|essa mesma|é essa mesma|correto|certo)\b/i.test(msg.trim());
   if ((esc || afirma) && ceps.length) {

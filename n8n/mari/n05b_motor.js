@@ -278,8 +278,12 @@ const push = (role, content) => {
 };
 // Fala do consultor humano (atendimento pelo Chatwoot) entra como 'assistant', marcada, para a Mari saber o que
 // a equipe já disse ao cliente quando a conversa volta para ela.
+// v7: o resumo do que foi enviado como interativo ("[botões: Sim / Não]", "[carrossel: …]") fica no banco e na tela Mari,
+// mas NÃO vai para o Claude — ele imitava a marca em perguntas que não são de sim/não (teste real de 06/11).
+const semMarcaInterativo = (t) => String(t || '').replace(/\n*\[(?:bot[oõ]es|carrossel):[^\]]*\]/gi, '').trim();
 for (const h of historico) {
   if (h.papel === 'lead') push('user', h.texto);
+  else if (h.papel === 'mari') push('assistant', semMarcaInterativo(h.texto));
   else if (h.papel === 'humano') push('assistant', `[Mensagem do consultor da equipe, enviada enquanto ele atendia]\n${h.texto}`);
   else push('assistant', h.texto);
 }
@@ -312,6 +316,8 @@ return [{ json: {
       dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
     primeira,   // 💚 na saudação (7 · Extrair)
+    // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?
+    condicoesEnviadas: historico.some((h) => h.papel === 'mari' && String(h.texto || '').includes('Antes de fechar, rapidinho as condições')),
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
     emojiMari, emojiCliente,

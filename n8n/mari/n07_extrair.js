@@ -70,7 +70,8 @@ if (hm) {
 const imitado = { botoes: null, carrossel: false };
 bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
   const t = norm(x);
-  imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : /sim/.test(t) ? 'sim_nao' : null;
+  // Só pagamento e resumo: "Sim / Não" copiado caía em pergunta aberta (complemento + referência) — teste real 06/11.
+  imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : null;
   return '';
 }).replace(/\[carrossel:[^\]]*\]/gi, () => { imitado.carrossel = true; return ''; });
 
@@ -482,6 +483,14 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
   texto = baloesFinais.join('\n\n');
 }
 
+// ── 5b. v7: trava das condições — plano escolhido e condições nunca enviadas = o sistema põe o bloco exato logo depois
+// da confirmação (teste real 06/11: o modelo pulou direto para "manhã ou tarde"). Com upsell, as condições vêm depois.
+if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas && !tags.upsell_oferecido
+  && (upd.plano_escolhido || c.plano_escolhido) && baloesFinais.length && !baloesFinais.some((b) => b.includes(COND_ABRE))) {
+  baloesFinais = [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)].slice(0, 4);
+  texto = baloesFinais.join('\n\n');
+}
+
 // ── 6. v7: CPF mascarado na fala da Mari (prompt 27 A6 — o banco guarda inteiro) ──
 if (V7) {
   // Inteiro → mascarado; e a máscara que o modelo inventar ("529.XXX.XXX-25", "•••") vira o padrão 123.***.***-30.
@@ -527,6 +536,31 @@ if (V7 && !erro && tags.carrossel) {
     if (lt) { baloesFinais = [...baloesFinais, lt]; texto = baloesFinais.join('\n\n'); }
     if (divergentes.length) erro = erro || { no: '7 · Extrair', mensagem: 'carrossel_preco_divergente', payload: { planos: divergentes.map((k) => k.plano_codigo) } };
   }
+}
+// v7: e-mail que o cliente mandou e o modelo não registrou em [DADOS_COLETADOS] (bateria 06/11) — o sistema registra.
+// Idem o telefone: "é esse mesmo / este número / o do WhatsApp" = o telefone desta conversa.
+if (V7 && !m.dados.telefone && /\b(esse|este) (mesmo|numero|n[uú]mero)|mesmo (numero|n[uú]mero)|do (proprio )?whats/.test(norm((prep.consolidado || {}).mensagem))) {
+  const tw = String((ctx.conversa || {}).telefone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (tw) { dados.telefone = tw; upd.dados = { ...(upd.dados || {}), telefone: tw }; m.dados.telefone = tw; }
+}
+if (V7 && !m.dados.email) {
+  const em = String((prep.consolidado || {}).mensagem || '').match(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i);
+  if (em) { dados.email = em[0].toLowerCase(); upd.dados = { ...(upd.dados || {}), email: dados.email }; m.dados.email = dados.email; }
+}
+// Forma de pagamento tocada no botão (ou digitada) e não registrada pelo modelo — o sistema registra.
+if (V7 && !m.forma_pagamento) {
+  const fm = norm((prep.consolidado || {}).mensagem).trim();
+  const f = /^(cartao|cartao de credito|credito|no cartao)\b/.test(fm) ? 'cartao' : /^(boleto|boleto bancario|no boleto)\b/.test(fm) ? 'boleto'
+    : /^(debito|debito automatico|dacc)\b/.test(fm) ? 'dacc' : null;
+  if (f) { upd.forma_pagamento = f; m.forma_pagamento = f; }
+}
+// Trava do pagamento (bateria 06/11): nome, CPF, telefone e e-mail completos e sem forma de pagamento = a próxima pergunta
+// é o pagamento — se o modelo pulou para "manhã ou tarde", essa pergunta sai e entram os botões de pagamento.
+if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email
+  && !baloesFinais.some((b) => /confere os dados/.test(norm(b)))) {
+  baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/manha ou (a )?tarde|instalacao, voce prefere/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
+  tags.botoes = 'pagamento';
+  texto = baloesFinais.join('\n\n');
 }
 // Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
 if (V7 && !erro && !tags.botoes && baloesFinais.length && /confere os dados/.test(norm(baloesFinais[baloesFinais.length - 1]))

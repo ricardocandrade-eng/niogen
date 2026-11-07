@@ -133,9 +133,10 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
 def cen_c(c):   # só rua, sem CEP → opções numeradas com CEP
     c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
     r = c.diz('Moro na Rua Sebastião Pedro da Silva, número 2')
-    c.exige(re.search(r'1\)[^\n]*\d{5}-?\d{3}', r.get('resposta') or ''), f'(c) não ofereceu opções com CEP: «{(r.get("resposta") or "")[:160]}»')
+    c.exige(re.search(r'\d{5}-?\d{3}', r.get('resposta') or ''), f'(c) não ofereceu a rua com o CEP: «{(r.get("resposta") or "")[:160]}»')
     r = c.diz('1')
-    c.exige('sebastiao pedro' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(c) não confirmou o endereço escolhido')
+    rows = sql(f"select cep from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36092272', f'(c) a escolha "1" não virou o CEP da opção: {rows}')
 
 
 def ate_planos(c, cep, num, operadora='Uso a Vivo'):
