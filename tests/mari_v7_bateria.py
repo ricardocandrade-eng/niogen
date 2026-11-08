@@ -333,7 +333,30 @@ def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua
     print(f'    pós-handoff → {r.get("resposta") or r}')
 
 
-CENARIOS = {'o': (13, cen_o), 'm': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
+def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800 Mega → 1 Giga); telefone não se pergunta
+    r = c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        r = c.diz('Sim')
+    c.diz('403')
+    r = c.diz('Igreja')
+    if 'operadora' not in norm(r.get('resposta')):
+        r = c.diz('Não tem ponto de referência melhor, é perto da igreja')
+    c.diz('Claro')
+    r = c.diz('Quero o Essencial')
+    t = norm(r.get('resposta'))
+    c.exige(not re.search(r'\bdobro\b|duas vezes|\btriplo\b|\bmetade\b', t), f'(p) upsell com comparação: «{(r.get("resposta") or "")[:200]}»')
+    if 'por mais r$' in t:
+        c.exige('800' in t and ('1 giga' in t or '1 gb' in t), f'(p) upsell sem os números da tabela: «{(r.get("resposta") or "")[:200]}»')
+    if 'condicoes' not in t:
+        r = c.diz('Quero esse mesmo')
+    r = c.diz('Ricardo Teste - 529.982.247-25')
+    t = norm(r.get('resposta'))
+    c.exige('mail' in t and 'telefone' not in t, f'(p) perguntou o telefone (ou não pediu o e-mail): «{(r.get("resposta") or "")[:160]}»')
+
+
+CENARIOS = {'p': (14, cen_p), 'o': (13, cen_o), 'm': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 def relatorio(res):
     print('\n── tokens e custo (estimativa pelos preços da tabela PRECOS) ──')

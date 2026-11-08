@@ -46,6 +46,13 @@ function cpfValido(v) {
 }
 const emailValido = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e || ''));
 const telValido = (t) => /^\d{10,11}$/.test(String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''));
+// 08/11 (Ricardo): o telefone de contato é o do WhatsApp da conversa — a Mari não pergunta. O WhatsApp entrega celular
+// sem o 9 ("553288015161"): sem DDI e com o 9 de volta quando é celular (8 dígitos começando por 6–9).
+const foneWa = (t) => {
+  let x = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+  if (/^\d{2}[6-9]\d{7}$/.test(x)) x = `${x.slice(0, 2)}9${x.slice(2)}`;
+  return x;
+};
 
 // ── formatação dos planos (INTERNAL DATA) ──
 const R = (v) => {
@@ -145,7 +152,8 @@ const cpfOk = dados.cpf ? cpfValido(dados.cpf) : null;
 const faltando = [];
 if (!dados.nome) faltando.push('nome');
 if (!dados.cpf || !cpfOk) faltando.push('cpf');
-if (!dados.telefone || !telValido(dados.telefone)) faltando.push('telefone');
+// 08/11: sem telefone guardado, vale o do WhatsApp (o 7 · Extrair grava) — telefone só "falta" se nem esse servir.
+if (!(dados.telefone && telValido(dados.telefone)) && !telValido(foneWa(conv.telefone))) faltando.push('telefone');
 if (!dados.email || !emailValido(dados.email)) faltando.push('email');
 if (!conv.forma_pagamento) faltando.push('pagamento');
 if (!(conv.instalacao_preferencia || conv.visita_preferencia)) faltando.push(V4 ? 'instalacao' : 'visita');
@@ -171,7 +179,7 @@ if (conv.ciclo_anterior && typeof conv.ciclo_anterior === 'object') {
   L.push(`retomada: sim — esta conversa já passou pelo nosso time e foi encerrada; o cliente voltou a escrever agora. `
     + `Handoff anterior: ${MOT[ca.motivo] || ca.motivo || '?'}${ca.venda_id ? ' | venda_ja_registrada: sim' : ''}. Siga a regra RETOMADA (Bloco 3).`);
 }
-L.push(`telefone_whatsapp: ${String(conv.telefone || '').replace(/^55/, '')}`);
+L.push(`telefone_whatsapp: ${foneWa(conv.telefone)} (é o telefone de contato: não pergunte)`);
 L.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);
 L.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);
 L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (dados.complemento_ok ? 'não tem' : '—')} | complemento_respondido: ${conv.complemento || dados.complemento_ok ? 'sim' : 'nao'}`);

@@ -301,6 +301,13 @@ function violacoesDe(t) {
         : `citou preço ou plano sem ter planos no estado (${fora.join('; ')}) — a cidade ainda não foi identificada pelo CEP: não invente nomes nem valores, peça o CEP e o número`);
     }
   }
+  // Teste real 08/11 00h15: "por mais R$30 o Super já vem com o dobro de velocidade (1 Giga)" — Essencial 800 Mega × Super
+  // 1 Giga (+25 %). Comparação ("o dobro", "duas vezes mais", "3x mais", "o triplo", "metade") sobre velocidade, internet ou
+  // plano não existe na tabela: a Mari diz os números como estão ("vai de 800 Mega pra 1 Giga").
+  if (V7 && n.split(/[.?!\n]+/).some((f) => /\b(o )?dobro\b|\bduas vezes\b|\btres vezes\b|\b\d+\s*x\s+mais\b|\b(o )?triplo\b|\bmetade\b/.test(f)
+    && /velocidade|internet|mega|giga|\bgb\b|rapid|plano|wi-?fi|nio (fibra|essencial|super|ultra)|\b(fibra|essencial|super|ultra)\b/.test(f))) {
+    v.push('comparou planos com "o dobro"/"duas vezes"/"metade" — isso não está na tabela: diga os números como estão no [INTERNAL DATA] (ex.: "vai de 800 Mega pra 1 Giga e ainda traz Globoplay por 12 meses")');
+  }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
   if (t.replace(/\d{3}\.?[*x•]{3}\.?[*x•]{3}-?\d{2}/gi, '').includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
@@ -415,6 +422,13 @@ if (/^55\d{10,11}$/.test(tel)) tel = tel.slice(2);
 const email = (d.email || hy.email || '').trim();
 if (nome && nome !== '—') { dados.nome = nome; upd.nome_confiavel = true; }
 if (cpf) dados.cpf = cpf;
+// 08/11 (Ricardo): o telefone de contato é o do WhatsApp — a Mari não pergunta; o sistema grava. Celular sem o 9 (como o
+// WhatsApp entrega, "553288015161", ou como o modelo copiou na conversa #1, "3288015161") ganha o 9 de volta.
+const com9 = (x) => (/^\d{2}[6-9]\d{7}$/.test(x) ? `${x.slice(0, 2)}9${x.slice(2)}` : x);
+if (tel) tel = com9(tel);
+if (V7 && !tel && !((c.dados || {}).telefone) && c.telefone) {
+  tel = com9(String(c.telefone).replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''));
+}
 if (tel) dados.telefone = tel;
 if (email && email !== '—') dados.email = email.toLowerCase();
 
@@ -807,10 +821,26 @@ if (posHandoff) {
   Object.keys(upd).forEach((k) => { delete upd[k]; });
   texto = baloesFinais.join('\n\n');
 }
+// Despedida repetida (teste real 08/11 00h20): "Entendi!" e "Minha filha receberá o técnico" chegaram com 6 s de diferença
+// (a 2ª, 0,13 s depois da checagem do 7b) e saíram duas despedidas quase iguais ("Qualquer coisa é só me chamar aqui" /
+// "Qualquer dúvida, é só chamar por aqui"). Se a última fala da Mari já se despediu assim, a frase não se repete. Na janela
+// pós-handoff, se não sobrar nada, a Mari fica calada (um humano não responde "Entendi!" com outra despedida).
+let silencioIntencional = false;
+const FECHO = /qualquer (coisa|duvida)[^.!?\n]{0,40}\b(chamar|chama|falar|fala)\b/;
+const histC = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+const ultimaMari = [...histC].reverse().find((h) => h && h.papel === 'mari');
+if (!erro && !handoff && !interativo && ultimaMari && FECHO.test(norm(ultimaMari.texto)) && baloesFinais.some((b) => FECHO.test(norm(b)))) {
+  const sem = baloesFinais.map((b) => b.split('\n\n').map((p) => {
+    const fr = p.split(/(?<=[.!?])[ \t]+/);
+    return fr.some((f) => FECHO.test(norm(f))) ? fr.filter((f) => !FECHO.test(norm(f))).join(' ').trim() : p;
+  }).filter(Boolean).join('\n\n')).filter((b) => b.trim());
+  if (sem.length) { baloesFinais = sem; texto = sem.join('\n\n'); }
+  else if (posHandoff) { baloesFinais = []; texto = ''; silencioIntencional = true; }
+}
 if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
 // Rede de segurança (conversa #5, 07/11): nada para mandar (sem texto, sem interativo, sem handoff) = cliente no vácuo.
 // Deixa o rastro em mari_erros com o que o modelo escreveu.
-if (!erro && !handoff && !interativo && !String(texto || '').trim()) {
+if (!erro && !handoff && !interativo && !silencioIntencional && !String(texto || '').trim()) {
   erro = { no: '7 · Extrair', mensagem: 'resposta_vazia', payload: { bruto: String(bruto || '').slice(0, 300) } };
 }
 
