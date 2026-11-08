@@ -6,6 +6,8 @@
  * 06/11 (prompt 27): contadores em "Mari · IA" (conversas aguardando humano — v_mari_aguardando_humano; vermelho se alguma
  * passou de 15 min em horário de contato) e em "Vendas" (novas em Qualificado desde a última visita — usuario_vistos — mais as
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
+ * 08/11: link discreto "Guia do Backoffice" sob a data/versão (guia.html), com "• atualizado" se o guia foi publicado depois da
+ * última leitura (localStorage niogen.guia.visto, em try/catch).
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
@@ -79,6 +81,7 @@
         <h2>NIO<span>GEN</span></h2>
         <p>Renascer. Reconstruir. Crescer.</p>
         <p class="clock" data-relogio>${relogio()}</p>
+        <a class="nav-guia${pagina === 'guia' ? ' ativo' : ''}" href="guia.html" data-guia title="Como trabalhar com a Mari, o Chatwoot e o NIOGEN">Guia do Backoffice<span class="novo" data-guia-novo hidden>• atualizado</span></a>
       </div>
       <div class="nav-user">
         <div class="nav-avatar" aria-hidden="true">${NG.esc(iniciais(u.nome))}</div>
@@ -92,6 +95,7 @@
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
     menuMovel(nav, pagina);
+    guiaNovo(nav, pagina);
 
     // Badge de Instalações: vendas esperando agendamento.
     const { count } = await NG.sb.from('v_instalacoes').select('id', { count: 'exact', head: true }).eq('coluna', 'agendar');
@@ -107,6 +111,22 @@
     }
     await avisos(nav);
     setInterval(() => avisos(nav), 60000);
+  }
+
+  // ---------- Guia do Backoffice (08/11): "• atualizado" se foi publicado depois da última vez que você abriu ----------
+  async function guiaNovo(nav, pagina) {
+    if (pagina === 'guia') return;   // a própria tela grava o "visto"
+    try {
+      const { data } = await NG.sb.from('conteudos').select('publicado_em, rev').eq('chave', 'guia_backoffice').maybeSingle();
+      if (!data) return;
+      let visto = null;
+      try { visto = localStorage.getItem('niogen.guia.visto'); } catch (e) { /* modo privado: sem o ponto */ return; }
+      const el = nav.querySelector('[data-guia-novo]');
+      const novo = !visto || new Date(data.publicado_em) > new Date(visto);
+      if (el) el.hidden = !novo;
+      const a = nav.querySelector('[data-guia]');
+      if (a && data.rev) a.title = `Guia do Backoffice · rev. ${data.rev}${novo ? ' · atualizado desde a sua última leitura' : ''}`;
+    } catch (e) { /* o link do guia nunca derruba o menu */ }
   }
 
   // ---------- contadores do menu (prompt 27) ----------

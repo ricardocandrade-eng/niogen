@@ -1,0 +1,115 @@
+<!doctype html>
+<!-- NIOGEN | docs/guia.html | 08/11/2026 — Claude Code (docs/Prompt_pendencias_venda_081126_0005.md, Parte 2)
+     Guia do Backoffice: lê conteudos (chave guia_backoffice, migration 0065) e renderiza o Markdown com assets/markdown.js
+     (local, sem CDN). NENHUM texto do guia mora neste arquivo: o repo é público e a fonte única é o arquivo do Drive
+     docs/BACKOFFICE_chatwoot_com_a_mari_051126_1045.md, publicado por scripts/publicar_guia.py. Índice lateral pelos títulos,
+     busca simples, âncoras (guia.html#pendencias), rodapé "rev. … · publicado em …". Todos os perfis logados. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Guia do Backoffice · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=081126-2">
+<script src="config.js?v=081126-2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=081126-2"></script>
+<script src="assets/sidebar.js?v=081126-2"></script>
+<script src="assets/markdown.js?v=081126-2"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="guia"></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1>Guia do Backoffice</h1>
+        <div class="sub" id="sub">Como trabalhar com a Mari, o Chatwoot e o NIOGEN — por situação</div>
+      </div>
+    </header>
+    <div class="guia-wrap">
+      <nav class="guia-indice" aria-label="Índice do guia">
+        <input type="search" class="sel guia-busca" id="busca" placeholder="Buscar no guia…" aria-label="Buscar no guia">
+        <div id="indice"><span class="nota-campo">Carregando…</span></div>
+      </nav>
+      <article class="guia-texto" id="texto"><div class="carregando">Carregando…</div></article>
+    </div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+  const texto = document.getElementById('texto');
+  const indice = document.getElementById('indice');
+  const busca = document.getElementById('busca');
+
+  const { data, error } = await NG.sb.from('conteudos').select('titulo, markdown, rev, publicado_em').eq('chave', 'guia_backoffice').maybeSingle();
+  if (error || !data) {
+    texto.innerHTML = `<div class="placeholder">${esc(error ? NG.msgErro(error) : 'O guia ainda não foi publicado (scripts/publicar_guia.py).')}</div>`;
+    indice.innerHTML = '';
+    return;
+  }
+  // Abriu o guia = viu a versão publicada (o ponto "• atualizado" do menu some). localStorage pode faltar: try/catch.
+  try { localStorage.setItem('niogen.guia.visto', data.publicado_em); } catch (e) { /* modo privado */ }
+  const r = NGMarkdown.render(data.markdown);
+  const rodape = `<div class="guia-rodape">rev. ${esc(data.rev || '—')} · publicado em ${esc(NG.fmtDataHora(data.publicado_em))}</div>`;
+  texto.innerHTML = r.html + rodape;
+  document.getElementById('sub').textContent = `Como trabalhar com a Mari, o Chatwoot e o NIOGEN — rev. ${data.rev || '—'}`;
+  const tit = r.titulos.filter((t) => t.nivel === 2 || t.nivel === 3);
+  indice.innerHTML = tit.map((t) => `<a href="#${esc(t.id)}" class="${t.nivel === 3 ? 'sub' : ''}" data-id="${esc(t.id)}">${esc(t.texto)}</a>`).join('');
+
+  // Âncora na URL (ex.: guia.html#pendencias, vindo da ficha ou da aba Em espera): leva até a seção depois de desenhar.
+  const irPara = (id) => { const el = id && document.getElementById(id); if (el) el.scrollIntoView({ block: 'start' }); };
+  if (location.hash) requestAnimationFrame(() => irPara(decodeURIComponent(location.hash.slice(1))));
+
+  // Índice: marca a seção visível.
+  const marcar = () => {
+    let atual = null;
+    tit.forEach((t) => { const el = document.getElementById(t.id); if (el && el.getBoundingClientRect().top < 120) atual = t.id; });
+    indice.querySelectorAll('a').forEach((a) => a.classList.toggle('ativo', a.dataset.id === atual));
+  };
+  document.addEventListener('scroll', marcar, { passive: true, capture: true });
+  marcar();
+
+  // Busca simples: realça o termo no texto e vai até a 1ª ocorrência; o índice mostra só as seções que têm o termo.
+  const original = texto.innerHTML;
+  let t0 = null;
+  busca.addEventListener('input', () => {
+    clearTimeout(t0);
+    t0 = setTimeout(() => {
+      const q = busca.value.trim();
+      texto.innerHTML = original;
+      indice.querySelectorAll('a').forEach((a) => { a.hidden = false; });
+      if (q.length < 2) return;
+      const fonte = esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');   // casa com o texto já escapado
+      const temTermo = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const walker = document.createTreeWalker(texto, NodeFilter.SHOW_TEXT);
+      const nos = [];
+      while (walker.nextNode()) if (temTermo.test(walker.currentNode.nodeValue)) nos.push(walker.currentNode);
+      nos.forEach((n) => {
+        const span = document.createElement('span');
+        span.innerHTML = esc(n.nodeValue).replace(new RegExp(fonte, 'gi'), (m) => `<mark>${m}</mark>`);
+        n.replaceWith(span);
+      });
+      const com = new Set();
+      let h2 = null, h3 = null;
+      texto.querySelectorAll('h2, h3, mark').forEach((el) => {
+        if (el.tagName === 'H2') { h2 = el.id; h3 = null; } else if (el.tagName === 'H3') h3 = el.id;
+        else { if (h2) com.add(h2); if (h3) com.add(h3); }
+      });
+      indice.querySelectorAll('a').forEach((a) => { a.hidden = !com.has(a.dataset.id); });
+      const m = texto.querySelector('mark');
+      if (m) m.scrollIntoView({ block: 'center' });
+    }, 250);
+  });
+})();
+</script>
+</body>
+</html>
