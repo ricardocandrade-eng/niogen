@@ -33,7 +33,9 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 - **Conversas da Mari** (orelha ao lado de *Prontas para o portal*, só admin/backoffice): conversas em andamento (ativas ou com o time,
   Chatwoot não resolvido, sem pedido aberto) para **consultar o portal antes de a venda ser qualificada**. A extensão usa o que a Mari já
   coletou (CEP, número, referência, CPF, contato, plano). Sem venda não há "Gravar no NIOGEN"; se a conversa já virou venda, botão **Abrir a venda**.
-- **Orelha Conversa** (na venda ou na conversa aberta): a negociação da Mari/time/cliente (`mari_turnos`), só leitura, com **Abrir no Chatwoot**.
+- **Orelha "💬 Conversa (Chatwoot)"** (ao lado de "Preencher no portal", na venda ou na conversa aberta; atalho **💬 Ler conversa** na lista): a negociação da Mari/time/cliente (`mari_turnos`), só leitura, com **Abrir no Chatwoot**.
+- **Atualizar** (0.2.1, no topo do painel): recarrega do NIOGEN o que está aberto — dados da venda/conversa e a negociação — sem perder a
+  etapa, os resultados do preenchimento nem o nº do pedido digitado; na tela inicial, recarrega as duas listas.
 - Banco: nenhuma migration — leitura direta de `mari_conversas`, `mari_turnos` e `config_planos` pelo RLS (admin/backoffice).
   Na conversa sem venda nada é gravado (nem `eventos_venda`).
 

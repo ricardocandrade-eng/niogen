@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NIOGEN no Portal",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Painel lateral do NIOGEN sobre o portal PAP da Nio: mostra as vendas prontas e preenche os campos da etapa aberta do Novo Pedido. A pessoa confere e clica em tudo.",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "storage"],

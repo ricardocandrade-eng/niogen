@@ -72,3 +72,13 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; white-
 .toast { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 5; display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--warn); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
 .toast.bad { border-color: var(--bad); }
 .toast.ok { border-color: var(--acc); }
+/* rev. 08/11 tarde — orelhas mais visíveis e atalho "Ler conversa" na lista */
+.orelhas-sub { background: var(--bg); border: 1px solid var(--linha); border-radius: 8px; padding: 3px; gap: 3px; border-bottom-width: 1px; }
+.orelhas-sub .orelha { border: 0; border-radius: 6px; padding: 7px 4px; }
+.orelhas-sub .orelha.ativa { background: var(--acc); color: var(--acc-tx); }
+.item-duplo { padding: 0; cursor: default; }
+.item-duplo:hover { border-color: var(--linha); }
+.item-corpo { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 6px; cursor: pointer; border-radius: 10px; }
+.item-corpo:hover b { color: var(--acc); }
+.item-corpo:focus-visible { outline: 2px solid var(--acc); }
+.item-ler { margin: 0 12px 10px; align-self: flex-start; }

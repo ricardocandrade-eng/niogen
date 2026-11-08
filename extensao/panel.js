@@ -43,6 +43,7 @@
     aba: 'vendas', convs: null, convsErro: '', convsCarregando: false, busca: '',
     conversa: null,            // conversa aberta (ponto de partida sem venda) ou a conversa ligada à venda aberta
     turnos: null, turnosErro: '', turnosCarregando: false, orelha: 'portal',
+    atualizando: false,        // botão "Atualizar" do topo (rev. 08/11 tarde)
   };
 
   // ------------------------------------------------------------------ DOM
@@ -301,17 +302,52 @@
       agendamento: { preferencia: vazio(c.instalacao_preferencia || c.visita_preferencia) },
     };
   }
-  async function abreConversa(c) {
+  // Botão "Atualizar" do topo: recarrega do NIOGEN o que está aberto (o cliente pode ter respondido e a Mari coletado mais dado).
+  // Mantém a etapa escolhida, os resultados do preenchimento e o nº do pedido digitado.
+  async function planoDaConversa(c) {
+    if (!c.plano_escolhido) return null;
+    const p = await api(`/rest/v1/config_planos?select=nome&codigo=eq.${encodeURIComponent(c.plano_escolhido)}`).catch(() => null);
+    return (p && p[0] && p[0].nome) || c.plano_escolhido;
+  }
+  async function atualizarTudo() {
+    if (S.atualizando) return;
+    S.atualizando = true; desenha();
+    try {
+      if (S.dados) {
+        const convId = S.conversa && S.conversa.id;
+        let conv = null;
+        if (convId && podeVerConversas()) {
+          const r = await api(`/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&id=eq.${encodeURIComponent(convId)}`);
+          conv = (r && r[0]) || null;
+        }
+        if (S.venda) {
+          const d = await rpc('dados_portal', { p_venda_id: S.venda.venda_id });
+          if (!d) throw new Error('Não achei mais essa venda (ou você perdeu o acesso).');
+          S.dados = d; S.venda = { ...S.venda, cliente_nome: (d.cliente && d.cliente.nome) || S.venda.cliente_nome };
+          if (conv) S.conversa = conv;
+        } else if (conv) {
+          S.conversa = conv; S.dados = dadosDaConversa(conv, await planoDaConversa(conv));
+        } else if (convId) {
+          throw new Error('Essa conversa não está mais disponível.');
+        }
+        if (S.conversa && (S.orelha === 'conversa' || S.turnos != null)) await carregaTurnos();
+        aviso('Dados atualizados.', 'ok');
+      } else {
+        await Promise.all([carregaFila(), carregaConversas()]);
+        aviso('Listas atualizadas.', 'ok');
+      }
+    } catch (e) { aviso(e.message, 'bad'); }
+    S.atualizando = false; desenha();
+  }
+
+  async function abreConversa(c, orelha) {
     S.ocupado = true; aviso(''); desenha();
     try {
-      let plano = null;
-      if (c.plano_escolhido) {
-        const p = await api(`/rest/v1/config_planos?select=nome&codigo=eq.${encodeURIComponent(c.plano_escolhido)}`).catch(() => null);
-        plano = (p && p[0] && p[0].nome) || c.plano_escolhido;
-      }
+      const plano = await planoDaConversa(c);
       S.venda = null; S.conversa = c; S.dados = dadosDaConversa(c, plano);
-      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null; S.orelha = 'portal'; S.turnos = null; S.turnosErro = '';
+      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
       window.scrollTo(0, 0);
+      if (S.orelha === 'conversa') carregaTurnos();
       try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
@@ -431,14 +467,16 @@
     const itens = lista.map((c) => {
       const d = c.dados || {}, ec = c.endereco_cep || {};
       const temEnd = !!(c.cep && c.numero), temDoc = !!so(d.cpf);
-      return h('button', { class: 'item', type: 'button', onclick: () => abreConversa(c) },
+      return h('div', { class: 'item item-duplo' },
+        h('button', { class: 'item-corpo', type: 'button', onclick: () => abreConversa(c) },
         h('b', {}, nomeConversa(c)),
         h('span', { class: 'meta' }, [ec.bairro, c.cidade].filter(Boolean).join(' · ') || 'sem endereço ainda'),
         h('span', { class: 'meta' }, `Mari: ${ETAPA_MARI[c.etapa] || c.etapa}${c.status === 'handoff_realizado' ? ' · com o time' : ''} · ${ha(c.ultima_msg_lead_at || c.updated_at)}`),
         h('span', {},
           h('span', { class: `chip ${temEnd ? 'ok' : 'bad'}` }, temEnd ? 'CEP e número' : 'sem CEP/número'), ' ',
           h('span', { class: `chip ${temDoc ? 'ok' : ''}` }, temDoc ? 'CPF' : 'sem CPF'), ' ',
-          c.venda_id ? h('span', { class: 'chip acc' }, 'já é venda') : null));
+          c.venda_id ? h('span', { class: 'chip acc' }, 'já é venda') : null)),
+        h('button', { class: 'btn btn-sm item-ler', type: 'button', title: 'Ler a conversa do Chatwoot', onclick: () => abreConversa(c, 'conversa') }, '💬 Ler conversa'));
     });
     return [
       h('div', { class: 'card' },
@@ -550,7 +588,7 @@
           h('span', { class: 'sub' }, [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · ')),
           !S.venda ? h('div', {}, h('span', { class: 'chip acc' }, 'Conversa da Mari · sem venda qualificada')) : null),
         h('button', { class: 'btn btn-sm', type: 'button', onclick: voltar }, S.aba === 'conversas' ? '← Conversas' : '← Vendas')),
-      orelhas([['portal', 'Portal'], ['conversa', 'Conversa']], S.orelha, trocaOrelha, 'orelhas-sub'));
+      orelhas([['portal', 'Preencher no portal'], ['conversa', '💬 Conversa (Chatwoot)']], S.orelha, trocaOrelha, 'orelhas-sub'));
     if (S.orelha === 'conversa') return [cab, telaConversa()];
     const avisosPortal = S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg));
     const regua = h('div', { class: 'regua' }, ETAPAS.map((_, i) => h('span', { class: n === i + 1 ? 'atual' : n && i + 1 < n ? 'feito' : '' })));
@@ -573,6 +611,9 @@
     const ativo = document.activeElement; const idAtivo = ativo && ativo.id; const ini = ativo && ativo.selectionStart; const fim = ativo && ativo.selectionEnd;
     const sair = document.getElementById('sair'), quem = document.getElementById('quem');
     sair.hidden = !S.sess; quem.hidden = !S.sess; quem.textContent = S.nome || '';
+    const atu = document.getElementById('atualizar');
+    atu.hidden = !S.sess; atu.disabled = S.atualizando || S.ocupado; atu.textContent = S.atualizando ? 'Atualizando…' : 'Atualizar';
+    atu.onclick = atualizarTudo;
     sair.onclick = async () => { await sairLocal(); desenha(); };
     // a caixa da conversa guarda a posição (quem rolou para cima para ler não é jogado de volta ao fim a cada redesenho)
     const caixa = document.getElementById('conv-box');
