@@ -814,7 +814,7 @@
         // validação (amarelo) e > 72 h (vermelho, humano liga); crédito pendente há > 24 h (reconsultar no portal).
         const hBio = v.horas_biometria_pendente != null ? Number(v.horas_biometria_pendente) : null;
         const hCred = v.horas_credito_pendente != null ? Number(v.horas_credito_pendente) : null;
-        if (v.credito_resultado === 'negado') return { txt: 'Crédito negado no portal · encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
+        if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF ao cliente (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
         if (v.biometria_status === 'validada') {
           if (!v.nio_pedido) return { txt: 'Biometria validada · falta o nº do pedido', nivel: 'warn', acao: true, resolver: 'pedido' };
           if (!portalViavel(v)) return { txt: 'Biometria validada · registrar a viabilidade do portal (Viável)', nivel: 'warn', acao: true, resolver: 'viab' };
