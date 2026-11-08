@@ -27,6 +27,9 @@
   let empurrou = false;    // a ficha criou a entrada no histórico (fechar = voltar)
   let consultarDfv = null; // consulta da base DFV do bloco Endereço em edição
   let usuariosCache = null;
+  let convAberta = false;  // orelha da conversa da Mari aberta (painel à esquerda da ficha)
+  let conv = null;         // { id, turnos, erro } — carregada na 1ª abertura
+  let convFim = false;     // rolar a conversa até a última mensagem no próximo desenho
   const ouvintes = [];
 
   // ---------- formatação local ----------
@@ -581,9 +584,11 @@
     const pd = pistaDfv(v);
     const form = formAtivo === 'viab' ? FORMS.viab(v) : '';
     const fechada = v.status === 'saida';
-    return `<section class="conf-card portal-card" aria-label="Viabilidade">
-      <h3>Viabilidade ${NG.dicaTxt(NG.ajuda.viab_portal)}</h3>
-      <div class="d-l"><span>Portal PAP</span><b><span class="pill ${cls}">${esc(estado)}</span>${quando ? ` <small class="apagado">${esc(quando)}</small>` : ''}</b></div>
+    // 07/11: recolhido = uma linha com o status do portal; abre no clique ou quando o formulário do resultado está aberto.
+    const aberto = abertos.has('c_viab') || formAtivo === 'viab';
+    return `<section class="conf-card portal-card recolhe${aberto ? ' aberto' : ''}" aria-label="Viabilidade">
+      <div class="cc-cab"><button type="button" class="cc-tog" data-f="cartao" data-c="c_viab" aria-expanded="${aberto}"><b>Viabilidade</b><span class="pill ${cls}">${esc(estado)}</span>${quando ? `<small>${esc(quando)}</small>` : ''}${vencida ? '<small class="warn-txt">consultar de novo</small>' : ''}</button>${NG.dicaTxt(NG.ajuda.viab_portal)}</div>
+      <div class="cc-corpo">
       ${vencida ? '<div class="faixa amarelo">Viável há mais de 7 dias: consulte de novo antes de registrar a venda.</div>' : ''}
       ${r && r !== 'viavel' && !fechada ? '<span class="nota-campo">Sem viabilidade ou endereço não encontrado: tente variações de CEP, rua e número no portal antes de encerrar.</span>' : ''}
       ${!fechada && !form ? `<div class="conf-botoes">
@@ -591,6 +596,7 @@
         <button type="button" class="btn" data-f="viab-form" title="${esc(NG.ajuda.viab_registrar)}">Registrar resultado</button></div>` : ''}
       ${form}
       <div class="pista-dfv" title="${esc(NG.ajuda.dfv_pista)}"><span>Pista do DFV (foto da Nio de ${esc(pd.foto)})</span> ${esc(pd.txt)}</div>
+      </div>
     </section>`;
   }
 
@@ -644,12 +650,16 @@
         ${val ? `<button type="button" class="btn btn-sm pp-copiar" data-f="copiar-campo" data-i="${idx}" aria-label="Copiar ${esc(rotCurto(rot))}" title="Copiar ${esc(rotCurto(rot))}">⧉</button>` : '<span></span>'}</div>`;
     }).join('')}</div>`).join('');
     const faltam = camposPortal(v).flatMap(([, cs]) => cs).filter(([, val, obrig]) => obrig && !val).length;
-    return `<section class="conf-card portal-card" aria-label="Dados para o portal PAP">
-      <h3>Dados para o portal PAP ${NG.dicaTxt(NG.ajuda.portal_dados)} ${faltam ? `<span class="pill cf-reprovada">${faltam} ${faltam === 1 ? 'falta' : 'faltam'}</span>` : '<span class="pill cf-aprovada">completo</span>'}</h3>
+    // 07/11: recolhido por padrão (status + "Copiar tudo" na linha); abre no clique ou ao editar a referência.
+    const aberto = abertos.has('c_portal') || formAtivo === 'ref';
+    return `<section class="conf-card portal-card recolhe${aberto ? ' aberto' : ''}" aria-label="Dados para o portal PAP">
+      <div class="cc-cab"><button type="button" class="cc-tog" data-f="cartao" data-c="c_portal" aria-expanded="${aberto}"><b>Dados para o portal PAP</b>${faltam ? `<span class="pill cf-reprovada">${faltam} ${faltam === 1 ? 'falta' : 'faltam'}</span>` : '<span class="pill cf-aprovada">completo</span>'}</button>${NG.dicaTxt(NG.ajuda.portal_dados)}
+        <button type="button" class="btn btn-sm" data-f="copiar-tudo" title="Um campo por linha, &quot;Rótulo: valor&quot;. O que falta vai como &quot;—&quot;.">Copiar tudo</button></div>
+      <div class="cc-corpo">
       ${secoes}
       ${formAtivo === 'ref' ? FORMS.ref(v) : ''}
-      <div class="conf-botoes"><button type="button" class="btn btn-acc" data-f="copiar-tudo">Copiar tudo</button>
-        <span class="nota-campo">Um campo por linha, "Rótulo: valor". O que falta vai como "—".</span></div>
+      <span class="nota-campo">"Copiar tudo": um campo por linha, "Rótulo: valor". O que falta vai como "—".</span>
+      </div>
     </section>`;
   }
 
@@ -692,8 +702,53 @@
             <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         </div>
       </div>
+      ${linhaDoTempo(v)}
     </header>`;
   }
+
+  // ---------- conversa da Mari (orelha à esquerda da ficha, 07/11) ----------
+  // Só para quem lê mari_conversas (admin/backoffice): sem conversaId, sem orelha. Mesmos balões da tela Mari, só texto.
+  const limpaTurno = (t) => String(t || '').replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '').replace(/\[[A-Z_]{3,}(?::[^\]]*)?\]/g, '').trim();
+  function painelConversa(v) {
+    if (!d.conversaId) return '';
+    const pronta = conv && conv.id === d.conversaId;
+    let corpo = '<div class="carregando">Carregando a conversa…</div>';
+    let n = 0;
+    if (pronta && conv.erro) corpo = `<div class="vazio">${esc(conv.erro)}</div>`;
+    else if (pronta) {
+      const quemDe = { lead: v.cliente_nome, mari: 'Mari', humano: 'Humano', sistema: 'Sistema' };
+      const itens = conv.turnos.filter((t) => quemDe[t.papel] && limpaTurno(t.texto));
+      n = itens.length;
+      corpo = itens.map((t) => `<div class="balao ${t.papel}"><div class="b-quem">${esc(quemDe[t.papel])} · ${esc(NG.fmtDataHora(t.created_at))}</div><div class="b-txt">${esc(limpaTurno(t.texto))}</div></div>`).join('')
+        || '<div class="vazio">Sem mensagens</div>';
+    }
+    return `<button type="button" class="f-orelha" data-f="conversa" aria-expanded="${convAberta}" aria-controls="f-conv" title="${convAberta ? 'Fechar a conversa' : 'Ler a conversa da Mari'}"><span>Conversa</span></button>
+      <section class="f-conv" id="f-conv" aria-label="Conversa da Mari"${convAberta ? '' : ' hidden'}>
+        <header class="f-conv-cab"><div><b>Conversa da Mari</b><small>${esc(v.cliente_nome)}${pronta && !conv.erro ? ` · ${n} ${n === 1 ? 'mensagem' : 'mensagens'}` : ''}</small></div>
+          <div class="f-conv-acoes">${d.chatwoot ? `<a class="btn btn-sm" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}<a class="btn btn-sm" href="mari.html?conversa=${esc(d.conversaId)}">Na tela Mari</a>
+          <button type="button" class="g-fechar" data-f="conversa" aria-label="Fechar a conversa">×</button></div></header>
+        <div class="conversa f-conv-corpo">${corpo}</div>
+      </section>`;
+  }
+  async function abrirConversa() {
+    convAberta = true;
+    convFim = true;
+    render();
+    if (conv && conv.id === d.conversaId) return;
+    const id = d.conversaId;
+    const { data, error } = await NG.sb.from('mari_turnos').select('id, papel, texto, created_at').eq('conversa_id', id).order('created_at').order('id').limit(400);
+    if (!d || d.conversaId !== id) return;   // trocou de venda no meio
+    conv = { id, turnos: data || [], erro: error ? NG.msgErro(error) : null };
+    convFim = true;
+    render();
+  }
+  // Esc fecha primeiro a conversa, depois a ficha (captura antes do Esc da gaveta).
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !convAberta || !d || document.querySelector('dialog[open]') || document.querySelector('.dica-pop')) return;
+    ev.stopPropagation();
+    convAberta = false;
+    render();
+  }, true);
 
   function faixaProximo(v, pr) {
     let nota = '';
@@ -954,17 +1009,19 @@
     const destaque = pr.resolver ? BLOCO_DO_PASSO[pr.resolver] : null;
     const corpoAntes = raiz.querySelector('.f-corpo');
     const rolagem = corpoAntes ? corpoAntes.scrollTop : 0;
+    const convAntes = raiz.querySelector('.f-conv-corpo');
+    const rolagemConv = convAntes ? convAntes.scrollTop : 0;
     if (modo === 'gaveta') document.title = `${v.cliente_nome} · ${document.title.split(' · ').pop()}`;
     else document.title = `${v.cliente_nome} · NIOGEN`;
 
-    raiz.innerHTML = `<div class="ficha f-${modo}">
+    raiz.innerHTML = `<div class="ficha f-${modo}${convAberta && d.conversaId ? ' conv-on' : ''}">
+      ${painelConversa(v)}
       ${cabecalho(v)}
       <div class="f-corpo">
         ${faixaProximo(v, pr)}
         ${cartaoViabilidade(v)}
         ${cartaoPortal(v)}
         ${cartaoConferencia(v)}
-        ${linhaDoTempo(v)}
         ${blocos(v).map((b) => {
           const aberto = abertos.has(b.id);
           const editando = edicao === b.id && b.editar;
@@ -980,6 +1037,10 @@
     </div>`;
     const corpo = raiz.querySelector('.f-corpo');
     if (corpo && modo === 'gaveta') corpo.scrollTop = rolagem;
+    const convCorpo = raiz.querySelector('.f-conv-corpo');
+    if (convCorpo) {
+      if (convFim && conv && conv.id === d.conversaId) { convCorpo.scrollTop = convCorpo.scrollHeight; convFim = false; } else convCorpo.scrollTop = rolagemConv;
+    }
     ligarDfvSeEditando();
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f) f.focus({ preventScroll: true });
@@ -1083,6 +1144,17 @@
         try { await navigator.clipboard.writeText(t); NG.toast(`Telefone copiado: ${t}`, 'ok'); } catch (e) { NG.toast(t); }
         return;
       }
+      if (acao === 'conversa') {
+        if (convAberta) { convAberta = false; render(); } else abrirConversa();
+        return;
+      }
+      if (acao === 'cartao') {
+        const id = b.dataset.c;
+        const forcado = (id === 'c_viab' && formAtivo === 'viab') || (id === 'c_portal' && formAtivo === 'ref');
+        if (abertos.has(id) || forcado) { abertos.delete(id); if (forcado) formAtivo = null; } else abertos.add(id);
+        render();
+        return;
+      }
       if (acao === 'bloco') {
         const id = b.closest('[data-bloco]').dataset.bloco;
         if (abertos.has(id)) { abertos.delete(id); if (edicao === id) edicao = null; } else abertos.add(id);
@@ -1172,7 +1244,7 @@
     garantirGaveta();
     if (idAtual !== id) {
       idAtual = id;
-      d = null; abertos = null; edicao = null; formAtivo = null;
+      d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null;
       raiz.innerHTML = '<div class="ficha f-gaveta"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>';
     }
     if (!gav.classList.contains('aberta')) {
