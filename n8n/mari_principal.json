@@ -435,7 +435,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('2 · Entrada').first().json.telefone, type: 'text', text: { body: '🧹 Memória da Mari zerada (teste). Manda um oi que ela começa do zero.' } }) }}",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('2 · Entrada').first().json.telefone, type: 'text', text: { body: '🧹 Memória da Mari zerada (teste)' + ($json.vendas_apagadas > 0 ? ` e ${$json.vendas_apagadas} venda(s) de teste apagada(s)` : '') + ($json.vendas_mantidas > 0 ? ` — ${$json.vendas_mantidas} venda(s) com pedido/pontos/pagamento mantida(s)` : '') + '. Manda um oi que ela começa do zero.' } }) }}",
         "options": {
           "timeout": 20000
         }
