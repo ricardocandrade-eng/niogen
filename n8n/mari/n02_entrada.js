@@ -174,6 +174,9 @@ if (ex('1 · Webhook Mari teste')) {
     cwStatus,
   };
   if (!/^\d{10,15}$/.test(entrada.telefone)) return soStatus;
+  // 08/11 (0062): "#zerar" = comando de teste — encerra a conversa da Mari e a próxima mensagem começa do zero. Quem pode
+  // é o banco que decide (config_mari_textos.telefones_teste); número fora da lista segue o fluxo normal como fala comum.
+  if (/^\s*[#/]\s*zerar\s*$/i.test(texto)) entrada.registrar = 'zerar';
 } else {
   return [];
 }

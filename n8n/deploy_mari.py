@@ -213,6 +213,7 @@ def js(arquivo):
 CODE = {
     '2 · Entrada': 'n02_entrada.js',
     '2h · Guard humano': 'n02h_guard_humano.js',
+    '2w · Seguir entrada': 'n02w_seguir.js',                  # 08/11 (0062): "#zerar" fora da lista segue normal
     '3e · Espera lock': 'n03e_espera_lock.js',
     '4 · Preparar': 'n04_preparar.js',
     '2c · Mídia': 'n02c_midia.js',
@@ -321,6 +322,37 @@ def build(ids):
     iff('2q · Resolvida?', "={{ $json.registrar === 'resolvida' }}", 660, 450)
     rpc('2v · Supabase encerrar ciclo', 'mari_encerrar_ciclo',
         "={{ JSON.stringify({ p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 880, 650)
+    # 08/11 (0062): "#zerar" de um número de teste → encerra a conversa da Mari (nada apagado), avisa pela Graph API (sem
+    # eco no Chatwoot — o aviso não vira fala "humana" na conversa nova), limpa as etiquetas e resolve no Chatwoot.
+    # Número fora de telefones_teste → 2w devolve a entrada e segue o fluxo normal (2m).
+    iff('2k · Zerar?', "={{ $json.registrar === 'zerar' }}", 770, 800)
+    rpc('2l · Supabase zerar', 'mari_zerar_memoria',
+        "={{ JSON.stringify({ p_telefone: $json.telefone, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 990, 900)
+    iff('2n · Zerou?', '={{ $json.ok === true }}', 1210, 900)
+    code('2w · Seguir entrada', 1430, 1000)
+    add('2o · WABA aviso zerar', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', "
+                    "to: $('2 · Entrada').first().json.telefone, type: 'text', text: { body: "
+                    "'🧹 Memória da Mari zerada (teste). Manda um oi que ela começa do zero.' } }) }}",
+        'options': {'timeout': 20000}}, 1430, 800, credentials=wa_cred, onError='continueRegularOutput',
+        notes='Comando #zerar (0062) — aviso pela Graph API (credencial "WABA Nio (Nio_API)"): não passa pelo Chatwoot, sem eco.')
+    add('2p · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/labels",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ labels: [] }) }}',
+        'options': {'timeout': 15000}}, 1650, 800, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Comando #zerar — tira as etiquetas (handoff, handoff-venda…) para o próximo teste começar limpo.')
+    add('2u · Chatwoot resolver', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/toggle_status",
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'resolved' }) }}",
+        'options': {'timeout': 15000}}, 1870, 800, credentials=cw_cred, onError='continueRegularOutput',
+        notes='Comando #zerar — resolve a conversa (a automação 24387 tira dono e time); o próximo "oi" reabre sem dono.')
     iff('2m · Modo chatwoot?', "={{ $json.modo === 'chatwoot' }}", 660, 200)
     add('2g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET',
@@ -505,7 +537,15 @@ def build(ids):
         ('2x · Fala humana?', 0, '2y · Supabase registrar humano'),
         ('2x · Fala humana?', 1, '2q · Resolvida?'),
         ('2q · Resolvida?', 0, '2v · Supabase encerrar ciclo'),
-        ('2q · Resolvida?', 1, '2m · Modo chatwoot?'),
+        ('2q · Resolvida?', 1, '2k · Zerar?'),
+        ('2k · Zerar?', 0, '2l · Supabase zerar'),
+        ('2k · Zerar?', 1, '2m · Modo chatwoot?'),
+        ('2l · Supabase zerar', 0, '2n · Zerou?'),
+        ('2n · Zerou?', 0, '2o · WABA aviso zerar'),
+        ('2n · Zerou?', 1, '2w · Seguir entrada'),
+        ('2w · Seguir entrada', 0, '2m · Modo chatwoot?'),
+        ('2o · WABA aviso zerar', 0, '2p · Chatwoot etiquetas'),
+        ('2p · Chatwoot etiquetas', 0, '2u · Chatwoot resolver'),
         ('2m · Modo chatwoot?', 0, '2g · Chatwoot conversa'),
         ('2m · Modo chatwoot?', 1, '2h · Guard humano'),
         ('2g · Chatwoot conversa', 0, '2h · Guard humano'),
