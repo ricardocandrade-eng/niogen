@@ -123,6 +123,24 @@ let texto = bruto
   .replace(/\n{3,}/g, '\n\n')
   .trim();
 
+// ── 3a. travas do teste real de 07/11 23h08 (conversa #1) ──
+const conv0 = ctx.conversa || {};
+// Janela pós-handoff (0061): a venda já foi passada ao nosso time há poucos minutos e ninguém da equipe falou ainda.
+// A Mari só responde agradecimento ou dúvida final — não muda estado, não faz handoff, não manda botão.
+const posHandoff = conv0.status === 'handoff_realizado';
+// Cobertura: "A Nio atende o seu endereço ✅" só com o PORTAL viável. O DFV "viável" é pista e não libera a frase — o
+// modelo confundiu os dois (portal indisponível, DFV viável). Sem portal viável, a frase vira a da cidade (Passo 3).
+if (conv0.nio_viab_resultado !== 'viavel') {
+  const cidadeTxt = conv0.cidade ? `A Nio atende ${conv0.cidade} 🎯 ` : '';
+  texto = texto.replace(/a nio atende (o )?seu endere[cç]o[.!]?[ \t]*✅?️?[ \t]*/gi,
+    `${cidadeTxt}A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido. `)
+    .replace(/[ \t]+\n/g, '\n');
+}
+// LGPD: uma vez por conversa ("Seus dados são usados só pro seu pedido com a Nio." saiu duas vezes).
+if (conv0.lgpd_enviada) {
+  texto = texto.replace(/\n*[ \t]*Seus dados s[aã]o usados s[oó] pro seu pedido com a Nio\.?[ \t]*/gi, '').trim();
+}
+
 // ── 3b. bloco de condições (prompt v5, decisão do Ricardo 05/11 16h33) ──
 // O texto é EXATO: o modelo escreve só a marca [CONDICOES] e o sistema põe o bloco, com a taxa e os meses do plano
 // escolhido (varejo = R$ 540 / 12 meses = o texto do Ricardo palavra por palavra; Empresas = 24 meses; sem fidelidade =
@@ -148,6 +166,8 @@ function blocoCondicoes() {
     '', 'A velocidade real depende do aparelho e do Wi-Fi.'].join('\n');
 }
 if (VERc >= 5 && /\[CONDI[CÇ][OÕ]ES\]/i.test(texto)) {
+  // Ensaio 07/11 23h55: "Tô te mandando as condições certinhas:" logo antes da marca só repete a abertura do bloco — sai.
+  texto = texto.replace(/(^|\n)[^\n]*condi[cç][oõ]es[^\n]*:[ \t]*(?=\s*(\|\|\s*)?\[CONDI[CÇ][OÕ]ES\])/gi, '$1');
   // O bloco vai sempre sozinho num balão: o sistema põe o "||" antes e depois (balões vazios somem no corte).
   texto = texto.replace(/\[CONDI[CÇ][OÕ]ES\]/gi, () => (condicoesInseridas ? '' : (condicoesInseridas = true, `\n||\n${blocoCondicoes()}\n||\n`)))
     .replace(/(\s*\|\|\s*){2,}/g, '\n||\n').replace(/^\s*\|\|\s*|\s*\|\|\s*$/g, '')
@@ -174,7 +194,8 @@ function prometeCobertura(n) {
   if (((ctx.conversa || {}).nio_viab_resultado) === 'viavel') return false;   // portal já disse viável (nível A)
   // Pergunta ou condicional ("pra eu ver se a Nio chega aí", "chega aí?") não é promessa — só afirmação conta.
   return n.split(/(?<=[.?!\n])/).filter((f) => !f.includes('?') && !/\b(ver|saber|confirmar|checar|conferir|olhar) se\b|\bse (a nio |a fibra |ela )?(chega|atende)\b/.test(f)).some((f) =>
-    /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa|no seu predio|no seu bairro)/.test(f)
+    // 07/11 23h10: "atende o seu endereço" (sem o "no") passava pela trava.
+    /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|(o )?seu endereco|(a )?sua rua|na sua casa|(a )?sua casa|no seu predio|no seu bairro)/.test(f)
     || /\btem cobertura\b|\bcobertura (no|na|pro|pra) (seu|sua)\b|(seu endereco|sua rua|sua casa) (e|esta|ta|fica) (atendid|coberto|coberta)/.test(f)
     || (/\bboa noticia\b/.test(f) && /atende|cobertura|chega|disponivel/.test(f)));
 }
@@ -257,7 +278,7 @@ function violacoesDe(t) {
     const nPag = n.replace(/\b(nao|nenhum|sem|nunca)\b[^.?!\n]{0,40}?(link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|cobra\w*)/g, ' ')
       .replace(/\b(a gente|nos|nosso time|o time|o consultor) (nao|nunca) (cobra|vai cobrar|faz a cobranca)/g, ' ');
     if (/link (de |do |pro |para o |pra )?pagamento|pagamento seguro|cadastr\w* (do |o |seu )?cartao|dados do cartao|(a gente|nos|nosso time|o time|o consultor) (cobra|vai cobrar|faz a cobranca)|cobranca (e feita |fica )?(pelo|por|com) (nosso|o nosso|a gente)/.test(nPag)) {
-      v.push('falou de link de pagamento ou de cobrança pela revenda (quem cobra é a própria Nio; escolhida a forma, só "Anotado!" e segue)');
+      v.push('falou de link de pagamento ou de cobrança pela revenda (quem cobra é a própria Nio; escolhida a forma, segue direto para manhã ou tarde)');
     }
     // Guard-rail 14: "sem custo" só na linha do roteador do bloco de condições (texto do Ricardo).
     if (n.replace(/roteador em comodato incluido sem custo extra/g, '').includes('sem custo')) v.push('usou "sem custo" (proibido; a única exceção é a linha do roteador nas condições)');
@@ -316,7 +337,8 @@ const emojiAjustes = [];
 // Ricardo (05/11 ~17h15): 💚 em toda saudação e despedida. Quem põe é o sistema (fim deste nó) e ele não conta no limite
 // de emoji — o 💚 que o modelo escrever sai aqui, antes da regra de emoji.
 const CORACAO = '💚';
-if (VER >= 5) baloes = baloes.map((b) => b.replace(/[ \t]*💚[ \t]*/gu, ' ').trim()).filter(Boolean);
+// Exceção: na janela pós-handoff o 💚 do "Imagina! 💚" é do modelo (Ricardo, 07/11 23h30).
+if (VER >= 5 && !posHandoff) baloes = baloes.map((b) => b.replace(/[ \t]*💚[ \t]*/gu, ' ').trim()).filter(Boolean);
 // v4 (Ricardo, 05/11, pendência 47): ✅ e 🎯 liberados SÓ nas falas de cobertura do roteiro — "a Nio atende o seu
 // endereço ✅" e "a Nio atende aí em [cidade] 🎯". Viram marcador antes da regra de emoji (não contam no limite) e voltam no fim.
 const SELO_OK = '\u0001OK\u0001', SELO_AL = '\u0001AL\u0001';
@@ -327,6 +349,9 @@ if (V4) {
     // v7 (A1): "A Nio atende Juiz de Fora 🎯" — a fala liberada da cidade
     .replace(/(a nio atende [^\n.!🎯]{2,40}?[.!]?)[ \t]*🎯/gi, (m, f) => `${f.trimEnd()} ${SELO_AL}`));
 }
+// Janela pós-handoff: o 💚 do "Imagina! 💚" não conta no limite de emoji (vira selo e volta no fim).
+const SELO_CO = 'CO';
+if (posHandoff) baloes = baloes.map((b) => b.replace(/💚/gu, SELO_CO));
 if (V3) {
   const limpa = (s) => s.replace(/[ \t]{2,}/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/^[ \t]+/gm, '').trim();
   baloes = baloes.map((b) => {
@@ -344,6 +369,7 @@ if (V3) {
   }
 }
 if (V4) baloes = baloes.map((b) => b.split(SELO_OK).join('✅').split(SELO_AL).join('🎯'));
+if (posHandoff) baloes = baloes.map((b) => b.split(SELO_CO).join('💚'));
 // Prompt 18 (C5/C6): parágrafos separados por linha em branco em todo balão; a lista de planos com uma linha em branco
 // entre cada opção. Só as linhas "•" seguidas (resumo e condições) ficam coladas uma na outra.
 if (VER >= 5) {
@@ -355,8 +381,24 @@ if (VER >= 5) {
 // 💚 na saudação: fim do 1º parágrafo da 1ª mensagem da conversa ("Olá, tudo bem? Mari da Nio aqui. 💚").
 if (VER >= 5 && ctx.primeira && baloes.length) {
   const ps = baloes[0].split('\n\n');
-  ps[0] = `${ps[0]} ${CORACAO}`;
+  // 07/11 23h08: "Oi! Aqui é a Mari, da Nio 👋 💚" — o cumprimento sorteado já tinha emoji. O 💚 TOMA O LUGAR dele.
+  ps[0] = `${ps[0].replace(/[ \t]*(\p{Extended_Pictographic}️?[ \t]*)+$/u, '')} ${CORACAO}`;
   baloes[0] = ps.join('\n\n');
+}
+// "Anotado" a cada dado (5 vezes na conversa #1 de 07/11): um humano não confirma cada resposta, só segue para a próxima.
+// Sai a FRASE que só diz "anotado" ("Anotado!", "Perfeito, anotado 😊", "Show, anotado o e-mail."); o resto fica
+// ("Show, Ricardo! Anotado." → "Show, Ricardo!"). Fora da despedida de handoff. Se não sobrar nada e não houver botões
+// nem carrossel para mandar, a fala fica como veio (nunca deixar o cliente no vácuo).
+const soAnotado = (f) => /^((perfeito|show|beleza|otimo|certo|ok|pronto|fechado|boa|massa|tudo certo)[,!. ]+([a-z]+[,!. ]+)?)?anotad[oa]( (o|a) (seu |sua )?[a-z-]+| aqui| tudo)?[.!]*$/
+  .test(norm(f).replace(/\p{Extended_Pictographic}️?/gu, '').replace(/\s+/g, ' ').trim());
+if (V7 && !handoffYaml && baloes.length) {
+  // Só mexe no parágrafo que tem a frase (listas "•" do resumo e das condições ficam intactas).
+  const limpos = baloes.map((b) => b.split('\n\n').map((p) => {
+    const fr = p.split(/(?<=[.!?])[ \t]+/);
+    return fr.some(soAnotado) ? fr.filter((f) => !soAnotado(f)).join(' ').trim() : p;
+  })
+    .filter(Boolean).join('\n\n')).filter((b) => b.trim());
+  if (limpos.length || tags.botoes || tags.carrossel) baloes = limpos;
 }
 texto = baloes.join('\n\n');
 
@@ -534,7 +576,7 @@ if (motivo) {
     const prazo = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
     texto = {
       dados_completos: V7
-        ? 'Pronto, anotado!\n\nAgora o nosso time confere tudo no sistema da Nio e abre o seu pedido. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.'
+        ? 'Pronto, tudo certo por aqui!\n\nAgora o nosso time confere tudo no sistema da Nio e abre o seu pedido. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.'
         : V6
         ? `Pronto, anotado!\n\nAgora o nosso time abre o seu pedido, ${prazo}. Assim que ele for aberto, a própria Nio te manda o link da biometria por WhatsApp e por e-mail — é rapidinho, você faz pelo celular.\n\nDepois a gente confirma a data da instalação por aqui.`
         : V4
@@ -565,18 +607,34 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
 // da confirmação (teste real 06/11: o modelo pulou direto para "manhã ou tarde"). Com upsell, as condições vêm depois.
 if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas && !tags.upsell_oferecido
   && (upd.plano_escolhido || c.plano_escolhido) && baloesFinais.length && !baloesFinais.some((b) => b.includes(COND_ABRE))) {
-  baloesFinais = [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)].slice(0, 4);
+  // 07/11 23h11 (conversa #1): o modelo pôs confirmação + "Fechou? Me manda seu nome completo e CPF…" num balão só e as
+  // condições chegavam DEPOIS do pedido de dados. O pedido (e a linha da LGPD) passa para depois do bloco.
+  const ehPedidoDados = (p) => /nome completo|\bcpf\b|seus dados sao usados|^fechou\?/.test(norm(p));
+  const ps0 = baloesFinais[0].split('\n\n');
+  const fica = ps0.filter((p) => !ehPedidoDados(p));
+  const vai = ps0.filter(ehPedidoDados);
+  baloesFinais = (fica.length && vai.length
+    ? [fica.join('\n\n'), blocoCondicoes(), vai.join('\n\n'), ...baloesFinais.slice(1)]
+    : [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)]).slice(0, 4);
   texto = baloesFinais.join('\n\n');
 }
 
 // ── 6. v7: CPF mascarado na fala da Mari (prompt 27 A6 — o banco guarda inteiro) ──
 if (V7) {
-  // Inteiro → mascarado; e a máscara que o modelo inventar ("529.XXX.XXX-25", "•••") vira o padrão 123.***.***-30.
+  // Inteiro → mascarado; e a máscara que o modelo inventar ("529.XXX.XXX-25", "•••") vira o padrão.
+  // 07/11 23h14 (conversa #1): o modelo copiou o EXEMPLO do prompt ("123.***.***-30") no lugar do CPF do cliente. Com o CPF
+  // guardado (11 dígitos), a máscara sai SEMPRE dele — o que o modelo escreveu na linha do CPF é ignorado.
+  const cpfReal = String(dados.cpf || ((c.dados || {}).cpf) || '').replace(/\D/g, '');
+  const cpfMasc = cpfReal.length === 11 ? `${cpfReal.slice(0, 3)}.***.***-${cpfReal.slice(9)}` : null;
+  const CPF_QQ = /\b\d{3}\.?[\dx*•]{3}\.?[\dx*•]{3}-?\d{2}\b/gi;
   const mascara = (s) => s.split('\n').map((l) => (/cpf/i.test(l)
-    ? l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4')
-      .replace(/\b(\d{3})\.?[x*•]{3}\.?[x*•]{3}-?(\d{2})\b/gi, '$1.***.***-$2') : l)).join('\n');
-  baloesFinais = baloesFinais.map(mascara);
-  texto = mascara(texto);
+    ? (cpfMasc ? l.replace(CPF_QQ, cpfMasc)
+      : l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4')
+        .replace(/\b(\d{3})\.?[x*•]{3}\.?[x*•]{3}-?(\d{2})\b/gi, '$1.***.***-$2')) : l)).join('\n');
+  // Telefone do resumo no mesmo formato da confirmação ("32 98801-5161"), não "32988015161".
+  const telFmt = (s) => s.replace(/^(•\s*Telefone:\s*)\(?(\d{2})\)?\s*(9?\d{4})-?\s*(\d{4})\s*$/gim, '$1$2 $3-$4');
+  baloesFinais = baloesFinais.map((b) => telFmt(mascara(b)));
+  texto = telFmt(mascara(texto));
 }
 
 // ── 7. v7: mensagem interativa (prompt 26) — o n8n manda pela Graph API depois dos balões ──
@@ -679,10 +737,13 @@ if (V7 && !m.forma_pagamento) {
 // Trava do pagamento (bateria 06/11; 07/11): plano escolhido, telefone e e-mail completos e sem forma de pagamento = a
 // próxima pergunta é o pagamento (ordem do Passo 4). Dispara quando a Mari não perguntou nada ("Anotado o e-mail!") ou
 // pulou para "manhã ou tarde" (essa pergunta sai). Se ela está pedindo outra coisa (o CPF que falta…), não dispara.
+// Resumo de conferência: "confere os dados", e também o refeito depois de "Corrigir" ("Confere de novo os dados",
+// "confere os dados de novo") — 07/11 23h14 o refeito saiu sem os botões.
+const RESUMO_RE = /confere\b[^\n]{0,15}\bdados/;
 const ultimaFala = norm(baloesFinais[baloesFinais.length - 1] || '');
 const outraPergunta = ultimaFala.includes('?') && !/manha ou (a )?tarde|instalacao, voce prefere/.test(ultimaFala);
 if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && m.dados.telefone && m.dados.email
-  && !outraPergunta && !baloesFinais.some((b) => /confere os dados/.test(norm(b)))) {
+  && !outraPergunta && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))) {
   baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/manha ou (a )?tarde|instalacao, voce prefere/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
   tags.botoes = 'pagamento';
   texto = baloesFinais.join('\n\n');
@@ -699,11 +760,11 @@ const ehPerguntaPag = (f) => {
 const frases = (b) => b.split(/\n\n|(?<=[.!?])\s+/);
 if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && baloesFinais.length
   && !tags.upsell_oferecido && !/por mais r\$/.test(norm(texto))
-  && !baloesFinais.some((b) => /confere os dados/.test(norm(b))) && frases(baloesFinais[baloesFinais.length - 1]).some(ehPerguntaPag)) {
+  && !baloesFinais.some((b) => RESUMO_RE.test(norm(b))) && frases(baloesFinais[baloesFinais.length - 1]).some(ehPerguntaPag)) {
   tags.botoes = 'pagamento';
 }
 // Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
-if (V7 && !erro && !tags.botoes && baloesFinais.length && /confere os dados/.test(norm(baloesFinais[baloesFinais.length - 1]))
+if (V7 && !erro && !tags.botoes && baloesFinais.length && RESUMO_RE.test(norm(baloesFinais[baloesFinais.length - 1]))
   && /cpf:/.test(norm(baloesFinais[baloesFinais.length - 1]))) tags.botoes = 'resumo';
 if (V7 && !erro && tags.botoes) {
   const chave = norm(tags.botoes).replace(/[^a-z_]/g, '');
@@ -735,6 +796,17 @@ if (V7 && !erro && tags.botoes) {
   }
 }
 // O histórico (mari_turnos) guarda o que o cliente viu: texto + corpo interativo + resumo legível.
+// Janela pós-handoff (0061, Ricardo 07/11 23h30): a venda já está com o nosso time. A Mari responde e só — nada de botões,
+// de novo handoff (a venda já existe) ou de mudar a conversa (etapa, dados). Pedido de mudança de dado o backoffice lê aqui.
+if (posHandoff) {
+  // O corpo que ia nos botões volta a ser balão de texto (senão o cliente fica sem resposta).
+  if (interativo && interativo.tipo === 'botoes' && interativo.chave !== 'pagamento' && interativo.corpo) baloesFinais = [...baloesFinais, interativo.corpo];
+  interativo = null;
+  delete tags.botoes; delete tags.carrossel; delete tags.handoff;
+  handoff = null;
+  Object.keys(upd).forEach((k) => { delete upd[k]; });
+  texto = baloesFinais.join('\n\n');
+}
 if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
 // Rede de segurança (conversa #5, 07/11): nada para mandar (sem texto, sem interativo, sem handoff) = cliente no vácuo.
 // Deixa o rastro em mari_erros com o que o modelo escreveu.
@@ -760,4 +832,12 @@ return [{ json: {
   promptVersao: ctx.promptVersao,
   violacoes: null,
   violacoesCorrigidas,
+  // 07/11 (conversa #1): o "digitando" do 1º balão acontece no 7w, ANTES da checagem de mensagem nova (7b/7c) — uma
+  // mensagem que chega nesse intervalo agora aborta esta resposta e entra junto na próxima. Rota de teste: sem espera.
+  esperaAntes: (() => {
+    let modo = null;
+    try { modo = ($('2 · Entrada').first().json || {}).modo; } catch (e) { modo = null; }
+    if (modo !== 'chatwoot' || !baloesFinais.length) return 0.1;
+    return Math.min(6, Math.max(2, Math.round(baloesFinais[0].length / 60)));
+  })(),
 } }];

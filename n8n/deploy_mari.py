@@ -370,6 +370,10 @@ def build(ids):
     code('5c · Pedido de correção', 4400, 600)
     claude('6r · Claude (correção)', 4620, 600)
     code('7r · Extrair (correção)', 4840, 600)
+    # 07/11 (teste real, conversa #1): o "digitando" do 1º balão passa para ANTES da checagem de mensagem nova — o "Sim"
+    # que chegou 0,3 s depois do 7b não abortava a resposta. O 11 · Saída zera o atraso do 1º balão (não espera duas vezes).
+    add('7w · Espera 1º balão', 'n8n-nodes-base.wait', 1.1, {'amount': '={{ $json.esperaAntes || 0.1 }}', 'unit': 'seconds'},
+        4950, 300, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/7w'))))
     add('7b · Supabase pendentes', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET',
         'url': f"={SB}/rest/v1/mari_turnos?conversa_id=eq.{{{{ $json.conversaId }}}}&pendente=is.true&select=id",
@@ -535,10 +539,11 @@ def build(ids):
         ('6 · Claude', 0, '7 · Extrair'),
         ('7 · Extrair', 0, '7d · Corrigir?'),
         ('7d · Corrigir?', 0, '5c · Pedido de correção'),
-        ('7d · Corrigir?', 1, '7b · Supabase pendentes'),
+        ('7d · Corrigir?', 1, '7w · Espera 1º balão'),
         ('5c · Pedido de correção', 0, '6r · Claude (correção)'),
         ('6r · Claude (correção)', 0, '7r · Extrair (correção)'),
-        ('7r · Extrair (correção)', 0, '7b · Supabase pendentes'),
+        ('7r · Extrair (correção)', 0, '7w · Espera 1º balão'),
+        ('7w · Espera 1º balão', 0, '7b · Supabase pendentes'),
         ('7b · Supabase pendentes', 0, '7c · Anti-duplicata'),
         ('7c · Anti-duplicata', 0, '7e · Abortar?'),
         ('7e · Abortar?', 0, '7f · Supabase abortar'),

@@ -3,11 +3,14 @@
 // por vez, com o atraso antes de cada um (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).
 // Resposta sem "||" (v2, mídia, despedida de segurança) = um balão só, como antes.
 const j = $input.first().json;
-const baloes = Array.isArray(j.baloes) && j.baloes.length ? j.baloes : (j.resposta ? [j.resposta] : []);
+// 07/11 23h09 (conversa #1): com interativo, nunca cair no texto do histórico (ele traz "[botões: …]").
+const comInterativo = !!(j.saida && j.saida.interativo);
+const baloes = Array.isArray(j.baloes) && j.baloes.length ? j.baloes : (!comInterativo && j.resposta ? [j.resposta] : []);
 const atrasos = Array.isArray(j.atrasos) ? j.atrasos : [];
 return baloes.map((conteudo, i) => ({ json: {
   conteudo,
-  atraso: atrasos[i] || Math.min(6, Math.max(2, Math.round(conteudo.length / 60))),
+  // 0,3 s no 1º balão = o "digitando" já aconteceu antes da checagem de mensagem nova (7w).
+  atraso: atrasos[i] != null ? atrasos[i] : Math.min(6, Math.max(2, Math.round(conteudo.length / 60))),
   ordem: i + 1,
   total: baloes.length,
   chatwootConversationId: j.chatwootConversationId,

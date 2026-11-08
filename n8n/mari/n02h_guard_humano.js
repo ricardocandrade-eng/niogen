@@ -17,8 +17,14 @@ const labels = Array.isArray(c.labels) ? c.labels : [];
 let motivo = null;
 if (labels.includes('nao-contatar')) motivo = 'etiqueta nao-contatar';   // adendo 2: não falar, mesmo sem dono
 else if (assignee && (assignee.id ?? assignee.account_id)) motivo = 'humano atribuído';
-else if (teamId) motivo = 'time atribuído';
+else if (teamId && !labels.includes('handoff-venda')) motivo = 'time atribuído';
 else if (status === 'resolved') motivo = 'conversa resolvida';
+
+// Janela pós-handoff (Ricardo, 07/11 23h30 — migration 0061): venda passada ao backoffice (etiqueta handoff-venda, time
+// atribuído pela automação) e AINDA SEM DONO → segue para o 3a; quem decide é o mari_entrada (handoff dados_completos há
+// menos de N min — config_mari_textos.pos_handoff_minutos — e nenhuma fala do nosso time desde então). Fora disso ele
+// devolve silêncio e a mensagem fica registrada, como no 2r. Alguém do time assumiu (dono) → calada, como sempre.
+if (!motivo && teamId) return [{ json: { ...e, humano: false, guard: 'time sem dono + handoff-venda — janela pós-handoff (banco decide)' } }];
 
 if (motivo) return [{ json: { ...e, humano: true, encerrar: true, saida: { silencio: true, motivo } } }];
 return [{ json: { ...e, humano: false, guard: 'sem humano' } }];

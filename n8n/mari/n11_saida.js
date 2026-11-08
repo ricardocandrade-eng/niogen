@@ -31,11 +31,17 @@ if (j.saida) {
     prompt: r.promptVersao || null,
     // Balões (v3, "||"): o envio pelo Chatwoot manda um por vez, com o atraso antes de cada um
     // (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).
-    baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.texto ? [r.texto] : [])),
+    // Teste real 07/11 23h09 (conversa #1): com interativo, a pergunta inteira vira o corpo dos botões e não sobra balão.
+    // O fallback para r.texto mandava o histórico ("…\n\n[botões: Sim / Não]") como texto público pelo Chatwoot —
+    // o cliente via a marca e a pergunta duas vezes. Com interativo, balões vazios = só a mensagem interativa.
+    baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.interativo ? [] : (r.texto ? [r.texto] : []))),
     emoji_ajustes: r.emojiAjustes || null,
     interativo: r.interativo || null,   // v7: carrossel/botões (enviado pela Graph API depois dos balões)
   };
   saida.atrasos = saida.baloes.map((b) => Math.min(6, Math.max(2, Math.round(b.length / 60))));
+  // 07/11 (conversa #1, "Sim" que chegou 0,3 s depois da checagem): o "digitando" do 1º balão agora acontece ANTES da
+  // checagem de mensagem nova (7w · Espera 1º balão → 7b → 7c). Aqui ele vira quase zero para não esperar duas vezes.
+  if (ex('7w · Espera 1º balão') && saida.atrasos.length) saida.atrasos[0] = 0.3;
 } else if (ex('7f · Supabase abortar')) {
   saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };
 } else if (j.esgotado) {
@@ -53,7 +59,9 @@ if (j.saida) {
 return [{ json: {
   modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',
   saida,
-  resposta: saida.resposta || '',
+  // Modo chatwoot com interativo e sem balão: resposta vazia → o 11c pula os balões e vai direto ao 12x (botões).
+  // A rota de teste continua devolvendo saida.resposta inteira (o 12t responde com saida).
+  resposta: (saida.interativo && Array.isArray(saida.baloes) && !saida.baloes.length) ? '' : (saida.resposta || ''),
   baloes: saida.baloes || (saida.resposta ? [saida.resposta] : []),
   atrasos: saida.atrasos || (saida.resposta ? [2] : []),
   chatwootConversationId: e.chatwootConversationId || null,

@@ -156,6 +156,12 @@ const L = [];
 L.push(`primeira_mensagem: ${primeira ? 'sim' : 'nao'}`);
 L.push(`status_conversa: ${conv.status}`);
 L.push(`etapa: ${conv.etapa}`);
+// 0061 (Ricardo, 07/11 23h30): só chega aqui com status handoff_realizado quem está na janela pós-handoff.
+if (conv.status === 'handoff_realizado') {
+  L.push('pos_handoff: sim — a venda acabou de ser passada ao nosso time (o pedido já está com eles). Siga a regra PÓS-HANDOFF (Bloco 3): '
+    + 'agradecimento → só "Imagina[, nome]! 💚" e, se quiser, "Qualquer coisa é só chamar aqui."; dúvida final → responda curto pelas '
+    + 'regras de sempre (sem prazo, link é da Nio); não venda, não peça nem refaça dados, não faça resumo, não emita tags nem [HANDOFF].');
+}
 if (conv.ciclo_anterior && typeof conv.ciclo_anterior === 'object') {
   // Prompt 18 (A, migration 0030): a conversa foi resolvida pelo nosso time e o cliente voltou a escrever.
   const ca = conv.ciclo_anterior;

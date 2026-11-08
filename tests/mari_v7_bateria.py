@@ -293,7 +293,47 @@ def cen_l(c):   # teste real 07/11 00h11: sem CEP o cliente pressiona por planos
         c.exige(not (r.get('interativo') or {}).get('tipo') == 'carrossel', '(l) mandou carrossel sem cidade/CEP')
 
 
-CENARIOS = {'m': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
+def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua única, cobertura sem portal, condições, CPF, tanto faz
+    sem_anotado = lambda r, rot: c.exige('anotad' not in norm(r.get('resposta')), f'(o) "anotado" em {rot}: «{(r.get("resposta") or "")[:100]}»')
+    r = c.diz('Oi, Mari! Vim pelo Instagram e quero saber se a Nio chega na minha rua. (IG)')
+    c.exige('👋' not in (r.get('resposta') or '') and (r.get('resposta') or '').count('💚') == 1, f'(o) saudação com 2 emojis: «{(r.get("resposta") or "")[:80]}»')
+    r = c.diz('Rua dos Artistas, 123')
+    alvo = norm((r.get('resposta') or '') + ((r.get('interativo') or {}).get('corpo') or ''))
+    c.exige('encontrei aqui' not in alvo and '·' not in alvo, f'(o) rua única em formato de lista: «{alvo[:120]}»')
+    r = c.diz('Sim')
+    r = c.diz('Apto 403')
+    r = c.diz('Perto da igreja')
+    sem_anotado(r, 'referência')
+    r = c.diz('Vero')
+    c.exige('atende o seu endereco' not in norm(r.get('resposta')), '(o) prometeu cobertura sem o portal')
+    c.exige('pode deixar' not in norm(r.get('resposta')), f'(o) comentou a operadora: «{(r.get("resposta") or "")[:80]}»')
+    r = c.diz('Quero o Super')
+    t = norm(r.get('resposta'))
+    c.exige('rapidinho as condicoes' in t and ('nome completo' not in t or t.index('rapidinho as condicoes') < t.index('nome completo')),
+            '(o) pedido de nome/CPF antes das condições')
+    r = c.diz('Ricardo Teste - 529.982.247-25')
+    sem_anotado(r, 'nome/CPF')
+    r = c.diz('Esse mesmo daqui')
+    if '?' in (r.get('resposta') or '') and 'mail' not in norm(r.get('resposta')):
+        r = c.diz('Sim')
+    r = c.diz('ricardo.teste@exemplo.com')
+    sem_anotado(r, 'e-mail')
+    c.exige((r.get('interativo') or {}).get('chave') == 'pagamento', '(o) pagamento sem os botões')
+    r = c.diz('Cartão de crédito')
+    sem_anotado(r, 'pagamento')
+    r = c.diz('Tanto faz')
+    txt = (r.get('resposta') or '') + '\n' + ((r.get('interativo') or {}).get('corpo') or '')
+    c.exige('529.***.***-25' in txt, f'(o) CPF errado no resumo: «{txt[:240]}»')
+    c.exige('deixo como' not in norm(txt) and 'qualquer' in norm(txt), f'(o) "tanto faz" virou escolha da Mari: «{txt[:160]}»')
+    c.exige((r.get('interativo') or {}).get('chave') == 'resumo', '(o) resumo sem os botões')
+    r = c.diz('Sim, está certo')
+    c.exige((r.get('handoff') or {}).get('motivo') == 'dados_completos', '(o) sem handoff dados_completos')
+    sem_anotado(r, 'despedida')
+    r = c.diz('Obrigado!')
+    print(f'    pós-handoff → {r.get("resposta") or r}')
+
+
+CENARIOS = {'o': (13, cen_o), 'm': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 def relatorio(res):
     print('\n── tokens e custo (estimativa pelos preços da tabela PRECOS) ──')
