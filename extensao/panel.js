@@ -1,4 +1,7 @@
-/* NIOGEN | extensao/panel.js | 06/11/2026 — Claude Code (prompt 28)
+/* NIOGEN | extensao/panel.js | 06/11/2026 — Claude Code (prompt 28) · rev. 08/11/2026 (rolagem + conversas da Mari)
+ * rev. 08/11: (1) "Preencher esta etapa" rola o painel até a etapa seguinte quando a etapa fechou; (2) orelha "Conversas da Mari":
+ * consulta o portal a partir de uma conversa ainda sem venda (mari_conversas, RLS admin/backoffice) e orelha "Conversa" com a
+ * negociação (mari_turnos = o que passou pelo Chatwoot). Só leitura no banco; nada novo é gravado.
  * Painel lateral "NIOGEN no Portal". Fala com o Supabase Nio por REST com a anon key + o login do usuário do NIOGEN (o RLS vale).
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
  * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
@@ -22,10 +25,24 @@
     ambiguo: ['mais de uma opção parecida — escolha você', 'warn'], recusado: ['recusado pela trava de segurança', 'bad'],
   };
 
+  // Conta "Nio Atendimento" do Chatwoot (a mesma do docs/assets/app.js) — só para o link "Abrir no Chatwoot".
+  const CHATWOOT_NIO_ACCOUNT = '195428';
+  // PDV de todo pedido (o mesmo que dados_portal devolve) — usado quando o ponto de partida é uma conversa, sem venda.
+  const PDV = { uf: 'MG', codigo: '1069521', nome: 'DHARMA TELECOM LTDA' };
+  const ETAPA_MARI = { abertura: 'abertura', endereco: 'endereço', elegibilidade: 'elegibilidade', planos: 'planos', coleta: 'coletando dados',
+    resumo: 'resumo', handoff: 'handoff', retomada: 'retomada' };
+  const COLS_CONV = 'id,telefone,nome_contato,status,etapa,cep,numero,complemento,endereco_cep,cidade,uf,plano_escolhido,forma_pagamento,'
+    + 'visita_preferencia,instalacao_preferencia,dados,venda_id,chatwoot_conversation_id,chatwoot_status,handoff_motivo,updated_at,ultima_msg_lead_at,'
+    + 'venda:vendas(status,nio_pedido)';
+
   const S = {
     sess: null, nome: '', perfil: '', fila: null, filaErro: '', carregando: false,
     venda: null, dados: null, etapaAuto: null, etapaManual: null, avisos: [], resultados: {},
     matricula: '', pedido: '', msg: null, tabId: null, ocupado: false,
+    // rev. 08/11 — conversas da Mari
+    aba: 'vendas', convs: null, convsErro: '', convsCarregando: false, busca: '',
+    conversa: null,            // conversa aberta (ponto de partida sem venda) ou a conversa ligada à venda aberta
+    turnos: null, turnosErro: '', turnosCarregando: false, orelha: 'portal',
   };
 
   // ------------------------------------------------------------------ DOM
@@ -110,6 +127,7 @@
   async function sairLocal() {
     S.sess = null; S.nome = ''; S.perfil = ''; S.fila = null; S.venda = null; S.dados = null;
     S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = '';
+    S.convs = null; S.conversa = null; S.turnos = null; S.busca = ''; S.aba = 'vendas'; S.orelha = 'portal';
     try { await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* aba sem content script */ }
   }
@@ -140,6 +158,18 @@
   const fmtDoc = (d) => { const x = so(d); if (x.length === 11) return `${x.slice(0, 3)}.${x.slice(3, 6)}.${x.slice(6, 9)}-${x.slice(9)}`; return x.length === 14 ? `${x.slice(0, 2)}.${x.slice(2, 5)}.${x.slice(5, 8)}/${x.slice(8, 12)}-${x.slice(12)}` : (d || ''); };
   const celular = (t) => { let d = so(t); if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2); return d; };
   const fmtCel = (t) => { const d = celular(t); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : (t || ''); };
+  const fmtQuando = (iso) => { try { return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
+  const ha = (iso) => {
+    if (!iso) return '';
+    const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (min < 60) return `há ${min} min`;
+    const hrs = Math.round(min / 60);
+    return hrs < 48 ? `há ${hrs} h` : `há ${Math.round(hrs / 24)} dias`;
+  };
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // mesmo filtro do mari.html: tira o bloco [HANDOFF] e os marcadores internos da Mari
+  const limpa = (t) => String(t || '').replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '').replace(/\[[A-Z_]{3,}(?::[^\]]*)?\]/g, '').trim();
+  const nomeConversa = (c) => (c.dados && c.dados.nome) || c.nome_contato || fmtCel(c.telefone) || '—';
   const FORMAS = { boleto: ['Boleto', ['boleto', 'boleto bancario']], cartao: ['Cartão', ['cartao de credito', 'cartao', 'credito']], dacc: ['DACC (débito em conta)', ['debito em conta', 'debito automatico', 'dacc']] };
 
   // ------------------------------------------------------------------ o que cada etapa mostra e o que a extensão escreve
@@ -219,7 +249,12 @@
   const rotuloCampo = (id) => ROTULO_CAMPO[id] || (id.startsWith('ad') ? 'Adicional' : id);
 
   // ------------------------------------------------------------------ ações
-  function aviso(texto, tipo) { S.msg = texto ? { texto, tipo: tipo || 'ok' } : null; }
+  let tAviso = null;
+  function aviso(texto, tipo) {
+    S.msg = texto ? { texto, tipo: tipo || 'ok' } : null;
+    clearTimeout(tAviso);
+    if (S.msg && S.msg.tipo !== 'bad') { const m = S.msg; tAviso = setTimeout(() => { if (S.msg === m) { S.msg = null; desenha(); } }, 9000); }
+  }
 
   async function carregaFila() {
     S.carregando = true; S.filaErro = ''; desenha();
@@ -227,36 +262,118 @@
     catch (e) { S.filaErro = e.message; S.fila = S.fila || []; }
     S.carregando = false; desenha();
   }
+  // ---- conversas da Mari em andamento (rev. 08/11): abertas, Chatwoot não resolvido, sem pedido aberto e fora de Saída.
+  const podeVerConversas = () => ['admin', 'backoffice'].includes(S.perfil);
+  async function carregaConversas() {
+    if (!podeVerConversas()) { S.convs = []; desenha(); return; }
+    S.convsCarregando = true; S.convsErro = ''; desenha();
+    try {
+      const q = `/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&status=in.(ativo,handoff_realizado)&canal=neq.teste`
+        + '&or=(chatwoot_status.is.null,chatwoot_status.neq.resolved)&order=updated_at.desc&limit=80';
+      const r = (await api(q)) || [];
+      S.convs = r.filter((c) => !(c.venda && (c.venda.nio_pedido || c.venda.status === 'saida')));
+    } catch (e) { S.convsErro = e.message; S.convs = S.convs || []; }
+    S.convsCarregando = false; desenha();
+  }
+  async function carregaTurnos() {
+    const c = S.conversa; if (!c) return;
+    S.turnosCarregando = true; S.turnosErro = ''; desenha();
+    try {
+      const r = (await api(`/rest/v1/mari_turnos?select=id,papel,texto,created_at&conversa_id=eq.${encodeURIComponent(c.id)}`
+        + '&papel=in.(lead,mari,humano)&order=created_at.desc,id.desc&limit=400')) || [];
+      if (S.conversa && S.conversa.id === c.id) S.turnos = r.reverse();
+    } catch (e) { S.turnosErro = e.message; }
+    S.turnosCarregando = false; desenha();
+  }
+  // O bloco "Dados para o portal" montado a partir do que a Mari já coletou (mesmo formato do dados_portal).
+  function dadosDaConversa(c, plano) {
+    const d = c.dados || {}, ec = c.endereco_cep || {};
+    const doc = so(d.cpf);
+    const vazio = (x) => { const t = String(x == null ? '' : x).trim(); return t || null; };
+    return {
+      venda_id: c.venda_id || null, conversa_id: c.id, status: null, pedido: null,
+      pdv: { ...PDV, matricula: MATRICULA_PAP, vendedor: MATRICULA_NOME },
+      viabilidade: { cep: vazio(c.cep), numero: vazio(c.numero), complemento: vazio(c.complemento), referencia: vazio(d.referencia),
+        logradouro: ec.logradouro || null, bairro: ec.bairro || null, cidade: c.cidade || ec.localidade || null, uf: c.uf || ec.uf || null },
+      cliente: { tipo: doc.length === 14 ? 'CNPJ' : 'CPF', documento: doc || null, nome: d.nome || c.nome_contato || null },
+      contato: { celular: so(d.telefone || c.telefone) || null, email: vazio(d.email) },
+      oferta: { plano: plano || null, adicionais: [], forma_pagamento: c.forma_pagamento || null },
+      agendamento: { preferencia: vazio(c.instalacao_preferencia || c.visita_preferencia) },
+    };
+  }
+  async function abreConversa(c) {
+    S.ocupado = true; aviso(''); desenha();
+    try {
+      let plano = null;
+      if (c.plano_escolhido) {
+        const p = await api(`/rest/v1/config_planos?select=nome&codigo=eq.${encodeURIComponent(c.plano_escolhido)}`).catch(() => null);
+        plano = (p && p[0] && p[0].nome) || c.plano_escolhido;
+      }
+      S.venda = null; S.conversa = c; S.dados = dadosDaConversa(c, plano);
+      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null; S.orelha = 'portal'; S.turnos = null; S.turnosErro = '';
+      window.scrollTo(0, 0);
+      try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
+    } catch (e) { aviso(e.message, 'bad'); }
+    S.ocupado = false; desenha();
+  }
   async function abreVenda(item) {
     S.ocupado = true; aviso(''); desenha();
     try {
       const d = await rpc('dados_portal', { p_venda_id: item.venda_id });
       if (!d) throw new Error('Não achei essa venda (ou você não tem acesso).');
       S.venda = item; S.dados = d; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null;
+      S.orelha = 'portal'; S.turnos = null; S.turnosErro = ''; S.conversa = null;
+      // a conversa da Mari que gerou a venda (se houver e se o perfil enxerga) — alimenta a orelha "Conversa"
+      if (podeVerConversas()) {
+        const r = await api(`/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&venda_id=eq.${encodeURIComponent(item.venda_id)}`
+          + '&order=created_at.desc&limit=1').catch(() => null);
+        S.conversa = (r && r[0]) || null;
+      }
+      window.scrollTo(0, 0);
       try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
   async function voltar() {
     S.venda = null; S.dados = null; S.resultados = {}; S.matricula = ''; S.pedido = ''; aviso('');
+    S.conversa = null; S.turnos = null; S.orelha = 'portal';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
-    desenha(); carregaFila();
+    desenha();
+    if (S.aba === 'conversas') carregaConversas(); else carregaFila();
+  }
+  function trocaOrelha(o) {
+    S.orelha = o; desenha();
+    if (o === 'conversa' && S.conversa && S.turnos == null && !S.turnosCarregando) carregaTurnos();
+  }
+  function trocaAba(a) {
+    S.aba = a; desenha();
+    if (a === 'conversas' && S.convs == null) carregaConversas();
+  }
+  // rev. 08/11 — rola o painel até o bloco da etapa (o cabeçalho fixo fica de fora pelo scroll-margin-top do CSS)
+  function rolarPara(n, bloco) {
+    const el = document.getElementById(`etapa-${n}`);   // desenha() já trocou o DOM (síncrono)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: bloco || 'start' });
   }
   const etapaAtual = () => S.etapaManual || S.etapaAuto;
 
   async function preencherEtapa(n) {
     const campos = camposDaEtapa(n);
+    let fechou = false;
     S.ocupado = true; aviso(''); desenha();
     try {
       const r = await mandar({ tipo: 'preencher', campos });
       const mapa = {}; (r.resultados || []).forEach((x) => { mapa[x.id] = x.estado; });
       S.resultados[n] = campos.map((c) => ({ id: c.id, estado: mapa[c.id] || 'nao_achado' }));
       const ok = S.resultados[n].filter((x) => ['ok', 'ja', 'destacado'].includes(x.estado)).length;
-      if (ok) { api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' },
+      // Etapa fechada (tudo escrito/destacado, ou o que falta é dado que não temos) → o painel desce para a próxima.
+      // Se algum campo pede você (não apareceu ainda, opção ambígua, portal recusou), fica nesta etapa mostrando o resultado.
+      fechou = n < 7 && S.resultados[n].every((x) => ['ok', 'ja', 'destacado', 'sem_valor'].includes(x.estado));
+      if (ok && S.dados.venda_id) { api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' },
         body: { venda_id: S.dados.venda_id, tipo: n === 5 ? 'portal_extensao_destacado' : 'portal_extensao_preenchido', detalhe: { etapa: n, campos: ok } } }).catch(() => {}); }
       aviso(n === 5 ? 'Destaquei no portal o que a venda tem. Confira e clique você.' : 'Pronto — confira os campos no portal e clique você mesmo em Buscar/Avançar.', 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
+    if (fechou) rolarPara(n + 1); else if (S.resultados[n]) rolarPara(n, 'nearest');
   }
   async function gravaPedido() {
     const ped = S.pedido.trim();
@@ -267,6 +384,7 @@
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
       S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.matricula = '';
+      S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
       try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
       aviso(`Pedido gravado no NIOGEN (${nome}). A Nio manda o link da biometria ao cliente — avise na conversa.`, 'ok');
     } catch (e) {
@@ -282,7 +400,7 @@
       ev.preventDefault();
       const fd = new FormData(form);
       erro.textContent = ''; btn.disabled = true;
-      try { await entrar(String(fd.get('email') || '').trim(), String(fd.get('senha') || '')); await abaAtiva(); try { await mandar({ tipo: 'estado?' }); } catch (e) { /* ok */ } desenha(); carregaFila(); }
+      try { await entrar(String(fd.get('email') || '').trim(), String(fd.get('senha') || '')); await abaAtiva(); try { await mandar({ tipo: 'estado?' }); } catch (e) { /* ok */ } desenha(); carregaFila(); carregaConversas(); }
       catch (e) { erro.textContent = e.message; btn.disabled = false; }
     } },
       h('h2', {}, 'Entrar com o seu login do NIOGEN'),
@@ -292,6 +410,68 @@
     const btn = h('button', { class: 'btn btn-acc btn-bloco', type: 'submit' }, 'Entrar');
     form.append(btn);
     return [form, h('p', { class: 'sub' }, 'A extensão só escreve nos campos do Novo Pedido. Quem clica em Buscar, Avançar e em tudo mais é você.')];
+  }
+
+  function orelhas(lista, ativa, onTroca, cls) {
+    return h('div', { class: `orelhas ${cls || ''}`, role: 'tablist' }, lista.map(([id, rot]) =>
+      h('button', { class: `orelha${ativa === id ? ' ativa' : ''}`, type: 'button', role: 'tab', 'aria-selected': ativa === id ? 'true' : 'false',
+        onclick: () => onTroca(id) }, rot)));
+  }
+  function telaInicio() {
+    const nV = S.fila ? ` (${S.fila.length})` : '', nC = S.convs && podeVerConversas() ? ` (${S.convs.length})` : '';
+    return [orelhas([['vendas', `Prontas para o portal${nV}`], ['conversas', `Conversas da Mari${nC}`]], S.aba, trocaAba),
+      S.aba === 'conversas' ? telaConversas() : telaFila()];
+  }
+
+  function telaConversas() {
+    if (!podeVerConversas()) return h('p', { class: 'sub' }, 'As conversas da Mari aparecem só para admin e backoffice.');
+    const b = semAcento(S.busca).trim(), bDig = so(S.busca);
+    const lista = (S.convs || []).filter((c) => !b || semAcento([nomeConversa(c), c.cidade, c.endereco_cep && c.endereco_cep.bairro].join(' ')).includes(b)
+      || (bDig.length >= 3 && so(c.telefone).includes(bDig)));
+    const itens = lista.map((c) => {
+      const d = c.dados || {}, ec = c.endereco_cep || {};
+      const temEnd = !!(c.cep && c.numero), temDoc = !!so(d.cpf);
+      return h('button', { class: 'item', type: 'button', onclick: () => abreConversa(c) },
+        h('b', {}, nomeConversa(c)),
+        h('span', { class: 'meta' }, [ec.bairro, c.cidade].filter(Boolean).join(' · ') || 'sem endereço ainda'),
+        h('span', { class: 'meta' }, `Mari: ${ETAPA_MARI[c.etapa] || c.etapa}${c.status === 'handoff_realizado' ? ' · com o time' : ''} · ${ha(c.ultima_msg_lead_at || c.updated_at)}`),
+        h('span', {},
+          h('span', { class: `chip ${temEnd ? 'ok' : 'bad'}` }, temEnd ? 'CEP e número' : 'sem CEP/número'), ' ',
+          h('span', { class: `chip ${temDoc ? 'ok' : ''}` }, temDoc ? 'CPF' : 'sem CPF'), ' ',
+          c.venda_id ? h('span', { class: 'chip acc' }, 'já é venda') : null));
+    });
+    return [
+      h('div', { class: 'card' },
+        h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('h2', { style: 'flex:1' }, 'Conversas em andamento'),
+          h('button', { class: 'btn btn-sm', type: 'button', onclick: carregaConversas, disabled: S.convsCarregando }, S.convsCarregando ? 'Atualizando…' : 'Atualizar')),
+        h('span', { class: 'sub' }, 'Para consultar o portal antes de a venda ser qualificada. A extensão usa o que a Mari já coletou; o que faltar, pergunte na conversa.'),
+        h('input', { type: 'text', id: 'in-busca', placeholder: 'Buscar por nome, telefone, bairro ou cidade', autocomplete: 'off', value: S.busca,
+          oninput: (ev) => { S.busca = ev.target.value; desenha(); } }),
+        S.convsErro ? h('div', { class: 'erro' }, S.convsErro) : null),
+      S.convs && !lista.length && !S.convsErro && !S.convsCarregando ? h('p', { class: 'sub' }, S.busca ? 'Nenhuma conversa com essa busca.' : 'Nenhuma conversa em andamento agora.') : null,
+      h('div', { class: 'fila' }, itens),
+    ];
+  }
+
+  function telaConversa() {
+    const c = S.conversa;
+    if (!c) return h('p', { class: 'sub' }, podeVerConversas() ? 'Esta venda não tem conversa da Mari ligada a ela.' : 'A conversa aparece só para admin e backoffice.');
+    const cw = c.chatwoot_conversation_id
+      ? h('a', { class: 'btn btn-sm', target: '_blank', rel: 'noopener', href: `https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${encodeURIComponent(c.chatwoot_conversation_id)}` }, 'Abrir no Chatwoot')
+      : null;
+    const quem = { lead: nomeConversa(c), mari: 'Mari', humano: 'Time' };
+    const baloes = (S.turnos || []).map((t) => {
+      const txt = limpa(t.texto);
+      if (!txt) return null;
+      return h('div', { class: `balao ${t.papel}` }, h('div', { class: 'b-quem' }, `${quem[t.papel] || t.papel} · ${fmtQuando(t.created_at)}`), h('div', { class: 'b-txt' }, txt));
+    }).filter(Boolean);
+    return h('section', { class: 'card' },
+      h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('h2', { style: 'flex:1' }, 'Negociação'),
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: carregaTurnos, disabled: S.turnosCarregando }, S.turnosCarregando ? 'Atualizando…' : 'Atualizar'), cw),
+      h('span', { class: 'sub' }, `Mari: ${ETAPA_MARI[c.etapa] || c.etapa}${c.status === 'handoff_realizado' ? ' · com o time' : ''} · última mensagem do cliente ${ha(c.ultima_msg_lead_at) || '—'}. Só leitura — responda pelo Chatwoot.`),
+      S.turnosErro ? h('div', { class: 'erro' }, S.turnosErro) : null,
+      S.turnos == null && !S.turnosErro ? h('p', { class: 'sub' }, 'Carregando a conversa…')
+        : h('div', { class: 'conversa', id: 'conv-box' }, baloes.length ? baloes : h('p', { class: 'sub' }, 'Sem mensagens.')));
   }
 
   function telaFila() {
@@ -335,7 +515,7 @@
       : n === 3 ? 'Depois de preencher, clique você em Buscar (o nome vem da Receita).'
       : n === 5 ? 'Crédito, oferta, forma de pagamento e dados bancários são com você: eu só destaco o que a venda tem. Banco, agência e conta, nunca.'
       : n === 6 || n === 7 ? 'Nada é preenchido aqui. Antes da biometria, o cliente precisa ter ouvido:' : '';
-    return h('section', { class: 'card' },
+    return h('section', { class: 'card', id: `etapa-${n}` },
       h('div', { class: `etapa-tit${atual ? ' atual' : ''}` }, `Etapa ${n} · ${ETAPAS[n - 1]}${atual ? ' — aberta no portal' : ''}`,
         ' ', falt ? h('span', { class: 'chip bad' }, `${falt} ${falt === 1 ? 'falta' : 'faltam'}`) : null),
       corpo, extraTxt ? h('span', { class: 'sub' }, extraTxt) : null,
@@ -343,8 +523,35 @@
       acao, resultados);
   }
 
+  function fimDoPedido() {
+    if (S.venda) {
+      return h('section', { class: 'card' },
+        h('h2', {}, 'Fim do pedido'),
+        h('span', { class: 'sub' }, 'Quando o portal mostrar o número do pedido, digite aqui e grave. Eu não leio o número do portal.'),
+        h('label', { class: 'campo' }, 'Número do pedido',
+          h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
+        h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
+    }
+    const c = S.conversa;
+    return h('section', { class: 'card' },
+      h('h2', {}, 'Ainda não é venda'),
+      c && c.venda_id
+        ? [h('span', { class: 'sub' }, 'Esta conversa já virou venda no NIOGEN. Para gravar o número do pedido, abra a venda.'),
+          h('button', { class: 'btn btn-bloco', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda')]
+        : h('span', { class: 'sub' }, 'Daqui dá para consultar a viabilidade e adiantar o pedido. O número do pedido só se grava depois que a venda existir no NIOGEN (Mari ou vendedor qualifica).'));
+  }
+
   function telaVenda() {
     const d = S.dados, n = etapaAtual();
+    const titulo = S.venda ? (S.venda.cliente_nome || '—') : nomeConversa(S.conversa || {});
+    const cab = h('div', { class: 'card' },
+      h('div', { style: 'display:flex;align-items:center;gap:8px' },
+        h('div', { style: 'flex:1' }, h('h2', {}, titulo),
+          h('span', { class: 'sub' }, [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · ')),
+          !S.venda ? h('div', {}, h('span', { class: 'chip acc' }, 'Conversa da Mari · sem venda qualificada')) : null),
+        h('button', { class: 'btn btn-sm', type: 'button', onclick: voltar }, S.aba === 'conversas' ? '← Conversas' : '← Vendas')),
+      orelhas([['portal', 'Portal'], ['conversa', 'Conversa']], S.orelha, trocaOrelha, 'orelhas-sub'));
+    if (S.orelha === 'conversa') return [cab, telaConversa()];
     const avisosPortal = S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg));
     const regua = h('div', { class: 'regua' }, ETAPAS.map((_, i) => h('span', { class: n === i + 1 ? 'atual' : n && i + 1 < n ? 'feito' : '' })));
     const seletor = h('label', { class: 'campo' }, 'Etapa (automática; troque se eu errar)',
@@ -352,21 +559,13 @@
         h('option', { value: '' }, S.etapaAuto ? `Automática — etapa ${S.etapaAuto} · ${ETAPAS[S.etapaAuto - 1]}` : 'Automática — não identifiquei a etapa'),
         ETAPAS.map((nome, i) => h('option', { value: i + 1, selected: S.etapaManual === i + 1 }, `${i + 1} · ${nome}`))));
     const ordem = [1, 2, 3, 4, 5, 6, 7];
+    cab.append(regua, seletor);
     return [
-      h('div', { class: 'card' },
-        h('div', { style: 'display:flex;align-items:center;gap:8px' },
-          h('div', { style: 'flex:1' }, h('h2', {}, S.venda.cliente_nome || '—'), h('span', { class: 'sub' }, [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · '))),
-          h('button', { class: 'btn btn-sm', type: 'button', onclick: voltar }, '← Vendas')),
-        regua, seletor),
+      cab,
       avisosPortal,
       !n ? h('div', { class: 'dica' }, 'Abra o Novo Pedido no portal (menu Novo Pedido) para eu identificar a etapa.') : null,
       ordem.map(blocoEtapa),
-      h('section', { class: 'card' },
-        h('h2', {}, 'Fim do pedido'),
-        h('span', { class: 'sub' }, 'Quando o portal mostrar o número do pedido, digite aqui e grave. Eu não leio o número do portal.'),
-        h('label', { class: 'campo' }, 'Número do pedido',
-          h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
-        h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN')),
+      fimDoPedido(),
     ];
   }
 
@@ -375,15 +574,22 @@
     const sair = document.getElementById('sair'), quem = document.getElementById('quem');
     sair.hidden = !S.sess; quem.hidden = !S.sess; quem.textContent = S.nome || '';
     sair.onclick = async () => { await sairLocal(); desenha(); };
+    // a caixa da conversa guarda a posição (quem rolou para cima para ler não é jogado de volta ao fim a cada redesenho)
+    const caixa = document.getElementById('conv-box');
+    const posConv = caixa ? { top: caixa.scrollTop, noFim: caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 24 } : null;
     const partes = [];
-    if (S.msg) partes.push(h('div', { class: S.msg.tipo === 'bad' ? 'aviso' : 'dica' }, S.msg.texto));
     if (!S.sess) partes.push(telaLogin());
     else if (S.dados) partes.push(telaVenda());
     else {
       if (S.avisos.length) partes.push(S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg)));
-      partes.push(telaFila());
+      partes.push(telaInicio());
     }
+    // rev. 08/11: o recado vai num aviso fixo no rodapé — o painel rola até a próxima etapa e o recado continua à vista
+    if (S.msg) partes.push(h('div', { class: `toast ${S.msg.tipo === 'bad' ? 'bad' : 'ok'}`, role: 'status' },
+      h('span', { class: 'grow' }, S.msg.texto), h('button', { class: 'btn btn-sm', type: 'button', 'aria-label': 'Fechar', onclick: () => { aviso(''); desenha(); } }, '×')));
     raiz.replaceChildren(...partes.flat(Infinity).filter(Boolean));
+    const nova = document.getElementById('conv-box');
+    if (nova) nova.scrollTop = posConv && !posConv.noFim ? posConv.top : nova.scrollHeight;
     if (idAtivo) { const el = document.getElementById(idAtivo); if (el) { el.focus(); try { if (ini != null) el.setSelectionRange(ini, fim); } catch (e) { /* select/email */ } } }
   }
 
@@ -395,6 +601,6 @@
     } catch (e) { S.sess = null; }
     await abaAtiva();
     desenha();
-    if (S.sess) { try { await mandar({ tipo: 'estado?' }); } catch (e) { /* ok */ } carregaFila(); }
+    if (S.sess) { try { await mandar({ tipo: 'estado?' }); } catch (e) { /* ok */ } carregaFila(); carregaConversas(); }
   })();
 })();

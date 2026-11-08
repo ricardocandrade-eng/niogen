@@ -26,6 +26,17 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 | 5 Pagamento/Ofertas | **só destaca** plano, "Com fidelidade", adicionais, forma de pagamento. Crédito, banco, agência e conta: nunca |
 | 6 Resumo · 7 Abrir OS | nada; mostra o checklist do fechamento obrigatório e o período preferido |
 
+## Novidades da 0.2.0 (08/11/2026)
+- **Rolagem:** depois de **Preencher esta etapa**, o painel desce sozinho até a etapa seguinte quando a etapa fechou (tudo escrito,
+  ou o que falta é dado que o NIOGEN não tem). Se algum campo ainda pede você (não apareceu, lista ambígua, portal recusou), fica na
+  mesma etapa mostrando o resultado. O recado "Pronto — confira…" fica num aviso fixo no rodapé.
+- **Conversas da Mari** (orelha ao lado de *Prontas para o portal*, só admin/backoffice): conversas em andamento (ativas ou com o time,
+  Chatwoot não resolvido, sem pedido aberto) para **consultar o portal antes de a venda ser qualificada**. A extensão usa o que a Mari já
+  coletou (CEP, número, referência, CPF, contato, plano). Sem venda não há "Gravar no NIOGEN"; se a conversa já virou venda, botão **Abrir a venda**.
+- **Orelha Conversa** (na venda ou na conversa aberta): a negociação da Mari/time/cliente (`mari_turnos`), só leitura, com **Abrir no Chatwoot**.
+- Banco: nenhuma migration — leitura direta de `mari_conversas`, `mari_turnos` e `config_planos` pelo RLS (admin/backoffice).
+  Na conversa sem venda nada é gravado (nem `eventos_venda`).
+
 ## Regras do código (não negociáveis)
 - **Nunca clica em botão do portal** (`content.js › cliqueSeguro`: só opção de lista e caixa de marcar; botão, link e `[role=button]` são recusados).
 - Não toca em login, token, `localStorage` do portal, rede do portal (`pap-api…`) nem no sufixo cifrado — só o DOM da página aberta por você.

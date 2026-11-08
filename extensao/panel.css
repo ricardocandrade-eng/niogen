@@ -1,4 +1,4 @@
-/* NIOGEN | extensao/panel.css | 06/11/2026 — Claude Code (prompt 28). Painel escuro (mesma paleta do NIOGEN). */
+/* NIOGEN | extensao/panel.css | 06/11/2026 — Claude Code (prompt 28). Painel escuro (mesma paleta do NIOGEN). rev. 08/11: orelhas, conversa, aviso no rodapé. */
 :root {
   --bg: #0E1116; --bg2: #161B22; --bg3: #1E252E; --linha: #2A323D;
   --tx: #E6EAF0; --tx2: #9AA6B5; --acc: #32E000; --acc-tx: #07240A;
@@ -54,3 +54,21 @@ ul.lista { margin: 0; padding-left: 18px; }
 .regua span { flex: 1; height: 4px; border-radius: 2px; background: var(--linha); }
 .regua span.feito { background: var(--tx2); }
 .regua span.atual { background: var(--acc); }
+/* rev. 08/11 — rolagem até a etapa (o cabeçalho fixo não cobre o título), orelhas, conversa da Mari e aviso no rodapé */
+main { padding-bottom: 84px; }
+section[id^="etapa-"] { scroll-margin-top: 54px; }
+.orelhas { display: flex; gap: 2px; border-bottom: 1px solid var(--linha); }
+.orelhas-sub { margin-top: 2px; }
+.orelha { flex: 1; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--tx2); padding: 8px 4px; font: inherit; font-weight: 600; font-size: 12px; cursor: pointer; }
+.orelha:hover { color: var(--tx); }
+.orelha.ativa { color: var(--acc); border-bottom-color: var(--acc); }
+a.btn { display: inline-block; text-decoration: none; text-align: center; white-space: nowrap; }
+.conversa { display: flex; flex-direction: column; gap: 6px; max-height: calc(100vh - 250px); min-height: 160px; overflow-y: auto; padding: 8px; background: var(--bg); border: 1px solid var(--linha); border-radius: 10px; }
+.balao { max-width: 88%; padding: 6px 9px; border-radius: 10px; background: var(--bg3); align-self: flex-start; display: flex; flex-direction: column; gap: 2px; }
+.balao.mari { align-self: flex-end; background: #1C2B22; }
+.balao.humano { align-self: flex-end; background: #1B2636; }
+.balao .b-quem { font-size: 10px; color: var(--tx2); }
+.balao .b-txt { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; }
+.toast { position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 5; display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border-radius: 10px; background: var(--bg2); border: 1px solid var(--warn); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
+.toast.bad { border-color: var(--bad); }
+.toast.ok { border-color: var(--acc); }
