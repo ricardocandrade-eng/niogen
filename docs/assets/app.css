@@ -1003,3 +1003,54 @@ label.cartao { cursor: pointer; }
   .ficha.f-gaveta .f-orelha { right: auto; left: 0; top: auto; bottom: 88px; width: 26px; min-height: 96px; border: 1px solid var(--border-strong); border-left: 0; border-radius: 0 10px 10px 0; }
   .ficha.f-pagina.conv-on .f-orelha { display: none; }
 }
+
+/* ---------- 0064 (08/11): pendência com terceiro ("Em espera") ---------- */
+.prox.espera { color: var(--info-fg); }
+.prox.espera::before { background: var(--info-bg); border-color: var(--info-fg); }
+.qcard.espera { border-left: 3px solid var(--info-fg); }
+.f-prox.espera { background: var(--info-bg); border-color: #34507A; }
+.f-prox.espera b { color: var(--info-fg); }
+.abas.pilulas .aba.espera b { background: var(--info-bg); color: var(--info-fg); }
+.col-head .c-espera { font-family: var(--mono); font-size: 11px; color: var(--info-fg); margin-left: 6px; font-weight: 500; }
+.pend-card.espera { border-color: #34507A; }
+.pend-card.vencida { border-color: var(--bad-border); background: var(--bad-bg); }
+.pend-card .cc-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pend-card h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.pend-card .pend-guia { margin-left: auto; font-size: 12px; color: var(--muted); }
+.pend-hist { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.pend-hist b { color: var(--text); font-weight: 600; }
+.pill.pend-espera { background: var(--info-bg); color: var(--info-fg); }
+.pill.pend-vencida { background: var(--bad-bg); color: var(--bad-fg); }
+.pill.pend-adiada { background: var(--warn-bg); color: var(--warn-fg); }
+.espera-ajuda { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 12px; color: var(--muted); margin: -4px 0 4px; }
+
+/* ---------- Guia do Backoffice (08/11) ---------- */
+.nav-guia { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--muted); text-decoration: none; }
+.nav-guia:hover { color: var(--text); text-decoration: underline; }
+.nav-guia .novo { color: var(--info-fg); font-size: 11px; }
+.guia-wrap { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; align-items: start; }
+.guia-indice { position: sticky; top: 12px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 24px); overflow: auto; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); }
+.guia-indice a { display: block; padding: 5px 8px; border-radius: 6px; font-size: 13px; color: var(--muted); text-decoration: none; }
+.guia-indice a.sub { padding-left: 18px; font-size: 12px; }
+.guia-indice a:hover, .guia-indice a.ativo { color: var(--text); background: var(--surface-2); }
+.guia-texto { min-width: 0; max-width: 820px; padding: 4px 24px 24px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); line-height: 1.6; font-size: 14.5px; }
+.guia-texto h1 { font-size: 24px; margin: 18px 0 8px; }
+.guia-texto h2 { font-size: 19px; margin: 30px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); scroll-margin-top: 12px; }
+.guia-texto h3 { font-size: 15.5px; margin: 22px 0 6px; scroll-margin-top: 12px; }
+.guia-texto p, .guia-texto ul, .guia-texto ol { margin: 8px 0; }
+.guia-texto li { margin: 3px 0; }
+.guia-texto code { font-family: var(--mono); font-size: 12.5px; padding: 1px 5px; border-radius: 4px; background: var(--surface-2); }
+.guia-texto blockquote { margin: 10px 0; padding: 8px 14px; border-left: 3px solid var(--info-fg); background: var(--info-bg); border-radius: 0 8px 8px 0; color: var(--text); }
+.guia-texto table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; display: block; overflow-x: auto; }
+.guia-texto th, .guia-texto td { text-align: left; padding: 6px 10px; border: 1px solid var(--border); vertical-align: top; }
+.guia-texto th { background: var(--surface-2); }
+.guia-texto hr { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+.guia-texto mark { background: var(--warn-bg); color: var(--warn-fg); border-radius: 3px; padding: 0 2px; }
+.guia-texto :target { outline: 2px solid var(--info-fg); outline-offset: 4px; border-radius: 4px; }
+.guia-rodape { margin-top: 18px; font-size: 12px; color: var(--muted); }
+.guia-busca { width: 100%; margin-bottom: 8px; }
+@media (max-width: 900px) {
+  .guia-wrap { grid-template-columns: 1fr; }
+  .guia-indice { position: static; max-height: none; }
+  .guia-texto { padding: 4px 16px 18px; }
+}

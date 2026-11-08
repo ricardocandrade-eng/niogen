@@ -9,6 +9,8 @@
  * 06/11 (prompt 27): cartão VIABILIDADE com o portal PAP na frente (Consultar no portal · Registrar resultado; DFV vira "pista")
  * e cartão DADOS PARA O PORTAL PAP (campos na ordem das etapas do Novo Pedido, copiar por campo e Copiar tudo; em
  * eventos_venda só o fato "dados copiados"). Os dois aparecem em Qualificado e em Saída.
+ * 08/11 (0064): cartão PENDÊNCIA ("Em espera": abrir · adiar · encerrar por RPC, só admin/backoffice; atalho para a Saída sugerida;
+ * histórico) logo abaixo do próximo passo; eventos tipo "pendencia" no histórico.
  * Depende de app.js (NG). Uso: <script src="assets/ficha.js"></script>; NGFicha.abrir(id) · NGFicha.aoMudar(fn) · NGFicha.pagina(el, id).
  */
 (function () {
@@ -30,6 +32,8 @@
   let convAberta = false;  // orelha da conversa da Mari aberta (painel à esquerda da ficha)
   let conv = null;         // { id, turnos, erro } — carregada na 1ª abertura
   let convFim = false;     // rolar a conversa até a última mensagem no próximo desenho
+  let saidaPreset = null;  // 0064: motivo de Saída sugerido pela pendência (pré-seleciona o formulário de Saída)
+  let motivosCache = null; // 0064: config_motivos_pendencia (ativos)
   const ouvintes = [];
 
   // ---------- formatação local ----------
@@ -128,6 +132,22 @@
       // Prompt 27: só o fato (quem, quando) — o conteúdo copiado nunca é gravado.
       titulo = 'Dados copiados para o portal PAP';
       texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
+    } else if (e.tipo === 'pendencia') {
+      // 0064: pendência com terceiro ("Em espera").
+      const nome = dt.nome || (((d && d.motivos) || []).find((m) => m.codigo === dt.motivo) || {}).nome || dt.motivo || '';
+      if (dt.acao === 'aberta') {
+        titulo = `Em espera · ${nome}`;
+        cor = 'warn';
+        texto = `${NG.fmtDataHora(e.criado_em)}${quem} · destrava: ${esc(NG.QUEM_DESTRAVA[dt.quem] || dt.quem || '—')} · revisar ${esc(NG.diaCurto(dt.revisar_em))}${dt.descricao ? ' · ' + esc(dt.descricao) : ''}`;
+      } else if (dt.acao === 'adiada') {
+        titulo = `Revisão adiada (${dt.revisoes}×)`;
+        cor = dt.revisoes >= 2 ? 'bad' : 'warn';
+        texto = `${NG.fmtDataHora(e.criado_em)}${quem} · ${esc(NG.diaCurto(dt.de))} → ${esc(NG.diaCurto(dt.para))}${dt.nota ? ' · ' + esc(dt.nota) : ''}`;
+      } else {
+        titulo = `Pendência encerrada · ${NG.RESULTADO_PENDENCIA[dt.resultado] || dt.resultado}`;
+        cor = dt.resultado === 'saida' ? 'bad' : '';
+        texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.automatica ? ' · automática (a venda foi para Saída)' : ''}${dt.dias != null ? ` · ${dt.dias} dia${dt.dias === 1 ? '' : 's'} em espera` : ''}${dt.nota ? ' · ' + esc(dt.nota) : ''}`;
+      }
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -213,7 +233,16 @@
       ]);
       cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
     }
+    // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config).
+    const [rph, rmot] = await Promise.all([
+      NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
+      motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
+    ]);
+    if (!rmot.error) motivosCache = rmot.data || [];
+    const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
+    const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     return {
+      pend: NG.pendencia(v), pendAberta, pendHist, motivos: motivosCache || [],
       cad,
       parc, semResposta,
       v,
@@ -233,6 +262,7 @@
     pedido: 'Registrar venda', portal: 'Registrar o pedido do portal', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
     dfv: 'Consultar cobertura', sem_cobertura: 'Encerrar sem cobertura', agendar: 'Agendar instalação',
     reagendar: 'Reagendar', docs: 'Registrar envio dos documentos', viab: 'Registrar resultado do portal',
+    pendencia: 'Ver a pendência',
   };
   // Bloco ligado a cada passo (é o único que abre sozinho).
   const BLOCO_DO_PASSO = {
@@ -248,6 +278,12 @@
 
   const hojeISO = () => NG.diaSP();
   const amanhaISO = () => NG.somaDias(NG.diaSP(), 1);
+  // 0064: próximo dia útil (pula domingo) depois de base (ou de hoje) — sugestão da data de revisão da pendência.
+  const proximoDiaUtil = (base) => {
+    let x = NG.somaDias(base && base >= hojeISO() ? base : hojeISO(), 1);
+    while (new Date(`${x}T12:00:00-03:00`).getUTCDay() === 0) x = NG.somaDias(x, 1);
+    return x;
+  };
   const periodoDe = (ts) => (ts && Number(new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, hour: '2-digit', hour12: false }).format(new Date(ts))) >= 12 ? '13:00' : '08:00');
   const campoData = (rot, nome, valor, extra = '') => `<label class="campo">${esc(rot)}<input type="date" name="${nome}" value="${esc(valor || '')}" ${extra}></label>`;
   const campoPeriodo = (nome, atual) => `<label class="campo">Período<select name="${nome}">
@@ -299,8 +335,8 @@
        ${campoPeriodo('periodo', v.instalacao_agendada_para ? periodoDe(v.instalacao_agendada_para) : '08:00')}</div>`, v.instalacao_agendada_para ? 'Reagendar' : 'Agendar'),
     docs: () => formWrap('docs', 'Documentos entregues à Nio', 'Contrato: termos assinados e documentação em até 15 dias após a habilitação.',
       campoData('Entregues em', 'dia', hojeISO(), 'required'), 'Registrar'),
-    saida: () => formWrap('saida', 'Encerrar com motivo', '',
-      `<label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${NG.MOTIVOS_SAIDA.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
+    saida: () => formWrap('saida', 'Encerrar com motivo', saidaPreset ? `Motivo sugerido pela pendência: <b>${esc(saidaPreset)}</b>. Confira e registre.` : '',
+      `<label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${NG.MOTIVOS_SAIDA.map((m) => `<option${m === saidaPreset ? ' selected' : ''}>${esc(m)}</option>`).join('')}</select></label>
        <label class="campo" data-futuro hidden>Volta em<input type="date" name="futuro"></label>`, 'Registrar saída'),
     sem_cobertura: (v) => formWrap('sem_cobertura', v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : 'Encerrar: sem cobertura',
       v.dfv_resultado === 'endereco_ocupado' ? 'Use só se o cliente confirmou que já tem Nio (vender seria estorno 100 %). A venda vai para Saída "Já é cliente Nio".'
@@ -319,6 +355,20 @@
     // Referência (o portal exige na etapa 2). Não entra em trava: o backoffice registra quando o cliente passar.
     ref: (v) => formWrap('ref', 'Ponto de referência', 'Peça ao cliente um ponto de referência perto da casa (o portal exige na etapa 2).',
       `<label class="campo">Referência<input type="text" name="ref" value="${esc(v.ponto_referencia || '')}" maxlength="200" autocomplete="off" autofocus></label>`, 'Salvar referência'),
+    // Pendência com terceiro (0064): abrir · adiar · encerrar. Abrem DENTRO do cartão Pendência.
+    pend_abrir: () => formWrap('pend_abrir', 'Abrir pendência (venda em espera)',
+      'A venda fica na etapa, sai de "Precisam de ação" até a data de revisão e a cadência da Mari pausa. Na data, volta em vermelho para todos.',
+      `<label class="campo">Motivo<select name="motivo_pend" required autofocus><option value="">Escolher…</option>${(d.motivos || []).map((m) => `<option value="${esc(m.codigo)}">${esc(m.nome)} · destrava: ${esc(NG.QUEM_DESTRAVA[m.quem_destrava] || m.quem_destrava)}${m.exige_descricao ? ' (descreva)' : ''}</option>`).join('')}</select></label>
+       <label class="campo">Descrição <span class="nota-campo">(o que falta e com quem; obrigatória em "Outro motivo")</span><textarea name="descricao" maxlength="500"></textarea></label>
+       ${campoData('Revisar em', 'revisar', proximoDiaUtil(), `min="${hojeISO()}" required`)}`, 'Abrir pendência'),
+    pend_adiar: () => formWrap('pend_adiar', 'Adiar a revisão',
+      d.pend && d.pend.revisoes >= 1 ? 'Já foi adiada antes: com 2 adiamentos o selo mostra "⚠️ adiada 2×" e sobe para o Ricardo decidir.' : 'Use quando o terceiro pediu mais prazo. Fica registrado no histórico.',
+      `${campoData('Nova data de revisão', 'revisar', proximoDiaUtil(d.pend ? d.pend.revisar_em : null), `min="${hojeISO()}" required autofocus`)}
+       <label class="campo">Nota <span class="nota-campo">(por que adiou)</span><input type="text" name="nota" maxlength="300" autocomplete="off"></label>`, 'Adiar'),
+    pend_encerrar: () => formWrap('pend_encerrar', 'Encerrar a pendência',
+      '<b>Destravou</b> = o terceiro resolveu e a venda segue · <b>Virou Saída</b> = confirmou o problema (depois você registra a Saída) · <b>Cancelada</b> = aberta por engano.',
+      `<label class="campo">Como terminou<select name="resultado" required autofocus><option value="">Escolher…</option>${Object.entries(NG.RESULTADO_PENDENCIA).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('')}</select></label>
+       <label class="campo">Nota <span class="nota-campo">(o que o terceiro respondeu)</span><input type="text" name="nota" maxlength="300" autocomplete="off"></label>`, 'Encerrar'),
     // Mover para Aguardando pelo seletor (era o modal de NG.moverStatus: só a data).
     mover_aguardando: (v) => formWrap('mover_aguardando', 'Mover para Aguardando instalação', 'Informe a data combinada com o cliente.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
@@ -335,6 +385,7 @@
       return false;
     }
     if (d) { d.avisoBanco = null; d.avisoTent = null; }
+    saidaPreset = null;
     NG.toast(msgOk, 'ok');
     formAtivo = null;
     edicao = null;
@@ -344,6 +395,17 @@
     return true;
   }
   const quandoDe = (fd) => `${fd.get('dia')}T${fd.get('periodo')}:00-03:00`;
+  // 0064: as três ações da pendência vão por RPC (SECURITY DEFINER, checam admin/backoffice e gravam em eventos_venda).
+  async function rpcPendencia(fn, args, msgOk) {
+    const { error } = await NG.sb.rpc(fn, args);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+    NG.toast(msgOk, 'ok');
+    formAtivo = null;
+    abertos = null;
+    await recarregar();
+    ouvintes.forEach((f) => { try { f(d && d.v); } catch (e) { /* tela que ouve */ } });
+    return true;
+  }
 
   const SALVAR = {
     async pedido(fd) {
@@ -411,6 +473,29 @@
     async docs(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data.', 'bad'); return false; }
       return gravar({ docs_entregues_em: `${fd.get('dia')}T12:00:00-03:00` }, 'Documentos registrados');
+    },
+    // ---------- pendência com terceiro (0064): só pelas RPCs (escrita direta na tabela é proibida pelo RLS) ----------
+    async pend_abrir(fd) {
+      const motivo = fd.get('motivo_pend');
+      if (!motivo) { NG.toast('Escolha o motivo da pendência.', 'bad'); return false; }
+      if (!fd.get('revisar')) { NG.toast('Informe a data de revisão.', 'bad'); return false; }
+      return rpcPendencia('pendencia_abrir', { p_venda: d.v.id, p_motivo: motivo, p_descricao: String(fd.get('descricao') || '').trim() || null, p_revisar_em: fd.get('revisar') },
+        'Pendência aberta · a venda está em espera e a cadência da Mari pausou');
+    },
+    async pend_adiar(fd) {
+      if (!fd.get('revisar')) { NG.toast('Informe a nova data de revisão.', 'bad'); return false; }
+      return rpcPendencia('pendencia_adiar', { p_id: d.pend.id, p_novo_revisar_em: fd.get('revisar'), p_nota: String(fd.get('nota') || '').trim() || null },
+        `Revisão adiada para ${NG.diaCurto(fd.get('revisar'))}`);
+    },
+    async pend_encerrar(fd) {
+      const res = fd.get('resultado');
+      if (!res) { NG.toast('Escolha como a pendência terminou.', 'bad'); return false; }
+      const sugerida = d.pend.saida_sugerida;
+      const ok = await rpcPendencia('pendencia_encerrar', { p_id: d.pend.id, p_resultado: res, p_nota: String(fd.get('nota') || '').trim() || null },
+        res === 'saida' ? 'Pendência encerrada · agora registre a Saída' : 'Pendência encerrada · a venda voltou ao fluxo normal');
+      // "Virou Saída" só registra: a etapa muda pelo formulário de Saída de sempre (já com o motivo sugerido, se houver).
+      if (ok && res === 'saida' && d.v.status !== 'saida') { saidaPreset = sugerida || null; formAtivo = 'saida'; render(); }
+      return ok;
     },
     async saida(fd) {
       const motivo = fd.get('motivo');
@@ -541,6 +626,47 @@
     </section>`;
   }
 
+  // ---------- pendência com terceiro (0064) ----------
+  // Aparece em venda aberta (Qualificado a Instalado) ou quando há histórico. Admin/backoffice abrem, adiam e encerram;
+  // os outros perfis só leem. O atalho "Confirmado? Encerrar como …" abre o formulário de Saída com o motivo sugerido
+  // (a pendência é encerrada pelo trigger do banco quando a venda vai para Saída).
+  function cartaoPendencia(v) {
+    const pode = ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
+    const aberta = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado'].includes(v.status);
+    const pe = d.pend;
+    const hist = d.pendHist || [];
+    if (!pe && !hist.length && (!aberta || !pode)) return '';
+    const form = formAtivo && formAtivo.startsWith('pend_') && FORMS[formAtivo] ? FORMS[formAtivo](v) : '';
+    const guia = '<a class="pend-guia" href="guia.html#pendencias" target="_blank" rel="noopener">Como funciona ↗</a>';
+    const nomeMot = (c) => (d.motivos.find((m) => m.codigo === c) || {}).nome || c;
+    const histHtml = hist.length ? `<div class="pend-hist"><div class="f-sub">Histórico</div>${hist.slice(0, 6).map((p) => `<span><b>${esc(nomeMot(p.motivo))}</b> · ${esc(NG.fmtData(p.aberta_em))} → ${esc(NG.fmtData(p.encerrada_em))} · ${esc(NG.RESULTADO_PENDENCIA[p.resultado] || p.resultado)}${p.revisoes ? ` · adiada ${p.revisoes}×` : ''}${p.nota_encerramento ? ` · ${esc(p.nota_encerramento)}` : ''}${p.autor ? ` · ${esc(p.autor)}` : ''}</span>`).join('')}</div>` : '';
+    if (!pe) {
+      return `<section class="conf-card pend-card" aria-label="Pendência" data-pend-card>
+        <div class="cc-linha"><h3>Pendência <span class="pill dim">nenhuma</span></h3>${guia}</div>
+        ${pode && aberta && !form ? '<div class="conf-botoes"><button type="button" class="btn" data-f="pend-abrir">⏸ Abrir pendência (depende de terceiro)</button></div>' : ''}
+        ${form}${histHtml}
+      </section>`;
+    }
+    const pill = pe.vencida ? '<span class="pill pend-vencida">⏰ revisar hoje</span>' : '<span class="pill pend-espera">⏸ em espera</span>';
+    const dias = pe.desde ? Math.max(0, Math.round((new Date(`${NG.diaSP()}T12:00:00-03:00`) - new Date(`${NG.diaSP(pe.desde)}T12:00:00-03:00`)) / 86400000)) : null;
+    const atalho = pode && pe.saida_sugerida && !form
+      ? `<button type="button" class="btn btn-ghost" data-f="pend-saida">Confirmado? Encerrar como ${esc(pe.saida_sugerida)}</button>` : '';
+    const botoes = pode && !form ? `<div class="conf-botoes">
+        <button type="button" class="btn ${pe.vencida ? 'btn-acc' : ''}" data-f="pend-encerrar">Encerrar</button>
+        <button type="button" class="btn" data-f="pend-adiar">Adiar</button>${atalho}</div>` : '';
+    return `<section class="conf-card pend-card ${pe.vencida ? 'vencida' : 'espera'}" aria-label="Pendência" data-pend-card>
+      <div class="cc-linha"><h3>Pendência ${pill}${pe.revisoes >= 2 ? `<span class="pill pend-adiada" title="Adiada duas ou mais vezes: o Ricardo decide">⚠️ adiada ${pe.revisoes}×</span>` : ''}</h3>${guia}</div>
+      ${linha('Motivo', esc(pe.nome))}
+      ${linha('Quem destrava', esc(pe.quemTxt))}
+      ${linha('Desde', esc(`${NG.fmtDataHora(pe.desde)}${dias != null ? ` · ${dias} dia${dias === 1 ? '' : 's'} parada` : ''}`))}
+      ${linha('Revisar em', `<span class="${pe.vencida ? 'bad-txt' : ''}">${esc(pe.diaTxt)}</span>`)}
+      ${pe.descricao ? linha('Descrição', esc(pe.descricao)) : ''}
+      <span class="nota-campo">A cadência da Mari está pausada para este cliente até a pendência ser encerrada. Avise o cliente uma vez, à mão (texto pronto no guia).</span>
+      ${pode ? '' : '<span class="nota-campo">Só admin ou backoffice adia ou encerra.</span>'}
+      ${botoes}${form}${histHtml}
+    </section>`;
+  }
+
   // DFV (bloco Endereço em edição): o mesmo "Salvar consulta" e "Dispensar (admin)" da venda.html.
   async function salvarDfv() {
     const dados = NG.dfvLer(raiz.querySelector('[data-dfv-campos]'));
@@ -555,7 +681,7 @@
   }
 
   // ---------- viabilidade pelo portal + dados para o portal (prompt 27) ----------
-  const FORMS_NO_CARTAO = ['viab', 'ref'];   // abrem dentro dos cartões, não na faixa do próximo passo
+  const FORMS_NO_CARTAO = ['viab', 'ref', 'pend_abrir', 'pend_adiar', 'pend_encerrar'];   // abrem dentro dos cartões, não na faixa do próximo passo
   const mostraCartoesPortal = (v) => ['0_qualificado', 'saida'].includes(v.status);
   const cepNumero = (v) => [NG.fmtCep(v.cep), v.numero || ''].filter(Boolean).join(' ').trim();
 
@@ -755,6 +881,7 @@
     if (pr.resolver === 'invalida') nota = 'Venda inválida não conta para meta nem comissão e pode gerar multa ou estorno (tolerância zero). Avise o Ricardo.';
     else if (v.status === '1_vendido') nota = 'Contrato: instalação agendada em até 4 h depois da venda.';
     else if (pr.resolver === 'dfv' || pr.resolver === 'viab') nota = NG.TEXTOS_DFV.trava;
+    else if (pr.resolver === 'pendencia') nota = pr.vencida ? 'Chegou a data de revisão: confira com o terceiro e adie ou encerre a pendência (cartão abaixo).' : 'A venda está esperando um terceiro. Nada a fazer até a data de revisão; a cadência da Mari está pausada.';
     const botoes = [];
     // Viabilidade (prompt 27): 1º consultar no portal (abre e copia "CEP número"), depois registrar o resultado.
     if (pr.resolver === 'viab') {
@@ -1019,6 +1146,7 @@
       ${cabecalho(v)}
       <div class="f-corpo">
         ${faixaProximo(v, pr)}
+        ${cartaoPendencia(v)}
         ${cartaoViabilidade(v)}
         ${cartaoPortal(v)}
         ${cartaoConferencia(v)}
@@ -1087,6 +1215,13 @@
       const r = ev.target.closest('[data-resolver]');
       if (r && d) {
         const qual = r.dataset.resolver;
+        if (qual === 'pendencia') {   // 0064: leva ao cartão Pendência (vencida já abre o "Encerrar" para quem pode)
+          formAtivo = d.pend && d.pend.vencida && ['admin', 'backoffice'].includes((NG.usuario || {}).perfil) ? 'pend_encerrar' : null;
+          render();
+          const c = raiz.querySelector('[data-pend-card]');
+          if (c) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          return;
+        }
         if (qual === 'dfv') {   // abre o bloco Endereço em edição e já consulta a base
           edicao = 'endereco';
           formAtivo = null;
@@ -1164,6 +1299,7 @@
       if (acao === 'editar') { edicao = b.closest('[data-bloco]').dataset.bloco; formAtivo = null; render(); return; }
       if (acao === 'cancelar') {
         if (b.closest('.f-bloco')) edicao = null; else formAtivo = null;
+        saidaPreset = null;
         render();
         return;
       }
@@ -1171,6 +1307,14 @@
       if (acao === 'conf-aprovar') { b.disabled = true; const ok = await gravar({ conferencia_status: 'aprovada' }, 'Conferência aprovada'); if (!ok && b.isConnected) b.disabled = false; return; }
       if (acao === 'conf-form-reprovar' || acao === 'conf-form-devolver') { formAtivo = acao === 'conf-form-reprovar' ? 'conf_reprovar' : 'conf_devolver'; render(); return; }
       if (acao === 'conf-gerar') { b.disabled = true; await confGerar(); return; }
+      if (acao === 'pend-abrir' || acao === 'pend-adiar' || acao === 'pend-encerrar') {
+        formAtivo = acao.replace('-', '_');
+        render();
+        const f = raiz.querySelector(`[data-form="${formAtivo}"]`);
+        if (f) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      if (acao === 'pend-saida') { saidaPreset = d.pend ? d.pend.saida_sugerida : null; formAtivo = 'saida'; render(); return; }
       if (acao === 'dfv-salvar') { b.disabled = true; await salvarDfv(); b.disabled = false; return; }
       if (acao === 'dfv-dispensar') { await dispensarDfv(); }
     });

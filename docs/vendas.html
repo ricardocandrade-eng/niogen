@@ -3,7 +3,8 @@
      lista em largura total com etapa + próximo passo; "Nova venda" (venda de rua, 5 passos, mesmas travas e gravação) em gaveta;
      no celular, cartões + botão flutuante. Referência: docs/LAYOUT_vendas_v2 (artefato 9mrHryuD8iwhsiFH2qpjXS, v2.1).
      04/11 (prompt 13): chave Lista | Quadro (?vista=, lembrada em localStorage niogen.vendas.vista). O Quadro substitui o
-     antigo Funil: 5 colunas, Saída/Interesse futuro recolhidos, arrastar com as mesmas travas (NG.moverStatus). --><html lang="pt-BR">
+     antigo Funil: 5 colunas, Saída/Interesse futuro recolhidos, arrastar com as mesmas travas (NG.moverStatus).
+     08/11 (0064): aba "Em espera (n)" (pendência com terceiro; ?aba=espera), selo ⏸/⏰ no próximo passo e "· n em espera" no topo da coluna. --><html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -14,13 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=071126-1">
-<script src="config.js?v=071126-1"></script>
+<link rel="stylesheet" href="assets/app.css?v=081126-1">
+<script src="config.js?v=081126-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=071126-1"></script>
-<script src="assets/sidebar.js?v=071126-1"></script>
-<script src="assets/ficha.js?v=071126-1"></script>
-<script src="assets/novavenda.js?v=071126-1"></script>
+<script src="assets/app.js?v=081126-1"></script>
+<script src="assets/sidebar.js?v=081126-1"></script>
+<script src="assets/ficha.js?v=081126-1"></script>
+<script src="assets/novavenda.js?v=081126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -117,8 +118,8 @@
   // ?etapa= (links antigos do Funil e do Painel): abre a aba na Lista; no Quadro, leva até a coluna.
   const etapaIni = ETAPAS.some((e) => e.id === qsIni.get('etapa')) ? qsIni.get('etapa') : null;
   if (etapaIni) aba = etapaIni;
-  // ?aba=acao ("ver todas" do Painel): abre direto em "Precisam de ação".
-  if (qsIni.get('aba') === 'acao') aba = 'acao';
+  // ?aba=acao ("ver todas" do Painel): abre direto em "Precisam de ação". ?aba=espera (tile do Painel, 0064): "Em espera".
+  if (['acao', 'espera'].includes(qsIni.get('aba'))) aba = qsIni.get('aba');
   const mainEl = document.querySelector('main.main');
   const vistaEl = document.querySelector('.seg.vista');
 
@@ -133,8 +134,8 @@
   }
   aplicarVista(vista, { gravar: VISTAS.includes(qsIni.get('vista')) });
   vistaEl.addEventListener('change', (ev) => { if (VISTAS.includes(ev.target.value)) { aplicarVista(ev.target.value); render(); } });
-  // A aba que vale agora: no Quadro só existem "Todas" e "Precisam de ação" (as colunas fazem o papel das etapas).
-  const abaAtual = () => (vista === 'quadro' && !['todas', 'acao'].includes(aba) ? 'todas' : aba);
+  // A aba que vale agora: no Quadro só existem "Todas", "Precisam de ação" e "Em espera" (as colunas fazem o papel das etapas).
+  const abaAtual = () => (vista === 'quadro' && !['todas', 'acao', 'espera'].includes(aba) ? 'todas' : aba);
 
   NG.carregarUsuarios().then((us) => {
     NG.preencherSelect(fVendedor, us.map((u) => [u.id, u.nome]), 'Todos os vendedores');
@@ -190,7 +191,8 @@
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
   }
-  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? !!proximo(v).acao : NG.etapaDe(v.status).id === a);
+  // "Em espera" (0064) = pendência com terceiro aberta, vencida ou não; a não vencida fica FORA de "Precisam de ação".
+  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? !!proximo(v).acao : a === 'espera' ? !!NG.pendencia(v) : NG.etapaDe(v.status).id === a);
   const CHAVES = {
     cliente: (v) => v.cliente_nome || '',
     etapa: (v) => ETAPA_IDX[NG.etapaDe(v.status).id] ?? 99,
@@ -230,11 +232,18 @@
 
   function renderAbas(b) {
     const conta = (a) => b.filter((v) => naAba(v, a)).length;
+    const nEspera = conta('espera');
     NG.abasPilulas(document.getElementById('abas'), [
       { id: 'todas', nome: 'Todas', n: b.length },
       { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true },
+      { id: 'espera', nome: 'Em espera', n: nEspera, cls: 'espera', dica: NG.ajuda.pendencia },
       ...(vista === 'lista' ? ETAPAS.map((e) => ({ id: e.id, nome: e.nome, n: conta(e.id) })) : []),
     ], abaAtual(), (id) => { aba = id; render(); });
+    // Na aba "Em espera": uma linha do que é e o link para a seção do Guia do Backoffice.
+    let aj = document.getElementById('espera-ajuda');
+    if (!aj) { aj = document.createElement('div'); aj.id = 'espera-ajuda'; aj.className = 'espera-ajuda'; document.getElementById('abas').after(aj); }
+    aj.hidden = abaAtual() !== 'espera';
+    aj.innerHTML = `<span>⏸ Vendas paradas esperando um terceiro (Nio, Rogério, cliente). Saem de "Precisam de ação" até a data de revisão; a cadência da Mari fica pausada.</span><a href="guia.html#pendencias">Como funciona →</a>`;
   }
 
   // Topo (KPIs + abas) vale para as duas vistas; depois desenha só a vista ativa.
@@ -288,7 +297,7 @@
   // Origem em uma palavra no cartão.
   const ORIGEM_CURTA = { meta_ads: 'Meta', fila_vero: 'Fila Vero', rua: 'Rua', indicacao: 'Indicação', site: 'Site', outro: 'Evento' };
   const origemCurta = (v) => (v.origem === 'parceiro_pap' ? NG.origemTxt(v) : ORIGEM_CURTA[v.origem] || v.origem);
-  const URGENCIA = { bad: 0, warn: 1 };
+  const URGENCIA = { bad: 0, warn: 1, ok: 2, dim: 2, espera: 3 };   // em espera (0064) vai para o fim da coluna
   const ehFuturo = (v) => !!v.interesse_futuro_em;
   let foraAberto = etapaIni === 'saida';
   const podeArrastar = () => !movel.matches;   // celular: muda a etapa pelo "Mover para…" da ficha
@@ -321,8 +330,9 @@
 
     boardEl.innerHTML = COLUNAS_Q.map((c) => {
       const itens = ordenarQ(porCol[c.id]);
+      const nEsp = itens.filter((x) => x.pr.espera).length;   // "Qualificado 1 · 1 em espera" (0064)
       return `<section class="col qv-col" data-etapa="${c.id}" aria-label="${esc(c.nome)}">
-        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'ativo' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)}</span></div>
+        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'ativo' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)}${nEsp ? `<span class="c-espera" title="${esc(NG.ajuda.pendencia)}">· ${NG.fmtNum(nEsp)} em espera</span>` : ''}</span></div>
         <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((x) => qcard(x.v, x.pr)).join('') : '<div class="col-vazia">—</div>'}</div>
       </section>`;
     }).join('');

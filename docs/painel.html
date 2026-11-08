@@ -4,6 +4,7 @@
      Abaixo: "Precisam de ação agora" (as 8 primeiras, clique → ficha da venda em gaveta) e blocos curtos que levam às telas:
      Vendas por etapa → Quadro · Instalações de hoje · Mari: conversas que precisam de humano (admin/backoffice) · Cobertura JF.
      Nada de tabela larga: o gráfico por dia e as quebras por origem/cidade/vendedor/plano/forma saíram daqui (vão para o Placar).
+     08/11 (0064): bloco "Em espera" (n · vencidas, ordenado pela data de revisão → vendas.html?aba=espera).
      Dados: v_funil (KPIs e lista, mesma regra da tela Vendas), contatos_cliente, mari_conversas/mari_turnos, v_dfv_resumo, importacoes. -->
 <html lang="pt-BR">
 <head>
@@ -16,12 +17,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=071126-1">
-<script src="config.js?v=071126-1"></script>
+<link rel="stylesheet" href="assets/app.css?v=081126-1">
+<script src="config.js?v=081126-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=071126-1"></script>
-<script src="assets/sidebar.js?v=071126-1"></script>
-<script src="assets/ficha.js?v=071126-1"></script>
+<script src="assets/app.js?v=081126-1"></script>
+<script src="assets/sidebar.js?v=081126-1"></script>
+<script src="assets/ficha.js?v=081126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -137,7 +138,7 @@
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
         nota: acao.length ? `${NG.fmtNum(verm)} atrasada${verm === 1 ? '' : 's'} ou com prazo do contrato estourando` : 'nada pendente ✓',
-        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, pedido no portal, link da biometria (> 24 h / > 72 h), crédito pendente, contato, viabilidade, documentos, pendência da Nio.' }),
+        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, pedido no portal, link da biometria (> 24 h / > 72 h), crédito pendente, contato, viabilidade, documentos, pendência da Nio. Venda em espera (pendência com terceiro) só entra na data de revisão.' }),
     ].join('');
 
     // ---------- Precisam de ação agora (8 primeiras) ----------
@@ -162,6 +163,16 @@
         <div class="q-linha"><span>${esc(e.nome)}</span><span class="mono">${NG.fmtNum(porEtapa[e.id])}</span></div>
         <div class="q-trilho"><i class="et-${e.id}" style="width:${(porEtapa[e.id] / maxE) * 100}%"></i></div></a>`).join('')}
       <span class="nota-campo">Saída: ${NG.fmtNum(porEtapa.saida)} no período · abertas aparecem sempre</span>
+    </section>`);
+    // Em espera (0064): pendências com terceiro, as que vencem primeiro no topo → Vendas ?aba=espera
+    const espera = vendas.map((v) => ({ v, pe: NG.pendencia(v) })).filter((x) => x.pe)
+      .sort((a, b) => a.pe.revisar_em.localeCompare(b.pe.revisar_em));
+    const vencidas = espera.filter((x) => x.pe.vencida).length;
+    blocos.push(`<section class="painel bloco-curto">
+      <div class="q-linha"><h2 title="${esc(NG.ajuda.pendencia)}">Em espera</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=espera">Vendas →</a></div>
+      <a class="bc-num" href="vendas.html?vista=lista&amp;aba=espera" style="text-decoration:none"><span class="mono">${NG.fmtNum(espera.length)}</span><span class="muted">em espera · <span class="${vencidas ? 'bad-txt' : ''}">${NG.fmtNum(vencidas)} vencida${vencidas === 1 ? '' : 's'}</span></span></a>
+      ${espera.slice(0, 4).map(({ v, pe }) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="${pe.vencida ? 'bad-txt' : 'muted'}">${pe.vencida ? '⏰ revisar hoje' : `revisar ${esc(pe.diaTxt)}`} · ${esc(pe.quemTxt)}${pe.revisoes >= 2 ? ` · ⚠️ ${pe.revisoes}×` : ''}</span></a>`).join('')}
+      ${espera.length ? '' : '<span class="nota-campo">Nenhuma venda esperando terceiro.</span>'}
     </section>`);
     // Instalações de hoje → Instalações
     const hoje = NG.diaSP();

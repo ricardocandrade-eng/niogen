@@ -123,7 +123,9 @@
     interesse_futuro: 'Interesse futuro: a venda está em Saída e o cliente pediu para voltarmos a falar na data. A conversa ganha a etiqueta interesse-futuro no Chatwoot e uma nota privada com a data; o backoffice retoma por lá. A cadência não manda nada para ela.',
     // menu lateral
     menu_mari: 'Conversas esperando alguém do time: handoff da Mari, A resolver no Chatwoot e a última mensagem é do cliente. Vermelho = alguma passou de 15 min em horário de contato.',
-    menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação.',
+    menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação (venda em espera só conta na data de revisão).',
+    // pendência com terceiro (0064)
+    pendencia: 'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
   };
   const opcoes = (mapa, atual, vazio = '—') => `<option value="">${vazio}</option>${Object.entries(mapa).map(([k, t]) => `<option value="${k}" ${atual === k ? 'selected' : ''}>${t}</option>`).join('')}`;
   const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice' };
@@ -707,7 +709,7 @@
   function abasPilulas(el, itens, ativa, aoEscolher) {
     el.classList.add('abas', 'pilulas');
     el.setAttribute('role', 'tablist');
-    el.innerHTML = itens.map((a) => `<button type="button" role="tab" class="aba${a.alerta ? ' alerta' : ''}${a.id === ativa ? ' ativa' : ''}"
+    el.innerHTML = itens.map((a) => `<button type="button" role="tab" class="aba${a.alerta ? ' alerta' : ''}${a.cls ? ` ${a.cls}` : ''}${a.id === ativa ? ' ativa' : ''}"${a.dica ? ` title="${esc(a.dica)}"` : ''}
       aria-selected="${a.id === ativa}" data-aba="${esc(a.id)}">${esc(a.nome)}<b>${fmtNum(a.n)}</b></button>`).join('');
     if (!el.dataset.ligado) {
       el.dataset.ligado = '1';
@@ -756,6 +758,22 @@
   // Sinais do banco: horas_sem_agendamento, biometria_em, nio_pendencia_*, dfv_ok, docs_prazo_em, nio_venda_valida e o
   // último contato (contatos_cliente, ou a entrada quando não há nenhum). ultimoContatoEm = data do último contato ou null.
   const ATIVAS_INST = ['1_vendido', '2_aguardando_instalacao', '3_instalado'];
+  // ---------- pendência com terceiro (0064) ----------
+  // Os motivos vêm de config_motivos_pendencia; aqui só o rótulo de "quem destrava" (enum do banco).
+  const QUEM_DESTRAVA = { nio: 'Nio', rogerio: 'Rogério', cliente: 'cliente', interno: 'nosso time' };
+  const RESULTADO_PENDENCIA = { destravou: 'Destravou', saida: 'Virou Saída', cancelada: 'Cancelada' };
+  const diaCurto = (iso) => (iso ? `${fmtDiaSemana(`${String(iso).slice(0, 10)}T12:00:00-03:00`)} ${fmtDiaISO(iso).slice(0, 5)}` : '—');
+  // v = linha da v_funil (colunas pend_*). null = sem pendência aberta (ou venda em Saída).
+  function pendencia(v) {
+    if (!v || !v.pend_id || v.status === 'saida') return null;
+    const r = String(v.pend_revisar_em || '').slice(0, 10);
+    return {
+      id: v.pend_id, motivo: v.pend_motivo, nome: v.pend_motivo_nome || v.pend_motivo, quem: v.pend_quem,
+      quemTxt: QUEM_DESTRAVA[v.pend_quem] || v.pend_quem || '—', descricao: v.pend_descricao, desde: v.pend_desde,
+      revisar_em: r, revisoes: Number(v.pend_revisoes || 0), saida_sugerida: v.pend_saida_sugerida,
+      vencida: !!r && r <= diaSP(), diaTxt: diaCurto(r),
+    };
+  }
   function proximoPasso(v, ultimoContatoEm) {
     const hoje = diaSP();
     const dd = (x) => fmtData(x);
@@ -766,6 +784,17 @@
     if (v.nio_venda_valida === false) return { txt: 'Nio marcou a venda como inválida', nivel: 'bad', acao: true, resolver: 'invalida' };
     if ((v.nio_pendencia_cod || v.nio_pendencia_desc) && ATIVAS_INST.includes(v.status)) {
       return { txt: `Pendência Nio · ${[v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · ')}`.slice(0, 70), nivel: 'bad', acao: true, resolver: 'reagendar' };
+    }
+    // 0064 (08/11): pendência com terceiro ("Em espera"). A venda fica na etapa; enquanto a data de revisão não chega o selo é
+    // neutro e a venda SAI de "Precisam de ação"; na data (ou depois) vira vermelho e volta a contar — para todos.
+    const pe = pendencia(v);
+    if (pe) {
+      const adiada = pe.revisoes >= 2 ? ` · ⚠️ adiada ${pe.revisoes}×` : '';
+      if (pe.vencida) {
+        const era = pe.revisar_em < hoje ? ` (era ${pe.diaTxt})` : '';
+        return { txt: `⏰ Revisar hoje: ${pe.nome} · ${pe.quemTxt}${era}${adiada}`, nivel: 'bad', acao: true, espera: true, vencida: true, resolver: 'pendencia' };
+      }
+      return { txt: `⏸ Aguardando ${pe.quemTxt} · ${pe.nome} · revisar ${pe.diaTxt}${adiada}`, nivel: 'espera', espera: true, resolver: 'pendencia' };
     }
     // Venda de parceiro (prompt 25): a conferência de qualidade vem antes de qualquer outro passo. Enquanto não estiver aprovada o
     // banco não deixa passar de Qualificado (trigger vendas_antes_conferencia); aqui só dizemos o que fazer e até quando.
@@ -966,6 +995,7 @@
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, CHATWOOT_NIO_ACCOUNT, linkChatwoot,
+    QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
