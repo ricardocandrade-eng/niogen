@@ -336,7 +336,9 @@ def build(ids):
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', "
                     "to: $('2 · Entrada').first().json.telefone, type: 'text', text: { body: "
-                    "'🧹 Memória da Mari zerada (teste). Manda um oi que ela começa do zero.' } }) }}",
+                    "'🧹 Memória da Mari zerada (teste)' + ($json.vendas_apagadas > 0 ? ` e ${$json.vendas_apagadas} venda(s) de teste apagada(s)` : '') "
+                    "+ ($json.vendas_mantidas > 0 ? ` — ${$json.vendas_mantidas} venda(s) com pedido/pontos/pagamento mantida(s)` : '') "
+                    "+ '. Manda um oi que ela começa do zero.' } }) }}",
         'options': {'timeout': 20000}}, 1430, 800, credentials=wa_cred, onError='continueRegularOutput',
         notes='Comando #zerar (0062) — aviso pela Graph API (credencial "WABA Nio (Nio_API)"): não passa pelo Chatwoot, sem eco.')
     add('2p · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
