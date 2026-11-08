@@ -308,6 +308,13 @@ function violacoesDe(t) {
     && /velocidade|internet|mega|giga|\bgb\b|rapid|plano|wi-?fi|nio (fibra|essencial|super|ultra)|\b(fibra|essencial|super|ultra)\b/.test(f))) {
     v.push('comparou planos com "o dobro"/"duas vezes"/"metade" — isso não está na tabela: diga os números como estão no [INTERNAL DATA] (ex.: "vai de 800 Mega pra 1 Giga e ainda traz Globoplay por 12 meses")');
   }
+  // 08/11 00h36: "Esse CPF parece incompleto" para um CPF de 11 dígitos válido (o estado nem tinha CPF ainda). Se o cliente
+  // mandou agora um CPF que confere, dizer que ele está errado é proibido → reescrita.
+  if (V7 && /\bcpf\b[^.?!\n]{0,40}(incomplet|invalid|errad|nao parece|nao confere)/.test(n)) {
+    const okCpf = (x) => { if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); };
+    const cands = [...String((prep.consolidado || {}).mensagem || '').matchAll(/\d[\d.\s-]{9,16}\d/g)].map((m) => m[0].replace(/\D/g, ''));
+    if (cands.some(okCpf)) v.push('disse que o CPF está incompleto/errado, mas o CPF que o cliente mandou é válido: emita [DADOS_COLETADOS: …; cpf=…] e siga para o próximo dado');
+  }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
   if (t.replace(/\d{3}\.?[*x•]{3}\.?[*x•]{3}-?\d{2}/gi, '').includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
@@ -500,6 +507,17 @@ if (pl) {
   }
   if (achado) upd.plano_escolhido = achado.codigo;
 }
+// Teste real 08/11 00h35: "Quero o Essencial" e o modelo respondeu sem NENHUMA marca ([PLANO_ESCOLHIDO], [CONDICOES]) — o
+// plano não foi gravado, as condições só saíram depois do CPF e o resumo dependeu do texto do modelo. Sem plano marcado e o
+// cliente escolhendo um ("Quero o plano Nio X", como chega do botão ou do "Quero o X" digitado), o sistema grava a escolha.
+if (V7 && !posHandoff && !upd.plano_escolhido && !(ctx.conversa || {}).plano_escolhido) {
+  const msgCli = norm((prep.consolidado || {}).mensagem);
+  const mq = msgCli.match(/\bquero (?:o |a )?(?:plano )?(?:nio )?(fibra|essencial|super|ultra)\b/);
+  const temNfid = /sem fidelidade/.test(msgCli);
+  const achadoCli = mq && (ctx.planos || []).find((p) => p.portfolio === seg && norm(p.nome).includes(mq[1])
+    && (temNfid ? /nfid/.test(p.variante || '') : !/nfid/.test(p.variante || '')));
+  if (achadoCli) upd.plano_escolhido = achadoCli.codigo;
+}
 
 if (/seus dados sao usados/.test(norm(texto))) upd.lgpd_enviada = true;
 if (tags.upsell_oferecido || /so pra voce saber: por mais/.test(norm(texto))) upd.upsell_oferecido = true;
@@ -627,8 +645,13 @@ if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas && 
   const ps0 = baloesFinais[0].split('\n\n');
   const fica = ps0.filter((p) => !ehPedidoDados(p));
   const vai = ps0.filter(ehPedidoDados);
+  // 08/11 00h36: o pedido saía como o modelo escreveu ("Fechou?" solto + "Agora preciso confirmar seus dados: me manda…" +
+  // LGPD) — confuso. Depois das condições, o pedido é a frase do roteiro, e a LGPD só na primeira vez.
+  const pedidoDados = ['Fechou? Me manda seu nome completo e CPF que eu já adianto aqui.',
+    (ctx.conversa || {}).lgpd_enviada ? null : 'Seus dados são usados só pro seu pedido com a Nio.'].filter(Boolean).join('\n\n');
+  const jaTemNomeCpf = !!(((ctx.conversa || {}).dados || {}).cpf || dados.cpf);
   baloesFinais = (fica.length && vai.length
-    ? [fica.join('\n\n'), blocoCondicoes(), vai.join('\n\n'), ...baloesFinais.slice(1)]
+    ? [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? vai.join('\n\n') : pedidoDados, ...baloesFinais.slice(1)]
     : [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)]).slice(0, 4);
   texto = baloesFinais.join('\n\n');
 }
@@ -646,7 +669,9 @@ if (V7) {
       : l.replace(/\b(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})\b/g, '$1.***.***-$4')
         .replace(/\b(\d{3})\.?[x*•]{3}\.?[x*•]{3}-?(\d{2})\b/gi, '$1.***.***-$2')) : l)).join('\n');
   // Telefone do resumo no mesmo formato da confirmação ("32 98801-5161"), não "32988015161".
-  const telFmt = (s) => s.replace(/^(•\s*Telefone:\s*)\(?(\d{2})\)?\s*(9?\d{4})-?\s*(\d{4})\s*$/gim, '$1$2 $3-$4');
+  // + CEP do endereço do resumo com hífen ("CEP 36035130" → "CEP 36035-130", teste real 08/11 00h37).
+  const telFmt = (s) => s.replace(/^(•\s*Telefone:\s*)\(?(\d{2})\)?\s*(9?\d{4})-?\s*(\d{4})\s*$/gim, '$1$2 $3-$4')
+    .replace(/^(•\s*Endere[cç]o:.*\bCEP\s*)(\d{5})(\d{3})\b/gim, '$1$2-$3');
   baloesFinais = baloesFinais.map((b) => telFmt(mascara(b)));
   texto = telFmt(mascara(texto));
 }

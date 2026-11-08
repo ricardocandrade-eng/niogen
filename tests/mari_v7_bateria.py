@@ -351,6 +351,11 @@ def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800
         c.exige('800' in t and ('1 giga' in t or '1 gb' in t), f'(p) upsell sem os números da tabela: «{(r.get("resposta") or "")[:200]}»')
     if 'condicoes' not in t:
         r = c.diz('Quero esse mesmo')
+        t = norm(r.get('resposta'))
+    # 08/11 00h36: confirmação → condições → "Fechou? Me manda seu nome completo e CPF…" (nunca o pedido antes das condições)
+    c.exige('rapidinho as condicoes' in t and 'nome completo' in t and t.index('rapidinho as condicoes') < t.index('nome completo'),
+            f'(p) condições fora de ordem: «{(r.get("resposta") or "")[:220]}»')
+    c.exige('preciso confirmar seus dados' not in t, '(p) pedido de dados confuso ("Agora preciso confirmar seus dados")')
     r = c.diz('Ricardo Teste - 529.982.247-25')
     t = norm(r.get('resposta'))
     c.exige('mail' in t and 'telefone' not in t, f'(p) perguntou o telefone (ou não pediu o e-mail): «{(r.get("resposta") or "")[:160]}»')
