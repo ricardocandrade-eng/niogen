@@ -15,13 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=081126-3">
-<script src="config.js?v=081126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-5">
+<script src="config.js?v=091126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=081126-3"></script>
-<script src="assets/sidebar.js?v=081126-3"></script>
-<script src="assets/ficha.js?v=081126-3"></script>
-<script src="assets/novavenda.js?v=081126-3"></script>
+<script src="assets/app.js?v=091126-5"></script>
+<script src="assets/sidebar.js?v=091126-5"></script>
+<script src="assets/ficha.js?v=091126-5"></script>
+<script src="assets/novavenda.js?v=091126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -120,6 +120,9 @@
   if (etapaIni) aba = etapaIni;
   // ?aba=acao ("ver todas" do Painel): abre direto em "Precisam de ação". ?aba=espera (tile do Painel, 0064): "Em espera".
   if (['acao', 'espera'].includes(qsIni.get('aba'))) aba = qsIni.get('aba');
+  // ?parada=<etapa> (faixa "primeira venda" do Painel, onda 2.1): só as vendas paradas naquele passo (NG.paradaDe), em qualquer
+  // período — a faixa conta todas as abertas. O aviso acima da lista tem × para tirar o filtro.
+  let parada = NG.PARADAS.some((x) => x.id === qsIni.get('parada')) ? qsIni.get('parada') : null;
   const mainEl = document.querySelector('main.main');
   const vistaEl = document.querySelector('.seg.vista');
 
@@ -184,7 +187,7 @@
     const q = fBusca.value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     return vendas.filter((v) =>
-      NG.noPeriodo(v.criado_em, p) &&
+      (parada ? (NG.paradaDe(v) || {}).id === parada : NG.noPeriodo(v.criado_em, p)) &&
       (!fOrigem.value || v.origem === fOrigem.value) &&
       (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
       (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value) &&
@@ -247,8 +250,24 @@
   }
 
   // Topo (KPIs + abas) vale para as duas vistas; depois desenha só a vista ativa.
+  function renderParada() {
+    let el = document.getElementById('filtro-parada');
+    if (!el) { el = document.createElement('div'); el.id = 'filtro-parada'; el.className = 'filtro-parada'; document.getElementById('abas').before(el); }
+    const p = NG.PARADAS.find((x) => x.id === parada);
+    el.hidden = !p;
+    if (!p) return;
+    el.innerHTML = `<span>Paradas em <b>${esc(p.nome)}</b> — ${esc(p.dica)} · todos os períodos</span><button type="button" id="tirar-parada">× tirar filtro</button>`;
+    document.getElementById('tirar-parada').onclick = () => {
+      parada = null;
+      const qs = new URLSearchParams(location.search); qs.delete('parada');
+      history.replaceState(null, '', `${location.pathname}?${qs}${location.hash}`);
+      render();
+    };
+  }
+
   function render() {
     const b = base();
+    renderParada();
     renderKpis();
     renderAbas(b);
     if (vista === 'quadro') renderQuadro(b); else renderLista(b);

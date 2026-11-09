@@ -872,6 +872,46 @@
       default: return { txt: '', nivel: 'dim' };
     }
   }
+  // ---------- faixa "primeira venda" (onda 2.1, 09/11) ----------
+  // Em que passo a venda está parada, desde quando e se passou do prazo do contrato. Prazos vêm de config_regras
+  // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
+  const PARADAS = [
+    { id: 'qualificado', nome: 'Qualificado', dica: 'Qualificada, ainda sem pedido no portal PAP' },
+    { id: 'pedido', nome: 'Pedido', dica: 'Pedido aberto no portal, esperando a biometria do cliente (link da Nio)' },
+    { id: 'biometria', nome: 'Biometria', dica: 'Biometria validada, falta registrar a venda' },
+    { id: 'agendamento', nome: 'Agendamento', dica: 'Vendida, sem instalação agendada — contrato: agendar em até 4 h' },
+    { id: 'instalacao', nome: 'Instalação', dica: 'Instalação agendada, esperando o técnico / o OSAB' },
+    { id: 'instalada', nome: 'Instalada · docs', dica: 'Instalada, documentos à Nio pendentes — contrato: 15 dias' },
+  ];
+  function paradaDe(v, regras = {}) {
+    if (!v || v.status === 'saida') return null;
+    const hAg = Number(regras.prazo_agendar_horas ?? 4);
+    const dDocs = Number(regras.prazo_docs_dias ?? 15);
+    const horas = (desde) => (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
+    switch (v.status) {
+      case '0_qualificado':
+        if (v.biometria_status === 'validada') return { id: 'biometria', desde: v.biometria_validada_em || v.criado_em };
+        if (v.nio_pedido) return { id: 'pedido', desde: v.biometria_link_enviado_em || v.criado_em };
+        return { id: 'qualificado', desde: v.criado_em };
+      case '1_vendido': {
+        const desde = v.vendido_em || v.criado_em;
+        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : horas(desde);
+        return { id: 'agendamento', desde, atrasada: h != null && h > hAg, prazo: `${hAg} h` };
+      }
+      case '2_aguardando_instalacao': return { id: 'instalacao', desde: v.agendamento_registrado_em || v.vendido_em || v.criado_em };
+      case '3_instalado': {
+        if (v.docs_entregues_em || !v.instalado_em) return null;
+        return { id: 'instalada', desde: v.instalado_em, atrasada: horas(v.instalado_em) > dDocs * 24, prazo: `${dDocs} dias` };
+      }
+      default: return null;
+    }
+  }
+  // "há 3h05" / "há 2 dias" (para "a mais antiga está parada há …").
+  const haQuanto = (desde) => {
+    if (!desde) return '—';
+    const h = Math.max(0, (Date.now() - new Date(desde)) / 3600000);
+    return h < 48 ? fmtHoras(h) : `${Math.floor(h / 24)} dias`;
+  };
   // Último contato por venda (contatos_cliente ordenado do mais novo para o mais velho) → {venda_id: em}.
   function ultimosContatos(linhas) {
     const m = {};
@@ -994,7 +1034,8 @@
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
-    proximoPasso, ultimosContatos, abrirVenda, CHATWOOT_NIO_ACCOUNT, linkChatwoot,
+    proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
+    CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,

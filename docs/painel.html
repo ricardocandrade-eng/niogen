@@ -5,6 +5,9 @@
      Vendas por etapa → Quadro · Instalações de hoje · Mari: conversas que precisam de humano (admin/backoffice) · Cobertura JF.
      Nada de tabela larga: o gráfico por dia e as quebras por origem/cidade/vendedor/plano/forma saíram daqui (vão para o Placar).
      08/11 (0064): bloco "Em espera" (n · vencidas, ordenado pela data de revisão → vendas.html?aba=espera).
+     09/11 (onda 2.1, 0075): faixa "primeira venda" no topo, para todos os perfis — meta do mês × instaladas (painel_meta_ritmo,
+     a mesma conta do resumo diário), ritmo "faltam N em D dias → X por dia" e paradas por etapa (NG.paradaDe; vermelho = prazo do
+     contrato vencido, de config_regras) — clique abre vendas.html?vista=lista&parada=<etapa>.
      Dados: v_funil (KPIs e lista, mesma regra da tela Vendas), contatos_cliente, mari_conversas/mari_turnos, v_dfv_resumo, importacoes. -->
 <html lang="pt-BR">
 <head>
@@ -17,12 +20,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=081126-3">
-<script src="config.js?v=081126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-5">
+<script src="config.js?v=091126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=081126-3"></script>
-<script src="assets/sidebar.js?v=081126-3"></script>
-<script src="assets/ficha.js?v=081126-3"></script>
+<script src="assets/app.js?v=091126-5"></script>
+<script src="assets/sidebar.js?v=091126-5"></script>
+<script src="assets/ficha.js?v=091126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -38,6 +41,8 @@
         <a class="btn btn-acc acao-principal" href="vendas.html#nova">＋ Nova venda</a>
       </div>
     </header>
+
+    <section class="faixa-meta" id="faixa-meta" aria-label="Meta do mês e vendas paradas"><div class="carregando">Carregando…</div></section>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
 
@@ -60,21 +65,26 @@
   const veMari = ['admin', 'backoffice'].includes(eu.perfil);
   let vendas = [], metas = [], ultimoContato = {}, base, osab = null, mari;   // base/mari: undefined = carregando
   let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
+  let ritmo = null, regras = {};   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
   async function carregar() {
-    const [rv, rm, rc, ri] = await Promise.all([
+    const [rv, rm, rc, ri, rr, rg] = await Promise.all([
       NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('config_metas').select('*'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
       NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
+      NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
+      NG.sb.from('config_regras').select('chave, valor'),
     ]);
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
     vendas = rv.data || [];
     metas = rm.data || [];
     ultimoContato = NG.ultimosContatos(rc.data);
     osab = (ri.data || [])[0] || null;
+    ritmo = rr && !rr.error ? rr.data : null;
+    regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
     render();
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
@@ -117,6 +127,8 @@
     document.getElementById('titulo').textContent = 'Painel';
     document.getElementById('sub').textContent = `${fraseDia.charAt(0).toUpperCase() + fraseDia.slice(1)} · atualizado ${NG.fmtHora(new Date())} · `
       + (osab ? `OSAB de ${osab.dt_ref ? NG.fmtDiaISO(osab.dt_ref).slice(0, 5) : '—'} aplicado ${NG.fmtDataHora(osab.aplicado_em)}` : 'OSAB ainda não importado');
+
+    renderFaixa();
 
     // ---------- KPIs do período (a mesma conta da tela Vendas: vendidas pela data da venda) ----------
     const V = vendas.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
@@ -205,6 +217,44 @@
         : '<span class="nota-campo">Base DFV ainda não carregada.</span>'}
     </section>`);
     document.getElementById('blocos').innerHTML = blocos.join('');
+  }
+
+  // ---------- faixa "primeira venda" (onda 2.1): meta × instaladas, ritmo e paradas por etapa ----------
+  // Não depende do Período: é sempre o mês corrente (a meta é mensal) e as vendas abertas agora.
+  function renderFaixa() {
+    const el = document.getElementById('faixa-meta');
+    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+    let meta = '';
+    if (!ritmo) meta = '<div class="fm-meta"><span class="nota-campo">Meta do mês indisponível agora.</span></div>';
+    else {
+      const r = ritmo;
+      const plural = (n, um, v) => `${NG.fmtNum(n)} ${n === 1 ? um : v}`;
+      const frase = !r.meta ? 'sem meta cadastrada para o mês'
+        : r.faltam === 0 ? 'meta batida ✓'
+        : `faltam <b>${NG.fmtNum(r.faltam)}</b> em ${plural(r.dias_restantes, 'dia', 'dias')} → <b>${String(r.por_dia).replace('.', ',')}</b> por dia`;
+      meta = `<div class="fm-meta" title="Instaladas no mês (data da instalação, sem Saída) contra a meta de config_metas. Ritmo em dias corridos até o fim do mês, hoje incluído.">
+        <span class="rot">Meta de ${esc(nomeMes)} · instaladas</span>
+        <span class="val"><b class="mono">${NG.fmtNum(r.instaladas)}</b> <small>/ ${NG.fmtNum(r.meta)}</small></span>
+        <div class="barra"><i style="width:${Math.max(0, Math.min(100, Number(r.pct || 0)))}%"></i></div>
+        <span class="fm-ritmo">${frase}</span>
+      </div>`;
+    }
+    const grupos = Object.fromEntries(NG.PARADAS.map((p) => [p.id, []]));
+    vendas.forEach((v) => { const p = NG.paradaDe(v, regras); if (p && grupos[p.id]) grupos[p.id].push(p); });
+    const etapas = NG.PARADAS.map((p, i) => {
+      const g = grupos[p.id];
+      const velha = g.reduce((m, x) => (!m || new Date(x.desde) < new Date(m.desde) ? x : m), null);
+      const atras = g.filter((x) => x.atrasada).length;
+      const cls = atras ? 'bad' : g.length ? '' : 'vazia';
+      const prazo = g[0] && g[0].prazo ? ` · prazo ${g[0].prazo}` : '';
+      return `${i ? '<span class="fm-seta" aria-hidden="true">→</span>' : ''}<a class="fm-etapa ${cls}" href="vendas.html?vista=lista&amp;parada=${p.id}" title="${esc(p.dica)}">
+        <span class="fm-nome">${esc(p.nome)}</span>
+        <span class="fm-n mono">${NG.fmtNum(g.length)}</span>
+        <span class="fm-velha">${velha ? `mais antiga há ${esc(NG.haQuanto(velha.desde))}` : '—'}</span>
+        ${atras ? `<span class="fm-atraso">${NG.fmtNum(atras)} fora do prazo${esc(prazo)}</span>` : ''}
+      </a>`;
+    }).join('');
+    el.innerHTML = `${meta}<div class="fm-etapas" aria-label="Vendas paradas por etapa">${etapas}</div>`;
   }
 
   NGFicha.aoMudar(() => carregar());
