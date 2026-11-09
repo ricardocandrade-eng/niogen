@@ -15,12 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-15">
-<script src="config.js?v=091126-15"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-16">
+<script src="config.js?v=091126-16"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-15"></script>
-<script src="assets/sidebar.js?v=091126-15"></script>
-<script src="assets/ficha.js?v=091126-15"></script>
+<script src="assets/app.js?v=091126-16"></script>
+<script src="assets/sidebar.js?v=091126-16"></script>
+<script src="assets/conversa.js?v=091126-16"></script>
+<script src="assets/ficha.js?v=091126-16"></script>
 </head>
 <body>
 <div class="app">
@@ -89,15 +90,18 @@
   let aba = 'todas';
   const ord = { chave: 'quando', dir: 1 };
 
-  const VENDIDAS = ['1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  // 0089: a instalação começa na etapa 3 (Pedido · biometria): a biometria validada vira "OS + agendar" (prazo de 4 h).
+  const VENDIDAS = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  let jor = { porVenda: {} };
   async function carregar() {
+    jor = await NG.jornada();
     const [rv, rp, rc] = await Promise.all([
       NG.sb.from('v_funil').select('*').in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('config_planos').select('id, nome_curto'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
     ]);
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
-    vendas = rv.data || [];
+    vendas = (rv.data || []).filter((v) => v.status !== '0_qualificado' || String(v.nio_pedido || '').trim());
     nomeCurto = Object.fromEntries((rp.data || []).map((p) => [p.id, p.nome_curto]));
     ultimoContato = NG.ultimosContatos(rc.data);
     const manter = (sel, valores, todos) => { const a = sel.value; NG.preencherSelect(sel, valores, todos); sel.value = valores.some(([v]) => v === a) ? a : ''; };
@@ -112,24 +116,18 @@
     const hoje = NG.diaSP();
     if (v.instalado_em) return 'instalada';
     if (v.nio_pendencia_cod || v.nio_pendencia_desc) return 'atrasada';
-    if (v.status === '1_vendido' && v.biometria_status !== 'validada') return 'biometria';   // 0087: venda (OS) esperando a biometria
+    if (v.status === '0_qualificado') return v.biometria_status === 'validada' ? 'agendar' : 'biometria';   // 0089: etapa 3
     if (v.status === '1_vendido' || !v.instalacao_agendada_para) return 'agendar';
     const d = NG.diaSP(v.instalacao_agendada_para);
     if (d < hoje) return 'atrasada';
     if (d === hoje) return 'hoje';
     return 'proximos';
   }
-  // Próximo passo: o mesmo da ficha (NG.proximoPasso); a atrasada sem pendência ganha o texto daqui.
-  function proximo(v) {
-    const s = situacao(v);
-    if (s === 'atrasada' && !(v.nio_pendencia_cod || v.nio_pendencia_desc)) {
-      return { txt: `Passou de ${NG.fmtData(v.instalacao_agendada_para)} sem instalar · reagendar ou conferir OSAB`, nivel: 'bad', acao: true };
-    }
-    return NG.proximoPasso(v, ultimoContato[v.id]);
-  }
-  const precisaAcao = (v) => situacao(v) === 'atrasada' || !!proximo(v).acao;
-  // "A agendar há > 4 h" conta da biometria validada ou do pedido (vendido_em), o que vier depois (v_funil.agendar_desde).
-  const horasSemAgenda = (v) => { const desde = v.agendar_desde || v.vendido_em; return desde ? (Date.now() - new Date(desde)) / 3600000 : 0; };
+  // Próximo passo e "precisa de ação": a regra única (v_jornada, 0090) — a mesma da Minha vez, do menu e do Funil.
+  const proximo = (v) => NG.passoJornada(jor.porVenda[v.id]) || NG.proximoPasso(v, ultimoContato[v.id]);
+  const precisaAcao = (v) => !!(jor.porVenda[v.id] ? jor.porVenda[v.id].precisa_acao : proximo(v).acao);
+  // "OS + agendar há > 4 h" conta da biometria validada (v_funil.agendar_desde, 0089).
+  const horasSemAgenda = (v) => { const desde = v.agendar_desde || v.biometria_validada_em || v.vendido_em; return desde ? (Date.now() - new Date(desde)) / 3600000 : 0; };
 
   // Busca + vendedor + bairro; o Período corta só as instaladas (data da instalação).
   function base() {
@@ -144,19 +142,20 @@
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
   }
-  const ABAS = [['todas', 'Todas'], ['acao', 'Precisam de ação'], ['biometria', 'Biometria pendente'], ['agendar', 'A agendar'], ['hoje', 'Hoje'], ['proximos', 'Próximos dias'], ['atrasada', 'Atrasadas'], ['instalada', 'Instaladas']];
+  const ABAS = [['todas', 'Todas'], ['acao', 'Precisam de ação'], ['biometria', 'Biometria pendente'], ['agendar', 'OS + agendar'], ['hoje', 'Hoje'], ['proximos', 'Próximos dias'], ['atrasada', 'Atrasadas'], ['instalada', 'Instaladas']];
   const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(v) : situacao(v) === a);
 
   // "Quando": a data que importa em cada situação (vendida → agendar; agendada → dia e período; instalada → dia).
   function quandoTxt(v) {
     const s = situacao(v);
     if (s === 'instalada') return { txt: `instalada ${NG.quando(v.instalado_em)}`, sub: v.docs_entregues_em ? 'docs entregues' : v.docs_prazo_em ? `docs até ${NG.fmtData(v.docs_prazo_em)}` : '' };
-    if (s === 'biometria') return { txt: v.vendido_em ? `OS aberta ${NG.quando(v.vendido_em)} ${NG.fmtHora(v.vendido_em)}` : 'OS aberta', sub: 'esperando a biometria do cliente' };
-    if (s === 'agendar') return { txt: v.vendido_em ? `vendida ${NG.quando(v.vendido_em)} ${NG.fmtHora(v.vendido_em)}` : 'vendida', sub: `há ${NG.fmtHoras(horasSemAgenda(v))} sem agenda` };
+    if (s === 'biometria') { const l = v.biometria_link_enviado_em; return { txt: l ? `pedido ${NG.quando(l)} ${NG.fmtHora(l)}` : 'pedido gravado', sub: 'esperando a biometria do cliente' }; }
+    if (s === 'agendar') { const b = v.biometria_validada_em || v.vendido_em; return { txt: b ? `biometria ok ${NG.quando(b)} ${NG.fmtHora(b)}` : 'biometria ok', sub: `há ${NG.fmtHoras(horasSemAgenda(v))} · abrir a OS e agendar` }; }
     const q = v.instalacao_agendada_para;
     return { txt: q ? `${NG.fmtDiaSemana(q)} ${NG.fmtData(q)}` : '—', sub: q ? NG.janela(q) : '' };
   }
-  const quandoOrd = (v) => new Date(situacao(v) === 'instalada' ? v.instalado_em : situacao(v) === 'agendar' ? v.vendido_em || v.criado_em : v.instalacao_agendada_para).getTime();
+  const quandoOrd = (v) => new Date(situacao(v) === 'instalada' ? v.instalado_em : situacao(v) === 'agendar' ? v.agendar_desde || v.vendido_em || v.criado_em
+    : situacao(v) === 'biometria' ? v.biometria_link_enviado_em || v.criado_em : v.instalacao_agendada_para).getTime();
   const planoCurto = (v) => nomeCurto[v.plano_id] || v.plano_nome || '—';
   const formaTxt = (v) => ({ cartao: 'cartão', boleto: 'boleto', dacc: 'débito' })[v.forma_pagamento] || '';
   const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
@@ -183,9 +182,9 @@
     const mediana = dias.length ? (dias.length % 2 ? dias[(dias.length - 1) / 2] : (dias[dias.length / 2 - 1] + dias[dias.length / 2]) / 2) : null;
     const instHoje = doFiltro.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: 'A agendar', val: NG.fmtNum(agendar.length), cls: mais4 ? 'bad' : agendar.length ? 'warn' : '',
-        nota: mais4 ? `${NG.fmtNum(mais4)} há mais de 4 h` : agendar.length ? 'dentro do prazo de 4 h' : 'nenhuma esperando agenda',
-        dica: 'Vendidas (pedido no portal + biometria validada) sem data de instalação. Contrato: agendar em até 4 h — conta da biometria validada ou do pedido, o que vier depois.' }),
+      NG.kpi({ rot: 'OS + agendar', val: NG.fmtNum(agendar.length), cls: mais4 ? 'bad' : agendar.length ? 'warn' : '',
+        nota: mais4 ? `${NG.fmtNum(mais4)} há mais de 4 h` : agendar.length ? 'dentro do prazo de 4 h' : 'nenhuma biometria esperando a OS',
+        dica: 'Pedido · biometria com a biometria validada: falta abrir a OS no portal com o dia e o período (é isso que faz a venda contar). Contrato: até 4 h da biometria validada.' }),
       NG.kpi({ rot: 'Agendadas hoje', val: NG.fmtNum(hojeL.length), nota: hojeL.length ? `${NG.fmtNum(manha)} manhã · ${NG.fmtNum(hojeL.length - manha)} tarde${instHoje ? ` · ${NG.fmtNum(instHoje)} já instalada${instHoje === 1 ? '' : 's'}` : ''}` : instHoje ? `${NG.fmtNum(instHoje)} instalada${instHoje === 1 ? '' : 's'} hoje` : 'nenhuma para hoje' }),
       NG.kpi({ rot: 'Atrasadas', val: NG.fmtNum(atras.length), cls: atras.length ? 'bad' : '',
         nota: atras.length ? `${NG.fmtNum(pend)} com pendência da Nio · ${NG.fmtNum(atras.length - pend)} passaram da data` : 'nenhuma',
@@ -231,7 +230,7 @@
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') NG.abrirVenda(tr.dataset.id); });
 
   document.getElementById('exportar').addEventListener('click', () => {
-    const SIT = { biometria: 'Biometria pendente', agendar: 'A agendar', hoje: 'Hoje', proximos: 'Próximos dias', atrasada: 'Atrasada', instalada: 'Instalada' };
+    const SIT = { biometria: 'Biometria pendente', agendar: 'OS + agendar', hoje: 'Hoje', proximos: 'Próximos dias', atrasada: 'Atrasada', instalada: 'Instalada' };
     const linhas = NG.ordenar(base().filter((v) => naAba(v, aba)), CHAVES, ord);
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
     const cab = ['Cliente', 'Situação', 'Agendada para', 'Instalada em', 'Plano', 'Vendedor', 'Origem', 'Bairro', 'Cidade', 'Pedido Nio', 'Pendência Nio'];

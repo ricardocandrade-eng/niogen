@@ -23,30 +23,58 @@
   const TZ = 'America/Sao_Paulo';
 
   const STATUS = [
-    // 0087 (Ricardo, 09/11): lead qualificado NÃO é venda. Venda = OS aberta no portal (etapa 7: nº do pedido + nº da OS).
-    { id: '0_qualificado', curto: '0 · Lead qualificado', col: '0 · Lead qualificado (ainda não é venda)', chip: 'info' },
-    { id: '1_vendido', curto: '1 · Venda · OS', col: '1 · Venda · OS aberta (biometria)', chip: '' },
-    { id: '2_aguardando_instalacao', curto: '2 · Aguardando', col: '2 · Aguardando instalação', chip: '' },
-    { id: '3_instalado', curto: '3 · Instalado', col: '3 · Instalado', chip: '' },
-    // Os ids são do banco e não mudam. Desde 04/11 (padrão de telas) 4 e 5 aparecem juntos como "Ativo";
-    // o 5 fica fora dos seletores (oculto) — a passagem 4 → 5, se existir, roda sem aparecer.
-    { id: '4_ativo_provisorio', curto: '4 · Ativo', col: '4 · Ativo', chip: 'ok' },
-    { id: '5_comissao_firme', curto: '4 · Ativo', col: '4 · Ativo', chip: 'ok', oculto: true },
+    // 0089 (Ricardo, 09/11): UMA jornada de 5 etapas com os mesmos nomes em toda tela. Os ids do banco não mudam:
+    // 0_qualificado é a etapa 2 (sem pedido) ou a 3 (com pedido) — quem separa é etapaDe(venda). Venda = OS + agendamento.
+    { id: '0_qualificado', curto: 'Lead qualificado', col: 'Lead qualificado (ainda não é venda)', chip: 'info' },
+    { id: '1_vendido', curto: 'Venda · OS agendada', col: 'Venda · OS agendada', chip: '', oculto: true },
+    { id: '2_aguardando_instalacao', curto: 'Venda · OS agendada', col: 'Venda · OS agendada', chip: '' },
+    { id: '3_instalado', curto: 'Instalada', col: 'Instalada', chip: 'ok' },
+    { id: '4_ativo_provisorio', curto: 'Instalada', col: 'Instalada', chip: 'ok', oculto: true },
+    { id: '5_comissao_firme', curto: 'Instalada', col: 'Instalada', chip: 'ok', oculto: true },
     { id: 'saida', curto: 'Saída', col: 'Saída · motivo obrigatório', chip: 'dim' },
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
 
-  // Etapas visíveis (padrão de telas): Lead qualificado · Venda (OS aberta) · Aguardando · Instalado · Ativo (4 e 5) · Saída.
-  // 0087: os ids ficam (URLs e banco); só o nome muda — Qualificado ≠ venda.
-  const ETAPAS = [
-    { id: 'qualificado', nome: 'Lead qualificado', status: ['0_qualificado'] },
-    { id: 'vendido', nome: 'Venda · OS aberta', status: ['1_vendido'] },
-    { id: 'aguardando', nome: 'Aguardando', status: ['2_aguardando_instalacao'] },
-    { id: 'instalado', nome: 'Instalado', status: ['3_instalado'] },
-    { id: 'ativo', nome: 'Ativo', status: ['4_ativo_provisorio', '5_comissao_firme'] },
-    { id: 'saida', nome: 'Saída', status: ['saida'] },
+  // A jornada (0089): 1 Conversa · 2 Lead qualificado · 3 Pedido · biometria · 4 Venda · OS agendada · 5 Instalada · Saída.
+  // A etapa 1 (conversa sem venda) não tem venda: aparece só na Minha vez (v_jornada). Ids curtos ficam nas URLs.
+  const JORNADA = [
+    { n: 1, id: 'conversa', nome: 'Conversa', cor: '#6B8AFD' },
+    { n: 2, id: 'qualificado', nome: 'Lead qualificado', cor: '#5FB3F9' },
+    { n: 3, id: 'pedido', nome: 'Pedido · biometria', cor: '#E3B341' },
+    { n: 4, id: 'vendido', nome: 'Venda · OS agendada', cor: '#32E000' },
+    { n: 5, id: 'instalado', nome: 'Instalada', cor: '#2EA043' },
   ];
-  const etapaDe = (status) => ETAPAS.find((e) => e.status.includes(status)) || { id: '', nome: status || '—', status: [] };
+  const ETAPAS = [
+    { id: 'qualificado', n: 2, nome: 'Lead qualificado', status: ['0_qualificado'] },
+    { id: 'pedido', n: 3, nome: 'Pedido · biometria', status: ['0_qualificado'] },
+    { id: 'vendido', n: 4, nome: 'Venda · OS agendada', status: ['1_vendido', '2_aguardando_instalacao'] },
+    { id: 'instalado', n: 5, nome: 'Instalada', status: ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'] },
+    { id: 'saida', n: 0, nome: 'Saída', status: ['saida'] },
+  ];
+  // etapaDe(venda) — com a venda separa a etapa 2 da 3 pelo nº do pedido; com só o status, 0_qualificado = Lead qualificado.
+  const etapaDe = (x) => {
+    const obj = x && typeof x === 'object';
+    const st = obj ? x.status : x;
+    if (st === '0_qualificado') return obj && (x.jornada_etapa === 3 || String(x.nio_pedido || '').trim()) ? ETAPAS[1] : ETAPAS[0];
+    return ETAPAS.find((e) => e.status.includes(st)) || { id: '', n: null, nome: st || '—', status: [] };
+  };
+  // ---------- v_jornada (0090): a regra única de "precisa de ação" ----------
+  // nivel do banco → cor das telas: agora = vermelho · hoje = amarelo · espera = azul (terceiro) · ok/fora = cinza.
+  const NIVEL_COR = { agora: 'bad', hoje: 'warn', espera: 'espera', ok: 'ok', fora: 'dim' };
+  async function jornada() {
+    const { data, error } = await sb.from('v_jornada').select('*');
+    if (error) return { erro: msgErro(error), lista: [], porVenda: {}, porConversa: {} };
+    const lista = (data || []).filter((j) => j.etapa > 0);
+    return {
+      lista, todas: data || [],
+      porVenda: Object.fromEntries((data || []).filter((j) => j.venda_id).map((j) => [j.venda_id, j])),
+      porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
+    };
+  }
+  // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
+  const passoJornada = (j) => (j ? { txt: j.o_que_fazer, nivel: NIVEL_COR[j.nivel] || 'dim', acao: !!j.precisa_acao, espera: j.nivel === 'espera', botao: j.botao } : null);
+  const ordemJornada = (a, b) => (({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[a.nivel] - ({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[b.nivel])
+    || (new Date(a.desde || 0) - new Date(b.desde || 0));
 
   const ORIGENS = {
     meta_ads: 'Meta Ads · Mari', instagram: 'Instagram · Mari', facebook: 'Facebook · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
@@ -258,7 +286,7 @@
   // dados.conversa_id vem (conversa sem venda: assumir/parar/devolver). Devolve o jsonb da RPC ({resumo, aviso, …}) ou null.
   const MOMENTOS = {
     assumir: 'Assumida', viabilidade: 'Viabilidade registrada', pedido: 'Pedido gravado', biometria: 'Biometria',
-    agendar: 'Instalação agendada', parar: 'Cliente pediu para parar', devolver_mari: 'Devolvida para a Mari',
+    os_agendar: 'OS + agendamento (venda)', reagendar: 'Instalação reagendada', parar: 'Cliente pediu para parar', devolver_mari: 'Devolvida para a Mari',
   };
   async function momento(vendaId, qual, dados = {}) {
     const { data, error } = await sb.rpc('backoffice_momento', { p_venda: vendaId || null, p_momento: qual, p_dados: dados || {} });
@@ -268,46 +296,7 @@
     return data;
   }
 
-  // Fila "Minha vez" (0082, Fase 2): junta conversas esperando o time e mensagens "mandar à mão" (v_fila_backoffice) com as
-  // vendas e instalações cujo próximo passo está vermelho/amarelo — a MESMA regra da tela Vendas (proximoPasso), sem copiar em SQL.
-  // Uma linha por pessoa (a conversa ganha da venda dela); ordem: vermelho → amarelo → mais antigo. Usada pela fila.html e pelo menu.
-  const MOTIVO_FILA = {
-    dados_completos: 'venda pronta · abrir o pedido', pedido_humano: 'pediu um consultor', objecao: 'objeção', urgencia_alta: 'urgência',
-    ja_cliente_nio: 'já é cliente Nio (ou reclamando)', sem_contato: 'sem contato',
-  };
-  function filaItens(fila, vendas, ult) {
-    const itens = [];
-    const comConversa = new Set();
-    const agora = Date.now();
-    (fila || []).forEach((f) => {
-      if (f.tipo === 'manual') {
-        itens.push({ tipo: 'manual', ico: '✉', chave: f.chave, nome: f.nome, cidade: f.cidade, desde: f.desde, nivel: 'bad', f,
-          venda_id: f.venda_id, conversa_id: f.conversa_id,
-          falta: `Mandar à mão: ${f.motivo || 'mensagem ao cliente'}${f.erro ? ` (${f.erro})` : ''}` });
-        return;
-      }
-      const min = (agora - new Date(f.desde)) / 60000;
-      if (f.venda_id) comConversa.add(f.venda_id);
-      const oque = f.sem_resposta ? 'cliente sem resposta' : (MOTIVO_FILA[f.motivo] || 'esperando alguém do time');
-      itens.push({ tipo: 'conversa', ico: '💬', chave: f.chave, nome: f.nome, cidade: f.cidade, desde: f.desde, f,
-        venda_id: f.venda_id, conversa_id: f.conversa_id,
-        nivel: f.sem_resposta || (!f.assumida && min > 15) ? 'bad' : 'warn',
-        falta: `${oque}${f.assumida ? ` · com ${f.chatwoot_agente || 'o time'}` : ''}` });
-    });
-    (vendas || []).forEach((v) => {
-      if (v.status === 'saida' || comConversa.has(v.id)) return;
-      const pr = proximoPasso(v, (ult || {})[v.id]);
-      if (!pr.acao || (pr.espera && !pr.vencida)) return;
-      if (!(pr.nivel === 'bad' || pr.nivel === 'warn' || pr.resolver === 'conferencia')) return;
-      const inst = ['2_aguardando_instalacao', '3_instalado'].includes(v.status) || ['reagendar', 'docs'].includes(pr.resolver);
-      const desde = v.status === '1_vendido' ? (v.agendar_desde || v.vendido_em)
-        : v.biometria_status === 'pendente' && v.biometria_link_enviado_em ? v.biometria_link_enviado_em : v.criado_em;
-      itens.push({ tipo: inst ? 'instalacao' : 'venda', ico: inst ? '🔧' : '🧾', chave: v.id, venda_id: v.id,
-        nome: v.cliente_nome, cidade: v.cidade, desde, nivel: pr.nivel === 'bad' ? 'bad' : 'warn', falta: pr.txt, resolver: pr.resolver });
-    });
-    const peso = { bad: 0, warn: 1 };
-    return itens.sort((a, b) => (peso[a.nivel] - peso[b.nivel]) || (new Date(a.desde) - new Date(b.desde)));
-  }
+  // Fila "Minha vez": desde a 0090 vem inteira da v_jornada (NG.jornada) — a mesma regra do menu, do Funil, do Painel e da Mari.
 
   // ---------- comissão: prevista / paga · M-10 · downgrade ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
@@ -840,7 +829,7 @@
   }
 
   // Pílula da etapa (uma por linha) e "próximo passo" ({txt, nivel: bad | warn | ok | dim}).
-  const pilulaEtapa = (status) => { const e = etapaDe(status); return `<span class="pill ${e.id}">${esc(e.nome)}</span>`; };
+  const pilulaEtapa = (x) => { const e = etapaDe(x); return `<span class="pill ${e.id}">${esc(e.nome)}</span>`; };
   const proxPasso = (p) => (p && p.txt ? `<span class="prox ${p.nivel || 'ok'}">${esc(p.txt)}</span>` : '<span class="prox dim">—</span>');
   // ---------- próximo passo da venda (Vendas, Instalações, Painel e ficha usam daqui) ----------
   // {txt, nivel, acao (entra em "Precisam de ação"), resolver (o formulário da ficha que resolve o passo)}.
@@ -899,62 +888,54 @@
     }
     switch (v.status) {
       case '0_qualificado': {
-        // 0087: LEAD QUALIFICADO (ainda não é venda). Portal: etapa 2 viabilidade → etapa 3 crédito → etapa 7 Abrir OS = VENDA.
-        const hCred = v.horas_credito_pendente != null ? Number(v.horas_credito_pendente) : null;
-        if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF ao cliente (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
-        if (v.nio_pedido && !v.nio_os) return { txt: 'Pedido gravado · falta o nº da OS para virar venda', nivel: 'warn', acao: true, resolver: 'portal' };
-        if (v.nio_pedido && v.nio_os && !portalViavel(v)) return { txt: 'Pedido + OS gravados · registrar a viabilidade do portal (Viável) para virar venda', nivel: 'warn', acao: true, resolver: 'viab' };
-        if (hCred != null && hCred > 24) return { txt: `Crédito pendente há ${fmtHoras(hCred)} · reconsultar no portal`, nivel: 'warn', acao: true, resolver: 'portal' };
-        // 06/11 (prompt 27): o 1º passo é SEMPRE o portal. O DFV não entra no próximo passo (é pista, fica na ficha).
-        if (!v.nio_pedido && !portalViavel(v)) {
-          const onde = `CEP ${fmtCep(v.cep)}${v.numero ? `, nº ${v.numero}` : ''}${v.complemento ? ` · ${v.complemento}` : ''}`;
-          if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
-            return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/nº ou encerrar`, nivel: 'warn', acao: true, resolver: 'viab' };
+        // 0089: etapa 2 LEAD QUALIFICADO (sem pedido) → viabilidade → pedido. Etapa 3 PEDIDO · BIOMETRIA (com pedido) → biometria
+        // validada → OS + agendar (um passo só; é ele que faz a venda contar). Mesmos textos da v_jornada.
+        if (!String(v.nio_pedido || '').trim()) {
+          if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
+          if (!portalViavel(v)) {
+            if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
+              return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/nº ou abrir pendência`, nivel: 'warn', acao: true, resolver: 'viab' };
+            }
+            if (v.nio_viab_resultado === 'viavel') return { txt: 'Viabilidade vencida (> 7 dias) · consultar de novo no portal', nivel: 'warn', acao: true, resolver: 'viab' };
+            return { txt: 'Consultar a viabilidade no portal', nivel: 'warn', acao: true, resolver: 'viab' };
           }
-          if (v.nio_viab_resultado === 'viavel') return { txt: `Viabilidade do portal vencida (> 7 dias) · consultar de novo (${onde})`, nivel: 'warn', acao: true, resolver: 'viab' };
-          return { txt: `Consultar a viabilidade no portal (${onde})`, nivel: 'warn', acao: true, resolver: 'viab' };
+          return { txt: 'Viável · abrir o pedido no portal e gravar o nº', nivel: 'warn', acao: true, resolver: 'pedido' };
         }
-        const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
-        const h = (Date.now() - new Date(ult)) / 3600000;
-        if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
-        return { txt: 'Lead pronto · crédito e oferta no portal e Abrir OS (etapa 7) → registrar pedido + OS = venda', nivel: 'warn', acao: true, resolver: 'portal' };
-      }
-      case '1_vendido': {
-        // 0087: VENDA (OS aberta). A Nio manda o link da biometria sozinha; depois da biometria validada, agendar em até 4 h.
+        const desdeLink = v.biometria_link_enviado_em || v.nio_pedido_em;
+        const hBio = desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null;
         if (v.biometria_status === 'validada') {
-          const desde = v.agendar_desde || v.biometria_validada_em || v.vendido_em;
-          const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
-          return { txt: `Biometria validada · agendar a instalação${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true, resolver: 'agendar' };
+          const h = v.biometria_validada_em ? (Date.now() - new Date(v.biometria_validada_em)) / 3600000 : null;
+          return { txt: `Biometria validada · abrir a OS e agendar (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'os_agendar' };
         }
-        if (v.biometria_status === 'com_risco') return { txt: 'Venda · biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
-        const desdeLink = v.biometria_link_enviado_em || v.nio_pedido_em || v.vendido_em;
-        const hBio = v.horas_biometria_pendente != null ? Number(v.horas_biometria_pendente) : (desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null);
-        if (hBio != null && hBio > 72) return { txt: `Venda · link da Nio há ${fmtHoras(hBio)} sem biometria · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
-        if (hBio != null && hBio > 24) return { txt: `Venda · link da Nio há ${fmtHoras(hBio)} sem biometria · avisar o cliente`, nivel: 'warn', acao: true, resolver: 'bio_status' };
-        const quando = desdeLink ? (diaSP(desdeLink) === diaSP() ? fmtHora(desdeLink) : fmtDataHora(desdeLink)) : '';
-        return { txt: `Venda · OS aberta · biometria pendente (link da Nio ${quando})`, nivel: 'ok', resolver: 'bio_status' };
+        if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'warn', acao: true, resolver: 'bio_status' };
+        if (hBio != null && hBio > 72) return { txt: `Link da biometria há ${fmtHoras(hBio)} · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (hBio != null && hBio > 24) return { txt: `Link da biometria há ${fmtHoras(hBio)} · lembrar o cliente pela conversa`, nivel: 'warn', acao: true, resolver: 'bio_status' };
+        return { txt: `Esperando a biometria do cliente${hBio != null ? ` · link da Nio há ${fmtHoras(hBio)}` : ''}`, nivel: 'espera', espera: true, resolver: 'bio_status' };
       }
+      case '1_vendido':
       case '2_aguardando_instalacao': {
+        // 0089: etapa 4 VENDA · OS AGENDADA. Só volta para a vez com a data passada sem baixa ou pendência da Nio.
         const q = v.instalacao_agendada_para;
-        if (!q) return { txt: 'Sem data de instalação', nivel: 'warn', acao: true, resolver: 'agendar' };
+        if (!q) return { txt: 'Venda sem data de instalação · agendar', nivel: 'bad', acao: true, resolver: 'reagendar' };
         const d = diaSP(q), j = janela(q);
-        if (d === hoje) return { txt: `Instalação hoje · ${j}`, nivel: 'ok', resolver: 'reagendar' };
-        if (d === somaDias(hoje, 1)) return { txt: `Instalação amanhã · ${j}`, nivel: 'ok', resolver: 'reagendar' };
-        if (d < hoje) return { txt: `Instalação era ${dd(q)} · aguardando OSAB`, nivel: 'ok', resolver: 'reagendar' };
-        return { txt: `Instalação ${dd(q)} · ${j}`, nivel: 'ok', resolver: 'reagendar' };
+        if (d < hoje) return { txt: `Instalação era ${dd(q)} e a Nio não deu baixa · conferir no portal`, nivel: 'warn', acao: true, resolver: 'reagendar' };
+        if (d === hoje) return { txt: `Instalação hoje · ${j} · com a Nio`, nivel: 'ok', resolver: 'reagendar' };
+        if (d === somaDias(hoje, 1)) return { txt: `Instalação amanhã · ${j} · com a Nio`, nivel: 'ok', resolver: 'reagendar' };
+        return { txt: `Instalação ${dd(q)} · ${j} · com a Nio`, nivel: 'ok', resolver: 'reagendar' };
       }
       case '3_instalado': {
         if (!v.docs_entregues_em && v.docs_prazo_em) {
           const dias = (new Date(v.docs_prazo_em) - Date.now()) / 86400000;
-          if (dias < 0) return { txt: `Documentos à Nio atrasados · ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true, resolver: 'docs' };
-          if (dias <= 3) return { txt: `Documentos à Nio até ${dd(v.docs_prazo_em)}`, nivel: 'warn', acao: true, resolver: 'docs' };
+          if (dias < 0) return { txt: `Documentos à Nio atrasados · prazo era ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true, resolver: 'docs' };
+          return { txt: `Documentos à Nio · prazo ${dd(v.docs_prazo_em)} (15 dias)`, nivel: 'warn', acao: true, resolver: 'docs' };
         }
-        return { txt: 'Aguardando ativação Nio', nivel: 'ok', resolver: v.docs_entregues_em ? null : 'docs' };
+        return { txt: 'Instalada · conta na meta', nivel: 'ok' };
       }
       case '4_ativo_provisorio':
       case '5_comissao_firme': {
         const b = v.ativado_em || v.instalado_em;
-        return { txt: b ? `Ativa desde ${dd(b)}` : 'Ativa', nivel: 'ok' };
+        return { txt: b ? `Instalada · ativa desde ${dd(b)}` : 'Instalada · ativa', nivel: 'ok' };
       }
       default: return { txt: '', nivel: 'dim' };
     }
@@ -963,11 +944,11 @@
   // Em que passo a venda está parada, desde quando e se passou do prazo do contrato. Prazos vêm de config_regras
   // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
   const PARADAS = [
-    { id: 'qualificado', nome: 'Lead qualificado', dica: 'Ainda NÃO é venda: falta viabilidade, crédito e abrir a OS no portal (etapa 7)' },
-    { id: 'biometria', nome: 'Venda · biometria', dica: 'Venda feita (OS aberta): esperando o cliente fazer a biometria (link automático da Nio)' },
-    { id: 'agendamento', nome: 'Agendamento', dica: 'Biometria validada, sem instalação agendada — contrato: agendar em até 4 h' },
-    { id: 'instalacao', nome: 'Instalação', dica: 'Instalação agendada, esperando o técnico / o OSAB' },
-    { id: 'instalada', nome: 'Instalada · docs', dica: 'Instalada, documentos à Nio pendentes — contrato: 15 dias' },
+    { id: 'qualificado', nome: 'Lead qualificado', dica: 'Etapa 2 · ainda NÃO é venda: falta a viabilidade do portal e gravar o pedido' },
+    { id: 'biometria', nome: 'Pedido · biometria', dica: 'Etapa 3 · pedido gravado: esperando o cliente fazer a biometria (link automático da Nio)' },
+    { id: 'agendamento', nome: 'OS + agendar', dica: 'Etapa 3 · biometria validada, falta abrir a OS e agendar — contrato: até 4 h' },
+    { id: 'instalacao', nome: 'Venda · OS agendada', dica: 'Etapa 4 · venda feita: esperando o técnico / a baixa da Nio no OSAB' },
+    { id: 'instalada', nome: 'Instalada · docs', dica: 'Etapa 5 · instalada, documentos à Nio pendentes — contrato: 15 dias' },
   ];
   function paradaDe(v, regras = {}) {
     if (!v || v.status === 'saida') return null;
@@ -975,14 +956,13 @@
     const dDocs = Number(regras.prazo_docs_dias ?? 15);
     const horas = (desde) => (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
     switch (v.status) {
-      case '0_qualificado':
-        return { id: 'qualificado', desde: v.criado_em };
-      case '1_vendido': {
-        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.vendido_em || v.criado_em };
-        const desde = v.agendar_desde || v.biometria_validada_em || v.vendido_em || v.criado_em;
-        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : horas(desde);
-        return { id: 'agendamento', desde, atrasada: h != null && h > hAg, prazo: `${hAg} h` };
+      case '0_qualificado': {
+        if (!String(v.nio_pedido || '').trim()) return { id: 'qualificado', desde: v.criado_em };
+        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.nio_pedido_em || v.criado_em };
+        const desde = v.biometria_validada_em || v.criado_em;
+        return { id: 'agendamento', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
       }
+      case '1_vendido':
       case '2_aguardando_instalacao': return { id: 'instalacao', desde: v.agendamento_registrado_em || v.vendido_em || v.criado_em };
       case '3_instalado': {
         if (v.docs_entregues_em || !v.instalado_em) return null;
@@ -1130,7 +1110,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, filaItens, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, jornada, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha,   // onda 3.1: ficha única (só aviso)

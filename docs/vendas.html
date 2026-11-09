@@ -4,7 +4,10 @@
      no celular, cartões + botão flutuante. Referência: docs/LAYOUT_vendas_v2 (artefato 9mrHryuD8iwhsiFH2qpjXS, v2.1).
      04/11 (prompt 13): chave Lista | Quadro (?vista=, lembrada em localStorage niogen.vendas.vista). O Quadro substitui o
      antigo Funil: 5 colunas, Saída/Interesse futuro recolhidos, arrastar com as mesmas travas (NG.moverStatus).
-     08/11 (0064): aba "Em espera (n)" (pendência com terceiro; ?aba=espera), selo ⏸/⏰ no próximo passo e "· n em espera" no topo da coluna. --><html lang="pt-BR">
+     08/11 (0064): aba "Em espera (n)" (pendência com terceiro; ?aba=espera), selo ⏸/⏰ no próximo passo e "· n em espera" no topo da coluna.
+     09/11 (0089/0090, jornada única): etapas Lead qualificado · Pedido · biometria · Venda · OS agendada · Instalada (+ Saída);
+     "Precisam de ação" e o próximo passo vêm da v_jornada (a mesma regra da Minha vez); o card NÃO se arrasta — a etapa só anda
+     pelo botão da ficha. --><html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -15,13 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-15">
-<script src="config.js?v=091126-15"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-16">
+<script src="config.js?v=091126-16"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-15"></script>
-<script src="assets/sidebar.js?v=091126-15"></script>
-<script src="assets/ficha.js?v=091126-15"></script>
-<script src="assets/novavenda.js?v=091126-15"></script>
+<script src="assets/app.js?v=091126-16"></script>
+<script src="assets/sidebar.js?v=091126-16"></script>
+<script src="assets/conversa.js?v=091126-16"></script>
+<script src="assets/ficha.js?v=091126-16"></script>
+<script src="assets/novavenda.js?v=091126-16"></script>
 </head>
 <body>
 <div class="app">
@@ -101,7 +105,7 @@
   const fParceiro = document.getElementById('f-parceiro');
   NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas as origens');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
-  let vendas = [], metas = [], ultimoContato = {}, nomeCurto = {};
+  let vendas = [], metas = [], ultimoContato = {}, nomeCurto = {}, jor = { porVenda: {} };
   let aba = 'todas';
   const ord = { chave: 'entrou', dir: -1 };
 
@@ -152,12 +156,14 @@
   const sincParceiro = () => { fParceiro.hidden = fOrigem.value !== 'parceiro_pap' || fParceiro.options.length < 2; if (fParceiro.hidden) fParceiro.value = ''; };
 
   async function carregarLista() {
-    const [rv, rc, rp, rm] = await Promise.all([
+    const [rv, rc, rp, rm, rj] = await Promise.all([
       NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
       NG.sb.from('config_planos').select('*'),
       NG.sb.from('config_metas').select('*'),
+      NG.jornada(),
     ]);
+    jor = rj;
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
     vendas = rv.data || [];
     ultimoContato = NG.ultimosContatos(rc.data);
@@ -171,8 +177,8 @@
   }
   const metaDoMes = (aaaamm) => { const m = metas.find((x) => String(x.mes).slice(0, 7) === aaaamm); return m ? Number(m.meta_vendas) : 0; };
 
-  // Próximo passo: o mesmo da ficha e das outras telas (NG.proximoPasso, em app.js).
-  const proximo = (v) => NG.proximoPasso(v, ultimoContato[v.id]);
+  // Próximo passo e "precisa de ação": a regra única (v_jornada, 0090); NG.proximoPasso só se a linha não vier.
+  const proximo = (v) => NG.passoJornada(jor.porVenda[v.id]) || NG.proximoPasso(v, ultimoContato[v.id]);
 
   const planoCurto = (v) => nomeCurto[v.plano_id] || v.plano_nome || '—';
   const formaTxt = (v) => [({ cartao: 'cartão', boleto: 'boleto', dacc: 'débito' })[v.forma_pagamento],
@@ -195,10 +201,10 @@
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
   }
   // "Em espera" (0064) = pendência com terceiro aberta, vencida ou não; a não vencida fica FORA de "Precisam de ação".
-  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? !!proximo(v).acao : a === 'espera' ? !!NG.pendencia(v) : NG.etapaDe(v.status).id === a);
+  const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? !!proximo(v).acao : a === 'espera' ? !!NG.pendencia(v) : NG.etapaDe(v).id === a);
   const CHAVES = {
     cliente: (v) => v.cliente_nome || '',
-    etapa: (v) => ETAPA_IDX[NG.etapaDe(v.status).id] ?? 99,
+    etapa: (v) => ETAPA_IDX[NG.etapaDe(v).id] ?? 99,
     plano: (v) => planoCurto(v),
     origem: (v) => NG.origemTxt(v),
     vendedor: (v) => v.vendedor_nome || '',
@@ -216,20 +222,23 @@
     const V = doFiltro.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
     const n = (s) => V.filter((v) => s.includes(v.status)).length;
     const inst = n(['3_instalado', '4_ativo_provisorio', '5_comissao_firme']);
-    const agu = n(['2_aguardando_instalacao']);
-    const agendar = n(['1_vendido']);
-    const atraso = V.filter((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4).length;
+    const agu = n(['1_vendido', '2_aguardando_instalacao']);
+    // 0089: "OS + agendar" = etapa 3 com a biometria validada (ainda não é venda; contrato: 4 h).
+    const osAg = doFiltro.filter((v) => v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim());
+    const agendar = osAg.length;
+    const atraso = osAg.filter((v) => Number(v.horas_sem_agendamento) > 4).length;
     const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
     const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
     const nv = (x, um, varios) => `${NG.fmtNum(x)} ${x === 1 ? um : varios}`;
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: meta ? 'Vendidas · meta' : 'Vendidas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
+      NG.kpi({ rot: meta ? 'Vendas · meta' : 'Vendas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
         nota: meta ? null : esc(per.rotulo.toLowerCase()),
-        dica: 'Vendas com pedido no portal e biometria validada (data da venda) no período. A lista abaixo filtra pela data de entrada no funil.' }),
-      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} aguardando · ${NG.fmtNum(agendar)} a agendar` }),
+        dica: 'Venda = OS aberta no portal com o dia e o período, depois da biometria validada (etapa 4), pela data da venda. A lista abaixo filtra pela data de entrada no funil.' }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} com a OS agendada · ${NG.fmtNum(agendar)} esperando a OS` }),
       NG.kpi({ rot: 'Comissão prevista no período', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da' : 'das'} ${nv(V.length, 'venda', 'vendas')} do período` }),
-      NG.kpi({ rot: 'Aguardando instalação', val: NG.fmtNum(agu + agendar), cls: atraso ? 'bad' : '',
-        nota: atraso ? `${nv(atraso, 'sem agendamento', 'sem agendamento')} há mais de 4 h` : agendar ? `${nv(agendar, 'a agendar', 'a agendar')} · prazo de 4 h` : 'nenhuma sem agendamento' }),
+      NG.kpi({ rot: 'OS + agendar', val: NG.fmtNum(agendar), cls: atraso ? 'bad' : agendar ? 'warn' : '',
+        nota: atraso ? `${nv(atraso, 'passou', 'passaram')} de 4 h da biometria validada` : agendar ? 'biometria validada · prazo de 4 h' : 'nenhuma biometria esperando a OS',
+        dica: 'Etapa 3 com a biometria validada: falta abrir a OS no portal com o dia e o período — é isso que faz a venda contar.' }),
     ].join('');
   }
 
@@ -280,7 +289,7 @@
       const pr = proximo(v);
       return `<tr class="clicavel ${v.status === 'saida' ? 'saida' : ''}" data-id="${v.id}" tabindex="0" title="Abrir a venda">
         <td class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></td>
-        <td>${NG.pilulaEtapa(v.status)}</td>
+        <td>${NG.pilulaEtapa(v)}</td>
         <td>${NG.proxPasso(pr)}</td>
         <td class="plano-c"><b>${esc(planoCurto(v))}</b><small>${esc(formaTxt(v))}</small></td>
         <td class="apagado col-media">${esc(NG.origemTxt(v))}</td>
@@ -293,25 +302,23 @@
       <a class="cartao ${v.status === 'saida' ? 'saida' : ''}" href="#venda=${v.id}">
         <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc([v.bairro, NG.quando(v.criado_em)].filter(Boolean).join(' · '))}</small></div>
         <div class="valor">${esc(fmtCom(v))}</div>
-        <div class="l2">${NG.pilulaEtapa(v.status)}<span>${esc(planoCurto(v))}</span></div>
+        <div class="l2">${NG.pilulaEtapa(v)}<span>${esc(planoCurto(v))}</span></div>
         <div class="l2">${NG.proxPasso(proximo(v))}</div>
       </a>`).join('') : '<div class="vazio">Nenhuma venda neste filtro</div>';
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'venda' : 'vendas'} no filtro`;
   }
 
   // ================================================================== quadro
-  // Herdado do Funil: arrastar muda a etapa pelas MESMAS travas e modais (NG.moverStatus: pedido + OS para Venda — 0087,
-  // agendamento para Aguardando, motivo para Saída; o trigger do banco é a autoridade). Ativo só pela importação do OSAB.
+  // 0089: quatro colunas da jornada (Lead qualificado · Pedido · biometria · Venda · OS agendada · Instalada); Saída recolhida.
   const boardEl = document.getElementById('board');
   const foraEl = document.querySelector('.qv-fora');
   const faixaFora = document.getElementById('qv-faixa');
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const COLUNAS_Q = [
-    { id: 'qualificado', nome: 'Lead qualificado', destino: '0_qualificado' },
-    { id: 'vendido', nome: 'Venda · OS aberta', destino: '1_vendido' },
-    { id: 'aguardando', nome: 'Aguardando instalação', destino: '2_aguardando_instalacao' },
-    { id: 'instalado', nome: 'Instalado', destino: '3_instalado' },
-    { id: 'ativo', nome: 'Ativo', destino: null },
+    { id: 'qualificado', nome: '2 · Lead qualificado' },
+    { id: 'pedido', nome: '3 · Pedido · biometria' },
+    { id: 'vendido', nome: '4 · Venda · OS agendada' },
+    { id: 'instalado', nome: '5 · Instalada' },
   ];
   // Origem em uma palavra no cartão.
   const ORIGEM_CURTA = { meta_ads: 'Meta', fila_vero: 'Fila Vero', rua: 'Rua', indicacao: 'Indicação', site: 'Site', outro: 'Evento' };
@@ -319,11 +326,11 @@
   const URGENCIA = { bad: 0, warn: 1, ok: 2, dim: 2, espera: 3 };   // em espera (0064) vai para o fim da coluna
   const ehFuturo = (v) => !!v.interesse_futuro_em;
   let foraAberto = etapaIni === 'saida';
-  const podeArrastar = () => !movel.matches;   // celular: muda a etapa pelo "Mover para…" da ficha
+  const podeArrastar = () => false;   // 0089: a etapa só anda pelo botão da ficha (nunca arrastando)
 
   // Na coluna Ativo o próximo passo mostra a comissão (paga, se já veio no extrato; senão a prevista).
   function proximoQ(v) {
-    if (NG.etapaDe(v.status).id !== 'ativo') return proximo(v);
+    if (!['4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) return proximo(v);
     if (v.comissao_paga != null) return { txt: `Comissão ${NG.fmtMoeda(v.comissao_paga)} paga${v.ciclo_pago ? ` · ${v.ciclo_pago}` : ''}`, nivel: 'ok' };
     if (v.comissao_prevista != null) return { txt: `Comissão prevista ${NG.fmtMoeda(v.comissao_prevista)}`, nivel: 'ok' };
     return proximo(v);
@@ -345,13 +352,13 @@
     const lista = b.filter((v) => naAba(v, abaAtual()));
     const porCol = Object.fromEntries(COLUNAS_Q.map((c) => [c.id, []]));
     const fora = [];
-    lista.forEach((v) => { const e = NG.etapaDe(v.status).id; if (porCol[e]) porCol[e].push(v); else if (e === 'saida') fora.push(v); });
+    lista.forEach((v) => { const e = NG.etapaDe(v).id; if (porCol[e]) porCol[e].push(v); else if (e === 'saida') fora.push(v); });
 
     boardEl.innerHTML = COLUNAS_Q.map((c) => {
       const itens = ordenarQ(porCol[c.id]);
       const nEsp = itens.filter((x) => x.pr.espera).length;   // "Qualificado 1 · 1 em espera" (0064)
       return `<section class="col qv-col" data-etapa="${c.id}" aria-label="${esc(c.nome)}">
-        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'ativo' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)}${nEsp ? `<span class="c-espera" title="${esc(NG.ajuda.pendencia)}">· ${NG.fmtNum(nEsp)} em espera</span>` : ''}</span></div>
+        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'instalado' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)}${nEsp ? `<span class="c-espera" title="${esc(NG.ajuda.pendencia)}">· ${NG.fmtNum(nEsp)} em espera</span>` : ''}</span></div>
         <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((x) => qcard(x.v, x.pr)).join('') : '<div class="col-vazia">—</div>'}</div>
       </section>`;
     }).join('');
@@ -369,40 +376,7 @@
 
   faixaFora.addEventListener('click', () => { foraAberto = !foraAberto; render(); });
 
-  async function moverQ(id, etapa) {
-    const v = vendas.find((x) => x.id === id);
-    if (!v || NG.etapaDe(v.status).id === etapa) return;
-    if (etapa === 'ativo') { NG.toast('Ativo vem da importação do OSAB: não dá para arrastar para lá.', 'bad'); return; }
-    const destino = etapa === 'saida' ? 'saida' : (COLUNAS_Q.find((c) => c.id === etapa) || {}).destino;
-    if (destino && await NG.moverStatus(v, destino)) await carregarLista();
-  }
-
-  // Arrastar e soltar (só no computador). Alvos: as 5 colunas e a faixa de Saída.
-  const quadroEl = document.querySelector('.quadro-vendas');
-  const limparAlvo = () => quadroEl.querySelectorAll('.drop-alvo').forEach((x) => x.classList.remove('drop-alvo'));
-  const alvoDe = (ev) => ev.target.closest('.qv-col, .qv-fora');
-  quadroEl.addEventListener('dragstart', (ev) => {
-    const c = ev.target.closest('.qcard');
-    if (!c || !podeArrastar()) { ev.preventDefault(); return; }
-    ev.dataTransfer.setData('text/plain', c.dataset.id);
-    ev.dataTransfer.effectAllowed = 'move';
-    c.classList.add('arrastando');
-  });
-  quadroEl.addEventListener('dragend', (ev) => { ev.target.closest('.qcard')?.classList.remove('arrastando'); limparAlvo(); });
-  quadroEl.addEventListener('dragover', (ev) => {
-    const alvo = alvoDe(ev);
-    if (!alvo) return;
-    ev.preventDefault();
-    ev.dataTransfer.dropEffect = 'move';   // em Ativo o drop avisa por toast em vez de sumir calado
-    if (!alvo.classList.contains('drop-alvo')) { limparAlvo(); alvo.classList.add('drop-alvo'); }
-  });
-  quadroEl.addEventListener('drop', (ev) => {
-    const alvo = alvoDe(ev);
-    if (!alvo) return;
-    ev.preventDefault();
-    limparAlvo();
-    moverQ(ev.dataTransfer.getData('text/plain'), alvo.dataset.etapa);
-  });
+  // 0089: sem arrastar — a etapa anda só pelo botão da ficha (o card leva à ficha).
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);

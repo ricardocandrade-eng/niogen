@@ -22,12 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-15">
-<script src="config.js?v=091126-15"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-16">
+<script src="config.js?v=091126-16"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-15"></script>
-<script src="assets/sidebar.js?v=091126-15"></script>
-<script src="assets/ficha.js?v=091126-15"></script>
+<script src="assets/app.js?v=091126-16"></script>
+<script src="assets/sidebar.js?v=091126-16"></script>
+<script src="assets/conversa.js?v=091126-16"></script>
+<script src="assets/ficha.js?v=091126-16"></script>
 </head>
 <body>
 <div class="app">
@@ -72,12 +73,13 @@
   let ritmo = null, regras = {};
   const ehAdmin = eu.perfil === 'admin';
   let funil = null;   // 0087: funil_mes()
+  let jor = { lista: [], porVenda: {} };   // 0090: v_jornada (a regra única de "precisa de ação")
   let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
   async function carregar() {
-    const [rv, rm, rc, ri, rr, rg, rf] = await Promise.all([
+    const [rv, rm, rc, ri, rr, rg, rf, rj] = await Promise.all([
       NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('config_metas').select('*'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
@@ -85,7 +87,9 @@
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
       NG.sb.from('config_regras').select('chave, valor'),
       NG.sb.rpc('funil_mes', { p_mes: NG.diaSP() }),
+      NG.jornada(),
     ]);
+    jor = rj && !rj.erro ? rj : jor;
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
     vendas = rv.data || [];
     metas = rm.data || [];
@@ -128,8 +132,6 @@
   }
 
   const metaDoMes = (aaaamm) => { const m = metas.find((x) => String(x.mes).slice(0, 7) === aaaamm); return m ? Number(m.meta_vendas) : 0; };
-  const URG = { bad: 0, warn: 1 };
-  const proximo = (v) => NG.proximoPasso(v, ultimoContato[v.id]);
 
   function render() {
     const p = per.valor();
@@ -146,35 +148,37 @@
     // 0087 (Ricardo, 09/11): a meta conta INSTALADAS (sem Saída — a mesma conta da faixa e do resumo diário); vendas (OS) ao lado.
     const inst = vendas.filter((v) => v.instalado_em && v.status !== 'saida' && NG.noPeriodo(v.instalado_em, p));
     const aguard = V.filter((v) => ['1_vendido', '2_aguardando_instalacao'].includes(v.status)).length;
+    // 0090: "Precisam de ação" = v_jornada (a mesma lista da Minha vez e o mesmo número do menu), conversas incluídas.
     const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
     const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
-    const acao = vendas.filter((v) => v.status !== 'saida' && proximo(v).acao)
-      .map((v) => ({ v, pr: proximo(v) }))
-      .sort((a, b) => (URG[a.pr.nivel] ?? 2) - (URG[b.pr.nivel] ?? 2) || new Date(a.v.criado_em) - new Date(b.v.criado_em));
-    const verm = acao.filter((x) => x.pr.nivel === 'bad').length;
+    const acao = jor.lista.filter((j) => j.precisa_acao).sort(NG.ordemJornada);
+    const verm = acao.filter((j) => j.nivel === 'agora').length;
     const faltam = Math.max(0, meta - inst.length);
     document.getElementById('kpis').innerHTML = [
       NG.kpi({ rot: meta ? 'Instaladas · meta' : 'Instaladas', val: NG.fmtNum(inst.length), de: meta || null, pct: meta ? (inst.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
         dica: 'A meta do mês conta instaladas (data da instalação, sem Saída) — é o que paga comissão.' }),
-      NG.kpi({ rot: 'Vendas (OS)', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} aguardando biometria ou instalação`,
-        dica: 'Venda = OS aberta no portal da Nio (nº do pedido + nº da OS), pela data da OS, no período. Lead qualificado não conta.' }),
+      NG.kpi({ rot: 'Vendas (OS agendada)', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} esperando a instalação`,
+        dica: 'Venda = OS aberta no portal com o dia e o período, depois da biometria validada (etapa 4), pela data da venda. Lead qualificado e pedido não contam.' }),
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
-        nota: acao.length ? `${NG.fmtNum(verm)} atrasada${verm === 1 ? '' : 's'} ou com prazo do contrato estourando` : 'nada pendente ✓',
-        dica: 'Todas as vendas abertas com algo a fazer agora (não depende do período): agendar instalação, pedido no portal, link da biometria (> 24 h / > 72 h), crédito pendente, contato, viabilidade, documentos, pendência da Nio. Venda em espera (pendência com terceiro) só entra na data de revisão.' }),
+        nota: acao.length ? `${NG.fmtNum(verm)} para agora (cliente esperando ou prazo do contrato)` : 'nada pendente ✓',
+        dica: 'O mesmo número da Minha vez e do menu (v_jornada): conversas esperando o time e vendas com o próximo passo vencendo. Pendência com terceiro só entra na data de revisão. Não depende do período.' }),
     ].join('');
 
     // ---------- Precisam de ação agora (8 primeiras) ----------
     const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
-    document.getElementById('lista-acao').innerHTML = acao.length ? acao.slice(0, 8).map(({ v, pr }) => `
-      <a class="la" href="#venda=${v.id}">
-        <span class="la-cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></span>
-        ${NG.pilulaEtapa(v.status)}
-        <span class="la-prox">${NG.proxPasso(pr)}</span>
+    const etJ = (j) => (NG.JORNADA.find((e) => e.n === j.etapa) || { id: '', nome: j.etapa_nome });
+    document.getElementById('lista-acao').innerHTML = acao.length ? acao.slice(0, 8).map((j) => `
+      <a class="la" href="${j.venda_id ? `#venda=${esc(j.venda_id)}` : `fila.html#conversa=${esc(j.conversa_id)}`}">
+        <span class="la-cli"><b>${esc(j.nome)}</b><small>${esc(j.cidade || '—')}</small></span>
+        <span class="pill ${etJ(j).id}">${esc(etJ(j).nome)}</span>
+        <span class="la-prox">${NG.proxPasso(NG.passoJornada(j))}</span>
       </a>`).join('') : '<div class="vazio-curto">Nada pendente agora ✓</div>';
-    document.getElementById('ver-acao').textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver em Vendas →';
+    const va = document.getElementById('ver-acao');
+    va.textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver na Minha vez →';
+    va.href = ['admin', 'backoffice'].includes(eu.perfil) ? 'fila.html' : 'vendas.html?vista=lista&aba=acao';
 
     // ---------- blocos curtos ----------
     const blocos = [];
@@ -188,7 +192,7 @@
     }
     // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
     const porEtapa = Object.fromEntries(ETAPAS.map((e) => [e.id, 0]));
-    vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v.status).id; if (e in porEtapa) porEtapa[e] += 1; });
+    vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v).id; if (e in porEtapa) porEtapa[e] += 1; });
     const maxE = Math.max(1, ...ETAPAS.filter((e) => e.id !== 'saida').map((e) => porEtapa[e.id]));
     blocos.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Vendas por etapa</h2><a class="muted" href="vendas.html?vista=quadro">Quadro →</a></div>
@@ -212,20 +216,22 @@
     const instHoje = vendas.filter((v) => !v.instalado_em && v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && NG.diaSP(v.instalacao_agendada_para) === hoje)
       .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
     const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
-    const semAgenda = vendas.filter((v) => v.status === '1_vendido' && v.biometria_status === 'validada').length;   // 0087: só depois da biometria
+    const osAg = vendas.filter((v) => v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim());   // 0089: etapa 3
+    const semAgenda = osAg.length;
     blocos.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
-      ${semAgenda ? `<span class="prox ${vendas.some((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} com biometria validada sem agendamento</span>` : ''}
+      ${semAgenda ? `<span class="prox ${osAg.some((v) => Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} com biometria validada esperando "OS + agendar" (4 h)</span>` : ''}
     </section>`);
     // Mari: conversas que precisam de humano (só admin/backoffice veem a Mari)
     if (veMari) {
-      const lista = (mari && mari.lista) || [];
+      // 0090: as conversas que precisam de ação pela regra única (v_jornada) — as mesmas da Minha vez.
+      const lista = jor.lista.filter((j) => j.conversa_id && j.precisa_acao).sort(NG.ordemJornada);
       blocos.push(`<section class="painel bloco-curto">
-        <div class="q-linha"><h2>Mari · precisam de humano</h2><a class="muted" href="mari.html">Mari →</a></div>
-        ${mari === undefined ? '<span class="nota-campo">Carregando…</span>' : mari.erro ? `<span class="nota-campo">${esc(mari.erro)}</span>` : `<div class="bc-num"><span class="mono ${lista.length ? 'warn-txt' : ''}">${NG.fmtNum(lista.length)}</span><span class="muted">conversa${lista.length === 1 ? '' : 's'} esperando um consultor</span></div>
-        ${lista.slice(0, 4).map((c) => `<a class="bc-linha" href="mari.html?conversa=${esc(c.id)}"><span>${esc(c.nome_contato || 'Contato')}</span><span class="muted">desde ${esc(NG.quando(c.handoff_em))} ${esc(NG.fmtHora(c.handoff_em))}</span></a>`).join('')}`}
+        <div class="q-linha"><h2>Conversas · precisam de ação</h2><a class="muted" href="fila.html">Minha vez →</a></div>
+        <div class="bc-num"><span class="mono ${lista.length ? 'warn-txt' : ''}">${NG.fmtNum(lista.length)}</span><span class="muted">conversa${lista.length === 1 ? '' : 's'} esperando o time</span></div>
+        ${lista.slice(0, 4).map((j) => `<a class="bc-linha" href="${j.venda_id ? `#venda=${esc(j.venda_id)}` : `fila.html#conversa=${esc(j.conversa_id)}`}"><span>${esc(NG.primeiroNome(j.nome))}</span><span class="muted">${esc(j.o_que_fazer)}</span></a>`).join('')}
         ${mari && (mari.semVenda || []).length ? (mari.semVenda.slice(0, 3).map((c) => `<a class="prox bad" href="mari.html?conversa=${esc(c.id)}" title="Dados completos, mas a venda não foi criada (duplicidade ou outro erro) — o backoffice decide">⚠️ Venda não criada · ${esc(c.nome_contato || 'Contato')} · ${esc(NG.quando(c.handoff_em))} ${esc(NG.fmtHora(c.handoff_em))}</a>`).join('')) : ''}
         ${portal && portal.ok === false && !portal.nunca ? `<span class="prox bad" title="${esc(portal.ultimo_erro || 'sessão vencida')}">Portal PAP sem sessão${portal.sem_sessao_desde ? ` desde ${esc(NG.quando(portal.sem_sessao_desde))} ${esc(NG.fmtHora(portal.sem_sessao_desde))}` : ''} · a Mari fala por cidade</span>` : ''}
       </section>`);
@@ -301,7 +307,7 @@
           <span class="fu-nome">${esc(e.nome)}</span><span class="fu-n mono">${NG.fmtNum(Number(e.n))}</span>
           <span class="fu-pct">${pct == null ? '&nbsp;' : `${pct}% da anterior`}</span></div>`;
     }).join('');
-    el.innerHTML = `<div class="fu-cab"><b>Funil de ${esc(nomeMes)}</b><span>entradas no mês em cada etapa · <b>lead qualificado não é venda</b>: venda = OS aberta no portal (pedido + OS)</span></div>
+    el.innerHTML = `<div class="fu-cab"><b>Funil de ${esc(nomeMes)}</b><span>entradas no mês em cada etapa · <b>lead qualificado e pedido não são venda</b>: venda = OS aberta com o dia e o período, depois da biometria</span></div>
       <div class="fu-etapas"><span class="fu-fase">Lead</span>${itens}</div>`;
   }
 
