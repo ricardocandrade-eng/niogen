@@ -8,6 +8,10 @@
 # é de usuário — não acorda a Mari). Tipos listados em config_regras.backoffice_cred_usuario vão com "Chatwoot Nio" (token do Ricardo),
 # só se o bot for recusado. Resultado de cada ação → backoffice_acao_resultado (feita / erro, 3 tentativas).
 # O freio do contrato (horário, 2/dia · 15/mês, janela 24 h) é do banco: aqui só executa o que já venceu.
+# 0090 (09/11): "1w · Na hora" — webhook que o Supabase chama (pg_net, gatilho no 1º item de cada clique) para a resposta do
+# time sair na hora; o ciclo de 1 min continua de rede. O caminho do webhook é segredo: fica só no n8n e no Vault do Supabase
+# ('n8n_backoffice_webhook'); o export grava WEBHOOK_PLACEHOLDER no lugar. Ação com payload.como = 'humano' (resposta e nota do
+# time) vai pela credencial "Chatwoot Nio" (balão de pessoa) — a decisão é do banco (backoffice_acoes_proximas.usuario).
 # Desligar sem mexer no n8n: config_regras.backoffice_chatwoot_ligado = false (a fila acumula).
 #
 # Credenciais (só IDs/nomes): "Supabase Nio (service role)", "Chatwoot Nio — Mari bot", "Chatwoot Nio". Chave da API do n8n: N8N_API_KEY_NIO.
@@ -56,7 +60,10 @@ return { json: { p_id: base.id, p_ok: !erro, p_erro: erro } };
 """
 
 
-def build(ids):
+WEBHOOK_PLACEHOLDER = '<segredo: Vault n8n_backoffice_webhook>'
+
+
+def build(ids, webhook_path=None):
     cred = ids.get('credenciais', {})
     if not cred.get('chatwoot_bot'):
         raise SystemExit('credencial "Chatwoot Nio — Mari bot" ausente em mari_ids.json — nada gerado.')
@@ -87,6 +94,10 @@ def build(ids):
 
     add('1 · A cada 1 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
         {'rule': {'interval': [{'field': 'minutes', 'minutesInterval': 1}]}}, 0, 0)
+    add('1w · Na hora (webhook)', 'n8n-nodes-base.webhook', 2,
+        {'httpMethod': 'POST', 'path': webhook_path or WEBHOOK_PLACEHOLDER, 'responseMode': 'onReceived', 'options': {}},
+        0, -200, webhookId=webhook_path or WEBHOOK_PLACEHOLDER,
+        notes='Chamado pelo Supabase (pg_net) no 1º item de cada clique. Só acorda: os dados vêm do banco.', notesInFlow=True)
     # Devolve uma lista (um item por ação, na ordem do grupo); lista vazia = nenhum item = nada mais roda.
     add('2 · Supabase ações', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': f'{dm.SB}/rest/v1/rpc/backoffice_acoes_proximas',
@@ -119,6 +130,7 @@ def build(ids):
         c[saida].append({'node': d, 'type': 'main', 'index': 0})
 
     liga('1 · A cada 1 min', '2 · Supabase ações')
+    liga('1w · Na hora (webhook)', '2 · Supabase ações')
     liga('2 · Supabase ações', '3 · Etiquetas?')
     liga('3 · Etiquetas?', '3a · Chatwoot ler etiquetas', 0)
     liga('3 · Etiquetas?', '4 · Usuário?', 1)
@@ -139,7 +151,23 @@ def build(ids):
     return {'name': WF_NOME, 'nodes': nodes, 'connections': conns, 'settings': settings}
 
 
+def sem_caminho(wf):
+    for n in wf.get('nodes', []):
+        if n.get('type') == 'n8n-nodes-base.webhook':
+            n['parameters']['path'] = WEBHOOK_PLACEHOLDER
+            n['webhookId'] = WEBHOOK_PLACEHOLDER
+    return wf
+
+
+def caminho_atual(wf):
+    for n in wf.get('nodes', []):
+        if n.get('type') == 'n8n-nodes-base.webhook' and n['parameters'].get('path') not in (None, '', WEBHOOK_PLACEHOLDER):
+            return n['parameters']['path']
+    return None
+
+
 def salvar(wf):
+    wf = sem_caminho(json.loads(json.dumps(wf)))
     dm.checar_sem_segredo(wf)
     keep = {k: wf[k] for k in ('name', 'nodes', 'connections', 'settings') if k in wf}
     keep['active'] = wf.get('active', False)
@@ -176,7 +204,27 @@ def cmd_estrutura():
     with open(bk, 'w', encoding='utf-8') as f:
         json.dump(atual, f, ensure_ascii=False, indent=2)
     print('backup:', os.path.relpath(bk, REPO))
-    dm.put(ids[ID_KEY], build(ids))
+    caminho = caminho_atual(atual)
+    novo = caminho is None
+    if novo:
+        caminho = str(uuid.uuid4())
+    dm.put(ids[ID_KEY], build(ids, caminho))
+    if novo:
+        # Grava a URL no Vault do Supabase sem imprimir (o gatilho 0090 lê dali). Nada em arquivo versionado.
+        url = f'{dm.N8N}/webhook/{caminho}'
+        import subprocess, tempfile
+        sql = ("select vault.update_secret(id, '%s') from vault.secrets where name = 'n8n_backoffice_webhook';\n"
+               "select vault.create_secret('%s', 'n8n_backoffice_webhook', 'acorda o n8n backoffice_chatwoot (0090)') "
+               "where not exists (select 1 from vault.secrets where name = 'n8n_backoffice_webhook');\n") % (url, url)
+        fd, tmp = tempfile.mkstemp(suffix='.sql')
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                f.write(sql)
+            r = subprocess.run(['npx.cmd' if os.name == 'nt' else 'npx', '-y', 'supabase@3.0.0', 'db', 'query', '--remote', '--yes', '-o', 'json', '-f', tmp],
+                               cwd=REPO, capture_output=True, text=True, encoding='utf-8')
+            print('vault n8n_backoffice_webhook:', 'gravado' if r.returncode == 0 else 'FALHOU — ' + (r.stderr or r.stdout)[-300:].replace(url, '<url>'))
+        finally:
+            os.remove(tmp)
     print('ok (active =', dm.api('GET', f'/workflows/{ids[ID_KEY]}').get('active'), ')')
     cmd_exportar()
 

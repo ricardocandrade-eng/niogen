@@ -23,6 +23,25 @@
     },
     {
       "parameters": {
+        "httpMethod": "POST",
+        "path": "<segredo: Vault n8n_backoffice_webhook>",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "1w · Na hora (webhook)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -200
+      ],
+      "id": "6318d049-b4fd-513c-9ca3-f30b1b078543",
+      "webhookId": "<segredo: Vault n8n_backoffice_webhook>",
+      "notes": "Chamado pelo Supabase (pg_net) no 1º item de cada clique. Só acorda: os dados vêm do banco.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/backoffice_acoes_proximas",
         "authentication": "predefinedCredentialType",
@@ -296,6 +315,17 @@
   ],
   "connections": {
     "1 · A cada 1 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase ações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1w · Na hora (webhook)": {
       "main": [
         [
           {
