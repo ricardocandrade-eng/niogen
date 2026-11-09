@@ -16,6 +16,13 @@
 #   python n8n/deploy_mari.py estrutura             # PUT do workflow inteiro (nós + conexões), backup antes
 #   python n8n/deploy_mari.py ativar | desativar    # liga/desliga o mari_principal (nada mais)
 #   python n8n/deploy_mari.py exportar              # baixa o estado atual e grava o export sanitizado
+#   python n8n/deploy_mari.py hash                  # hash do código que subiria na PRODUÇÃO (portão)
+#   python n8n/deploy_mari.py conferir --ensaio     # o ensaio no n8n está igual ao código local? (sai 1 se não)
+#
+# PORTÃO (Onda 1.2, 08/11): "codigo" e "estrutura" na PRODUÇÃO só seguem com uma rodada da bateria fixa "portao"
+# (tests/mari_portao.py) 100 % verde, completa, com o mesmo hash e o modelo da produção, nas últimas 6 h
+# (tabela mari_portao_rodadas, 0068). Saída de emergência: --sem-portao "motivo" — publica, grava o motivo na mesma
+# tabela e avisa. Só o Ricardo decide usar (nunca por conta própria). O ensaio (--ensaio) não tem portão.
 #
 # Ensaio barato (07/11): o ensaio usa a credencial "Claude API Nio — Testes" (workspace "Testes Mari", chave na variável
 # de usuário ANTHROPIC_API_KEY_TESTES; "credenciais --ensaio" cria) e o modelo/corte de histórico do ALVOS['ensaio'].
@@ -697,6 +704,101 @@ def put(wf_id, wf):
     return api('PUT', f'/workflows/{wf_id}', corpo)
 
 
+# ─────────────────────────────── portão (Onda 1.2, 08/11) ───────────────────────────────
+
+PORTAO_HORAS = 6
+NPX = 'npx.cmd' if sys.platform == 'win32' else 'npx'
+
+
+def _sql(q, escrita=False):
+    import subprocess
+    args = [NPX, 'supabase', 'db', 'query', '--remote', '-o', 'json'] + (['--yes'] if escrita else ['--read-only'])
+    p = subprocess.run(args + [q], cwd=REPO, capture_output=True, text=True, encoding='utf-8')
+    out = p.stdout.strip()
+    if p.returncode != 0:
+        raise SystemExit(f'[supabase] falhou: {(p.stderr or "")[-300:]} {out[-300:]}')
+    return json.loads(out[out.find('{'):]).get('rows', [])
+
+
+def hash_codigo(ids):
+    # O que subiria na PRODUÇÃO: build do alvo atual (nomes, tipos, parâmetros — jsCode e prompt inclusos — e conexões).
+    # Determinístico (IDs por uuid5). Só faz sentido com ALVO producao: o hash do ensaio é outro de propósito.
+    import hashlib
+    wf = build(ids)
+    nos = sorted(([n['name'], n['type'], n.get('typeVersion'), n['parameters']] for n in wf['nodes']), key=lambda x: x[0])
+    corpo = json.dumps({'nos': nos, 'conexoes': wf['connections'], 'prompt': ALVOS['producao']['prompt']},
+                       ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(corpo.encode('utf-8')).hexdigest()[:16]
+
+
+def _sem_portao_motivo():
+    if '--sem-portao' not in sys.argv:
+        return None
+    i = sys.argv.index('--sem-portao')
+    m = sys.argv[i + 1].strip() if i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith('--') else ''
+    if not m:
+        raise SystemExit('--sem-portao precisa de um motivo entre aspas: --sem-portao "o motivo".')
+    return m
+
+
+def portao(ids):
+    """Recusa (SystemExit) se não houver rodada verde do mesmo código. Só para a produção."""
+    if ALVO != 'producao':
+        return
+    if ALVOS['ensaio']['prompt'] != ALVOS['producao']['prompt']:
+        raise SystemExit(f"PORTÃO: o ensaio está em {ALVOS['ensaio']['prompt']} e a produção em {ALVOS['producao']['prompt']} — "
+                         'a bateria não testou o que vai subir. Alinhe os dois em ALVOS antes.')
+    h = hash_codigo(ids)
+    motivo = _sem_portao_motivo()
+    if motivo:
+        m = motivo.replace("'", "''")[:500]
+        _sql(f"insert into public.mari_portao_rodadas (tipo, hash_codigo, modelo, motivo) "
+             f"values ('sem_portao', '{h}', '{MODELO}', '{m}')", escrita=True)
+        print(f'⚠️  PORTÃO PULADO (--sem-portao) · hash {h} · motivo gravado em mari_portao_rodadas.')
+        print('    Aviso no celular do Ricardo: pendente (Parte 2 do prompt — alarme — em espera). Avise-o no chat.')
+        return
+    rows = _sql(f"select id, quando, verdes, total, custo_usd from public.mari_portao_rodadas "
+                f"where tipo = 'bateria' and hash_codigo = '{h}' and completa and vermelhos = 0 and verdes = total "
+                f"and total > 0 and modelo = '{ALVOS['producao']['modelo']}' "
+                f"and quando > now() - interval '{PORTAO_HORAS} hours' order by quando desc limit 1")
+    if not rows:
+        ult = _sql(f"select quando, verdes, vermelhos, total, completa, modelo from public.mari_portao_rodadas "
+                   f"where tipo = 'bateria' and hash_codigo = '{h}' order by quando desc limit 1")
+        falta = (f'a última rodada deste código ({ult[0]["quando"]}) teve {ult[0]["vermelhos"]} vermelho(s), '
+                 f'{ult[0]["verdes"]}/{ult[0]["total"]} verdes, completa={ult[0]["completa"]}, modelo {ult[0]["modelo"]}'
+                 if ult else 'nenhuma rodada da bateria "portao" com este código')
+        raise SystemExit(f'PORTÃO FECHADO — nada foi publicado no {WF_NOME}. Hash {h}: {falta}.\n'
+                         f'  1) python n8n/deploy_mari.py codigo --ensaio   (ou "estrutura --ensaio")\n'
+                         f'  2) python tests/mari_portao.py                  (precisa sair 100 % verde, vale {PORTAO_HORAS} h)\n'
+                         f'  3) rode de novo este comando.')
+    r = rows[0]
+    print(f'portão aberto: rodada #{r["id"]} ({r["quando"]}) {r["verdes"]}/{r["total"]} verdes · hash {h}')
+
+
+def cmd_hash():
+    if ALVO != 'producao':
+        raise SystemExit('hash é do código da produção — rode sem --ensaio.')
+    print(hash_codigo(ler_ids()))
+
+
+def cmd_conferir():
+    # O ensaio no n8n está com o código local? (mesmos nós e mesmo jsCode). Sai 1 se não.
+    ids = ler_ids()
+    vivo = achar_wf(ids)
+    local = build(ids)
+    nv = {n['name']: n for n in vivo['nodes']}
+    nl = {n['name']: n for n in local['nodes']}
+    dif = sorted(set(nv) ^ set(nl))
+    for nome, n in nl.items():
+        if n['type'] == 'n8n-nodes-base.code' and nome in nv \
+                and nv[nome]['parameters'].get('jsCode') != n['parameters'].get('jsCode'):
+            dif.append(nome)
+    if dif:
+        print(f'{WF_NOME} DIFERENTE do código local: {", ".join(dif)}')
+        sys.exit(1)
+    print(f'{WF_NOME} igual ao código local ({len(nl)} nós)')
+
+
 def cmd_credenciais():
     ids = ler_ids()
     cred = ids.setdefault('credenciais', {})
@@ -779,6 +881,7 @@ def cmd_codigo(dry):
     if dry:
         print('(dry-run: nada gravado)')
         return
+    portao(ids)
     backup(api('GET', f'/workflows/{ids[ID_KEY]}'))
     ativo = wf.get('active')
     put(ids[ID_KEY], wf)
@@ -791,6 +894,7 @@ def cmd_codigo(dry):
 def cmd_estrutura():
     ids = ler_ids()
     print(f'alvo: {WF_NOME} · modelo {MODELO} · histórico {HISTORICO or "sem corte"} · credencial {CRED_CLAUDE_KEY}')
+    portao(ids)
     atual = achar_wf(ids)
     backup(atual)
     ativo = atual.get('active')
@@ -837,5 +941,9 @@ if __name__ == '__main__':
         cmd_ativar(False)
     elif c == 'exportar':
         cmd_exportar()
+    elif c == 'hash':
+        cmd_hash()
+    elif c == 'conferir':
+        cmd_conferir()
     else:
         raise SystemExit(f'comando desconhecido: {c}')

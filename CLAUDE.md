@@ -134,6 +134,17 @@ Nada está "pronto" com o guia desatualizado.
 - Sempre dentro de 2 contatos/dia e 15/mês; nunca domingo ou feriado.
 - Template com marca Nio → aprovação da Nio antes da Meta.
 
+## Regras da Mari no código — o portão (08/11/2026, Onda 1.2)
+
+- **Nada sobe no `mari_principal` sem a bateria fixa `portao` verde.** `python n8n/deploy_mari.py codigo|estrutura` (produção)
+  recusa se não houver, nas últimas 6 h, uma rodada de `python tests/mari_portao.py` 100 % verde, completa, com o **mesmo hash**
+  do código que vai subir e o modelo da produção (tabela `mari_portao_rodadas`). Caminho: `codigo --ensaio` → `tests/mari_portao.py` → `codigo`.
+- **Falha nova achada em teste real → antes de corrigir, escrever o cenário** em `tests/mari_portao.py` (P16, P17…) que a reproduz
+  e vê-lo vermelho; depois corrigir até ficar verde. Toda falha já vista vira cenário fixo.
+- A bateria roda **só no ensaio** (`mari_principal_v3`, chave "Claude API Nio — Testes"), nunca na produção. Custo ~US$ 1,40 por rodada.
+- Bateria achou vermelho → **listar e parar**; corrigir a Mari é outro passo, com o OK do Ricardo.
+- `--sem-portao "motivo"` publica mesmo assim e grava o motivo — **só o Ricardo decide** usar.
+
 ---
 
 ## Onde o trabalho realmente acontece
