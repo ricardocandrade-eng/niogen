@@ -480,8 +480,8 @@
       "id": "b6c929ae-a089-59b5-88c5-e19704839f17",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -510,8 +510,8 @@
       "id": "d93a163a-e315-5a8b-9f16-703a13e362f4",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -570,12 +570,12 @@
       "id": "c269aa5e-bbe8-57ba-80ac-de0d8fa081d4",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
-      "notes": "MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial \"Chatwoot Nio\"."
+      "notes": "MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial \"Chatwoot Nio — Mari bot\"."
     },
     {
       "parameters": {
@@ -1525,8 +1525,8 @@
       "id": "365064d7-b090-5793-b890-e03d54703f28",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -1555,8 +1555,8 @@
       "id": "627f9620-a908-5993-b706-08b0ab5bbca0",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -1680,8 +1680,8 @@
       "id": "e820831c-ab08-53df-9679-140652142013",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -1846,11 +1846,11 @@
       "id": "87acfb19-cfbf-5799-b45b-98a4edfd0e75",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
-      "notes": "MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial \"Chatwoot Nio\"."
+      "notes": "MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial \"Chatwoot Nio — Mari bot\"."
     },
     {
       "parameters": {
@@ -1998,8 +1998,8 @@
       "id": "6d2883db-fb40-53de-8f20-1485ef2067b5",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",

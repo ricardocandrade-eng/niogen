@@ -12,7 +12,7 @@
 #
 # Uso:
 #   python n8n/deploy_cadencia.py build          # gera n8n/mari_cadencia.json (export, sem segredos)
-#   python n8n/deploy_cadencia.py credencial     # cria "Chatwoot Nio" (header api_access_token, valor a colar no painel)
+#   python n8n/deploy_cadencia.py credencial     # confere a credencial "Chatwoot Nio — Mari bot" (Agent Bot, 09/11)
 #   python n8n/deploy_cadencia.py criar          # cria o workflow INATIVO; falha se o nome já existe
 #   python n8n/deploy_cadencia.py estrutura      # PUT do workflow inteiro, backup antes (mantém o active atual)
 #   python n8n/deploy_cadencia.py desativar      # garante inativo
@@ -34,7 +34,7 @@ JS_DIR = os.path.join(AQUI, 'cadencia')
 EXPORT = os.path.join(AQUI, 'mari_cadencia.json')
 WF_NOME = 'mari_cadencia'
 SB = dm.SB
-CRED_CHATWOOT = 'Chatwoot Nio'
+CRED_CHATWOOT = 'Chatwoot Nio — Mari bot'   # 09/11 (pendência 33): Agent Bot "Mari" — a cadência fala como ela
 
 CODE = {
     '2 · Interruptor': 'c02_interruptor.js',
@@ -57,7 +57,7 @@ def build(ids):
     cred = ids.get('credenciais', {})
     sb_cred = {'supabaseApi': {'id': cred.get('supabase', ''), 'name': dm.CRED_SUPABASE}}
     te_cred = {'httpHeaderAuth': {'id': cred.get('teste', ''), 'name': dm.CRED_TESTE}}
-    cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}
+    cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot_bot', ''), 'name': CRED_CHATWOOT}}
     nodes = []
 
     def add(name, ntype, ver, params, x, y, **extra):
@@ -237,16 +237,12 @@ def backup(wf):
 
 
 def cmd_credencial():
-    ids = dm.ler_ids()
-    cred = ids.setdefault('credenciais', {})
-    if cred.get('chatwoot'):
-        print(f'já existe: {CRED_CHATWOOT} ({cred["chatwoot"]})')
-        return
-    r = dm.api('POST', '/credentials', {'name': CRED_CHATWOOT, 'type': 'httpHeaderAuth',
-                                         'data': {'name': 'api_access_token', 'value': 'COLE_AQUI'}})
-    cred['chatwoot'] = r['id']
-    dm.gravar_ids(ids)
-    print(f'criada: {CRED_CHATWOOT} ({r["id"]}) — colar o api_access_token da conta Nio no painel do n8n')
+    # 09/11: a cadência usa a credencial do Agent Bot "Mari" (criada junto com o bot, token só no n8n). Nada a criar aqui.
+    cred = dm.ler_ids().get('credenciais', {})
+    if cred.get('chatwoot_bot'):
+        print(f'já existe: {CRED_CHATWOOT} ({cred["chatwoot_bot"]})')
+    else:
+        raise SystemExit(f'{CRED_CHATWOOT} ausente em mari_ids.json — criar o Agent Bot e a credencial antes (Diário 09/11).')
 
 
 def cmd_criar():

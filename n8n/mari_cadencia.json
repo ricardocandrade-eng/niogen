@@ -227,8 +227,8 @@
       "id": "f434599c-a4f1-5bf3-b3cf-cfcde27e0ca4",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -364,8 +364,8 @@
       "id": "15ae7969-aebe-50ae-ae5b-9095c6cd4e7e",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -507,8 +507,8 @@
       "id": "cb89f2d2-8b44-54a8-b97c-f30e6ce8221e",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput"
@@ -582,8 +582,8 @@
       "id": "7fa84c33-5308-5c28-a84b-d31c763ec486",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",
@@ -612,8 +612,8 @@
       "id": "8dd03db8-fd36-5e6e-913c-4464c563a071",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "Ti7TJGxc6OMDWmkb",
-          "name": "Chatwoot Nio"
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
         }
       },
       "onError": "continueRegularOutput",

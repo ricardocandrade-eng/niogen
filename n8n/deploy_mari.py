@@ -121,7 +121,11 @@ CRED_CLAUDE_TESTES = 'Claude API Nio — Testes'       # só o ensaio; chave do 
 ENV_CLAUDE_TESTES = 'ANTHROPIC_API_KEY_TESTES'
 CRED_TESTE = 'MARI_TESTE_SECRET'
 CRED_WABA = 'WABA Nio (Nio_API)'                      # v7: header Authorization: Bearer (system user Nio_API) — token só no n8n
-CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token (conta "Nio Atendimento")
+CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token (conta "Nio Atendimento") — token do PERFIL do Ricardo
+# 09/11 (pendência 33): a Mari fala no Chatwoot como Agent Bot "Mari" (id em config_links 'chatwoot_mari_bot'; não ocupa
+# assento; fala aparece com nome e foto dela e sender.type = agent_bot). O bot não pode editar contato (401 "not authorized
+# for bots") → só o 9k · Chatwoot nome segue com o token do Ricardo. O bot NÃO está ligado à caixa 153431 (não precisa).
+CRED_CHATWOOT_BOT = 'Chatwoot Nio — Mari bot'          # header api_access_token = access_token do Agent Bot (só no n8n)
 HEADER_TESTE = 'X-Mari-Secret'
 
 
@@ -249,7 +253,10 @@ def build(ids):
     cl_cred = {'anthropicApi': {'id': cred.get(CRED_CLAUDE_KEY, ''),
                                 'name': CRED_CLAUDE_TESTES if CRED_CLAUDE_KEY == 'claude_testes' else CRED_CLAUDE}}
     te_cred = {'httpHeaderAuth': {'id': cred.get('teste', ''), 'name': CRED_TESTE}}
-    cw_cred = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}
+    cw_user = {'httpHeaderAuth': {'id': cred.get('chatwoot', ''), 'name': CRED_CHATWOOT}}        # só o 9k (contato)
+    if not cred.get('chatwoot_bot'):
+        raise SystemExit('credencial "Chatwoot Nio — Mari bot" ausente em mari_ids.json — nada gerado.')
+    cw_cred = {'httpHeaderAuth': {'id': cred['chatwoot_bot'], 'name': CRED_CHATWOOT_BOT}}      # todo o resto
     wa_cred = {'httpHeaderAuth': {'id': cred.get('waba', ''), 'name': CRED_WABA}}
 
     nodes = []
@@ -368,7 +375,7 @@ def build(ids):
         'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'options': {'timeout': 10000}}, 880, 300, credentials=cw_cred, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial "Chatwoot Nio".')
+        notes='MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial "Chatwoot Nio — Mari bot".')
     code('2h · Guard humano', 1100, 200)
     iff('2i · Humano?', '={{ $json.humano === true }}', 1320, 200)
     # Mari calada (humano/time/resolvida): a fala do cliente entra no histórico mesmo assim, sem resposta.
@@ -465,7 +472,7 @@ def build(ids):
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ name: $('9d · Montar handoff Chatwoot').first().json.renomear.name }) }}",
-        'options': {'timeout': 10000}}, 7700, -350, credentials=cw_cred, onError='continueRegularOutput')
+        'options': {'timeout': 10000}}, 7700, -350, credentials=cw_user, onError='continueRegularOutput')
     iff('9g · Atribuir time?', "={{ $('9d · Montar handoff Chatwoot').first().json.atribuirTime === true }}", 7700, -100)
     add('9h · Chatwoot time', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': CW + '/assignments',
@@ -491,7 +498,7 @@ def build(ids):
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ content: $json.conteudo, message_type: 'outgoing', private: false }) }}",
         'options': {'timeout': 15000}}, 7920, 500, credentials=cw_cred,
-        notes='MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial "Chatwoot Nio".')
+        notes='MODO CHATWOOT — envio pela API do Chatwoot (um balão por vez, vindo do 12b). Credencial "Chatwoot Nio — Mari bot".')
 
     # ── v7 (prompts 26 + 27): carrossel / botões pela Graph API, depois dos balões ──
     # Modo chatwoot: sempre que o 7 · Extrair montou um interativo. Rota de teste: só com enviar_real + "tel real" (ensaio).
