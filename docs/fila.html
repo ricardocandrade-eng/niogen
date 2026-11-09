@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-16">
-<script src="config.js?v=091126-16"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-17">
+<script src="config.js?v=091126-17"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-16"></script>
-<script src="assets/sidebar.js?v=091126-16"></script>
-<script src="assets/conversa.js?v=091126-16"></script>
-<script src="assets/ficha.js?v=091126-16"></script>
+<script src="assets/app.js?v=091126-17"></script>
+<script src="assets/sidebar.js?v=091126-17"></script>
+<script src="assets/conversa.js?v=091126-17"></script>
+<script src="assets/ficha.js?v=091126-17"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -147,7 +147,7 @@
     const atual = NGFicha.atual;
     const linhas = l.map((j) => `<div class="mv-row ${j.nivel}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
         <span class="mv-et" title="${esc(j.etapa_nome)}">${dot(j.etapa)}<span>${esc(j.etapa_nome)}</span></span>
-        <span class="mv-cli"><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small></span>
+        <span class="mv-cli"><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}<span class="mv-ha-2"> · há ${esc(haTempo(j.desde))}</span></small></span>
         <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
         <span class="mv-ha apagado">${esc(haTempo(j.desde))}</span>
         ${donoHtml(j)}

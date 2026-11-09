@@ -1378,7 +1378,15 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 .mv-feito[hidden] { display: none; }
 .mv-feito .btn { align-self: flex-start; margin-top: 6px; }
 .mv-feito-x { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: var(--muted); font-size: 16px; cursor: pointer; }
-@media (max-width: 1200px) { .mv-row { grid-template-columns: 34px minmax(120px, 1fr) minmax(160px, 2fr) 50px 110px; } .mv-et span { display: none; } .mv-row .mv-bt { display: none; } .mv-cab span:last-child { display: none; } }
+.mv-lista { container-type: inline-size; }
+.mv-cli .mv-ha-2 { display: none; }
+/* Lista estreita (ficha ao lado): a etapa vira só a bolinha, o "há" vai para baixo do nome e o botão continua visível. */
+@container (max-width: 820px) {
+  .mv-row { grid-template-columns: 14px minmax(110px, 1fr) minmax(130px, 1.5fr) 96px auto; gap: 8px; }
+  .mv-et span, .mv-row .mv-ha { display: none; }
+  .mv-cli .mv-ha-2 { display: inline; }
+  .mv-cab span:nth-child(4) { display: none; }
+}
 @media (max-width: 900px) {
   .mv-trab { grid-template-columns: 1fr; height: auto; min-height: 0; }
   .mv-trab.com-conversa { height: calc(100vh - 140px); }
