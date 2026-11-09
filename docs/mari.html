@@ -6,7 +6,12 @@
      Dados: mari_conversas (RLS admin/backoffice), v_mari_cadencia, mari_turnos, mari_erros, config_planos, vendas.
      06/11 (prompt 27): situação vem da VENDA quando a conversa tem venda (etapa ou "Saída · motivo"); coluna e filtro do
      status do Chatwoot (A resolver / Resolvida · atribuída a · etiquetas — 0048, gravado pelo n8n/carga única);
-     "cliente esperando o time" pela v_mari_aguardando_humano; explicação ao passar o mouse em tudo (NG.ajuda). -->
+     "cliente esperando o time" pela v_mari_aguardando_humano; explicação ao passar o mouse em tudo (NG.ajuda).
+     09/11 (docs/Prompt_mari_quadro_termometro_081126_2115.md, migration 0072): chave Lista | Quadro (?vista=, lembrada em
+     localStorage niogen.mari.vista; ?coluna= destaca a coluna), status na linha do card (vez + tempo), TERMÔMETRO de dados
+     (v_mari_quadro: só vazio/coletado/validado por item — nunca o valor) e selos das travas do contrato. Colunas, itens e
+     motivos vêm de config_mari_colunas / config_mari_itens. A etapa vem da Mari: arrastar só para Com humano (assumir) e
+     Encerrada (motivo) pela RPC mari_quadro_mover. Recarrega a cada 60 s com a aba visível + botão ↻. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -18,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=081126-3">
-<script src="config.js?v=081126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-1">
+<script src="config.js?v=091126-1"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=081126-3"></script>
-<script src="assets/sidebar.js?v=081126-3"></script>
-<script src="assets/ficha.js?v=081126-3"></script>
+<script src="assets/app.js?v=091126-1"></script>
+<script src="assets/sidebar.js?v=091126-1"></script>
+<script src="assets/ficha.js?v=091126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -35,7 +40,14 @@
         <h1>Mari</h1>
         <div class="sub" id="sub">Atendimento da IA no WhatsApp</div>
       </div>
-      <a class="btn acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">Abrir Chatwoot</a>
+      <div class="cab-acoes">
+        <div class="seg vista" role="radiogroup" aria-label="Vista">
+          <label><input type="radio" name="vista" value="lista">Lista</label>
+          <label><input type="radio" name="vista" value="quadro">Quadro</label>
+        </div>
+        <button type="button" class="btn btn-ghost" id="btn-recarregar" title="Recarregar agora (a tela também se atualiza sozinha a cada minuto)" aria-label="Recarregar">↻</button>
+        <a class="btn acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">Abrir Chatwoot</a>
+      </div>
     </header>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
@@ -44,10 +56,9 @@
 
     <div class="barra-filtros">
       <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar conversa" placeholder="Buscar por nome, telefone, CEP, bairro ou cidade"></label>
-      <select class="sel" id="f-cidade" aria-label="Cidade"></select>
-      <select class="sel" id="f-etapa" aria-label="Etapa"></select>
       <select class="sel" id="f-origem" aria-label="Origem"></select>
-      <select class="sel" id="f-cw" aria-label="Status no Chatwoot" title="Status da conversa no Chatwoot: A resolver (aberta ou pendente) ou Resolvida."></select>
+      <select class="sel" id="f-cidade" aria-label="Cidade"></select>
+      <select class="sel" id="f-vez" aria-label="De quem é a vez" title="De quem é a próxima fala: do nosso time (humano), da Mari ou do cliente."></select>
       <span id="f-periodo"></span>
       <label class="check-mini" id="lbl-testes" hidden><input type="checkbox" id="f-testes"> mostrar testes</label>
       <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
@@ -57,21 +68,30 @@
       <div class="rolagem">
         <table class="tab">
           <thead><tr>
-            <th data-ord="contato" data-ajuda="col_contato">Contato</th>
-            <th data-ord="local" data-ajuda="col_local">Local</th>
-            <th data-ord="situacao" data-ajuda="col_situacao">Situação</th>
-            <th data-ord="chatwoot" data-ajuda="col_chatwoot">Chatwoot</th>
-            <th data-ord="plano" data-ajuda="col_plano">Plano</th>
-            <th data-ord="valor" data-dir="desc" class="num" data-ajuda="col_valor">Valor</th>
-            <th data-ajuda="col_proximo">Próximo passo</th>
-            <th data-ord="ultima" data-dir="desc" data-ajuda="col_ultima">Última mensagem</th>
+            <th data-ord="acao">Cliente · local</th>
+            <th data-ord="etapa">Etapa</th>
+            <th data-ord="vez">Vez</th>
+            <th data-ord="ultima" data-dir="desc">Última</th>
+            <th data-ord="termometro" data-dir="desc" title="Dados para o pedido: verde validado, âmbar coletado, cinza falta. Nunca mostra o valor.">Termômetro</th>
+            <th title="Travas do contrato: já é cliente Nio, endereço com Nio, viabilidade/área.">Travas</th>
+            <th>Próximo toque</th>
+            <th>Alertas</th>
           </tr></thead>
           <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
-      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a conversa</span></div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Ordem: precisa de ação agora primeiro · clique na linha para abrir a conversa</span></div>
     </section>
     <div class="cartoes" id="cartoes" aria-label="Conversas da Mari"></div>
+
+    <!-- Vista Quadro: colunas da config_mari_colunas; Encerrada recolhida embaixo (como Saída em Vendas). -->
+    <section class="quadro-vendas quadro-mari" aria-label="Quadro das conversas da Mari">
+      <div class="board qv" id="board"></div>
+      <div class="qv-fora" data-col="encerrada">
+        <button type="button" class="qv-faixa" id="qv-faixa" aria-expanded="false" aria-controls="qv-fora-corpo"></button>
+        <div class="qv-fora-corpo" id="qv-fora-corpo" hidden></div>
+      </div>
+    </section>
   </main>
 </div>
 <a class="fab desab" id="fab" aria-label="Abrir Chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">💬</a>
@@ -122,23 +142,44 @@
   const cartoesEl = document.getElementById('cartoes');
   const fBusca = document.getElementById('f-busca');
   const fCidade = document.getElementById('f-cidade');
-  const fEtapa = document.getElementById('f-etapa');
   const fOrigem = document.getElementById('f-origem');
   const fTestes = document.getElementById('f-testes');
-  const fCw = document.getElementById('f-cw');
+  const fVez = document.getElementById('f-vez');
   document.getElementById('lbl-testes').hidden = !ADMIN;
-  NG.preencherSelect(fEtapa, Object.entries(ETAPAS_MARI), 'Todas as etapas');
   NG.preencherSelect(fOrigem, Object.entries(ORIGENS_MARI), 'Todas as origens');
-  NG.preencherSelect(fCw, [['aresolver', 'A resolver'], ['resolvida', 'Resolvidas']], 'Chatwoot: todas');
+  NG.preencherSelect(fVez, [['humano', 'Vez do humano'], ['mari', 'Vez da Mari'], ['cliente', 'Vez do cliente']], 'Vez: todas');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'hoje', aoMudar: render });
   // Explicação ao passar o mouse (NG.ajuda): cabeçalhos e filtros.
   document.querySelectorAll('[data-ajuda]').forEach((el) => { el.title = NG.ajuda[el.dataset.ajuda] || ''; });
-  fEtapa.title = NG.ajuda.etapa;
   fOrigem.title = NG.ajuda.origem;
 
+  // 0072: linha da v_mari_quadro por conversa (coluna, vez, termômetro, travas, alertas) + colunas da config.
+  let qd = {}, colunas = [];
   let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, vendasDe = {}, aguardando = {}, aba = 'todas';
   let templates = {}, enviadosDe = {};
-  const ord = { chave: 'ultima', dir: -1 };
+  const ord = { chave: 'acao', dir: 1 };   // 0072: padrão = "precisa de ação agora" (rankAcao)
+
+  // ---------- vista: Lista | Quadro (0072, mesmo padrão de Vendas) ----------
+  // Ordem: ?vista= na URL → última usada (localStorage niogen.mari.vista) → Quadro no computador e Lista em ≤ 760 px.
+  const LS_VISTA = 'niogen.mari.vista';
+  const VISTAS = ['lista', 'quadro'];
+  const qsIni = new URLSearchParams(location.search);
+  const lsLer = () => { try { return localStorage.getItem(LS_VISTA); } catch (e) { return null; } };
+  const lsGravar = (x) => { try { localStorage.setItem(LS_VISTA, x); } catch (e) { /* modo privado */ } };
+  const mainEl = document.querySelector('main.main');
+  const vistaEl = document.querySelector('.seg.vista');
+  let vista = VISTAS.includes(qsIni.get('vista')) ? qsIni.get('vista') : VISTAS.includes(lsLer()) ? lsLer() : (window.matchMedia('(max-width: 760px)').matches ? 'lista' : 'quadro');
+  function aplicarVista(nova, { gravar = true } = {}) {
+    vista = nova;
+    mainEl.dataset.vista = vista;
+    vistaEl.querySelectorAll('input').forEach((i) => { i.checked = i.value === vista; });
+    if (gravar) lsGravar(vista);
+    const qs = new URLSearchParams(location.search);
+    qs.set('vista', vista);
+    history.replaceState(null, '', `${location.pathname}?${qs}${location.hash}`);
+  }
+  aplicarVista(vista, { gravar: VISTAS.includes(qsIni.get('vista')) });
+  vistaEl.addEventListener('change', (ev) => { if (VISTAS.includes(ev.target.value)) { aplicarVista(ev.target.value); render(); } });
 
   if (CHATWOOT_NIO_ACCOUNT) {
     for (const id of ['btn-chatwoot', 'fab']) {
@@ -156,11 +197,13 @@
     + 'chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, chatwoot_sync_em, cadencia_passo';
 
   async function carregar() {
-    const [rc, rk, rp, re] = await Promise.all([
+    const [rc, rk, rp, re, rq, rcol] = await Promise.all([
       NG.sb.from('mari_conversas').select(COLS).order('updated_at', { ascending: false }).limit(2000),
       NG.sb.from('v_mari_cadencia').select('*'),
       NG.sb.from('config_planos').select('codigo, nome, nome_curto, preco, preco_cartao'),
       NG.sb.from('mari_erros').select('id, conversa_id, no_n8n, mensagem, created_at').gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(1000),
+      NG.sb.from('v_mari_quadro').select('*').limit(2000),
+      NG.sb.from('config_mari_colunas').select('codigo, nome, descricao, ordem, etapas, cor, recolhida, aceita_arrastar, motivos').eq('ativo', true).order('ordem'),
     ]);
     if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
     // erro da cadência não derruba a tela, mas aparece (antes era engolido em silêncio)
@@ -169,6 +212,12 @@
     cad = Object.fromEntries(((rk.error ? [] : rk.data) || []).map((c) => [c.conversa_id, c]));
     planos = Object.fromEntries((rp.data || []).map((p) => [p.codigo, p]));
     erros = re.data || [];
+    // 0072: sem a view (erro) a tela segue funcionando, só sem termômetro e com tudo em Qualificando.
+    if (rq.error) NG.toast(`Quadro indisponível: ${NG.msgErro(rq.error)}`, 'bad');
+    qd = Object.fromEntries(((rq.error ? [] : rq.data) || []).map((q) => [q.id, q]));
+    colunas = (rcol.data || []);
+    const semMapa = [...new Set(Object.values(qd).filter((q) => !q.coluna).map((q) => q.etapa_chave))];
+    if (semMapa.length) console.warn('[mari] etapa(s) sem coluna em config_mari_colunas — caem em Qualificando:', semMapa);
     // Prompt 27: a situação de quem já tem venda vem da venda; "cliente esperando o time" vem da view (0048).
     const comVenda = [...new Set(convs.map((c) => c.venda_id).filter(Boolean))];
     // Prompt 28: bolinhas — o que a cadência já mandou (turnos com tags.cadencia) e os textos dos templates.
@@ -342,24 +391,126 @@
     const q = fBusca.value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     return convs.filter((c) =>
-      (fTestes.checked || !ehTeste(c)) &&
-      (!comPeriodo || NG.noPeriodo(ultimaDe(c), p) || NG.noPeriodo(c.created_at, p)) &&
+      (fTestes.checked || !(ehTeste(c) || (qd[c.id] && qd[c.id].teste))) &&
+      // 0072: o período só filtra conversa ENCERRADA — as abertas aparecem sempre (o Quadro é o que está em andamento)
+      (!comPeriodo || colDe(c) !== 'encerrada' || NG.noPeriodo(ultimaDe(c), p) || NG.noPeriodo(c.created_at, p)) &&
       (!fCidade.value || c.cidade === fCidade.value) &&
-      (!fEtapa.value || c.etapa === fEtapa.value) &&
+      (!fVez.value || (qd[c.id] && qd[c.id].vez === fVez.value)) &&
       (!fOrigem.value || c.origem === fOrigem.value) &&
-      (!fCw.value || (fCw.value === 'aresolver' ? ['open', 'pending'].includes(c.chatwoot_status) : c.chatwoot_status === 'resolved')) &&
       (!q || [nomeDe(c), c.nome_contato, bairroDe(c), c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [c.telefone, c.cep].some((x) => NG.soDigitos(x).includes(qd)))));
   }
-  const precisaAcao = (c) => !!proximo(c).acao;
-  const naAba = (c, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(c) : situacao(c).id === a);
+  // ------------------------------------------------------------------ Quadro / termômetro (0072)
+  // Tudo o que é regra vem da v_mari_quadro (coluna, vez, estado dos itens, travas, pronto_handoff); aqui só o desenho.
+  const colDe = (c) => { const q = qd[c.id]; return (q && q.coluna) || 'qualificando'; };
+  const colInfo = (cod) => colunas.find((k) => k.codigo === cod) || { codigo: cod, nome: cod, cor: 'muted', ordem: 99 };
+  const temTrava = (q) => !!q && [q.trava_cliente_nio, q.trava_endereco_nio, q.trava_viabilidade].includes('bloqueia');
+  const TRAVAS = [
+    ['trava_cliente_nio', { ok: 'não é cliente Nio', pendente: 'cliente Nio?', bloqueia: 'já é cliente Nio' },
+      'Já é cliente Nio (ou cancelou há menos de 30 dias): não vender — estorno 100 % + multa R$ 500.'],
+    ['trava_endereco_nio', { ok: 'endereço livre', pendente: 'endereço?', bloqueia: 'endereço com Nio' },
+      'Endereço já na base Nio (DFV "endereço ocupado" ou portal "posse"): conferir com o cliente e no portal antes do pedido — estorno 100 %.'],
+    ['trava_viabilidade', { ok: 'viabilidade ok', pendente: 'viabilidade', bloqueia: 'fora de área' },
+      'Área de atuação e viabilidade (portal PAP; DFV como pista). Pendente não impede o handoff; fora da área = sem comissão.'],
+  ];
+  const ICONE_TRAVA = { ok: '✓', pendente: '⏳', bloqueia: '✕' };
+  function travasHtml(q, { soProblema = false } = {}) {
+    if (!q) return '<span class="apagado">—</span>';
+    const sel = TRAVAS.filter(([k]) => !soProblema || q[k] !== 'ok');
+    return sel.map(([k, txt, aj]) => `<span class="mq-trava ${q[k]}" title="${esc(aj)}">${ICONE_TRAVA[q[k]] || ''} ${esc(txt[q[k]] || q[k])}</span>`).join('');
+  }
+  const SIMBOLO = { validado: '✓', coletado: '•', vazio: '○' };
+  const ROT_ESTADO = { validado: 'validado', coletado: 'coletado (falta validar)', vazio: 'falta' };
+  const termoDica = (q) => (q.itens || []).filter((i) => i.obrigatorio).map((i) => `${SIMBOLO[i.estado]} ${i.nome} — ${ROT_ESTADO[i.estado]}`).join('\n');
+  function termometro(q, { curto = false } = {}) {
+    if (!q || !q.itens_total) return '<span class="apagado">—</span>';
+    const seg = (q.itens || []).filter((i) => i.obrigatorio).map((i) => `<i class="${i.estado}"></i>`).join('');
+    const falta = (q.faltam || []).map((n) => n.toLowerCase());
+    const ftxt = falta.length ? ` · falta ${falta.slice(0, 2).join(', ')}${falta.length > 2 ? ` +${falta.length - 2}` : ''}` : '';
+    return `<span class="mq-termo${curto ? ' curto' : ''}" tabindex="0" title="${esc(termoDica(q))}"><span class="tm" aria-hidden="true">${seg}</span><span class="tm-txt">${q.itens_validados}/${q.itens_total}${curto ? '' : esc(ftxt)}</span></span>`;
+  }
+  const VEZ = { humano: 'Vez do humano', mari: 'Vez da Mari', cliente: 'Vez do cliente' };
+  // Vermelho: vez do humano há > 15 min no horário do contrato, ou vez da Mari há > 15 min (ela travou).
+  function vezAtrasada(q) {
+    if (!q || !q.vez_desde || !['humano', 'mari'].includes(q.vez)) return false;
+    return minutos(q.vez_desde) > 15 && (q.vez === 'mari' || noHorario(new Date()));
+  }
+  function vezHtml(q) {
+    if (!q || !q.vez) return '<span class="apagado">—</span>';
+    const desde = q.vez === 'cliente' ? q.ultima_em : q.vez_desde || q.ultima_em;
+    return `<span class="mq-vez ${q.vez}${vezAtrasada(q) ? ' atrasada' : ''}">● ${esc(VEZ[q.vez])}${desde ? ` · ${esc(ha(desde))}` : ''}</span>`;
+  }
+  const noTeto = (q) => !!q && (q.contatos_hoje >= 2 || q.contatos_mes >= 15);
+  function janelaTxt(q) {
+    if (!q || !q.janela_24h_fecha_em) return null;
+    const m = Math.floor((new Date(q.janela_24h_fecha_em) - Date.now()) / 60000);
+    if (m <= 0) return { txt: 'janela fechada', cls: '' };
+    return { txt: `janela ${m < 60 ? `${m} min` : `${Math.floor(m / 60)}h`}`, cls: m < 180 ? 'warn' : '' };
+  }
+  // Próximo toque da cadência (v_mari_cadencia já respeita horário, domingo e feriado). No teto 2/dia ou 15/mês: nenhum.
+  function toqueTxt(q) {
+    if (!q || q.coluna === 'encerrada') return null;
+    if (noTeto(q)) return { txt: 'sem toque (teto do contrato)', cls: 'bad' };
+    if (!q.proximo_passo) return null;
+    const nome = PASSO[q.proximo_passo] || q.proximo_passo;
+    if (q.pode_enviar) return { txt: `toque ${nome} agora`, cls: 'warn' };
+    return { txt: `toque ${nome}${q.proximo_em ? ` ${quandoCurto(q.proximo_em)}` : ''}`, cls: '' };
+  }
+  const contadorHtml = (q) => (q ? `<span class="${noTeto(q) ? 'mq-teto' : ''}" title="Contatos ativos com este cliente (contrato: 2 por dia, 15 por mês).">hoje ${q.contatos_hoje}/2 · mês ${q.contatos_mes}/15</span>` : '');
+  const ALERTA = { desconto: 'pediu desconto', reclamacao_nio: 'reclamação / cliente Nio', nao_pedi_contato: '"não pedi contato"', nao_contatar: 'não contatar', urgencia: 'urgência' };
+  const alertasHtml = (q) => ((q && q.alertas) || []).map((a) => `<span class="mq-alerta">⚠ ${esc(ALERTA[a] || a)}</span>`).join('');
+  // Selo do card: barra cheia com trava (vermelho) · pronto para o handoff (verde) · venda criada (link para a ficha).
+  function seloHtml(q) {
+    if (!q) return '';
+    const cheia = q.itens_total && q.itens_validados === q.itens_total;
+    if (cheia && temTrava(q)) {
+      const t = TRAVAS.find(([k]) => q[k] === 'bloqueia');
+      return `<span class="mq-selo bad" title="${esc(t[2])}">Trava: ${esc(t[1].bloqueia)} — não vender</span>`;
+    }
+    if (q.pronto_handoff) return '<span class="mq-selo ok" title="Todos os dados obrigatórios validados e nenhuma trava do contrato. A Mari ainda não fez o handoff: confira e siga para o pedido.">Pronto para o handoff</span>';
+    if (q.venda_id && q.coluna !== 'encerrada') return `<a class="mq-selo venda" href="#venda=${esc(q.venda_id)}" data-venda title="Abrir a ficha da venda">Venda criada · seguir em Vendas</a>`;
+    return '';
+  }
+  const ORIGEM_CURTA = { meta_ads: 'Meta', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', teste: 'Teste' };
+  function origemCard(c, q) {
+    const o = ORIGEM_CURTA[c.origem] || c.origem || '';
+    const ad = q && (q.ad_nome || q.adset_nome);
+    return { txt: [o, ad].filter(Boolean).join(' · '), title: q && q.ad_nome ? [q.campanha_nome, q.adset_nome, q.ad_nome].filter(Boolean).join(' › ') : '' };
+  }
+  const clusterTxt = (c) => (c.cluster === 'btu' ? 'BTU' : c.cluster === 'regular' ? 'Regular' : '');
+  const nomeCurtoLocal = (c) => [c.cidade, clusterTxt(c)].filter(Boolean).join(' · ');
+
+  // Ordem "precisa de ação agora": trava vermelha → vez humano/Mari há mais tempo → pronto para o handoff → janela fechando
+  // (< 3 h) → toque vencido → o resto pela última mensagem. Encerradas sempre por último.
+  function rankAcao(c) {
+    const q = qd[c.id] || {};
+    const enc = colDe(c) === 'encerrada';
+    const sua = ['humano', 'mari'].includes(q.vez);
+    const janelaMin = q.janela_24h_fecha_em ? (new Date(q.janela_24h_fecha_em) - Date.now()) / 60000 : Infinity;
+    return [
+      enc ? 1 : 0,
+      temTrava(q) && !enc ? 0 : 1,
+      sua ? 0 : 1,
+      sua && q.vez_desde ? new Date(q.vez_desde).getTime() : 0,
+      q.pronto_handoff ? 0 : 1,
+      janelaMin > 0 && janelaMin < 180 ? 0 : 1,
+      q.pode_enviar && !noTeto(q) ? 0 : 1,
+      -new Date(ultimaDe(c)).getTime(),
+    ];
+  }
+  const cmpRank = (a, b) => { const x = rankAcao(a), y = rankAcao(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+
+  const precisaAcao = (c) => {
+    if (proximo(c).acao) return true;
+    if (colDe(c) === 'encerrada') return false;
+    const q = qd[c.id];
+    return temTrava(q) || (!!q && (q.pronto_handoff || q.vez === 'humano' || vezAtrasada(q)));
+  };
+  const naAba = (c, a) => (a === 'acao' ? precisaAcao(c) : true);
   const CHAVES = {
-    contato: (c) => contatoDe(c).toLowerCase(),
-    local: (c) => localDe(c).toLowerCase(),
-    situacao: (c) => SIT_ORD[situacao(c).id] ?? 9,
-    chatwoot: (c) => ({ open: 0, pending: 0, snoozed: 1, resolved: 2 })[c.chatwoot_status] ?? 3,
-    plano: (c) => (plano(c) ? plano(c).nome_curto || plano(c).nome : ''),
-    valor: (c) => valorDe(c),
+    etapa: (c) => colInfo(colDe(c)).ordem ?? 99,
+    vez: (c) => ({ humano: 0, mari: 1, cliente: 2 })[(qd[c.id] || {}).vez] ?? 3,
+    termometro: (c) => { const q = qd[c.id]; return q && q.itens_total ? q.itens_validados / q.itens_total : -1; },
     ultima: (c) => new Date(ultimaDe(c)).getTime(),
   };
 
@@ -390,10 +541,8 @@
     const conta = (a) => b.filter((c) => naAba(c, a)).length;
     NG.abasPilulas(document.getElementById('abas'), [
       { id: 'todas', nome: 'Todas', n: b.length },
-      { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true },
-      { id: 'andamento', nome: 'Em andamento', n: conta('andamento') },
-      { id: 'qualificada', nome: 'Qualificadas', n: conta('qualificada') },
-      { id: 'encerrada', nome: 'Encerradas', n: conta('encerrada') },
+      { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true,
+        dica: 'Trava do contrato, vez do humano, Mari parada há mais de 15 min, pronto para o handoff, cliente esperando o time ou erro.' },
     ], aba, (id) => { aba = id; render(); });
   }
 
@@ -414,55 +563,181 @@
       ${comEtiquetas && et.length ? `<span class="etiquetas">${et.map((e) => `<span class="chip" title="${esc(NG.ajuda.cw_etiquetas)}">${esc(e)}</span>`).join('')}</span>` : ''}</div>`;
   }
   const planoTxt = (c) => { const p = plano(c); return p ? p.nome_curto || p.nome : '—'; };
-  const filtradas = () => NG.ordenar(base().filter((c) => naAba(c, aba)), CHAVES, ord);
+  const filtradas = () => {
+    const l = base().filter((c) => naAba(c, aba));
+    return ord.chave === 'acao' ? l.sort(cmpRank) : NG.ordenar(l, CHAVES, ord);
+  };
+
+  // Card do Quadro e do celular: uma linha de status (vez + tempo), termômetro, travas, janela/toque/contador, alertas.
+  function cardHtml(c, { arrastavel = false, tag = 'div' } = {}) {
+    const q = qd[c.id];
+    const enc = colDe(c) === 'encerrada';
+    const og = origemCard(c, q);
+    const pl = q && q.plano_nome ? q.plano_nome : (plano(c) ? plano(c).nome_curto || plano(c).nome : '');
+    const jan = janelaTxt(q), toq = toqueTxt(q);
+    const l5 = enc ? '' : [jan ? `<span class="${jan.cls}">⏱ ${esc(jan.txt)}</span>` : '', toq ? `<span class="${toq.cls}">${esc(toq.txt)}</span>` : '', contadorHtml(q)].filter(Boolean).join(' · ');
+    const pr = proximo(c);
+    const cls = ['qcard', 'mq', temTrava(q) && !enc ? 'trava' : '', vezAtrasada(q) && !enc ? 'bad' : '', enc ? 'dim' : ''].filter(Boolean).join(' ');
+    return `<${tag} class="${cls}" data-id="${c.id}" ${tag === 'button' ? 'type="button"' : 'role="button" tabindex="0"'} draggable="${arrastavel}" title="Abrir a conversa">
+      <b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}<span class="mq-local">${esc(nomeCurtoLocal(c) ? ` · ${nomeCurtoLocal(c)}` : '')}</span></b>
+      <small${og.title ? ` title="${esc(og.title)}"` : ''}>${esc([og.txt, pl].filter(Boolean).join(' · ') || '—')}</small>
+      ${enc ? `<span class="mq-enc">${esc((q && q.encerrada_txt) || 'Encerrada')} · ${esc(ha(ultimaDe(c)))}</span>` : `<div class="mq-l">${vezHtml(q)}</div>`}
+      ${q && q.itens_total ? `<div class="mq-l">${termometro(q)}</div>` : ''}
+      ${!enc && q ? `<div class="mq-l mq-travas">${travasHtml(q)}</div>` : ''}
+      ${l5 ? `<div class="mq-l mq-meta">${l5}</div>` : ''}
+      ${alertasHtml(q) ? `<div class="mq-l">${alertasHtml(q)}</div>` : ''}
+      ${!enc && pr.acao && pr.txt ? `<div class="mq-l">${NG.proxPasso(pr)}</div>` : ''}
+      ${seloHtml(q) ? `<div class="mq-l">${seloHtml(q)}</div>` : ''}
+    </${tag}>`;
+  }
+
+  function renderLista(lista) {
+    tbody.innerHTML = lista.length ? lista.map((c) => {
+      const q = qd[c.id];
+      const ci = colInfo(colDe(c));
+      const enc = colDe(c) === 'encerrada';
+      const toq = toqueTxt(q), jan = janelaTxt(q);
+      const og = origemCard(c, q);
+      return `<tr class="clicavel ${enc ? 'saida' : ''} ${temTrava(q) && !enc ? 'mq-tr-trava' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small${og.title ? ` title="${esc(og.title)}"` : ''}>${esc([nomeCurtoLocal(c), og.txt].filter(Boolean).join(' · ') || '—')}</small></td>
+        <td><span class="mq-col ${esc(ci.cor || 'muted')}" title="${esc(ci.descricao || '')}">${esc(ci.nome)}</span>${enc && q && q.encerrada_txt ? `<small class="apagado">${esc(q.encerrada_txt)}</small>` : ''}</td>
+        <td>${enc ? '<span class="apagado">—</span>' : vezHtml(q)}</td>
+        <td class="apagado">${esc(ha(ultimaDe(c)))}${q && q.ultima_quem ? `<small>${esc({ cliente: 'cliente', mari: 'Mari', humano: 'humano' }[q.ultima_quem] || '')}</small>` : ''}</td>
+        <td>${termometro(q, { curto: true })}${seloHtml(q) ? `<div>${seloHtml(q)}</div>` : ''}</td>
+        <td class="mq-travas">${enc ? '' : travasHtml(q, { soProblema: true }) || '<span class="mq-trava ok">✓ ok</span>'}</td>
+        <td>${enc ? '' : `${toq ? `<span class="mq-toq ${toq.cls}">${esc(toq.txt)}</span>` : NG.proxPasso(proximo(c))}<small>${jan ? esc(jan.txt) : ''}${q ? ` · ${contadorHtml(q)}` : ''}</small>`}</td>
+        <td>${alertasHtml(q) || '<span class="apagado">—</span>'}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="8" class="vazio">Nenhuma conversa neste filtro</td></tr>';
+    cartoesEl.innerHTML = lista.length ? lista.map((c) => cardHtml(c)).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'conversa' : 'conversas'} no filtro`;
+  }
+
+  // Quadro: colunas da config (ordem), Encerrada recolhida embaixo. Dentro da coluna, a mesma ordem "precisa de ação".
+  const boardEl = document.getElementById('board');
+  const foraEl = document.querySelector('.quadro-mari .qv-fora');
+  const faixaFora = document.getElementById('qv-faixa');
+  const foraCorpo = document.getElementById('qv-fora-corpo');
+  const movel = window.matchMedia('(max-width: 760px)');
+  const podeArrastar = () => !movel.matches;   // celular: sem arrastar (abre a conversa)
+  let foraAberto = false;
+  movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
+
+  function renderQuadro(lista) {
+    const abertas = colunas.filter((k) => !k.recolhida);
+    const recolhidas = colunas.filter((k) => k.recolhida);
+    const por = {};
+    lista.forEach((c) => { (por[colDe(c)] = por[colDe(c)] || []).push(c); });
+    boardEl.innerHTML = abertas.map((k) => {
+      const itens = (por[k.codigo] || []).sort(cmpRank);
+      const nAcao = itens.filter(precisaAcao).length;
+      return `<section class="col qv-col" data-col="${esc(k.codigo)}" aria-label="${esc(k.nome)}">
+        <div class="col-head" title="${esc(k.descricao || '')}"><span class="mq-c-${esc(k.cor || 'muted')}">${esc(k.nome)}</span><span>${NG.fmtNum(itens.length)}${nAcao ? `<span class="c-acao" title="precisam de ação"> · ${NG.fmtNum(nAcao)}!</span>` : ''}</span></div>
+        <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((c) => cardHtml(c, { arrastavel: podeArrastar() })).join('') : '<div class="col-vazia">—</div>'}</div>
+      </section>`;
+    }).join('') || '<div class="vazio">Sem colunas configuradas (config_mari_colunas).</div>';
+    const fora = recolhidas.flatMap((k) => por[k.codigo] || []).sort((a, b) => new Date(ultimaDe(b)) - new Date(ultimaDe(a)));
+    const nomeFora = recolhidas.map((k) => k.nome).join(' · ') || 'Encerrada';
+    foraEl.hidden = !recolhidas.length;
+    faixaFora.innerHTML = `<span>${esc(nomeFora)} <b>${NG.fmtNum(fora.length)}</b> <span class="apagado">· no período</span></span><span class="seta" aria-hidden="true">${foraAberto ? '▴' : '▾'}</span>`;
+    faixaFora.setAttribute('aria-expanded', String(foraAberto));
+    foraCorpo.hidden = !foraAberto;
+    foraCorpo.innerHTML = foraAberto ? `<div class="qv-grade">${fora.length ? fora.map((c) => cardHtml(c)).join('') : '<div class="col-vazia">—</div>'}</div>` : '';
+  }
 
   function render() {
     const b = base();
     renderKpis(b);
     renderAbas(b);
     const lista = filtradas();
-    tbody.innerHTML = lista.length ? lista.map((c) => {
-      const v = valorDe(c);
-      return `<tr class="clicavel ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
-        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small class="com-ajuda" title="${esc(NG.ajuda.origem)}">${esc(c.origem === 'teste' ? '' : ORIGENS_MARI[c.origem] || c.origem || '')}</small></td>
-        <td class="apagado">${esc(localDe(c) || '—')}</td>
-        <td>${pilula(c)}</td>
-        <td>${chatwootCel(c)}</td>
-        <td class="plano-c"><b>${esc(planoTxt(c))}</b><small>${esc(FORMA[c.forma_pagamento] || '')}</small></td>
-        <td class="num">${v == null ? '—' : esc(NG.fmtMoeda(v))}</td>
-        <td>${NG.proxPasso(proximo(c))}${bolinhas(c) ? `<div>${bolinhas(c)}</div>` : ''}</td>
-        <td class="apagado">${esc(ha(ultimaDe(c)))}</td>
-      </tr>`;
-    }).join('') : '<tr><td colspan="8" class="vazio">Nenhuma conversa neste filtro</td></tr>';
-    cartoesEl.innerHTML = lista.length ? lista.map((c) => {
-      const v = valorDe(c);
-      return `<button type="button" class="cartao ${situacao(c).id === 'encerrada' ? 'saida' : ''}" data-id="${c.id}">
-        <div class="cli"><b>${esc(contatoDe(c))}</b><small>${esc([localDe(c), ha(ultimaDe(c))].filter(Boolean).join(' · '))}</small></div>
-        <div class="valor">${v == null ? '—' : esc(NG.fmtMoeda(v))}</div>
-        <div class="l2">${pilula(c)}<span>${esc(planoTxt(c))}</span></div>
-        ${c.chatwoot_status ? `<div class="l2">${chatwootCel(c, false)}</div>` : ''}
-        <div class="l2">${NG.proxPasso(proximo(c))}</div>
-        ${bolinhas(c) ? `<div class="l2">${bolinhas(c)}</div>` : ''}
-      </button>`;
-    }).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
-    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'conversa' : 'conversas'} no filtro`;
+    if (vista === 'quadro') renderQuadro(lista); else renderLista(lista);
   }
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
-  [fBusca, fCidade, fEtapa, fOrigem, fCw, fTestes].forEach((el) => el.addEventListener('input', render));
-  tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(tr.dataset.id); });
+  [fBusca, fCidade, fVez, fOrigem, fTestes].forEach((el) => el.addEventListener('input', render));
+  // Clique no selo "Venda criada" segue o link (#venda=) e não abre a conversa.
+  const clicouLink = (ev) => !!ev.target.closest('a[href]');
+  tbody.addEventListener('click', (ev) => { if (clicouLink(ev)) return; const tr = ev.target.closest('tr[data-id]'); if (tr) abrir(tr.dataset.id); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrir(tr.dataset.id); });
-  cartoesEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
+  cartoesEl.addEventListener('click', (ev) => { if (clicouLink(ev)) return; const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
+  const quadroEl = document.querySelector('.quadro-mari');
+  quadroEl.addEventListener('click', (ev) => {
+    if (clicouLink(ev)) return;
+    if (ev.target.closest('#qv-faixa')) { foraAberto = !foraAberto; render(); return; }
+    const card = ev.target.closest('.qcard[data-id]');
+    if (card) abrir(card.dataset.id);
+  });
+  quadroEl.addEventListener('keydown', (ev) => { const card = ev.target.closest('.qcard[data-id]'); if (card && ev.key === 'Enter') abrir(card.dataset.id); });
+
+  // ------------------------------------------------------------------ arrastar (0072)
+  // A etapa vem da Mari. Só Com humano (assumir) e Encerrada (com motivo) aceitam — config_mari_colunas.aceita_arrastar;
+  // grava pela RPC mari_quadro_mover (o banco recusa qualquer outro destino).
+  const limparAlvo = () => quadroEl.querySelectorAll('.drop-alvo').forEach((x) => x.classList.remove('drop-alvo'));
+  const alvoDe = (ev) => ev.target.closest('.qv-col, .qv-fora');
+  quadroEl.addEventListener('dragstart', (ev) => {
+    const c = ev.target.closest('.qcard');
+    if (!c || !podeArrastar()) { ev.preventDefault(); return; }
+    ev.dataTransfer.setData('text/plain', c.dataset.id);
+    ev.dataTransfer.effectAllowed = 'move';
+    c.classList.add('arrastando');
+  });
+  quadroEl.addEventListener('dragend', (ev) => { ev.target.closest('.qcard')?.classList.remove('arrastando'); limparAlvo(); });
+  quadroEl.addEventListener('dragover', (ev) => {
+    const alvo = alvoDe(ev);
+    if (!alvo) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+    if (!alvo.classList.contains('drop-alvo')) { limparAlvo(); alvo.classList.add('drop-alvo'); }
+  });
+  quadroEl.addEventListener('drop', (ev) => {
+    const alvo = alvoDe(ev);
+    if (!alvo) return;
+    ev.preventDefault();
+    limparAlvo();
+    mover(ev.dataTransfer.getData('text/plain'), alvo.dataset.col);
+  });
+
+  async function mover(id, destino) {
+    const c = convs.find((x) => x.id === id);
+    if (!c || !destino || colDe(c) === destino) return;
+    const k = colInfo(destino);
+    if (!k.aceita_arrastar) {
+      const ok = colunas.filter((x) => x.aceita_arrastar).map((x) => x.nome).join(' ou ');
+      NG.toast(`A etapa anda sozinha (vem da Mari). Só dá para arrastar para ${ok}.`, 'bad');
+      return;
+    }
+    let motivo = null;
+    if (destino === 'encerrada') {
+      const ms = Array.isArray(k.motivos) ? k.motivos : [];
+      const fd = await NG.modal(`
+        <h3>Encerrar a conversa</h3>
+        <p>${esc(contatoDe(c))}${c.cidade ? ` · ${esc(c.cidade)}` : ''}</p>
+        <label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${ms.map((m) => `<option value="${esc(m.codigo)}">${esc(m.nome)}</option>`).join('')}</select></label>
+        <p class="nota-campo">A cadência para. Se o cliente escrever de novo, a conversa volta para a etapa dela. "Não contatar": marque também a etiqueta <b>nao-contatar</b> no Chatwoot (é ela que cala a Mari).</p>`);
+      if (!fd) return;
+      motivo = fd.get('motivo');
+    }
+    const { data, error } = await NG.sb.rpc('mari_quadro_mover', { p_conversa: id, p_destino: destino, p_motivo: motivo });
+    if (error || !data || !data.ok) { NG.toast(error ? NG.msgErro(error) : (data && data.erro) || 'Não foi possível mover.', 'bad'); return; }
+    if (destino === 'humano') NG.toast('Assumida: a cadência parou. Atribua a conversa a você no Chatwoot — é isso que cala a Mari.', 'ok');
+    else NG.toast(`Encerrada${data.nao_contatar ? ' · não contatar (marque a etiqueta nao-contatar no Chatwoot)' : ''}.`, 'ok');
+    await carregar();
+    if (destino === 'humano') abrir(id);   // a gaveta tem o "Abrir no Chatwoot"
+  }
 
   // CSV: sem CPF; telefone inteiro (06/11, Ricardo: nada mascarado).
   document.getElementById('exportar').addEventListener('click', () => {
-    const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Situação', (c) => situacao(c).txt],
+    const q = (c) => qd[c.id] || {};
+    const cols = [['Contato', contatoDe], ['Telefone', (c) => telMascara(c.telefone)], ['Coluna', (c) => colInfo(colDe(c)).nome],
+      ['Vez', (c) => VEZ[q(c).vez] || ''], ['Termômetro', (c) => (q(c).itens_total ? `${q(c).itens_validados}/${q(c).itens_total}` : '')],
+      ['Faltam', (c) => (q(c).faltam || []).join(', ')], ['Travas', (c) => TRAVAS.map(([k, t]) => (q(c)[k] ? `${t[q(c)[k]] || q(c)[k]}` : '')).filter(Boolean).join(' · ')],
+      ['Alertas', (c) => (q(c).alertas || []).map((a) => ALERTA[a] || a).join(', ')], ['Situação', (c) => situacao(c).txt],
       ['Chatwoot', (c) => (CW[c.chatwoot_status] || [''])[0]], ['Atribuída a', atribuidaDe], ['Etiquetas', (c) => (c.chatwoot_etiquetas || []).join(', ')],
       ['Etapa', (c) => ETAPAS_MARI[c.etapa] || c.etapa],
       ['Origem', (c) => ORIGENS_MARI[c.origem] || c.origem], ['Bairro', bairroDe], ['Cidade', (c) => c.cidade], ['Plano', planoTxt], ['Forma', (c) => FORMA[c.forma_pagamento] || ''],
       ['Valor', valorDe], ['Próximo passo', (c) => proximo(c).txt], ['Abertura', (c) => NG.fmtDataHora(c.created_at)], ['Última mensagem', (c) => NG.fmtDataHora(ultimaDe(c))]];
-    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
-    const csv = [cols.map((c) => q(c[0])).join(';')].concat(filtradas().map((c) => cols.map(([, f]) => q(f(c))).join(';'))).join('\r\n');
+    const aspas = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const csv = [cols.map((c) => aspas(c[0])).join(';')].concat(filtradas().map((c) => cols.map(([, f]) => aspas(f(c))).join(';'))).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
     a.download = `niogen_mari_${NG.diaSP().replace(/-/g, '')}.csv`;
@@ -487,6 +762,21 @@
     return ch.length ? `<div class="chips">${ch.map((x) => `<span class="chip">${esc(x)}</span>`).join('')}</div>` : '';
   }
   const linha = (rot, val) => `<div class="d-l"><span>${esc(rot)}</span><b>${val}</b></div>`;
+
+  // Termômetro na gaveta (toque no celular): cada item com ✓ validado · • coletado · ○ falta, e as travas. Sem valores aqui.
+  function termoGaveta(c) {
+    const q = qd[c.id];
+    if (!q || !q.itens_total) return '';
+    const itens = (q.itens || []).filter((i) => i.obrigatorio)
+      .map((i) => `<li class="${i.estado}"><span aria-hidden="true">${SIMBOLO[i.estado]}</span> ${esc(i.nome)} <small>${esc(ROT_ESTADO[i.estado])}</small></li>`).join('');
+    return `<section class="d-sec"><h3>Termômetro de dados · ${q.itens_validados}/${q.itens_total}</h3>
+      ${seloHtml(q) ? `<div>${seloHtml(q)}</div>` : ''}
+      <div>${termometro(q)}</div>
+      <ul class="mq-itens">${itens}</ul>
+      <div class="mq-travas">${travasHtml(q)}</div>
+      ${alertasHtml(q) ? `<div>${alertasHtml(q)}</div>` : ''}
+    </section>`;
+  }
 
   async function abrir(id) {
     const c = convs.find((x) => x.id === id);
@@ -525,6 +815,7 @@
     const errs = errosDe(c.id);
     corpo.innerHTML = `
       ${pr.txt ? `<div class="faixa ${pr.nivel === 'bad' ? 'vermelho' : pr.nivel === 'warn' ? 'amarelo' : 'cinza'}">Próximo passo: ${esc(pr.txt)}</div>` : ''}
+      ${termoGaveta(c)}
       <section class="d-sec"><h3>Conversa</h3><div class="conversa">${baloes}</div></section>
       <section class="d-sec"><h3>Dados coletados</h3>
         ${linha('Nome', esc(d.nome || '—'))}
@@ -576,8 +867,27 @@
   // Link direto vindo do detalhe da venda ("Ver conversa"): mari.html?conversa=<id> abre a gaveta dessa conversa.
   const qConversa = new URLSearchParams(location.search).get('conversa');
   if (qConversa) abrir(qConversa);
+  // ?coluna=<codigo> no Quadro: leva até a coluna (no celular, encaixa nela) e a destaca por um instante.
+  const qColuna = new URLSearchParams(location.search).get('coluna');
+  if (qColuna && vista === 'quadro') {
+    const recolhida = colInfo(qColuna).recolhida;
+    if (recolhida && !foraAberto) { foraAberto = true; render(); }
+    const alvo = recolhida ? foraEl : boardEl.querySelector(`.qv-col[data-col="${CSS.escape(qColuna)}"]`);
+    if (alvo) {
+      alvo.scrollIntoView({ block: 'nearest', inline: 'start' });
+      alvo.classList.add('destaque');
+      setTimeout(() => alvo.classList.remove('destaque'), 1600);
+    }
+  }
   NGFicha.iniciar();   // mari.html#venda=<id> abre a ficha direto
-  setInterval(carregar, 60000);   // a lista se atualiza sozinha a cada minuto (só leitura)
+  // Atualiza sozinha a cada minuto com a aba visível (filtros, vista e aba ficam); ↻ recarrega na hora.
+  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+  document.getElementById('btn-recarregar').addEventListener('click', async (ev) => {
+    ev.currentTarget.disabled = true;
+    await carregar();
+    ev.currentTarget.disabled = false;
+  });
 })();
 </script>
 </body>
