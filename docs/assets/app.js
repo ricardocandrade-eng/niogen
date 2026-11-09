@@ -894,7 +894,7 @@
           if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
           if (!portalViavel(v)) {
             if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
-              return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir variações de CEP/rua/nº ou abrir pendência`, nivel: 'warn', acao: true, resolver: 'viab' };
+              return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir no DFV: endereço viável a até 200 m → formulário da Nio + pendência`, nivel: 'warn', acao: true, resolver: 'viab' };
             }
             if (v.nio_viab_resultado === 'viavel') return { txt: 'Viabilidade vencida (> 7 dias) · consultar de novo no portal', nivel: 'warn', acao: true, resolver: 'viab' };
             return { txt: 'Consultar a viabilidade no portal', nivel: 'warn', acao: true, resolver: 'viab' };

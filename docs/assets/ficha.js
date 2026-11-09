@@ -49,6 +49,9 @@
   let motivosCache = null; // 0064: config_motivos_pendencia (ativos)
   let feitoUltimo = null;  // 0082: { resumo, aviso } do último momento (a linha "✓ …" embaixo do próximo passo)
   let detalhes = false;    // 0089: os blocos de antes, recolhidos embaixo
+  let pendPreset = null;   // 0092: motivo pré-escolhido no "Abrir pendência" (ex.: viabilidade_confirmar)
+  let planosCache = null;  // 0092: config_planos ativos (trocar plano / upsell)
+  let linksCache = null;   // 0092: config_links (DFV, formulário de análise da Nio)
   let cvComp = null;       // 0090: NGConversa montado no painel da ficha
   let hostConversa = null; // 0090: a tela abre a conversa no lugar dela (Minha vez)
   let ladoEl = null;       // 0090: ficha ao lado (Minha vez · Lista), sem gaveta
@@ -262,19 +265,25 @@
       cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
     }
     // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
-    const [rph, rmot, rav, rjo, rnm, rbq] = await Promise.all([
+    const [rph, rmot, rav, rjo, rnm, rbq, rpl, rlk] = await Promise.all([
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
       NG.sb.rpc('ficha_avisos', { p_venda: id }),
       NG.sb.from('v_jornada').select('*').eq('venda_id', id).maybeSingle(),   // 0090: etapa, próximo passo, precisa de ação
       convId ? NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', convId).in('papel', ['lead', 'mari', 'humano']) : Promise.resolve({ count: 0 }),
       convId ? NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', convId).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
+      planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
+      linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
     ]);
+    if (!rpl.error) planosCache = rpl.data || [];
+    if (!rlk.error) linksCache = rlk.data || [];
     if (!rmot.error) motivosCache = rmot.data || [];
     const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     return {
       jor: rjo && !rjo.error ? rjo.data : null,
+      planos: planosCache || [],
+      links: Object.fromEntries((linksCache || []).map((l) => [l.chave, l.url])),
       nMsgs: rnm && rnm.count != null ? rnm.count : null,
       bloqueada: ((rbq && rbq.data) || [])[0] || null,
       avisos: rav && !rav.error ? rav.data : null,
@@ -370,9 +379,10 @@
        ${campoPeriodo('periodo', v.instalacao_agendada_para ? periodoDe(v.instalacao_agendada_para) : '08:00')}</div>`, v.instalacao_agendada_para ? 'Reagendar' : 'Agendar'),
     // 0089: etapa 2 → 3. Só o nº do pedido (a OS vem depois da biometria).
     pedido_so: (v) => formWrap('pedido_so', 'Gravar o pedido',
-      'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode o crédito e grave aqui o nº do pedido. A Nio manda o link da biometria ao cliente.',
+      'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode o crédito e grave aqui o nº do pedido. A Nio manda o link da biometria ao cliente e <b>o NIOGEN avisa o cliente sozinho</b> — não mande o aviso à mão.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
-       <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>`, 'Gravar pedido'),
+       <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
+       <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>`, 'Gravar pedido'),
     // 0089: etapa 3 → 4 (VENDA). OS + dia + período num formulário só.
     os_agendar: (v) => formWrap('os_agendar', 'Abrir a OS e agendar = VENDA',
       'Biometria validada. No portal, abra a OS já com o dia e o período combinados com o cliente e grave aqui. Com isso, a venda conta. Contrato: até 4 h da biometria validada.',
@@ -404,7 +414,7 @@
     // Pendência com terceiro (0064): abrir · adiar · encerrar. Abrem DENTRO do cartão Pendência.
     pend_abrir: () => formWrap('pend_abrir', 'Abrir pendência (venda em espera)',
       'A venda fica na etapa, sai de "Precisam de ação" até a data de revisão e a cadência da Mari pausa. Na data, volta em vermelho para todos.',
-      `<label class="campo">Motivo<select name="motivo_pend" required autofocus><option value="">Escolher…</option>${(d.motivos || []).map((m) => `<option value="${esc(m.codigo)}">${esc(m.nome)} · destrava: ${esc(NG.QUEM_DESTRAVA[m.quem_destrava] || m.quem_destrava)}${m.exige_descricao ? ' (descreva)' : ''}</option>`).join('')}</select></label>
+      `<label class="campo">Motivo<select name="motivo_pend" required autofocus><option value="">Escolher…</option>${(d.motivos || []).map((m) => `<option value="${esc(m.codigo)}"${pendPreset === m.codigo ? ' selected' : ''}>${esc(m.nome)} · destrava: ${esc(NG.QUEM_DESTRAVA[m.quem_destrava] || m.quem_destrava)}${m.exige_descricao ? ' (descreva)' : ''}</option>`).join('')}</select></label>
        <label class="campo">Descrição <span class="nota-campo">(o que falta e com quem; obrigatória em "Outro motivo")</span><textarea name="descricao" maxlength="500"></textarea></label>
        ${campoData('Revisar em', 'revisar', proximoDiaUtil(), `min="${hojeISO()}" required`)}`, 'Abrir pendência'),
     pend_adiar: () => formWrap('pend_adiar', 'Adiar a revisão',
@@ -547,7 +557,7 @@
     async pedido_so(fd) {
       const pedido = String(fd.get('pedido') || '').trim();
       if (!pedido) { NG.toast('Informe o nº do pedido.', 'bad'); return false; }
-      return !!(await rodarMomento('pedido', { pedido, credito: fd.get('credito') || null }));
+      return !!(await rodarMomento('pedido', { pedido, credito: fd.get('credito') || null, sem_aviso: !!fd.get('sem_aviso') }));
     },
     async os_agendar(fd) {
       const os = String(fd.get('os') || '').trim();
@@ -564,6 +574,7 @@
       const motivo = fd.get('motivo_pend');
       if (!motivo) { NG.toast('Escolha o motivo da pendência.', 'bad'); return false; }
       if (!fd.get('revisar')) { NG.toast('Informe a data de revisão.', 'bad'); return false; }
+      pendPreset = null;
       return rpcPendencia('pendencia_abrir', { p_venda: d.v.id, p_motivo: motivo, p_descricao: String(fd.get('descricao') || '').trim() || null, p_revisar_em: fd.get('revisar') },
         'Pendência aberta · a venda está em espera e a cadência da Mari pausou');
     },
@@ -601,6 +612,18 @@
       return gravar({ status: '2_aguardando_instalacao', instalacao_agendada_para: quandoDe(fd), instalacao_turno: turnoDe(fd) }, `${NG.primeiroNome(d.v.cliente_nome)} → ${STATUS_MAP['2_aguardando_instalacao'].curto}`);
     },
     // ----- edição por bloco -----
+    async ed_plano(fd) {
+      const id = fd.get('plano');
+      const forma = fd.get('forma');
+      if (!id || !forma) { NG.toast('Escolha o plano e a forma de pagamento.', 'bad'); return false; }
+      const p = (d.planos || []).find((x) => x.id === id);
+      const antes = `${d.nomeCurto || d.v.plano_nome || '—'} · ${FORMAS[d.v.forma_pagamento] || '—'}`;
+      const ok = await gravar({ plano_id: id, forma_pagamento: forma }, `Plano trocado: ${p ? p.nome : 'novo plano'} · ${FORMAS[forma]}`);
+      if (ok) {
+        await NG.sb.from('eventos_venda').insert({ venda_id: d.v.id, tipo: 'plano_trocado', detalhe: { antes, depois: `${p ? p.nome : id} · ${FORMAS[forma]}` } });
+      }
+      return ok;
+    },
     async ed_cliente(fd) {
       const nome = String(fd.get('nome') || '').trim();
       if (!nome) { NG.toast('O nome do cliente é obrigatório.', 'bad'); return false; }
@@ -1017,11 +1040,20 @@
       bts.push(B('data-momento="assumir"', 'Assumir', true));
       sozinho = SOZINHO.assumir;
     } else if (etapa === 2 && v.status === '0_qualificado') {
-      if (!NG.portalViavel(v)) {
+      if (!NG.portalViavel(v) && ['sem_viabilidade', 'nao_encontrado'].includes(v.nio_viab_resultado)) {
+        // 0092 (Rogério): portal negou → DFV; endereço viável a até 200 m → formulário de análise da Nio + pendência.
+        const L = d.links || {};
+        bts.push(L.dfv_sudeste ? `<a class="btn" href="${esc(L.dfv_sudeste)}" target="_blank" rel="noopener">Conferir no DFV ↗</a>` : '',
+          L.nio_form_analise_viabilidade ? `<a class="btn" href="${esc(L.nio_form_analise_viabilidade)}" target="_blank" rel="noopener">Formulário de análise da Nio ↗</a>` : '',
+          B('data-f="pend-viab"', '⏸ Pendência: Nio confirma', true),
+          B('data-f="viab-rapido" data-r="viavel"', 'Deu Viável', false));
+        nota = 'Antes de desistir: tente variações de CEP, rua e número no portal. No DFV, se houver endereço viável a até 200 m do cliente, mande o formulário de análise da Nio e abra a pendência — a venda sai da sua vez até a resposta.';
+        sozinho = 'a pendência tira a venda da sua vez até a data de revisão e pausa os lembretes da Mari.';
+      } else if (!NG.portalViavel(v)) {
         bts.push(`<a class="btn" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Abrir o portal ↗</a>`,
           B('data-f="viab-rapido" data-r="viavel"', 'Viável', true), B('data-f="viab-rapido" data-r="sem_viabilidade"', 'Sem viabilidade', false),
           B('data-f="viab-form"', 'Detalhes…', false));
-        sozinho = SOZINHO.viabilidade;
+        sozinho = SOZINHO.viabilidade + ' Também dá para registrar pela extensão, na etapa 2 do portal.';
       } else {
         if (!form) { formAtivoPadrao = 'pedido_so'; }
         sozinho = SOZINHO.pedido;
@@ -1075,6 +1107,7 @@
     if (bo && !d.pend && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="pend-abrir" title="A venda sai da sua vez até a data de revisão; a cadência da Mari pausa">⏸ Pendência</button>');
     if (bo && temCw && (dono === 'pessoa' || dono === 'time')) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari" title="Tira a atribuição no Chatwoot e deixa nota: a Mari continua com o contexto">Devolver para a Mari</button>');
     if (bo && temCw && !cv.nao_contatar) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar" title="Etiqueta nao-contatar, nota, resolve a conversa e para tudo">Cliente pediu para parar</button>');
+    if (bo && NG.etapaDe(v).n >= 2 && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="trocar-plano" title="Upsell ou troca feita no portal: o valor e a comissão se recalculam">Trocar plano</button>');
     b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="saida-form">Saída…</button>');
     return `<div class="f-atalhos">${b.join('')}</div>`;
   }
@@ -1251,7 +1284,8 @@
       {
         id: 'endereco', titulo: 'Endereço e viabilidade',
         resumo: [[v.logradouro, v.numero].filter(Boolean).join(', ') || 'sem endereço',
-          `portal: ${v.nio_viab_resultado ? (NG.VIAB_NIO[v.nio_viab_resultado] || v.nio_viab_resultado).toLowerCase() : 'não consultado'}`, `pista ${dfvRot}`].join(' · '),
+          `portal: ${v.nio_viab_resultado ? (NG.VIAB_NIO[v.nio_viab_resultado] || v.nio_viab_resultado).toLowerCase() : 'não consultado'}`,
+          NG.portalViavel(v) ? null : `DFV ${dfvRot.replace(/^DFV:? ?/, '')}`].filter(Boolean).join(' · '),
         corpo: () => `${linha('Endereço', esc([v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ') || '—'))}
           ${linha('Bairro · cidade', esc([v.bairro, [v.cidade, v.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ') || '—'))}
           ${linha('CEP', `<span class="mono">${esc(v.cep || '—')}</span>`)}
@@ -1288,7 +1322,18 @@
           ${linha('Forma', esc(formaTxt))}
           ${linha('1º vencimento', esc(v.primeiro_vencimento ? `${NG.fmtDiaISO(v.primeiro_vencimento)} · ${cartao ? 'cobra todo dia' : 'depois todo dia'} ${v.vencimento_dia}` : cartao ? 'no dia da instalação' : '25 dias após a instalação'))}
           ${v.plano_taxa_a_vista ? linha('Fidelidade', 'sem fidelidade · taxa de habilitação à vista na 1ª fatura') : ''}
-          <span class="nota-campo">Plano e forma de pagamento saem da tabela vigente na entrada da venda; para trocar, fale com o backoffice.</span>`,
+          <span class="nota-campo">Plano e forma de pagamento saem da tabela vigente. Upsell ou troca no portal: use <b>Trocar plano ou pagamento</b> (backoffice) — o valor e a comissão se recalculam.</span>`,
+        rotuloEditar: 'Trocar plano ou pagamento',
+        editar: ehBO() && v.status !== 'saida' ? () => {
+          const atual = (d.planos || []).find((x) => x.id === v.plano_id) || {};
+          const opcoes = (d.planos || []).filter((x) => (!atual.cluster || x.cluster === atual.cluster) && (!atual.portfolio || x.portfolio === atual.portfolio));
+          const preco = (x) => `${m(x.preco)} boleto${x.preco_cartao ? ` · ${m(x.preco_cartao)} cartão` : ''}`;
+          return `<form class="f-formulario" data-form="ed_plano" novalidate>
+            <label class="campo">Plano (mesma faixa de preço da cidade)<select name="plano">${opcoes.map((x) => `<option value="${esc(x.id)}"${x.id === v.plano_id ? ' selected' : ''}>${esc(x.nome)} — ${esc(preco(x))}</option>`).join('')}</select></label>
+            <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === v.forma_pagamento ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label>
+            <span class="nota-campo">O valor sai da tabela: o preço do cartão só vale com cartão. Prometer o preço do cartão a quem paga no boleto é desconto fora da tabela (contrato).</span>
+            ${acoesForm('Trocar')}</form>`;
+        } : null,
       },
       {
         id: 'pedido', titulo: 'Pedido, biometria e OS',
@@ -1639,6 +1684,13 @@
         return;
       }
       if (acao === 'detalhes') { detalhes = !detalhes; render(); return; }
+      if (acao === 'trocar-plano') {
+        detalhes = true; edicao = 'plano'; formAtivo = null; render();
+        const bl = raiz.querySelector('[data-bloco="plano"]');
+        if (bl) bl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
+      }
+      if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' ? null : 'saida'; render(); return; }
       if (acao === 'mover') { await mover(b.dataset.st); return; }
       if (acao === 'viab-rapido') {

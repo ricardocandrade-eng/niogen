@@ -82,3 +82,8 @@ a.btn { display: inline-block; text-decoration: none; text-align: center; white-
 .item-corpo:hover b { color: var(--acc); }
 .item-corpo:focus-visible { outline: 2px solid var(--acc); }
 .item-ler { margin: 0 12px 10px; align-self: flex-start; }
+/* 0092: registrar viabilidade/crédito no NIOGEN */
+.registro { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,.15); }
+.registro .acoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.registro .sub.ok { color: #8FE39A; }
+.check { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; margin: 6px 0; }

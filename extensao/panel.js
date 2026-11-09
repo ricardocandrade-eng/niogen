@@ -6,6 +6,8 @@
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
  * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
  * rev. 09/11 (0087, 0.3.1): venda = OS aberta (etapa 7) — o painel pede o nº do pedido E o nº da OS.
+ * rev. 09/11 (0092, 0.3.3): na etapa 2 o resultado da viabilidade e na etapa 3 o do crédito vão para o NIOGEN com um toque
+ *   (backoffice_momento 'viabilidade' / 'credito'); "Já avisei o cliente" no Gravar pedido (sem o aviso automático).
  * rev. 09/11 (0089, 0.3.2): ordem nova — o painel grava SÓ o nº do pedido (etapa 3). A OS se abre depois da biometria validada,
  * já com o dia e o período, pela ficha do NIOGEN ("Gravar OS e agendamento") — é isso que faz a venda contar.
  * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
@@ -415,6 +417,17 @@
     S.ocupado = false; desenha();
     if (fechou) rolarPara(n + 1); else if (S.resultados[n]) rolarPara(n, 'nearest');
   }
+  // 0092: registra no NIOGEN o que o portal respondeu (viabilidade na etapa 2, crédito na etapa 3) — o mesmo botão da ficha.
+  async function registra(qual, resultado) {
+    if (!S.dados || !S.dados.venda_id) { aviso('Abra uma venda para registrar.', 'bad'); desenha(); return; }
+    S.ocupado = true; aviso(''); desenha();
+    try {
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
+      S.registro = { ...(S.registro || {}), [qual]: resultado };
+      aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
+    } catch (e) { aviso(e.message, 'bad'); }
+    S.ocupado = false; desenha();
+  }
   async function gravaPedido() {
     const ped = S.pedido.trim();
     if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
@@ -422,10 +435,10 @@
     try {
       // 0082 (fluxo único do backoffice): o momento "pedido" grava o nº e, sozinho, põe a etiqueta biometria-pendente, deixa a
       // nota e avisa o cliente na conversa (respeitando horário, 2/dia · 15/mês e a janela de 24 h).
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao' } });
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao', sem_aviso: !!S.semAviso } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
-      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = '';
+      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null;
       S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
       try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
       aviso(`Pedido gravado no NIOGEN (${nome}). ${(r && r.resumo) || ''}${r && r.aviso ? ` · ${r.aviso}` : ' · o cliente é avisado pelo sistema.'}`, r && r.aviso ? 'bad' : 'ok');
@@ -564,7 +577,19 @@
         ' ', falt ? h('span', { class: 'chip bad' }, `${falt} ${falt === 1 ? 'falta' : 'faltam'}`) : null),
       corpo, extraTxt ? h('span', { class: 'sub' }, extraTxt) : null,
       n === 6 || n === 7 ? h('ul', { class: 'lista sub' }, CHECKLIST.map((x) => h('li', {}, x))) : null,
-      acao, resultados);
+      acao, resultados, registroNiogen(n));
+  }
+  // 0092: botões "registrar no NIOGEN" das etapas 2 (viabilidade) e 3 (crédito). Só com venda aberta no painel.
+  function registroNiogen(n) {
+    if (!S.venda || !S.dados || !S.dados.venda_id || (n !== 2 && n !== 3)) return null;
+    const feito = (S.registro || {})[n === 2 ? 'viabilidade' : 'credito'];
+    const B = (qual, res, rot, forte) => h('button', { class: `btn ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, onclick: () => registra(qual, res) }, rot);
+    const ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado', aprovado: 'Aprovado', so_cartao: 'Só cartão', pendente: 'Pendente', negado: 'Negado' };
+    return h('div', { class: 'registro' },
+      h('span', { class: 'sub' }, n === 2 ? 'O portal respondeu a viabilidade? Registre no NIOGEN:' : 'O portal respondeu o crédito? Registre no NIOGEN:'),
+      n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
+        : h('div', { class: 'acoes' }, B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')),
+      feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT[feito] || feito}`) : null);
   }
 
   function fimDoPedido() {
@@ -574,6 +599,9 @@
         h('span', { class: 'sub' }, 'Quando o portal gravar o pedido, digite o nº aqui e grave (etapa 3). A Nio manda o link da biometria ao cliente. A OS vem DEPOIS da biometria validada, já com o dia e o período, pela ficha do NIOGEN. Eu não leio os números do portal.'),
         h('label', { class: 'campo' }, 'Número do pedido',
           h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
+          ' Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)'),
+        h('span', { class: 'sub' }, 'O NIOGEN avisa o cliente sozinho quando você grava — não mande o aviso à mão.'),
         h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
     }
     const c = S.conversa;

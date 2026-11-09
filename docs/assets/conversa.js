@@ -152,7 +152,7 @@
           <label class="cvp-f">Atribuída<select data-cv="dono"${c.nao_contatar ? ' disabled' : ''}>${optsDono.map(([v, t]) => `<option value="${v}"${v === dn.v ? ' selected' : ''}${v === 'outro' ? ' disabled' : ''}>${esc(t)}</option>`).join('')}</select></label>
           <span class="cvp-sep"></span>
           <span class="cvp-f ${jn.aberta ? '' : 'warn-txt'}">${esc(jn.txt)}</span>
-          ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener">Abrir no Chatwoot ↗</a>` : ''}
+          ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}
         </div>
         <div class="cvp-l2"><span class="cvp-f">Etiquetas</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
           <select data-cv="etiqueta" aria-label="Pôr etiqueta"><option value="">+ etiqueta</option>${ETIQUETAS.filter((x) => !etq.includes(x)).map((x) => `<option>${esc(x)}</option>`).join('')}</select></div>
@@ -164,7 +164,7 @@
               ${usaTpl ? '' : d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
               ${!st.nota && d.tpls.length ? `<optgroup label="Templates aprovados${jn.aberta ? ' (janela fechada)' : ''}">${d.tpls.map((t) => `<option value="t:${esc(t.nome)}"${st.tpl === t.nome ? ' selected' : ''}>${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}
             </select>
-            <span class="cvp-ajuda">${esc(ajuda)} · contatos hoje ${esc(d.q.contatos_hoje ?? 0)}/2 · mês ${esc(d.q.contatos_mes ?? 0)}/15</span>
+            <span class="cvp-ajuda">${esc(ajuda)} · Enter envia, Shift+Enter pula linha · contatos hoje ${esc(d.q.contatos_hoje ?? 0)}/2 · mês ${esc(d.q.contatos_mes ?? 0)}/15</span>
           </div>
           <div class="cvp-caixa"><textarea data-cv-txt rows="2" placeholder="${st.nota ? 'Escrever nota privada…' : st.tpl ? 'Template escolhido — o texto sai como aprovado' : `Responder ${esc(NG.primeiroNome(nome))}…`}"${st.tpl ? ' readonly' : ''}>${esc(st.rascunho)}</textarea>
             <button type="button" class="btn btn-acc" data-cv="enviar"${st.enviando || c.nao_contatar ? ' disabled' : ''}>${st.nota ? 'Salvar nota' : 'Enviar'}</button></div>
@@ -256,8 +256,9 @@
         if (ta) ta.focus();
       }
     });
+    // Enter envia; Shift+Enter quebra a linha (como no WhatsApp Web). Não envia no meio da composição de acento (IME).
     el.addEventListener('keydown', (ev) => {
-      if (ev.target.matches('[data-cv-txt]') && ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); enviar(); }
+      if (ev.target.matches('[data-cv-txt]') && ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); if (!st.enviando) enviar(); }
     });
     const intervalo = setInterval(() => { if (document.visibilityState === 'visible' && !st.enviando) carregar(); }, 20000);
 
