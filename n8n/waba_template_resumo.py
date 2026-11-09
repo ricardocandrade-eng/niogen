@@ -7,7 +7,7 @@
 #
 # Uso:  python n8n/waba_template_resumo.py            # dry-run: mostra o que mandaria
 #       python n8n/waba_template_resumo.py --enviar   # submete (só se ainda não tem meta_id)
-#       python n8n/waba_template_resumo.py --status   # consulta o status na Meta e atualiza o banco
+#       python n8n/waba_template_resumo.py --status   # consulta status e categoria na Meta e atualiza o banco
 
 import json
 import os
@@ -40,7 +40,7 @@ def main():
         r = w.graph('GET', f'/{w.WABA_NIO}/message_templates?name={NOME}&fields=name,status,id,category,rejected_reason')
         for m in r.get('data', []):
             print(f"{m['name']}: {m['status']} ({m['category']}, id {m['id']}){' · ' + m['rejected_reason'] if m.get('rejected_reason') not in (None, 'NONE') else ''}")
-            w.sql(f"update config_templates_waba set meta_id = '{m['id']}', status = '{m['status']}', atualizado_em = now() where nome = '{NOME}'")
+            w.sql(f"update config_templates_waba set meta_id = '{m['id']}', status = '{m['status']}', categoria = '{m['category']}', atualizado_em = now() where nome = '{NOME}'")
         return
     if '--enviar' not in sys.argv:
         print(json.dumps(payload, ensure_ascii=False, indent=2))

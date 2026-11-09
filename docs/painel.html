@@ -8,8 +8,8 @@
      09/11 (onda 2.1, 0075): faixa "primeira venda" no topo, para todos os perfis — meta do mês × instaladas (painel_meta_ritmo,
      a mesma conta do resumo diário), ritmo "faltam N em D dias → X por dia" e paradas por etapa (NG.paradaDe; vermelho = prazo do
      contrato vencido, de config_regras) — clique abre vendas.html?vista=lista&parada=<etapa>.
-     09/11 (onda 3.2, 0077): cartão "Resumo de ontem" (só admin) com o texto de resumo_diario(ontem) e botão Copiar — o envio
-     automático (n8n resumo_diario, 08h seg–sáb) está criado INATIVO, esperando a decisão do canal.
+     09/11 (onda 3.2, 0077): cartão "Resumo de ontem" (só admin) com o texto de resumo_diario(ontem) e botão Copiar — o mesmo
+     resumo vai às 8h (seg–sáb) pelo WhatsApp do Ricardo (n8n resumo_diario, template resumo_diario_interno — 0080).
      Dados: v_funil (KPIs e lista, mesma regra da tela Vendas), contatos_cliente, mari_conversas/mari_turnos, v_dfv_resumo, importacoes. -->
 <html lang="pt-BR">
 <head>
@@ -22,12 +22,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-8">
-<script src="config.js?v=091126-8"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-9">
+<script src="config.js?v=091126-9"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-8"></script>
-<script src="assets/sidebar.js?v=091126-8"></script>
-<script src="assets/ficha.js?v=091126-8"></script>
+<script src="assets/app.js?v=091126-9"></script>
+<script src="assets/sidebar.js?v=091126-9"></script>
+<script src="assets/ficha.js?v=091126-9"></script>
 </head>
 <body>
 <div class="app">
@@ -176,7 +176,7 @@
       blocos.push(`<section class="painel bloco-curto resumo-ontem">
         <div class="q-linha"><h2 title="resumo_diario(ontem): vendas do dia, Meta Ads, conversas paradas, prazos do contrato e ritmo da meta. Sem CPF nem telefone.">Resumo de ontem</h2><button type="button" class="btn btn-sm" id="copiar-resumo"${resumo && resumo.texto ? '' : ' disabled'}>Copiar</button></div>
         ${resumo === undefined ? '<span class="nota-campo">Carregando…</span>' : !resumo ? '' : resumo.erro ? `<span class="nota-campo">${esc(resumo.erro)}</span>`
-          : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Envio automático às 8h: desligado até decidir o canal (WhatsApp × Telegram).</span>`}
+          : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Às 8h (seg–sáb) este resumo chega no seu WhatsApp.</span>`}
       </section>`);
     }
     // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
