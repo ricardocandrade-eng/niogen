@@ -1,0 +1,190 @@
+<!doctype html>
+<!-- NIOGEN | docs/fila.html | 09/11/2026 — Claude Code (docs/Prompt_fluxo_unico_backoffice_091126_1000.md · Fase 2)
+     "Minha vez": a tela de rotina do backoffice (1ª do menu). Uma linha por pessoa, um botão por linha:
+       💬 conversa esperando o time (v_mari_aguardando_humano + sem resposta) → Assumir (atribui no Chatwoot sozinho)
+       🧾 venda com próximo passo vermelho/amarelo, conferência de parceiro, pendência que vence hoje → abre a ficha no passo
+       🔧 instalação com exceção (pendência Nio, data passada, docs) → abre a ficha
+       ✉ mensagem que o sistema não pôde mandar (janela 24 h fechada sem template, teto 2/dia · 15/mês) → mandar à mão + "Já mandei"
+     Ordem: vermelho → amarelo → mais antigo. Dados: v_fila_backoffice (security_invoker, 0082) + v_funil com NG.proximoPasso
+     (a mesma regra da tela Vendas). Sem CPF nem endereço na lista. Mari, Vendas e Instalações continuam como consulta. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Minha vez · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=091126-12">
+<script src="config.js?v=091126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=091126-12"></script>
+<script src="assets/sidebar.js?v=091126-12"></script>
+<script src="assets/ficha.js?v=091126-12"></script>
+<style>
+  .fila-tipo { font-size: 16px; width: 28px; text-align: center; }
+  .fila-falta b { font-weight: 600; }
+  .fila-falta.bad b { color: var(--bad-fg); }
+  .fila-falta.warn b { color: var(--warn-fg); }
+  .fila-bt { text-align: right; white-space: nowrap; }
+  .fila-bt .btn + .btn { margin-left: 6px; }
+  .fila-regra { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 13px; color: var(--muted); }
+  .fila-regra b { color: var(--text); }
+  .cartao .fila-cbt { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="minhavez"></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1>Minha vez</h1>
+        <div class="sub">Pegue a primeira linha e aperte o botão. O NIOGEN cuida do Chatwoot; lá você só conversa com o cliente.</div>
+      </div>
+      <div class="cab-acoes" id="cab-acoes"></div>
+    </header>
+
+    <p class="fila-regra"><b>Vermelho</b> = prazo do contrato estourando ou cliente esperando · <b>amarelo</b> = fazer hoje.
+      💬 conversa · 🧾 venda · 🔧 instalação · ✉ mensagem que você manda à mão.</p>
+
+    <div id="abas"></div>
+
+    <section class="lista padrao" aria-label="Fila do backoffice">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr>
+            <th aria-label="Tipo"></th>
+            <th>Quem</th>
+            <th>O que falta</th>
+            <th>Há quanto tempo</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a ficha ou a conversa</span></div>
+    </section>
+    <div class="cartoes" id="cartoes" aria-label="Fila do backoffice"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  const tbody = document.getElementById('tbody');
+  const cartoesEl = document.getElementById('cartoes');
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    tbody.innerHTML = '<tr><td colspan="5" class="vazio">A Fila é do backoffice. Use Vendas.</td></tr>';
+    return;
+  }
+  const CW = NG.CHATWOOT_NIO_ACCOUNT;
+  let itens = [];
+  let aba = 'todas';
+
+  async function carregar() {
+    const [rf, rv, rc] = await Promise.all([
+      NG.sb.from('v_fila_backoffice').select('*'),
+      NG.sb.from('v_funil').select('*').neq('status', 'saida').limit(2000),
+      NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
+    ]);
+    const erro = rf.error || rv.error;
+    if (erro) { tbody.innerHTML = `<tr><td colspan="5" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`; return; }
+    itens = NG.filaItens(rf.data || [], rv.data || [], NG.ultimosContatos(rc.data || []));
+    render();
+  }
+
+  const haTempo = (iso) => {
+    if (!iso) return '—';
+    const min = Math.max(0, (Date.now() - new Date(iso)) / 60000);
+    if (min < 60) return `há ${Math.round(min)} min`;
+    if (min < 48 * 60) return `há ${NG.fmtHoras(min / 60)}`;
+    return `há ${Math.floor(min / 1440)} dias`;
+  };
+  const quem = (it) => `<b>${esc(it.tipo === 'venda' || it.tipo === 'instalacao' ? it.nome : it.nome)}</b><small>${esc(it.cidade || '—')}</small>`;
+  const linkChat = (it) => (it.f && it.f.chatwoot_conversation_id && CW ? `https://app.chatwoot.com/app/accounts/${CW}/conversations/${encodeURIComponent(it.f.chatwoot_conversation_id)}` : null);
+  // Um botão por linha (o 2º só no ✉: copiar o texto pronto para colar no Chatwoot).
+  function botoes(it) {
+    if (it.tipo === 'manual') {
+      const ch = linkChat(it);
+      return `${it.f.texto ? `<button type="button" class="btn btn-sm" data-a="copiar" data-k="${esc(it.chave)}" title="Copia o texto pronto">Copiar texto</button>` : ''}`
+        + `${ch ? `<a class="btn btn-sm" href="${esc(ch)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}`
+        + `<button type="button" class="btn btn-acc btn-sm" data-a="mandei" data-k="${esc(it.chave)}" title="Você mandou pelo Chatwoot (template, se a janela de 24 h fechou): conta no limite do contrato e sai da Fila">Já mandei</button>`;
+    }
+    if (it.tipo === 'conversa' && !it.f.assumida) return `<button type="button" class="btn btn-acc btn-sm" data-a="assumir" data-k="${esc(it.chave)}" title="Atribui a você no Chatwoot (a Mari cala), para a cadência e abre a conversa">Assumir</button>`;
+    if (it.tipo === 'conversa') return `<button type="button" class="btn btn-sm" data-a="abrir" data-k="${esc(it.chave)}">${it.venda_id ? 'Abrir a ficha' : 'Abrir a conversa'}</button>`;
+    return `<button type="button" class="btn ${it.nivel === 'bad' ? 'btn-acc' : ''} btn-sm" data-a="abrir" data-k="${esc(it.chave)}">Resolver</button>`;
+  }
+  const ABAS = [['todas', 'Todas'], ['conversa', '💬 Conversas'], ['venda', '🧾 Vendas'], ['instalacao', '🔧 Instalações'], ['manual', '✉ Mandar à mão']];
+
+  function render() {
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: id === 'todas' ? itens.length : itens.filter((x) => x.tipo === id).length,
+      alerta: id === 'todas' && itens.some((x) => x.nivel === 'bad') })), aba, (id) => { aba = id; render(); });
+    const lista = itens.filter((x) => aba === 'todas' || x.tipo === aba);
+    tbody.innerHTML = lista.length ? lista.map((it) => `<tr class="clicavel" data-k="${esc(it.chave)}" tabindex="0">
+        <td class="fila-tipo" title="${esc({ conversa: 'Conversa', venda: 'Venda', instalacao: 'Instalação', manual: 'Mensagem à mão' }[it.tipo])}">${it.ico}</td>
+        <td class="cli">${quem(it)}</td>
+        <td class="fila-falta ${it.nivel}"><b>${esc(it.falta)}</b></td>
+        <td class="apagado">${esc(haTempo(it.desde))}</td>
+        <td class="fila-bt">${botoes(it)}</td>
+      </tr>`).join('') : '<tr><td colspan="5" class="vazio">Nada na sua vez agora ✅ — a Fila se atualiza sozinha a cada minuto.</td></tr>';
+    cartoesEl.innerHTML = lista.length ? lista.map((it) => `<div class="cartao" data-k="${esc(it.chave)}" tabindex="0">
+        <div class="cli"><b>${it.ico} ${esc(it.nome)}</b><small>${esc(it.cidade || '—')} · ${esc(haTempo(it.desde))}</small></div>
+        <div class="l2 fila-falta ${it.nivel}"><b>${esc(it.falta)}</b></div>
+        <div class="fila-cbt">${botoes(it)}</div>
+      </div>`).join('') : '<div class="vazio">Nada na sua vez agora ✅</div>';
+    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'linha' : 'linhas'} · ${NG.fmtNum(lista.filter((x) => x.nivel === 'bad').length)} em vermelho`;
+  }
+
+  function abrirItem(it) {
+    if (it.venda_id) { NGFicha.abrir(it.venda_id); return; }
+    if (it.conversa_id) location.href = `mari.html?conversa=${encodeURIComponent(it.conversa_id)}`;
+  }
+  async function acao(b) {
+    const it = itens.find((x) => x.chave === b.dataset.k);
+    if (!it) return;
+    const qual = b.dataset.a;
+    if (qual === 'abrir') { abrirItem(it); return; }
+    if (qual === 'copiar') {
+      try { await navigator.clipboard.writeText(it.f.texto); NG.toast('Texto copiado — cole na conversa do Chatwoot', 'ok'); } catch (e) { NG.toast('Não deu para copiar — abra a ficha e copie à mão.', 'bad'); }
+      return;
+    }
+    b.disabled = true;
+    if (qual === 'assumir') {
+      const r = await NG.momento(it.venda_id || null, 'assumir', it.venda_id ? {} : { conversa_id: it.conversa_id });
+      if (!r) { b.disabled = false; return; }
+      await carregar();
+      abrirItem(it);
+      return;
+    }
+    if (qual === 'mandei') {
+      const { error } = await NG.sb.rpc('backoffice_acao_manual', { p_id: it.f.acao_id, p_enviei: true });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+      NG.toast('Registrado: mensagem enviada à mão (conta no limite do contrato)', 'ok');
+      await carregar();
+    }
+  }
+  const clique = (ev) => {
+    const b = ev.target.closest('[data-a]');
+    if (b) { ev.stopPropagation(); acao(b); return; }
+    const l = ev.target.closest('[data-k]');
+    if (l) { const it = itens.find((x) => x.chave === l.dataset.k); if (it) abrirItem(it); }
+  };
+  tbody.addEventListener('click', clique);
+  cartoesEl.addEventListener('click', clique);
+  tbody.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.matches('tr[data-k]')) clique(ev); });
+
+  NGFicha.aoMudar(() => carregar());
+  NG.botaoAtualizar(() => carregar());
+  await carregar();
+  NGFicha.iniciar();
+  setInterval(() => { if (document.visibilityState === 'visible' && !NGFicha.aberta) carregar(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !NGFicha.aberta) carregar(); });
+})();
+</script>
+</body>
+</html>

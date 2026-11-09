@@ -8,6 +8,8 @@
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
  * 08/11: link discreto "Guia do Backoffice" sob a data/versão (guia.html), com "• atualizado" se o guia foi publicado depois da
  * última leitura (localStorage niogen.guia.visto, em try/catch).
+ * 09/11 (0082, prompt fluxo único): "Minha vez" (fila.html) é a 1ª do menu para admin/backoffice; o número = total da Fila
+ * (NG.filaItens: conversas esperando o time + mensagens "mandar à mão" + vendas/instalações vermelhas ou amarelas).
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
@@ -16,6 +18,9 @@
   const VERSAO = 'v1.3 · 06/11';
 
   const MENU = [
+    ['Backoffice', [
+      { id: 'minhavez', ico: '☰', nome: 'Minha vez', href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila' },
+    ]],
     ['Gestão', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
       { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
@@ -88,7 +93,7 @@
         <div class="nav-user-txt"><strong>${NG.esc(u.nome || '')}</strong><span>${NG.esc(NG.PERFIS[u.perfil] || '')}</span></div>
       </div>
       <div class="nav-items">
-        ${MENU.map(([sec, itens]) => `<div class="nav-sec">${sec}</div>${itens.map((it) => item(it, it.id === pagina)).join('')}`).join('')}
+        ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
       <div class="nav-foot"><button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button></div>`;
 
@@ -169,6 +174,7 @@
           total += n;
         }
       }
+      let funil = null, ultC = null;
       if (nav.querySelector('[data-badge="vendas"]')) {
         const [rv, rc, rs] = await Promise.all([
           NG.sb.from('v_funil').select('*').neq('status', 'saida').limit(2000),
@@ -177,6 +183,7 @@
         ]);
         if (!rv.error) {
           const ult = NG.ultimosContatos(rc.data || []);
+          funil = rv.data || []; ultC = ult;
           const visto = rs.data ? new Date(rs.data.visto_em) : null;
           const ids = new Set();
           let novas = 0, acao = 0;
@@ -190,6 +197,15 @@
           pinta(nav, 'vendas', ids.size, novas ? 'alerta' : 'info',
             `${novas} ${novas === 1 ? 'venda nova' : 'vendas novas'} em Qualificado desde a sua última visita · ${acao} ${acao === 1 ? 'precisa' : 'precisam'} de ação. ${NG.ajuda.menu_vendas}`);
           total += ids.size;
+        }
+      }
+      // 0082: número da Fila "Minha vez" (não soma no título: as mesmas vendas já contam em Vendas).
+      if (['admin', 'backoffice'].includes(u.perfil) && nav.querySelector('[data-badge="fila"]') && funil) {
+        const rf = await NG.sb.from('v_fila_backoffice').select('*');
+        if (!rf.error) {
+          const itens = NG.filaItens(rf.data || [], funil, ultC);
+          const verm = itens.filter((x) => x.nivel === 'bad').length;
+          pinta(nav, 'fila', itens.length, verm ? 'alerta' : 'info', `${itens.length} na sua fila · ${verm} em vermelho (prazo do contrato ou cliente esperando).`);
         }
       }
     } catch (e) { /* aviso do menu nunca derruba a tela */ }

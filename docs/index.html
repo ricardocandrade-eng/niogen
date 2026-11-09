@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- NIOGEN | docs/index.html | 03/11/2026 — login (Supabase Auth e-mail/senha) → painel.html
+<!-- NIOGEN | docs/index.html | 03/11/2026 — login (Supabase Auth e-mail/senha) → painel.html (backoffice → fila.html desde 09/11, 0082)
      08/11 (Onda 1.3): link do convite e de "esqueci a senha" abre aqui → "Crie sua senha" (a pessoa digita a própria senha;
      updateUser). Convidado sem acesso liberado ouve "falta o admin liberar" em vez de cair no erro de perfil. -->
 <html lang="pt-BR">
@@ -13,14 +13,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-11">
+<link rel="stylesheet" href="assets/app.css?v=091126-12">
 <script>
   // Antes do supabase-js limpar o endereço: de onde veio o link (convite, recuperação) ou o erro dele (link vencido).
   (function () { const h = new URLSearchParams(location.hash.slice(1)); window.NG_LINK = { tipo: h.get('type'), erro: h.get('error_code') || h.get('error') }; })();
 </script>
-<script src="config.js?v=091126-11"></script>
+<script src="config.js?v=091126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-11"></script>
+<script src="assets/app.js?v=091126-12"></script>
 </head>
 <body>
 <main class="login">
@@ -50,6 +50,10 @@
 </main>
 <script>
 (async function () {
+  // 0082: o backoffice entra pela Fila "Minha vez"; os outros pelo Painel.
+  async function telaInicial() {
+    try { const { data } = await NG.sb.rpc('meu_perfil'); return data === 'backoffice' ? 'fila.html' : 'painel.html'; } catch (e) { return 'painel.html'; }
+  }
   const msg = document.getElementById('msg');
   const erro = new URLSearchParams(location.search).get('erro');
   const link = window.NG_LINK || {};
@@ -79,7 +83,7 @@
       if (error) { btn.disabled = false; m.textContent = /weak|pwned|leaked/i.test(error.message) ? 'Essa senha é fraca ou já vazou em outro site. Escolha outra.' : error.message; return; }
       // Convidado ainda inativo não lê a própria linha (RLS) → avisa em vez de cair no erro de perfil.
       const { data: u } = await NG.sb.from('usuarios').select('ativo').eq('id', data.session.user.id).maybeSingle();
-      if (u && u.ativo) { location.replace('painel.html'); return; }
+      if (u && u.ativo) { location.replace(await telaInicial()); return; }
       await NG.sb.auth.signOut();
       fs.hidden = true;
       document.getElementById('form-login').hidden = false;
@@ -87,7 +91,7 @@
     });
     return;
   }
-  if (data.session && !msg.textContent) location.replace('painel.html');
+  if (data.session && !msg.textContent) location.replace(await telaInicial());
 
   document.getElementById('esqueci').addEventListener('click', async () => {
     const email = document.querySelector('#form-login [name=email]').value.trim();
@@ -110,7 +114,7 @@
       msg.textContent = /invalid/i.test(error.message) ? 'E-mail ou senha incorretos.' : error.message;
       return;
     }
-    location.replace('painel.html');
+    location.replace(await telaInicial());
   });
 })();
 </script>
