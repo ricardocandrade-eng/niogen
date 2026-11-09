@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-20">
-<script src="config.js?v=091126-20"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-21">
+<script src="config.js?v=091126-21"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-20"></script>
-<script src="assets/sidebar.js?v=091126-20"></script>
-<script src="assets/conversa.js?v=091126-20"></script>
-<script src="assets/ficha.js?v=091126-20"></script>
+<script src="assets/app.js?v=091126-21"></script>
+<script src="assets/sidebar.js?v=091126-21"></script>
+<script src="assets/conversa.js?v=091126-21"></script>
+<script src="assets/ficha.js?v=091126-21"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -135,8 +135,14 @@
   function filtradas(comVez = soVez) {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && (!comVez || vez(j))).sort(NG.ordemJornada);
   }
+  // Acompanhando: vendas que não pedem nada agora, mas que o time acompanha — biometria, instalação, pendência com terceiro.
+  // (As conversas que a Mari está tocando ficam só em "Todas".)
+  const acompanha = (j) => !vez(j) && !!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora';
+  function acompanhando() {
+    return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
+  }
   const abas = () => `<div class="mv-abas"><div class="mv-tabs" role="tablist">
-      <button type="button" role="tab" data-aba="vez" aria-selected="${soVez}" class="${soVez ? 'on' : ''}">Sua vez · ${filtradas(true).length}</button>
+      <button type="button" role="tab" data-aba="vez" aria-selected="${soVez}" class="${soVez ? 'on' : ''}" title="O que é para fazer agora e hoje, e embaixo o que você acompanha">Sua vez · ${filtradas(true).length}<span class="mv-acomp-n"> + acompanhando ${acompanhando().length}</span></button>
       <button type="button" role="tab" data-aba="todas" aria-selected="${!soVez}" class="${soVez ? '' : 'on'}">Todas · ${filtradas(false).length}</button></div>
       <span class="apagado">${etapaSel ? `Só ${esc(NG.JORNADA[etapaSel - 1].nome)} · clique de novo na etapa para tirar` : 'Clique numa etapa para filtrar'}</span></div>`;
 
@@ -145,17 +151,25 @@
     if (conv) return;   // a conversa está no lugar da lista
     const l = filtradas();
     const atual = NGFicha.atual;
-    const linhas = l.map((j) => `<div class="mv-row ${j.nivel}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
+    const linha = (j) => `<div class="mv-row ${j.nivel}${vez(j) ? '' : ' acomp'}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
         <span class="mv-et" title="${esc(j.etapa_nome)}">${dot(j.etapa)}<span>${esc(j.etapa_nome)}</span></span>
         <span class="mv-cli"><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}<span class="mv-ha-2"> · há ${esc(haTempo(j.desde))}</span></small></span>
         <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
         <span class="mv-ha apagado">${esc(haTempo(j.desde))}</span>
         ${donoHtml(j)}
-        <span class="mv-bt"><button type="button" class="btn btn-sm${vez(j) ? ' mv-go' : ''}" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button></span>
-      </div>`).join('');
+        <span class="mv-bt"><button type="button" class="btn btn-sm${vez(j) ? ' mv-go' : ''}" data-bt="${vez(j) ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(vez(j) ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}</button></span>
+      </div>`;
+    const ac = soVez ? acompanhando() : [];
+    const grupo = (tit, sub) => `<div class="mv-grupo"><b>${tit}</b><span class="apagado">${sub}</span></div>`;
+    let linhas = l.map(linha).join('');
+    if (soVez) {
+      linhas = (l.length ? grupo(`Para fazer · ${l.length}`, 'vermelho = agora · amarelo = hoje') + linhas
+        : '<div class="mv-nada">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>')
+        + (ac.length ? grupo(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — biometria, instalação, pendência. Volta para "Para fazer" sozinha quando precisar.') + ac.map(linha).join('') : '');
+    }
     listaEl.innerHTML = `${abas()}
       <div class="mv-rolar"><div class="mv-row mv-cab mono"><span>ETAPA</span><span>CLIENTE</span><span>O QUE FAZER</span><span>HÁ</span><span>DONO</span><span></span></div>
-      ${linhas || `<div class="vazio">${soVez ? 'Nada na sua vez agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
+      ${linhas || `<div class="vazio">${soVez ? 'Nada para fazer nem acompanhar agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
       <div class="mv-pe apagado">Vermelho = agora (cliente esperando ou prazo de 4 h) · amarelo = hoje · ⏸ azul = esperando terceiro, fora da sua vez até a data · a lista se atualiza a cada minuto</div>`;
   }
 
@@ -163,10 +177,10 @@
   function renderQuadro() {
     const atual = NGFicha.atual;
     const cols = NG.JORNADA.filter((e) => !etapaSel || e.n === etapaSel).map((e) => {
-      const L = jor.lista.filter((j) => j.etapa === e.n && (!soVez || vez(j))).sort(NG.ordemJornada);
+      const L = jor.lista.filter((j) => j.etapa === e.n && (!soVez || vez(j) || acompanha(j))).sort(NG.ordemJornada);
       const nv = jor.lista.filter((j) => j.etapa === e.n && vez(j)).length;
       return `<section class="mv-col"><div class="mv-colh"><b>${dot(e.n)}${e.n} · ${esc(e.nome)}</b><span class="${nv ? 'mv-vz' : 'apagado'}">${L.length}${nv ? ` · ${nv} sua vez` : ''}</span></div>
-        <div class="mv-cards">${L.map((j) => `<div class="mv-kc ${j.nivel}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
+        <div class="mv-cards">${L.map((j) => `<div class="mv-kc ${j.nivel}${vez(j) ? '' : ' acomp'}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
           <b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small>
           <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
           <span class="mv-meta">${donoHtml(j)}<span class="apagado">há ${esc(haTempo(j.desde))}</span></span>

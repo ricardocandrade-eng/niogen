@@ -1399,3 +1399,10 @@ a.selo-ficha:hover { filter: brightness(1.15); }
   .mv-row .mv-cli { grid-area: cli; } .mv-row .mv-oque { grid-area: oque; } .mv-row .mv-dono { grid-area: dono; } .mv-row .mv-ha { grid-area: ha; text-align: right; }
   .mv-row .mv-bt { grid-area: bt; display: block; }
 }
+/* Minha vez · grupo "Acompanhando" (09/11): o que não pede nada agora mas o time acompanha */
+.mv-grupo { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 10px 14px 6px; font-size: 12px; border-bottom: 1px solid var(--border); background: var(--surface-dim); position: sticky; top: 34px; z-index: 1; }
+.mv-grupo b { font-size: 12.5px; }
+.mv-nada { padding: 14px; font-size: 13px; color: var(--ok-fg); border-bottom: 1px solid var(--border); }
+.mv-row.acomp, .mv-kc.acomp { opacity: .78; }
+.mv-row.acomp:hover, .mv-kc.acomp:hover { opacity: 1; }
+.mv-acomp-n { color: var(--muted); font-weight: 400; }
