@@ -6,6 +6,8 @@
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
  * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
  * rev. 09/11 (0087, 0.3.1): venda = OS aberta (etapa 7) — o painel pede o nº do pedido E o nº da OS.
+ * rev. 09/11 (0089, 0.3.2): ordem nova — o painel grava SÓ o nº do pedido (etapa 3). A OS se abre depois da biometria validada,
+ * já com o dia e o período, pela ficha do NIOGEN ("Gravar OS e agendamento") — é isso que faz a venda contar.
  * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
  */
 'use strict';
@@ -415,13 +417,12 @@
   }
   async function gravaPedido() {
     const ped = S.pedido.trim();
-    const os = String(S.os || '').trim();
-    if (!ped || !os) { aviso('Digite o número do pedido e o número da OS que o portal mostrou: venda é pedido + OS.', 'bad'); desenha(); return; }
+    if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
     S.ocupado = true; aviso(''); desenha();
     try {
       // 0082 (fluxo único do backoffice): o momento "pedido" grava o nº e, sozinho, põe a etiqueta biometria-pendente, deixa a
       // nota e avisa o cliente na conversa (respeitando horário, 2/dia · 15/mês e a janela de 24 h).
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, os, origem: 'extensao' } });
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao' } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
       S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = '';
@@ -569,12 +570,10 @@
   function fimDoPedido() {
     if (S.venda) {
       return h('section', { class: 'card' },
-        h('h2', {}, 'Etapa 7 · OS aberta = VENDA'),
-        h('span', { class: 'sub' }, 'Quando o portal abrir a OS, digite o nº do pedido e o nº da OS e grave: isso é a venda. Eu não leio os números do portal.'),
+        h('h2', {}, 'Pedido gravado → biometria'),
+        h('span', { class: 'sub' }, 'Quando o portal gravar o pedido, digite o nº aqui e grave (etapa 3). A Nio manda o link da biometria ao cliente. A OS vem DEPOIS da biometria validada, já com o dia e o período, pela ficha do NIOGEN. Eu não leio os números do portal.'),
         h('label', { class: 'campo' }, 'Número do pedido',
           h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
-        h('label', { class: 'campo' }, 'Número da OS',
-          h('input', { type: 'text', id: 'in-os', autocomplete: 'off', value: S.os || '', oninput: (ev) => { S.os = ev.target.value; } })),
         h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
     }
     const c = S.conversa;
