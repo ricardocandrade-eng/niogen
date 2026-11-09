@@ -8,8 +8,8 @@
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
  * 08/11: link discreto "Guia do Backoffice" sob a data/versão (guia.html), com "• atualizado" se o guia foi publicado depois da
  * última leitura (localStorage niogen.guia.visto, em try/catch).
- * 09/11 (0082, prompt fluxo único): "Minha vez" (fila.html) é a 1ª do menu para admin/backoffice; o número = total da Fila
- * (NG.filaItens: conversas esperando o time + mensagens "mandar à mão" + vendas/instalações vermelhas ou amarelas).
+ * 09/11 (0082, prompt fluxo único): "Minha vez" (fila.html) é a 1ª do menu para admin/backoffice.
+ * 09/11 (0090, jornada única): Minha vez, Funil e Mari contam pela MESMA regra — v_jornada.precisa_acao.
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
@@ -102,11 +102,6 @@
     menuMovel(nav, pagina);
     guiaNovo(nav, pagina);
 
-    // Badge de Instalações: vendas esperando agendamento.
-    const { count } = await NG.sb.from('v_instalacoes').select('id', { count: 'exact', head: true }).eq('coluna', 'agendar');
-    const b = nav.querySelector('[data-badge="agendar"]');
-    if (b && count) { b.textContent = count; b.hidden = false; }
-
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
     tituloBase = document.title.replace(/^\(\d+\)\s*/, '');
@@ -136,13 +131,6 @@
 
   // ---------- contadores do menu (prompt 27) ----------
   let tituloBase = '';
-  // Horário do contrato (seg–sex 9–21, sáb 10–16): o atraso de 15 min só conta dentro dele.
-  function noHorario(d) {
-    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: NG.TZ, weekday: 'short', hour: 'numeric', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
-    const h = Number(p.hour) % 24;
-    if (p.weekday === 'Sun') return false;
-    return p.weekday === 'Sat' ? h >= 10 && h < 16 : h >= 9 && h < 21;
-  }
   function pinta(nav, chave, n, cls, titulo) {
     const el = nav.querySelector(`[data-badge="${chave}"]`);
     if (!el) return;
@@ -153,60 +141,38 @@
     const item = el.closest('.nav-item');
     if (item) item.title = n ? titulo : '';
   }
+  // 0090: os três números saem da MESMA regra (v_jornada.precisa_acao): Minha vez = todos · Funil = os que têm venda ·
+  // Mari = os que têm conversa. Funil soma as vendas novas em Lead qualificado desde a última visita.
   async function avisos(nav) {
     const u = NG.usuario || {};
     let total = 0;
     try {
-      if (['admin', 'backoffice'].includes(u.perfil) && nav.querySelector('[data-badge="mari"]')) {
-        const [{ data, error }, rsr] = await Promise.all([
-          NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead'),
-          NG.sb.from('v_mari_sem_resposta').select('id'),   // 0081: cliente sem resposta (nem Mari, nem time) há ≥ 3 min
-        ]);
-        if (!error) {
-          const lista = data || [];
-          const ids = new Set(lista.map((a) => a.id));
-          const silencio = (rsr && !rsr.error ? rsr.data || [] : []).filter((x) => !ids.has(x.id));
-          const n = lista.length + silencio.length;
-          const agora = new Date();
-          const atrasada = silencio.length > 0 || (noHorario(agora) && lista.some((a) => (agora - new Date(a.ult_lead)) > 15 * 60000));
-          pinta(nav, 'mari', n, atrasada ? 'alerta' : 'info',
-            `${lista.length} ${lista.length === 1 ? 'conversa esperando' : 'conversas esperando'} alguém do time${silencio.length ? ` · ${silencio.length} sem resposta da Mari` : ''}${atrasada && !silencio.length ? ' — alguma há mais de 15 min' : ''}. ${NG.ajuda.menu_mari}`);
-          total += n;
-        }
+      const j = await NG.jornada();
+      if (j.erro) return;
+      const acao = j.lista.filter((x) => x.precisa_acao);
+      const verm = (l) => l.filter((x) => x.nivel === 'agora').length;
+      // Instalações: biometria validada esperando "OS + agendar" (contrato: 4 h).
+      const osAg = j.lista.filter((x) => x.botao === 'os_agendar');
+      pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} com a biometria validada esperando abrir a OS e agendar (contrato: até 4 h).`);
+      if (['admin', 'backoffice'].includes(u.perfil)) {
+        const conv = acao.filter((x) => x.conversa_id);
+        pinta(nav, 'mari', conv.length, verm(conv) ? 'alerta' : 'info',
+          `${conv.length} ${conv.length === 1 ? 'conversa precisa' : 'conversas precisam'} de ação (a mesma regra da Minha vez) · ${verm(conv)} agora. ${NG.ajuda.menu_mari}`);
+        pinta(nav, 'fila', acao.length, verm(acao) ? 'alerta' : 'info',
+          `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
+        total = acao.length;
       }
-      let funil = null, ultC = null;
       if (nav.querySelector('[data-badge="vendas"]')) {
-        const [rv, rc, rs] = await Promise.all([
-          NG.sb.from('v_funil').select('*').neq('status', 'saida').limit(2000),
-          NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
-          NG.sb.from('usuario_vistos').select('visto_em').eq('tela', 'vendas').maybeSingle(),
-        ]);
-        if (!rv.error) {
-          const ult = NG.ultimosContatos(rc.data || []);
-          funil = rv.data || []; ultC = ult;
-          const visto = rs.data ? new Date(rs.data.visto_em) : null;
-          const ids = new Set();
-          let novas = 0, acao = 0;
-          (rv.data || []).forEach((v) => {
-            const nova = v.status === '0_qualificado' && (!visto || new Date(v.criado_em) > visto);
-            const precisa = !!NG.proximoPasso(v, ult[v.id]).acao;
-            if (nova) novas += 1;
-            if (precisa) acao += 1;
-            if (nova || precisa) ids.add(v.id);
-          });
-          pinta(nav, 'vendas', ids.size, novas ? 'alerta' : 'info',
-            `${novas} ${novas === 1 ? 'venda nova' : 'vendas novas'} em Qualificado desde a sua última visita · ${acao} ${acao === 1 ? 'precisa' : 'precisam'} de ação. ${NG.ajuda.menu_vendas}`);
-          total += ids.size;
-        }
-      }
-      // 0082: número da Fila "Minha vez" (não soma no título: as mesmas vendas já contam em Vendas).
-      if (['admin', 'backoffice'].includes(u.perfil) && nav.querySelector('[data-badge="fila"]') && funil) {
-        const rf = await NG.sb.from('v_fila_backoffice').select('*');
-        if (!rf.error) {
-          const itens = NG.filaItens(rf.data || [], funil, ultC);
-          const verm = itens.filter((x) => x.nivel === 'bad').length;
-          pinta(nav, 'fila', itens.length, verm ? 'alerta' : 'info', `${itens.length} na sua fila · ${verm} em vermelho (prazo do contrato ou cliente esperando).`);
-        }
+        const rs = await NG.sb.from('usuario_vistos').select('visto_em').eq('tela', 'vendas').maybeSingle();
+        let q = NG.sb.from('vendas').select('id').eq('status', '0_qualificado');
+        if (rs.data && rs.data.visto_em) q = q.gt('criado_em', rs.data.visto_em);
+        const rn = await q.limit(500);
+        const novas = (rn.data || []).map((x) => x.id);
+        const vend = acao.filter((x) => x.venda_id);
+        const ids = new Set([...novas, ...vend.map((x) => x.venda_id)]);
+        pinta(nav, 'vendas', ids.size, novas.length ? 'alerta' : 'info',
+          `${novas.length} ${novas.length === 1 ? 'venda nova' : 'vendas novas'} em Lead qualificado desde a sua última visita · ${vend.length} ${vend.length === 1 ? 'precisa' : 'precisam'} de ação. ${NG.ajuda.menu_vendas}`);
+        if (!['admin', 'backoffice'].includes(u.perfil)) total = ids.size;
       }
     } catch (e) { /* aviso do menu nunca derruba a tela */ }
     document.title = total ? `(${total}) ${tituloBase}` : tituloBase;
