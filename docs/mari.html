@@ -23,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-2">
-<script src="config.js?v=091126-2"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-3">
+<script src="config.js?v=091126-3"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-2"></script>
-<script src="assets/sidebar.js?v=091126-2"></script>
-<script src="assets/ficha.js?v=091126-2"></script>
+<script src="assets/app.js?v=091126-3"></script>
+<script src="assets/sidebar.js?v=091126-3"></script>
+<script src="assets/ficha.js?v=091126-3"></script>
 </head>
 <body>
 <div class="app">
@@ -424,7 +424,7 @@
   const termoDica = (q) => (q.itens || []).filter((i) => i.obrigatorio).map((i) => `${SIMBOLO[i.estado]} ${i.nome} — ${ROT_ESTADO[i.estado]}`).join('\n');
   function termometro(q, { curto = false } = {}) {
     if (!q || !q.itens_total) return '<span class="apagado">—</span>';
-    const seg = (q.itens || []).filter((i) => i.obrigatorio).map((i) => `<i class="${i.estado}"></i>`).join('');
+    const seg = (q.itens || []).filter((i) => i.obrigatorio).map((i) => `<i class="tm-${i.estado}"></i>`).join('');
     const falta = (q.faltam || []).map((n) => n.toLowerCase());
     const ftxt = falta.length ? ` · falta ${falta.slice(0, 2).join(', ')}${falta.length > 2 ? ` +${falta.length - 2}` : ''}` : '';
     return `<span class="mq-termo${curto ? ' curto' : ''}" tabindex="0" title="${esc(termoDica(q))}"><span class="tm" aria-hidden="true">${seg}</span><span class="tm-txt">${q.itens_validados}/${q.itens_total}${curto ? '' : esc(ftxt)}</span></span>`;
@@ -769,7 +769,7 @@
     const q = qd[c.id];
     if (!q || !q.itens_total) return '';
     const itens = (q.itens || []).filter((i) => i.obrigatorio)
-      .map((i) => `<li class="${i.estado}"><span aria-hidden="true">${SIMBOLO[i.estado]}</span> ${esc(i.nome)} <small>${esc(ROT_ESTADO[i.estado])}</small></li>`).join('');
+      .map((i) => `<li class="tm-${i.estado}"><span aria-hidden="true">${SIMBOLO[i.estado]}</span> ${esc(i.nome)} <small>${esc(ROT_ESTADO[i.estado])}</small></li>`).join('');
     return `<section class="d-sec"><h3>Termômetro de dados · ${q.itens_validados}/${q.itens_total}</h3>
       ${seloHtml(q) ? `<div>${seloHtml(q)}</div>` : ''}
       <div>${termometro(q)}</div>

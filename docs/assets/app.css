@@ -1080,9 +1080,9 @@ label.cartao { cursor: pointer; }
 .mq-termo { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; outline: none; }
 .mq-termo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .mq-termo .tm { display: inline-flex; gap: 2px; flex: none; }
-.mq-termo .tm i { width: 10px; height: 8px; border-radius: 2px; background: var(--border); }
-.mq-termo .tm i.coletado { background: var(--warn-dot); }
-.mq-termo .tm i.validado { background: var(--ok-fg); }
+.mq-termo .tm i { display: block; flex: none; padding: 0; width: 10px; height: 8px; border-radius: 2px; background: var(--border); }
+.mq-termo .tm i.tm-coletado { background: var(--warn-dot); }
+.mq-termo .tm i.tm-validado { background: var(--ok-fg); }
 .mq-termo .tm-txt { font-size: 12px; color: var(--muted); }
 .qcard.mq .mq-termo .tm i { width: 14px; }
 .mq-termo.curto .tm i { width: 6px; }
@@ -1102,5 +1102,5 @@ label.cartao { cursor: pointer; }
 .tab tr.mq-tr-trava td:first-child { box-shadow: inset 3px 0 0 var(--bad-dot); }
 .mq-itens { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
 .mq-itens li small { color: var(--muted); font-size: 11.5px; }
-.mq-itens li.validado span { color: var(--ok-fg); } .mq-itens li.coletado span { color: var(--warn-dot); } .mq-itens li.vazio span { color: var(--muted); }
+.mq-itens li.tm-validado span { color: var(--ok-fg); } .mq-itens li.tm-coletado span { color: var(--warn-dot); } .mq-itens li.tm-vazio span { color: var(--muted); }
 .cartoes .qcard.mq { padding: 12px 14px; border-radius: 12px; }
