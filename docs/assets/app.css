@@ -1443,3 +1443,11 @@ a.selo-ficha:hover { filter: brightness(1.15); }
   .cv-trab.com-conversa .cv-direita { display: flex; }
   .cv-voltar { display: inline-flex; }
 }
+/* Conversas: tela fixa no computador — ocupa a altura da janela, sem rolagem da página; só a lista e as mensagens rolam. */
+@media (min-width: 761px) {
+  body.tela-conversas { height: 100vh; overflow: hidden; }
+  body.tela-conversas .app { height: 100vh; min-height: 0; flex-wrap: nowrap; overflow: hidden; }
+  body.tela-conversas .nav { height: 100vh; overflow-y: auto; }
+  body.tela-conversas .main.cv-main { height: 100vh; min-height: 0; overflow: hidden; padding-bottom: 16px; }
+  body.tela-conversas .cv-trab { flex: 1; min-height: 0; height: auto; }
+}
