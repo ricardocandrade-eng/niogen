@@ -1,12 +1,12 @@
 <!doctype html>
-<!-- NIOGEN | docs/fila.html | 09/11/2026 — Claude Code (docs/Prompt_fluxo_unico_backoffice_091126_1000.md · Fase 2)
-     "Minha vez": a tela de rotina do backoffice (1ª do menu). Uma linha por pessoa, um botão por linha:
-       💬 conversa esperando o time (v_mari_aguardando_humano + sem resposta) → Assumir (atribui no Chatwoot sozinho)
-       🧾 venda com próximo passo vermelho/amarelo, conferência de parceiro, pendência que vence hoje → abre a ficha no passo
-       🔧 instalação com exceção (pendência Nio, data passada, docs) → abre a ficha
-       ✉ mensagem que o sistema não pôde mandar (janela 24 h fechada sem template, teto 2/dia · 15/mês) → mandar à mão + "Já mandei"
-     Ordem: vermelho → amarelo → mais antigo. Dados: v_fila_backoffice (security_invoker, 0082) + v_funil com NG.proximoPasso
-     (a mesma regra da tela Vendas). Sem CPF nem endereço na lista. Mari, Vendas e Instalações continuam como consulta. -->
+<!-- NIOGEN | docs/fila.html | 09/11/2026 — Claude Code
+     "Minha vez": a tela de rotina do backoffice (1ª do menu).
+     09/11 (0089/0090 · docs/Prompt_ajustes_operacao_ficha_conversa_091126_1535.md · ponto 5): tudo vem da v_jornada (a regra única de
+     "precisa de ação" — o mesmo número do menu, do Funil, do Painel e da Mari). Funil fino com as 5 etapas (total + "sua vez N",
+     clique filtra) · abas Sua vez | Todas · Lista | Quadro (uma coluna por etapa; o card só muda pelo botão, sem arrastar) · ficha ao
+     lado (Lista) ou em gaveta (Quadro) · a conversa abre no espaço da lista (Quadro: painel à esquerda da ficha) · depois de cada
+     ação, "o NIOGEN fez sozinho" + "Próximo da fila: nome →" · 1º acesso: "Como usar, em 3 passos" (some em "Entendi").
+     Cores discretas: bolinha por etapa, filete fino de urgência, verde cheio só no botão principal da ficha. Sem CPF nem endereço. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -18,172 +18,284 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-15">
-<script src="config.js?v=091126-15"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-16">
+<script src="config.js?v=091126-16"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-15"></script>
-<script src="assets/sidebar.js?v=091126-15"></script>
-<script src="assets/ficha.js?v=091126-15"></script>
-<style>
-  .fila-tipo { font-size: 16px; width: 28px; text-align: center; }
-  .fila-falta b { font-weight: 600; }
-  .fila-falta.bad b { color: var(--bad-fg); }
-  .fila-falta.warn b { color: var(--warn-fg); }
-  .fila-bt { text-align: right; white-space: nowrap; }
-  .fila-bt .btn + .btn { margin-left: 6px; }
-  .fila-regra { margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); font-size: 13px; color: var(--muted); }
-  .fila-regra b { color: var(--text); }
-  .cartao .fila-cbt { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
-</style>
+<script src="assets/app.js?v=091126-16"></script>
+<script src="assets/sidebar.js?v=091126-16"></script>
+<script src="assets/conversa.js?v=091126-16"></script>
+<script src="assets/ficha.js?v=091126-16"></script>
 </head>
-<body>
+<body class="tela-fila">
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="minhavez"></nav>
-  <main class="main">
+  <main class="main mv">
     <header class="cab">
       <div>
         <h1>Minha vez</h1>
-        <div class="sub">Pegue a primeira linha e aperte o botão. O NIOGEN cuida do Chatwoot; lá você só conversa com o cliente.</div>
+        <div class="sub" id="sub">Pegue a primeira linha e aperte o botão — a ficha abre ao lado. O NIOGEN cuida do Chatwoot.</div>
       </div>
-      <div class="cab-acoes" id="cab-acoes"></div>
+      <div class="cab-acoes" id="cab-acoes">
+        <div class="seg mv-vista" role="group" aria-label="Vista"><button type="button" data-vista="lista">Lista</button><button type="button" data-vista="quadro">Quadro</button></div>
+      </div>
     </header>
-
-    <p class="fila-regra"><b>Vermelho</b> = prazo do contrato estourando ou cliente esperando · <b>amarelo</b> = fazer hoje.
-      💬 conversa · 🧾 venda · 🔧 instalação · ✉ mensagem que você manda à mão.</p>
-
-    <div id="abas"></div>
-
-    <section class="lista padrao" aria-label="Fila do backoffice">
-      <div class="rolagem">
-        <table class="tab">
-          <thead><tr>
-            <th aria-label="Tipo"></th>
-            <th>Quem</th>
-            <th>O que falta</th>
-            <th>Há quanto tempo</th>
-            <th></th>
-          </tr></thead>
-          <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
-        </table>
-      </div>
-      <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir a ficha ou a conversa</span></div>
-    </section>
-    <div class="cartoes" id="cartoes" aria-label="Fila do backoffice"></div>
+    <div id="intro"></div>
+    <div id="funil" class="mv-funil" aria-label="Etapas da jornada"></div>
+    <div class="mv-trab" id="trab">
+      <section class="mv-lista" id="lista" aria-label="Fila do backoffice"></section>
+      <aside class="mv-ficha" id="ficha-lado" aria-label="Ficha" hidden></aside>
+      <div class="mv-ficha-vazia" id="ficha-vazia"><span>Clique numa linha para abrir a ficha.</span></div>
+    </div>
+    <div id="quadro" class="mv-quadro" hidden></div>
   </main>
 </div>
+<div class="mv-feito" id="feito" role="status" aria-live="polite" hidden></div>
 <script>
 (async function () {
   const { esc } = NG;
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
-  const tbody = document.getElementById('tbody');
-  const cartoesEl = document.getElementById('cartoes');
+  const listaEl = document.getElementById('lista');
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
-    tbody.innerHTML = '<tr><td colspan="5" class="vazio">A Fila é do backoffice. Use Vendas.</td></tr>';
+    listaEl.innerHTML = '<div class="vazio">A Minha vez é do backoffice. Use o Funil de vendas.</div>';
     return;
   }
-  const CW = NG.CHATWOOT_NIO_ACCOUNT;
-  let itens = [];
-  let aba = 'todas';
+  const funilEl = document.getElementById('funil');
+  const quadroEl = document.getElementById('quadro');
+  const trabEl = document.getElementById('trab');
+  const fichaLado = document.getElementById('ficha-lado');
+  const fichaVazia = document.getElementById('ficha-vazia');
+  const feitoEl = document.getElementById('feito');
+  const movel = window.matchMedia('(max-width: 900px)');
+  const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
 
-  async function carregar() {
-    const [rf, rv, rc] = await Promise.all([
-      NG.sb.from('v_fila_backoffice').select('*'),
-      NG.sb.from('v_funil').select('*').neq('status', 'saida').limit(2000),
-      NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
-    ]);
-    const erro = rf.error || rv.error;
-    if (erro) { tbody.innerHTML = `<tr><td colspan="5" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`; return; }
-    itens = NG.filaItens(rf.data || [], rv.data || [], NG.ultimosContatos(rc.data || []));
-    render();
-  }
+  let jor = { lista: [], todas: [] };
+  let soVez = true;
+  let etapaSel = null;
+  let vista = ['lista', 'quadro'].includes(ls.ler('niogen.fila.vista')) ? ls.ler('niogen.fila.vista') : 'lista';
+  let conv = null;   // { id, nome, comp } — conversa aberta no lugar da lista
 
+  const BOTAO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', biometria: 'Biometria',
+    os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
+  const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
+  const dot = (n) => `<i class="mv-dot" style="--c:${COR[n] || '#6E747C'}"></i>`;
+  const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';
+  const ICO_PESSOA = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>';
+  const donoHtml = (j) => {
+    if (!j.dono_tipo) return '<span class="mv-dono apagado">sem dono</span>';
+    const nome = j.dono_tipo === 'mari' ? 'Mari' : (j.dono_nome === eu.nome ? 'você' : j.dono_nome || 'time');
+    return `<span class="mv-dono ${j.dono_tipo}">${j.dono_tipo === 'mari' ? ICO_ROBO : ICO_PESSOA}${esc(nome)}</span>`;
+  };
   const haTempo = (iso) => {
     if (!iso) return '—';
     const min = Math.max(0, (Date.now() - new Date(iso)) / 60000);
-    if (min < 60) return `há ${Math.round(min)} min`;
-    if (min < 48 * 60) return `há ${NG.fmtHoras(min / 60)}`;
-    return `há ${Math.floor(min / 1440)} dias`;
+    if (min < 60) return `${Math.round(min)} min`;
+    if (min < 48 * 60) return `${Math.floor(min / 60)} h`;
+    return `${Math.floor(min / 1440)} d`;
   };
-  const quem = (it) => `<b>${esc(it.tipo === 'venda' || it.tipo === 'instalacao' ? it.nome : it.nome)}</b><small>${esc(it.cidade || '—')}</small>`;
-  const linkChat = (it) => (it.f && it.f.chatwoot_conversation_id && CW ? `https://app.chatwoot.com/app/accounts/${CW}/conversations/${encodeURIComponent(it.f.chatwoot_conversation_id)}` : null);
-  // Um botão por linha (o 2º só no ✉: copiar o texto pronto para colar no Chatwoot).
-  function botoes(it) {
-    if (it.tipo === 'manual') {
-      const ch = linkChat(it);
-      return `${it.f.texto ? `<button type="button" class="btn btn-sm" data-a="copiar" data-k="${esc(it.chave)}" title="Copia o texto pronto">Copiar texto</button>` : ''}`
-        + `${ch ? `<a class="btn btn-sm" href="${esc(ch)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}`
-        + `<button type="button" class="btn btn-acc btn-sm" data-a="mandei" data-k="${esc(it.chave)}" title="Você mandou pelo Chatwoot (template, se a janela de 24 h fechou): conta no limite do contrato e sai da Fila">Já mandei</button>`;
-    }
-    if (it.tipo === 'conversa' && !it.f.assumida) return `<button type="button" class="btn btn-acc btn-sm" data-a="assumir" data-k="${esc(it.chave)}" title="Atribui a você no Chatwoot (a Mari cala), para a cadência e abre a conversa">Assumir</button>`;
-    if (it.tipo === 'conversa') return `<button type="button" class="btn btn-sm" data-a="abrir" data-k="${esc(it.chave)}">${it.venda_id ? 'Abrir a ficha' : 'Abrir a conversa'}</button>`;
-    return `<button type="button" class="btn ${it.nivel === 'bad' ? 'btn-acc' : ''} btn-sm" data-a="abrir" data-k="${esc(it.chave)}">Resolver</button>`;
+  const chaveFicha = (j) => (j.venda_id ? j.venda_id : `c:${j.conversa_id}`);
+  const vez = (j) => !!j.precisa_acao;
+
+  async function carregar() {
+    const r = await NG.jornada();
+    if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
+    jor = r;
+    render();
   }
-  const ABAS = [['todas', 'Todas'], ['conversa', '💬 Conversas'], ['venda', '🧾 Vendas'], ['instalacao', '🔧 Instalações'], ['manual', '✉ Mandar à mão']];
+
+  // ---------- como usar (1º acesso) ----------
+  function renderIntro() {
+    const el = document.getElementById('intro');
+    if (ls.ler('niogen.fila.intro') === 'ok' || conv) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="mv-intro"><div><b>Como usar, em 3 passos</b><ol>
+      <li><b>Pegue a primeira linha.</b> "Sua vez" já vem na ordem: vermelho é agora, amarelo é hoje.</li>
+      <li><b>Aperte o botão da linha.</b> A ficha abre ao lado e diz o próximo passo. Um botão por vez.</li>
+      <li><b>Fale com o cliente pela barra "Conversa" da ficha.</b> Etiqueta, atribuição e nota o NIOGEN faz sozinho.</li></ol>
+      <span class="apagado">Funil, Mari e Instalações continuam no menu para consultar.</span></div><button type="button" class="btn btn-sm" id="intro-ok">Entendi</button></div>`;
+    document.getElementById('intro-ok').onclick = () => { ls.gravar('niogen.fila.intro', 'ok'); renderIntro(); };
+  }
+
+  // ---------- funil fino ----------
+  function renderFunil() {
+    const n = (e) => jor.lista.filter((j) => j.etapa === e).length;
+    const nv = (e) => jor.lista.filter((j) => j.etapa === e && vez(j)).length;
+    const sai = (jor.todas || []).filter((j) => j.etapa === 0).length;
+    if (conv && vista === 'lista') {
+      funilEl.className = 'mv-funil fino';
+      funilEl.innerHTML = NG.JORNADA.map((e) => `<button type="button" data-etapa="${e.n}" class="${etapaSel === e.n ? 'sel' : ''}">${dot(e.n)}${esc(e.nome)} <b>${n(e.n)}</b>${nv(e.n) ? `<span class="mv-vz">· ${nv(e.n)}</span>` : ''}</button>`).join('');
+      return;
+    }
+    funilEl.className = 'mv-funil';
+    funilEl.innerHTML = NG.JORNADA.map((e) => `<button type="button" class="mv-st${etapaSel === e.n ? ' sel' : ''}" data-etapa="${e.n}" aria-pressed="${etapaSel === e.n}">
+        <span class="mv-st-n">ETAPA ${e.n}</span><b>${dot(e.n)}${esc(e.nome)}</b>
+        <span class="mv-st-c"><strong>${n(e.n)}</strong><span class="${nv(e.n) ? 'mv-vz' : 'apagado'}">${nv(e.n) ? `sua vez ${nv(e.n)}` : '—'}</span></span></button>`).join('')
+      + `<span class="mv-fora" title="Fora da jornada (com motivo)">Saída ${sai}</span>`;
+  }
+
+  function filtradas(comVez = soVez) {
+    return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && (!comVez || vez(j))).sort(NG.ordemJornada);
+  }
+  const abas = () => `<div class="mv-abas"><div class="mv-tabs" role="tablist">
+      <button type="button" role="tab" data-aba="vez" aria-selected="${soVez}" class="${soVez ? 'on' : ''}">Sua vez · ${filtradas(true).length}</button>
+      <button type="button" role="tab" data-aba="todas" aria-selected="${!soVez}" class="${soVez ? '' : 'on'}">Todas · ${filtradas(false).length}</button></div>
+      <span class="apagado">${etapaSel ? `Só ${esc(NG.JORNADA[etapaSel - 1].nome)} · clique de novo na etapa para tirar` : 'Clique numa etapa para filtrar'}</span></div>`;
+
+  // ---------- lista ----------
+  function renderLista() {
+    if (conv) return;   // a conversa está no lugar da lista
+    const l = filtradas();
+    const atual = NGFicha.atual;
+    const linhas = l.map((j) => `<div class="mv-row ${j.nivel}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
+        <span class="mv-et" title="${esc(j.etapa_nome)}">${dot(j.etapa)}<span>${esc(j.etapa_nome)}</span></span>
+        <span class="mv-cli"><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small></span>
+        <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
+        <span class="mv-ha apagado">${esc(haTempo(j.desde))}</span>
+        ${donoHtml(j)}
+        <span class="mv-bt"><button type="button" class="btn btn-sm${vez(j) ? ' mv-go' : ''}" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button></span>
+      </div>`).join('');
+    listaEl.innerHTML = `${abas()}
+      <div class="mv-rolar"><div class="mv-row mv-cab mono"><span>ETAPA</span><span>CLIENTE</span><span>O QUE FAZER</span><span>HÁ</span><span>DONO</span><span></span></div>
+      ${linhas || `<div class="vazio">${soVez ? 'Nada na sua vez agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
+      <div class="mv-pe apagado">Vermelho = agora (cliente esperando ou prazo de 4 h) · amarelo = hoje · ⏸ azul = esperando terceiro, fora da sua vez até a data · a lista se atualiza a cada minuto</div>`;
+  }
+
+  // ---------- quadro ----------
+  function renderQuadro() {
+    const atual = NGFicha.atual;
+    const cols = NG.JORNADA.filter((e) => !etapaSel || e.n === etapaSel).map((e) => {
+      const L = jor.lista.filter((j) => j.etapa === e.n && (!soVez || vez(j))).sort(NG.ordemJornada);
+      const nv = jor.lista.filter((j) => j.etapa === e.n && vez(j)).length;
+      return `<section class="mv-col"><div class="mv-colh"><b>${dot(e.n)}${e.n} · ${esc(e.nome)}</b><span class="${nv ? 'mv-vz' : 'apagado'}">${L.length}${nv ? ` · ${nv} sua vez` : ''}</span></div>
+        <div class="mv-cards">${L.map((j) => `<div class="mv-kc ${j.nivel}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
+          <b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small>
+          <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
+          <span class="mv-meta">${donoHtml(j)}<span class="apagado">há ${esc(haTempo(j.desde))}</span></span>
+          ${vez(j) ? `<button type="button" class="btn btn-sm mv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : ''}
+        </div>`).join('') || '<span class="apagado mv-col-vazia">—</span>'}</div></section>`;
+    }).join('');
+    const sai = (jor.todas || []).filter((j) => j.etapa === 0);
+    quadroEl.innerHTML = `${abas()}<div class="mv-board">${cols}</div>
+      <div class="mv-saida apagado">Fora da jornada · <b>Saída ${sai.length}</b>${sai.length ? `: ${sai.slice(0, 8).map((j) => `${esc(NG.primeiroNome(j.nome))} (${esc(j.o_que_fazer)})`).join(' · ')}` : ''} · o card só muda de coluna pelo botão da ficha</div>`;
+  }
 
   function render() {
-    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: id === 'todas' ? itens.length : itens.filter((x) => x.tipo === id).length,
-      alerta: id === 'todas' && itens.some((x) => x.nivel === 'bad') })), aba, (id) => { aba = id; render(); });
-    const lista = itens.filter((x) => aba === 'todas' || x.tipo === aba);
-    tbody.innerHTML = lista.length ? lista.map((it) => `<tr class="clicavel" data-k="${esc(it.chave)}" tabindex="0">
-        <td class="fila-tipo" title="${esc({ conversa: 'Conversa', venda: 'Venda', instalacao: 'Instalação', manual: 'Mensagem à mão' }[it.tipo])}">${it.ico}</td>
-        <td class="cli">${quem(it)}</td>
-        <td class="fila-falta ${it.nivel}"><b>${esc(it.falta)}</b></td>
-        <td class="apagado">${esc(haTempo(it.desde))}</td>
-        <td class="fila-bt">${botoes(it)}</td>
-      </tr>`).join('') : '<tr><td colspan="5" class="vazio">Nada na sua vez agora ✅ — a Fila se atualiza sozinha a cada minuto.</td></tr>';
-    cartoesEl.innerHTML = lista.length ? lista.map((it) => `<div class="cartao" data-k="${esc(it.chave)}" tabindex="0">
-        <div class="cli"><b>${it.ico} ${esc(it.nome)}</b><small>${esc(it.cidade || '—')} · ${esc(haTempo(it.desde))}</small></div>
-        <div class="l2 fila-falta ${it.nivel}"><b>${esc(it.falta)}</b></div>
-        <div class="fila-cbt">${botoes(it)}</div>
-      </div>`).join('') : '<div class="vazio">Nada na sua vez agora ✅</div>';
-    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'linha' : 'linhas'} · ${NG.fmtNum(lista.filter((x) => x.nivel === 'bad').length)} em vermelho`;
+    const lista = vista === 'lista' && !movel.matches;
+    document.querySelectorAll('[data-vista]').forEach((b) => b.classList.toggle('on', b.dataset.vista === vista));
+    document.getElementById('sub').hidden = !!conv && lista;
+    renderIntro();
+    renderFunil();
+    trabEl.hidden = vista !== 'lista';
+    quadroEl.hidden = vista !== 'quadro';
+    fichaVazia.hidden = !lista || !!NGFicha.atual;
+    if (vista === 'lista') renderLista(); else renderQuadro();
   }
 
-  function abrirItem(it) {
-    if (it.venda_id) { NGFicha.abrir(it.venda_id); return; }
-    if (it.conversa_id) location.href = `mari.html?conversa=${encodeURIComponent(it.conversa_id)}`;
+  // ---------- ficha: ao lado (Lista, computador) · gaveta (Quadro e celular) ----------
+  NGFicha.lado(fichaLado);
+  function modoFicha() {
+    if (vista === 'lista' && !movel.matches) { NGFicha.usarLado(); NGFicha.aoConversa(abrirConversaLista); } else { fecharConversa(); NGFicha.usarGaveta(); NGFicha.aoConversa(null); }
   }
-  async function acao(b) {
-    const it = itens.find((x) => x.chave === b.dataset.k);
-    if (!it) return;
-    const qual = b.dataset.a;
-    if (qual === 'abrir') { abrirItem(it); return; }
-    if (qual === 'copiar') {
-      try { await navigator.clipboard.writeText(it.f.texto); NG.toast('Texto copiado — cole na conversa do Chatwoot', 'ok'); } catch (e) { NG.toast('Não deu para copiar — abra a ficha e copie à mão.', 'bad'); }
-      return;
-    }
-    b.disabled = true;
-    if (qual === 'assumir') {
-      const r = await NG.momento(it.venda_id || null, 'assumir', it.venda_id ? {} : { conversa_id: it.conversa_id });
+  NGFicha.aoFechar(() => { fecharConversa(); render(); });
+
+  // ---------- conversa no lugar da lista ----------
+  function abrirConversaLista({ conversaId, nome, aoMudar }) {
+    if (conv && conv.id === conversaId) return;
+    if (conv && conv.comp) conv.comp.destruir();
+    conv = { id: conversaId, nome };
+    trabEl.classList.add('com-conversa');
+    render();
+    conv.comp = NGConversa.montar(listaEl, { conversaId, nome, rotuloFechar: '← Lista',
+      aoFechar: () => { fecharConversa(); render(); },
+      aoMudar: (r) => { carregar(); if (aoMudar) aoMudar(r); } });
+  }
+  function fecharConversa() {
+    if (!conv) return;
+    if (conv.comp) conv.comp.destruir();
+    conv = null;
+    trabEl.classList.remove('com-conversa');
+  }
+
+  // ---------- "o NIOGEN fez sozinho" + próximo da fila ----------
+  let feitoTimer = null;
+  function avisoFeito(r) {
+    if (!r || !r.feito) return;
+    const atual = NGFicha.atual;
+    const prox = filtradas(true).find((j) => chaveFicha(j) !== atual);
+    feitoEl.innerHTML = `<b>O NIOGEN fez sozinho</b>${(r.feito || []).map((x) => `<span>✓ ${esc(x)}</span>`).join('')}
+      ${r.aviso ? `<span class="warn-txt">${esc(r.aviso)}</span>` : ''}
+      ${prox ? `<button type="button" class="btn btn-acc btn-sm" data-prox="${esc(chaveFicha(prox))}">Próximo da fila: ${esc(NG.primeiroNome(prox.nome || 'Contato'))} →</button>` : '<span class="apagado">Fila zerada ✅</span>'}
+      <button type="button" class="mv-feito-x" aria-label="Fechar o aviso">×</button>`;
+    feitoEl.hidden = false;
+    clearTimeout(feitoTimer);
+    feitoTimer = setTimeout(() => { feitoEl.hidden = true; }, 9000);
+  }
+  feitoEl.addEventListener('click', (ev) => {
+    if (ev.target.closest('.mv-feito-x')) { feitoEl.hidden = true; return; }
+    const b = ev.target.closest('[data-prox]');
+    if (b) { feitoEl.hidden = true; abrirChave(b.dataset.prox); }
+  });
+  NGFicha.aoMudar((v, r) => { carregar(); if (r) avisoFeito(r); });
+
+  // ---------- cliques ----------
+  function abrirChave(k) {
+    fecharConversa();
+    if (String(k).startsWith('c:')) NGFicha.abrirConversa(k.slice(2)); else NGFicha.abrir(k);
+    setTimeout(render, 0);
+  }
+  async function botao(b) {
+    const k = b.dataset.k;
+    const j = jor.lista.find((x) => chaveFicha(x) === k);
+    if (!j) return;
+    if (b.dataset.bt === 'assumir') {
+      b.disabled = true;
+      const r = await NG.momento(j.venda_id || null, 'assumir', j.venda_id ? {} : { conversa_id: j.conversa_id });
       if (!r) { b.disabled = false; return; }
+      avisoFeito(r);
+      abrirChave(k);
       await carregar();
-      abrirItem(it);
+      if (j.conversa_id && vista === 'lista' && !movel.matches) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: () => NGFicha.recarregar() });
       return;
     }
-    if (qual === 'mandei') {
-      const { error } = await NG.sb.rpc('backoffice_acao_manual', { p_id: it.f.acao_id, p_enviei: true });
-      if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
-      NG.toast('Registrado: mensagem enviada à mão (conta no limite do contrato)', 'ok');
-      await carregar();
+    abrirChave(k);
+    if (b.dataset.bt === 'responder' && j.conversa_id && vista === 'lista' && !movel.matches) {
+      setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: () => NGFicha.recarregar() }), 50);
     }
   }
-  const clique = (ev) => {
-    const b = ev.target.closest('[data-a]');
-    if (b) { ev.stopPropagation(); acao(b); return; }
-    const l = ev.target.closest('[data-k]');
-    if (l) { const it = itens.find((x) => x.chave === l.dataset.k); if (it) abrirItem(it); }
-  };
-  tbody.addEventListener('click', clique);
-  cartoesEl.addEventListener('click', clique);
-  tbody.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.matches('tr[data-k]')) clique(ev); });
+  function clique(ev) {
+    const b = ev.target.closest('[data-bt]');
+    if (b) { ev.stopPropagation(); botao(b); return; }
+    const t = ev.target.closest('[data-aba]');
+    if (t) { soVez = t.dataset.aba === 'vez'; render(); return; }
+    const r = ev.target.closest('.mv-row[data-k], .mv-kc[data-k]');
+    if (r) abrirChave(r.dataset.k);
+  }
+  listaEl.addEventListener('click', (ev) => { if (!conv) clique(ev); });
+  quadroEl.addEventListener('click', clique);
+  [listaEl, quadroEl].forEach((el) => el.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' && ev.target.matches('.mv-row[data-k], .mv-kc[data-k]')) abrirChave(ev.target.dataset.k);
+  }));
+  funilEl.addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-etapa]');
+    if (!b) return;
+    const n = Number(b.dataset.etapa);
+    if (conv) { fecharConversa(); etapaSel = n; } else etapaSel = etapaSel === n ? null : n;
+    render();
+  });
+  document.querySelectorAll('[data-vista]').forEach((b) => b.addEventListener('click', () => {
+    vista = b.dataset.vista;
+    ls.gravar('niogen.fila.vista', vista);
+    modoFicha();
+    render();
+  }));
+  movel.addEventListener('change', () => { modoFicha(); render(); });
 
-  NGFicha.aoMudar(() => carregar());
   NG.botaoAtualizar(() => carregar());
+  modoFicha();
   await carregar();
   NGFicha.iniciar();
-  setInterval(() => { if (document.visibilityState === 'visible' && !NGFicha.aberta) carregar(); }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && !NGFicha.aberta) carregar(); });
+  render();
+  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
 })();
 </script>
 </body>
