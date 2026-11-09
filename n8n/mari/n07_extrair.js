@@ -636,24 +636,43 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
 }
 
 // ── 5b. v7: trava das condições — plano escolhido e condições nunca enviadas = o sistema põe o bloco exato logo depois
-// da confirmação (teste real 06/11: o modelo pulou direto para "manhã ou tarde"). Com upsell, as condições vêm depois.
-if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas && !tags.upsell_oferecido
+// da confirmação (teste real 06/11: o modelo pulou direto para "manhã ou tarde").
+// P9 (portão 08/11 22h26, cenário o): com upsell as condições ficavam "para a resposta seguinte" — o cliente ignorou a
+// sugestão, mandou o CPF e as condições só chegaram depois dos dados. Agora, com ou sem upsell, saem NA MESMA resposta:
+// confirmação (+ sugestão) → condições → pedido de nome/CPF ("ou me fala se prefere trocar", quando houve sugestão).
+const upsellAgora = !!tags.upsell_oferecido || /so pra voce saber: por mais|por mais r\$/.test(norm(texto));
+// P16 (portão 08/11 22h40): upsell entre planos de mesma velocidade (Super 1 Giga → Ultra 1 Giga) saía "vai de 1 Giga pra
+// 1 Giga mesmo (a diferença é o que já vem com), com…". Sem diferença de velocidade, a frase vira "já vem com …".
+const MESMA_VEL = /\s+vai de (\d+(?:[.,]\d+)?\s*(?:mega|giga|gb|mb))\s+pra\s+\1\b(?:\s+(?:tamb[eé]m|mesmo))?(?:\s*\([^)]*\))?\s*,?\s*(?:(?:mas|e)\s+)?(?:j[aá]\s+vem\s+com\s+|com\s+)?/i;
+if (V7 && upsellAgora && MESMA_VEL.test(texto)) {
+  baloesFinais = baloesFinais.map((b) => b.replace(MESMA_VEL, ' já vem com '));
+  texto = texto.replace(MESMA_VEL, ' já vem com ');
+}
+if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas
   && (upd.plano_escolhido || c.plano_escolhido) && baloesFinais.length && !baloesFinais.some((b) => b.includes(COND_ABRE))) {
   // 07/11 23h11 (conversa #1): o modelo pôs confirmação + "Fechou? Me manda seu nome completo e CPF…" num balão só e as
   // condições chegavam DEPOIS do pedido de dados. O pedido (e a linha da LGPD) passa para depois do bloco.
   const ehPedidoDados = (p) => /nome completo|\bcpf\b|seus dados sao usados|^fechou\?/.test(norm(p));
-  const ps0 = baloesFinais[0].split('\n\n');
+  const ps0 = (upsellAgora ? baloesFinais.join('\n\n') : baloesFinais[0]).split('\n\n');
   const fica = ps0.filter((p) => !ehPedidoDados(p));
   const vai = ps0.filter(ehPedidoDados);
   // 08/11 00h36: o pedido saía como o modelo escreveu ("Fechou?" solto + "Agora preciso confirmar seus dados: me manda…" +
   // LGPD) — confuso. Depois das condições, o pedido é a frase do roteiro, e a LGPD só na primeira vez.
-  const pedidoDados = ['Fechou? Me manda seu nome completo e CPF que eu já adianto aqui.',
+  const pedidoDados = [upsellAgora
+    ? 'Fechou? Me manda seu nome completo e CPF que eu já adianto aqui (ou me fala se prefere trocar de plano).'
+    : 'Fechou? Me manda seu nome completo e CPF que eu já adianto aqui.',
     (ctx.conversa || {}).lgpd_enviada ? null : 'Seus dados são usados só pro seu pedido com a Nio.'].filter(Boolean).join('\n\n');
   const jaTemNomeCpf = !!(((ctx.conversa || {}).dados || {}).cpf || dados.cpf);
-  baloesFinais = (fica.length && vai.length
-    ? [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? vai.join('\n\n') : pedidoDados, ...baloesFinais.slice(1)]
-    : [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)]).slice(0, 4);
+  if (upsellAgora) {
+    // confirmação + sugestão num balão só (máx. 3 balões): [confirmação e sugestão] · [condições] · [pedido de dados]
+    baloesFinais = [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? (vai.join('\n\n') || null) : pedidoDados].filter(Boolean);
+  } else {
+    baloesFinais = (fica.length && vai.length
+      ? [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? vai.join('\n\n') : pedidoDados, ...baloesFinais.slice(1)]
+      : [baloesFinais[0], blocoCondicoes(), ...baloesFinais.slice(1)]).slice(0, 4);
+  }
   texto = baloesFinais.join('\n\n');
+  if (/seus dados sao usados/.test(norm(texto))) upd.lgpd_enviada = true;   // a marcação da linha 522 roda antes deste bloco
 }
 
 // ── 6. v7: CPF mascarado na fala da Mari (prompt 27 A6 — o banco guarda inteiro) ──
@@ -779,6 +798,15 @@ if (V7 && !m.forma_pagamento) {
 // Resumo de conferência: "confere os dados", e também o refeito depois de "Corrigir" ("Confere de novo os dados",
 // "confere os dados de novo") — 07/11 23h14 o refeito saiu sem os botões.
 const RESUMO_RE = /confere\b[^\n]{0,15}\bdados/;
+// P17 (portão 08/11 22h48, cenário a): o cliente mandou o e-mail e o modelo respondeu "Me falta só o e-mail — não recebi
+// ele ainda. Pode mandar?". O e-mail já foi registrado acima (pela mensagem) → a frase que o pede de novo sai, e a trava
+// do pagamento logo abaixo segue (sem essa frase não há "outra pergunta" segurando).
+if (V7 && m.dados.email && /[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i.test(String((prep.consolidado || {}).mensagem || ''))) {
+  const pedeEmail = (p) => /e-?mail/.test(norm(p)) && /nao recebi|me falta|faltou|pode mandar|me manda|me passa|qual (e )?(o )?seu (melhor )?e-?mail/.test(norm(p));
+  const antes = baloesFinais.length;
+  baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !pedeEmail(p)).join('\n\n')).filter((b) => b.trim());
+  if (baloesFinais.length !== antes || baloesFinais.join('\n\n') !== texto) texto = baloesFinais.join('\n\n');
+}
 const ultimaFala = norm(baloesFinais[baloesFinais.length - 1] || '');
 const outraPergunta = ultimaFala.includes('?') && !/manha ou (a )?tarde|instalacao, voce prefere/.test(ultimaFala);
 if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && m.dados.telefone && m.dados.email
@@ -801,6 +829,18 @@ if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_esc
   && !tags.upsell_oferecido && !/por mais r\$/.test(norm(texto))
   && !baloesFinais.some((b) => RESUMO_RE.test(norm(b))) && frases(baloesFinais[baloesFinais.length - 1]).some(ehPerguntaPag)) {
   tags.botoes = 'pagamento';
+}
+// P17 (portão 08/11 22h48, cenário a): depois do CPF a Mari pediu o e-mail, o cliente respondeu outra coisa ("o telefone é
+// esse mesmo") e ela pulou para a forma de pagamento — o e-mail ficou para trás. Ordem do Passo 4: sem e-mail, a forma de
+// pagamento (pergunta ou botões) não sai; no lugar, o pedido do e-mail.
+if (V7 && !erro && !handoff && !m.forma_pagamento && !m.dados.email && cpfOk(m.dados.cpf) && m.plano_escolhido
+  && (tags.botoes === 'pagamento' || baloesFinais.some((b) => frases(b).some(ehPerguntaPag)))) {
+  tags.botoes = null;
+  baloesFinais = baloesFinais.map((b) => b.split('\n\n')
+    .filter((p) => !frases(p).some(ehPerguntaPag) && !/desconto|^de: r\$|^por: r\$|💳/.test(norm(p)) && !/💳/.test(p)).join('\n\n'))
+    .filter((b) => b.trim());
+  baloesFinais.push('Antes da forma de pagamento, me passa seu melhor e-mail?');
+  texto = baloesFinais.join('\n\n');
 }
 // Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
 if (V7 && !erro && !tags.botoes && baloesFinais.length && RESUMO_RE.test(norm(baloesFinais[baloesFinais.length - 1]))

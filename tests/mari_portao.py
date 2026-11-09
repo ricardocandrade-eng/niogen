@@ -32,6 +32,24 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 norm = B.norm
 
+# Internet instável (08/11 22h48: "Transport error" no meio da rodada deixou a limpeza por fazer): o SQL tenta 3 vezes.
+# As escritas daqui são idempotentes (limpeza, fechar ciclo) ou só a última linha da rodada.
+_sql_orig = B.sql
+
+
+def _sql_retry(q, escrita=False):
+    import time
+    for i in range(3):
+        try:
+            return _sql_orig(q, escrita)
+        except RuntimeError as e:
+            if i == 2 or not re.search(r'Transport error|timeout|connection|10054|EOF', str(e), re.I):
+                raise
+            time.sleep(5 * (i + 1))
+
+
+B.sql = _sql_retry
+
 
 def arg(nome, padrao):
     if nome in sys.argv:
@@ -97,6 +115,7 @@ class ConversaPortao(B.Conversa):
     def __init__(self, cid, n):
         super().__init__(cid, n)
         self.pos_handoff = False
+        self.email_dado = False
 
     def diz(self, texto):
         with LOCK:
@@ -138,6 +157,19 @@ class ConversaPortao(B.Conversa):
         # P12 — CPF válido nunca é reclamado (todos os cenários usam CPF válido)
         if RX_CPF_RUIM.search(n_):
             self.falha(f'[P12] reclamou de CPF válido: «{resp[:120]}»')
+        # P16 (portão 08/11 22h40, cenário o) — upsell entre planos de mesma velocidade: "vai de 1 Giga pra 1 Giga"
+        m16 = re.search(r'\bde (\d+(?:[.,]\d+)?\s*(?:mega|giga|gb|mb))\s+pra\s+\1\b', n_)
+        if m16:
+            self.falha(f'[P16] upsell com a mesma velocidade: «{m16.group(0)}»')
+        # P17 (portão 08/11 22h48, cenário a) — (1) pagamento perguntado antes de ter o e-mail; (2) o cliente manda o e-mail e
+        # a Mari diz que não recebeu / pede de novo.
+        if re.search(r'[^\s@]+@[^\s@]+\.[a-z]{2,}', texto, re.I) and re.search(r'e-?mail', n_) \
+                and re.search(r'nao recebi|me falta|faltou|pode mandar|me manda|qual (e )?(o )?seu (melhor )?e-?mail', n_):
+            self.falha(f'[P17] pediu de novo o e-mail que o cliente acabou de mandar: «{resp[:100]}»')
+        if re.search(r'[^\s@]+@[^\s@]+\.[a-z]{2,}', texto, re.I):
+            self.email_dado = True
+        if it.get('chave') == 'pagamento' and not self.email_dado:
+            self.falha('[P17] botões de pagamento antes do e-mail')
         if r.get('handoff'):
             self.pos_handoff = True
         return r
@@ -202,13 +234,13 @@ def cen_q(c):   # P15 — controle: fora do assunto → volta ao fluxo sem inven
 
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
-    'a': (1, B.cen_a, 'P1 P5 P7'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
+    'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'regressão operadora'), 'i': (7, B.cen_i, 'regressão botão'),
     'j': (8, B.cen_j, 'regressão BTU'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
-    'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14'),
+    'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14 P16'),
     'p': (14, B.cen_p, 'P9 P10'), 'q': (15, cen_q, 'P15'),
 }
-GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 em toda fala'
+GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
 
 def rodar(k):
