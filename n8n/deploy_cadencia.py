@@ -85,8 +85,9 @@ def build(ids):
             'sendBody': True, 'specifyBody': 'json', 'jsonBody': body_expr,
             'options': {'timeout': 20000}}, x, y, credentials=sb_cred, **extra)
 
-    add('1 · A cada 10 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
-        {'rule': {'interval': [{'field': 'minutes', 'minutesInterval': 10}]}}, 0, 0)
+    # 08/11 (abertura B2, 0070): a cada 5 min (era 10) — o lembrete L15 sai entre 15 e 20 min depois da abertura.
+    add('1 · A cada 5 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
+        {'rule': {'interval': [{'field': 'minutes', 'minutesInterval': 5}]}}, 0, 0)
     add('1w · Admin cadência', 'n8n-nodes-base.webhook', 2, {
         'httpMethod': 'POST', 'path': 'mari-cadencia-admin', 'authentication': 'headerAuth',
         'responseMode': 'responseNode', 'options': {}}, 0, 300,
@@ -159,7 +160,7 @@ def build(ids):
         '={{ JSON.stringify({ p_conversa: $json.conversaId, p_para: $json.voltaEm }) }}', 2860, 900)
 
     ligacoes = [
-        ('1 · A cada 10 min', 0, '2 · Interruptor'),
+        ('1 · A cada 5 min', 0, '2 · Interruptor'),
         ('1w · Admin cadência', 0, '2 · Interruptor'),
         ('2 · Interruptor', 0, '2a · Admin?'),
         ('2a · Admin?', 0, '2r · Responder admin'),

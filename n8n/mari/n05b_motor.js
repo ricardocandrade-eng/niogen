@@ -279,6 +279,12 @@ if (v3) {
   L.push(`emoji: você já usou ${emojiMari} na conversa | cliente usa emoji: ${emojiCliente > 0 ? `sim (${emojiCliente})` : 'nao — no máximo 2 na conversa inteira'}`);
 }
 if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);
+// 08/11 (abertura B2): a saudação com botões já saiu pelo sistema e o cliente respondeu em TEXTO (sem tocar) — o Claude
+// segue sem repetir a saudação; pede só o CEP (ou rua e bairro) e o número depois da cidade.
+if (V7 && (conv.dados || {}).abertura && !conv.cep) {
+  L.push('abertura_b2: a 1ª mensagem (saudação + botões "Ver minha rua / Ver os planos / Falar com alguém") JÁ FOI ENVIADA pelo sistema — '
+    + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
+}
 const estadoTxt = L.join('\n');
 
 // ── system: parte fixa (cacheável) + parte dinâmica ──
@@ -339,6 +345,78 @@ if (V7) {
   const FAM = { fibra: 'V-REG-FIBRA', essencial: 'V-REG-ESS', super: 'V-REG-SUP', ultra: 'V-REG-ULT' };
   const card = md && cartoes.find((k) => k.plano_codigo === FAM[md[1].toLowerCase()]);
   if (card) textoFixo = { texto: card.texto_detalhes, plano: card.plano_codigo };
+}
+
+// 08/11 (docs/Prompt_mari_abertura_b2_081126_1310.md): ABERTURA B2. 1ª mensagem da conversa → saudação fixa + 3 botões,
+// SEM o Claude (o lead do anúncio sumia quando a 1ª resposta pedia CEP e número). Toque num botão dela → resposta fixa
+// (rua / planos) ou humano na hora. Textos e títulos em config_mari_textos (0070) — sem 'abertura_versao' a B2 fica
+// desligada e tudo segue como antes. Fica de fora (vai para o Claude, como hoje): 1ª mensagem já com CEP ou endereço,
+// cliente Nio reclamando, luto, urgência, desconto, pedido de atendente, retomada de ciclo e conversa em handoff.
+const tx = inter.textos || {};
+const B2 = String(tx.abertura_versao || '').trim();
+const nrm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const semEmoji = (s) => nrm(s).replace(/\p{Extended_Pictographic}|️|‍/gu, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
+  const BOT_AB = [
+    { id: 'ab:rua', chave: 'rua', title: tx.abertura_botao_rua || '📍 Ver minha rua' },
+    { id: 'ab:planos', chave: 'planos', title: tx.abertura_botao_planos || '💰 Ver os planos' },
+    { id: 'ab:humano', chave: 'humano', title: tx.abertura_botao_humano || '💬 Falar com alguém' },
+  ];
+  const msgAb = String(cons.mensagem || '').trim();
+  const tocado = BOT_AB.find((b) => semEmoji(b.title) === semEmoji(msgAb));
+  const jaTemMari = historico.some((h) => h.papel === 'mari' || h.papel === 'humano');
+  const dadosAb = conv.dados || {};
+  if (tocado && tocado.chave === 'humano') {
+    // "💬 Falar com alguém" vale a qualquer momento: humano agora (motivo pedido_humano → etiqueta handoff-humano + time).
+    textoFixo = {
+      texto: tx.abertura_resp_humano || 'Claro! Já chamei nosso consultor, ele te responde por aqui 💚',
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'humano' },
+      upd: dadosAb.abertura_botao ? {} : { dados: { abertura_botao: 'humano' } },
+      handoff: { motivo: 'pedido_humano', lead: { dados: {}, briefing: 'Cliente tocou "💬 Falar com alguém" na abertura da Mari — chamar agora.'
+        + (conv.cep ? '' : ' Ainda sem CEP/endereço.') } },
+      modelo: 'abertura_b2',
+    };
+  } else if (tocado && !cluster) {
+    // "📍 Ver minha rua" / "💰 Ver os planos": a cidade ainda não é conhecida → pede só o CEP (ou rua e bairro), sem preço.
+    // Cidade já conhecida → o toque segue para o Claude (mostra os planos da cidade).
+    textoFixo = {
+      texto: tocado.chave === 'rua'
+        ? (tx.abertura_resp_rua || 'Oba! 🥰 Me manda só o seu CEP que eu já confiro pra você.\n\nSe não lembrar, tudo bem: pode mandar o nome da rua e o bairro 😉')
+        : (tx.abertura_resp_planos || 'Claro! 😊 Os planos vão de 600 Mega a 1 Giga, com preço fixo até 2030.\n\nO valor muda um pouquinho de cidade pra cidade. Me manda seu CEP (ou a rua e o bairro) que eu te mostro os planos e preços certinhos daí 👇'),
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: tocado.chave },
+      upd: dadosAb.abertura_botao ? {} : { dados: { abertura_botao: tocado.chave } },
+      modelo: 'abertura_b2',
+    };
+  } else if (!tocado && !jaTemMari && !conv.ciclo_anterior && !conv.cep && !prep.p_cep) {
+    const m0 = nrm(msgAb);
+    const temEndereco = /\b\d{5}-?\d{3}\b/.test(msgAb)
+      || /\b(rua|r\.|avenida|av\.?|travessa|tv\.|alameda|estrada|praca|rodovia|beco|bairro)\s+[a-z]{2,}/.test(m0)
+      || /\bn[º°o.]\s*\d|\bnumero\s*\d/.test(m0);
+    // Regras de handoff de sempre vêm antes da abertura: quem chega reclamando, de luto, com urgência, pedindo desconto ou
+    // um atendente vai para o Claude (que já sabe tratar cada caso).
+    const especial = /\b(ja sou cliente|sou cliente|ja tenho (a )?nio|minha internet|sem internet|internet (caiu|parou|lenta|ruim)|caiu|parou de funcionar|reclama|cancel|suporte|tecnico|defeito|problema|fatura|segunda via|2a via|boleto|conta da nio|luto|falec|morreu|velorio|urgen|emergencia|desconto|mais barat|abatimento|atendente|humano|pessoa de verdade|falar com (alguem|uma pessoa|um atendente|o consultor|um vendedor))/.test(m0);
+    if (!temEndereco && !especial) {
+      // {nome} = 1º nome do contato no Chatwoot, só se parecer nome de pessoa (sem número, emoji, "Cliente", loja…).
+      const nc = String(conv.nome_contato || '').trim();
+      const NAO_PESSOA = /^(familia|casa|eu|mae|pai|amor|vida|cliente|whatsapp|contato|teste|oi|ola|nio|internet|loja|vendas|atendimento|suporte|sr|sra|dr|dra)$/;
+      const LOJA = /\b(loja|store|ltda|me|eireli|comercio|comercial|distribuidora|empresa|servicos|atacado|oficina|studio|estudio|salao|bar|lanchonete|restaurante|mercado|acougue|padaria|farmacia|igreja|escola)\b/;
+      const p1 = nc.split(/\s+/)[0] || '';
+      const pessoa = /^[A-Za-zÀ-ÿ' .-]{2,40}$/.test(nc) && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) && !NAO_PESSOA.test(nrm(p1)) && !LOJA.test(nrm(nc));
+      const nome = pessoa ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : null;
+      const comNome = (s) => (nome ? s.replace(/\{nome\}/g, nome) : s.replace(/,?\s*\{nome\}\s*,?\s*/g, ', ').replace(/^Oi, ,/, 'Oi,'));
+      const corpo = comNome(tx.abertura_corpo || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nTe mostro rapidinho, sem compromisso nenhum. O que você prefere ver primeiro?');
+      const fb = comNome(tx.abertura_fallback || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nMe manda seu CEP (ou o nome da rua e o bairro) que eu já te mostro os planos daí 😉');
+      textoFixo = {
+        texto: null,
+        interativo: { tipo: 'botoes', chave: 'abertura', corpo: corpo.slice(0, 1024),
+          botoes: BOT_AB.map((b) => ({ id: b.id, title: b.title })),
+          resumo: `botões: ${BOT_AB.map((b) => b.title).join(' / ')}`, fallbackTexto: fb },
+        tags: { abertura: B2 },
+        upd: { dados: { abertura: B2 } },
+        modelo: 'abertura_b2',
+      };
+    }
+  }
 }
 
 return [{ json: {

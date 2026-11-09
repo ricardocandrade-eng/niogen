@@ -18,12 +18,21 @@ const resp = $input.first().json || {};
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
 // v7 (prompt 26, spec §4): "Detalhes <plano>" — texto fixo do cartão, sem Claude e sem filtro (texto aprovado pelo Ricardo).
-if (resp.fixo && resp.fixo.texto) {
-  const tf = String(resp.fixo.texto);
+// 08/11 (abertura B2): o mesmo caminho leva a abertura com 3 botões (interativo), a resposta fixa de cada botão e o
+// handoff do "💬 Falar com alguém" — tudo montado no 5b, com tags/upd próprios (dados.abertura, dados.abertura_botao).
+if (resp.fixo && (resp.fixo.texto || resp.fixo.interativo)) {
+  const fx = resp.fixo;
+  const tf = fx.texto ? String(fx.texto) : '';
+  const it = fx.interativo || null;
+  let modoFx = null;
+  try { modoFx = ($('2 · Entrada').first().json || {}).modo; } catch (e) { modoFx = null; }
   return [{ json: {
-    corrigir: false, conversaId: ctx.conversaId, texto: tf, tags: { detalhes: resp.fixo.plano }, upd: {}, handoff: null, erro: null,
-    baloes: [tf], interativo: null, emojiAjustes: null, modelo: 'texto_fixo', tokensIn: null, tokensOut: null,
+    corrigir: false, conversaId: ctx.conversaId,
+    texto: it ? [tf, it.corpo, `[${it.resumo}]`].filter(Boolean).join('\n\n') : tf,
+    tags: fx.tags || { detalhes: fx.plano }, upd: fx.upd || {}, handoff: fx.handoff || null, erro: null,
+    baloes: tf ? [tf] : [], interativo: it, emojiAjustes: null, modelo: fx.modelo || 'texto_fixo', tokensIn: null, tokensOut: null,
     latenciaMs: Date.now() - ctx.t0, turnoIds: ctx.turnoIds, promptVersao: ctx.promptVersao, violacoes: null, violacoesCorrigidas: null,
+    esperaAntes: modoFx === 'chatwoot' && fx.modelo === 'abertura_b2' ? 2 : 0.1,
   } }];
 }
 

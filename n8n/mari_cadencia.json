@@ -7,19 +7,19 @@
           "interval": [
             {
               "field": "minutes",
-              "minutesInterval": 10
+              "minutesInterval": 5
             }
           ]
         }
       },
-      "name": "1 · A cada 10 min",
+      "name": "1 · A cada 5 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
         0,
         0
       ],
-      "id": "8b79ad13-9c11-5758-8415-8b25e8d6f656"
+      "id": "0d7aad65-7407-5965-8062-fbb7cde553ea"
     },
     {
       "parameters": {
@@ -695,7 +695,7 @@
     }
   ],
   "connections": {
-    "1 · A cada 10 min": {
+    "1 · A cada 5 min": {
       "main": [
         [
           {

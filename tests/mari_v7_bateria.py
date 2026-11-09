@@ -86,12 +86,13 @@ GLOBAL = [
 
 
 class Conversa:
-    def __init__(self, cid, n):
-        self.cid, self.tel, self.falhas, self.log = cid, f'{PREFIXO}{n:03d}', [], []
+    def __init__(self, cid, n, nome='Teste V7'):
+        # nome = nome do contato no Chatwoot. 'Teste V7' (com número) NÃO parece nome de pessoa → abertura sem nome.
+        self.cid, self.tel, self.falhas, self.log, self.nome = cid, f'{PREFIXO}{n:03d}', [], [], nome
 
     def diz(self, texto):
         time.sleep(1.5)
-        r = falar(self.tel, texto)
+        r = falar(self.tel, texto, self.nome)
         resp = r.get('resposta') or ''
         it = r.get('interativo')
         self.log.append({'lead': texto, 'mari': resp, 'interativo': it, 'handoff': r.get('handoff'), 'erro': r.get('erro'), 'tags': r.get('tags'),
@@ -296,7 +297,9 @@ def cen_l(c):   # teste real 07/11 00h11: sem CEP o cliente pressiona por planos
 def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua única, cobertura sem portal, condições, CPF, tanto faz
     sem_anotado = lambda r, rot: c.exige('anotad' not in norm(r.get('resposta')), f'(o) "anotado" em {rot}: «{(r.get("resposta") or "")[:100]}»')
     r = c.diz('Oi, Mari! Vim pelo Instagram e quero saber se a Nio chega na minha rua. (IG)')
-    c.exige('👋' not in (r.get('resposta') or '') and (r.get('resposta') or '').count('💚') == 1, f'(o) saudação com 2 emojis: «{(r.get("resposta") or "")[:80]}»')
+    # 08/11: desde a abertura B2 a 1ª resposta é a saudação fixa com 3 botões (casos r–u); a regra do 👋💚 vale se ela não sair.
+    if (r.get('interativo') or {}).get('chave') != 'abertura':
+        c.exige('👋' not in (r.get('resposta') or '') and (r.get('resposta') or '').count('💚') == 1, f'(o) saudação com 2 emojis: «{(r.get("resposta") or "")[:80]}»')
     r = c.diz('Rua dos Artistas, 123')
     alvo = norm((r.get('resposta') or '') + ((r.get('interativo') or {}).get('corpo') or ''))
     c.exige('encontrei aqui' not in alvo and '·' not in alvo, f'(o) rua única em formato de lista: «{alvo[:120]}»')
@@ -361,7 +364,72 @@ def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800
     c.exige('mail' in t and 'telefone' not in t, f'(p) perguntou o telefone (ou não pediu o e-mail): «{(r.get("resposta") or "")[:160]}»')
 
 
-CENARIOS = {'p': (14, cen_p), 'o': (13, cen_o), 'm': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
+# ── abertura B2 (08/11, docs/Prompt_mari_abertura_b2_081126_1310.md): saudação fixa + 3 botões, sem o Claude ──
+BOTOES_B2 = ['📍 Ver minha rua', '💰 Ver os planos', '💬 Falar com alguém']
+RX_RS = r'r\$\s*\d'
+
+
+def exige_abertura(c, r, inicio, rot):
+    it = r.get('interativo') or {}
+    c.exige(it.get('chave') == 'abertura', f'({rot}) 1ª resposta sem a abertura B2 com botões: {it or (r.get("resposta") or "")[:120]}')
+    c.exige((it.get('corpo') or '').startswith(inicio), f'({rot}) saudação errada: «{(it.get("corpo") or "")[:60]}» (esperado «{inicio}…»)')
+    c.exige([b.get('title') for b in it.get('botoes') or []] == BOTOES_B2, f'({rot}) botões errados: {it.get("botoes")}')
+    c.exige(all(len(b.get('title') or '') <= 20 for b in it.get('botoes') or []), f'({rot}) título de botão com mais de 20 caracteres')
+    c.exige(r.get('modelo') == 'abertura_b2', f'({rot}) a abertura passou pelo Claude (modelo {r.get("modelo")!r})')
+    c.exige(not re.search(RX_RS, norm(it.get('corpo'))), f'({rot}) preço na abertura')
+    rows = sql(f"select dados->>'abertura' ab from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and rows[0].get('ab') == 'b2_081126', f'({rot}) dados.abertura não gravado: {rows}')
+
+
+def cen_r(c):   # B2 sem nome ("Teste V7" não parece nome) + o cliente responde em TEXTO → o Claude segue sem saudar de novo
+    r = c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
+    exige_abertura(c, r, 'Oi, tudo bem? 😊', 'r')
+    r = c.diz('Moro na Rua Sebastião Pedro da Silva, número 2')
+    t = norm((r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or ''))
+    c.exige((r.get('interativo') or {}).get('chave') != 'abertura', '(r) repetiu a abertura depois da resposta em texto')
+    c.exige('aqui e a mari' not in t, f'(r) apresentou-se de novo: «{t[:120]}»')
+    c.exige('sebastiao pedro' in t, f'(r) não seguiu com a rua do cliente: «{t[:160]}»')
+
+
+def cen_s(c):   # B2 com nome de pessoa no contato → "Oi, Ana, tudo bem? 😊"
+    c.nome = 'Ana Paula Teste'
+    r = c.diz('Vi o anúncio e queria mais informações')
+    exige_abertura(c, r, 'Oi, Ana, tudo bem? 😊', 's')
+
+
+def cen_t(c):   # 1ª mensagem já com CEP → sem abertura com botões, direto no fluxo do CEP (Claude)
+    r = c.diz('Oi, quero a internet da Nio. Meu CEP é 36035-130')
+    c.exige((r.get('interativo') or {}).get('chave') != 'abertura', '(t) mandou a abertura com botões a quem já deu o CEP')
+    c.exige(r.get('modelo') != 'abertura_b2', '(t) respondeu com texto fixo da abertura')
+    rows = sql(f"select cep, dados->>'abertura' ab from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and str(rows[0].get('cep') or '').replace('-', '') == '36035130', f'(t) CEP não gravado: {rows}')
+    c.exige(rows and not rows[0].get('ab'), f'(t) dados.abertura gravado sem abertura: {rows}')
+
+
+def cen_u(c):   # toque em cada botão (sem Claude): rua e planos → pede só o CEP, sem preço; "Falar com alguém" → humano agora
+    r = c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
+    exige_abertura(c, r, 'Oi, tudo bem? 😊', 'u')
+    r = c.diz('📍 Ver minha rua')
+    t = norm(r.get('resposta'))
+    c.exige('me manda so o seu cep' in t and 'rua e o bairro' in t, f'(u) "Ver minha rua" sem o texto fixo: «{t[:120]}»')
+    c.exige(r.get('modelo') == 'abertura_b2', f'(u) "Ver minha rua" passou pelo Claude ({r.get("modelo")!r})')
+    rows = sql(f"select dados->>'abertura_botao' b from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and rows[0].get('b') == 'rua', f'(u) dados.abertura_botao não gravado: {rows}')
+    r = c.diz('💰 Ver os planos')
+    t = norm(r.get('resposta'))
+    c.exige('600 mega a 1 giga' in t and 'cep' in t, f'(u) "Ver os planos" sem o texto fixo: «{t[:120]}»')
+    c.exige(not re.search(RX_RS, t), '(u) preço antes da cidade')
+    h = type(c)('u2', int(c.tel[-3:]) + 1, c.nome)
+    r = h.diz('Oi, vi o anúncio')
+    exige_abertura(h, r, 'Oi, tudo bem? 😊', 'u2')
+    r = h.diz('💬 Falar com alguém')
+    h.exige((r.get('handoff') or {}).get('motivo') == 'pedido_humano', f'(u2) "Falar com alguém" sem handoff humano: {r.get("handoff")}')
+    h.exige('ja chamei nosso consultor' in norm(r.get('resposta')), f'(u2) resposta fixa errada: «{(r.get("resposta") or "")[:100]}»')
+    c.falhas += h.falhas
+    c.log += h.log
+
+
+CENARIOS = {'r': (16, cen_r), 's': (17, cen_s), 't': (18, cen_t), 'u': (19, cen_u), 'p': (14, cen_p), 'o': (13, cen_o), 'm': (11, cen_m), 'n': (12, cen_n), 'l': (10, cen_l),'a': (1, cen_a), 'c': (2, cen_c), 'd': (3, cen_d), 'e': (4, cen_e), 'g': (5, cen_g), 'h': (6, cen_h), 'i': (7, cen_i), 'j': (8, cen_j), 'k': (9, cen_k)}
 
 def relatorio(res):
     print('\n── tokens e custo (estimativa pelos preços da tabela PRECOS) ──')

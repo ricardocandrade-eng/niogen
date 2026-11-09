@@ -112,8 +112,8 @@ def valor(s):
 class ConversaPortao(B.Conversa):
     """Conversa do ensaio + checagens globais do portão em TODA fala da Mari."""
 
-    def __init__(self, cid, n):
-        super().__init__(cid, n)
+    def __init__(self, cid, n, nome='Teste V7'):
+        super().__init__(cid, n, nome)
         self.pos_handoff = False
         self.email_dado = False
 
@@ -239,6 +239,8 @@ PORTAO = {
     'j': (8, B.cen_j, 'regressão BTU'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
     'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14 P16'),
     'p': (14, B.cen_p, 'P9 P10'), 'q': (15, cen_q, 'P15'),
+    # 08/11 — abertura B2 (saudação fixa + 3 botões): sem nome, com nome, 1ª mensagem já com CEP, toque em cada botão.
+    'r': (16, B.cen_r, 'B2 sem nome'), 's': (17, B.cen_s, 'B2 com nome'), 't': (18, B.cen_t, 'B2 com CEP'), 'u': (19, B.cen_u, 'B2 botões'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
