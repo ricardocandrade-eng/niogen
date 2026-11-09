@@ -965,9 +965,10 @@
     const eu = ((NG.usuario || {}).nome || '').trim();
     if (!cv || !cv.chatwoot_conversation_id) return { tipo: null, html: 'sem conversa' };
     if (cv.nao_contatar) return { tipo: null, html: 'não contatar' };
-    if (cv.chatwoot_status === 'resolved') return { tipo: 'mari', html: `${ICO_ROBO} sem dono (a Mari volta se o cliente escrever)` };
+    // 0091: assumida vale mesmo com a conversa resolvida (o Chatwoot sincroniza depois).
     if (cv.chatwoot_agente) return { tipo: 'pessoa', html: `${ICO_PESSOA} ${esc(cv.chatwoot_agente === eu ? 'você' : cv.chatwoot_agente)}` };
     if (cv.humano_atribuido) return { tipo: 'pessoa', html: `${ICO_PESSOA} time (assumida)` };
+    if (cv.chatwoot_status === 'resolved') return { tipo: 'mari', html: `${ICO_ROBO} sem dono (a Mari volta se o cliente escrever)` };
     if (cv.chatwoot_time) return { tipo: 'time', html: `${ICO_PESSOA} time backoffice` };
     return { tipo: 'mari', html: `${ICO_ROBO} Mari atendendo` };
   }

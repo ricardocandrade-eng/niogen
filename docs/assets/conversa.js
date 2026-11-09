@@ -81,9 +81,9 @@
     const meuNome = () => ((NG.usuario || {}).nome || '').trim();
     function dono(c) {
       if (c.nao_contatar) return { v: 'parar', txt: 'Não contatar' };
-      if (c.chatwoot_status === 'resolved') return { v: 'mari', txt: 'Sem dono · Mari atende' };
       if (c.chatwoot_agente) return c.chatwoot_agente === meuNome() ? { v: 'eu', txt: 'Você' } : { v: 'outro', txt: c.chatwoot_agente };
       if (c.humano_atribuido) return { v: 'time', txt: 'Time (assumida)' };
+      if (c.chatwoot_status === 'resolved') return { v: 'mari', txt: 'Sem dono · Mari atende' };
       if (c.chatwoot_time) return { v: 'time', txt: 'Time backoffice' };
       return { v: 'mari', txt: 'Sem dono · Mari atende' };
     }
