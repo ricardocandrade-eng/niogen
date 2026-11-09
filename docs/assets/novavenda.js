@@ -205,7 +205,7 @@
     $('vigencia').textContent = ini ? NG.fmtDiaISO(ini) : '—';
 
     // Endereço vindo do ViaCEP + resultado das travas.
-    const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false };
+    const estado = { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, avisos: null, dfv: null, dfvErro: false, consultando: false };
 
     const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
     // Linha da área que cobre o endereço (traz o cluster: a tabela de preço da cidade). A mesma regra roda no banco (cluster_da_area).
@@ -329,7 +329,8 @@
       const chip = $('cluster-chip');
       chip.className = `chip ${estado.area === false ? 'bad' : estado.area ? 'ok' : ''}`;
       chip.textContent = estado.area === false ? 'Fora da área de atuação' : estado.cluster ? (estado.cluster === 'btu' ? 'BTU' : 'Regular') : '—';
-      if (!estado.viacep) { travasEl.innerHTML = ''; return; }
+      const selos = NG.selosFicha(estado.avisos);   // 0076: ficha única, só aviso
+      if (!estado.viacep) { travasEl.innerHTML = selos; return; }
       const a = estado.area === false ? '<span class="chip bad">Cidade fora da área de atuação ✗</span>'
         : estado.area ? `<span class="chip ok">Dentro da área ✓ · ${estado.cluster === 'btu' ? 'BTU' : 'Regular'}</span>` : '';
       const d = estado.dup === null ? '' : estado.dup.endereco
@@ -338,10 +339,23 @@
       const doc = estado.dup && estado.dup.documento ? '<span class="chip bad">CPF/CNPJ já tem venda ativa ✗</span>' : '';
       // Recompra (endereço que já teve venda que saiu ou que a Nio cancelou): avisa, não bloqueia.
       const rec = estado.recompra && estado.recompra.recompra ? '<span class="chip warn recompra">Possível recompra: a Nio aplica multa de R$ 500 por pedido. Confirme com o Ricardo antes de registrar.</span>' : '';
-      travasEl.innerHTML = a + d + doc + rec;
+      travasEl.innerHTML = a + d + doc + rec + selos;
+    }
+
+    // 0076 (onda 3.1 fase 1): cruza CPF/CNPJ, telefone e endereço com vendas, conversas da Mari, OSAB e DFV. Só aviso.
+    let avisosSeq = 0;
+    async function checarAvisos() {
+      const seq = ++avisosSeq;
+      const p = { p_doc: F.doc.value || null, p_tel: F.whatsapp.value || null, p_cep: F.cep.value || null, p_numero: F.numero.value || null, p_complemento: F.complemento.value || null };
+      if (!NG.soDigitos(p.p_doc) && !NG.soDigitos(p.p_tel) && !(NG.soDigitos(p.p_cep) && (p.p_numero || '').trim())) { estado.avisos = null; atualizar(); return; }
+      const { data, error } = await NG.sb.rpc('ficha_avisos', p);
+      if (seq !== avisosSeq) return;
+      estado.avisos = error ? null : data;
+      atualizar();
     }
 
     async function checarDuplicidade() {
+      checarAvisos();
       if (!NG.soDigitos(F.cep.value) || !F.numero.value.trim()) { estado.dup = null; atualizar(); return; }
       const { data, error } = await NG.sb.rpc('checar_duplicidade', { p_cpf_cnpj: F.doc.value, p_cep: F.cep.value, p_numero: F.numero.value });
       estado.dup = error ? null : data;
@@ -585,7 +599,8 @@
 
     F.cep.addEventListener('input', () => { if (NG.soDigitos(F.cep.value).length === 8) buscarCep(); });
     F.numero.addEventListener('change', () => { checarDuplicidade(); consultarDfv(); });
-    F.complemento.addEventListener('change', () => { consultarDfv(); checarRecompra(); });
+    F.complemento.addEventListener('change', () => { consultarDfv(); checarRecompra(); checarAvisos(); });
+    F.whatsapp.addEventListener('change', () => checarAvisos());
     F.bairro.addEventListener('change', () => {
       if (estado.viacep) { atualizarArea(); renderPlanos(); atualizar(); }
     });
@@ -656,7 +671,7 @@
 
     function limpar() {
       form.reset();
-      Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, dfv: null, dfvErro: false, consultando: false });
+      Object.assign(estado, { viacep: null, cobertura: null, area: null, cluster: null, dup: null, recompra: null, avisos: null, dfv: null, dfvErro: false, consultando: false });
       $('endereco').hidden = true;
       $('doc-erro').textContent = '';
       $('campo-ref').hidden = true;

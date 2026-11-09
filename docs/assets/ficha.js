@@ -233,15 +233,17 @@
       ]);
       cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
     }
-    // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config).
-    const [rph, rmot] = await Promise.all([
+    // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
+    const [rph, rmot, rav] = await Promise.all([
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
+      NG.sb.rpc('ficha_avisos', { p_venda: id }),
     ]);
     if (!rmot.error) motivosCache = rmot.data || [];
     const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     return {
+      avisos: rav && !rav.error ? rav.data : null,
       pend: NG.pendencia(v), pendAberta, pendHist, motivos: motivosCache || [],
       cad,
       parc, semResposta,
@@ -1146,6 +1148,7 @@
       ${cabecalho(v)}
       <div class="f-corpo">
         ${faixaProximo(v, pr)}
+        ${v.status === 'saida' ? '' : NG.selosFicha(d.avisos, { ignorar: v.id })}
         ${cartaoPendencia(v)}
         ${cartaoViabilidade(v)}
         ${cartaoPortal(v)}

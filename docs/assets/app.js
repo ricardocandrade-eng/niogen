@@ -906,6 +906,19 @@
       default: return null;
     }
   }
+  // ---------- ficha única · fase 1 (onda 3.1, 0076): selos de aviso, nada bloqueia ----------
+  // r = retorno de ficha_avisos() ({bloquear, selos:[{tipo, nivel, texto, venda_id?, conversa_id?}]}). ignorar = id da venda aberta.
+  const ICONE_SELO = { duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' };
+  function selosFicha(r, { ignorar } = {}) {
+    const selos = ((r && r.selos) || []).filter((s) => !ignorar || s.venda_id !== ignorar);
+    if (!selos.length) return '';
+    return `<div class="selos-ficha" role="note" aria-label="Avisos de ficha única">${selos.map((s) => {
+      const alvo = s.venda_id ? `#venda=${esc(s.venda_id)}` : s.conversa_id ? `mari.html?conversa=${esc(s.conversa_id)}` : '';
+      const corpo = `${ICONE_SELO[s.tipo] || '⚠️'} ${esc(s.texto)}`;
+      return alvo ? `<a class="selo-ficha ${esc(s.nivel || 'warn')}" href="${alvo}" title="Abrir">${corpo}</a>`
+        : `<span class="selo-ficha ${esc(s.nivel || 'warn')}">${corpo}</span>`;
+    }).join('')}<span class="selo-ficha-nota">Só aviso — nada foi bloqueado. Confira antes do pedido (recompra = multa R$ 500; cliente/endereço já Nio = estorno 100 %).</span></div>`;
+  }
   // "há 3h05" / "há 2 dias" (para "a mais antiga está parada há …").
   const haQuanto = (desde) => {
     if (!desde) return '—';
@@ -1035,6 +1048,7 @@
     documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
+    selosFicha,   // onda 3.1: ficha única (só aviso)
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
