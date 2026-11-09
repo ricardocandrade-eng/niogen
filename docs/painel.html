@@ -8,6 +8,8 @@
      09/11 (onda 2.1, 0075): faixa "primeira venda" no topo, para todos os perfis — meta do mês × instaladas (painel_meta_ritmo,
      a mesma conta do resumo diário), ritmo "faltam N em D dias → X por dia" e paradas por etapa (NG.paradaDe; vermelho = prazo do
      contrato vencido, de config_regras) — clique abre vendas.html?vista=lista&parada=<etapa>.
+     09/11 (onda 3.2, 0077): cartão "Resumo de ontem" (só admin) com o texto de resumo_diario(ontem) e botão Copiar — o envio
+     automático (n8n resumo_diario, 08h seg–sáb) está criado INATIVO, esperando a decisão do canal.
      Dados: v_funil (KPIs e lista, mesma regra da tela Vendas), contatos_cliente, mari_conversas/mari_turnos, v_dfv_resumo, importacoes. -->
 <html lang="pt-BR">
 <head>
@@ -20,12 +22,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-6">
-<script src="config.js?v=091126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-7">
+<script src="config.js?v=091126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-6"></script>
-<script src="assets/sidebar.js?v=091126-6"></script>
-<script src="assets/ficha.js?v=091126-6"></script>
+<script src="assets/app.js?v=091126-7"></script>
+<script src="assets/sidebar.js?v=091126-7"></script>
+<script src="assets/ficha.js?v=091126-7"></script>
 </head>
 <body>
 <div class="app">
@@ -65,7 +67,9 @@
   const veMari = ['admin', 'backoffice'].includes(eu.perfil);
   let vendas = [], metas = [], ultimoContato = {}, base, osab = null, mari;   // base/mari: undefined = carregando
   let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
-  let ritmo = null, regras = {};   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
+  let ritmo = null, regras = {};
+  const ehAdmin = eu.perfil === 'admin';
+  let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
@@ -89,14 +93,16 @@
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
   async function carregarExtras() {
-    const [rz, rmari, rp] = await Promise.all([
+    const [rz, rmari, rp, rres] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
       veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
+      ehAdmin ? NG.sb.rpc('resumo_diario', { p_dia: NG.somaDias(NG.diaSP(), -1) }) : Promise.resolve(null),
     ]);
     base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
     mari = rmari || { lista: [] };
     portal = rp && !rp.error ? rp.data : null;
+    resumo = !rres ? null : rres.error ? { erro: NG.msgErro(rres.error) } : rres.data;
     render();
   }
 
@@ -165,6 +171,14 @@
 
     // ---------- blocos curtos ----------
     const blocos = [];
+    // Resumo de ontem (onda 3.2, só admin): o mesmo texto que o n8n vai mandar às 8h quando o canal for decidido.
+    if (ehAdmin) {
+      blocos.push(`<section class="painel bloco-curto resumo-ontem">
+        <div class="q-linha"><h2 title="resumo_diario(ontem): vendas do dia, Meta Ads, conversas paradas, prazos do contrato e ritmo da meta. Sem CPF nem telefone.">Resumo de ontem</h2><button type="button" class="btn btn-sm" id="copiar-resumo"${resumo && resumo.texto ? '' : ' disabled'}>Copiar</button></div>
+        ${resumo === undefined ? '<span class="nota-campo">Carregando…</span>' : !resumo ? '' : resumo.erro ? `<span class="nota-campo">${esc(resumo.erro)}</span>`
+          : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Envio automático às 8h: desligado até decidir o canal (WhatsApp × Telegram).</span>`}
+      </section>`);
+    }
     // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
     const porEtapa = Object.fromEntries(ETAPAS.map((e) => [e.id, 0]));
     vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v.status).id; if (e in porEtapa) porEtapa[e] += 1; });
@@ -217,6 +231,11 @@
         : '<span class="nota-campo">Base DFV ainda não carregada.</span>'}
     </section>`);
     document.getElementById('blocos').innerHTML = blocos.join('');
+    const bc = document.getElementById('copiar-resumo');
+    if (bc) bc.onclick = async () => {
+      try { await navigator.clipboard.writeText(resumo.texto); NG.toast('Resumo copiado ✓', 'ok'); }
+      catch (e) { NG.toast('Não deu para copiar — selecione o texto e copie à mão', 'bad'); }
+    };
   }
 
   // ---------- faixa "primeira venda" (onda 2.1): meta × instaladas, ritmo e paradas por etapa ----------

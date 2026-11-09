@@ -1,0 +1,104 @@
+{
+  "name": "resumo_diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1-6"
+            }
+          ]
+        }
+      },
+      "name": "1 · 08h seg–sáb",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "74d0cb24-31c0-5d3f-b2b5-6dc580a0f740",
+      "notes": "Feriados ainda não entram (pendência 16): no feriado o resumo sairia igual."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/resumo_diario",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase resumo de ontem",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "99dae80b-b5d2-5e7c-af34-e0612ef27df0",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {},
+      "name": "3 · Enviar (AGUARDA CANAL)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        480,
+        0
+      ],
+      "id": "10ee2b7b-0144-5432-b3df-c580fff3fa6a",
+      "disabled": true,
+      "notes": "DESLIGADO — aguarda canal: template WhatsApp × bot do Telegram (cartão \"Canal do alarme da Mari\"). Quando decidir, troca este nó pelo envio ao Ricardo usando {{$json.texto}} e liga o workflow.",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "1 · 08h seg–sáb": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase resumo de ontem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase resumo de ontem": {
+      "main": [
+        [
+          {
+            "node": "3 · Enviar (AGUARDA CANAL)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}

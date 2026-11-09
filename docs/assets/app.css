@@ -1148,3 +1148,6 @@ label.cartao { cursor: pointer; }
 .selo-ficha.bad { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad-fg); }
 a.selo-ficha:hover { filter: brightness(1.15); }
 .selo-ficha-nota { flex-basis: 100%; font-size: 11px; color: var(--muted); }
+/* Resumo de ontem (onda 3.2, 09/11): texto pronto para copiar. */
+.resumo-ontem { grid-column: 1 / -1; }
+.resumo-txt { margin: 4px 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); font: 12.5px/1.5 var(--sans); color: var(--text); white-space: pre-wrap; word-break: break-word; }
