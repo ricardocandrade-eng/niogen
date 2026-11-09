@@ -4,6 +4,7 @@
  * negociação (mari_turnos = o que passou pelo Chatwoot). Só leitura no banco; nada novo é gravado.
  * Painel lateral "NIOGEN no Portal". Fala com o Supabase Nio por REST com a anon key + o login do usuário do NIOGEN (o RLS vale).
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
+ * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
  * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
  */
 'use strict';
@@ -416,13 +417,15 @@
     if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
     S.ocupado = true; aviso(''); desenha();
     try {
-      await rpc('portal_gravar_pedido', { p_venda_id: S.dados.venda_id, p_pedido: ped });
+      // 0082 (fluxo único do backoffice): o momento "pedido" grava o nº e, sozinho, põe a etiqueta biometria-pendente, deixa a
+      // nota e avisa o cliente na conversa (respeitando horário, 2/dia · 15/mês e a janela de 24 h).
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao' } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
       S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.matricula = '';
       S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
       try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
-      aviso(`Pedido gravado no NIOGEN (${nome}). A Nio manda o link da biometria ao cliente — avise na conversa.`, 'ok');
+      aviso(`Pedido gravado no NIOGEN (${nome}). ${(r && r.resumo) || ''}${r && r.aviso ? ` · ${r.aviso}` : ' · o cliente é avisado pelo sistema.'}`, r && r.aviso ? 'bad' : 'ok');
     } catch (e) {
       aviso(/duplicate|unique|23505/i.test(e.message) ? 'Esse número de pedido já está em outra venda do NIOGEN.' : e.message, 'bad');
     }

@@ -18,5 +18,6 @@
   "agente_trafego_workflow_id": "8hvHCVh8Y7jxNed6",
   "chatwoot_bot_id": 11823,
   "resumo_diario_workflow_id": "6MwLIIqRnxUUth75",
-  "alarme_silencio_workflow_id": "ScmdsERY6cqdlyeT"
+  "alarme_silencio_workflow_id": "ScmdsERY6cqdlyeT",
+  "backoffice_chatwoot_workflow_id": "aXTo5Q2djsDQbHD5"
 }

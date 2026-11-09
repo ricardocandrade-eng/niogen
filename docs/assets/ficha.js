@@ -11,6 +11,10 @@
  * eventos_venda só o fato "dados copiados"). Os dois aparecem em Qualificado e em Saída.
  * 08/11 (0064): cartão PENDÊNCIA ("Em espera": abrir · adiar · encerrar por RPC, só admin/backoffice; atalho para a Saída sugerida;
  * histórico) logo abaixo do próximo passo; eventos tipo "pendencia" no histórico.
+ * 09/11 (0082, fluxo único do backoffice): os botões do próximo passo chamam backoffice_momento — Assumir · Registrar viabilidade ·
+ * Gravar nº do pedido · Biometria Validada/Risco/Negado · Agendar — e atalhos "Devolver para a Mari" e "Cliente pediu para parar".
+ * O banco grava a venda e enfileira etiqueta/nota/mensagem/resolver no Chatwoot (n8n backoffice_chatwoot); a ficha mostra em uma
+ * linha o que o sistema fez. Validada abre o agendamento na sequência.
  * Depende de app.js (NG). Uso: <script src="assets/ficha.js"></script>; NGFicha.abrir(id) · NGFicha.aoMudar(fn) · NGFicha.pagina(el, id).
  */
 (function () {
@@ -34,6 +38,7 @@
   let convFim = false;     // rolar a conversa até a última mensagem no próximo desenho
   let saidaPreset = null;  // 0064: motivo de Saída sugerido pela pendência (pré-seleciona o formulário de Saída)
   let motivosCache = null; // 0064: config_motivos_pendencia (ativos)
+  let feitoUltimo = null;  // 0082: { resumo, aviso } do último momento (a linha "✓ …" embaixo do próximo passo)
   const ouvintes = [];
 
   // ---------- formatação local ----------
@@ -148,6 +153,15 @@
         cor = dt.resultado === 'saida' ? 'bad' : '';
         texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.automatica ? ' · automática (a venda foi para Saída)' : ''}${dt.dias != null ? ` · ${dt.dias} dia${dt.dias === 1 ? '' : 's'} em espera` : ''}${dt.nota ? ' · ' + esc(dt.nota) : ''}`;
       }
+    } else if (e.tipo === 'backoffice') {
+      // 0082: um botão do fluxo único — o que o sistema fez (etiqueta, nota, mensagem…) numa linha.
+      const BIO_R = { validada: 'validada', risco: 'com risco', negado: 'crédito negado' };
+      titulo = `NIOGEN · ${NG.MOMENTOS[dt.momento] || dt.momento}${dt.momento === 'biometria' && dt.resultado ? ` ${BIO_R[dt.resultado] || dt.resultado}` : ''}`;
+      cor = dt.mensagem === 'bloqueada' || dt.aviso ? 'warn' : '';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.resumo ? ' · ' + esc(dt.resumo) : ''}${dt.aviso ? ' · ' + esc(dt.aviso) : ''}`;
+    } else if (e.tipo === 'pedido_aberto_portal') {
+      titulo = `Pedido aberto no portal${dt.pedido ? ` · nº ${dt.pedido}` : ''}`;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.origem === 'extensao' ? ' · pela extensão' : ''}`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -180,7 +194,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, humano_atribuido, nao_contatar').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -252,6 +266,7 @@
       lim: rl.data || { hoje: 0, mes: 0 },
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
+      convInfo: (rc.data || [])[0] || null,   // 0082: dono no Chatwoot (Assumir só aparece sem dono)
       chatwoot: NG.linkChatwoot(((rc.data || [])[0] || {}).chatwoot_conversation_id),
       contatos: rk.data || [],
       usuarios: ru,
@@ -316,7 +331,7 @@
     // própria Nio (WhatsApp + e-mail) na hora do pedido — salvar o nº do pedido marca a biometria pendente e a contagem
     // 24/72 h e o D+1 partem dali (trigger vendas_antes_biometria, 0032). O backoffice só avisa o cliente na conversa.
     portal: (v) => formWrap('portal', 'Pedido no portal',
-      'Abra o pedido no portal PAP (perfil BO) com o endereço abaixo e rode a análise de crédito. Ao concluir o pedido, a própria Nio manda ao cliente o link da biometria por WhatsApp e por e-mail — nós não mandamos link. Salve aqui o nº do pedido (a contagem de 24/72 h começa agora) e avise o cliente na conversa. Nunca conclua pedido com CPF de teste.',
+      'Abra o pedido no portal PAP (perfil BO) com o endereço abaixo e rode a análise de crédito. Ao concluir o pedido, a própria Nio manda ao cliente o link da biometria por WhatsApp e por e-mail — nós não mandamos link. Salve aqui o nº do pedido (a contagem de 24/72 h começa agora): o sistema põe a etiqueta, deixa a nota e avisa o cliente sozinho. Nunca conclua pedido com CPF de teste.',
       `${botoesPortal}<span class="nota-campo mono">${esc(enderecoPortal(v))}</span>
        <div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
@@ -397,6 +412,19 @@
     return true;
   }
   const quandoDe = (fd) => `${fd.get('dia')}T${fd.get('periodo')}:00-03:00`;
+  // 0082: o botão do momento — o banco grava a venda e enfileira o Chatwoot; a ficha guarda a linha do que foi feito.
+  async function rodarMomento(qual, dados) {
+    const r = await NG.momento(d.v.id, qual, dados);
+    if (!r) return null;
+    feitoUltimo = { resumo: r.resumo, aviso: r.aviso || null };
+    formAtivo = null;
+    edicao = null;
+    abertos = null;
+    saidaPreset = null;
+    await recarregar();
+    ouvintes.forEach((f) => { try { f(d && d.v); } catch (e) { /* tela que ouve */ } });
+    return r;
+  }
   // 0064: as três ações da pendência vão por RPC (SECURITY DEFINER, checam admin/backoffice e gravam em eventos_venda).
   async function rpcPendencia(fn, args, msgOk) {
     const { error } = await NG.sb.rpc(fn, args);
@@ -429,12 +457,18 @@
       };
       // Biometria pendente e a contagem: o banco carimba na hora em que o nº do pedido entra (0032).
       const pedidoNovo = campos.nio_pedido && campos.nio_pedido !== (v.nio_pedido || null);
-      return gravar(campos, pedidoNovo ? 'Pedido registrado · a Nio manda o link da biometria ao cliente' : 'Pedido no portal atualizado');
+      // 0082: nº novo = momento "pedido" (etiqueta biometria-pendente + nota + aviso ao cliente, tudo pelo sistema).
+      if (pedidoNovo) return !!(await rodarMomento('pedido', { pedido: campos.nio_pedido, credito: campos.credito_resultado, link: link || null }));
+      return gravar(campos, 'Pedido no portal atualizado');
     },
     async bio_status(fd) {
       return gravar({ biometria_status: fd.get('biometria') || null, credito_resultado: fd.get('credito') || null }, 'Biometria e crédito atualizados');
     },
-    async viab(fd) { return SALVAR.ed_viab(fd); },
+    async viab(fd) {
+      // 0082: momento "viabilidade" (grava os mesmos campos e deixa a nota no Chatwoot).
+      return !!(await rodarMomento('viabilidade', { resultado: fd.get('viab') || null, velocidade: fd.get('vel') || null,
+        interesse: fd.get('interesse') || null, endereco_portal: fd.get('endp') || null }));
+    },
     async ref(fd) {
       return gravar({ ponto_referencia: String(fd.get('ref') || '').trim() || null }, 'Referência registrada');
     },
@@ -468,9 +502,9 @@
     },
     async agendar(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
-      const campos = { instalacao_agendada_para: quandoDe(fd), instalacao_turno: turnoDe(fd), nio_pendencia_cod: null, nio_pendencia_desc: null };
-      if (d.v.status === '1_vendido') campos.status = '2_aguardando_instalacao';
-      return gravar(campos, `Instalação de ${NG.primeiroNome(d.v.cliente_nome)} agendada`);
+      // 0082: momento "agendar" — mesmos campos (Vendido → Aguardando, limpa a pendência da Nio) + etiqueta, nota, confirmação ao
+      // cliente, tira a atribuição e resolve a conversa (D3), tudo pelo sistema.
+      return !!(await rodarMomento('agendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }));
     },
     async docs(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data.', 'bad'); return false; }
@@ -885,11 +919,22 @@
     else if (pr.resolver === 'dfv' || pr.resolver === 'viab') nota = NG.TEXTOS_DFV.trava;
     else if (pr.resolver === 'pendencia') nota = pr.vencida ? 'Chegou a data de revisão: confira com o terceiro e adie ou encerre a pendência (cartão abaixo).' : 'A venda está esperando um terceiro. Nada a fazer até a data de revisão; a cadência da Mari está pausada.';
     const botoes = [];
+    const podeBO = ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
+    const cv = d.convInfo;
+    // 0082: conversa sem dono no Chatwoot → Assumir vem primeiro (atribui, cala a Mari, para a cadência).
+    if (podeBO && cv && cv.chatwoot_conversation_id && !cv.chatwoot_agente && !cv.nao_contatar && v.status !== 'saida') {
+      botoes.push('<button type="button" class="btn btn-acc" data-momento="assumir" title="Atribui a conversa a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>');
+    }
     // Viabilidade (prompt 27): 1º consultar no portal (abre e copia "CEP número"), depois registrar o resultado.
     if (pr.resolver === 'viab') {
       botoes.push(`<a class="btn btn-acc" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>`);
     }
-    if (pr.resolver && BOTAO[pr.resolver]) {
+    if (pr.resolver === 'bio_status' && podeBO && v.nio_pedido && v.status === '0_qualificado') {
+      // 0082: biometria em um toque — Validada abre o agendamento; Negado manda o pedido de outro CPF e abre a pendência.
+      botoes.push('<button type="button" class="btn btn-acc" data-momento="biometria" data-r="validada">✓ Biometria validada</button>',
+        '<button type="button" class="btn" data-momento="biometria" data-r="risco">Com risco</button>',
+        '<button type="button" class="btn" data-momento="biometria" data-r="negado">Crédito negado</button>');
+    } else if (pr.resolver && BOTAO[pr.resolver]) {
       const forte = pr.nivel === 'bad' || pr.nivel === 'warn' || ['pedido', 'portal', 'agendar', 'docs'].includes(pr.resolver);
       const rot = pr.resolver === 'sem_cobertura' && v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : BOTAO[pr.resolver];
       botoes.push(`<button type="button" class="btn ${forte ? 'btn-acc' : ''}" data-resolver="${pr.resolver}">${esc(rot)}</button>`);
@@ -899,10 +944,14 @@
       botoes.push('<button type="button" class="btn btn-ghost" data-resolver="pedido">Registrar venda</button>');
     }
     const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') && !FORMS_NO_CARTAO.includes(formAtivo) ? FORMS[formAtivo](v) : '';
+    const feito = feitoUltimo ? `<div class="f-feito${feitoUltimo.aviso ? ' warn' : ''}" role="status">${esc(feitoUltimo.resumo)}${feitoUltimo.aviso ? `<span>${esc(feitoUltimo.aviso)}</span>` : ''}</div>` : '';
+    const atalhos = podeBO && cv && cv.chatwoot_conversation_id && v.status !== 'saida' && !form ? `<div class="f-atalhos">
+        ${cv.chatwoot_agente || cv.humano_atribuido ? '<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari" title="Tira a atribuição no Chatwoot e deixa nota: a Mari continua com o contexto">Devolver para a Mari</button>' : ''}
+        ${cv.nao_contatar ? '' : '<button type="button" class="btn btn-ghost btn-sm" data-momento="parar" title="Etiqueta nao-contatar, nota, resolve a conversa e para tudo">Cliente pediu para parar</button>'}</div>` : '';
     return `<section class="f-prox ${pr.nivel || 'dim'}" aria-label="Próximo passo">
         <div class="f-prox-txt"><span class="f-rot">Próximo passo</span><b>${esc(pr.txt || '—')}</b>${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}</div>
         ${botoes.length && !form ? `<div class="f-prox-bts">${botoes.join('')}</div>` : ''}
-      </section>${form}`;
+      </section>${feito}${atalhos}${form}`;
   }
 
   function linhaDoTempo(v) {
@@ -1215,6 +1264,18 @@
   }
   function ligar(el) {
     el.addEventListener('click', async (ev) => {
+      const mo = ev.target.closest('[data-momento]');
+      if (mo && d) {
+        const qual = mo.dataset.momento;
+        const res = mo.dataset.r || null;
+        if (qual === 'parar' && !window.confirm('O cliente pediu para parar?\n\nA conversa ganha a etiqueta nao-contatar, uma nota, é resolvida e ninguém mais chama esse cliente.')) return;
+        if (res === 'negado' && !window.confirm('Crédito negado no CPF do cliente?\n\nO sistema manda ao cliente o pedido de outro CPF e abre a pendência "aguardando outro CPF".')) return;
+        mo.disabled = true;
+        const r = await rodarMomento(qual, res ? { resultado: res } : {});
+        if (r && qual === 'biometria' && res === 'validada' && d && ['1_vendido', '0_qualificado'].includes(d.v.status)) { formAtivo = 'agendar'; render(); }
+        if (!r && mo.isConnected) mo.disabled = false;
+        return;
+      }
       const r = ev.target.closest('[data-resolver]');
       if (r && d) {
         const qual = r.dataset.resolver;
@@ -1391,7 +1452,7 @@
     garantirGaveta();
     if (idAtual !== id) {
       idAtual = id;
-      d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null;
+      d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null;
       raiz.innerHTML = '<div class="ficha f-gaveta"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>';
     }
     if (!gav.classList.contains('aberta')) {

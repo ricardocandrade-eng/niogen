@@ -251,6 +251,62 @@
     return b;
   }
 
+  // ---------- fluxo único do backoffice (0082): um botão por momento; o banco grava a venda e enfileira o Chatwoot ----------
+  // momento: assumir · viabilidade · pedido · biometria · agendar · parar · devolver_mari. vendaId pode ser null quando
+  // dados.conversa_id vem (conversa sem venda: assumir/parar/devolver). Devolve o jsonb da RPC ({resumo, aviso, …}) ou null.
+  const MOMENTOS = {
+    assumir: 'Assumida', viabilidade: 'Viabilidade registrada', pedido: 'Pedido gravado', biometria: 'Biometria',
+    agendar: 'Instalação agendada', parar: 'Cliente pediu para parar', devolver_mari: 'Devolvida para a Mari',
+  };
+  async function momento(vendaId, qual, dados = {}) {
+    const { data, error } = await sb.rpc('backoffice_momento', { p_venda: vendaId || null, p_momento: qual, p_dados: dados || {} });
+    if (error) { toast(msgErro(error), 'bad'); return null; }
+    toast(data.aviso ? `${data.resumo} · ${data.aviso}` : data.resumo, data.aviso ? 'bad' : 'ok');
+    if (window.NGSidebar && NGSidebar.avisos) NGSidebar.avisos();
+    return data;
+  }
+
+  // Fila "Minha vez" (0082, Fase 2): junta conversas esperando o time e mensagens "mandar à mão" (v_fila_backoffice) com as
+  // vendas e instalações cujo próximo passo está vermelho/amarelo — a MESMA regra da tela Vendas (proximoPasso), sem copiar em SQL.
+  // Uma linha por pessoa (a conversa ganha da venda dela); ordem: vermelho → amarelo → mais antigo. Usada pela fila.html e pelo menu.
+  const MOTIVO_FILA = {
+    dados_completos: 'venda pronta · abrir o pedido', pedido_humano: 'pediu um consultor', objecao: 'objeção', urgencia_alta: 'urgência',
+    ja_cliente_nio: 'já é cliente Nio (ou reclamando)', sem_contato: 'sem contato',
+  };
+  function filaItens(fila, vendas, ult) {
+    const itens = [];
+    const comConversa = new Set();
+    const agora = Date.now();
+    (fila || []).forEach((f) => {
+      if (f.tipo === 'manual') {
+        itens.push({ tipo: 'manual', ico: '✉', chave: f.chave, nome: f.nome, cidade: f.cidade, desde: f.desde, nivel: 'bad', f,
+          venda_id: f.venda_id, conversa_id: f.conversa_id,
+          falta: `Mandar à mão: ${f.motivo || 'mensagem ao cliente'}${f.erro ? ` (${f.erro})` : ''}` });
+        return;
+      }
+      const min = (agora - new Date(f.desde)) / 60000;
+      if (f.venda_id) comConversa.add(f.venda_id);
+      const oque = f.sem_resposta ? 'cliente sem resposta' : (MOTIVO_FILA[f.motivo] || 'esperando alguém do time');
+      itens.push({ tipo: 'conversa', ico: '💬', chave: f.chave, nome: f.nome, cidade: f.cidade, desde: f.desde, f,
+        venda_id: f.venda_id, conversa_id: f.conversa_id,
+        nivel: f.sem_resposta || (!f.assumida && min > 15) ? 'bad' : 'warn',
+        falta: `${oque}${f.assumida ? ` · com ${f.chatwoot_agente || 'o time'}` : ''}` });
+    });
+    (vendas || []).forEach((v) => {
+      if (v.status === 'saida' || comConversa.has(v.id)) return;
+      const pr = proximoPasso(v, (ult || {})[v.id]);
+      if (!pr.acao || (pr.espera && !pr.vencida)) return;
+      if (!(pr.nivel === 'bad' || pr.nivel === 'warn' || pr.resolver === 'conferencia')) return;
+      const inst = ['2_aguardando_instalacao', '3_instalado'].includes(v.status) || ['reagendar', 'docs'].includes(pr.resolver);
+      const desde = v.status === '1_vendido' ? (v.agendar_desde || v.vendido_em)
+        : v.biometria_status === 'pendente' && v.biometria_link_enviado_em ? v.biometria_link_enviado_em : v.criado_em;
+      itens.push({ tipo: inst ? 'instalacao' : 'venda', ico: inst ? '🔧' : '🧾', chave: v.id, venda_id: v.id,
+        nome: v.cliente_nome, cidade: v.cidade, desde, nivel: pr.nivel === 'bad' ? 'bad' : 'warn', falta: pr.txt, resolver: pr.resolver });
+    });
+    const peso = { bad: 0, warn: 1 };
+    return itens.sort((a, b) => (peso[a.nivel] - peso[b.nivel]) || (new Date(a.desde) - new Date(b.desde)));
+  }
+
   // ---------- comissão: prevista / paga · M-10 · downgrade ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
   // Desde 04/11 (decisão do Ricardo no padrão de telas) a comissão aparece só como "prevista" (antes do pagamento) ou
@@ -1076,7 +1132,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar,TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, filaItens, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha,   // onda 3.1: ficha única (só aviso)

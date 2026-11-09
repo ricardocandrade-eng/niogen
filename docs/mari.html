@@ -23,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-11">
-<script src="config.js?v=091126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-12">
+<script src="config.js?v=091126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-11"></script>
-<script src="assets/sidebar.js?v=091126-11"></script>
-<script src="assets/ficha.js?v=091126-11"></script>
+<script src="assets/app.js?v=091126-12"></script>
+<script src="assets/sidebar.js?v=091126-12"></script>
+<script src="assets/ficha.js?v=091126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -723,10 +723,16 @@
       if (!fd) return;
       motivo = fd.get('motivo');
     }
+    // 0082: "Com humano" = o momento Assumir do fluxo único (atribui no Chatwoot sozinho, para a cadência, deixa nota).
+    if (destino === 'humano') {
+      if (!(await NG.momento(null, 'assumir', { conversa_id: id }))) return;
+      await carregar();
+      abrir(id);
+      return;
+    }
     const { data, error } = await NG.sb.rpc('mari_quadro_mover', { p_conversa: id, p_destino: destino, p_motivo: motivo });
     if (error || !data || !data.ok) { NG.toast(error ? NG.msgErro(error) : (data && data.erro) || 'Não foi possível mover.', 'bad'); return; }
-    if (destino === 'humano') NG.toast('Assumida: a cadência parou. Atribua a conversa a você no Chatwoot — é isso que cala a Mari.', 'ok');
-    else NG.toast(`Encerrada${data.nao_contatar ? ' · não contatar (marque a etiqueta nao-contatar no Chatwoot)' : ''}.`, 'ok');
+    NG.toast(`Encerrada${data.nao_contatar ? ' · não contatar (use "Cliente pediu para parar" na gaveta para a etiqueta sair sozinha)' : ''}.`, 'ok');
     await carregar();
     if (destino === 'humano') abrir(id);   // a gaveta tem o "Abrir no Chatwoot"
   }
@@ -862,12 +868,28 @@
     // "Ver venda": abre a ficha da venda em gaveta nesta mesma tela (#venda=<id>; voltar fecha).
     if (c.venda_id) links.push(`<a class="btn" href="#venda=${esc(c.venda_id)}">Ver venda</a>`);
     if (c.chatwoot_conversation_id && CHATWOOT_NIO_ACCOUNT) {
+      // 0082: Assumir (sem dono) · Devolver para a Mari (com dono) · Cliente pediu para parar — o NIOGEN mexe no Chatwoot sozinho.
+      if (!c.chatwoot_agente && !c.nao_contatar) links.unshift(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
+      else if (c.chatwoot_agente || c.humano_atribuido) links.push(`<button type="button" class="btn btn-ghost" data-momento="devolver_mari" data-conv="${esc(c.id)}">Devolver para a Mari</button>`);
+      if (!c.nao_contatar) links.push(`<button type="button" class="btn btn-ghost" data-momento="parar" data-conv="${esc(c.id)}">Cliente pediu para parar</button>`);
       links.push(`<a class="btn" target="_blank" rel="noopener" href="https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${esc(c.chatwoot_conversation_id)}">Abrir no Chatwoot</a>`);
     }
     document.getElementById('d-links').innerHTML = links.join('') || '<span class="nota-campo">Sem venda criada e sem conversa no Chatwoot.</span>';
     const conv = corpo.querySelector('.conversa');
     if (conv) conv.scrollTop = conv.scrollHeight;
   }
+
+  document.getElementById('d-links').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-momento]');
+    if (!b) return;
+    const qual = b.dataset.momento;
+    if (qual === 'parar' && !window.confirm('O cliente pediu para parar?\n\nA conversa ganha a etiqueta nao-contatar, uma nota, é resolvida e ninguém mais chama esse cliente.')) return;
+    b.disabled = true;
+    const r = await NG.momento(null, qual, { conversa_id: b.dataset.conv });
+    if (!r) { b.disabled = false; return; }
+    await carregar();
+    abrir(b.dataset.conv);
+  });
 
   await carregar();
   // Link direto vindo do detalhe da venda ("Ver conversa"): mari.html?conversa=<id> abre a gaveta dessa conversa.

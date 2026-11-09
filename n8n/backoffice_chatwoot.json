@@ -1,0 +1,439 @@
+{
+  "name": "backoffice_chatwoot",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 1 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "755bd9a4-40ed-593a-a379-1921705f24cc"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/backoffice_acoes_proximas",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_limite: 20 }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase ações",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "4f1184b1-939d-5d64-a9d5-7427dca64d0e",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "4bb9418e-933d-5ff1-b41f-577da6688e45",
+              "leftValue": "={{ $json.tipo === 'etiquetas' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3 · Etiquetas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "e7c069f9-a146-5052-897b-6324d8ed4288"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url_base + '/labels' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "3a · Chatwoot ler etiquetas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -160
+      ],
+      "id": "818007cf-c808-5879-aff9-1e5171893b96",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 3b · Montar etiquetas — UNIÃO das etiquetas atuais (GET) com as novas, tirando só as que o momento manda tirar.\n// Leitura falhou → não posta nada (postar só as novas apagaria as atuais: POST /labels substitui a lista).\nconst a = $('3 · Etiquetas?').item.json;\nconst r = $json || {};\nif (r.error || !Array.isArray(r.payload)) {\n  return { json: { ...a, erroLeitura: 'não li as etiquetas atuais: ' + JSON.stringify(r.error || r).slice(0, 300) } };\n}\nconst tirar = new Set(a.remove || []);\nconst labels = [...new Set([...r.payload, ...(a.add || [])])].filter((l) => !tirar.has(l));\nreturn { json: { ...a, corpo: { labels } } };\n"
+      },
+      "name": "3b · Montar etiquetas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        -160
+      ],
+      "id": "43583d71-e2fb-5854-a948-59a92008964f"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "d40e74f9-0b72-52e5-970f-c3b57dd6d3ec",
+              "leftValue": "={{ !$json.erroLeitura }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3c · Leu as etiquetas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        -160
+      ],
+      "id": "a9705f4f-a69e-5fa4-a6c4-786770eba41c"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "fb015703-aada-52db-b89a-95dd6479dffb",
+              "leftValue": "={{ $json.usuario === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "4 · Usuário?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        0
+      ],
+      "id": "ea41b813-8e9b-55cc-9679-64426d87f3e3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "5b · Chatwoot (bot Mari)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "401f678c-8a74-5afd-860a-0cd549ac345f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Credencial \"Chatwoot Nio — Mari bot\": a fala sai como Mari e não acorda a Mari.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "name": "5u · Chatwoot (usuário)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        -100
+      ],
+      "id": "93985c3b-72b8-528f-ad05-0aee25d82cd6",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Só os tipos de config_regras.backoffice_cred_usuario (token do Ricardo).",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 6 · Resultado — ok = a API do Chatwoot respondeu sem erro. O id vem do item que entrou no 4 (ou do 3b, se a leitura falhou).\nlet base = null;\ntry { base = $('4 · Usuário?').item.json; } catch (e) { base = null; }\nif (!base || $json.erroLeitura) base = $json;\nconst erro = $json.erroLeitura || ($json.error ? JSON.stringify($json.error).slice(0, 400) : null);\nreturn { json: { p_id: base.id, p_ok: !erro, p_erro: erro } };\n"
+      },
+      "name": "6 · Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        0
+      ],
+      "id": "a458c5bc-de7a-5985-8afa-2c9f3b573efe"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/backoffice_acao_resultado",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "7 · Supabase resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        0
+      ],
+      "id": "83ced9a9-2ef0-5262-b2a6-71b388130e6b",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "1 · A cada 1 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase ações",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase ações": {
+      "main": [
+        [
+          {
+            "node": "3 · Etiquetas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Etiquetas?": {
+      "main": [
+        [
+          {
+            "node": "3a · Chatwoot ler etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "4 · Usuário?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3a · Chatwoot ler etiquetas": {
+      "main": [
+        [
+          {
+            "node": "3b · Montar etiquetas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3b · Montar etiquetas": {
+      "main": [
+        [
+          {
+            "node": "3c · Leu as etiquetas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3c · Leu as etiquetas?": {
+      "main": [
+        [
+          {
+            "node": "4 · Usuário?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6 · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Usuário?": {
+      "main": [
+        [
+          {
+            "node": "5u · Chatwoot (usuário)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5b · Chatwoot (bot Mari)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5u · Chatwoot (usuário)": {
+      "main": [
+        [
+          {
+            "node": "6 · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b · Chatwoot (bot Mari)": {
+      "main": [
+        [
+          {
+            "node": "6 · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Resultado": {
+      "main": [
+        [
+          {
+            "node": "7 · Supabase resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}

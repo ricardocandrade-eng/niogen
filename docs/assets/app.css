@@ -702,6 +702,11 @@ button.cartao { font: inherit; color: var(--text); text-align: left; width: 100%
 .f-prox.bad b, .f-prox.bad .f-nota { color: var(--bad-fg); }
 .f-prox.dim { background: var(--surface-dim); }
 .f-prox-bts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 0 1 auto; margin-left: auto; }
+/* 0082: linha do que o sistema fez depois do botão do momento + atalhos de exceção */
+.f-feito { margin-top: 6px; padding: 7px 12px; border-radius: 8px; font-size: 12.5px; background: var(--ok-bg, var(--surface-2)); color: var(--ok-fg, var(--text)); border: 1px solid var(--ok-border, var(--border)); }
+.f-feito span { display: block; margin-top: 3px; }
+.f-feito.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-border); }
+.f-atalhos { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; margin-top: 6px; }
 .f-prox-bts .btn { min-height: 40px; }
 
 /* Formulário dentro da ficha (faixa do próximo passo ou "Editar" do bloco) */
