@@ -25,7 +25,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/resumo_diario",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/resumo_diario_whatsapp",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
@@ -54,17 +54,33 @@
       "waitBetweenTries": 5000
     },
     {
-      "parameters": {},
-      "name": "3 · Enviar (AGUARDA CANAL)",
-      "type": "n8n-nodes-base.noOp",
-      "typeVersion": 1,
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.destino, type: 'template', template: { name: $json.template, language: { code: $json.idioma }, components: [{ type: 'body', parameters: $json.params.map(t => ({ type: 'text', text: t })) }] } }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3 · WABA enviar ao Ricardo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         480,
         0
       ],
-      "id": "10ee2b7b-0144-5432-b3df-c580fff3fa6a",
-      "disabled": true,
-      "notes": "DESLIGADO — aguarda canal: template WhatsApp × bot do Telegram (cartão \"Canal do alarme da Mari\"). Quando decidir, troca este nó pelo envio ao Ricardo usando {{$json.texto}} e liga o workflow.",
+      "id": "ff9f37cc-377a-54cf-9994-d8eff50528b9",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "notes": "Template resumo_diario_interno (UTILITY, sem marca) da WABA Nio para o celular do Ricardo. Nunca para cliente.",
       "notesInFlow": true
     }
   ],
@@ -84,7 +100,7 @@
       "main": [
         [
           {
-            "node": "3 · Enviar (AGUARDA CANAL)",
+            "node": "3 · WABA enviar ao Ricardo",
             "type": "main",
             "index": 0
           }

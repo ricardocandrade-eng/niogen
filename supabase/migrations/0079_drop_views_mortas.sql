@@ -1,6 +1,5 @@
--- NIOGEN | supabase/rascunhos/DROP_views_mortas_091126_RASCUNHO.sql | 09/11/2026 01h30 — Claude Code (rodada noturna, item 3a · pendência 39)
--- ⚠️ RASCUNHO — NÃO APLICAR sem o OK do Ricardo (DROP). Quando aprovado: renomear para supabase/migrations/00NN_drop_views_mortas.sql
---    (próximo número livre), `db query --remote -f` + `migration repair --status applied 00NN`, e conferir Painel/Vendas/Instalações logado.
+-- NIOGEN | supabase/migrations/0079_drop_views_mortas.sql | 09/11/2026 — Claude Code (pendência 39; rascunho da rodada noturna aprovado)
+-- ✅ OK do Ricardo em 09/11 de manhã: "Pode apagar". Antes era o rascunho supabase/rascunhos/DROP_views_mortas_091126_RASCUNHO.sql.
 --
 -- Levantamento de quem lê cada view (09/11 ~01h25):
 --   • front (niogen/docs/*.html, assets/*.js) ........ grep pelo nome
@@ -19,14 +18,10 @@
 --   v_pendencias_abertas  0      0         0                       ⏸ nasceu 08/11 (0064) e está nas notas técnicas do backoffice — manter
 --   v_placar_dfv          0      0         0                       ⏸ base da tela Placar ("em breve") — manter
 --
--- O Ricardo já escreveu no Trello (08/11 ~14h55): "Views antigas: pode apagar". Mesmo assim a rodada noturna só deixa o rascunho
--- (o prompt proíbe DROP sem OK explícito). O cartão "Decidir: aplicar o DROP das 3 views mortas" pede o OK.
 
-begin;
 drop view if exists public.v_painel_mes;
 drop view if exists public.v_painel_hoje;
 drop view if exists public.v_alertas_contrato;
-commit;
 
 -- ============================================================================================================================
 -- VOLTAR ATRÁS (se algo quebrar depois do DROP): as definições abaixo foram copiadas do banco em 09/11 01h25 (pg_get_viewdef).
