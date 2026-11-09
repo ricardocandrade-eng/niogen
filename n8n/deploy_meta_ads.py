@@ -4,6 +4,7 @@
 # (hoje e os 2 dias anteriores — a Meta ainda ajusta conversas atrasadas) e o status dos anúncios da CA
 # act_764071346694892, e grava no Supabase Nio por meta_ads_gravar (migration 0034). A tela Meta Ads › Desempenho lê dali.
 # 07/11: + conjunto × posicionamento × dia → meta_ads_gravar_posicionamentos (migration 0054), base do agente de Meta Ads.
+# 09/11: + nós 9/9b/10 → saldo em aberto e limite de cobrança da conta (migration 0078, card "Saldo em aberto"). Só leitura.
 # SÓ LEITURA na Meta: nenhum nó pausa, ativa ou muda verba. Mesmo padrão do deploy_cadencia.py: backup antes de
 # qualquer PUT e este script só opera no workflow "meta_ads_coleta".
 #
@@ -46,6 +47,7 @@ CAMPOS_INSIGHTS = ','.join(['date_start', 'ad_id', 'ad_name', 'adset_id', 'adset
 CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}'
 CAMPOS_POSIC = ','.join(['date_start', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                          'spend', 'impressions', 'clicks', 'inline_link_clicks', 'actions'])
+CAMPOS_SALDO = 'balance,amount_spent,spend_cap,currency,is_prepay_account'   # 0078: card "Saldo em aberto" (sem dados do cartão)
 CAMPOS_CONJ = ('id,name,effective_status,campaign_id,campaign{name},targeting{publisher_platforms,facebook_positions,'
                'instagram_positions,whatsapp_positions,audience_network_positions,messenger_positions}')
 
@@ -112,6 +114,27 @@ def build(ids):
         'jsonBody': "={{ JSON.stringify({ p_conjuntos: $json.data || [] }) }}",
         'options': {'timeout': 20000}}, 1680, 100, credentials=sb_cred)
 
+    # 09/11 (migration 0078, card "Saldo em aberto"): saldo da conta e limite de cobrança do ciclo — SÓ LEITURA. Os três nós
+    # seguem em frente mesmo com erro (onError=continueRegularOutput): sem permissão para o ciclo, o card mostra "limite: ver no BM";
+    # a coleta de desempenho acima nunca falha por causa deles. O limite vem sempre da API (nunca de config).
+    add('9 · Meta saldo', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': f'{GRAPH}/{CONTA}',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'facebookGraphApi',
+        'sendQuery': True, 'queryParameters': {'parameters': [{'name': 'fields', 'value': CAMPOS_SALDO}]},
+        'options': {'timeout': 20000}}, 1920, 100, credentials=fb_cred, onError='continueRegularOutput', alwaysOutputData=True)
+    add('9b · Meta ciclo de cobrança', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': f'{GRAPH}/{CONTA}/adspaymentcycle',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'facebookGraphApi',
+        'sendQuery': True, 'queryParameters': {'parameters': [{'name': 'fields', 'value': 'threshold_amount,created_time'}]},
+        'options': {'timeout': 20000}}, 2160, 100, credentials=fb_cred, onError='continueRegularOutput', alwaysOutputData=True)
+    add('10 · Supabase saldo', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{SB}/rest/v1/rpc/meta_ads_gravar_saldo',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': (f"={{{{ JSON.stringify({{ p_act: '{CONTA}', p_conta: $('9 · Meta saldo').first().json, "
+                     "p_ciclo: $('9b · Meta ciclo de cobrança').first().json }) }}"),
+        'options': {'timeout': 20000}}, 2400, 100, credentials=sb_cred, onError='continueRegularOutput')
+
     ligacoes = [
         ('1 · A cada 15 min', 0, '2 · Meta insights'),
         ('1w · Rodar agora (teste)', 0, '2 · Meta insights'),
@@ -121,6 +144,9 @@ def build(ids):
         ('5 · Meta posicionamentos', 0, '6 · Supabase posicionamentos'),
         ('6 · Supabase posicionamentos', 0, '7 · Meta conjuntos'),
         ('7 · Meta conjuntos', 0, '8 · Supabase conjuntos'),
+        ('8 · Supabase conjuntos', 0, '9 · Meta saldo'),
+        ('9 · Meta saldo', 0, '9b · Meta ciclo de cobrança'),
+        ('9b · Meta ciclo de cobrança', 0, '10 · Supabase saldo'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}

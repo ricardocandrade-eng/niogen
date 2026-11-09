@@ -320,6 +320,107 @@
           "name": "Supabase Nio (service role)"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "balance,amount_spent,spend_cap,currency,is_prepay_account"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "9 · Meta saldo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        100
+      ],
+      "id": "62e6c46e-6af5-5689-a6ef-ec8a7534b756",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v24.0/act_764071346694892/adspaymentcycle",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "facebookGraphApi",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "fields",
+              "value": "threshold_amount,created_time"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "9b · Meta ciclo de cobrança",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        100
+      ],
+      "id": "178d348c-3868-56db-b038-86e960890d7b",
+      "credentials": {
+        "facebookGraphApi": {
+          "id": "6gZXxn959udw7E6c",
+          "name": "Meta Ads Nio — NIOGEN"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_ads_gravar_saldo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_act: 'act_764071346694892', p_conta: $('9 · Meta saldo').first().json, p_ciclo: $('9b · Meta ciclo de cobrança').first().json }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "10 · Supabase saldo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        100
+      ],
+      "id": "cc61bc34-f5d3-516c-9db6-20f02d99611e",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -405,6 +506,39 @@
         [
           {
             "node": "8 · Supabase conjuntos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Supabase conjuntos": {
+      "main": [
+        [
+          {
+            "node": "9 · Meta saldo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9 · Meta saldo": {
+      "main": [
+        [
+          {
+            "node": "9b · Meta ciclo de cobrança",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9b · Meta ciclo de cobrança": {
+      "main": [
+        [
+          {
+            "node": "10 · Supabase saldo",
             "type": "main",
             "index": 0
           }

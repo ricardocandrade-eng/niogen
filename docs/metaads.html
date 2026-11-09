@@ -18,11 +18,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-7">
-<script src="config.js?v=091126-7"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-8">
+<script src="config.js?v=091126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-7"></script>
-<script src="assets/sidebar.js?v=091126-7"></script>
+<script src="assets/app.js?v=091126-8"></script>
+<script src="assets/sidebar.js?v=091126-8"></script>
 <style>
   /* As vistas embrulham os blocos da tela: repetem o espaçamento do .main (gap 18px) que o wrapper anulava. */
   .vista { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
@@ -119,7 +119,7 @@
     </header>
 
     <div id="vista-desempenho" class="vista">
-      <section class="kpis" id="kpis-d" aria-label="Resumo do período"></section>
+      <section class="kpis seis" id="kpis-d" aria-label="Resumo do período"></section>
       <section class="painel funil-vis" aria-labelledby="t-funil">
         <div class="fv-cab"><h3 id="t-funil">Funil · anúncio → venda</h3>
           <span class="info" title="Espessura da fita em escala logarítmica suavizada (de milhares de impressões a poucas vendas): mostra a ordem, não a proporção exata — os números valem. O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
@@ -273,14 +273,46 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => carregarDesempenho() });
 
+  // Card "Saldo em aberto" (0078, pedido do Ricardo 08/11): saldo da CA Nio e próxima cobrança ("R$ limite ou data", o que vier
+  // primeiro). O limite vem só da API, lido a cada coleta; sem leitura → "limite: ver no BM" e o alerta fica só pela data.
+  // Pisca (âmbar) quando saldo ≥ alerta_pct % do limite OU a cobrança está a ≤ alerta_dias dias. Sem dado ou coleta > 1 h: cinza.
+  function cardSaldo(s, r) {
+    const alertaPct = Number.isFinite(r.meta_cobranca_alerta_pct) ? r.meta_cobranca_alerta_pct : 85;
+    const alertaDias = Number.isFinite(r.meta_cobranca_alerta_dias) ? r.meta_cobranca_alerta_dias : 2;
+    const velho = !s || (Date.now() - new Date(s.coletado_em)) > 3600000;
+    if (velho) {
+      return `<div class="kpi saldo-meta sem-leitura" title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora.">
+        <span class="rot">Saldo em aberto</span><span class="val">—</span>
+        <span class="nota">sem leitura da Meta${s ? ` · última ${esc(NG.quando(s.coletado_em))} ${esc(NG.fmtHora(s.coletado_em))}` : ''}</span></div>`;
+    }
+    const saldo = Number(s.saldo), lim = s.limite_cobranca != null ? Number(s.limite_cobranca) : null;
+    const dias = s.proxima_cobranca_em ? Math.round((new Date(`${s.proxima_cobranca_em}T12:00:00-03:00`) - new Date(`${NG.diaSP()}T12:00:00-03:00`)) / 86400000) : null;
+    const pct = lim ? (saldo / lim) * 100 : null;
+    const motivos = [];
+    if (pct != null && pct >= alertaPct) motivos.push(`${NG.fmtNum(Math.round(pct))} % do limite`);
+    if (dias != null && dias <= alertaDias) motivos.push(dias <= 0 ? 'cobra hoje' : `cobra em ${dias} dia${dias === 1 ? '' : 's'}`);
+    const data = s.proxima_cobranca_em ? NG.fmtDiaISO(s.proxima_cobranca_em).slice(0, 5) : '—';
+    const prox = `${lim != null ? `${esc(NG.fmtMoeda(lim))} ou ` : ''}${esc(data)}${s.fonte_data === 'config' ? ' <small class="fonte">(config)</small>' : ''}`;
+    const min = Math.max(0, Math.round((Date.now() - new Date(s.coletado_em)) / 60000));
+    return `<div class="kpi saldo-meta${motivos.length ? ' pisca' : ''}" title="${esc(motivos.length ? `Cobrança chegando: ${motivos.join(' · ')}` : 'Saldo da conta de anúncios Nio (o que a Meta vai cobrar no cartão).')}">
+      <span class="rot">Saldo em aberto</span>
+      <span class="val">${esc(NG.fmtMoeda(saldo))}</span>
+      ${s.imposto_estimado != null ? `<span class="nota">+ ${esc(NG.fmtMoeda(Number(s.imposto_estimado)))} imposto estimado</span>` : ''}
+      <span class="nota"><b>Próxima cobrança</b> ${prox}${lim == null ? ' · limite: ver no BM' : ''}</span>
+      <span class="nota">atualizado há ${min} min</span>
+    </div>`;
+  }
+
   async function carregarDesempenho() {
     const p = per.valor();
     let qDiario = NG.sb.from('meta_ads_diario').select('*');
     if (p.de) qDiario = qDiario.gte('dia', p.de);
     if (p.ate) qDiario = qDiario.lte('dia', p.ate);
-    const [rDiario, rAds, rDias, rVerba] = await Promise.all([
+    const [rDiario, rAds, rDias, rVerba, rSaldo, rRegras] = await Promise.all([
       qDiario, NG.sb.from('meta_ads_anuncios').select('*'), NG.sb.from('v_meta_ads_dia').select('*').order('dia', { ascending: false }),
       NG.sb.from('config_meta_ads_regras').select('valor').eq('parceiro_id', 'dharma').eq('chave', 'verba_mes').maybeSingle(),
+      NG.sb.from('meta_ads_conta_saldo').select('*').order('coletado_em', { ascending: false }).limit(1),
+      NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma').in('chave', ['meta_cobranca_alerta_pct', 'meta_cobranca_alerta_dias']),
     ]);
     if (!rVerba.error && rVerba.data && Number(rVerba.data.valor) > 0) VERBA_MES = Number(rVerba.data.valor);
     const erro = rDiario.error || rAds.error || rDias.error;
@@ -306,6 +338,7 @@
     const vendas = soma(dias, 'vendas');
     const fora = soma(dias, 'fora_area');
     document.getElementById('kpis-d').innerHTML = [
+      cardSaldo((rSaldo.data || [])[0], Object.fromEntries((rRegras.data || []).map((x) => [x.chave, Number(x.valor)]))),
       NG.kpi({ rot: `Gasto · ${per.rotulo}`, val: NG.fmtMoeda(gasto), pct: (gastoMes / VERBA_MES) * 100,
         nota: `${NG.fmtMoeda(gastoMes)} de ${NG.fmtMoeda(VERBA_MES)} no mês`, cls: gastoMes > VERBA_MES ? 'bad' : '' }),
       NG.kpi({ rot: 'Conversas iniciadas', val: NG.fmtNum(convMeta), nota: `${porConversa(gasto, convMeta)} por conversa (Meta)`,
