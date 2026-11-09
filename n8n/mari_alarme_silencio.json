@@ -1,0 +1,157 @@
+{
+  "name": "mari_alarme_silencio",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 1 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a4b6e136-72ad-5772-af97-79ca85c75e74"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_alarme_proximos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase alarmes a mandar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "4cb4a9f9-903e-5af7-a753-a6dbecf21d6e",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $json.destino, type: 'template', template: { name: $json.template, language: { code: $json.idioma }, components: [{ type: 'body', parameters: $json.params.map(t => ({ type: 'text', text: t })) }] } }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3 · WABA enviar ao Ricardo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "f1c9809e-87f5-59ad-8c49-82ceb0c5682c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Template alerta_mari_silencio (sem marca) só para o Ricardo. Nunca para cliente.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_alarme_erro",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_id: $('2 · Supabase alarmes a mandar').item.json.id, p_erro: $json.error ? JSON.stringify($json.error).slice(0, 400) : null }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "4 · Supabase registrar erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "4c758420-0171-5f81-ae64-a427fb639da3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "1 · A cada 1 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase alarmes a mandar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase alarmes a mandar": {
+      "main": [
+        [
+          {
+            "node": "3 · WABA enviar ao Ricardo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · WABA enviar ao Ricardo": {
+      "main": [
+        [
+          {
+            "node": "4 · Supabase registrar erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}

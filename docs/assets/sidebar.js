@@ -153,14 +153,20 @@
     let total = 0;
     try {
       if (['admin', 'backoffice'].includes(u.perfil) && nav.querySelector('[data-badge="mari"]')) {
-        const { data, error } = await NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead');
+        const [{ data, error }, rsr] = await Promise.all([
+          NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead'),
+          NG.sb.from('v_mari_sem_resposta').select('id'),   // 0081: cliente sem resposta (nem Mari, nem time) há ≥ 3 min
+        ]);
         if (!error) {
           const lista = data || [];
+          const ids = new Set(lista.map((a) => a.id));
+          const silencio = (rsr && !rsr.error ? rsr.data || [] : []).filter((x) => !ids.has(x.id));
+          const n = lista.length + silencio.length;
           const agora = new Date();
-          const atrasada = noHorario(agora) && lista.some((a) => (agora - new Date(a.ult_lead)) > 15 * 60000);
-          pinta(nav, 'mari', lista.length, atrasada ? 'alerta' : 'info',
-            `${lista.length} ${lista.length === 1 ? 'conversa esperando' : 'conversas esperando'} alguém do time${atrasada ? ' — alguma há mais de 15 min' : ''}. ${NG.ajuda.menu_mari}`);
-          total += lista.length;
+          const atrasada = silencio.length > 0 || (noHorario(agora) && lista.some((a) => (agora - new Date(a.ult_lead)) > 15 * 60000));
+          pinta(nav, 'mari', n, atrasada ? 'alerta' : 'info',
+            `${lista.length} ${lista.length === 1 ? 'conversa esperando' : 'conversas esperando'} alguém do time${silencio.length ? ` · ${silencio.length} sem resposta da Mari` : ''}${atrasada && !silencio.length ? ' — alguma há mais de 15 min' : ''}. ${NG.ajuda.menu_mari}`);
+          total += n;
         }
       }
       if (nav.querySelector('[data-badge="vendas"]')) {

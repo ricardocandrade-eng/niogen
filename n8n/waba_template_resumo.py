@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # NIOGEN | n8n/waba_template_resumo.py | 09/11/2026 — Claude Code (decisão do Ricardo: resumo diário por template de WhatsApp)
-# Submete o template interno `resumo_diario_interno` (UTILITY, pt_BR, sem marca Nio — vai só para o celular do Ricardo) na WABA Nio
-# e grava meta_id/status em config_templates_waba. O texto vem do banco (migration 0080) — o script confere e usa o mesmo.
+# Submete os templates INTERNOS (UTILITY pedido, pt_BR, sem marca Nio — vão só para o celular do Ricardo) na WABA Nio e grava
+# meta_id/status/categoria em config_templates_waba. O texto vem do banco — o script usa o mesmo.
+#   resumo_diario_interno (0080, resumo das 8h) · alerta_mari_silencio (0081, alarme de silêncio da Mari)
 #
 # Token: variável de ambiente WABA_NIO_TOKEN (system user Nio_API). Nunca em arquivo. WABA Nio 1419511943295487 (nunca a da Vero).
 #
-# Uso:  python n8n/waba_template_resumo.py            # dry-run: mostra o que mandaria
+# Uso:  (acrescente --template alerta_mari_silencio para o alarme; sem isso = resumo_diario_interno)
+#       python n8n/waba_template_resumo.py            # dry-run: mostra o que mandaria
 #       python n8n/waba_template_resumo.py --enviar   # submete (só se ainda não tem meta_id)
 #       python n8n/waba_template_resumo.py --status   # consulta status e categoria na Meta e atualiza o banco
 
@@ -16,13 +18,15 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import waba_templates_lote_c as w   # noqa: E402  (env_usuario, sql, graph, WABA_NIO)
 
-NOME = 'resumo_diario_interno'
-EXEMPLO = ['dom 08/11',
+EXEMPLOS = {'alerta_mari_silencio': ['4', '123', 'Ana', 'quero saber do plano de 600 mega'], 'resumo_diario_interno': ['dom 08/11',
            '1 nova(s) · 2 qualificada(s) pela Mari · 0 pedido(s) · 0 biometria(s) · 0 instalada(s)',
            'R$ 201,53 · 7 conversa(s) · R$ 28,79 por conversa',
            '1 com humano sem resposta · 0 cliente esperando a Mari (há mais de 2 h)',
            'nada vencendo hoje nem amanhã · em espera: 2 (2 para revisar)',
-           '0/30 instaladas · faltam 30 em 22 dias · 1,4 por dia']
+           '0/30 instaladas · faltam 30 em 22 dias · 1,4 por dia']}
+NOME = sys.argv[sys.argv.index('--template') + 1] if '--template' in sys.argv else 'resumo_diario_interno'
+assert NOME in EXEMPLOS, f'template desconhecido: {NOME}'
+EXEMPLO = EXEMPLOS[NOME]
 
 
 def linha_banco():
