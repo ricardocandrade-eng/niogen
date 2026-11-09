@@ -22,12 +22,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-14">
-<script src="config.js?v=091126-14"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-15">
+<script src="config.js?v=091126-15"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-14"></script>
-<script src="assets/sidebar.js?v=091126-14"></script>
-<script src="assets/ficha.js?v=091126-14"></script>
+<script src="assets/app.js?v=091126-15"></script>
+<script src="assets/sidebar.js?v=091126-15"></script>
+<script src="assets/ficha.js?v=091126-15"></script>
 </head>
 <body>
 <div class="app">
@@ -143,7 +143,8 @@
 
     // ---------- KPIs do período (a mesma conta da tela Vendas: vendidas pela data da venda) ----------
     const V = vendas.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
-    const inst = vendas.filter((v) => v.instalado_em && NG.noPeriodo(v.instalado_em, p));
+    // 0087 (Ricardo, 09/11): a meta conta INSTALADAS (sem Saída — a mesma conta da faixa e do resumo diário); vendas (OS) ao lado.
+    const inst = vendas.filter((v) => v.instalado_em && v.status !== 'saida' && NG.noPeriodo(v.instalado_em, p));
     const aguard = V.filter((v) => ['1_vendido', '2_aguardando_instalacao'].includes(v.status)).length;
     const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
     const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
@@ -151,12 +152,13 @@
       .map((v) => ({ v, pr: proximo(v) }))
       .sort((a, b) => (URG[a.pr.nivel] ?? 2) - (URG[b.pr.nivel] ?? 2) || new Date(a.v.criado_em) - new Date(b.v.criado_em));
     const verm = acao.filter((x) => x.pr.nivel === 'bad').length;
-    const faltam = Math.max(0, meta - V.length);
+    const faltam = Math.max(0, meta - inst.length);
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: meta ? 'Vendas (OS) · meta' : 'Vendas (OS)', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
+      NG.kpi({ rot: meta ? 'Instaladas · meta' : 'Instaladas', val: NG.fmtNum(inst.length), de: meta || null, pct: meta ? (inst.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
+        dica: 'A meta do mês conta instaladas (data da instalação, sem Saída) — é o que paga comissão.' }),
+      NG.kpi({ rot: 'Vendas (OS)', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} aguardando biometria ou instalação`,
         dica: 'Venda = OS aberta no portal da Nio (nº do pedido + nº da OS), pela data da OS, no período. Lead qualificado não conta.' }),
-      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst.length), nota: `${NG.fmtNum(aguard)} venda${aguard === 1 ? '' : 's'} (OS) aguardando instalação` }),
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
