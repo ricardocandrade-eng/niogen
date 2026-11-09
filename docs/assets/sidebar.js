@@ -20,6 +20,7 @@
   const MENU = [
     ['Backoffice', [
       { id: 'minhavez', ico: '☰', nome: 'Minha vez', href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila' },
+      { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
     ]],
     ['Gestão', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
@@ -161,6 +162,9 @@
         pinta(nav, 'fila', acao.length, verm(acao) ? 'alerta' : 'info',
           `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
         total = acao.length;
+        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time).
+        const rc = await NG.sb.from('v_conversas').select('id', { count: 'exact', head: true }).eq('encerrada', false).gte('esperando_min', 3);
+        if (!rc.error) pinta(nav, 'conversas', rc.count || 0, rc.count ? 'alerta' : 'info', `${rc.count || 0} ${rc.count === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais.`);
       }
       if (nav.querySelector('[data-badge="vendas"]')) {
         const rs = await NG.sb.from('usuario_vistos').select('visto_em').eq('tela', 'vendas').maybeSingle();

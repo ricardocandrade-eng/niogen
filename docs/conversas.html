@@ -1,0 +1,161 @@
+<!doctype html>
+<!-- NIOGEN | docs/conversas.html | 09/11/2026 — Claude Code
+     "Conversas": todas as conversas do WhatsApp num lugar só, como o Chatwoot (Ricardo, 09/11 ~19h40: "tá difícil ter que ir atrás do
+     cliente para falar com ele quando preciso"). À esquerda a lista (v_conversas, 0094: última mensagem, cliente esperando, dono,
+     etapa), com busca e filtros; à direita a conversa — o mesmo componente da Minha vez (assets/conversa.js: status, atribuição,
+     etiquetas, Responder | Nota privada, respostas rápidas, Enter envia). "Abrir a ficha" abre a ficha em gaveta.
+     Endereço direto: conversas.html#c=<id>. Só admin/backoffice (a tabela da Mari só abre para eles). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Conversas · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=091126-22">
+<script src="config.js?v=091126-22"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=091126-22"></script>
+<script src="assets/sidebar.js?v=091126-22"></script>
+<script src="assets/conversa.js?v=091126-22"></script>
+<script src="assets/ficha.js?v=091126-22"></script>
+</head>
+<body class="tela-conversas">
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="conversas"></nav>
+  <main class="main cv-main">
+    <header class="cab">
+      <div>
+        <h1>Conversas</h1>
+        <div class="sub">Todas as conversas do WhatsApp. Escolha à esquerda e responda à direita — o NIOGEN cuida do Chatwoot.</div>
+      </div>
+      <div class="cab-acoes" id="cab-acoes"></div>
+    </header>
+    <div class="cv-trab" id="trab">
+      <section class="cv-lista" aria-label="Lista de conversas">
+        <div class="cv-busca"><input type="search" id="busca" placeholder="Buscar nome, telefone ou cidade" autocomplete="off" aria-label="Buscar conversa"></div>
+        <div class="cv-filtros" id="filtros" role="tablist"></div>
+        <div class="cv-itens" id="itens"><div class="carregando">Carregando…</div></div>
+      </section>
+      <section class="cv-direita" id="direita">
+        <div class="cv-vazia">Escolha uma conversa à esquerda.</div>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  const itensEl = document.getElementById('itens');
+  const direita = document.getElementById('direita');
+  const trab = document.getElementById('trab');
+  if (!['admin', 'backoffice'].includes(eu.perfil)) { itensEl.innerHTML = '<div class="vazio">As conversas são do backoffice.</div>'; return; }
+  const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* */ } } };
+
+  let lista = [];
+  let filtro = ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
+  let atual = null;     // id da conversa aberta
+  let comp = null;      // NGConversa
+  const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
+  const NOME_ET = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.nome]));
+  const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';
+  const ICO_PESSOA = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>';
+  const minha = (c) => c.dono_tipo === 'pessoa' && c.dono_nome === eu.nome;
+  const aberta = (c) => !c.encerrada && c.chatwoot_status !== 'resolved';
+  const FILTROS = [
+    ['esperando', 'Esperando resposta', (c) => c.cliente_esperando && !c.encerrada],
+    ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada],
+    ['abertas', 'Abertas', aberta],
+    ['todas', 'Todas', (c) => !c.encerrada],
+    ['encerradas', 'Encerradas', (c) => c.encerrada],
+  ];
+  const quando = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (NG.diaSP(d) === NG.diaSP()) return NG.fmtHora(d);
+    const min = (Date.now() - d) / 60000;
+    if (min < 7 * 1440) return NG.fmtDiaSemana(d);
+    return NG.fmtData(d).slice(0, 5);
+  };
+  const previa = (c) => {
+    const txt = NGConversa.textoTurno(c.ultima_txt) || '—';
+    const quem = c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : '';
+    return quem + txt;
+  };
+
+  async function carregar() {
+    const { data, error } = await NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
+    if (error) { itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
+    lista = data || [];
+    render();
+  }
+
+  function render() {
+    const q = document.getElementById('busca').value.trim().toLowerCase();
+    const qd = NG.soDigitos(q);
+    const casa = (c) => !q || [c.nome, c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) || (qd.length >= 3 && NG.soDigitos(c.telefone).includes(qd));
+    const base = lista.filter(casa);
+    const fn = (FILTROS.find((f) => f[0] === filtro) || FILTROS[2])[2];
+    document.getElementById('filtros').innerHTML = FILTROS.map(([id, nome, f]) => {
+      const n = base.filter(f).length;
+      return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${filtro === id}" class="${filtro === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
+    }).join('');
+    const l = base.filter(fn).sort((a, b) => (filtro === 'esperando' ? (b.esperando_min || 0) - (a.esperando_min || 0) : new Date(b.ultima_em) - new Date(a.ultima_em)));
+    itensEl.innerHTML = l.length ? l.map((c) => `<button type="button" class="cv-item${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
+        <span class="cv-l1"><i class="mv-dot" style="--c:${COR[c.etapa] || '#6E747C'}" title="${esc(NOME_ET[c.etapa] || '')}"></i><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
+        <span class="cv-l2">${esc(previa(c))}</span>
+        <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(c.dono_nome === eu.nome ? 'você' : c.dono_nome)}` : 'sem dono'}
+          ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
+          ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}</span>
+      </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
+  }
+
+  function abrir(id) {
+    if (!id) return;
+    atual = id;
+    const c = lista.find((x) => x.id === id);
+    if (location.hash !== `#c=${id}`) history.replaceState(null, '', `${location.pathname}${location.search}#c=${id}`);
+    trab.classList.add('com-conversa');
+    direita.innerHTML = `<div class="cv-topo"><button type="button" class="btn btn-sm cv-voltar" id="voltar">← Conversas</button>
+      ${c && c.venda_id ? `<a class="btn btn-sm" href="#venda=${esc(c.venda_id)}">Abrir a ficha da venda</a>` : `<a class="btn btn-sm" href="#conversa=${esc(id)}">Abrir a ficha</a>`}
+      ${c ? `<span class="apagado">${esc(NOME_ET[c.etapa] || '')}${c.telefone ? ` · ${esc(c.telefone)}` : ''}</span>` : ''}</div><div class="cv-host"></div>`;
+    document.getElementById('voltar').onclick = fechar;
+    if (comp) comp.destruir();
+    comp = NGConversa.montar(direita.querySelector('.cv-host'), { conversaId: id, nome: c ? c.nome : null, aoMudar: () => carregar() });
+    render();
+  }
+  function fechar() {
+    atual = null;
+    if (comp) { comp.destruir(); comp = null; }
+    trab.classList.remove('com-conversa');
+    direita.innerHTML = '<div class="cv-vazia">Escolha uma conversa à esquerda.</div>';
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    render();
+  }
+
+  itensEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-id]'); if (b) abrir(b.dataset.id); });
+  document.getElementById('filtros').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-filtro]');
+    if (!b) return;
+    filtro = b.dataset.filtro; ls.gravar('niogen.conversas.filtro', filtro); render();
+  });
+  document.getElementById('busca').addEventListener('input', render);
+  NGFicha.aoMudar(() => { carregar(); if (comp) comp.recarregar(); });
+  NG.botaoAtualizar(() => carregar());
+
+  await carregar();
+  const m = location.hash.match(/^#c=([0-9a-f-]{36})$/i);
+  if (m) abrir(m[1]);
+  NGFicha.iniciar();
+  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+})();
+</script>
+</body>
+</html>
