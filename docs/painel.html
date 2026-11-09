@@ -22,12 +22,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-13">
-<script src="config.js?v=091126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-14">
+<script src="config.js?v=091126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-13"></script>
-<script src="assets/sidebar.js?v=091126-13"></script>
-<script src="assets/ficha.js?v=091126-13"></script>
+<script src="assets/app.js?v=091126-14"></script>
+<script src="assets/sidebar.js?v=091126-14"></script>
+<script src="assets/ficha.js?v=091126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -45,6 +45,8 @@
     </header>
 
     <section class="faixa-meta" id="faixa-meta" aria-label="Meta do mês e vendas paradas"><div class="carregando">Carregando…</div></section>
+    <!-- 0087: funil do mês — quantos entraram em cada etapa (lead qualificado ≠ venda; venda = OS aberta) -->
+    <section class="funil-mes" id="funil-mes" aria-label="Funil do mês"></section>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
 
@@ -69,18 +71,20 @@
   let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
   let ritmo = null, regras = {};
   const ehAdmin = eu.perfil === 'admin';
+  let funil = null;   // 0087: funil_mes()
   let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
   async function carregar() {
-    const [rv, rm, rc, ri, rr, rg] = await Promise.all([
+    const [rv, rm, rc, ri, rr, rg, rf] = await Promise.all([
       NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('config_metas').select('*'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
       NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
       NG.sb.from('config_regras').select('chave, valor'),
+      NG.sb.rpc('funil_mes', { p_mes: NG.diaSP() }),
     ]);
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
     vendas = rv.data || [];
@@ -89,6 +93,7 @@
     osab = (ri.data || [])[0] || null;
     ritmo = rr && !rr.error ? rr.data : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
+    funil = rf && !rf.error ? rf.data : null;
     render();
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
@@ -148,10 +153,10 @@
     const verm = acao.filter((x) => x.pr.nivel === 'bad').length;
     const faltam = Math.max(0, meta - V.length);
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: meta ? 'Vendidas · meta' : 'Vendidas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
+      NG.kpi({ rot: meta ? 'Vendas (OS) · meta' : 'Vendas (OS)', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
-        dica: 'Vendas com pedido no portal e biometria validada (data da venda) no período.' }),
-      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst.length), nota: `${NG.fmtNum(aguard)} vendida${aguard === 1 ? '' : 's'} aguardando instalação` }),
+        dica: 'Venda = OS aberta no portal da Nio (nº do pedido + nº da OS), pela data da OS, no período. Lead qualificado não conta.' }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst.length), nota: `${NG.fmtNum(aguard)} venda${aguard === 1 ? '' : 's'} (OS) aguardando instalação` }),
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
@@ -205,12 +210,12 @@
     const instHoje = vendas.filter((v) => !v.instalado_em && v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && NG.diaSP(v.instalacao_agendada_para) === hoje)
       .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
     const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
-    const semAgenda = vendas.filter((v) => v.status === '1_vendido').length;
+    const semAgenda = vendas.filter((v) => v.status === '1_vendido' && v.biometria_status === 'validada').length;   // 0087: só depois da biometria
     blocos.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
-      ${semAgenda ? `<span class="prox ${vendas.some((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} vendida${semAgenda === 1 ? '' : 's'} sem agendamento</span>` : ''}
+      ${semAgenda ? `<span class="prox ${vendas.some((v) => v.status === '1_vendido' && Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} com biometria validada sem agendamento</span>` : ''}
     </section>`);
     // Mari: conversas que precisam de humano (só admin/backoffice veem a Mari)
     if (veMari) {
@@ -274,6 +279,28 @@
       </a>`;
     }).join('');
     el.innerHTML = `${meta}<div class="fm-etapas" aria-label="Vendas paradas por etapa">${etapas}</div>`;
+    renderFunil();
+  }
+
+  // 0087 (Ricardo, 09/11): o funil inteiro do mês — entradas em cada etapa e a passagem da anterior. A linha grossa separa
+  // lead (ainda não é venda) de venda (OS aberta no portal).
+  function renderFunil() {
+    const el = document.getElementById('funil-mes');
+    if (!el) return;
+    if (!funil || !Array.isArray(funil.etapas)) { el.innerHTML = ''; return; }
+    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
+    const et = funil.etapas;
+    const itens = et.map((e, i) => {
+      const ant = i ? Number(et[i - 1].n) : null;
+      const pct = ant ? Math.round((Number(e.n) / ant) * 100) : null;
+      const venda = e.id === 'vendas';
+      return `${i ? `<span class="fu-seta${venda ? ' corte' : ''}" aria-hidden="true">${venda ? '‖' : '→'}</span>` : ''}
+        <div class="fu-etapa${venda ? ' venda' : ''}${Number(e.n) ? '' : ' vazia'}" title="${esc(e.dica || '')}">
+          <span class="fu-nome">${esc(e.nome)}</span><span class="fu-n mono">${NG.fmtNum(Number(e.n))}</span>
+          <span class="fu-pct">${pct == null ? '&nbsp;' : `${pct}% da anterior`}</span></div>`;
+    }).join('');
+    el.innerHTML = `<div class="fu-cab"><b>Funil de ${esc(nomeMes)}</b><span>entradas no mês em cada etapa · <b>lead qualificado não é venda</b>: venda = OS aberta no portal (pedido + OS)</span></div>
+      <div class="fu-etapas"><span class="fu-fase">Lead</span>${itens}</div>`;
   }
 
   NGFicha.aoMudar(() => carregar());

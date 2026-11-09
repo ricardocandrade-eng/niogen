@@ -26,7 +26,7 @@
       { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
     ]],
     ['Vendas', [
-      { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html', badge: 'vendas' },
+      { id: 'vendas', ico: '≡', nome: 'Funil de vendas', href: 'vendas.html', badge: 'vendas' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },

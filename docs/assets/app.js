@@ -23,8 +23,9 @@
   const TZ = 'America/Sao_Paulo';
 
   const STATUS = [
-    { id: '0_qualificado', curto: '0 · Qualificado', col: '0 · Qualificado (Mari)', chip: 'info' },
-    { id: '1_vendido', curto: '1 · Vendido', col: '1 · Vendido', chip: '' },
+    // 0087 (Ricardo, 09/11): lead qualificado NÃO é venda. Venda = OS aberta no portal (etapa 7: nº do pedido + nº da OS).
+    { id: '0_qualificado', curto: '0 · Lead qualificado', col: '0 · Lead qualificado (ainda não é venda)', chip: 'info' },
+    { id: '1_vendido', curto: '1 · Venda · OS', col: '1 · Venda · OS aberta (biometria)', chip: '' },
     { id: '2_aguardando_instalacao', curto: '2 · Aguardando', col: '2 · Aguardando instalação', chip: '' },
     { id: '3_instalado', curto: '3 · Instalado', col: '3 · Instalado', chip: '' },
     // Os ids são do banco e não mudam. Desde 04/11 (padrão de telas) 4 e 5 aparecem juntos como "Ativo";
@@ -35,10 +36,11 @@
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
 
-  // Etapas visíveis (padrão de telas): Qualificado · Vendido · Aguardando · Instalado · Ativo (4 e 5) · Saída.
+  // Etapas visíveis (padrão de telas): Lead qualificado · Venda (OS aberta) · Aguardando · Instalado · Ativo (4 e 5) · Saída.
+  // 0087: os ids ficam (URLs e banco); só o nome muda — Qualificado ≠ venda.
   const ETAPAS = [
-    { id: 'qualificado', nome: 'Qualificado', status: ['0_qualificado'] },
-    { id: 'vendido', nome: 'Vendido', status: ['1_vendido'] },
+    { id: 'qualificado', nome: 'Lead qualificado', status: ['0_qualificado'] },
+    { id: 'vendido', nome: 'Venda · OS aberta', status: ['1_vendido'] },
     { id: 'aguardando', nome: 'Aguardando', status: ['2_aguardando_instalacao'] },
     { id: 'instalado', nome: 'Instalado', status: ['3_instalado'] },
     { id: 'ativo', nome: 'Ativo', status: ['4_ativo_provisorio', '5_comissao_firme'] },
@@ -669,18 +671,18 @@
     return `${fd.get('data')}T${fd.get('periodo')}:00-03:00`;
   }
 
+  // 0087: venda = OS aberta no portal (etapa 7) — nº do pedido + nº da OS. A biometria vem depois.
   async function pedirPedidoBiometria(venda) {
     const fd = await modal(`
-      <h3>Registrar venda</h3>
-      <p>Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link).</p>
+      <h3>Registrar a venda (OS aberta)</h3>
+      <p>Venda é a OS aberta no portal da Nio (etapa 7 "Abrir OS"). O banco confere também a viabilidade do portal e o crédito.</p>
       <label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(venda.nio_pedido || '')}" autocomplete="off"></label>
-      <label class="campo">Biometria<select name="biometria">${opcoes(BIOMETRIA, venda.biometria_status)}</select></label>
+      <label class="campo">Nº da OS<input type="text" name="os" value="${esc(venda.nio_os || '')}" autocomplete="off"></label>
     `);
     if (!fd) return null;
     const pedido = String(fd.get('pedido') || '').trim();
-    const biometria = fd.get('biometria') || null;
-    // biometria_em, biometria_validada_em e biometria_link_enviado_em: carimbo do banco (trigger vendas_antes_biometria).
-    return { nio_pedido: pedido || null, biometria_status: biometria };
+    const os = String(fd.get('os') || '').trim();
+    return { nio_pedido: pedido || null, nio_os: os || null };
   }
 
   async function pedirSaida(venda) {
@@ -897,25 +899,12 @@
     }
     switch (v.status) {
       case '0_qualificado': {
-        // Venda remota (05/11): pedido no portal → link da biometria → validada → Vendido. Alertas: link há > 24 h sem
-        // validação (amarelo) e > 72 h (vermelho, humano liga); crédito pendente há > 24 h (reconsultar no portal).
-        const hBio = v.horas_biometria_pendente != null ? Number(v.horas_biometria_pendente) : null;
+        // 0087: LEAD QUALIFICADO (ainda não é venda). Portal: etapa 2 viabilidade → etapa 3 crédito → etapa 7 Abrir OS = VENDA.
         const hCred = v.horas_credito_pendente != null ? Number(v.horas_credito_pendente) : null;
         if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF ao cliente (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
-        if (v.biometria_status === 'validada') {
-          if (!v.nio_pedido) return { txt: 'Biometria validada · falta o nº do pedido', nivel: 'warn', acao: true, resolver: 'pedido' };
-          if (!portalViavel(v)) return { txt: 'Biometria validada · registrar a viabilidade do portal (Viável)', nivel: 'warn', acao: true, resolver: 'viab' };
-          return { txt: 'Biometria validada · registrar a venda', nivel: 'warn', acao: true, resolver: 'pedido' };
-        }
-        if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
-        // Prompt 19: o link é da Nio e sai na hora do pedido — a contagem (horas_biometria_pendente) parte do nº do pedido.
-        const linkNio = v.biometria_link_enviado_em
-          ? `link enviado pela Nio ${diaSP(v.biometria_link_enviado_em) === diaSP() ? fmtHora(v.biometria_link_enviado_em) : fmtDataHora(v.biometria_link_enviado_em)}`
-          : 'link enviado pela Nio';
-        if (hBio != null && hBio > 72) return { txt: `Link da Nio há ${fmtHoras(hBio)} sem biometria · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (v.nio_pedido && !v.nio_os) return { txt: 'Pedido gravado · falta o nº da OS para virar venda', nivel: 'warn', acao: true, resolver: 'portal' };
+        if (v.nio_pedido && v.nio_os && !portalViavel(v)) return { txt: 'Pedido + OS gravados · registrar a viabilidade do portal (Viável) para virar venda', nivel: 'warn', acao: true, resolver: 'viab' };
         if (hCred != null && hCred > 24) return { txt: `Crédito pendente há ${fmtHoras(hCred)} · reconsultar no portal`, nivel: 'warn', acao: true, resolver: 'portal' };
-        if (hBio != null && hBio > 24) return { txt: `Link da Nio há ${fmtHoras(hBio)} sem biometria · avisar o cliente`, nivel: 'warn', acao: true, resolver: 'bio_status' };
-        if (v.biometria_status === 'pendente') return { txt: `Pedido aberto · ${linkNio}`, nivel: 'ok', resolver: 'bio_status' };
         // 06/11 (prompt 27): o 1º passo é SEMPRE o portal. O DFV não entra no próximo passo (é pista, fica na ficha).
         if (!v.nio_pedido && !portalViavel(v)) {
           const onde = `CEP ${fmtCep(v.cep)}${v.numero ? `, nº ${v.numero}` : ''}${v.complemento ? ` · ${v.complemento}` : ''}`;
@@ -928,11 +917,22 @@
         const ult = ultimoContatoEm && new Date(ultimoContatoEm) > new Date(v.criado_em) ? ultimoContatoEm : v.criado_em;
         const h = (Date.now() - new Date(ult)) / 3600000;
         if (h > 24) return { txt: `Sem contato há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`, nivel: 'warn', acao: true, resolver: 'contato' };
-        return { txt: 'Abrir o pedido no portal e registrar o nº (a Nio manda o link)', nivel: 'warn', acao: true, resolver: 'portal' };
+        return { txt: 'Lead pronto · crédito e oferta no portal e Abrir OS (etapa 7) → registrar pedido + OS = venda', nivel: 'warn', acao: true, resolver: 'portal' };
       }
       case '1_vendido': {
-        const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (v.vendido_em ? (Date.now() - new Date(v.vendido_em)) / 3600000 : null);
-        return { txt: `Agendar instalação${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true, resolver: 'agendar' };
+        // 0087: VENDA (OS aberta). A Nio manda o link da biometria sozinha; depois da biometria validada, agendar em até 4 h.
+        if (v.biometria_status === 'validada') {
+          const desde = v.agendar_desde || v.biometria_validada_em || v.vendido_em;
+          const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
+          return { txt: `Biometria validada · agendar a instalação${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: h != null && h > 4 ? 'bad' : 'warn', acao: true, resolver: 'agendar' };
+        }
+        if (v.biometria_status === 'com_risco') return { txt: 'Venda · biometria com risco · conferir no portal', nivel: 'bad', acao: true, resolver: 'bio_status' };
+        const desdeLink = v.biometria_link_enviado_em || v.nio_pedido_em || v.vendido_em;
+        const hBio = v.horas_biometria_pendente != null ? Number(v.horas_biometria_pendente) : (desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null);
+        if (hBio != null && hBio > 72) return { txt: `Venda · link da Nio há ${fmtHoras(hBio)} sem biometria · ligar para o cliente`, nivel: 'bad', acao: true, resolver: 'bio_status' };
+        if (hBio != null && hBio > 24) return { txt: `Venda · link da Nio há ${fmtHoras(hBio)} sem biometria · avisar o cliente`, nivel: 'warn', acao: true, resolver: 'bio_status' };
+        const quando = desdeLink ? (diaSP(desdeLink) === diaSP() ? fmtHora(desdeLink) : fmtDataHora(desdeLink)) : '';
+        return { txt: `Venda · OS aberta · biometria pendente (link da Nio ${quando})`, nivel: 'ok', resolver: 'bio_status' };
       }
       case '2_aguardando_instalacao': {
         const q = v.instalacao_agendada_para;
@@ -963,10 +963,9 @@
   // Em que passo a venda está parada, desde quando e se passou do prazo do contrato. Prazos vêm de config_regras
   // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
   const PARADAS = [
-    { id: 'qualificado', nome: 'Qualificado', dica: 'Qualificada, ainda sem pedido no portal PAP' },
-    { id: 'pedido', nome: 'Pedido', dica: 'Pedido aberto no portal, esperando a biometria do cliente (link da Nio)' },
-    { id: 'biometria', nome: 'Biometria', dica: 'Biometria validada, falta registrar a venda' },
-    { id: 'agendamento', nome: 'Agendamento', dica: 'Vendida, sem instalação agendada — contrato: agendar em até 4 h' },
+    { id: 'qualificado', nome: 'Lead qualificado', dica: 'Ainda NÃO é venda: falta viabilidade, crédito e abrir a OS no portal (etapa 7)' },
+    { id: 'biometria', nome: 'Venda · biometria', dica: 'Venda feita (OS aberta): esperando o cliente fazer a biometria (link automático da Nio)' },
+    { id: 'agendamento', nome: 'Agendamento', dica: 'Biometria validada, sem instalação agendada — contrato: agendar em até 4 h' },
     { id: 'instalacao', nome: 'Instalação', dica: 'Instalação agendada, esperando o técnico / o OSAB' },
     { id: 'instalada', nome: 'Instalada · docs', dica: 'Instalada, documentos à Nio pendentes — contrato: 15 dias' },
   ];
@@ -977,11 +976,10 @@
     const horas = (desde) => (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
     switch (v.status) {
       case '0_qualificado':
-        if (v.biometria_status === 'validada') return { id: 'biometria', desde: v.biometria_validada_em || v.criado_em };
-        if (v.nio_pedido) return { id: 'pedido', desde: v.biometria_link_enviado_em || v.criado_em };
         return { id: 'qualificado', desde: v.criado_em };
       case '1_vendido': {
-        const desde = v.vendido_em || v.criado_em;
+        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.vendido_em || v.criado_em };
+        const desde = v.agendar_desde || v.biometria_validada_em || v.vendido_em || v.criado_em;
         const h = v.horas_sem_agendamento != null ? Number(v.horas_sem_agendamento) : horas(desde);
         return { id: 'agendamento', desde, atrasada: h != null && h > hAg, prazo: `${hAg} h` };
       }

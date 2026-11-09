@@ -15,13 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-13">
-<script src="config.js?v=091126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-14">
+<script src="config.js?v=091126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-13"></script>
-<script src="assets/sidebar.js?v=091126-13"></script>
-<script src="assets/ficha.js?v=091126-13"></script>
-<script src="assets/novavenda.js?v=091126-13"></script>
+<script src="assets/app.js?v=091126-14"></script>
+<script src="assets/sidebar.js?v=091126-14"></script>
+<script src="assets/ficha.js?v=091126-14"></script>
+<script src="assets/novavenda.js?v=091126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -29,8 +29,8 @@
   <main class="main com-fab">
     <header class="cab">
       <div>
-        <h1>Vendas</h1>
-        <div class="sub" id="sub">Tudo que entrou no funil, de qualquer origem</div>
+        <h1>Funil de vendas</h1>
+        <div class="sub" id="sub">Do lead qualificado à ativação · venda = OS aberta no portal da Nio</div>
       </div>
       <div class="cab-acoes">
         <div class="seg vista" role="radiogroup" aria-label="Vista">
@@ -300,15 +300,15 @@
   }
 
   // ================================================================== quadro
-  // Herdado do Funil: arrastar muda a etapa pelas MESMAS travas e modais (NG.moverStatus: pedido + biometria para Vendido,
+  // Herdado do Funil: arrastar muda a etapa pelas MESMAS travas e modais (NG.moverStatus: pedido + OS para Venda — 0087,
   // agendamento para Aguardando, motivo para Saída; o trigger do banco é a autoridade). Ativo só pela importação do OSAB.
   const boardEl = document.getElementById('board');
   const foraEl = document.querySelector('.qv-fora');
   const faixaFora = document.getElementById('qv-faixa');
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const COLUNAS_Q = [
-    { id: 'qualificado', nome: 'Qualificado', destino: '0_qualificado' },
-    { id: 'vendido', nome: 'Vendido', destino: '1_vendido' },
+    { id: 'qualificado', nome: 'Lead qualificado', destino: '0_qualificado' },
+    { id: 'vendido', nome: 'Venda · OS aberta', destino: '1_vendido' },
     { id: 'aguardando', nome: 'Aguardando instalação', destino: '2_aguardando_instalacao' },
     { id: 'instalado', nome: 'Instalado', destino: '3_instalado' },
     { id: 'ativo', nome: 'Ativo', destino: null },

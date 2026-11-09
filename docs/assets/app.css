@@ -1177,3 +1177,21 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 @keyframes ng-gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .btn-atualizar.girando .ico { animation: none; } }
 @media (max-width: 760px) { .btn-atualizar .txt { display: none; } .btn-atualizar { flex: 0 0 auto; padding: 0 12px; } }
+
+/* 0087: funil do mês no Painel (lead → venda = OS aberta → instalada → ativa) */
+.funil-mes { margin: 0 0 16px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.funil-mes:empty { display: none; }
+.fu-cab { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12.5px; color: var(--muted); margin-bottom: 8px; }
+.fu-cab > b { color: var(--text); font-size: 13px; }
+.fu-cab span b { color: var(--text); }
+.fu-etapas { display: flex; align-items: stretch; gap: 4px; overflow-x: auto; }
+.fu-fase { display: none; }
+.fu-seta { align-self: center; color: var(--muted); font-size: 12px; flex: none; }
+.fu-seta.corte { color: var(--accent); font-weight: 700; font-size: 16px; padding: 0 2px; }
+.fu-etapa { flex: 1 1 0; min-width: 88px; display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
+.fu-etapa.venda { border-color: var(--accent); }
+.fu-nome { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.fu-n { font-size: 20px; font-weight: 600; line-height: 1.2; }
+.fu-etapa.vazia .fu-n { color: var(--muted); }
+.fu-pct { font-size: 11px; color: var(--muted); white-space: nowrap; }
+

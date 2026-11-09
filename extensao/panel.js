@@ -5,6 +5,7 @@
  * Painel lateral "NIOGEN no Portal". Fala com o Supabase Nio por REST com a anon key + o login do usuário do NIOGEN (o RLS vale).
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
  * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
+ * rev. 09/11 (0087, 0.3.1): venda = OS aberta (etapa 7) — o painel pede o nº do pedido E o nº da OS.
  * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
  */
 'use strict';
@@ -128,7 +129,7 @@
   }
   async function sairLocal() {
     S.sess = null; S.nome = ''; S.perfil = ''; S.fila = null; S.venda = null; S.dados = null;
-    S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = '';
+    S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = ''; S.os = '';
     S.convs = null; S.conversa = null; S.turnos = null; S.busca = ''; S.aba = 'vendas'; S.orelha = 'portal';
     try { await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* aba sem content script */ }
@@ -346,7 +347,7 @@
     try {
       const plano = await planoDaConversa(c);
       S.venda = null; S.conversa = c; S.dados = dadosDaConversa(c, plano);
-      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
+      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; S.etapaManual = null; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
       window.scrollTo(0, 0);
       if (S.orelha === 'conversa') carregaTurnos();
       try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
@@ -358,7 +359,7 @@
     try {
       const d = await rpc('dados_portal', { p_venda_id: item.venda_id });
       if (!d) throw new Error('Não achei essa venda (ou você não tem acesso).');
-      S.venda = item; S.dados = d; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.etapaManual = null;
+      S.venda = item; S.dados = d; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; S.etapaManual = null;
       S.orelha = 'portal'; S.turnos = null; S.turnosErro = ''; S.conversa = null;
       // a conversa da Mari que gerou a venda (se houver e se o perfil enxerga) — alimenta a orelha "Conversa"
       if (podeVerConversas()) {
@@ -372,7 +373,7 @@
     S.ocupado = false; desenha();
   }
   async function voltar() {
-    S.venda = null; S.dados = null; S.resultados = {}; S.matricula = ''; S.pedido = ''; aviso('');
+    S.venda = null; S.dados = null; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; aviso('');
     S.conversa = null; S.turnos = null; S.orelha = 'portal';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
     desenha();
@@ -414,15 +415,16 @@
   }
   async function gravaPedido() {
     const ped = S.pedido.trim();
-    if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
+    const os = String(S.os || '').trim();
+    if (!ped || !os) { aviso('Digite o número do pedido e o número da OS que o portal mostrou: venda é pedido + OS.', 'bad'); desenha(); return; }
     S.ocupado = true; aviso(''); desenha();
     try {
       // 0082 (fluxo único do backoffice): o momento "pedido" grava o nº e, sozinho, põe a etiqueta biometria-pendente, deixa a
       // nota e avisa o cliente na conversa (respeitando horário, 2/dia · 15/mês e a janela de 24 h).
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao' } });
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, os, origem: 'extensao' } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
-      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.matricula = '';
+      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = '';
       S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
       try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
       aviso(`Pedido gravado no NIOGEN (${nome}). ${(r && r.resumo) || ''}${r && r.aviso ? ` · ${r.aviso}` : ' · o cliente é avisado pelo sistema.'}`, r && r.aviso ? 'bad' : 'ok');
@@ -567,10 +569,12 @@
   function fimDoPedido() {
     if (S.venda) {
       return h('section', { class: 'card' },
-        h('h2', {}, 'Fim do pedido'),
-        h('span', { class: 'sub' }, 'Quando o portal mostrar o número do pedido, digite aqui e grave. Eu não leio o número do portal.'),
+        h('h2', {}, 'Etapa 7 · OS aberta = VENDA'),
+        h('span', { class: 'sub' }, 'Quando o portal abrir a OS, digite o nº do pedido e o nº da OS e grave: isso é a venda. Eu não leio os números do portal.'),
         h('label', { class: 'campo' }, 'Número do pedido',
           h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
+        h('label', { class: 'campo' }, 'Número da OS',
+          h('input', { type: 'text', id: 'in-os', autocomplete: 'off', value: S.os || '', oninput: (ev) => { S.os = ev.target.value; } })),
         h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
     }
     const c = S.conversa;

@@ -15,12 +15,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-13">
-<script src="config.js?v=091126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-14">
+<script src="config.js?v=091126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-13"></script>
-<script src="assets/sidebar.js?v=091126-13"></script>
-<script src="assets/ficha.js?v=091126-13"></script>
+<script src="assets/app.js?v=091126-14"></script>
+<script src="assets/sidebar.js?v=091126-14"></script>
+<script src="assets/ficha.js?v=091126-14"></script>
 </head>
 <body>
 <div class="app">
@@ -112,6 +112,7 @@
     const hoje = NG.diaSP();
     if (v.instalado_em) return 'instalada';
     if (v.nio_pendencia_cod || v.nio_pendencia_desc) return 'atrasada';
+    if (v.status === '1_vendido' && v.biometria_status !== 'validada') return 'biometria';   // 0087: venda (OS) esperando a biometria
     if (v.status === '1_vendido' || !v.instalacao_agendada_para) return 'agendar';
     const d = NG.diaSP(v.instalacao_agendada_para);
     if (d < hoje) return 'atrasada';
@@ -143,13 +144,14 @@
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
   }
-  const ABAS = [['todas', 'Todas'], ['acao', 'Precisam de ação'], ['agendar', 'A agendar'], ['hoje', 'Hoje'], ['proximos', 'Próximos dias'], ['atrasada', 'Atrasadas'], ['instalada', 'Instaladas']];
+  const ABAS = [['todas', 'Todas'], ['acao', 'Precisam de ação'], ['biometria', 'Biometria pendente'], ['agendar', 'A agendar'], ['hoje', 'Hoje'], ['proximos', 'Próximos dias'], ['atrasada', 'Atrasadas'], ['instalada', 'Instaladas']];
   const naAba = (v, a) => (a === 'todas' ? true : a === 'acao' ? precisaAcao(v) : situacao(v) === a);
 
   // "Quando": a data que importa em cada situação (vendida → agendar; agendada → dia e período; instalada → dia).
   function quandoTxt(v) {
     const s = situacao(v);
     if (s === 'instalada') return { txt: `instalada ${NG.quando(v.instalado_em)}`, sub: v.docs_entregues_em ? 'docs entregues' : v.docs_prazo_em ? `docs até ${NG.fmtData(v.docs_prazo_em)}` : '' };
+    if (s === 'biometria') return { txt: v.vendido_em ? `OS aberta ${NG.quando(v.vendido_em)} ${NG.fmtHora(v.vendido_em)}` : 'OS aberta', sub: 'esperando a biometria do cliente' };
     if (s === 'agendar') return { txt: v.vendido_em ? `vendida ${NG.quando(v.vendido_em)} ${NG.fmtHora(v.vendido_em)}` : 'vendida', sub: `há ${NG.fmtHoras(horasSemAgenda(v))} sem agenda` };
     const q = v.instalacao_agendada_para;
     return { txt: q ? `${NG.fmtDiaSemana(q)} ${NG.fmtData(q)}` : '—', sub: q ? NG.janela(q) : '' };
@@ -229,7 +231,7 @@
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') NG.abrirVenda(tr.dataset.id); });
 
   document.getElementById('exportar').addEventListener('click', () => {
-    const SIT = { agendar: 'A agendar', hoje: 'Hoje', proximos: 'Próximos dias', atrasada: 'Atrasada', instalada: 'Instalada' };
+    const SIT = { biometria: 'Biometria pendente', agendar: 'A agendar', hoje: 'Hoje', proximos: 'Próximos dias', atrasada: 'Atrasada', instalada: 'Instalada' };
     const linhas = NG.ordenar(base().filter((v) => naAba(v, aba)), CHAVES, ord);
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
     const cab = ['Cliente', 'Situação', 'Agendada para', 'Instalada em', 'Plano', 'Vendedor', 'Origem', 'Bairro', 'Cidade', 'Pedido Nio', 'Pendência Nio'];

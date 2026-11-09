@@ -61,7 +61,7 @@
 
   // ---------- histórico de eventos (o mesmo texto da venda.html até 04/11) ----------
   const TITULOS = {
-    '0_qualificado': 'Qualificada', '1_vendido': 'Vendida · biometria validada', '2_aguardando_instalacao': 'Aguardando instalação',
+    '0_qualificado': 'Lead qualificado', '1_vendido': 'VENDA · OS aberta', '2_aguardando_instalacao': 'Aguardando instalação',
     '3_instalado': 'Instalada', '4_ativo_provisorio': 'Ativa', '5_comissao_firme': 'Ativa', saida: 'Saída',
   };
   const CANAIS = { whatsapp: 'WhatsApp', ligacao: 'Ligação', presencial: 'Presencial' };
@@ -203,7 +203,7 @@
     usuariosCache = ru;
     const v = rv.data;
     // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela.
-    const rx27 = await NG.sb.from('vendas').select('nio_viab_por, ponto_referencia').eq('id', id).maybeSingle();
+    const rx27 = await NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em').eq('id', id).maybeSingle();
     if (rx27.data) Object.assign(v, rx27.data);
     let nomeCurto = null;
     if (v.plano_id) {
@@ -276,7 +276,7 @@
 
   // ---------- próximo passo: botão e formulário que resolvem ----------
   const BOTAO = {
-    pedido: 'Registrar venda', portal: 'Registrar o pedido do portal', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
+    pedido: 'Registrar pedido + OS', portal: 'Registrar pedido + OS (venda)', bio_status: 'Atualizar biometria', contato: 'Registrar contato',
     dfv: 'Consultar cobertura', sem_cobertura: 'Encerrar sem cobertura', agendar: 'Agendar instalação',
     reagendar: 'Reagendar', docs: 'Registrar envio dos documentos', viab: 'Registrar resultado do portal',
     pendencia: 'Ver a pendência',
@@ -324,17 +324,16 @@
   // Formulários (faixa do próximo passo, "Mover para…" e "Editar" dos blocos). Cada um grava o que a tela antiga gravava.
   const FORMS = {
     // Qualificado → Vendido (era o modal "Registrar venda": pedido + biometria; a trava do banco confere DFV e o resto).
-    pedido: (v) => formWrap('pedido', 'Registrar venda', 'Para virar "Vendido" a Nio exige o nº do pedido do portal PAP e a biometria validada (link). O banco confere também a viabilidade do portal (Viável, &lt; 7 dias) — o DFV não libera.',
-      `<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
-       <label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status === 'validada' ? 'validada' : v.biometria_status)}</select></label></div>`, 'Registrar venda'),
+    pedido: (v) => FORMS.portal(v),   // 0087: "Registrar venda" = pedido + OS (o mesmo formulário do portal)
     // Venda remota: o nosso time abre o pedido no portal e roda o crédito. Prompt 19: o link da biometria é disparado pela
     // própria Nio (WhatsApp + e-mail) na hora do pedido — salvar o nº do pedido marca a biometria pendente e a contagem
     // 24/72 h e o D+1 partem dali (trigger vendas_antes_biometria, 0032). O backoffice só avisa o cliente na conversa.
-    portal: (v) => formWrap('portal', 'Pedido no portal',
-      'Abra o pedido no portal PAP (perfil BO) com o endereço abaixo e rode a análise de crédito. Ao concluir o pedido, a própria Nio manda ao cliente o link da biometria por WhatsApp e por e-mail — nós não mandamos link. Salve aqui o nº do pedido (a contagem de 24/72 h começa agora): o sistema põe a etiqueta, deixa a nota e avisa o cliente sozinho. Nunca conclua pedido com CPF de teste.',
+    portal: (v) => formWrap('portal', 'Abrir a OS no portal = VENDA',
+      'Portal PAP (perfil BO): etapa 2 viabilidade · etapa 3 cadastro e crédito · etapa 5 oferta · etapa 7 <b>Abrir OS</b>. Com a OS aberta, grave aqui o nº do pedido e o nº da OS: isso é a <b>venda</b>. A Nio manda o link da biometria ao cliente sozinha; o sistema põe a etiqueta, deixa a nota e avisa o cliente. Nunca abra OS com CPF de teste.',
       `${botoesPortal}<span class="nota-campo mono">${esc(enderecoPortal(v))}</span>
        <div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
-       <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
+       <label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" autocomplete="off"></label></div>
+       <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label>
        <label class="campo">Link da biometria (opcional — só referência; quem manda é a Nio)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>`, 'Salvar'),
     bio_status: (v) => formWrap('bio_status', 'Biometria e crédito', 'O portal mostra a biometria como Pendente, com Risco ou Validada (Consulta OS). Validada + nº do pedido libera "Registrar venda".',
       `${botoesPortal}<div class="grade2"><label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status)}</select></label>
@@ -455,10 +454,13 @@
         credito_resultado: fd.get('credito') || null,
         biometria_link: link || v.biometria_link || null,
       };
-      // Biometria pendente e a contagem: o banco carimba na hora em que o nº do pedido entra (0032).
-      const pedidoNovo = campos.nio_pedido && campos.nio_pedido !== (v.nio_pedido || null);
-      // 0082: nº novo = momento "pedido" (etiqueta biometria-pendente + nota + aviso ao cliente, tudo pelo sistema).
-      if (pedidoNovo) return !!(await rodarMomento('pedido', { pedido: campos.nio_pedido, credito: campos.credito_resultado, link: link || null }));
+      const os = String(fd.get('os') || '').trim() || null;
+      // 0087: pedido + OS = VENDA → momento "pedido" (vira Venda, etiqueta, nota e aviso ao cliente pelo sistema).
+      const pedidoNovo = campos.nio_pedido && (campos.nio_pedido !== (v.nio_pedido || null) || (os && os !== (v.nio_os || null)));
+      if (pedidoNovo || (campos.nio_pedido && os && v.status === '0_qualificado')) {
+        if (!os && !v.nio_os) { NG.toast('Informe também o nº da OS: venda é pedido + OS.', 'bad'); return false; }
+        return !!(await rodarMomento('pedido', { pedido: campos.nio_pedido, os, credito: campos.credito_resultado, link: link || null }));
+      }
       return gravar(campos, 'Pedido no portal atualizado');
     },
     async bio_status(fd) {
@@ -568,6 +570,7 @@
       if (link && !/^https?:\/\//i.test(link)) { NG.toast('O link da biometria tem que começar com https://', 'bad'); return false; }
       return gravar({
         nio_pedido: String(fd.get('pedido') || '').trim() || null,
+        nio_os: String(fd.get('os') || '').trim() || null,
         nio_contrato: String(fd.get('contrato') || '').trim() || null,
         nio_viab_interesse_id: String(fd.get('interesse') || '').trim() || null,
         credito_resultado: fd.get('credito') || null,
@@ -929,7 +932,7 @@
     if (pr.resolver === 'viab') {
       botoes.push(`<a class="btn btn-acc" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>`);
     }
-    if (pr.resolver === 'bio_status' && podeBO && v.nio_pedido && v.status === '0_qualificado') {
+    if (pr.resolver === 'bio_status' && podeBO && v.nio_pedido && v.status === '1_vendido') {
       // 0082: biometria em um toque — Validada abre o agendamento; Negado manda o pedido de outro CPF e abre a pendência.
       botoes.push('<button type="button" class="btn btn-acc" data-momento="biometria" data-r="validada">✓ Biometria validada</button>',
         '<button type="button" class="btn" data-momento="biometria" data-r="risco">Com risco</button>',
@@ -939,9 +942,9 @@
       const rot = pr.resolver === 'sem_cobertura' && v.dfv_resultado === 'endereco_ocupado' ? 'Encerrar: já é cliente Nio' : BOTAO[pr.resolver];
       botoes.push(`<button type="button" class="btn ${forte ? 'btn-acc' : ''}" data-resolver="${pr.resolver}">${esc(rot)}</button>`);
     }
-    // Em Qualificado o "Registrar venda" (pedido + biometria validada) sempre fica à mão.
-    if (v.status === '0_qualificado' && pr.resolver !== 'pedido' && pr.resolver !== 'sem_cobertura') {
-      botoes.push('<button type="button" class="btn btn-ghost" data-resolver="pedido">Registrar venda</button>');
+    // Em Lead qualificado o "Registrar pedido + OS" (= venda) sempre fica à mão.
+    if (v.status === '0_qualificado' && !['pedido', 'portal', 'sem_cobertura'].includes(pr.resolver)) {
+      botoes.push('<button type="button" class="btn btn-ghost" data-resolver="portal">Registrar pedido + OS</button>');
     }
     const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') && !FORMS_NO_CARTAO.includes(formAtivo) ? FORMS[formAtivo](v) : '';
     const feito = feitoUltimo ? `<div class="f-feito${feitoUltimo.aviso ? ' warn' : ''}" role="status">${esc(feitoUltimo.resumo)}${feitoUltimo.aviso ? `<span>${esc(feitoUltimo.aviso)}</span>` : ''}</div>` : '';
@@ -1093,19 +1096,20 @@
           <span class="nota-campo">Plano e forma de pagamento saem da tabela vigente na entrada da venda; para trocar, fale com o backoffice.</span>`,
       },
       {
-        id: 'pedido', titulo: 'Pedido e biometria',
-        resumo: [v.nio_pedido ? `Pedido #${v.nio_pedido}` : 'sem pedido no portal',
+        id: 'pedido', titulo: 'Venda (pedido + OS) e biometria',
+        resumo: [v.nio_pedido ? `Pedido #${v.nio_pedido}${v.nio_os ? ` · OS ${v.nio_os}` : ' · sem OS'}` : 'ainda não é venda (sem OS)',
           v.biometria_status === 'pendente' && v.biometria_link_enviado_em
             ? `pedido aberto · link enviado pela Nio ${NG.fmtDataHora(v.biometria_link_enviado_em)}`
             : `biometria ${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}`,
           v.credito_resultado ? `crédito ${NG.CREDITO[v.credito_resultado]}` : null].filter(Boolean).join(' · '),
         corpo: () => `${linha('Nº do pedido (portal)', `<span class="mono">${esc(v.nio_pedido || '—')}</span>`)}
+          ${linha('Nº da OS (venda)', `<span class="mono">${esc(v.nio_os || '—')}</span>${v.nio_os_em ? ' · ' + esc(NG.fmtDataHora(v.nio_os_em)) : ''}`)}
           ${linha('Contrato Nio', `<span class="mono">${esc(v.nio_contrato || '—')}</span>`)}
           ${linha('Interesse no portal', `<span class="mono">${esc(v.nio_viab_interesse_id || '—')}</span>`)}
           ${linha('Análise de crédito', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ' · ' + NG.fmtDataHora(v.credito_em) : ''}` : '—'))}
           ${linha('Biometria (link da Nio)', esc(`${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}${v.biometria_link_enviado_em ? ' · link enviado pela Nio ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
           ${avisosMari(['BIO1', 'BIO3'])}
-          ${linha('Vendida em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '—'))}
+          ${linha('Venda (OS aberta) em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '— ainda é lead qualificado'))}
           ${linha('Vendedor', esc(v.vendedor_nome || '—'))}
           ${v.status === '0_qualificado' ? botoesPortal : ''}
           <div class="f-sub">Conferências do contrato</div>
@@ -1117,6 +1121,7 @@
           ${trava('Endereço e telefone confirmados', v.trava_contato_confirmado)}`,
         editar: () => `<form class="f-formulario" data-form="ed_pedido" novalidate>
           <div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off"></label>
+          <label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" autocomplete="off"></label>
           <label class="campo">Contrato Nio<input type="text" name="contrato" value="${esc(v.nio_contrato || '')}"></label>
           <label class="campo">Interesse no portal<input type="text" name="interesse" value="${esc(v.nio_viab_interesse_id || '')}" autocomplete="off"></label>
           <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label>
@@ -1405,7 +1410,7 @@
   async function mover(destino) {
     const v = d.v;
     if (destino === v.status) return;
-    if (destino === '1_vendido' && v.status === '0_qualificado') { formAtivo = 'pedido'; render(); return; }
+    if (destino === '1_vendido' && v.status === '0_qualificado') { formAtivo = 'portal'; render(); return; }
     if (destino === '2_aguardando_instalacao') { formAtivo = 'mover_aguardando'; render(); return; }
     if (destino === 'saida') { formAtivo = 'saida'; render(); return; }
     formAtivo = null;
