@@ -23,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-3">
-<script src="config.js?v=091126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-4">
+<script src="config.js?v=091126-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-3"></script>
-<script src="assets/sidebar.js?v=091126-3"></script>
-<script src="assets/ficha.js?v=091126-3"></script>
+<script src="assets/app.js?v=091126-4"></script>
+<script src="assets/sidebar.js?v=091126-4"></script>
+<script src="assets/ficha.js?v=091126-4"></script>
 </head>
 <body>
 <div class="app">
@@ -605,7 +605,7 @@
         <td>${enc ? '<span class="apagado">—</span>' : vezHtml(q)}</td>
         <td class="apagado">${esc(ha(ultimaDe(c)))}${q && q.ultima_quem ? `<small>${esc({ cliente: 'cliente', mari: 'Mari', humano: 'humano' }[q.ultima_quem] || '')}</small>` : ''}</td>
         <td>${termometro(q, { curto: true })}${seloHtml(q) ? `<div>${seloHtml(q)}</div>` : ''}</td>
-        <td class="mq-travas">${enc ? '' : travasHtml(q, { soProblema: true }) || '<span class="mq-trava ok">✓ ok</span>'}</td>
+        <td><div class="mq-travas">${enc ? '' : travasHtml(q, { soProblema: true }) || '<span class="mq-trava ok">✓ ok</span>'}</div></td>
         <td>${enc ? '' : `${toq ? `<span class="mq-toq ${toq.cls}">${esc(toq.txt)}</span>` : NG.proxPasso(proximo(c))}<small>${jan ? esc(jan.txt) : ''}${q ? ` · ${contadorHtml(q)}` : ''}</small>`}</td>
         <td>${alertasHtml(q) || '<span class="apagado">—</span>'}</td>
       </tr>`;
