@@ -15,13 +15,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-10">
-<script src="config.js?v=091126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-11">
+<script src="config.js?v=091126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-10"></script>
-<script src="assets/sidebar.js?v=091126-10"></script>
-<script src="assets/ficha.js?v=091126-10"></script>
-<script src="assets/novavenda.js?v=091126-10"></script>
+<script src="assets/app.js?v=091126-11"></script>
+<script src="assets/sidebar.js?v=091126-11"></script>
+<script src="assets/ficha.js?v=091126-11"></script>
+<script src="assets/novavenda.js?v=091126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -430,6 +430,7 @@
   const novaVenda = await NGNovaVenda.montar({ eu, aoSalvar: () => carregarLista() });
   document.getElementById('btn-nova').addEventListener('click', () => novaVenda.abrir());
   document.getElementById('fab').addEventListener('click', () => novaVenda.abrir());
+  NG.botaoAtualizar(() => carregarLista());   // 09/11: dados frescos sem F5
 
   await carregarLista();
   // ?etapa= no Quadro: leva até a coluna (no celular, encaixa nela) e a destaca por um instante.

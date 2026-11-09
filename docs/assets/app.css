@@ -1163,3 +1163,12 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 @media (prefers-reduced-motion: reduce) { .kpi.saldo-meta.pisca { animation: none; } }
 /* Alarme de silêncio (0081, 09/11): selo vermelho "Sem resposta há N min" na tela Mari. */
 .mq-alerta.mq-silencio { color: var(--bad-fg); background: var(--bad-bg); border-color: var(--bad-border); font-weight: 600; }
+
+/* 09/11 — botão "Atualizar" das telas com dados vivos (NG.botaoAtualizar): busca de novo sem F5. */
+.btn-atualizar { gap: 6px; }
+.btn-atualizar .ico { display: inline-block; font-size: 15px; line-height: 1; }
+.btn-atualizar.girando { cursor: progress; color: var(--muted); }
+.btn-atualizar.girando .ico { animation: ng-gira .8s linear infinite; }
+@keyframes ng-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn-atualizar.girando .ico { animation: none; } }
+@media (max-width: 760px) { .btn-atualizar .txt { display: none; } .btn-atualizar { flex: 0 0 auto; padding: 0 12px; } }

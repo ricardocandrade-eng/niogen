@@ -23,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-10">
-<script src="config.js?v=091126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-11">
+<script src="config.js?v=091126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-10"></script>
-<script src="assets/sidebar.js?v=091126-10"></script>
-<script src="assets/ficha.js?v=091126-10"></script>
+<script src="assets/app.js?v=091126-11"></script>
+<script src="assets/sidebar.js?v=091126-11"></script>
+<script src="assets/ficha.js?v=091126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -45,7 +45,6 @@
           <label><input type="radio" name="vista" value="lista">Lista</label>
           <label><input type="radio" name="vista" value="quadro">Quadro</label>
         </div>
-        <button type="button" class="btn btn-ghost" id="btn-recarregar" title="Recarregar agora (a tela também se atualiza sozinha a cada minuto)" aria-label="Recarregar">↻</button>
         <a class="btn acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">Abrir Chatwoot</a>
       </div>
     </header>
@@ -887,14 +886,10 @@
     }
   }
   NGFicha.iniciar();   // mari.html#venda=<id> abre a ficha direto
-  // Atualiza sozinha a cada minuto com a aba visível (filtros, vista e aba ficam); ↻ recarrega na hora.
+  // Atualiza sozinha a cada minuto com a aba visível (filtros, vista e aba ficam); Atualizar recarrega na hora.
   setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
-  document.getElementById('btn-recarregar').addEventListener('click', async (ev) => {
-    ev.currentTarget.disabled = true;
-    await carregar();
-    ev.currentTarget.disabled = false;
-  });
+  NG.botaoAtualizar(() => carregar());   // 09/11: o ↻ antigo virou o botão Atualizar comum
 })();
 </script>
 </body>

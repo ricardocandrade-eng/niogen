@@ -229,5 +229,6 @@
     window.matchMedia('(min-width: 761px)').addEventListener('change', (m) => { if (m.matches) fechar(); });
   }
 
-  window.NGSidebar = { montar };
+  // 09/11: o botão "Atualizar" das telas (NG.botaoAtualizar) refaz os contadores do menu junto com os dados.
+  window.NGSidebar = { montar, avisos: () => { const nav = document.getElementById('sidebar'); return nav ? avisos(nav) : null; } };
 })();

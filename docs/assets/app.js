@@ -220,6 +220,37 @@
     setTimeout(() => el.remove(), tipo === 'bad' ? 7000 : 4000);
   }
 
+  // ---------- botão "Atualizar" (09/11, pedido do Ricardo): busca dados frescos sem F5 ----------
+  // Uso: NG.botaoAtualizar(() => carregar()) depois do login. Entra no começo de .cab-acoes (ou em opts.alvo), gira enquanto
+  // busca, não deixa clicar duas vezes e também refaz os contadores do menu (NGSidebar.avisos). Filtros, aba e vista ficam.
+  function botaoAtualizar(fn, { alvo } = {}) {
+    const box = alvo || document.querySelector('.cab .cab-acoes');
+    if (!box) return null;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn btn-atualizar';
+    b.title = 'Buscar os dados de novo, sem recarregar a página';
+    b.innerHTML = '<span class="ico" aria-hidden="true">↻</span><span class="txt">Atualizar</span>';
+    b.addEventListener('click', async () => {
+      if (b.classList.contains('girando')) return;
+      b.classList.add('girando');
+      b.setAttribute('aria-busy', 'true');
+      try {
+        await Promise.all([fn(), window.NGSidebar && NGSidebar.avisos ? NGSidebar.avisos() : null]);
+        const h = fmtHora(new Date().toISOString());
+        b.title = `Atualizado às ${h} — clique para buscar de novo`;
+        toast(`Atualizado às ${h}`, 'ok');
+      } catch (e) {
+        toast(msgErro(e), 'bad');
+      } finally {
+        b.classList.remove('girando');
+        b.removeAttribute('aria-busy');
+      }
+    });
+    box.prepend(b);
+    return b;
+  }
+
   // ---------- comissão: prevista / paga · M-10 · downgrade ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
   // Desde 04/11 (decisão do Ricardo no padrão de telas) a comissão aparece só como "prevista" (antes do pagamento) ou
@@ -1045,7 +1076,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar,TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha,   // onda 3.1: ficha única (só aviso)
