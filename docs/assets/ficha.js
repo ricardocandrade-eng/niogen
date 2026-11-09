@@ -989,7 +989,10 @@
   };
 
   function faixaProximo(v, pr) {
-    const j = d.jor;
+    const jReal = d.jor;
+    // Alerta da CONVERSA (mensagem que não saiu, cliente esperando): faixa própria em cima; o passo da VENDA segue com os botões dele.
+    const alertaConv = jReal && ['manual', 'responder'].includes(jReal.botao) && jReal.nivel === 'agora';
+    const j = alertaConv ? null : jReal;
     const nivel = j ? j.nivel : (pr.nivel === 'bad' ? 'agora' : pr.nivel === 'warn' ? 'hoje' : pr.espera ? 'espera' : 'ok');
     const texto = j ? j.o_que_fazer : pr.txt;
     const etapa = j ? j.etapa : (NG.etapaDe(v).n || 0);
@@ -1005,12 +1008,6 @@
       // Vendedor: o passo de sempre (contato, documentos…). Os botões dos momentos são do backoffice.
       if (pr.resolver && BOTAO[pr.resolver] && !['pedido', 'portal', 'bio_status', 'agendar', 'reagendar', 'os_agendar'].includes(pr.resolver)) bts.push(`<button type="button" class="btn" data-resolver="${pr.resolver}">${esc(BOTAO[pr.resolver])}</button>`);
       if (etapa >= 2 && etapa <= 3) nota = 'O backoffice anda a venda pelo portal (pedido → biometria → OS + agendamento).';
-    } else if (j && j.botao === 'manual' && d.bloqueada) {
-      bts.push(B('data-f="manual-copiar"', 'Copiar o texto', false), d.chatwoot ? `<a class="btn" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : '', B('data-f="manual-mandei"', 'Já mandei', true));
-      sozinho = SOZINHO.manual;
-    } else if (j && j.botao === 'responder' && d.conversaId) {
-      bts.push(B('data-f="conversa"', 'Abrir a conversa e responder', true));
-      sozinho = SOZINHO.responder;
     } else if (j && j.botao === 'pendencia') {
       bts.push(B('data-resolver="pendencia"', 'Ver a pendência', nivel === 'agora'));
       sozinho = '';
@@ -1051,7 +1048,15 @@
     if (!corpoForm && formAtivoPadrao && FORMS[formAtivoPadrao]) corpoForm = FORMS[formAtivoPadrao](v).replace(`data-f="cancelar">Cancelar`, 'data-f="cancelar" hidden>Cancelar');
     formAtivoPadrao = null;
     const feito = feitoUltimo ? `<div class="f-feito${feitoUltimo.aviso ? ' warn' : ''}" role="status">${esc(feitoUltimo.resumo)}${feitoUltimo.aviso ? `<span>${esc(feitoUltimo.aviso)}</span>` : ''}</div>` : '';
-    return `<section class="f-prox ${NIVEL_CLS[nivel] || 'dim'}" aria-label="Próximo passo">
+    let faixaConv = '';
+    if (alertaConv && bo) {
+      const bc = jReal.botao === 'manual' && d.bloqueada
+        ? [B('data-f="manual-copiar"', 'Copiar o texto', false), d.chatwoot ? `<a class="btn" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : '', B('data-f="manual-mandei"', 'Já mandei', true)]
+        : [B('data-f="conversa"', 'Abrir a conversa e responder', true)];
+      faixaConv = `<section class="f-prox bad f-alerta-conv" aria-label="Conversa precisa de ação"><div class="f-prox-txt"><span class="f-rot">CONVERSA · AGORA</span><b>${esc(jReal.o_que_fazer)}</b></div>
+        <div class="f-prox-bts">${bc.filter(Boolean).join('')}</div><span class="f-sozinho">O NIOGEN faz sozinho: ${esc(jReal.botao === 'manual' ? SOZINHO.manual : SOZINHO.responder)}</span></section>`;
+    }
+    return `${faixaConv}<section class="f-prox ${NIVEL_CLS[nivel] || 'dim'}" aria-label="Próximo passo">
         <div class="f-prox-txt"><span class="f-rot">${esc(NIVEL_ROT[nivel] || 'PRÓXIMO PASSO')}</span><b>${esc(texto || '—')}</b>${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}</div>
         ${bts.filter(Boolean).length && !form ? `<div class="f-prox-bts">${bts.filter(Boolean).join('')}</div>` : ''}
         ${corpoForm ? `<div class="f-prox-form">${corpoForm}</div>` : ''}

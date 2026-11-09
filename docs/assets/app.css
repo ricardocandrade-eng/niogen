@@ -1386,6 +1386,7 @@ a.selo-ficha:hover { filter: brightness(1.15); }
   .mv-et span, .mv-row .mv-ha { display: none; }
   .mv-cli .mv-ha-2 { display: inline; }
   .mv-cab span:nth-child(4) { display: none; }
+  .mv-cab span:first-child { visibility: hidden; }
 }
 @media (max-width: 900px) {
   .mv-trab { grid-template-columns: 1fr; height: auto; min-height: 0; }
