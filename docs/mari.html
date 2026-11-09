@@ -23,12 +23,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-12">
-<script src="config.js?v=091126-12"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-13">
+<script src="config.js?v=091126-13"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-12"></script>
-<script src="assets/sidebar.js?v=091126-12"></script>
-<script src="assets/ficha.js?v=091126-12"></script>
+<script src="assets/app.js?v=091126-13"></script>
+<script src="assets/sidebar.js?v=091126-13"></script>
+<script src="assets/ficha.js?v=091126-13"></script>
 </head>
 <body>
 <div class="app">
@@ -869,7 +869,7 @@
     if (c.venda_id) links.push(`<a class="btn" href="#venda=${esc(c.venda_id)}">Ver venda</a>`);
     if (c.chatwoot_conversation_id && CHATWOOT_NIO_ACCOUNT) {
       // 0082: Assumir (sem dono) · Devolver para a Mari (com dono) · Cliente pediu para parar — o NIOGEN mexe no Chatwoot sozinho.
-      if (!c.chatwoot_agente && !c.nao_contatar) links.unshift(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
+      if (!c.chatwoot_agente && !c.humano_atribuido && !c.nao_contatar) links.unshift(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
       else if (c.chatwoot_agente || c.humano_atribuido) links.push(`<button type="button" class="btn btn-ghost" data-momento="devolver_mari" data-conv="${esc(c.id)}">Devolver para a Mari</button>`);
       if (!c.nao_contatar) links.push(`<button type="button" class="btn btn-ghost" data-momento="parar" data-conv="${esc(c.id)}">Cliente pediu para parar</button>`);
       links.push(`<a class="btn" target="_blank" rel="noopener" href="https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${esc(c.chatwoot_conversation_id)}">Abrir no Chatwoot</a>`);

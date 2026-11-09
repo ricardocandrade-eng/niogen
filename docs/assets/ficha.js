@@ -922,7 +922,7 @@
     const podeBO = ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
     const cv = d.convInfo;
     // 0082: conversa sem dono no Chatwoot → Assumir vem primeiro (atribui, cala a Mari, para a cadência).
-    if (podeBO && cv && cv.chatwoot_conversation_id && !cv.chatwoot_agente && !cv.nao_contatar && v.status !== 'saida') {
+    if (podeBO && cv && cv.chatwoot_conversation_id && !cv.chatwoot_agente && !cv.humano_atribuido && !cv.nao_contatar && v.status !== 'saida') {
       botoes.push('<button type="button" class="btn btn-acc" data-momento="assumir" title="Atribui a conversa a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>');
     }
     // Viabilidade (prompt 27): 1º consultar no portal (abre e copia "CEP número"), depois registrar o resultado.

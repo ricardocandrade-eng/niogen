@@ -49,7 +49,7 @@ def ler_guia(caminho):
 
 
 def cli(args, sql_arquivo=None):
-    cmd = [NPX, 'supabase', 'db', 'query', '--remote'] + args
+    cmd = [NPX, 'supabase@3.0.0', 'db', 'query', '--remote'] + args   # 09/11: o 3.1.0 é bloqueado pelo Controle de Aplicativo do Windows
     if sql_arquivo:
         cmd += ['-f', sql_arquivo]
     r = subprocess.run(cmd, cwd=REPO, capture_output=True, text=True, encoding='utf-8')
