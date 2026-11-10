@@ -11,7 +11,14 @@
      localStorage niogen.mari.vista; ?coluna= destaca a coluna), status na linha do card (vez + tempo), TERMÔMETRO de dados
      (v_mari_quadro: só vazio/coletado/validado por item — nunca o valor) e selos das travas do contrato. Colunas, itens e
      motivos vêm de config_mari_colunas / config_mari_itens. A etapa vem da Mari: arrastar só para Com humano (assumir) e
-     Encerrada (motivo) pela RPC mari_quadro_mover. Recarrega a cada 60 s com a aba visível + botão ↻. -->
+     Encerrada (motivo) pela RPC mari_quadro_mover. Recarrega a cada 60 s com a aba visível + botão ↻.
+     10/11 (0107 · docs/Prompt_mari_ao_vivo_oportunidades_101126_1400.md · protótipo docs/LAYOUT_mari_ao_vivo_101126_1400.html):
+     tela "viva" — faixa de PULSO (Ativa · Quieta · Parada? · último turno, respondendo agora, tempo médio, próximo toque, sem resposta/
+     erros/WABA — RPC mari_ao_vivo, a cada 15 s com a aba visível); os 4 KPIs viraram o FUNIL DE RESULTADO do dia (conversas →
+     responderam → CEP válido → viram planos → qualificadas · vendas do mês × meta · R$ em negociação + nº de 🔥); CARTÃO DE 3 LINHAS
+     (nome · cidade · o que está acontecendo em palavras · barra do termômetro + UM chip; 🔥 no Live quando é oportunidade); origem,
+     contatos, travas e "falta…" foram para a gaveta; cartão que mudou acende 2 s; coluna vazia vira trilho; FEED "Agora, na Mari"
+     (v_mari_feed) à direita — no celular vira a aba "Agora". -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -23,13 +30,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-11">
-<script src="config.js?v=101126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-12">
+<script src="config.js?v=101126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-11"></script>
-<script src="assets/sidebar.js?v=101126-11"></script>
-<script src="assets/conversa.js?v=101126-11"></script>
-<script src="assets/ficha.js?v=101126-11"></script>
+<script src="assets/app.js?v=101126-12"></script>
+<script src="assets/sidebar.js?v=101126-12"></script>
+<script src="assets/conversa.js?v=101126-12"></script>
+<script src="assets/ficha.js?v=101126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -50,7 +57,9 @@
       </div>
     </header>
 
-    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+    <section class="mav-pulso" id="pulso" aria-label="Pulso da Mari" aria-live="polite"><span class="apagado">Lendo o pulso da Mari…</span></section>
+    <section class="mav-funil" id="funil" aria-label="Funil de resultado de hoje"></section>
+    <div class="seg mav-abas-movel" role="group" aria-label="Ver"><button type="button" data-mav="conversas" class="on">Conversas</button><button type="button" data-mav="agora">Agora</button></div>
 
     <div id="abas"></div>
 
@@ -64,20 +73,18 @@
       <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
     </div>
 
+    <div class="mav-corpo"><div class="mav-principal">
     <section class="lista padrao" aria-label="Conversas da Mari">
       <div class="rolagem">
         <table class="tab">
           <thead><tr>
             <th data-ord="acao">Cliente · local</th>
-            <th data-ord="etapa">Etapa</th>
-            <th data-ord="vez">Vez</th>
-            <th data-ord="ultima" data-dir="desc">Última</th>
+            <th data-ord="vez">O que está acontecendo</th>
             <th data-ord="termometro" data-dir="desc" title="Dados para o pedido: verde validado, âmbar coletado, cinza falta. Nunca mostra o valor.">Termômetro</th>
-            <th title="Travas do contrato: já é cliente Nio, endereço com Nio, viabilidade/área.">Travas</th>
-            <th>Próximo toque</th>
-            <th>Alertas</th>
+            <th data-ord="etapa">Etapa</th>
+            <th data-ord="ultima" data-dir="desc">Última</th>
           </tr></thead>
-          <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+          <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
       <div class="rodape-lista"><span id="contagem"></span><span>Ordem: precisa de ação agora primeiro · clique na linha para abrir a conversa</span></div>
@@ -92,6 +99,10 @@
         <div class="qv-fora-corpo" id="qv-fora-corpo" hidden></div>
       </div>
     </section>
+    </div>
+    <aside class="mav-feed" id="feed" aria-label="Agora, na Mari"><h4>Agora, na Mari <span class="apagado">atualiza a cada 15 s</span></h4><div id="feed-lista"><span class="apagado">Carregando…</span></div>
+      <p class="apagado mav-feed-pe">Só o que a Mari e o sistema fizeram hoje. Clique no nome para abrir a conversa. Sem CPF, telefone ou endereço.</p></aside>
+    </div>
   </main>
 </div>
 <a class="fab desab" id="fab" aria-label="Abrir Chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">💬</a>
@@ -114,7 +125,7 @@
   NGSidebar.montar();
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
     document.getElementById('sem-acesso').hidden = false;
-    document.querySelectorAll('.cab, #kpis, #abas, .barra-filtros, .lista, .cartoes, #fab').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
+    document.querySelectorAll('.cab, #pulso, #funil, .mav-abas-movel, #abas, .barra-filtros, .mav-corpo, #fab').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
     return;
   }
   const ADMIN = eu.perfil === 'admin';
@@ -159,6 +170,9 @@
   let semResposta = {};   // 0081: conversa id → minutos sem resposta (v_mari_sem_resposta)
   let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, vendasDe = {}, aguardando = {}, aba = 'todas';
   let templates = {}, enviadosDe = {};
+  let opDe = {};                 // 0107: conversa → oportunidade (v_oportunidades)
+  const sigCard = {}, acesos = new Set();   // 0107: assinatura de cada cartão → acende quando muda
+  let aoVivo = null, feedVistos = null;     // 0107: pulso (mari_ao_vivo) e feed (v_mari_feed)
   const ord = { chave: 'acao', dir: 1 };   // 0072: padrão = "precisa de ação agora" (rankAcao)
 
   // ---------- vista: Lista | Quadro (0072, mesmo padrão de Vendas) ----------
@@ -208,7 +222,7 @@
       NG.sb.from('v_mari_quadro').select('*').limit(2000),
       NG.sb.from('config_mari_colunas').select('codigo, nome, descricao, ordem, etapas, cor, recolhida, aceita_arrastar, motivos').eq('ativo', true).order('ordem'),
     ]);
-    if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
+    if (rc.error) { NG.toast(NG.msgErro(rc.error), 'bad'); tbody.innerHTML = `<tr><td colspan="5" class="vazio">${esc(NG.msgErro(rc.error))}</td></tr>`; return; }
     // erro da cadência não derruba a tela, mas aparece (antes era engolido em silêncio)
     if (rk.error) NG.toast(`Cadência indisponível: ${NG.msgErro(rk.error)}`, 'bad');
     convs = rc.data || [];
@@ -233,9 +247,12 @@
         .not('tags->>cadencia', 'is', null).in('conversa_id', naCadencia).order('created_at') : Promise.resolve({ data: [] }),
       NG.tplCadencia(),
       NG.sb.from('v_mari_sem_resposta').select('id, minutos'),   // 0081: alarme de silêncio
-      NG.jornada(),   // 0090: a regra única de "precisa de ação" (a mesma da Minha vez e do menu)
+      NG.jornada(),   // 0090: a regra única de "precisa de ação" (a mesma do Live e do menu)
     ]);
     jorConv = rj && !rj.erro ? rj.porConversa : {};
+    // 0107: 🔥 oportunidades (as mesmas do Live: sem as que já pedem ação) — o cartão ganha a borda laranja e "🔥 no Live".
+    const ro = await NG.oportunidades(rj && !rj.erro ? rj : null);
+    opDe = ro.erro ? {} : Object.fromEntries(ro.lista.map((o) => [o.conversa_id, o]));
     semResposta = rsr && !rsr.error ? Object.fromEntries((rsr.data || []).map((x) => [x.id, x.minutos])) : {};
     vendasDe = Object.fromEntries((rvv.data || []).map((v) => [v.id, v]));
     aguardando = rag.error ? {} : Object.fromEntries((rag.data || []).map((a) => [a.id, a.ult_lead]));
@@ -253,8 +270,17 @@
     const atual = fCidade.value;
     NG.preencherSelect(fCidade, cidades.map((c) => [c, c]), 'Todas as cidades');
     fCidade.value = atual;
+    // 0107: cartão que mudou desde a última recarga acende 2 s (verde). A 1ª carga só grava a assinatura.
+    const primeira = !Object.keys(sigCard).length;
+    convs.forEach((c) => {
+      const q = qd[c.id] || {};
+      const sig = [q.ultima_em, q.coluna, q.vez, q.itens_validados, opDe[c.id] ? 1 : 0, semResposta[c.id] != null ? 1 : 0].join('|');
+      if (!primeira && sigCard[c.id] !== sig) acesos.add(c.id);
+      sigCard[c.id] = sig;
+    });
     contexto();
     render();
+    if (acesos.size) setTimeout(() => { acesos.clear(); document.querySelectorAll('.mav.acende').forEach((x) => x.classList.remove('acende')); }, 2600);
   }
 
   function contexto() {
@@ -341,7 +367,7 @@
     }
     if (s.venda) {
       const j = jorConv[c.id];
-      return j ? NG.passoJornada(j) : { txt: `${s.txt} · seguir na Minha vez`, nivel: 'dim' };
+      return j ? NG.passoJornada(j) : { txt: `${s.txt} · seguir no Live`, nivel: 'dim' };
     }
     if (s.id === 'encerrada' && c.venda_id) return { txt: '', nivel: 'dim' };
     if (s.id === 'humano') {
@@ -522,7 +548,7 @@
   }
   const cmpRank = (a, b) => { const x = rankAcao(a), y = rankAcao(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
 
-  // 0090: "precisa de ação" = v_jornada (a MESMA regra da Minha vez, do menu, do Funil e do Painel). Antes a Mari tinha a sua.
+  // 0090: "precisa de ação" = v_jornada (a MESMA regra do Live, do menu, do Funil e do Painel). Antes a Mari tinha a sua.
   const precisaAcao = (c) => !!(jorConv[c.id] && jorConv[c.id].precisa_acao);
   const naAba = (c, a) => (a === 'acao' ? precisaAcao(c) : true);
   const CHAVES = {
@@ -532,27 +558,143 @@
     ultima: (c) => new Date(ultimaDe(c)).getTime(),
   };
 
-  function renderKpis(b) {
-    const p = per.valor();
-    const doPeriodo = b.filter((c) => NG.noPeriodo(c.created_at, p));
-    const qual = doPeriodo.filter((c) => c.handoff_motivo === 'dados_completos').length;
-    const pct = doPeriodo.length ? Math.round((qual / doPeriodo.length) * 100) : null;
-    const todas = base(false);
-    const agora = todas.filter((c) => c.status === 'ativo' && !c.humano_atribuido).length;
-    const precisam = todas.filter(precisaAcao).length;
-    const agoraN = todas.filter((c) => precisaAcao(c) && jorConv[c.id].nivel === 'agora').length;
-    const errosDia = new Set(erros.filter((e) => NG.diaSP(e.created_at) === NG.diaSP() && todas.some((c) => c.id === e.conversa_id)).map((e) => e.conversa_id)).size;
-    document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: 'Conversas', val: NG.fmtNum(doPeriodo.length), nota: esc(per.rotulo.toLowerCase()),
-        dica: 'Conversas que começaram no período (pela data de abertura), com os filtros de cidade, etapa e origem. Testes ficam fora.' }),
-      NG.kpi({ rot: 'Qualificadas', val: NG.fmtNum(qual), nota: pct == null ? 'nenhuma conversa no período' : `${pct}% de qualificação`, pct,
-        dica: 'Conversas do período que terminaram em handoff com dados completos (a Mari criou a venda em 0 · Qualificado). % = qualificadas ÷ conversas.' }),
-      NG.kpi({ rot: 'Em andamento agora', val: NG.fmtNum(agora), nota: 'com a Mari, sem humano',
-        dica: 'Conversas abertas neste momento que a Mari ainda conduz (status ativo, nenhum humano atribuído). Não depende do período.' }),
-      NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(precisam), cls: agoraN ? 'bad' : precisam ? 'warn' : '',
-        nota: `${NG.fmtNum(agoraN)} para agora · ${NG.fmtNum(errosDia)} com erro hoje`,
-        dica: 'A mesma regra da Minha vez e do menu (v_jornada): pediu um consultor, desconto, reclamação/cliente Nio, "não pedi contato", Mari sem responder, cliente escreveu e ninguém respondeu, mensagem que não saiu — e as vendas dessas conversas com o próximo passo vencendo. Não depende do período.' }),
+  // ------------------------------------------------------------------ 0107: pulso, funil de resultado e feed (tela viva)
+  const pulsoEl = document.getElementById('pulso');
+  const funilEl = document.getElementById('funil');
+  const feedEl = document.getElementById('feed-lista');
+  const EST = {
+    ativa: ['Ativa', 'ok', 'A Mari respondeu há menos de 10 min, ou ninguém está esperando resposta.'],
+    quieta: ['Quieta', 'warn', 'Fora do horário dos toques (seg–sex 9–21, sáb 10–16; nunca domingo/feriado) e ninguém esperando.'],
+    parada: ['Parada?', 'bad', 'Cliente esperando há mais de 3 min sem resposta — o alarme de silêncio já avisou o Ricardo. Veja "sem resposta".'],
+  };
+  const desdeTxt = (iso) => {
+    if (!iso) return '—';
+    const s = Math.max(0, (Date.now() - new Date(iso)) / 1000);
+    return s < 60 ? `${Math.round(s)} s` : s < 3600 ? `${Math.floor(s / 60)} min` : s < 86400 ? `${Math.floor(s / 3600)} h` : `${Math.floor(s / 86400)} d`;
+  };
+  const segTxt = (s) => (s == null ? '—' : s < 60 ? `${Math.round(s)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`);
+  function renderPulso() {
+    const v = aoVivo;
+    if (!v) return;
+    const [rot, cls, dica] = EST[v.estado] || EST.ativa;
+    const px = v.proximo_toque;
+    const waba = { GREEN: ['verde', 'ok'], YELLOW: ['amarela', 'warn'], RED: ['vermelha', 'bad'] }[v.waba_qualidade] || [v.waba_qualidade || '—', ''];
+    const n = Number(v.respondendo_agora || 0);
+    pulsoEl.className = `mav-pulso ${cls}`;
+    pulsoEl.innerHTML = `
+      <div class="it" title="${esc(dica)}"><span class="mav-est"><i class="mav-dot ${cls}" aria-hidden="true"></i><b>${rot}</b></span><small>último turno há <span data-ult>${desdeTxt(v.ultimo_turno_em)}</span></small></div>
+      <div class="it"><b>${n} ${n === 1 ? 'conversa' : 'conversas'}</b><small>respondendo agora (últimos 2 min)</small></div>
+      <div class="it" title="Da mensagem do cliente até a 1ª resposta da Mari, média de hoje (toques da cadência fora)."><b>${segTxt(v.resposta_media_s)}</b><small>tempo médio de resposta hoje</small></div>
+      <div class="it" title="Próximo toque automático da cadência (já no horário do contrato)."><b>${px ? `${esc(px.nome)} · ${esc(PASSO[px.passo] || px.passo)} ${esc(quandoCurto(px.em))}` : 'nenhum agendado'}</b><small>próximo toque · ${NG.fmtNum(v.toques_hoje || 0)} hoje</small></div>
+      <div class="it"><b class="${v.sem_resposta ? 'bad-txt' : 'ok-txt'}">${NG.fmtNum(v.sem_resposta || 0)} sem resposta</b><small>${NG.fmtNum(v.erros_hoje || 0)} ${v.erros_hoje === 1 ? 'erro' : 'erros'} hoje · WABA <span class="${waba[1]}-txt">${esc(waba[0])}</span></small></div>`;
+  }
+  function renderKpis() {
+    if (!aoVivo) { funilEl.innerHTML = ''; return; }
+    const f = aoVivo.funil || {};
+    const neg = aoVivo.em_negociacao || {};
+    const nOp = Object.keys(opDe).length;
+    const pct = f.conversas ? Math.round((Number(f.responderam || 0) * 100) / f.conversas) : null;
+    const caixa = (rot, val, nota, dica, cls = '') => `<div class="mav-f ${cls}" title="${esc(dica)}"><span class="lb">${rot}</span><b>${val}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
+    funilEl.innerHTML = [
+      caixa('Conversas hoje', NG.fmtNum(f.conversas || 0), '', 'Conversas que começaram hoje (a mesma conta do Agente de Tráfego). Testes ficam fora.'),
+      caixa('Responderam', NG.fmtNum(f.responderam || 0), pct == null ? '' : `${pct}%`, 'Das conversas de hoje, as em que o cliente escreveu.'),
+      caixa('CEP válido', NG.fmtNum(f.cep_valido || 0), '', 'Informaram um CEP dentro da área de atuação.'),
+      caixa('Viram planos', NG.fmtNum(f.viram_planos || 0), '', 'A Mari mostrou os planos (carrossel) ou o cliente já escolheu um.'),
+      caixa('Qualificadas', NG.fmtNum(f.qualificadas || 0), '', 'Handoff com dados completos: viraram venda em Lead qualificado.'),
+      caixa('Vendas (mês)', NG.fmtNum(f.vendas_mes || 0), `${NG.fmtNum(f.instaladas_mes || 0)} instaladas · meta ${NG.fmtNum(f.meta || 0)}`, 'Vendas criadas no mês (sem Saída). A meta conta as instaladas.'),
+      caixa('Em negociação', `${NG.fmtMoeda(neg.valor || 0)}/mês`,
+        `${NG.fmtNum(neg.conversas || 0)} ${neg.conversas === 1 ? 'conversa' : 'conversas'} com plano visto ou escolhido · <a href="fila.html">🔥 ${nOp} ${nOp === 1 ? 'oportunidade' : 'oportunidades'}</a>`,
+        'Soma do valor por mês das conversas abertas sem venda que já viram os planos ou escolheram um (sem plano escolhido, conta o mais barato da tabela do cliente). 🔥 = oportunidades no Live.', 'rs'),
     ].join('');
+  }
+  const chaveFeed = (r) => `${r.em}|${r.tipo}|${r.conversa_id || ''}|${r.texto}`;
+  function renderFeed(rows) {
+    const novos = feedVistos ? new Set(rows.filter((r) => !feedVistos.has(chaveFeed(r))).map(chaveFeed)) : new Set();
+    feedVistos = new Set(rows.map(chaveFeed));
+    feedEl.innerHTML = rows.length ? rows.map((r) => {
+      const nome = r.conversa_id && convs.some((c) => c.id === r.conversa_id)
+        ? `<button type="button" class="link" data-abrir="${esc(r.conversa_id)}">${esc(r.nome)}</button>` : `<b>${esc(r.nome)}</b>`;
+      return `<div class="mav-ev ${esc(r.nivel || '')}${novos.has(chaveFeed(r)) ? ' novo' : ''}"><span class="t">${esc(NG.fmtHora(r.em))}</span><span>${nome} · ${esc(r.texto)}</span></div>`;
+    }).join('') : '<span class="apagado">Nada ainda hoje.</span>';
+  }
+  async function carregarVivo() {
+    const [rv, rf] = await Promise.all([NG.sb.rpc('mari_ao_vivo'), NG.sb.from('v_mari_feed').select('*')]);
+    if (rv.error) {
+      pulsoEl.className = 'mav-pulso bad';
+      pulsoEl.innerHTML = `<span>Pulso indisponível: ${esc(NG.msgErro(rv.error))}</span>`;
+    } else {
+      const antes = aoVivo && aoVivo.ultimo_turno_em;
+      aoVivo = rv.data;
+      renderPulso();
+      renderKpis();
+      // Turno novo da Mari → recarrega os cartões (o que mudou acende).
+      if (antes && aoVivo.ultimo_turno_em && aoVivo.ultimo_turno_em !== antes) carregar();
+    }
+    if (!rf.error) renderFeed(rf.data || []);
+  }
+  feedEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-abrir]'); if (b) abrir(b.dataset.abrir); });
+  document.querySelector('.mav-abas-movel').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-mav]');
+    if (!b) return;
+    mainEl.dataset.mav = b.dataset.mav;
+    document.querySelectorAll('[data-mav]').forEach((x) => x.classList.toggle('on', x === b));
+  });
+
+  // ------------------------------------------------------------------ 0107: cartão de 3 linhas
+  // (1) nome · cidade [· BTU] (2) o que está acontecendo, em palavras (3) barra do termômetro + UM chip (o mais importante).
+  function agoraTxt(c) {
+    const q = qd[c.id] || {};
+    if (colDe(c) === 'encerrada') return { txt: `${q.encerrada_txt || 'Encerrada'} · ${ha(ultimaDe(c))}` };
+    if (semResposta[c.id] != null) return { txt: `Cliente sem resposta há ${semResposta[c.id]} min`, cls: 'bad' };
+    const desdeMin = (ts) => (ts ? (Date.now() - new Date(ts)) / 60000 : Infinity);
+    if (q.vez === 'mari') {
+      const m = desdeMin(q.vez_desde || q.ultima_em);
+      if (m < 2) return { txt: 'Mari respondendo…', vivo: true };
+      return { txt: `Vez da Mari ${ha(q.vez_desde || q.ultima_em)}`, cls: m > 15 ? 'bad' : 'warn' };
+    }
+    const j = jorConv[c.id];
+    if (j && j.precisa_acao) return { txt: j.o_que_fazer || 'Precisa de ação do time', cls: j.nivel === 'agora' ? 'bad' : 'warn' };
+    const s = situacao(c);
+    if (s.venda) return { txt: `Venda · ${s.txt}${c.chatwoot_agente ? ` · com ${c.chatwoot_agente}` : ''}` };
+    if (q.coluna === 'humano' || q.vez === 'humano') {
+      return q.vez === 'humano'
+        ? { txt: `Com ${c.chatwoot_agente || 'o time'} · cliente esperando ${ha(q.vez_desde || q.ultima_em)}`, cls: 'warn' }
+        : { txt: `Com ${c.chatwoot_agente || 'o time'} · esperando o cliente ${ha(q.ultima_em)}` };
+    }
+    const toq = toqueTxt(q);
+    const tq = toq ? ` · ${toq.txt}` : '';
+    if (q.coluna === 'planos') {
+      const pl = q.plano_nome || (opDe[c.id] && opDe[c.id].plano);
+      const v = valorDe(c) ?? (opDe[c.id] && opDe[c.id].valor_mes);
+      return { txt: `Viu os planos${pl ? ` (${pl}${v != null ? ` ${NG.fmtMoeda(v)}` : ''})` : ''} · sumiu ${ha(q.ultima_em)}${tq}` };
+    }
+    return { txt: `Esperando o cliente ${ha(q.ultima_em || ultimaDe(c))}${tq}` };
+  }
+  const chipC = (cls, txt, dica) => `<span class="mav-chip ${cls}"${dica ? ` title="${esc(dica)}"` : ''}>${esc(txt)}</span>`;
+  function chipCard(c) {
+    const q = qd[c.id];
+    if (!q) return '';
+    if (opDe[c.id] && colDe(c) !== 'encerrada') return `<span class="mav-fogo" title="${esc(`${opDe[c.id].motivo} — está no Live`)}">🔥 no Live</span>`;
+    const t = TRAVAS.find(([k]) => q[k] === 'bloqueia');
+    if (t) return chipC('r', `✕ ${t[1].bloqueia}`, t[2]);
+    const al = (q.alertas || [])[0];
+    if (al) return chipC('a', `⚠ ${ALERTA[al] || al}`, (q.alertas || []).map((a) => ALERTA[a] || a).join(' · '));
+    const d = c.dados || {};
+    if (d.objecao) return chipC('a', `💬 ${(OBJECAO[d.objecao] || d.objecao).replace('objeção: ', '')}`, 'A Mari contornou uma objeção');
+    const m = q.janela_24h_fecha_em ? (new Date(q.janela_24h_fecha_em) - Date.now()) / 60000 : -1;
+    const jan = janelaTxt(q);
+    if (m > 0 && m <= 240 && colDe(c) !== 'humano') return chipC('a', `⏱ ${jan.txt}`, 'Janela de 24 h do WhatsApp fechando: depois só template.');
+    if (q.pronto_handoff) return chipC('g', '✓ pronto p/ handoff', 'Todos os dados validados e nenhuma trava do contrato.');
+    if (q.trava_viabilidade === 'ok') return chipC('g', '✓ viabilidade ok', TRAVAS[2][2]);
+    if (q.trava_cliente_nio === 'ok' && ['novo', 'qualificando'].includes(q.coluna)) return chipC('g', '✓ não é cliente', TRAVAS[0][2]);
+    if (q.plano_nome) return chipC('', q.plano_nome);
+    if (jan) return chipC('', jan.txt);
+    return '';
+  }
+  function barra(q) {
+    if (!q || !q.itens_total) return '<span class="mav-bar vazia" aria-hidden="true"></span>';
+    const seg = (q.itens || []).filter((i) => i.obrigatorio).map((i) => `<i class="${esc(i.estado)}"></i>`).join('');
+    return `<span class="mav-bar" tabindex="0" title="${esc(`${q.itens_validados}/${q.itens_total} dados validados\n${termoDica(q)}`)}">${seg}</span>`;
   }
 
   function renderAbas(b) {
@@ -560,7 +702,7 @@
     NG.abasPilulas(document.getElementById('abas'), [
       { id: 'todas', nome: 'Todas', n: b.length },
       { id: 'acao', nome: 'Precisam de ação', n: conta('acao'), alerta: true,
-        dica: 'A mesma regra da Minha vez e do menu (v_jornada).' },
+        dica: 'A mesma regra do Live e do menu (v_jornada).' },
     ], aba, (id) => { aba = id; render(); });
   }
 
@@ -586,47 +728,36 @@
     return ord.chave === 'acao' ? l.sort(cmpRank) : NG.ordenar(l, CHAVES, ord);
   };
 
-  // Card do Quadro e do celular: uma linha de status (vez + tempo), termômetro, travas, janela/toque/contador, alertas.
+  // 0107: cartão de 3 linhas (Quadro e celular). O resto (origem/anúncio, contatos, travas, "falta…", selos) está na gaveta.
   function cardHtml(c, { arrastavel = false, tag = 'div' } = {}) {
     const q = qd[c.id];
     const enc = colDe(c) === 'encerrada';
-    const og = origemCard(c, q);
-    const pl = q && q.plano_nome ? q.plano_nome : (plano(c) ? plano(c).nome_curto || plano(c).nome : '');
-    const jan = janelaTxt(q), toq = toqueTxt(q);
-    const l5 = enc ? '' : [jan ? `<span class="${jan.cls}">⏱ ${esc(jan.txt)}</span>` : '', toq ? `<span class="${toq.cls}">${esc(toq.txt)}</span>` : '', contadorHtml(q)].filter(Boolean).join(' · ');
-    const pr = proximo(c);
-    const cls = ['qcard', 'mq', temTrava(q) && !enc ? 'trava' : '', vezAtrasada(q) && !enc ? 'bad' : '', enc ? 'dim' : ''].filter(Boolean).join(' ');
+    const a = agoraTxt(c);
+    const op = !enc && opDe[c.id];
+    const cls = ['qcard', 'mq', 'mav', a.vivo ? 'digitando' : '', op ? 'op' : '', temTrava(q) && !enc ? 'trava' : '', enc ? 'dim' : '', acesos.has(c.id) ? 'acende' : ''].filter(Boolean).join(' ');
     return `<${tag} class="${cls}" data-id="${c.id}" ${tag === 'button' ? 'type="button"' : 'role="button" tabindex="0"'} draggable="${arrastavel}" title="Abrir a conversa">
       <b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}<span class="mq-local">${esc(nomeCurtoLocal(c) ? ` · ${nomeCurtoLocal(c)}` : '')}</span></b>
-      <small${og.title ? ` title="${esc(og.title)}"` : ''}>${esc([og.txt, pl].filter(Boolean).join(' · ') || '—')}</small>
-      ${enc ? `<span class="mq-enc">${esc((q && q.encerrada_txt) || 'Encerrada')} · ${esc(ha(ultimaDe(c)))}</span>` : `<div class="mq-l">${vezHtml(q)}</div>`}
-      ${q && q.itens_total ? `<div class="mq-l">${termometro(q)}</div>` : ''}
-      ${!enc && q ? `<div class="mq-l mq-travas">${travasHtml(q)}${chipObjecao(c)}</div>` : ''}
-      ${l5 ? `<div class="mq-l mq-meta">${l5}</div>` : ''}
-      ${alertasHtml(q) ? `<div class="mq-l">${alertasHtml(q)}</div>` : ''}
-      ${!enc && pr.acao && pr.txt ? `<div class="mq-l">${NG.proxPasso(pr)}</div>` : ''}
-      ${seloHtml(q) ? `<div class="mq-l">${seloHtml(q)}</div>` : ''}
+      <span class="mav-agora ${a.cls || ''}"${op ? ` title="${esc(op.motivo)}"` : ''}>${esc(a.txt)}</span>
+      ${enc ? '' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}
     </${tag}>`;
   }
 
+  // Lista: as mesmas 3 informações por linha (cliente · local | o que está acontecendo | termômetro + chip) + etapa e última.
   function renderLista(lista) {
     tbody.innerHTML = lista.length ? lista.map((c) => {
       const q = qd[c.id];
       const ci = colInfo(colDe(c));
       const enc = colDe(c) === 'encerrada';
-      const toq = toqueTxt(q), jan = janelaTxt(q);
-      const og = origemCard(c, q);
-      return `<tr class="clicavel ${enc ? 'saida' : ''} ${temTrava(q) && !enc ? 'mq-tr-trava' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
-        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small${og.title ? ` title="${esc(og.title)}"` : ''}>${esc([nomeCurtoLocal(c), og.txt].filter(Boolean).join(' · ') || '—')}</small></td>
-        <td><span class="mq-col ${esc(ci.cor || 'muted')}" title="${esc(ci.descricao || '')}">${esc(ci.nome)}</span>${enc && q && q.encerrada_txt ? `<small class="apagado">${esc(q.encerrada_txt)}</small>` : ''}</td>
-        <td>${enc ? '<span class="apagado">—</span>' : vezHtml(q)}</td>
+      const a = agoraTxt(c);
+      const op = !enc && opDe[c.id];
+      return `<tr class="clicavel ${enc ? 'saida' : ''} ${temTrava(q) && !enc ? 'mq-tr-trava' : ''}${op ? ' mav-tr-op' : ''}${acesos.has(c.id) ? ' acende' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(nomeCurtoLocal(c) || '—')}</small></td>
+        <td><span class="mav-agora ${a.cls || ''}${a.vivo ? ' digitando' : ''}"${op ? ` title="${esc(op.motivo)}"` : ''}>${esc(a.txt)}</span></td>
+        <td>${enc ? '<span class="apagado">—</span>' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}</td>
+        <td><span class="mq-col ${esc(ci.cor || 'muted')}" title="${esc(ci.descricao || '')}">${esc(ci.nome)}</span></td>
         <td class="apagado">${esc(ha(ultimaDe(c)))}${q && q.ultima_quem ? `<small>${esc({ cliente: 'cliente', mari: 'Mari', humano: 'humano' }[q.ultima_quem] || '')}</small>` : ''}</td>
-        <td>${termometro(q, { curto: true })}${seloHtml(q) ? `<div>${seloHtml(q)}</div>` : ''}${chipObjecao(c) ? `<div>${chipObjecao(c)}</div>` : ''}</td>
-        <td><div class="mq-travas">${enc ? '' : travasHtml(q, { soProblema: true }) || '<span class="mq-trava ok">✓ ok</span>'}</div></td>
-        <td>${enc ? '' : `${toq ? `<span class="mq-toq ${toq.cls}">${esc(toq.txt)}</span>` : NG.proxPasso(proximo(c))}<small>${jan ? esc(jan.txt) : ''}${q ? ` · ${contadorHtml(q)}` : ''}</small>`}</td>
-        <td>${alertasHtml(q) || '<span class="apagado">—</span>'}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="8" class="vazio">Nenhuma conversa neste filtro</td></tr>';
+    }).join('') : '<tr><td colspan="5" class="vazio">Nenhuma conversa neste filtro</td></tr>';
     cartoesEl.innerHTML = lista.length ? lista.map((c) => cardHtml(c)).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'conversa' : 'conversas'} no filtro`;
   }
@@ -637,7 +768,7 @@
   const faixaFora = document.getElementById('qv-faixa');
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const movel = window.matchMedia('(max-width: 760px)');
-  // 0102: arrastar entre colunas só para admin (o backoffice opera pela Minha vez); celular: sem arrastar (abre a conversa).
+  // 0102: arrastar entre colunas só para admin (o backoffice opera pelo Live); celular: sem arrastar (abre a conversa).
   const podeArrastar = () => ADMIN && !movel.matches;
   let foraAberto = false;
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
@@ -650,6 +781,8 @@
     boardEl.innerHTML = abertas.map((k) => {
       const itens = (por[k.codigo] || []).sort(cmpRank);
       const nAcao = itens.filter(precisaAcao).length;
+      // 0107: coluna vazia vira trilho fino vertical com o nome e 0 (continua aceitando o arrastar).
+      if (!itens.length) return `<section class="col qv-col mav-trilho" data-col="${esc(k.codigo)}" aria-label="${esc(k.nome)} (vazia)" title="${esc(k.descricao || '')}"><span>${esc(k.nome)} · 0</span></section>`;
       return `<section class="col qv-col" data-col="${esc(k.codigo)}" aria-label="${esc(k.nome)}">
         <div class="col-head" title="${esc(k.descricao || '')}"><span class="mq-c-${esc(k.cor || 'muted')}">${esc(k.nome)}</span><span>${NG.fmtNum(itens.length)}${nAcao ? `<span class="c-acao" title="precisam de ação"> · ${NG.fmtNum(nAcao)}!</span>` : ''}</span></div>
         <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((c) => cardHtml(c, { arrastavel: podeArrastar() })).join('') : '<div class="col-vazia">—</div>'}</div>
@@ -803,6 +936,23 @@
     </section>`;
   }
 
+  // 0107: o que saiu do cartão mora aqui — agora, oportunidade, origem/anúncio, próximo toque, janela e contatos.
+  function resumoGaveta(c) {
+    const q = qd[c.id];
+    const og = origemCard(c, q);
+    const toq = toqueTxt(q);
+    const jan = janelaTxt(q);
+    const op = opDe[c.id];
+    return `<section class="d-sec"><h3>Agora</h3>
+      ${linha('O que está acontecendo', esc(agoraTxt(c).txt))}
+      ${op ? linha('🔥 Oportunidade', `${esc(op.motivo)} · <a href="fila.html">no Live →</a>`) : ''}
+      <div class="d-l"${og.title ? ` title="${esc(og.title)}"` : ''}><span>Origem · anúncio</span><b>${esc(og.txt || '—')}</b></div>
+      ${linha('Próximo toque', esc(toq ? toq.txt : '—'))}
+      ${linha('Janela de 24 h', esc(jan ? jan.txt : '—'))}
+      ${q ? linha('Contatos', esc(NG.contatosTxt(q.contatos_hoje, q.contatos_mes, teto))) : ''}
+    </section>`;
+  }
+
   async function abrir(id) {
     const c = convs.find((x) => x.id === id);
     if (!c) return;
@@ -840,6 +990,7 @@
     const errs = errosDe(c.id);
     corpo.innerHTML = `
       ${pr.txt ? `<div class="faixa ${pr.nivel === 'bad' ? 'vermelho' : pr.nivel === 'warn' ? 'amarelo' : 'cinza'}">Próximo passo: ${esc(pr.txt)}</div>` : ''}
+      ${resumoGaveta(c)}
       ${termoGaveta(c)}
       <section class="d-sec"><h3>Conversa</h3><div class="conversa">${baloes}</div></section>
       <section class="d-sec"><h3>Dados coletados</h3>
@@ -878,7 +1029,7 @@
       ${errs.length ? `<section class="d-sec"><h3>Erros (7 dias)</h3>${errs.map((e) => `<div class="faixa vermelho"><b>${esc(NG.fmtDataHora(e.created_at))} · ${esc(e.no_n8n || '')}</b>${esc(e.mensagem || '')}</div>`).join('')}</section>` : ''}
     `;
     // 0102 (Ricardo, 10/11): tela Mari = supervisão do piloto automático. Para operar, só Assumir; o resto se faz na ficha
-    // (Minha vez). Saíram daqui: Devolver para a Mari, Cliente pediu para parar, Abrir no Chatwoot.
+    // (Live). Saíram daqui: Devolver para a Mari, Cliente pediu para parar, Abrir no Chatwoot.
     const links = [];
     if (c.chatwoot_conversation_id && !c.chatwoot_agente && !c.humano_atribuido && !c.nao_contatar) links.push(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
     links.push(c.venda_id ? `<a class="btn" href="#venda=${esc(c.venda_id)}">Abrir ficha</a>` : `<a class="btn" href="#conversa=${esc(c.id)}">Abrir ficha</a>`);
@@ -918,8 +1069,12 @@
   NGFicha.iniciar();   // mari.html#venda=<id> abre a ficha direto
   // Atualiza sozinha a cada minuto com a aba visível (filtros, vista e aba ficam); Atualizar recarrega na hora.
   setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
-  NG.botaoAtualizar(() => carregar());   // 09/11: o ↻ antigo virou o botão Atualizar comum
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { carregar(); carregarVivo(); } });
+  // 0107: pulso + feed a cada 15 s com a aba visível; "último turno há…" anda a cada 5 s.
+  carregarVivo();
+  setInterval(() => { if (document.visibilityState === 'visible') carregarVivo(); }, 15000);
+  setInterval(() => { const u = pulsoEl.querySelector('[data-ult]'); if (u && aoVivo) u.textContent = desdeTxt(aoVivo.ultimo_turno_em); }, 5000);
+  NG.botaoAtualizar(() => { carregar(); carregarVivo(); });   // 09/11: o ↻ antigo virou o botão Atualizar comum
 })();
 </script>
 </body>

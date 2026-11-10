@@ -1,6 +1,6 @@
 /* NIOGEN | docs/assets/conversa.js | 09/11/2026 — Claude Code
  * A conversa do cliente DENTRO do NIOGEN, no jeito do WhatsApp Web. Um componente, três lugares: Conversas (conversas.html),
- * Minha vez (no lugar da lista) e a ficha (painel à esquerda da gaveta).
+ * Live (no lugar da lista) e a ficha (painel à esquerda da gaveta).
  * rev. 09/11 ~23h (Ricardo: "Enter falhando… telas não estão robustas… funcionamento similar ao WhatsApp Web"):
  *   · O esqueleto é montado UMA vez. A caixa de digitar nunca é redesenhada: o texto e o cursor ficam onde estão. Antes, cada
  *     atualização redesenhava tudo — depois do Enter o texto voltava para a caixa e o cursor sumia (parecia que não enviou).
@@ -116,8 +116,16 @@
       const sigFala = `${st.d.turnos.length}:${ultT ? ultT.id : ''}|${st.d.acoes.map((a) => `${a.id}:${a.status}`).join(',')}`;
       if (st.sigFala != null && st.sigFala !== sigFala && o.aoMudar) o.aoMudar({ eco: true });
       st.sigFala = sigFala;
+      // 0107 (🔥 oportunidade no Live): o texto sugerido entra na caixa, editável; a 1ª mensagem sai pela oportunidade_enviar.
+      if (o.oportunidade && !st.opPosta) {
+        st.opPosta = true;
+        if (o.oportunidade.template) st.tpl = o.oportunidade.template;
+        ta.value = o.oportunidade.texto || '';
+        st.foco = true;
+      }
       desenhar();
-      if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); st.foco = false; }
+      if (o.oportunidade && st.opPosta) ajusta();
+      if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); st.foco = false; }
     }
 
     const meuNome = () => ((NG.usuario || {}).nome || '').trim();
@@ -238,8 +246,10 @@
       const opRap = `<option value="">Respostas rápidas…</option>${usaTpl ? '' : st.d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
         ${!st.nota && st.d.tpls.length ? `<optgroup label="Templates aprovados">${st.d.tpls.map((t) => `<option value="t:${esc(t.nome)}">${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}`;
       if (st.sig.rap !== opRap && document.activeElement !== selRap) { st.sig.rap = opRap; selRap.innerHTML = opRap; }
+      const op = o.oportunidade && !st.nota;
       const aj = st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
         : st.nota ? 'Nota privada: só o time vê.'
+        : op ? `🔥 Oportunidade · ${o.oportunidade.assumir ? 'você assume a conversa (a Mari cala)' : 'a Mari segue a conversa depois (sem dono)'} · nunca desconto nem data de instalação`
         : st.tpl ? 'Template escolhido · Esc cancela'
         : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
         : dn.v === 'eu' ? 'Você é o dono · a Mari está calada.' : 'Enviar assume a conversa (a Mari cala).';
@@ -252,7 +262,9 @@
       if (!st.d) return;
       const txt = ta.value.trim();
       if (!st.tpl && !txt) { ta.focus(); return; }
-      const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, tpl: st.nota ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando' };
+      const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, tpl: st.nota ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando',
+        op: !st.nota && o.oportunidade ? o.oportunidade : null };
+      if (item.op) o.oportunidade = null;   // só a 1ª mensagem é a da oportunidade
       st.locais.push(item);
       ta.value = '';
       st.tpl = null;
@@ -263,9 +275,13 @@
       st.fila = st.fila.then(() => enviarUm(item));
     }
     async function enviarUm(item) {
-      const { data, error } = await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_nota: item.nota, p_template: item.tpl });
+      const { data, error } = item.op
+        ? await NG.sb.rpc('oportunidade_enviar', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_assumir: !!item.op.assumir, p_template: item.tpl })
+        : await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_nota: item.nota, p_template: item.tpl });
+      if (item.op && !error) NG.toast(data && data.resumo ? data.resumo : 'Mensagem enviada', 'ok');
       if (!st.vivo) return;
       if (error) {
+        if (item.op && !o.oportunidade) o.oportunidade = item.op;   // não saiu: o reenvio volta pela oportunidade
         item.estado = 'erro';
         item.erro = NG.msgErro(error);
         NG.toast(item.erro, 'bad');

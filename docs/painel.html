@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-11">
-<script src="config.js?v=101126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-12">
+<script src="config.js?v=101126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-11"></script>
-<script src="assets/sidebar.js?v=101126-11"></script>
-<script src="assets/conversa.js?v=101126-11"></script>
-<script src="assets/ficha.js?v=101126-11"></script>
+<script src="assets/app.js?v=101126-12"></script>
+<script src="assets/sidebar.js?v=101126-12"></script>
+<script src="assets/conversa.js?v=101126-12"></script>
+<script src="assets/ficha.js?v=101126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -52,6 +52,8 @@
     <section class="funil-mes" id="funil-mes" aria-label="Funil do mês"></section>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+    <!-- 0107: 🔥 oportunidades (só admin/backoffice) — mostradas · enviadas · responderam · qualificaram · pedidos (7 dias no mouse) -->
+    <a class="painel-op" id="op-linha" href="fila.html" hidden></a>
 
     <section class="painel" aria-labelledby="t-acao">
       <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=acao" id="ver-acao">ver todas →</a></div>
@@ -104,8 +106,20 @@
     render();
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
+  // 0107: linha "🔥 Oportunidades hoje" — atualiza os resultados (idempotente) e lê o resumo de hoje e de 7 dias.
+  async function carregarOportunidades() {
+    const el = document.getElementById('op-linha');
+    await NG.sb.rpc('oportunidades_atualizar');
+    const { data, error } = await NG.sb.rpc('oportunidades_resumo', { p_dias: 7 });
+    if (error || !data) { el.hidden = true; return; }
+    const h = data.hoje || {}, p = data.periodo || {}, k = data.controle || {};
+    const n = (x) => NG.fmtNum(Number(x || 0));
+    el.innerHTML = `<b>🔥 Oportunidades hoje:</b> ${n(h.mostradas)} mostradas · ${n(h.enviadas)} enviadas · ${n(h.responderam)} responderam · ${n(h.qualificaram)} qualificaram · ${n(h.pedidos)} pedidos <span class="apagado">· ver no Live →</span>`;
+    el.title = `Últimos ${p.dias || 7} dias: ${n(p.mostradas)} mostradas · ${n(p.enviadas)} enviadas · ${n(p.dispensadas)} dispensadas · ${n(p.responderam)} responderam em 24 h · ${n(p.qualificaram)} qualificaram · ${n(p.pedidos)} pedidos.\nControle (mostradas sem mensagem do time): ${n(k.sem_mensagem)}, das quais ${n(k.responderam)} responderam em 24 h mesmo assim.`;
+    el.hidden = false;
+  }
   async function carregarExtras() {
-    if (veMari) carregarAlarmes();
+    if (veMari) { carregarAlarmes(); carregarOportunidades(); }
     const [rz, rmari, rp, rres] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
@@ -170,7 +184,7 @@
     const card = document.getElementById('and-card');
     if (card && an) {
       const lista = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip dim">${esc(k)} <b>${NG.fmtNum(n)}</b></span>`).join(' ') || '<span class="nota-campo">nenhum</span>';
-      card.innerHTML = `<div class="q-linha"><h2>Andamento na Nio</h2><a class="muted" href="fila.html">Minha vez →</a></div>
+      card.innerHTML = `<div class="q-linha"><h2>Andamento na Nio</h2><a class="muted" href="fila.html">Live →</a></div>
         <div><span class="nota-campo">Portal PAP (pedidos de Venda):</span> ${lista(an.por_status_portal)}</div>
         <div><span class="nota-campo">Biometria GED360 (30 dias):</span> ${lista(an.por_resultado_bio)}</div>
         <span class="nota-campo">Portal lido ${an.portal_ultima_leitura ? esc(NG.fmtDataHora(an.portal_ultima_leitura)) : '—'} · GED360 ${an.ged360_ultima_ok ? esc(NG.fmtDataHora(an.ged360_ultima_ok)) : '—'}${an.casar_pedido ? ` · <b>${NG.fmtNum(an.casar_pedido)} pedido(s) para casar</b>` : ''}${an.bio_sem_venda ? ` · ${NG.fmtNum(an.bio_sem_venda)} biometria(s) sem venda` : ''}</span>`;
@@ -210,7 +224,7 @@
     // 0087 (Ricardo, 09/11): a meta conta INSTALADAS (sem Saída — a mesma conta da faixa e do resumo diário); vendas (OS) ao lado.
     const inst = vendas.filter((v) => v.instalado_em && v.status !== 'saida' && NG.noPeriodo(v.instalado_em, p));
     const aguard = V.filter((v) => ['1_vendido', '2_aguardando_instalacao'].includes(v.status)).length;
-    // 0090: "Precisam de ação" = v_jornada (a mesma lista da Minha vez e o mesmo número do menu), conversas incluídas.
+    // 0090: "Precisam de ação" = v_jornada (a mesma lista do Live e o mesmo número do menu), conversas incluídas.
     const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
     const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
     const acao = jor.lista.filter((j) => j.precisa_acao).sort(NG.ordemJornada);
@@ -226,7 +240,7 @@
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',
         nota: acao.length ? `${NG.fmtNum(verm)} para agora (cliente esperando ou prazo do contrato)` : 'nada pendente ✓',
-        dica: 'O mesmo número da Minha vez e do menu (v_jornada): conversas esperando o time e vendas com o próximo passo vencendo. Pendência com terceiro só entra na data de revisão. Não depende do período.' }),
+        dica: 'O mesmo número do Live e do menu (v_jornada): conversas esperando o time e vendas com o próximo passo vencendo. Pendência com terceiro só entra na data de revisão. Não depende do período.' }),
     ].join('');
 
     // ---------- Precisam de ação agora (8 primeiras) ----------
@@ -239,7 +253,7 @@
         <span class="la-prox">${NG.proxPasso(NG.passoJornada(j))}</span>
       </a>`).join('') : '<div class="vazio-curto">Nada pendente agora ✓</div>';
     const va = document.getElementById('ver-acao');
-    va.textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver na Minha vez →';
+    va.textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver no Live →';
     va.href = ['admin', 'backoffice'].includes(eu.perfil) ? 'fila.html' : 'vendas.html?vista=lista&aba=acao';
 
     // ---------- blocos curtos ----------
@@ -288,10 +302,10 @@
     </section>`);
     // Mari: conversas que precisam de humano (só admin/backoffice veem a Mari)
     if (veMari) {
-      // 0090: as conversas que precisam de ação pela regra única (v_jornada) — as mesmas da Minha vez.
+      // 0090: as conversas que precisam de ação pela regra única (v_jornada) — as mesmas do Live.
       const lista = jor.lista.filter((j) => j.conversa_id && j.precisa_acao).sort(NG.ordemJornada);
       blocos.push(`<section class="painel bloco-curto">
-        <div class="q-linha"><h2>Conversas · precisam de ação</h2><a class="muted" href="fila.html">Minha vez →</a></div>
+        <div class="q-linha"><h2>Conversas · precisam de ação</h2><a class="muted" href="fila.html">Live →</a></div>
         <div class="bc-num"><span class="mono ${lista.length ? 'warn-txt' : ''}">${NG.fmtNum(lista.length)}</span><span class="muted">conversa${lista.length === 1 ? '' : 's'} esperando o time</span></div>
         ${lista.slice(0, 4).map((j) => `<a class="bc-linha" href="${j.venda_id ? `#venda=${esc(j.venda_id)}` : `fila.html#conversa=${esc(j.conversa_id)}`}"><span>${esc(NG.primeiroNome(j.nome))}</span><span class="muted">${esc(j.o_que_fazer)}</span></a>`).join('')}
         ${mari && (mari.semVenda || []).length ? (mari.semVenda.slice(0, 3).map((c) => `<a class="prox bad" href="mari.html?conversa=${esc(c.id)}" title="Dados completos, mas a venda não foi criada (duplicidade ou outro erro) — o backoffice decide">⚠️ Venda não criada · ${esc(c.nome_contato || 'Contato')} · ${esc(NG.quando(c.handoff_em))} ${esc(NG.fmtHora(c.handoff_em))}</a>`).join('')) : ''}

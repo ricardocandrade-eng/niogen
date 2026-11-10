@@ -8,8 +8,8 @@
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
  * 08/11: link discreto "Guia do Backoffice" sob a data/versão (guia.html), com "• atualizado" se o guia foi publicado depois da
  * última leitura (localStorage niogen.guia.visto, em try/catch).
- * 09/11 (0082, prompt fluxo único): "Minha vez" (fila.html) é a 1ª do menu para admin/backoffice.
- * 09/11 (0090, jornada única): Minha vez, Funil e Mari contam pela MESMA regra — v_jornada.precisa_acao.
+ * 09/11 (0082, prompt fluxo único): "Live" (fila.html) é a 1ª do menu para admin/backoffice.
+ * 09/11 (0090, jornada única): Live, Funil e Mari contam pela MESMA regra — v_jornada.precisa_acao.
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
  */
 (function () {
@@ -19,7 +19,9 @@
 
   const MENU = [
     ['Backoffice', [
-      { id: 'minhavez', ico: '☰', nome: 'Minha vez', href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila' },
+      // 10/11 (Ricardo, 14h14): "Minha vez" passou a se chamar Live (arquivo e rota iguais). Bolinha vermelha discreta à
+      // esquerda do nome; número verde = só obrigação (v_jornada) · selo laranja 🔥 N = oportunidades (0107), nunca somados.
+      { id: 'minhavez', ico: '☰', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
     ]],
     ['Gestão', [
@@ -64,8 +66,9 @@
   function item(it, ativo) {
     // esconder: o item some (em vez de "em breve") para quem não tem o perfil — ex.: vendedor não vê a Mari.
     if (it.esconder && it.perfis && !it.perfis.includes((NG.usuario || {}).perfil)) return '';
-    const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${NG.esc(it.nome)}` +
+    const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${it.vivo ? '<span class="live-dot" aria-hidden="true"></span>' : ''}${NG.esc(it.nome)}` +
       (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '') +
+      (it.badge2 ? `<span class="badge fogo" data-badge="${it.badge2}" hidden></span>` : '') +
       (it.breve ? '<span class="tag-breve">em breve</span>' : '');
     // Telas "em breve" (05/11): abrem embreve.html com a frase do que vão mostrar, e o menu marca a atual.
     if (it.breve) return `<a class="nav-item breve${ativo ? ' ativo' : ''}" href="embreve.html?tela=${it.id}"${ativo ? ' aria-current="page"' : ''}>${conteudo}</a>`;
@@ -135,14 +138,14 @@
   function pinta(nav, chave, n, cls, titulo) {
     const el = nav.querySelector(`[data-badge="${chave}"]`);
     if (!el) return;
-    el.textContent = n || '';
+    el.textContent = n ? (chave === 'oport' ? `🔥 ${n}` : n) : '';
     el.hidden = !n;
-    el.className = `badge${cls ? ` ${cls}` : ''}`;
+    el.className = `badge${chave === 'oport' ? ' fogo' : ''}${cls ? ` ${cls}` : ''}`;
     el.title = titulo;
     const item = el.closest('.nav-item');
     if (item) item.title = n ? titulo : '';
   }
-  // 0090: os três números saem da MESMA regra (v_jornada.precisa_acao): Minha vez = todos · Funil = os que têm venda ·
+  // 0090: os três números saem da MESMA regra (v_jornada.precisa_acao): Live = todos · Funil = os que têm venda ·
   // Mari = os que têm conversa. Funil soma as vendas novas em Lead qualificado desde a última visita.
   async function avisos(nav) {
     const u = NG.usuario || {};
@@ -157,17 +160,20 @@
       pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} esperando abrir a OS ou agendar a instalação (contrato: até 4 h da biometria).`);
       if (['admin', 'backoffice'].includes(u.perfil)) {
         // 10/11 (Ricardo: "não pode o mesmo cliente trazer 2 notificações no menu lateral"): cada cliente conta UMA vez.
-        // Minha vez conta tudo o que precisa de ação; Mari não repete esse número; Conversas conta só quem espera e NÃO está na Minha vez.
+        // Live conta tudo o que precisa de ação; Mari não repete esse número; Conversas conta só quem espera e NÃO está no Live.
         pinta(nav, 'mari', 0, 'info', '');
         pinta(nav, 'fila', acao.length, verm(acao) ? 'alerta' : 'info',
           `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
         total = acao.length;
-        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time) — fora os da Minha vez.
+        // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
+        const op = await NG.oportunidades(j);
+        if (!op.erro) pinta(nav, 'oport', op.lista.length, '', `${op.lista.length} ${op.lista.length === 1 ? 'oportunidade' : 'oportunidades'}: a Mari acha que uma mensagem sua esquenta a conversa. Não é obrigação.`);
+        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time) — fora os do Live.
         // 0102: esse número deveria ser sempre 0; cada conversa contada é furo da v_jornada e fica gravada (NG.furosJornada).
         const fu = await NG.furosJornada(j);
         if (!fu.erro) {
           const n = fu.ids.size;
-          pinta(nav, 'conversas', n, n ? 'alerta' : 'info', n ? `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais FORA da Minha vez — deveria ser 0 (defeito registrado para corrigir).` : '');
+          pinta(nav, 'conversas', n, n ? 'alerta' : 'info', n ? `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais FORA do Live — deveria ser 0 (defeito registrado para corrigir).` : '');
         }
       }
       if (nav.querySelector('[data-badge="vendas"]')) {

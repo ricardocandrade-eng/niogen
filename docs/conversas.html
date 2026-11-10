@@ -2,7 +2,7 @@
 <!-- NIOGEN | docs/conversas.html | 09/11/2026 — Claude Code
      "Conversas": todas as conversas do WhatsApp num lugar só, como o Chatwoot (Ricardo, 09/11 ~19h40: "tá difícil ter que ir atrás do
      cliente para falar com ele quando preciso"). À esquerda a lista (v_conversas, 0094: última mensagem, cliente esperando, dono,
-     etapa), com busca e filtros; à direita a conversa — o mesmo componente da Minha vez (assets/conversa.js: status, atribuição,
+     etapa), com busca e filtros; à direita a conversa — o mesmo componente do Live (assets/conversa.js: status, atribuição,
      etiquetas, Responder | Nota privada, respostas rápidas, Enter envia). "Abrir a ficha" abre a ficha em gaveta.
      Endereço direto: conversas.html#c=<id>. Só admin/backoffice (a tabela da Mari só abre para eles). -->
 <html lang="pt-BR">
@@ -16,13 +16,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-11">
-<script src="config.js?v=101126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-12">
+<script src="config.js?v=101126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-11"></script>
-<script src="assets/sidebar.js?v=101126-11"></script>
-<script src="assets/conversa.js?v=101126-11"></script>
-<script src="assets/ficha.js?v=101126-11"></script>
+<script src="assets/app.js?v=101126-12"></script>
+<script src="assets/sidebar.js?v=101126-12"></script>
+<script src="assets/conversa.js?v=101126-12"></script>
+<script src="assets/ficha.js?v=101126-12"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -59,7 +59,7 @@
   const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* */ } } };
 
   let lista = [];
-  let furos = new Set();   // 0102: esperando há 3 min ou mais e fora da Minha vez = "deveria estar na Minha vez"
+  let furos = new Set();   // 0102: esperando há 3 min ou mais e fora do Live = "deveria estar no Live"
   let filtro = ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
   let atual = null;     // id da conversa aberta
   let comp = null;      // NGConversa
@@ -116,7 +116,7 @@
         <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(c.dono_nome === eu.nome ? 'você' : c.dono_nome)}` : 'sem dono'}
           ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
           ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
-          ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora da Minha vez: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar na Minha vez</span>' : ''}</span>
+          ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>' : ''}</span>
       </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
   }
 

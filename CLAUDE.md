@@ -122,6 +122,51 @@ sessão** `docs/BACKOFFICE_chatwoot_com_a_mari_051126_1045.md` (pasta `dharmapro
 **todo prompt do Code (regra 9) traz o item "atualizar o guia do backoffice"** ou diz explicitamente "guia do backoffice: sem impacto".
 Nada está "pronto" com o guia desatualizado.
 
+<!-- 10/11/2026 (Claude Code, prompt Prompt_mari_ao_vivo_oportunidades_101126_1400): regras 14–18 copiadas da pasta dharmapro-nio (rev. 10/11 14:00) — a pasta é a fonte; as regras 1–13 deste espelho podem estar defasadas (ver a pasta). -->
+### 14. Anúncio de imagem: cada posicionamento com a sua arte (06/11/2026)
+Todo anúncio de imagem nasce com **1x1 (1080×1080) e 9x16 (1080×1920)** e personalização por posicionamento:
+9x16 em **todas** as posições verticais (`instagram story/reels/profile_reels/reels_overlay`, `facebook story/facebook_reels/facebook_reels_overlay`,
+`messenger story`, `whatsapp status`) e **regra de fallback 1x1** para o resto. Advantage+ criativo e corte/ampliação automáticos sempre desligados.
+O script recusa criativo fora disso (`validar_criativo`, prompt 25). **Nada vai ao ar sem a prévia de Stories conferida** (9x16 servida) e,
+24 h depois, um print real de Stories. Edição sugerida pela IA da Meta (textos/títulos gerados) não se publica sem revisão.
+
+### 15. Construir como se houvesse mais de um parceiro (07/11/2026)
+Não se constrói multi-parceiro agora, mas nada fecha essa porta (ideia para 2027: `docs/IDEIA_NIOGEN_outros_PAPs_071126_0010.md`).
+- **Toda tabela de operação nova nasce com `parceiro_id`** (hoje um único valor: Dharma). Tabela antiga ganha a coluna quando for mexida.
+- **Nada fixo no código:** comissões, cidades, prazos do contrato, IDs Meta/WABA, links e logins do portal ficam em config no Supabase.
+- **Núcleo × módulos da Dharma:** regras do contrato e importadores dos relatórios da Nio são núcleo; **Mari** e **Fila Vero** são módulos desligáveis — o NIOGEN funciona sem eles.
+- **Cada importador de relatório da Nio é peça isolada**, testada contra `referencia-nio/`.
+Todo prompt do Claude Code (regra 9) respeita estes quatro pontos ou diz por que não.
+
+### 16. Painéis e integrações da Meta: fazer, não perguntar — e avisar logo em seguida (Ricardo, 07/11/2026)
+Claude Code e Cowork têm **autonomia total** no trabalho do projeto Nio, **sem perguntar antes**: app NIOGEN (developers.facebook.com: webhooks,
+campos assinados, casos de uso, permissões), WABA Nio, BM Dharma, CA Nio — inclusive **ativar, pausar e mudar verba de campanha**, apagar,
+remover ou desinscrever, e mexer no app Renata Digital quando a tarefa da Nio exigir (ampliado no mesmo dia: "Pode incluir tudo!").
+**Obrigação em troca:** sinalizar ao Ricardo **logo depois** o que foi feito (mensagem no chat), e registrar no Diário (+ INFRA se mudou endereço/ID).
+Limites que não dependem desta regra (regras de segurança do próprio Claude): ele não digita senha nem token em campo de site (o Ricardo cola),
+não executa pagamento nem transferência, e, no navegador, ainda pode confirmar na hora um clique irreversível. Tarefas da **Vero** fora do
+projeto Nio seguem o `CLAUDE.md` da raiz.
+
+
+### 17. Venda e resultado primeiro (Ricardo, 08/11/2026 13h09)
+"Vender é mais importante do que seguir todas essas regras. Precisamos pensar em venda, resultado!"
+- A meta (30 · 50 · 70 planos) manda. Toda proposta começa por **quanto ela aproxima da venda** e **quão rápido**.
+- **Cautela interna não segura venda:** esperar aprendizado da Meta, medição "limpa", volume mínimo de conversas, uma mudança por vez, documentação antes de agir — nada disso adia o que vende mais. Faz agora, mede depois, corrige rápido.
+- **Velocidade no contato:** lead que chegou é atendido e retomado o mais rápido que o contrato permite. Na dúvida entre esperar e agir, **agir**.
+- **O que trava de verdade é pouco:** o contrato com a Nio (sem desconto fora da tabela, biometria, não vender a quem já é cliente — porque quebrar vira estorno/multa e anula a venda) e segurança (regra 5). O resto das regras deste arquivo é **forma de trabalhar**: se atrasar uma venda, a venda vence e o Ricardo é avisado.
+- Governança (Diário, INFRA, guia, Trello) se faz **junto ou logo depois**, nunca **antes** do que vende.
+
+### 18. Tudo é resultado: o NIOGEN caça venda, receita e caixa o tempo todo (Ricardo, 10/11/2026 13h55)
+"O Niogen deve ser um sistema que busca oportunidade de venda, de receita e de controle financeiro a todo momento. Tudo dele deve ser voltado em RESULTADO!"
+- Toda tela responde primeiro **quanto isso vira de venda ou receita e o que fazer agora para pegar** — números em planos e R$, não em atividade.
+- **O sistema procura a oportunidade sozinho** (lead esquentável, janela de 24 h fechando, objeção parada, fatura em aberto antes do D+5, M-10 em risco,
+  estorno evitável, comissão não conciliada, verba Meta sem retorno) e a manda para o **Live** (antiga Minha vez) com o motivo, o valor em jogo e a ação de 1 clique.
+  Oportunidade não entra no contador de obrigação: tem selo próprio (🔥).
+- Cartão = **quem · onde está · quanto vale · o que fazer**. Informação que não muda uma decisão vai para a gaveta.
+- Sucesso de uma entrega = planos vendidos, receita confirmada, estorno ou inadimplência evitados. "Deploy ok" ou tela bonita não contam.
+- Todo prompt do Code (regra 9) diz **que resultado persegue e como medir em 7 dias**; toda oportunidade criada registra se foi usada e no que deu.
+- Limites que continuam: contrato (regra 1) e segurança (regra 5).
+
 ---
 
 ## Regras de conteúdo da Mari (valem para prompt, base e templates)

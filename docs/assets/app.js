@@ -36,7 +36,7 @@
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
 
   // A jornada (0089; nomes do Ricardo 09/11 ~23h55): 1 Conversa · 2 Lead qualificado · 3 Biometria · 4 Ativação/Agenda · 5 Instalada · Saída.
-  // A etapa 1 (conversa sem venda) não tem venda: aparece só na Minha vez (v_jornada). Ids curtos ficam nas URLs.
+  // A etapa 1 (conversa sem venda) não tem venda: aparece só no Live (v_jornada). Ids curtos ficam nas URLs.
   const JORNADA = [
     { n: 1, id: 'conversa', nome: 'Conversa', cor: '#6B8AFD' },
     { n: 2, id: 'qualificado', nome: 'Lead qualificado', cor: '#5FB3F9' },
@@ -71,8 +71,16 @@
       porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
     };
   }
-  // 0102 (10/11, papel das 3 telas): Conversas deveria contar SEMPRE 0 — cliente esperando há 3 min ou mais que NÃO está na
-  // Minha vez é furo da v_jornada. Devolve os ids (selo "deveria estar na Minha vez") e grava o rastro em mari_erros
+  // 0107: 🔥 oportunidades (v_oportunidades) — fora as conversas que já estão em "Para fazer" (v_jornada.precisa_acao):
+  // oportunidade nunca entra no contador de obrigação nem repete uma linha que já pede ação.
+  async function oportunidades(j) {
+    const { data, error } = await sb.from('v_oportunidades').select('*').order('ordem');
+    if (error) return { erro: msgErro(error), lista: [] };
+    const acao = new Set(((j && j.lista) || []).filter((x) => x.precisa_acao && x.conversa_id).map((x) => x.conversa_id));
+    return { lista: (data || []).filter((o) => !acao.has(o.conversa_id)) };
+  }
+  // 0102 (10/11, papel das 3 telas): Conversas deveria contar SEMPRE 0 — cliente esperando há 3 min ou mais que NÃO está no
+  // Live (antiga Minha vez) é furo da v_jornada. Devolve os ids (selo "deveria estar na Minha vez") e grava o rastro em mari_erros
   // (no_n8n = 'jornada_furo', 1 linha por conversa por dia — o banco deduplica).
   async function furosJornada(j) {
     const jj = j || await jornada();
@@ -96,7 +104,7 @@
   }
   const noTetoContato = (hoje, mes, t) => !!t && ((t.dia != null && (hoje || 0) >= t.dia) || (t.mes != null && (mes || 0) >= t.mes));
   const contatosTxt = (hoje, mes, t) => `hoje ${hoje || 0}${t && t.dia != null ? `/${t.dia}` : ''} · mês ${mes || 0}${t && t.mes != null ? `/${t.mes}` : ''}`;
-  // Rótulo do botão do próximo passo (v_jornada.botao) — o mesmo da Minha vez.
+  // Rótulo do botão do próximo passo (v_jornada.botao) — o mesmo do Live.
   const BOTAO_PASSO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', biometria: 'Biometria',
     os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
@@ -324,7 +332,7 @@
     return data;
   }
 
-  // Fila "Minha vez": desde a 0090 vem inteira da v_jornada (NG.jornada) — a mesma regra do menu, do Funil, do Painel e da Mari.
+  // Fila "Live": desde a 0090 vem inteira da v_jornada (NG.jornada) — a mesma regra do menu, do Funil, do Painel e da Mari.
 
   // ---------- comissão: prevista / paga · M-10 · downgrade ----------
   // Único lugar dos textos de explicação (Funil, Venda, Painel, Vendas e Tabela usam daqui).
@@ -1183,7 +1191,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, oportunidades, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)

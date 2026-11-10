@@ -1,6 +1,9 @@
 <!doctype html>
 <!-- NIOGEN | docs/fila.html | 09/11/2026 — Claude Code
-     "Minha vez": a tela de rotina do backoffice (1ª do menu).
+     "Live" (antiga "Minha vez", renomeada em 10/11 14h14): a tela de rotina do backoffice (1ª do menu).
+     10/11 (0107 · docs/Prompt_mari_ao_vivo_oportunidades_101126_1400.md): grupo "🔥 Oportunidades" entre Para fazer e Acompanhando —
+     v_oportunidades sem as que já pedem ação; Mandar mensagem abre a conversa aqui com o texto sugerido na caixa (Enter manda pela
+     oportunidade_enviar: a Mari segue) · ▾ Mandar e assumir · Agora não (motivo em 1 clique, some até amanhã).
      09/11 (0089/0090 · docs/Prompt_ajustes_operacao_ficha_conversa_091126_1535.md · ponto 5): tudo vem da v_jornada (a regra única de
      "precisa de ação" — o mesmo número do menu, do Funil, do Painel e da Mari). Funil fino com as 5 etapas (total + "sua vez N",
      clique filtra) · abas Sua vez | Todas · Lista | Quadro (uma coluna por etapa; o card só muda pelo botão, sem arrastar) · ficha ao
@@ -14,19 +17,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0E1116">
-<title>Minha vez · NIOGEN</title>
+<title>Live · NIOGEN</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-11">
-<script src="config.js?v=101126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-12">
+<script src="config.js?v=101126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-11"></script>
-<script src="assets/sidebar.js?v=101126-11"></script>
-<script src="assets/conversa.js?v=101126-11"></script>
-<script src="assets/ficha.js?v=101126-11"></script>
+<script src="assets/app.js?v=101126-12"></script>
+<script src="assets/sidebar.js?v=101126-12"></script>
+<script src="assets/conversa.js?v=101126-12"></script>
+<script src="assets/ficha.js?v=101126-12"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -34,7 +37,7 @@
   <main class="main mv">
     <header class="cab">
       <div>
-        <h1>Minha vez</h1>
+        <h1 class="live-tit"><span class="live-dot" aria-hidden="true"></span>Live</h1>
         <div class="sub" id="sub">Pegue a primeira linha e aperte o botão — a ficha abre ao lado. O NIOGEN cuida do Chatwoot.</div>
       </div>
       <div class="cab-acoes" id="cab-acoes">
@@ -59,7 +62,7 @@
   NGSidebar.montar();
   const listaEl = document.getElementById('lista');
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
-    listaEl.innerHTML = '<div class="vazio">A Minha vez é do backoffice. Use o Funil de vendas.</div>';
+    listaEl.innerHTML = '<div class="vazio">O Live é do backoffice. Use o Funil de vendas.</div>';
     return;
   }
   const funilEl = document.getElementById('funil');
@@ -73,6 +76,14 @@
 
   let jor = { lista: [], todas: [] };
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
+  let ops = [];       // 0107: 🔥 oportunidades (v_oportunidades, sem as que já pedem ação)
+  let opAtualizado = 0;
+  let opAberta = null;   // conversa_id da linha com "Agora não" aberto (motivos em 1 clique)
+  let motivosDispensa = [{ codigo: 'ja_falei', nome: 'Já falei' }, { codigo: 'nao_vale', nome: 'Não vale' }, { codigo: 'depois', nome: 'Depois' }];
+  NG.sb.from('config_oportunidades').select('parametros').eq('codigo', 'geral').maybeSingle().then(({ data }) => {
+    const m = data && data.parametros && data.parametros.dispensa_motivos;
+    if (Array.isArray(m) && m.length) motivosDispensa = m;
+  }, () => {});
   let soVez = true;
   let etapaSel = null;
   let vista = ['lista', 'quadro'].includes(ls.ler('niogen.fila.vista')) ? ls.ler('niogen.fila.vista') : 'lista';
@@ -103,8 +114,15 @@
     const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
-    // 0102 (Ricardo, 10/11): Minha vez = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
+    // 0102 (Ricardo, 10/11): Live = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
     // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
+    // 0107: 🔥 oportunidades (calculadas sobre a jornada inteira, antes do filtro: o que já pede ação não vira oportunidade).
+    const ro = await NG.oportunidades(r);
+    ops = ro.erro ? [] : ro.lista;
+    if (!opAtualizado || Date.now() - opAtualizado > 5 * 60000) {   // grava "mostrada" e os resultados (idempotente)
+      opAtualizado = Date.now();
+      NG.sb.rpc('oportunidades_atualizar').then(() => {}, () => {});
+    }
     r.lista = r.lista.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
     jor = r;
     render();
@@ -144,7 +162,7 @@
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && (!comVez || vez(j))).sort(NG.ordemJornada);
   }
   // Acompanhando: vendas que não pedem nada agora, mas que o time acompanha — biometria, instalação, pendência com terceiro.
-  // (As conversas que a Mari está tocando sozinha não aparecem na Minha vez — nem em "Todas" — desde a 0102.)
+  // (As conversas que a Mari está tocando sozinha não aparecem no Live — nem em "Todas" — desde a 0102.)
   // 0101: conversa em espera ("⏸ Aguardando · motivo · até DD/MM") também fica em Acompanhando.
   // 0103: conversa em que o cliente só confirmou ("ok", 👍) também fica em Acompanhando; volta para a Sua vez em 4 h úteis.
   const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou)));
@@ -195,14 +213,70 @@
     const blocoAnd = soVez && andPend.length
       ? grupo(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN') + andPend.map(andLinha).join('') : '';
     if (soVez) {
+      const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
       linhas = (l.length ? grupo(`Para fazer · ${l.length}`, 'vermelho = agora · amarelo = hoje') + linhas
         : '<div class="mv-nada">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>')
+        + (opL.length ? `<div class="mv-grupo mv-grupo-op"><b>🔥 Oportunidades · a Mari acha que uma mensagem sua esquenta · ${opL.length}</b><span class="apagado">não é obrigação: mande, assuma ou "Agora não". Depois de mandar, a Mari segue a conversa.</span></div>`
+          + opL.map((o, i) => opLinha(o, i)).join('') : '')
         + (ac.length ? grupo(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — biometria, instalação, pendência. Volta para "Para fazer" sozinha quando precisar.') + ac.map(linha).join('') : '');
     }
     listaEl.innerHTML = `${abas()}
       <div class="mv-rolar"><div class="mv-row mv-cab mono"><span>ETAPA</span><span>CLIENTE</span><span>O QUE FAZER</span><span>HÁ</span><span>DONO</span><span></span></div>
       ${blocoAnd}${linhas || `<div class="vazio">${soVez ? 'Nada para fazer nem acompanhar agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
       <div class="mv-pe apagado">Vermelho = agora (cliente esperando ou prazo de 4 h) · amarelo = hoje · ⏸ azul = esperando terceiro, fora da sua vez até a data · a lista se atualiza a cada minuto</div>`;
+  }
+
+  // ---------- 🔥 oportunidades (0107) ----------
+  // Linha: nome · cidade · motivo · plano/valor · Mandar mensagem (abre a conversa aqui com o texto na caixa) · ▾ Mandar e assumir ·
+  // Agora não (motivo em 1 clique). A sugestão aparece embaixo da 1ª; nas outras, ao passar o mouse.
+  function opLinha(o, i) {
+    const cid = esc(o.conversa_id);
+    const jan = o.janela_fecha_em ? (new Date(o.janela_fecha_em) - Date.now()) / 60000 : -1;
+    const janTxt = o.canal === 'template' ? ' · <span class="warn-txt">janela fechada → template</span>'
+      : jan > 0 && jan <= 240 && o.codigo !== 'O1' ? ` · <span class="warn-txt">janela fecha em ${jan < 60 ? `${Math.round(jan)} min` : `${Math.floor(jan / 60)} h`}</span>` : '';
+    const valor = o.valor_mes != null ? `${NG.fmtMoeda(o.valor_mes)}/mês` : '';
+    const acoes = opAberta === o.conversa_id
+      ? `<span class="apagado">Por quê?</span>${motivosDispensa.map((m) => `<button type="button" class="btn btn-sm" data-opd="${cid}" data-motivo="${esc(m.codigo)}">${esc(m.nome)}</button>`).join('')}<button type="button" class="btn btn-sm btn-ghost" data-opx="${cid}" aria-label="Cancelar">×</button>`
+      : `<details class="mv-op-menu"><summary class="btn btn-sm" title="Mais opções">▾</summary><button type="button" class="btn btn-sm" data-opm="${cid}" data-assumir="1" title="Manda e atribui a você: a Mari cala e a cadência para">Mandar e assumir</button></details>
+         <button type="button" class="btn btn-sm" data-opn="${cid}" title="Some até amanhã (pede o motivo em 1 clique)">Agora não</button>`;
+    return `<div class="mv-row mv-op${i === 0 ? ' prim' : ''}" data-k="c:${cid}" tabindex="0" role="button">
+        <span class="mv-et" title="Oportunidade (${esc((o.regras || []).join(' + '))} · ${esc(String(o.pontos))} pontos)"><span class="mv-fogo" aria-hidden="true">🔥</span><span>Oportunidade</span></span>
+        <span class="mv-cli"><b>${esc(o.nome || 'Contato')}</b><small>${esc([o.cidade, o.plano].filter(Boolean).join(' · ') || '—')}${valor ? ` · ${esc(valor)}` : ''}</small></span>
+        <span class="mv-oque">${esc(o.motivo || '')}${janTxt}</span>
+        <span class="mv-ha apagado">${esc(haTempo(o.parado_desde))}</span>
+        <span class="mv-dono mari">${ICO_ROBO}Mari</span>
+        <span class="mv-bt"><button type="button" class="btn btn-sm mv-go" data-opm="${cid}">${o.canal === 'template' ? 'Mandar template' : 'Mandar mensagem'}</button></span>
+        <div class="mv-op-pe"><span class="mv-sug">${o.canal === 'template' ? 'Template (janela fechada)' : 'Sugestão (editável)'}: “${esc(o.texto_sugerido || '')}”</span><span class="mv-op-acoes">${acoes}</span></div>
+      </div>`;
+  }
+  async function mandarOp(cid, assumir) {
+    const o = ops.find((x) => x.conversa_id === cid);
+    if (!o) return;
+    const op = { codigo: o.codigo, texto: o.texto_sugerido || '', template: o.canal === 'template' ? o.template : null, assumir: !!assumir };
+    if (podeFoco()) {
+      // Abre a ficha da conversa e a conversa no lugar da lista, com o texto na caixa (Enter manda pela oportunidade_enviar).
+      abrirChave(`c:${cid}`);
+      entrarFoco({ conversa_id: cid, nome: o.nome }, op);
+      return;
+    }
+    // Quadro e celular: a mesma mensagem numa janela (texto editável; template não muda).
+    const fd = await NG.modal(`
+      <h3>🔥 ${esc(o.nome || 'Contato')}${o.cidade ? ` · ${esc(o.cidade)}` : ''}</h3>
+      <p>${esc(o.motivo || '')}</p>
+      <label class="campo">${op.template ? 'Template aprovado (janela de 24 h fechada)' : 'Mensagem (editável)'}<textarea name="texto" rows="5"${op.template ? ' readonly' : ''}>${esc(op.texto)}</textarea></label>
+      <p class="nota-campo">${assumir ? 'Você assume a conversa: a Mari cala e a cadência para.' : 'Depois de mandar, a Mari segue a conversa (sem dono).'} Nunca desconto nem data de instalação.</p>`);
+    if (!fd) return;
+    const { data, error } = await NG.sb.rpc('oportunidade_enviar', { p_conversa: cid, p_texto: op.template ? '' : String(fd.get('texto') || ''), p_assumir: !!assumir, p_template: op.template });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast((data && data.resumo) || 'Mensagem enviada', 'ok');
+    await carregar();
+  }
+  async function dispensarOp(cid, motivo) {
+    const { error } = await NG.sb.rpc('oportunidade_dispensar', { p_conversa: cid, p_motivo: motivo });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    opAberta = null;
+    NG.toast('Some até amanhã', 'ok');
+    await carregar();
   }
 
   // ---------- quadro ----------
@@ -251,7 +325,7 @@
   let rolagemLista = 0;
   const podeFoco = () => vista === 'lista' && !movel.matches;
   const ecoFicha = (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) });
-  function entrarFoco(j) {
+  function entrarFoco(j, oportunidade) {
     if (!podeFoco() || !j) return;
     const rol = listaEl.querySelector('.mv-rolar');
     if (!foco && rol) rolagemLista = rol.scrollTop;
@@ -262,7 +336,7 @@
     trabEl.classList.toggle('so-ficha', !temConv);
     NGFicha.aoVoltar(() => sairFoco());
     NGFicha.largo(!temConv);
-    if (temConv) setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: ecoFicha }), 50);
+    if (temConv) setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: ecoFicha, oportunidade }), 50);
   }
   function sairFoco(quieto) {
     if (!foco) return;
@@ -287,15 +361,15 @@
   // 10/11 (Ricardo: "a janela da conversa fecha … clico em Abrir a conversa para responder e nada acontece"): se a mesma conversa
   // já está viva na tela, só traz o cursor para a caixa; se o estado ficou preso (conversa "aberta" sem estar na tela), monta de novo.
   function conversaViva() { return !!(conv && conv.comp && listaEl.querySelector('.cvp-raiz') && trabEl.classList.contains('com-conversa') && !trabEl.classList.contains('so-ficha')); }
-  function abrirConversaLista({ conversaId, nome, aoMudar }) {
-    if (conv && conv.id === conversaId && conversaViva()) { conv.comp.focar(); return; }
+  function abrirConversaLista({ conversaId, nome, aoMudar, oportunidade }) {
+    if (conv && conv.id === conversaId && conversaViva() && !oportunidade) { conv.comp.focar(); return; }
     if (foco && trabEl.classList.contains('so-ficha')) { trabEl.classList.remove('so-ficha'); NGFicha.largo(false); }
     if (conv && conv.comp) conv.comp.destruir();
     conv = null;
     conv = { id: conversaId, nome };
     trabEl.classList.add('com-conversa');
     render();
-    conv.comp = NGConversa.montar(listaEl, { conversaId, nome, rotuloFechar: '← Lista',
+    conv.comp = NGConversa.montar(listaEl, { conversaId, nome, rotuloFechar: '← Lista', oportunidade: oportunidade || null,
       aoFechar: () => { if (foco) sairFoco(); else { fecharConversa(); render(); } },
       aoMudar: (r) => { carregar(); if (aoMudar) aoMudar(r); } });
   }
@@ -365,6 +439,17 @@
     await carregar();
   }
   function clique(ev) {
+    // 0107: 🔥 oportunidades
+    if (ev.target.closest('.mv-op-menu summary')) { ev.stopPropagation(); return; }
+    const om = ev.target.closest('[data-opm]');
+    if (om) { ev.stopPropagation(); mandarOp(om.dataset.opm, om.dataset.assumir === '1'); return; }
+    const on = ev.target.closest('[data-opn]');
+    if (on) { ev.stopPropagation(); opAberta = on.dataset.opn; render(); return; }
+    const ox = ev.target.closest('[data-opx]');
+    if (ox) { ev.stopPropagation(); opAberta = null; render(); return; }
+    const od = ev.target.closest('[data-opd]');
+    if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
+    if (ev.target.closest('.mv-op-pe')) return;
     const bc = ev.target.closest('[data-casar]');
     if (bc) { ev.stopPropagation(); casar(bc); return; }
     const bv = ev.target.closest('[data-visto]');

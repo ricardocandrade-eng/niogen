@@ -16,7 +16,7 @@
  * O banco grava a venda e enfileira etiqueta/nota/mensagem/resolver no Chatwoot (n8n backoffice_chatwoot); a ficha mostra em uma
  * linha o que o sistema fez. Validada abre o agendamento na sequência.
  * 09/11 (0089/0090, prompt Prompt_ajustes_operacao_ficha_conversa_091126_1535 · ponto 3): de cima para baixo — nome · cidade ·
- * plano · origem · barra CONVERSA (abre a conversa: no espaço da lista na Minha vez; à esquerda da ficha nas outras telas) ·
+ * plano · origem · barra CONVERSA (abre a conversa: no espaço da lista no Live; à esquerda da ficha nas outras telas) ·
  * barra da JORNADA (5 etapas) · PRÓXIMO PASSO (um bloco, o botão e "o NIOGEN faz sozinho") · atalhos (Pendência, Devolver
  * para a Mari, Cliente pediu para parar, Saída) · 4 quadros de STATUS (NIOGEN · Nio · Chatwoot · Contrato) · LEMBRETES
  * automáticos · os blocos de antes recolhidos embaixo. A etapa só anda pelo botão: "Mover para…" ficou só para admin no "⋯".
@@ -54,8 +54,8 @@
   let planosCache = null;  // 0092: config_planos ativos (trocar plano / upsell)
   let linksCache = null;   // 0092: config_links (DFV, formulário de análise da Nio)
   let cvComp = null;       // 0090: NGConversa montado no painel da ficha
-  let hostConversa = null; // 0090: a tela abre a conversa no lugar dela (Minha vez)
-  let ladoEl = null;       // 0090: ficha ao lado (Minha vez · Lista), sem gaveta
+  let hostConversa = null; // 0090: a tela abre a conversa no lugar dela (Live)
+  let ladoEl = null;       // 0090: ficha ao lado (Live · Lista), sem gaveta
   const ouvintes = [];
   const ehBO = () => ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
 
@@ -519,11 +519,11 @@
   // 0100 (Ricardo, 10/11: "não consigo jogar o cliente para Saída … botão para silenciar … somos revenda, não suporte da Nio"):
   // conversa SEM venda → Saída (perdida / fora de área / já cliente) ou Silenciar (cliente Nio · suporte) · Reativar desfaz.
   const SAIDA_CONV = {
-    suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai da Minha vez e NÃO volta quando ele escrever. No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
-    perdida: 'Mandar para Saída · Perdida (sem interesse)?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para a Minha vez.',
-    fora_area: 'Mandar para Saída · Fora de área?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para a Minha vez.',
+    suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai do Live e NÃO volta quando ele escrever. No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
+    perdida: 'Mandar para Saída · Perdida (sem interesse)?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
+    fora_area: 'Mandar para Saída · Fora de área?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
     ja_cliente: 'Mandar para Saída · Já é cliente Nio?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta — para não voltar mais, use "Silenciar".',
-    reativar: 'Reativar a conversa?\n\nEla volta para a Minha vez com o time (a Mari segue calada; para ela voltar, "Devolver para a Mari").',
+    reativar: 'Reativar a conversa?\n\nEla volta para o Live com o time (a Mari segue calada; para ela voltar, "Devolver para a Mari").',
   };
   async function rodarSaidaConversa(motivo) {
     if (!SAIDA_CONV[motivo] || !window.confirm(SAIDA_CONV[motivo])) return null;
@@ -1176,7 +1176,7 @@
     const m10 = Number(v.bonus_m10_potencial || 0) ? ` · bônus M-10 ${NG.fmtMoeda(v.bonus_m10_potencial)} apurado em ${mesAno(p.a, p.m + 10)}` : '';
     return `<div class="f-st-g"><span class="f-rot">FATURAS</span>${NG.faturasBolinhas(bolas)}<span class="f-st-nota">${esc(`${pagas}/${NG.N_FATURAS} pagas${m10}`)}</span></div>`;
   }
-  // Modo foco da Minha vez: "← Lista" no cabeçalho da ficha (a tela diz o que fazer).
+  // Modo foco do Live: "← Lista" no cabeçalho da ficha (a tela diz o que fazer).
   let voltarFn = null;
   let largo = false;
   const botaoVoltar = () => (voltarFn && modo === 'lado' ? '<button type="button" class="btn btn-sm f-voltar" data-f="voltar-lista" title="Volta para a lista (Esc)">← Lista</button>' : '');
@@ -1434,12 +1434,12 @@
   }
 
   // 0105: o andamento do pedido na Nio, lido sozinho — PORTAL PAP (status do Histórico, extensão 0.4) e BIOMETRIA (GED360, a cada
-  // 15 min). Alerta vivo aparece em vermelho/amarelo com "Visto" (tira da Minha vez até o status mudar de novo).
+  // 15 min). Alerta vivo aparece em vermelho/amarelo com "Visto" (tira do Live até o status mudar de novo).
   function linhasAndamento() {
     const a = d.andamento;
     if (!a) return '';
     const NIV = { agora: 'bad', hoje: 'wa' };
-    const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}" title="Tira o alerta da Minha vez até o status mudar de novo">Visto</button>`;
+    const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}" title="Tira o alerta do Live até o status mudar de novo">Visto</button>`;
     const portal = a.portal_status ? `<div class="f-st-g"><span class="f-rot">PORTAL PAP</span>
         <span class="f-chip ${a.portal_status === 'GROSS' ? 'ok' : a.portal_alerta ? NIV[a.portal_alerta_nivel] || 'wa' : 'info'}">${esc(a.portal_rotulo || a.portal_status)}</span>
         <span class="apagado">desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))} · nº ${esc(a.portal_pedido)}</span>
@@ -1855,7 +1855,7 @@
         <datalist id="f-esp-motivos"><option value="parente/família decidir"><option value="cliente pediu para chamar depois"><option value="cliente mandar os dados"><option value="dia do pagamento do cliente"></datalist>
         <label>Até <input type="date" name="ate" min="${amanhaC}" value="${amanhaC}" required></label>
         <div class="f-prox-bts">${[1, 2, 3, 7].map((n) => `<button type="button" class="btn btn-ghost btn-sm" data-espera-dias="${n}">${n === 1 ? 'amanhã' : `+${n} dias`}</button>`).join('')}</div>
-        <span class="f-nota">Sai da Minha vez e da contagem até o dia, às 9h (aparece em "Acompanhando"). Se o cliente escrever antes, volta na hora. No Chatwoot: nota e conversa adiada até o dia. A Mari continua calada.</span>
+        <span class="f-nota">Sai do Live e da contagem até o dia, às 9h (aparece em "Acompanhando"). Se o cliente escrever antes, volta na hora. No Chatwoot: nota e conversa adiada até o dia. A Mari continua calada.</span>
         <div class="f-prox-bts"><button type="submit" class="btn btn-acc btn-sm">Aguardar</button><button type="button" class="btn btn-ghost btn-sm" data-f="cancelar">Cancelar</button></div></form>` : '';
     const at = [];
     if (bo && !silenciada && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
@@ -1863,7 +1863,7 @@
     // 0100: Saída e Silenciar (conversa sem venda) · Reativar quando silenciada.
     if (bo && silenciada) at.unshift('<button type="button" class="btn btn-sm" data-csaida="reativar">🔔 Reativar</button>');
     else if (bo && !c.nao_contatar) {
-      at.unshift('<button type="button" class="btn btn-sm" data-csaida="suporte_nio" title="Cliente Nio pedindo suporte ou reclamando: não é venda. A Mari cala e ele não volta para a Minha vez.">📵 Cliente Nio · suporte — silenciar</button>');
+      at.unshift('<button type="button" class="btn btn-sm" data-csaida="suporte_nio" title="Cliente Nio pedindo suporte ou reclamando: não é venda. A Mari cala e ele não volta para o Live.">📵 Cliente Nio · suporte — silenciar</button>');
       at.push(`<span class="f-menu"><button type="button" class="btn btn-ghost btn-sm" data-f="menu" aria-expanded="false">Saída ▾</button>
         <span class="f-menu-lista" hidden><button type="button" data-csaida="perdida">Perdida (sem interesse)</button><button type="button" data-csaida="fora_area">Fora de área</button><button type="button" data-csaida="ja_cliente">Já é cliente Nio</button></span></span>`);
     }
@@ -1878,9 +1878,9 @@
       { nome: 'Pedido', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'OS', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
-    const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para a Minha vez, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
+    const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para o Live, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
           ${dono.tipo === 'mari' && nivel !== 'agora' && !silenciada ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
-          ${emEspera && !silenciada ? `<span class="f-nota">⏸ Em espera até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}. Volta para a Minha vez no dia, ou antes se o cliente escrever.</span>` : ''}
+          ${emEspera && !silenciada ? `<span class="f-nota">⏸ Em espera até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}. Volta para o Live no dia, ou antes se o cliente escrever.</span>` : ''}
           ${bts.length ? `<div class="f-prox-bts">${bts.join('')}</div>` : ''}
           ${formEspera}
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
@@ -1892,7 +1892,7 @@
       <div class="f-corpo"><div class="f-col-a">
         ${regua(passosConv)}
         ${quadroPasso('conversa', silenciada ? 'dim' : (NIVEL_CLS[nivel] || 'dim'), silenciada ? 'SILENCIADA' : (NIVEL_ROT[nivel] || 'PRÓXIMO PASSO'),
-          silenciada ? 'Cliente Nio · suporte — fora da Minha vez' : (j.o_que_fazer || 'Mari atendendo'), corpoPasso, formAtivo === 'conv_espera')}${feito}
+          silenciada ? 'Cliente Nio · suporte — fora do Live' : (j.o_que_fazer || 'Mari atendendo'), corpoPasso, formAtivo === 'conv_espera')}${feito}
         <div class="f-linha-status">
           <div class="f-st-g"><span class="f-rot">MARI</span><span class="f-chip">dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</span></div>
           ${linhaEstorno(travasC, 'cliente Nio · cancelou < 30 d · endereço · área · viabilidade')}
@@ -1927,7 +1927,7 @@
     });
   }
 
-  // quieto (10/11): recarga automática (eco da conversa, refresh de 60 s da Minha vez) — só redesenha se o dado mudou e nunca
+  // quieto (10/11): recarga automática (eco da conversa, refresh de 60 s do Live) — só redesenha se o dado mudou e nunca
   // por cima de um formulário aberto (não apaga o que a pessoa está digitando).
   let sigDados = '';
   async function recarregar(op) {
@@ -1977,7 +1977,7 @@
       if (ed) { const i = ed.form && ed.form.querySelector('[name="ate"]'); if (i) i.value = NG.somaDias(NG.diaSP(), Number(ed.dataset.esperaDias)); return; }
       const ce = ev.target.closest('[data-cespera]');
       if (ce && d && d.soConversa) {
-        if (!window.confirm('Retomar agora?\n\nA conversa volta para a Minha vez e reabre no Chatwoot.')) return;
+        if (!window.confirm('Retomar agora?\n\nA conversa volta para o Live e reabre no Chatwoot.')) return;
         ce.disabled = true;
         const ok = await rodarEsperaConversa(null, null);
         if (!ok && ce.isConnected) ce.disabled = false;
@@ -2277,14 +2277,14 @@
     await recarregar();
   }
 
-  // 0090: ficha AO LADO (Minha vez · Lista): a mesma ficha, sem gaveta, dentro de um elemento da tela.
+  // 0090: ficha AO LADO (Live · Lista): a mesma ficha, sem gaveta, dentro de um elemento da tela.
   function lado(el) {
     modo = 'lado';
     ladoEl = el;
     raiz = el;
     ligar(raiz);
   }
-  // Troca o modo (Minha vez: Lista = ao lado · Quadro = gaveta) sem recarregar a página.
+  // Troca o modo (Live: Lista = ao lado · Quadro = gaveta) sem recarregar a página.
   function usarGaveta() {
     if (modo !== 'lado') return;
     if (idAtual) fecharLado();
@@ -2302,11 +2302,11 @@
     abrir,
     abrirConversa: abrirConversaFicha,
     lado, usarGaveta, usarLado,
-    // A tela abre a conversa no lugar dela (Minha vez: no espaço da lista). fn({conversaId, nome, aoMudar}); null desliga.
+    // A tela abre a conversa no lugar dela (Live: no espaço da lista). fn({conversaId, nome, aoMudar}); null desliga.
     aoConversa(fn) { hostConversa = fn; },
     aoFechar(fn) { ouvintesFechar.push(fn); },
     recarregar: (op) => recarregar(op),
-    // 10/11 (modo foco da Minha vez): fn = "← Lista" no cabeçalho (null tira) · largo(true) = ficha em 2 colunas, dados à direita.
+    // 10/11 (modo foco do Live): fn = "← Lista" no cabeçalho (null tira) · largo(true) = ficha em 2 colunas, dados à direita.
     aoVoltar(fn) { voltarFn = fn; if (d) render(); },
     largo(on) { largo = !!on; if (largo) detalhes = true; if (d) render(); },
     get atual() { return idAtual; },
