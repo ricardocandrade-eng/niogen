@@ -119,8 +119,14 @@ if (conv.dentro_area === false) {
 } else if (!principais.length) {
   internalData = '(Nenhum plano ativo para esta cidade e segmento — não invente; handoff pedido_humano.)';
 } else {
-  // As duas tabelas da cidade vão sempre: se o cliente disser NESTA mensagem que é empresa (CNPJ/MEI),
-  // a Mari já usa a de Empresas no mesmo turno (o segmento só é gravado depois da resposta).
+  // 09/11 (conversa #40, Timóteo): com as duas tabelas sempre no contexto, a Mari copiou a de Empresas para um cliente
+  // pessoa física (mesmos preços BTU, mesmos nomes, velocidades e inclusos diferentes). Agora vai SÓ a tabela do segmento
+  // gravado; a outra entra só no turno em que a mensagem do cliente fala do outro segmento (o segmento é gravado depois
+  // da resposta, então a Mari ainda precisa da outra tabela nesse turno).
+  const msgCli = String(cons.mensagem || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const falaEmpresa = /\b(cnpj|mei|empresa|empresas|empresarial|pj|pessoa juridica|comercio|comercial|loja|escritorio|negocio)\b/.test(msgCli);
+  const falaCasa = /\b(cpf|pessoa fisica|residencia|residencial|pra casa|para casa|minha casa|nao e empresa|nao tenho cnpj)\b/.test(msgCli);
+  const comOutra = seg === 'varejo' ? falaEmpresa : falaCasa;
   const doPortfolio = (pf, variantes) => planos.filter((p) => p.portfolio === pf && variantes.includes(p.variante)).sort((a, b) => a.preco - b.preco);
   const secao = (pf, titulo) => {
     const pr = doPortfolio(pf, ['regular', 'oferta50']);
@@ -135,11 +141,13 @@ if (conv.dentro_area === false) {
   };
   internalData = [
     `tabela_cidade: ${btu ? 'BTU — preço ÚNICO em todos os meios de pagamento (não fale em cartão mais barato nem em desconto)' : 'REGULAR — dois preços: boleto/débito (preco) e cartão de crédito (preco_cartao)'}`,
-    `segmento_atual: ${seg === 'empresas' ? 'Empresas (CNPJ)' : 'Varejo (pessoa física, CPF)'} — use SÓ a seção do segmento do cliente; se ele acabou de dizer que é para empresa/CNPJ/MEI, use já a seção PLANOS EMPRESAS`,
+    comOutra
+      ? `segmento_atual: ${seg === 'empresas' ? 'Empresas (CNPJ)' : 'Varejo (pessoa física, CPF)'} — vão as duas tabelas só porque a mensagem do cliente fala do outro segmento: use a do segmento que ele disse AGORA; na dúvida, pergunte se é para casa ou para empresa (CNPJ/MEI) antes de mostrar planos. Nunca misture linhas das duas seções.`
+      : `segmento_atual: ${seg === 'empresas' ? 'Empresas (CNPJ)' : 'Varejo (pessoa física, CPF)'} — esta é a ÚNICA tabela deste cliente; copie velocidade, inclusos e preço exatamente destas linhas.`,
     '',
-    ...secao('varejo', 'PLANOS VAREJO (pessoa física, CPF)'),
-    '',
-    ...secao('empresas', 'PLANOS EMPRESAS (CNPJ, MEI ou não)'),
+    ...((seg === 'varejo' || comOutra) ? secao('varejo', 'PLANOS VAREJO (pessoa física, CPF)') : []),
+    ...(comOutra ? [''] : []),
+    ...((seg === 'empresas' || comOutra) ? secao('empresas', 'PLANOS EMPRESAS (CNPJ, MEI ou não)') : []),
   ].join('\n');
 }
 

@@ -222,6 +222,18 @@ def cen_o_portao(c):   # P5 P7 P8 P9 P11 P14 (o original) + P13: retomada respon
     c.exige(not re.search(r'\b(imagina|de nada|disponha|por nada)\b', t), f'[P13] respondeu o "Obrigado!" antigo: «{(r.get("resposta") or "")[:120]}»')
 
 
+def cen_j_portao(c):   # regressão BTU (j original) + P18: pessoa física em cidade BTU recebe a tabela Varejo, nunca a de Empresas
+    # Conversa #40 (09/11, Timóteo): mesmos preços BTU nas duas tabelas → a Mari copiou velocidades e inclusos de Empresas.
+    B.cen_j(c)
+    listas = [x['mari'] for x in c.log if re.search(r'(?m)^\s*1\)', x.get('mari') or '')]
+    if not listas:
+        return   # o (j) original já reprova sem a lista
+    t = norm(listas[-1])
+    c.exige(not re.search(r'maquininha|pagbank|mcafee|exame', t), f'[P18] inclusos de Empresas para pessoa física: «{t[:200]}»')
+    c.exige(not re.search(r'\b700 mega\b', t), f'[P18] velocidade de Empresas (700 Mega) para pessoa física: «{t[:200]}»')
+    c.exige(re.search(r'\b800 mega\b', t) and '1 giga' in t, f'[P18] faltou 800 Mega / 1 Giga da tabela Varejo: «{t[:200]}»')
+
+
 def cen_q(c):   # P15 — controle: fora do assunto → volta ao fluxo sem inventar
     c.diz('Oi')
     c.diz('Você torce pra qual time? Aqui é Tupi kkkk')
@@ -236,7 +248,7 @@ def cen_q(c):   # P15 — controle: fora do assunto → volta ao fluxo sem inven
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'regressão operadora'), 'i': (7, B.cen_i, 'regressão botão'),
-    'j': (8, B.cen_j, 'regressão BTU'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
+    'j': (8, cen_j_portao, 'regressão BTU + P18'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
     'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14 P16'),
     'p': (14, B.cen_p, 'P9 P10'), 'q': (15, cen_q, 'P15'),
     # 08/11 — abertura B2 (saudação fixa + 3 botões): sem nome, com nome, 1ª mensagem já com CEP, toque em cada botão.
