@@ -72,6 +72,7 @@
       <div class="cvp-meio"><div class="cvp-msgs" data-msgs tabindex="0" aria-label="Mensagens" aria-live="polite"><div class="carregando">Carregando a conversa…</div></div>
         <button type="button" class="cvp-novas" data-cv="descer" hidden>↓ novas mensagens</button></div>
       <div class="cvp-pe">
+        <div class="cvp-venda" data-venda hidden></div>
         <div class="cvp-ctl">
           <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button></div>
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
@@ -83,6 +84,7 @@
     </section>`;
     const $ = (s) => el.querySelector(s);
     const cab = $('[data-cab]'), etqEl = $('[data-etq]'), msgs = $('[data-msgs]'), novas = $('[data-cv="descer"]');
+    const vendaEl = $('[data-venda]');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
     const secao = $('.cvp');
 
@@ -90,18 +92,21 @@
     async function carregar() {
       const id = o.conversaId;
       const meu = ++st.seq;
-      const [rc, rt, ra, rr, rtpl] = await Promise.all([
+      const [rc, rt, ra, rr, rtpl, rj] = await Promise.all([
         NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at').eq('id', id).maybeSingle(),
         NG.sb.from('mari_turnos').select('id, papel, texto, tags, created_at').eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400),
         NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200),
         rapidas(),
         templates(),
+        // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
+        NG.sb.from('v_jornada').select('venda_id, etapa_nome, botao, o_que_fazer').eq('conversa_id', id).not('venda_id', 'is', null).limit(1),
       ]);
       if (!st.vivo || meu !== st.seq) return;
       if (rc.error || !rc.data) {
         msgs.innerHTML = `<div class="vazio">${esc(rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).')}</div>`;
         return;
       }
+      st.venda = rj && !rj.error ? (rj.data || [])[0] || null : null;
       st.d = { c: rc.data, turnos: (rt.data || []).reverse(), acoes: (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
       // A mensagem local some quando a ação dela aparece na fila do banco.
       st.locais = st.locais.filter((l) => !(l.acao_id && st.d.acoes.some((a) => a.id === l.acao_id)));
@@ -148,6 +153,12 @@
       const nome = (c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente';
       const link = NG.linkChatwoot(c.chatwoot_conversation_id);
       const optsDono = [['mari', 'Sem dono · Mari atende'], ['eu', 'Você'], ['time', 'Time backoffice']];
+      // Cliente com venda: "Este cliente tem venda em {etapa} — o próximo passo é {botão}. …" (sem venda: nada).
+      const vj = st.venda;
+      const passo = vj ? (vj.botao && vj.botao !== 'abrir' && NG.BOTAO_PASSO[vj.botao] ? NG.BOTAO_PASSO[vj.botao] : vj.o_que_fazer) : '';
+      const htmlVenda = vj ? `Este cliente tem venda em <b>${esc(vj.etapa_nome || '—')}</b> — o próximo passo é <b>${esc(passo || 'abrir a ficha')}</b>. Faça pelo botão da ficha para a venda andar. <a href="#venda=${esc(vj.venda_id)}">Abrir ficha →</a>` : '';
+      vendaEl.hidden = !vj;
+      troca('venda', vendaEl, htmlVenda);
       if (dn.v === 'outro') optsDono.push(['outro', dn.txt]);
       // 10/11 (Ricardo: "organiza melhor esse cabeçalho, seguindo esses padrões" — os da ficha): linha 1 = ← Lista · nome ·
       // Chatwoot ↗; linha 2 = chips pequenos (status, dono, janela — os dois primeiros trocam pelo próprio chip); linha 3 =

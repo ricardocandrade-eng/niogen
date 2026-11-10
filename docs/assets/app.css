@@ -1636,3 +1636,6 @@ select.cvp-pill, .cvp-l1 select.cvp-pill, .cvp-l2 select.cvp-pill { width: auto;
 /* 0102: alarmes da operação no Painel (respostas fora do NIOGEN · qualidade da WABA) */
 .alarmes-op:not([hidden]) { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
 .alarmes-op .faixa { display: block; }
+/* 10/11: conversa de cliente com venda — lembrete âmbar acima da caixa de texto */
+.cvp-venda:not([hidden]) { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn-fg); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; line-height: 1.4; }
+.cvp-venda a { color: inherit; font-weight: 600; text-decoration: underline; white-space: nowrap; }

@@ -96,6 +96,9 @@
   }
   const noTetoContato = (hoje, mes, t) => !!t && ((t.dia != null && (hoje || 0) >= t.dia) || (t.mes != null && (mes || 0) >= t.mes));
   const contatosTxt = (hoje, mes, t) => `hoje ${hoje || 0}${t && t.dia != null ? `/${t.dia}` : ''} · mês ${mes || 0}${t && t.mes != null ? `/${t.mes}` : ''}`;
+  // Rótulo do botão do próximo passo (v_jornada.botao) — o mesmo da Minha vez.
+  const BOTAO_PASSO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', biometria: 'Biometria',
+    os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
   const passoJornada = (j) => (j ? { txt: j.o_que_fazer, nivel: NIVEL_COR[j.nivel] || 'dim', acao: !!j.precisa_acao, espera: j.nivel === 'espera', botao: j.botao } : null);
   const ordemJornada = (a, b) => (({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[a.nivel] - ({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[b.nivel])
@@ -1180,7 +1183,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, jornada, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
