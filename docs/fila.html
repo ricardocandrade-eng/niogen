@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-01">
-<script src="config.js?v=101126-01"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-02">
+<script src="config.js?v=101126-02"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-01"></script>
-<script src="assets/sidebar.js?v=101126-01"></script>
-<script src="assets/conversa.js?v=101126-01"></script>
-<script src="assets/ficha.js?v=101126-01"></script>
+<script src="assets/app.js?v=101126-02"></script>
+<script src="assets/sidebar.js?v=101126-02"></script>
+<script src="assets/conversa.js?v=101126-02"></script>
+<script src="assets/ficha.js?v=101126-02"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -207,9 +207,49 @@
   // ---------- ficha: ao lado (Lista, computador) · gaveta (Quadro e celular) ----------
   NGFicha.lado(fichaLado);
   function modoFicha() {
+    sairFoco(true);
     if (vista === 'lista' && !movel.matches) { NGFicha.usarLado(); NGFicha.aoConversa(abrirConversaLista); } else { fecharConversa(); NGFicha.usarGaveta(); NGFicha.aoConversa(null); }
   }
-  NGFicha.aoFechar(() => { fecharConversa(); render(); });
+  NGFicha.aoFechar(() => { if (foco) sairFoco(); else { fecharConversa(); render(); } });
+
+  // ---------- 10/11: modo foco (Lista, computador) ----------
+  // Clicar numa linha abre o caso na área toda: a lista some, a conversa (se houver) fica à esquerda e a ficha à direita;
+  // sem conversa, a ficha usa a largura toda em 2 colunas. "← Lista" e Esc voltam para a lista no mesmo lugar.
+  let foco = false;
+  let rolagemLista = 0;
+  const podeFoco = () => vista === 'lista' && !movel.matches;
+  const ecoFicha = (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) });
+  function entrarFoco(j) {
+    if (!podeFoco() || !j) return;
+    const rol = listaEl.querySelector('.mv-rolar');
+    if (!foco && rol) rolagemLista = rol.scrollTop;
+    foco = true;
+    const temConv = !!j.conversa_id;
+    document.body.classList.add('mv-foco');
+    trabEl.classList.add('foco');
+    trabEl.classList.toggle('so-ficha', !temConv);
+    NGFicha.aoVoltar(() => sairFoco());
+    NGFicha.largo(!temConv);
+    if (temConv) setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: ecoFicha }), 50);
+  }
+  function sairFoco(quieto) {
+    if (!foco) return;
+    foco = false;
+    document.body.classList.remove('mv-foco');
+    trabEl.classList.remove('foco', 'so-ficha');
+    NGFicha.aoVoltar(null);
+    NGFicha.largo(false);
+    fecharConversa();
+    if (quieto === true) return;
+    render();
+    const rol = listaEl.querySelector('.mv-rolar');
+    if (rol) rol.scrollTop = rolagemLista;
+  }
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !foco || ev.defaultPrevented) return;
+    if (document.querySelector('dialog[open], .gaveta.aberta, .dica-pop')) return;
+    sairFoco();
+  });
 
   // ---------- conversa no lugar da lista ----------
   function abrirConversaLista({ conversaId, nome, aoMudar }) {
@@ -219,7 +259,7 @@
     trabEl.classList.add('com-conversa');
     render();
     conv.comp = NGConversa.montar(listaEl, { conversaId, nome, rotuloFechar: '← Lista',
-      aoFechar: () => { fecharConversa(); render(); },
+      aoFechar: () => { if (foco) sairFoco(); else { fecharConversa(); render(); } },
       aoMudar: (r) => { carregar(); if (aoMudar) aoMudar(r); } });
   }
   function fecharConversa() {
@@ -246,7 +286,7 @@
   feitoEl.addEventListener('click', (ev) => {
     if (ev.target.closest('.mv-feito-x')) { feitoEl.hidden = true; return; }
     const b = ev.target.closest('[data-prox]');
-    if (b) { feitoEl.hidden = true; abrirChave(b.dataset.prox); }
+    if (b) { feitoEl.hidden = true; const j = jor.lista.find((x) => chaveFicha(x) === b.dataset.prox); abrirChave(b.dataset.prox); if (foco) entrarFoco(j); }
   });
   NGFicha.aoMudar((v, r) => { carregar(); if (r) avisoFeito(r); });
 
@@ -267,13 +307,11 @@
       avisoFeito(r);
       abrirChave(k);
       await carregar();
-      if (j.conversa_id && vista === 'lista' && !movel.matches) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) }) });
+      entrarFoco(j);
       return;
     }
     abrirChave(k);
-    if (b.dataset.bt === 'responder' && j.conversa_id && vista === 'lista' && !movel.matches) {
-      setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) }) }), 50);
-    }
+    entrarFoco(j);
   }
   function clique(ev) {
     const b = ev.target.closest('[data-bt]');
@@ -281,12 +319,17 @@
     const t = ev.target.closest('[data-aba]');
     if (t) { soVez = t.dataset.aba === 'vez'; render(); return; }
     const r = ev.target.closest('.mv-row[data-k], .mv-kc[data-k]');
-    if (r) abrirChave(r.dataset.k);
+    if (r) abrirLinha(r.dataset.k);
+  }
+  function abrirLinha(k) {
+    const j = jor.lista.find((x) => chaveFicha(x) === k);
+    abrirChave(k);
+    entrarFoco(j);   // só na Lista do computador; no Quadro e no celular segue a gaveta
   }
   listaEl.addEventListener('click', (ev) => { if (!conv) clique(ev); });
   quadroEl.addEventListener('click', clique);
   [listaEl, quadroEl].forEach((el) => el.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' && ev.target.matches('.mv-row[data-k], .mv-kc[data-k]')) abrirChave(ev.target.dataset.k);
+    if (ev.key === 'Enter' && ev.target.matches('.mv-row[data-k], .mv-kc[data-k]')) abrirLinha(ev.target.dataset.k);
   }));
   funilEl.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-etapa]');

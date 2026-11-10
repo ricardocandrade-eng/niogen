@@ -18,14 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-01">
-<script src="config.js?v=101126-01"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-02">
+<script src="config.js?v=101126-02"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-01"></script>
-<script src="assets/sidebar.js?v=101126-01"></script>
-<script src="assets/conversa.js?v=101126-01"></script>
-<script src="assets/ficha.js?v=101126-01"></script>
-<script src="assets/novavenda.js?v=101126-01"></script>
+<script src="assets/app.js?v=101126-02"></script>
+<script src="assets/sidebar.js?v=101126-02"></script>
+<script src="assets/conversa.js?v=101126-02"></script>
+<script src="assets/ficha.js?v=101126-02"></script>
+<script src="assets/novavenda.js?v=101126-02"></script>
 </head>
 <body>
 <div class="app">
@@ -337,9 +337,12 @@
   }
 
   function qcard(v, pr) {
-    const sub = [planoCurto(v), origemCurta(v)].filter(Boolean).join(' · ');
-    return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}">
-      <b>${esc(v.cliente_nome)}</b><small>${esc(sub)}</small>${NG.proxPasso(pr)}</a>`;
+    // 10/11: nome · plano e valor em letra menor · data agendada/instalada · próximo passo em UMA linha com a cor da urgência.
+    const sub = [planoCurto(v), Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null].filter(Boolean).join(' · ');
+    const dt = v.instalado_em ? `<span class="q-data ok">Instalada em ${esc(NG.fmtData(v.instalado_em))}</span>`
+      : v.instalacao_agendada_para && v.status !== 'saida' ? `<span class="q-data">Instalação ${esc(NG.fmtDiaSemana(v.instalacao_agendada_para).toLowerCase())} ${esc(NG.fmtData(v.instalacao_agendada_para))} · ${esc(NG.janela(v.instalacao_agendada_para))}</span>` : '';
+    return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}" title="${esc([origemCurta(v), pr && pr.txt].filter(Boolean).join(' · '))}">
+      <b>${esc(v.cliente_nome)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${dt}${NG.proxPasso(pr)}</a>`;
   }
 
   // Vermelho primeiro, depois amarelo, depois o mais antigo.

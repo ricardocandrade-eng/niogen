@@ -1548,3 +1548,65 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 .f-dl dd span { overflow-wrap: anywhere; }
 .f-copia { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 13px; }
 .f-copia:hover { color: var(--accent); }
+
+/* ───────── 10/11 (Prompt_pendencia_some_ao_responder, Parte 2): ficha mais leve — nada sai, muda o lugar e o peso ───────── */
+.f-nome { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.f-plano { margin: 3px 0 0; font-size: 13px; color: var(--muted); }
+.f-data { display: inline-flex; align-items: center; gap: 7px; margin-top: 8px; padding: 5px 10px; border-radius: 8px; border: 1px solid #34507A; background: var(--info-bg); color: var(--info-fg); font-size: 13px; font-weight: 600; }
+.f-data.ok { border-color: #2F5A37; background: var(--ok-bg); color: var(--ok-fg); }
+.f-data svg { flex: 0 0 auto; }
+.f-local { gap: 6px; }
+.f-local .f-chip { font-size: 11.5px; padding: 1px 8px; }
+.f-local-txt { font-size: 12.5px; color: var(--muted); }
+.f-voltar { margin-right: 4px; }
+.f-chip.wa { color: var(--warn-fg); border-color: var(--warn-border); }
+.f-chip.info { color: var(--info-fg); border-color: #34507A; }
+.f-st-nota { font-size: 11.5px; color: var(--muted); }
+.f-st-g .f-rot { width: 84px; }
+/* Régua de 5 passos: mesma largura cada, ícone + nome e o detalhe embaixo. */
+.f-regua { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.f-rp { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 8px 9px 7px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-dim); }
+.f-rp-t { display: flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-rp-t i { font-style: normal; flex: 0 0 auto; }
+.f-rp.ok i { color: var(--ok-fg); }
+.f-rp.no i, .f-rp.no .f-rp-t { color: var(--muted); }
+.f-rp.wa { border-color: var(--warn-border); background: var(--warn-bg); }
+.f-rp.wa i, .f-rp.wa .f-rp-d { color: var(--warn-fg); }
+.f-rp-d { font-size: 11px; color: var(--muted); font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-rp-d.azul { color: var(--info-fg); }
+/* Próximo passo recolhido: mesma altura em todos (rótulo + 1 linha); clique expande. A cor continua dizendo a urgência. */
+.f-pp { padding: 0; gap: 0; }
+.f-pp-cab { display: flex; flex-direction: column; justify-content: center; gap: 4px; width: 100%; height: 62px; padding: 10px 14px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: inherit; }
+.f-pp-cab:disabled { cursor: default; }
+.f-pp-cab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.f-pp-rot { display: flex !important; justify-content: space-between; gap: 8px; }
+.f-pp-cab b { display: block; margin: 0 !important; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-pp-corpo { display: flex; flex-direction: column; gap: 10px; padding: 0 14px 14px; }
+.f-pp-corpo .f-atalhos { padding-top: 4px; border-top: 1px solid var(--border); }
+.f-pp.ok .f-pp-cab b, .f-pp.dim .f-pp-cab b { color: var(--text); }
+.f-col-a, .f-col-b { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* Sem conversa (modo foco): a ficha usa a largura toda em 2 colunas — esquerda: nome, régua, próximo passo · direita: dados. */
+.ficha.f-largo .f-corpo { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 22px; align-items: start; padding: 18px 24px 24px; }
+.ficha.f-largo .f-cab { padding: 18px 24px 12px; }
+/* Fora da Minha vez: gaveta mais larga (o resto da tela escurece pelo véu). */
+.gaveta.larga { width: min(800px, 100vw); }
+.ficha { --conv-w: min(460px, calc(100vw - 840px)); }
+@media (max-width: 1300px) {
+  .ficha.f-gaveta { --conv-w: 100%; }
+  .ficha.f-gaveta .f-conv { right: 0; left: 0; width: auto; z-index: 7; border-left: 0; box-shadow: none; }
+  .ficha.f-gaveta.conv-on .f-orelha { display: none; }
+}
+@media (max-width: 760px) {
+  .f-regua { grid-template-columns: repeat(5, minmax(56px, 1fr)); overflow-x: auto; }
+  .ficha.f-largo .f-corpo { display: flex; }
+}
+/* Modo foco da Minha vez (desktop · Lista): a lista some; conversa à esquerda e ficha à direita, ou só a ficha em 2 colunas. */
+.mv-trab.foco { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); }
+.mv-trab.foco.so-ficha { grid-template-columns: minmax(0, 1fr); }
+.mv-trab.foco.so-ficha .mv-lista { display: none; }
+body.mv-foco #funil, body.mv-foco #intro, body.mv-foco #sub { display: none; }
+body.mv-foco .main.mv > .cab { margin-bottom: 4px; }
+/* Cartão do Funil (Quadro de Vendas): nome · plano e valor · data · próximo passo em uma linha. */
+.qcard .q-data { font-size: 12px; font-weight: 600; color: var(--info-fg); }
+.qcard .q-data.ok { color: var(--ok-fg); }
+.qcard .prox { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

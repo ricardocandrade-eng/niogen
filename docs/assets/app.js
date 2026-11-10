@@ -1111,6 +1111,40 @@
     return `<span class="cad-bolas com-ajuda" aria-label="Cadência da Mari">${itens.join('')}</span>`;
   }
 
+  // ---------- 10 bolinhas das faturas do M-10 (10/11: uma regra só — Adimplência e ficha) ----------
+  // Fatura: {nr, vencimento, pagamento, valor, situacao: paga | aberta | sem_cobranca}. Bolinha:
+  // paga (verde) · ate15 (amarela, em aberto 1–15 d) · mais15 (vermelha, em aberto > 15 d) · avencer (cinza) · futura (não emitida).
+  // Contrato: inadimplente = fatura em aberto > 15 d do vencimento → perde o M-10.
+  const LIMITE_M10 = 15;
+  const N_FATURAS = 10;
+  function faturaEstado(f, hoje = diaSP()) {
+    if (!f) return { cls: 'futura', atraso: 0 };
+    const venc = String(f.vencimento).slice(0, 10);
+    if (f.situacao === 'paga' || f.situacao === 'sem_cobranca' || f.pagamento) {
+      const pg = f.pagamento ? String(f.pagamento).slice(0, 10) : null;
+      return { cls: 'paga', atraso: 0, pagoCom: pg ? Math.max(0, diasEntre(`${venc}T12:00:00-03:00`, `${pg}T12:00:00-03:00`)) : 0 };
+    }
+    const atraso = diasEntre(`${venc}T12:00:00-03:00`, `${hoje}T12:00:00-03:00`);
+    if (atraso <= 0) return { cls: 'avencer', atraso: 0, faltam: -atraso };
+    return { cls: atraso > LIMITE_M10 ? 'mais15' : 'ate15', atraso };
+  }
+  // faturas (jsonb da v_adimplencia) → [{ n, f, e }] das faturas 1–10
+  function faturasBolas(faturas, hoje = diaSP()) {
+    const porNr = Object.fromEntries((faturas || []).map((f) => [f.nr, f]));
+    const bolas = [];
+    for (let n = 1; n <= N_FATURAS; n++) bolas.push({ n, f: porNr[n], e: faturaEstado(porNr[n], hoje) });
+    return bolas;
+  }
+  function faturaDica(b) {
+    if (!b.f) return `Fatura ${b.n} · ainda não emitida`;
+    const venc = fmtDiaISO(String(b.f.vencimento).slice(0, 10));
+    if (b.e.cls === 'paga') return `Fatura ${b.n} · venc. ${venc} · ${b.f.situacao === 'sem_cobranca' ? 'sem cobrança' : `paga${b.f.pagamento ? ' ' + fmtDiaISO(String(b.f.pagamento).slice(0, 10)) : ''}`}${b.e.pagoCom ? ` (${b.e.pagoCom} d depois do vencimento)` : ''}`;
+    if (b.e.cls === 'avencer') return `Fatura ${b.n} · vence ${venc}${b.e.faltam != null ? ` (em ${b.e.faltam} d)` : ''}`;
+    return `Fatura ${b.n} · venc. ${venc} · em aberto há ${b.e.atraso} d`;
+  }
+  const faturasBolinhas = (bolas, rotulo) => `<span class="fat10" aria-label="${esc(rotulo || `${bolas.filter((b) => b.e.cls === 'paga').length} de ${N_FATURAS} faturas pagas`)}">${bolas.map((b) =>
+    `<i class="${b.e.cls}${b.e.pagoCom > LIMITE_M10 ? ' tarde' : ''}" title="${esc(faturaDica(b))}"></i>`).join('')}</span>`;
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1132,6 +1166,7 @@
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência
+    LIMITE_M10, N_FATURAS, faturaEstado, faturasBolas, faturaDica, faturasBolinhas,   // 10/11: faturas do M-10 (Adimplência + ficha)
     get usuario() { return usuarioAtual; },
   };
 })();

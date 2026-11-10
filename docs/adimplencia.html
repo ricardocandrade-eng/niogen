@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-01">
-<script src="config.js?v=101126-01"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-02">
+<script src="config.js?v=101126-02"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-01"></script>
-<script src="assets/sidebar.js?v=101126-01"></script>
-<script src="assets/conversa.js?v=101126-01"></script>
-<script src="assets/ficha.js?v=101126-01"></script>
+<script src="assets/app.js?v=101126-02"></script>
+<script src="assets/sidebar.js?v=101126-02"></script>
+<script src="assets/conversa.js?v=101126-02"></script>
+<script src="assets/ficha.js?v=101126-02"></script>
 </head>
 <body>
 <div class="app">
@@ -99,8 +99,7 @@
   // Régua de pagamento (CLAUDE.md, regras da Mari): D−2 · D0 · D+5, só fatura em aberto; depois do D+5 o vendedor liga
   // (com 15 dias em aberto a fatura desclassifica o M-10). Contrato: M-10 = 10º mês ativo, adimplente e sem downgrade,
   // apurado pela Nio no 11º mês.
-  const LIMITE_M10 = 15;
-  const N_FATURAS = 10;
+  const { LIMITE_M10, N_FATURAS } = NG;
   const SIT = { emdia: 'Em dia', ate15: 'Atraso ≤ 15 d', mais15: 'Atraso > 15 d' };
 
   const elConteudo = document.getElementById('conteudo');
@@ -169,25 +168,14 @@
   // ---------- regras (só a situação das faturas) ----------
   // Fatura: {nr, vencimento, pagamento, valor, situacao: paga | aberta | sem_cobranca}. Bolinha:
   // paga (verde) · ate15 (laranja, em aberto 1–15 d) · mais15 (vermelha, em aberto > 15 d) · avencer (cinza) · futura (não emitida).
-  function estado(f, hoje) {
-    if (!f) return { cls: 'futura', atraso: 0 };
-    const venc = String(f.vencimento).slice(0, 10);
-    if (f.situacao === 'paga' || f.situacao === 'sem_cobranca' || f.pagamento) {
-      const pg = f.pagamento ? String(f.pagamento).slice(0, 10) : null;
-      return { cls: 'paga', atraso: 0, pagoCom: pg ? Math.max(0, NG.diasEntre(`${venc}T12:00:00-03:00`, `${pg}T12:00:00-03:00`)) : 0 };
-    }
-    const atraso = NG.diasEntre(`${venc}T12:00:00-03:00`, `${hoje}T12:00:00-03:00`);
-    if (atraso <= 0) return { cls: 'avencer', atraso: 0, faltam: -atraso };
-    return { cls: atraso > LIMITE_M10 ? 'mais15' : 'ate15', atraso };
-  }
+  // 10/11: a regra da bolinha mora em assets/app.js (NG.faturaEstado) — a ficha usa a mesma.
+  const estado = NG.faturaEstado;
   const mesDeVida = (ativ, hoje) => (ativ ? Math.floor(NG.diasEntre(ativ, `${hoje}T12:00:00-03:00`) / 30.44) + 1 : null);
 
   function calcular(v) {
     const hoje = NG.diaSP();
     const faturas = (v.faturas || []).slice().sort((a, b) => a.nr - b.nr);
-    const porNr = Object.fromEntries(faturas.map((f) => [f.nr, f]));
-    const bolas = [];
-    for (let n = 1; n <= N_FATURAS; n++) bolas.push({ n, f: porNr[n], e: estado(porNr[n], hoje) });
+    const bolas = NG.faturasBolas(faturas, hoje);
     const todos = faturas.map((f) => ({ f, e: estado(f, hoje) }));
     const atrasadas = todos.filter((x) => x.e.atraso > 0).sort((a, b) => b.e.atraso - a.e.atraso);
     const maxAtraso = atrasadas.length ? atrasadas[0].e.atraso : 0;
@@ -244,15 +232,7 @@
 
   // ---------- desenho ----------
   const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ');
-  function dicaBola(b) {
-    if (!b.f) return `Fatura ${b.n} · ainda não emitida`;
-    const venc = NG.fmtDiaISO(String(b.f.vencimento).slice(0, 10));
-    if (b.e.cls === 'paga') return `Fatura ${b.n} · venc. ${venc} · ${b.f.situacao === 'sem_cobranca' ? 'sem cobrança' : `paga${b.f.pagamento ? ' ' + NG.fmtDiaISO(String(b.f.pagamento).slice(0, 10)) : ''}`}${b.e.pagoCom ? ` (${b.e.pagoCom} d depois do vencimento)` : ''}`;
-    if (b.e.cls === 'avencer') return `Fatura ${b.n} · vence ${venc}`;
-    return `Fatura ${b.n} · venc. ${venc} · em aberto há ${b.e.atraso} d`;
-  }
-  const bolinhas = (v) => `<span class="fat10" aria-label="${v.pagas} de ${N_FATURAS} faturas pagas">${v.bolas.map((b) =>
-    `<i class="${b.e.cls}${b.e.pagoCom > LIMITE_M10 ? ' tarde' : ''}" title="${esc(dicaBola(b))}"></i>`).join('')}</span>`;
+  const bolinhas = (v) => NG.faturasBolinhas(v.bolas, `${v.pagas} de ${N_FATURAS} faturas pagas`);
   const ativaTxt = (v) => ({ txt: v.ativado_em ? NG.fmtDataAno(v.ativado_em) : '—', sub: v.mes ? `${v.mes}º mês ativo` : '' });
   const LEGENDA = '<span class="fat10"><i class="paga"></i></span>paga <span class="fat10"><i class="ate15"></i></span>atraso ≤ 15 d '
     + '<span class="fat10"><i class="mais15"></i></span>atraso > 15 d <span class="fat10"><i class="avencer"></i></span>a vencer '
