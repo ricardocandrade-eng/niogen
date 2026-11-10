@@ -4,6 +4,8 @@
  * negociação (mari_turnos = o que passou pelo Chatwoot). Só leitura no banco; nada novo é gravado.
  * Painel lateral "NIOGEN no Portal". Fala com o Supabase Nio por REST com a anon key + o login do usuário do NIOGEN (o RLS vale).
  * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão (só tokens) em chrome.storage.local por até 30 dias (0.4.0).
+ * rev. 10/11 (0111, 0.4.1): o nº do pedido só existe na OS (OS = pedido). O painel não pede mais número: "Aprovado" no crédito
+ *   (etapa 3) leva a venda para Biometria no NIOGEN (etiqueta + aviso do link), com "Já avisei" e a conferência de recompra.
  * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
  * rev. 09/11 (0087, 0.3.1): venda = OS aberta (etapa 7) — o painel pede o nº do pedido E o nº da OS.
  * rev. 09/11 (0092, 0.3.3): na etapa 2 o resultado da viabilidade e na etapa 3 o do crédito vão para o NIOGEN com um toque
@@ -446,17 +448,33 @@
     if (fechou) rolarPara(n + 1); else if (S.resultados[n]) rolarPara(n, 'nearest');
   }
   // 0092: registra no NIOGEN o que o portal respondeu (viabilidade na etapa 2, crédito na etapa 3) — o mesmo botão da ficha.
+  // 0111 (Ricardo, 10/11): o nº do pedido só existe na OS. Crédito aprovado aqui = etapa Biometria no NIOGEN (etiqueta + aviso do link).
+  const aprovou = (qual, resultado) => qual === 'credito' && ['aprovado', 'so_cartao'].includes(resultado);
   async function registra(qual, resultado) {
     if (!S.dados || !S.dados.venda_id) { aviso('Abra uma venda para registrar.', 'bad'); desenha(); return; }
+    if (aprovou(qual, resultado) && (S.selos || []).length && !S.conferiRecompra) {
+      aviso('Marque "Conferi: não é cliente nem endereço Nio" — há aviso de possível duplicado nesta venda.', 'bad'); desenha(); return;
+    }
     S.ocupado = true; aviso(''); desenha();
     try {
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
+      if (aprovou(qual, resultado) && (S.selos || []).length) {
+        try { await rpc('venda_conferencia_recompra', { p_venda: S.dados.venda_id, p_selos: S.selos.map((x) => x.tipo), p_origem: 'extensao' }); } catch (e) { /* não segura a venda */ }
+      }
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao', sem_aviso: !!S.semAviso } });
       S.registro = { ...(S.registro || {}), [qual]: resultado };
       aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
-  async function gravaPedido() {
+  async function concluiVenda() {
+    S.fila = (S.fila || []).filter((x) => x.venda_id !== (S.venda || {}).venda_id);
+    S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null;
+    S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
+    try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
+    aviso('');
+    desenha();
+  }
+  async function gravaPedido() {   // legado (antes de 0111); sem botão desde 10/11
     const ped = S.pedido.trim();
     if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
     if ((S.selos || []).length && !S.conferiRecompra) {
@@ -667,24 +685,27 @@
       h('span', { class: 'sub' }, n === 2 ? 'O portal respondeu a viabilidade? Registre no NIOGEN:' : 'O portal respondeu o crédito? Registre no NIOGEN:'),
       n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
         : h('div', { class: 'acoes' }, B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')),
+      n === 3 ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
+        ' Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)') : null,
+      n === 3 && (S.selos || []).length ? h('div', { class: 'aviso bad' },
+        h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
+          ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
+      n === 3 ? h('span', { class: 'sub' }, 'Aprovado: a venda vai para Biometria e o NIOGEN avisa o cliente do link sozinho. Não há nº de pedido aqui — ele só existe na OS.') : null,
       feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT[feito] || feito}`) : null);
   }
 
   function fimDoPedido() {
     if (S.venda) {
+      // 0111: sem nº de pedido aqui (só existe na OS, gravada pela ficha depois da biometria validada).
+      const cred = (S.registro || {}).credito;
+      const ok = ['aprovado', 'so_cartao'].includes(cred);
       return h('section', { class: 'card' },
-        h('h2', {}, 'Pedido gravado → biometria'),
-        h('span', { class: 'sub' }, 'Quando o portal gravar o pedido, digite o nº aqui e grave (etapa 3). A Nio manda o link da biometria ao cliente. A OS vem DEPOIS da biometria validada, já com o dia e o período, pela ficha do NIOGEN. Eu não leio os números do portal.'),
-        h('label', { class: 'campo' }, 'Número do pedido',
-          h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
-        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
-          ' Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)'),
-        (S.selos || []).length ? h('div', { class: 'aviso bad' },
-          h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
-          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
-            ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
-        h('span', { class: 'sub' }, 'O NIOGEN avisa o cliente sozinho quando você grava — não mande o aviso à mão.'),
-        h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
+        h('h2', {}, ok ? 'Crédito aprovado → biometria' : 'Falta o crédito'),
+        h('span', { class: 'sub' }, ok
+          ? 'A Nio manda o link da biometria ao cliente e o NIOGEN já avisou. Com a biometria validada, abra a OS e grave o nº do pedido (= OS) na ficha do NIOGEN.'
+          : 'Registre o resultado do crédito na etapa 3 acima — é ele que leva a venda para Biometria. O nº do pedido só existe na OS.'),
+        h('button', { class: 'btn btn-bloco', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir e fechar esta venda'));
     }
     const c = S.conversa;
     return h('section', { class: 'card' },

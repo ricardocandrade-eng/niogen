@@ -51,11 +51,14 @@
     { id: 'instalado', n: 5, nome: 'Instalada', status: ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'] },
     { id: 'saida', n: 0, nome: 'Saída', status: ['saida'] },
   ];
-  // etapaDe(venda) — com a venda separa a etapa 2 da 3 pelo nº do pedido; com só o status, 0_qualificado = Lead qualificado.
+  // 0111 (Ricardo, 10/11): etapa 3 (Biometria) = crédito aprovado no portal — o nº do pedido só existe na OS (OS = pedido).
+  // O nº gravado antes da OS (vendas antigas) continua valendo. Mesma regra da jornada_etapa do banco.
+  const naBiometria = (v) => !!v && (String(v.nio_pedido || '').trim() !== '' || ['aprovado', 'so_cartao'].includes(v.credito_resultado));
+  // etapaDe(venda) — com a venda separa a etapa 2 da 3 pelo crédito aprovado; com só o status, 0_qualificado = Lead qualificado.
   const etapaDe = (x) => {
     const obj = x && typeof x === 'object';
     const st = obj ? x.status : x;
-    if (st === '0_qualificado') return obj && (x.jornada_etapa === 3 || String(x.nio_pedido || '').trim()) ? ETAPAS[1] : ETAPAS[0];
+    if (st === '0_qualificado') return obj && (x.jornada_etapa === 3 || naBiometria(x)) ? ETAPAS[1] : ETAPAS[0];
     return ETAPAS.find((e) => e.status.includes(st)) || { id: '', n: null, nome: st || '—', status: [] };
   };
   // ---------- v_jornada (0090): a regra única de "precisa de ação" ----------
@@ -107,7 +110,7 @@
   const noTetoContato = (hoje, mes, t) => !!t && ((t.dia != null && (hoje || 0) >= t.dia) || (t.mes != null && (mes || 0) >= t.mes));
   const contatosTxt = (hoje, mes, t) => `hoje ${hoje || 0}${t && t.dia != null ? `/${t.dia}` : ''} · mês ${mes || 0}${t && t.mes != null ? `/${t.mes}` : ''}`;
   // Rótulo do botão do próximo passo (v_jornada.botao) — o mesmo do Live.
-  const BOTAO_PASSO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', biometria: 'Biometria',
+  const BOTAO_PASSO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', credito: 'Crédito', biometria: 'Biometria',
     os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
   const passoJornada = (j) => (j ? { txt: j.o_que_fazer, nivel: NIVEL_COR[j.nivel] || 'dim', acao: !!j.precisa_acao, espera: j.nivel === 'espera', botao: j.botao } : null);
@@ -698,18 +701,16 @@
     return `${fd.get('data')}T${fd.get('periodo')}:00-03:00`;
   }
 
-  // 0087: venda = OS aberta no portal (etapa 7) — nº do pedido + nº da OS. A biometria vem depois.
+  // 0111: venda = OS aberta no portal — o nº do pedido É a OS (um ID só, gravado nas duas colunas).
   async function pedirPedidoBiometria(venda) {
     const fd = await modal(`
       <h3>Registrar a venda (OS aberta)</h3>
-      <p>Venda é a OS aberta no portal da Nio (etapa 7 "Abrir OS"). O banco confere também a viabilidade do portal e o crédito.</p>
-      <label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(venda.nio_pedido || '')}" autocomplete="off"></label>
-      <label class="campo">Nº da OS<input type="text" name="os" value="${esc(venda.nio_os || '')}" autocomplete="off"></label>
+      <p>Venda é a OS aberta no portal da Nio — o nº do pedido é o número da OS. O banco confere também a viabilidade do portal e o crédito.</p>
+      <label class="campo">Nº do pedido (OS)<input type="text" name="os" value="${esc(venda.nio_os || venda.nio_pedido || '')}" autocomplete="off"></label>
     `);
     if (!fd) return null;
-    const pedido = String(fd.get('pedido') || '').trim();
     const os = String(fd.get('os') || '').trim();
-    return { nio_pedido: pedido || null, nio_os: os || null };
+    return { nio_pedido: os || null, nio_os: os || null };
   }
 
   async function pedirSaida(venda) {
@@ -928,7 +929,7 @@
       case '0_qualificado': {
         // 0089: etapa 2 LEAD QUALIFICADO (sem pedido) → viabilidade → pedido. Etapa 3 PEDIDO · BIOMETRIA (com pedido) → biometria
         // validada → abrir a OS (é ela que faz a venda contar, 0096); agendar é o passo seguinte. Mesmos textos da v_jornada.
-        if (!String(v.nio_pedido || '').trim()) {
+        if (!naBiometria(v)) {
           if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
           if (!portalViavel(v)) {
             if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
@@ -937,9 +938,10 @@
             if (v.nio_viab_resultado === 'viavel') return { txt: 'Viabilidade vencida (> 7 dias) · consultar de novo no portal', nivel: 'warn', acao: true, resolver: 'viab' };
             return { txt: 'Consultar a viabilidade no portal', nivel: 'warn', acao: true, resolver: 'viab' };
           }
-          return { txt: 'Viável · abrir o pedido no portal e gravar o nº', nivel: 'warn', acao: true, resolver: 'pedido' };
+          if (v.credito_resultado === 'pendente') return { txt: 'Crédito pendente na Nio · conferir no portal e gravar o resultado', nivel: 'warn', acao: true, resolver: 'credito' };
+          return { txt: 'Viável · rodar o crédito no portal e gravar o resultado', nivel: 'warn', acao: true, resolver: 'credito' };
         }
-        const desdeLink = v.biometria_link_enviado_em || v.nio_pedido_em;
+        const desdeLink = v.biometria_link_enviado_em || v.nio_pedido_em || v.credito_em;
         const hBio = desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null;
         if (v.biometria_status === 'validada') {
           const h = v.biometria_validada_em ? (Date.now() - new Date(v.biometria_validada_em)) / 3600000 : null;
@@ -986,9 +988,9 @@
   // Em que passo a venda está parada, desde quando e se passou do prazo do contrato. Prazos vêm de config_regras
   // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
   const PARADAS = [
-    { id: 'qualificado', nome: 'Lead qualificado', dica: 'Etapa 2 · ainda NÃO é venda: falta a viabilidade do portal e gravar o pedido' },
-    { id: 'biometria', nome: 'Biometria', dica: 'Etapa 3 · pedido gravado: esperando o cliente fazer a biometria (link automático da Nio)' },
-    { id: 'agendamento', nome: 'Abrir a OS', dica: 'Etapa 3 · biometria validada, falta abrir a OS no portal — contrato: até 4 h' },
+    { id: 'qualificado', nome: 'Lead qualificado', dica: 'Etapa 2 · ainda NÃO é venda: falta a viabilidade do portal e o crédito aprovado' },
+    { id: 'biometria', nome: 'Biometria', dica: 'Etapa 3 · crédito aprovado: esperando o cliente fazer a biometria (link automático da Nio)' },
+    { id: 'agendamento', nome: 'Abrir a OS', dica: 'Etapa 3 · biometria validada, falta abrir a OS no portal e gravar o nº do pedido — contrato: até 4 h' },
     { id: 'agendar', nome: 'Agendar', dica: 'Etapa 4 · OS aberta (venda), falta agendar a instalação — contrato: até 4 h da biometria' },
     { id: 'instalacao', nome: 'Ativação/Agenda', dica: 'Etapa 4 · instalação agendada: esperando o técnico / a baixa da Nio no OSAB' },
     { id: 'instalada', nome: 'Instalada · docs', dica: 'Etapa 5 · instalada, documentos à Nio pendentes — contrato: 15 dias' },
@@ -1000,8 +1002,8 @@
     const horas = (desde) => (desde ? (Date.now() - new Date(desde)) / 3600000 : null);
     switch (v.status) {
       case '0_qualificado': {
-        if (!String(v.nio_pedido || '').trim()) return { id: 'qualificado', desde: v.criado_em };
-        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.nio_pedido_em || v.criado_em };
+        if (!naBiometria(v)) return { id: 'qualificado', desde: v.criado_em };
+        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.nio_pedido_em || v.credito_em || v.criado_em };
         const desde = v.biometria_validada_em || v.criado_em;
         return { id: 'agendamento', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
       }
@@ -1190,7 +1192,7 @@
 
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, oportunidades, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
