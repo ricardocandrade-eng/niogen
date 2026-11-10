@@ -21,7 +21,8 @@
     ['Backoffice', [
       // 10/11 (Ricardo, 14h14): "Minha vez" passou a se chamar Live (arquivo e rota iguais). Bolinha vermelha discreta à
       // esquerda do nome; número verde = só obrigação (v_jornada) · selo laranja 🔥 N = oportunidades (0107), nunca somados.
-      { id: 'minhavez', ico: '☰', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
+      // 10/11 17h30 (Ricardo): sem o ☰ — a bolinha vermelha ocupa o lugar do ícone, alinhada com os demais.
+      { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
     ]],
     ['Gestão', [
@@ -66,7 +67,7 @@
   function item(it, ativo) {
     // esconder: o item some (em vez de "em breve") para quem não tem o perfil — ex.: vendedor não vê a Mari.
     if (it.esconder && it.perfis && !it.perfis.includes((NG.usuario || {}).perfil)) return '';
-    const conteudo = `<span class="ico" aria-hidden="true">${it.ico}</span>${it.vivo ? '<span class="live-dot" aria-hidden="true"></span>' : ''}${NG.esc(it.nome)}` +
+    const conteudo = `<span class="ico" aria-hidden="true">${it.vivo ? '<span class="live-dot"></span>' : it.ico}</span>${NG.esc(it.nome)}` +
       (it.badge ? `<span class="badge" data-badge="${it.badge}" hidden></span>` : '') +
       (it.badge2 ? `<span class="badge fogo" data-badge="${it.badge2}" hidden></span>` : '') +
       (it.breve ? '<span class="tag-breve">em breve</span>' : '');

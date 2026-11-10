@@ -1772,3 +1772,9 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 @keyframes mv-op-sobe { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mv-op-dock-corpo { animation: none; } }
 @media (max-width: 900px) { .mv-op-dock { max-height: 70vh; } .mv-bloco { margin: 10px 8px 0; } }
+/* 10/11 17h30 (Ricardo): Live no menu — bolinha no lugar do ícone; número de "Para fazer" verde sólido (obrigação),
+   vermelho sólido quando tem algo para AGORA; selo 🔥 com o mesmo tamanho e alinhamento */
+.nav-item .ico .live-dot { margin: 0; vertical-align: middle; }
+.nav-item .badge[data-badge="fila"] { background: var(--accent); color: #06200F; border: 1px solid transparent; min-width: 20px; text-align: center; line-height: 16px; padding: 0 6px; }
+.nav-item .badge[data-badge="fila"].alerta { background: #E5484D; color: #fff; }
+.nav-item .badge.fogo { line-height: 16px; padding: 0 6px; }
