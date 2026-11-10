@@ -20,7 +20,7 @@
  * barra da JORNADA (5 etapas) · PRÓXIMO PASSO (um bloco, o botão e "o NIOGEN faz sozinho") · atalhos (Pendência, Devolver
  * para a Mari, Cliente pediu para parar, Saída) · 4 quadros de STATUS (NIOGEN · Nio · Chatwoot · Contrato) · LEMBRETES
  * automáticos · os blocos de antes recolhidos embaixo. A etapa só anda pelo botão: "Mover para…" ficou só para admin no "⋯".
- * Ordem nova: pedido → biometria → OS + agendar (um passo; é ele que faz a venda contar). Texto e "precisa de ação" da v_jornada.
+ * Ordem: pedido → biometria → OS (é ela que faz a venda contar) → agendar (0096, "são etapas diferentes"). Texto e "precisa de ação" da v_jornada.
  * Ficha de CONVERSA (etapa 1, conversa sem venda): #conversa=<id> — NGFicha.abrirConversa(id).
  * Depende de app.js (NG) e conversa.js (NGConversa). Uso: NGFicha.abrir(id) · NGFicha.abrirConversa(id) · NGFicha.aoMudar(fn) ·
  * NGFicha.aoConversa(fn) (a tela abre a conversa no lugar dela) · NGFicha.lado(el) (ficha ao lado, sem gaveta) · NGFicha.pagina(el, id).
@@ -373,8 +373,9 @@
        <label class="campo">Resumo<textarea name="resumo" maxlength="500"></textarea></label>
        <label class="check"><input type="checkbox" name="autorizado"> O cliente pediu ou autorizou este contato</label>`, 'Registrar contato'),
     // Instalação: agendar (Vendido → Aguardando) ou reagendar; limpa a pendência da Nio (os campos do antigo NG.registrarAgendamento).
-    agendar: (v) => formWrap('agendar', 'Reagendar a instalação',
-      'Exceção: só quando a Nio ou o cliente mudar a data. O NIOGEN confirma a nova data ao cliente sozinho.',
+    agendar: (v) => formWrap('agendar', v.instalacao_agendada_para ? 'Reagendar a instalação' : 'Agendar a instalação',
+      v.instalacao_agendada_para ? 'Exceção: só quando a Nio ou o cliente mudar a data. O NIOGEN confirma a nova data ao cliente sozinho.'
+        : 'OS aberta. Agende no portal o dia e o período combinados com o cliente e grave aqui — o NIOGEN confirma ao cliente sozinho. Contrato: até 4 h da biometria validada.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
        ${campoPeriodo('periodo', v.instalacao_agendada_para ? periodoDe(v.instalacao_agendada_para) : '08:00')}</div>`, v.instalacao_agendada_para ? 'Reagendar' : 'Agendar'),
     // 0089: etapa 2 → 3. Só o nº do pedido (a OS vem depois da biometria).
@@ -383,7 +384,11 @@
       `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
        <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>`, 'Gravar pedido'),
-    // 0089: etapa 3 → 4 (VENDA). OS + dia + período num formulário só.
+    // 0096: etapa 3 → 4 (VENDA). Só o nº da OS; agendar é o passo seguinte.
+    os: (v) => formWrap('os', 'Abrir a OS = VENDA',
+      'Biometria validada. Abra a OS no portal e grave aqui o número — com isso a venda conta. Depois vem o agendamento. Contrato: até 4 h da biometria validada.',
+      `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" autocomplete="off" autofocus></label></div>`, 'Gravar a OS → vira Venda'),
+    // 0089 (mantido): OS + dia + período num formulário só.
     os_agendar: (v) => formWrap('os_agendar', 'Abrir a OS e agendar = VENDA',
       'Biometria validada. No portal, abra a OS já com o dia e o período combinados com o cliente e grave aqui. Com isso, a venda conta. Contrato: até 4 h da biometria validada.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" autocomplete="off" autofocus></label>
@@ -552,12 +557,17 @@
     async agendar(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
       // 0089: reagendar (exceção, depois da venda) — confirma ao cliente e resolve a conversa, pelo sistema.
-      return !!(await rodarMomento('reagendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }));
+      return !!(await rodarMomento('agendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }));
     },
     async pedido_so(fd) {
       const pedido = String(fd.get('pedido') || '').trim();
       if (!pedido) { NG.toast('Informe o nº do pedido.', 'bad'); return false; }
       return !!(await rodarMomento('pedido', { pedido, credito: fd.get('credito') || null, sem_aviso: !!fd.get('sem_aviso') }));
+    },
+    async os(fd) {
+      const os = String(fd.get('os') || '').trim();
+      if (!os) { NG.toast('Informe o nº da OS.', 'bad'); return false; }
+      return !!(await rodarMomento('os', { os }));
     },
     async os_agendar(fd) {
       const os = String(fd.get('os') || '').trim();
@@ -910,7 +920,7 @@
   }
 
   // ---------- desenho ----------
-  const DESTINOS = [['0_qualificado', 'Lead qualificado'], ['2_aguardando_instalacao', 'Venda · OS agendada'],
+  const DESTINOS = [['0_qualificado', 'Lead qualificado'], ['2_aguardando_instalacao', 'Ativação/Agenda'],
     ['3_instalado', 'Instalada'], ['saida', 'Saída']];   // só admin (menu ⋯); ativo vem do OSAB
 
   function cabecalho(v) {
@@ -934,7 +944,7 @@
         <div class="f-ctl"><div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
           <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         ${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-      <div class="f-local">${NG.pilulaEtapa(v)} ${esc(linha2 || '—')}</div>
+      <div class="f-local">${linkConversa()}<span>${esc(linha2 || '—')}</span></div>
     </header>`;
   }
 
@@ -1002,7 +1012,9 @@
     assumir: 'atribui a você no Chatwoot, cala a Mari e para a cadência.',
     viabilidade: 'nota no Chatwoot. Sem viabilidade: tente variações de CEP/rua/nº ou abra a pendência "Nio confirma".',
     pedido: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria.',
-    biometria: 'Validada: o próximo passo vira abrir a OS e agendar (4 h). Negado: pede outro CPF ao cliente e abre a pendência.',
+    biometria: 'Validada: o próximo passo vira abrir a OS (4 h). Negado: pede outro CPF ao cliente e abre a pendência.',
+    os: 'nota no Chatwoot. Com a OS a venda conta; o próximo passo é agendar a instalação.',
+    agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
     os_agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
     reagendar: 'confirma a nova data ao cliente e resolve a conversa.',
     docs: 'registra a entrega (contrato: 15 dias depois da instalação).',
@@ -1029,8 +1041,8 @@
     const form = formAtivo && FORMS[formAtivo] && !formAtivo.startsWith('conf_') && !FORMS_NO_CARTAO.includes(formAtivo) ? FORMS[formAtivo](v) : '';
     if (!bo) {
       // Vendedor: o passo de sempre (contato, documentos…). Os botões dos momentos são do backoffice.
-      if (pr.resolver && BOTAO[pr.resolver] && !['pedido', 'portal', 'bio_status', 'agendar', 'reagendar', 'os_agendar'].includes(pr.resolver)) bts.push(`<button type="button" class="btn" data-resolver="${pr.resolver}">${esc(BOTAO[pr.resolver])}</button>`);
-      if (etapa >= 2 && etapa <= 3) nota = 'O backoffice anda a venda pelo portal (pedido → biometria → OS + agendamento).';
+      if (pr.resolver && BOTAO[pr.resolver] && !['pedido', 'portal', 'bio_status', 'os', 'agendar', 'reagendar', 'os_agendar'].includes(pr.resolver)) bts.push(`<button type="button" class="btn" data-resolver="${pr.resolver}">${esc(BOTAO[pr.resolver])}</button>`);
+      if (etapa >= 2 && etapa <= 3) nota = 'O backoffice anda a venda pelo portal (pedido → biometria → OS → agendamento).';
     } else if (j && j.botao === 'pendencia') {
       bts.push(B('data-resolver="pendencia"', 'Ver a pendência', nivel === 'agora'));
       sozinho = '';
@@ -1060,13 +1072,16 @@
       }
     } else if (etapa === 3) {
       if (v.biometria_status === 'validada') {
-        if (!form) formAtivoPadrao = 'os_agendar';
-        sozinho = SOZINHO.os_agendar;
+        if (!form) formAtivoPadrao = 'os';
+        sozinho = SOZINHO.os;
       } else {
         bts.push(B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', true), B('data-momento="biometria" data-r="risco"', 'Com risco', false),
           B('data-momento="biometria" data-r="negado"', 'Crédito negado', false));
         sozinho = SOZINHO.biometria;
       }
+    } else if (etapa === 4 && !v.instalacao_agendada_para) {
+      if (!form) formAtivoPadrao = 'agendar';
+      sozinho = SOZINHO.agendar;
     } else if (etapa === 4) {
       bts.push(B('data-resolver="reagendar"', 'Reagendar', nivel === 'agora' || nivel === 'hoje'));
       sozinho = SOZINHO.reagendar;
@@ -1075,7 +1090,7 @@
       bts.push(B('data-resolver="docs"', 'Documentos ok', true));
       sozinho = SOZINHO.docs;
     }
-    // Formulário padrão do passo (pedido / OS + agendar) aparece aberto dentro do bloco.
+    // Formulário padrão do passo (pedido / OS / agendar) aparece aberto dentro do bloco.
     let corpoForm = form;
     if (!corpoForm && formAtivoPadrao && FORMS[formAtivoPadrao]) corpoForm = FORMS[formAtivoPadrao](v).replace(`data-f="cancelar">Cancelar`, 'data-f="cancelar" hidden>Cancelar');
     formAtivoPadrao = null;
@@ -1103,13 +1118,12 @@
     const temCw = cv && cv.chatwoot_conversation_id;
     const dono = temCw ? donoConversa(cv).tipo : null;
     const b = [];
-    if (v.status === 'saida' && d.conversaId) return `<div class="f-atalhos">${botaoConversa(d.nMsgs)}</div>`;
     if (bo && !d.pend && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="pend-abrir" title="A venda sai da sua vez até a data de revisão; a cadência da Mari pausa">⏸ Pendência</button>');
     if (bo && temCw && (dono === 'pessoa' || dono === 'time')) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari" title="Tira a atribuição no Chatwoot e deixa nota: a Mari continua com o contexto">Devolver para a Mari</button>');
     if (bo && temCw && !cv.nao_contatar) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar" title="Etiqueta nao-contatar, nota, resolve a conversa e para tudo">Cliente pediu para parar</button>');
     if (bo && NG.etapaDe(v).n >= 2 && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="trocar-plano" title="Upsell ou troca feita no portal: o valor e a comissão se recalculam">Trocar plano</button>');
     b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="saida-form">Saída…</button>');
-    return `<div class="f-atalhos">${botaoConversa(d.nMsgs)}${b.join('')}</div>`;
+    return b.length ? `<div class="f-atalhos">${b.join('')}</div>` : '';
   }
 
   function barraJornada(etapaAtual, datas = {}) {
@@ -1183,6 +1197,13 @@
     </div>`;
   }
   const botaoConversa = (n) => (d.conversaId ? `<button type="button" class="btn btn-sm f-bt-conv" data-f="conversa">💬 ${convAberta && !hostConversa ? 'Fechar a conversa' : 'Conversa'}${n != null ? ` · ${n}` : ''}</button>` : '');
+  // 0096: a conversa vira link no começo da linha do nome — "💬 Conversa · #32 | cidade · plano · origem".
+  const linkConversa = () => {
+    if (!d.conversaId) return '';
+    const cw = d.convInfo && d.convInfo.chatwoot_conversation_id;
+    const rot = convAberta && !hostConversa ? 'Fechar a conversa' : 'Conversa';
+    return `<button type="button" class="f-link-conv" data-f="conversa" title="${convAberta && !hostConversa ? 'Fechar a conversa' : 'Abrir a conversa'}${d.nMsgs != null ? ` · ${d.nMsgs} mensagens` : ''}">💬 ${rot}${cw ? ` · #${esc(cw)}` : ''}</button><span class="f-sep">|</span>`;
+  };
 
   // Lembretes automáticos da etapa: o que já saiu (✓), o próximo com horário, parada quando há dono, Pausar = pendência.
   function lembretes(v) {
@@ -1373,7 +1394,7 @@
           ${linha('Análise de crédito', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ' · ' + NG.fmtDataHora(v.credito_em) : ''}` : '—'))}
           ${linha('Biometria (link da Nio)', esc(`${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}${v.biometria_link_enviado_em ? ' · link enviado pela Nio ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
           ${avisosMari(['BIO1', 'BIO3'])}
-          ${linha('Venda (OS + agendamento) em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '— ainda não é venda'))}
+          ${linha('Venda (OS aberta) em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '— ainda não é venda'))}
           ${linha('Vendedor', esc(v.vendedor_nome || '—'))}
           ${v.status === '0_qualificado' ? botoesPortal : ''}
           <div class="f-sub">Conferências do contrato</div>
@@ -1392,7 +1413,7 @@
           <label class="campo">Biometria (link)<select name="biometria">${optBiometria(v.biometria_status)}</select></label>
           <label class="campo">Vendedor<select name="vendedor"><option value="">—</option>${vendedores.map((u) => `<option value="${u.id}" ${u.id === v.vendedor_id ? 'selected' : ''}>${esc(u.nome)}</option>`).join('')}</select></label></div>
           <label class="campo">Link da biometria<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>
-          <span class="nota-campo">A etapa só anda pelo botão do próximo passo. Venda = pedido + biometria validada + OS + agendamento + viabilidade do portal (o banco confere).</span>
+          <span class="nota-campo">A etapa só anda pelo botão do próximo passo. Venda = pedido + biometria validada + OS aberta + viabilidade do portal (o banco confere); o agendamento vem depois.</span>
           ${acoesForm('Salvar')}</form>`,
       },
       {
@@ -1474,7 +1495,7 @@
         ${v.status === 'saida' ? '' : NG.selosFicha(d.avisos, { ignorar: v.id })}
         ${linhaStatus(v)}
         ${cartaoPendencia(v)}
-        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}">${detalhes ? '▾' : '▸'} Mais detalhes · lembretes, viabilidade, dados para o portal, cliente, plano, pedido, instalação, comissão, histórico</button>
+        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}"><b>${detalhes ? '▾' : '▸'} 📋 Dados do cliente e da venda</b><span>cliente, endereço, plano, dados para o portal, viabilidade, pedido, instalação, comissão, lembretes, histórico</span></button>
         <div class="f-detalhes"${detalhes ? '' : ' hidden'}>
         ${detalhes ? `${lembretes(v)}
         ${cartaoViabilidade(v)}
@@ -1526,6 +1547,19 @@
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
     };
   }
+  // 0096 (Ricardo: "não estou vendo opção para ver os demais dados do cliente"): os valores que a Mari coletou, com copiar.
+  function dadosConversa(c) {
+    const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
+    const rua = x.rua_confirmada || x.rua_informada;
+    const L = [
+      ['Nome', x.nome || c.nome_contato], ['Telefone', c.telefone || x.telefone], ['CPF', x.cpf], ['E-mail', x.email],
+      ['CEP', x.cep_origem], ['Endereço', rua], ['Complemento', x.complemento_ok === true ? 'sem complemento' : typeof x.complemento_ok === 'string' ? x.complemento_ok : null],
+      ['Referência', x.referencia], ['Cidade', c.cidade], ['Operadora atual', x.operadora_atual], ['Plano escolhido', c.plano_escolhido],
+    ].filter(([, val]) => val != null && String(val).trim() !== '');
+    return `<div class="f-lembretes f-dados-conv"><div class="f-lb-cab"><span class="f-rot">DADOS DO CLIENTE (COLETADOS PELA MARI)</span></div>
+      ${L.length ? `<dl class="f-dl">${L.map(([k, val]) => `<dt>${esc(k)}</dt><dd><span>${esc(String(val))}</span><button type="button" class="f-copia" data-copiar="${esc(String(val))}" title="Copiar ${esc(k)}">⧉</button></dd>`).join('')}</dl>`
+        : '<span class="apagado">A Mari ainda não coletou dados deste cliente.</span>'}</div>`;
+  }
   function renderConversa() {
     const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;
     const c = d.conv;
@@ -1546,7 +1580,7 @@
       bts.push('<button type="button" class="btn btn-acc" data-f="conversa">Abrir a conversa e responder</button>');
       sozinho = SOZINHO.responder;
     }
-    const at = [botaoConversa(d.nMsgs)];
+    const at = [];
     if (bo && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
     if (bo && !c.nao_contatar && c.chatwoot_conversation_id) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar">Cliente pediu para parar</button>');
     at.push(`<a class="btn btn-ghost btn-sm" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>`);
@@ -1557,7 +1591,7 @@
     raiz.innerHTML = `<div class="ficha f-${modo}${convAberta && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
       <header class="f-cab"><div class="f-linha1"><h2>${esc(c.nome)}</h2><div class="f-ctl">${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-        <div class="f-local"><span class="pill conversa">Conversa</span> ${esc([c.cidade, q.plano_nome, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).join(' · ') || '—')}</div></header>
+        <div class="f-local">${linkConversa()}<span>${esc([c.cidade, q.plano_nome, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).join(' · ') || '—')}</span></div></header>
       <div class="f-corpo">
         ${barraJornada(1)}
         <section class="f-prox ${NIVEL_CLS[nivel] || 'dim'}" aria-label="Próximo passo">
@@ -1572,9 +1606,9 @@
           <div class="f-st-g"><span class="f-rot">CONVERSA</span>${c.chatwoot_conversation_id ? `<span class="f-chip">${c.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span><span class="f-chip">${dono.html}</span><span class="f-chip">Janela ${esc(janelaTxt(c))}</span>` : '<span class="f-chip">sem Chatwoot</span>'}</div>
           <div class="f-st-g"><span class="f-rot">CONTRATO</span>${[q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean).map((x) => `<span class="f-chip bad">✕ ${esc(x)}</span>`).join('') || '<span class="f-chip ok">✓ ok</span>'}</div>
         </div>
-        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}">${detalhes ? '▾' : '▸'} Mais detalhes · lembretes da Mari e dados coletados</button>
+        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}"><b>${detalhes ? '▾' : '▸'} 📋 Dados do cliente</b><span>o que a Mari coletou (nome, CPF, endereço, contato) e os lembretes</span></button>
         <div class="f-detalhes"${detalhes ? '' : ' hidden'}>
-        ${detalhes ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">LEMBRETES AUTOMÁTICOS · CADÊNCIA DO LEAD</span></div>
+        ${detalhes ? `${dadosConversa(c)}<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">LEMBRETES AUTOMÁTICOS · CADÊNCIA DO LEAD</span></div>
           <div class="f-cad">${['24 h', 'D3', 'Ligação', 'D7', 'D15'].map((x, i) => `${i ? '<i class="f-cad-s">›</i>' : ''}<span class="f-cad-p">${esc(x)}</span>`).join('')}</div>
           ${dono.tipo === 'pessoa' || dono.tipo === 'time' ? '<span class="apagado">Parada: a conversa está com uma pessoa. Volta se devolver para a Mari.</span>'
             : k && k.proximo_passo && k.proximo_em ? `<span>Próximo: <b>${esc(k.proximo_passo)} · ${esc(NG.fmtDiaSemana(k.proximo_em))} ${esc(NG.fmtDataHora(k.proximo_em))}</b>${k.bloqueio && k.bloqueio !== 'aguardando' ? ` · ${esc(k.bloqueio)}` : ''}</span>` : '<span class="apagado">Nenhum lembrete marcado agora.</span>'}</div>
@@ -1625,6 +1659,8 @@
   }
   function ligar(el) {
     el.addEventListener('click', async (ev) => {
+      const cp = ev.target.closest('[data-copiar]');
+      if (cp) { copiar(cp.dataset.copiar, 'Copiado.'); return; }
       const mo = ev.target.closest('[data-momento]');
       if (mo && d) {
         const qual = mo.dataset.momento;
@@ -1799,7 +1835,7 @@
   async function mover(destino) {
     const v = d.v;
     if (destino === v.status) return;
-    if (['1_vendido', '2_aguardando_instalacao'].includes(destino) && v.status === '0_qualificado') { formAtivo = 'os_agendar'; render(); return; }
+    if (['1_vendido', '2_aguardando_instalacao'].includes(destino) && v.status === '0_qualificado') { formAtivo = 'os'; render(); return; }
     if (destino === '2_aguardando_instalacao') { formAtivo = 'mover_aguardando'; render(); return; }
     if (destino === 'saida') { formAtivo = 'saida'; render(); return; }
     formAtivo = null;

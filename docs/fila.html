@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-26">
-<script src="config.js?v=091126-26"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-27">
+<script src="config.js?v=091126-27"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-26"></script>
-<script src="assets/sidebar.js?v=091126-26"></script>
-<script src="assets/conversa.js?v=091126-26"></script>
-<script src="assets/ficha.js?v=091126-26"></script>
+<script src="assets/app.js?v=091126-27"></script>
+<script src="assets/sidebar.js?v=091126-27"></script>
+<script src="assets/conversa.js?v=091126-27"></script>
+<script src="assets/ficha.js?v=091126-27"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -76,7 +76,7 @@
   let conv = null;   // { id, nome, comp } — conversa aberta no lugar da lista
 
   const BOTAO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', biometria: 'Biometria',
-    os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
+    os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
   const dot = (n) => `<i class="mv-dot" style="--c:${COR[n] || '#6E747C'}"></i>`;
   const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';

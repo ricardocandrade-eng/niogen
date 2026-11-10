@@ -24,10 +24,10 @@
 
   const STATUS = [
     // 0089 (Ricardo, 09/11): UMA jornada de 5 etapas com os mesmos nomes em toda tela. Os ids do banco não mudam:
-    // 0_qualificado é a etapa 2 (sem pedido) ou a 3 (com pedido) — quem separa é etapaDe(venda). Venda = OS + agendamento.
+    // 0_qualificado é a etapa 2 (sem pedido) ou a 3 (com pedido) — quem separa é etapaDe(venda). Venda = OS aberta (0096); o agendamento vem depois.
     { id: '0_qualificado', curto: 'Lead qualificado', col: 'Lead qualificado (ainda não é venda)', chip: 'info' },
-    { id: '1_vendido', curto: 'Venda · OS agendada', col: 'Venda · OS agendada', chip: '', oculto: true },
-    { id: '2_aguardando_instalacao', curto: 'Venda · OS agendada', col: 'Venda · OS agendada', chip: '' },
+    { id: '1_vendido', curto: 'Ativação/Agenda', col: 'Ativação/Agenda', chip: '', oculto: true },
+    { id: '2_aguardando_instalacao', curto: 'Ativação/Agenda', col: 'Ativação/Agenda', chip: '' },
     { id: '3_instalado', curto: 'Instalada', col: 'Instalada', chip: 'ok' },
     { id: '4_ativo_provisorio', curto: 'Instalada', col: 'Instalada', chip: 'ok', oculto: true },
     { id: '5_comissao_firme', curto: 'Instalada', col: 'Instalada', chip: 'ok', oculto: true },
@@ -35,19 +35,19 @@
   ];
   const STATUS_MAP = Object.fromEntries(STATUS.map((s) => [s.id, s]));
 
-  // A jornada (0089): 1 Conversa · 2 Lead qualificado · 3 Pedido · biometria · 4 Venda · OS agendada · 5 Instalada · Saída.
+  // A jornada (0089; nomes do Ricardo 09/11 ~23h55): 1 Conversa · 2 Lead qualificado · 3 Biometria · 4 Ativação/Agenda · 5 Instalada · Saída.
   // A etapa 1 (conversa sem venda) não tem venda: aparece só na Minha vez (v_jornada). Ids curtos ficam nas URLs.
   const JORNADA = [
     { n: 1, id: 'conversa', nome: 'Conversa', cor: '#6B8AFD' },
     { n: 2, id: 'qualificado', nome: 'Lead qualificado', cor: '#5FB3F9' },
-    { n: 3, id: 'pedido', nome: 'Pedido · biometria', cor: '#E3B341' },
-    { n: 4, id: 'vendido', nome: 'Venda · OS agendada', cor: '#32E000' },
+    { n: 3, id: 'pedido', nome: 'Biometria', cor: '#E3B341' },
+    { n: 4, id: 'vendido', nome: 'Ativação/Agenda', cor: '#32E000' },
     { n: 5, id: 'instalado', nome: 'Instalada', cor: '#2EA043' },
   ];
   const ETAPAS = [
     { id: 'qualificado', n: 2, nome: 'Lead qualificado', status: ['0_qualificado'] },
-    { id: 'pedido', n: 3, nome: 'Pedido · biometria', status: ['0_qualificado'] },
-    { id: 'vendido', n: 4, nome: 'Venda · OS agendada', status: ['1_vendido', '2_aguardando_instalacao'] },
+    { id: 'pedido', n: 3, nome: 'Biometria', status: ['0_qualificado'] },
+    { id: 'vendido', n: 4, nome: 'Ativação/Agenda', status: ['1_vendido', '2_aguardando_instalacao'] },
     { id: 'instalado', n: 5, nome: 'Instalada', status: ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'] },
     { id: 'saida', n: 0, nome: 'Saída', status: ['saida'] },
   ];
@@ -286,7 +286,7 @@
   // dados.conversa_id vem (conversa sem venda: assumir/parar/devolver). Devolve o jsonb da RPC ({resumo, aviso, …}) ou null.
   const MOMENTOS = {
     assumir: 'Assumida', viabilidade: 'Viabilidade registrada', pedido: 'Pedido gravado', biometria: 'Biometria',
-    os_agendar: 'OS + agendamento (venda)', reagendar: 'Instalação reagendada', parar: 'Cliente pediu para parar', devolver_mari: 'Devolvida para a Mari',
+    os: 'OS aberta (venda)', agendar: 'Instalação agendada', os_agendar: 'OS + agendamento (venda)', reagendar: 'Instalação reagendada', parar: 'Cliente pediu para parar', devolver_mari: 'Devolvida para a Mari',
   };
   async function momento(vendaId, qual, dados = {}) {
     const { data, error } = await sb.rpc('backoffice_momento', { p_venda: vendaId || null, p_momento: qual, p_dados: dados || {} });
@@ -889,7 +889,7 @@
     switch (v.status) {
       case '0_qualificado': {
         // 0089: etapa 2 LEAD QUALIFICADO (sem pedido) → viabilidade → pedido. Etapa 3 PEDIDO · BIOMETRIA (com pedido) → biometria
-        // validada → OS + agendar (um passo só; é ele que faz a venda contar). Mesmos textos da v_jornada.
+        // validada → abrir a OS (é ela que faz a venda contar, 0096); agendar é o passo seguinte. Mesmos textos da v_jornada.
         if (!String(v.nio_pedido || '').trim()) {
           if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'saida' };
           if (!portalViavel(v)) {
@@ -905,7 +905,7 @@
         const hBio = desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null;
         if (v.biometria_status === 'validada') {
           const h = v.biometria_validada_em ? (Date.now() - new Date(v.biometria_validada_em)) / 3600000 : null;
-          return { txt: `Biometria validada · abrir a OS e agendar (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'os_agendar' };
+          return { txt: `Biometria validada · abrir a OS no portal (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'os' };
         }
         if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'bio_status' };
         if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'warn', acao: true, resolver: 'bio_status' };
@@ -915,9 +915,13 @@
       }
       case '1_vendido':
       case '2_aguardando_instalacao': {
-        // 0089: etapa 4 VENDA · OS AGENDADA. Só volta para a vez com a data passada sem baixa ou pendência da Nio.
+        // 0096: etapa 4 ATIVAÇÃO/AGENDA. OS aberta sem data → agendar (4 h da biometria). Depois só volta com a data passada sem baixa.
         const q = v.instalacao_agendada_para;
-        if (!q) return { txt: 'Venda sem data de instalação · agendar', nivel: 'bad', acao: true, resolver: 'reagendar' };
+        if (!q) {
+          const b = v.biometria_validada_em || v.vendido_em;
+          const h = b ? (Date.now() - new Date(b)) / 3600000 : null;
+          return { txt: `OS aberta · agendar a instalação (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'agendar' };
+        }
         const d = diaSP(q), j = janela(q);
         if (d < hoje) return { txt: `Instalação era ${dd(q)} e a Nio não deu baixa · conferir no portal`, nivel: 'warn', acao: true, resolver: 'reagendar' };
         if (d === hoje) return { txt: `Instalação hoje · ${j} · com a Nio`, nivel: 'ok', resolver: 'reagendar' };
@@ -945,9 +949,10 @@
   // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
   const PARADAS = [
     { id: 'qualificado', nome: 'Lead qualificado', dica: 'Etapa 2 · ainda NÃO é venda: falta a viabilidade do portal e gravar o pedido' },
-    { id: 'biometria', nome: 'Pedido · biometria', dica: 'Etapa 3 · pedido gravado: esperando o cliente fazer a biometria (link automático da Nio)' },
-    { id: 'agendamento', nome: 'OS + agendar', dica: 'Etapa 3 · biometria validada, falta abrir a OS e agendar — contrato: até 4 h' },
-    { id: 'instalacao', nome: 'Venda · OS agendada', dica: 'Etapa 4 · venda feita: esperando o técnico / a baixa da Nio no OSAB' },
+    { id: 'biometria', nome: 'Biometria', dica: 'Etapa 3 · pedido gravado: esperando o cliente fazer a biometria (link automático da Nio)' },
+    { id: 'agendamento', nome: 'Abrir a OS', dica: 'Etapa 3 · biometria validada, falta abrir a OS no portal — contrato: até 4 h' },
+    { id: 'agendar', nome: 'Agendar', dica: 'Etapa 4 · OS aberta (venda), falta agendar a instalação — contrato: até 4 h da biometria' },
+    { id: 'instalacao', nome: 'Ativação/Agenda', dica: 'Etapa 4 · instalação agendada: esperando o técnico / a baixa da Nio no OSAB' },
     { id: 'instalada', nome: 'Instalada · docs', dica: 'Etapa 5 · instalada, documentos à Nio pendentes — contrato: 15 dias' },
   ];
   function paradaDe(v, regras = {}) {
@@ -963,7 +968,13 @@
         return { id: 'agendamento', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
       }
       case '1_vendido':
-      case '2_aguardando_instalacao': return { id: 'instalacao', desde: v.agendamento_registrado_em || v.vendido_em || v.criado_em };
+      case '2_aguardando_instalacao': {
+        if (!v.instalacao_agendada_para) {
+          const desde = v.biometria_validada_em || v.vendido_em || v.criado_em;
+          return { id: 'agendar', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
+        }
+        return { id: 'instalacao', desde: v.agendamento_registrado_em || v.vendido_em || v.criado_em };
+      }
       case '3_instalado': {
         if (v.docs_entregues_em || !v.instalado_em) return null;
         return { id: 'instalada', desde: v.instalado_em, atrasada: horas(v.instalado_em) > dDocs * 24, prazo: `${dDocs} dias` };

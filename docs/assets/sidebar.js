@@ -152,9 +152,9 @@
       if (j.erro) return;
       const acao = j.lista.filter((x) => x.precisa_acao);
       const verm = (l) => l.filter((x) => x.nivel === 'agora').length;
-      // Instalações: biometria validada esperando "OS + agendar" (contrato: 4 h).
-      const osAg = j.lista.filter((x) => x.botao === 'os_agendar');
-      pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} com a biometria validada esperando abrir a OS e agendar (contrato: até 4 h).`);
+      // Instalações: biometria validada esperando abrir a OS, ou OS aberta esperando agendar (contrato: 4 h da biometria).
+      const osAg = j.lista.filter((x) => x.botao === 'os' || x.botao === 'os_agendar' || (x.botao === 'agendar' && x.nivel === 'agora'));
+      pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} esperando abrir a OS ou agendar a instalação (contrato: até 4 h da biometria).`);
       if (['admin', 'backoffice'].includes(u.perfil)) {
         const conv = acao.filter((x) => x.conversa_id);
         pinta(nav, 'mari', conv.length, verm(conv) ? 'alerta' : 'info',

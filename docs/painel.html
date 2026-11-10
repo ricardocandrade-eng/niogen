@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-26">
-<script src="config.js?v=091126-26"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-27">
+<script src="config.js?v=091126-27"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-26"></script>
-<script src="assets/sidebar.js?v=091126-26"></script>
-<script src="assets/conversa.js?v=091126-26"></script>
-<script src="assets/ficha.js?v=091126-26"></script>
+<script src="assets/app.js?v=091126-27"></script>
+<script src="assets/sidebar.js?v=091126-27"></script>
+<script src="assets/conversa.js?v=091126-27"></script>
+<script src="assets/ficha.js?v=091126-27"></script>
 </head>
 <body>
 <div class="app">
@@ -158,7 +158,7 @@
       NG.kpi({ rot: meta ? 'Instaladas · meta' : 'Instaladas', val: NG.fmtNum(inst.length), de: meta || null, pct: meta ? (inst.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
         dica: 'A meta do mês conta instaladas (data da instalação, sem Saída) — é o que paga comissão.' }),
-      NG.kpi({ rot: 'Vendas (OS agendada)', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} esperando a instalação`,
+      NG.kpi({ rot: 'Vendas (OS aberta)', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} esperando a instalação`,
         dica: 'Venda = OS aberta no portal com o dia e o período, depois da biometria validada (etapa 4), pela data da venda. Lead qualificado e pedido não contam.' }),
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
@@ -216,13 +216,13 @@
     const instHoje = vendas.filter((v) => !v.instalado_em && v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && NG.diaSP(v.instalacao_agendada_para) === hoje)
       .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
     const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
-    const osAg = vendas.filter((v) => v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim());   // 0089: etapa 3
+    const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim()) || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
     const semAgenda = osAg.length;
     blocos.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
-      ${semAgenda ? `<span class="prox ${osAg.some((v) => Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} com biometria validada esperando "OS + agendar" (4 h)</span>` : ''}
+      ${semAgenda ? `<span class="prox ${osAg.some((v) => Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} esperando abrir a OS ou agendar (4 h da biometria)</span>` : ''}
     </section>`);
     // Mari: conversas que precisam de humano (só admin/backoffice veem a Mari)
     if (veMari) {

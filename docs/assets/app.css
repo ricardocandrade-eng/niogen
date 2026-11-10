@@ -1519,3 +1519,32 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 /* Ações: à esquerda, numa linha que quebra natural; a conversa primeiro. */
 .f-atalhos { justify-content: flex-start; gap: 6px; margin-top: 0; }
 .f-atalhos .btn { min-height: 32px; }
+
+/* 0096 (09/11 ~23h55, print do Ricardo): lista da Minha vez com colunas fixas (dono alinhado, botões do mesmo tamanho) */
+.mv-bt .btn { width: 100%; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-row .mv-dono { justify-content: flex-start; }
+@container (max-width: 820px) {
+  .mv-row { grid-template-columns: 14px minmax(110px, 1fr) minmax(130px, 1.5fr) 96px 122px; }
+}
+@container (max-width: 560px) {
+  .mv-row { grid-template-columns: 10px minmax(0, 1fr) minmax(0, 1.25fr) 104px; }
+}
+@media (max-width: 900px) {
+  .mv-row { grid-template-columns: 1fr 122px; }
+}
+/* Ficha: a conversa vira link no começo da linha do nome */
+.f-local { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.f-link-conv { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--accent); cursor: pointer; }
+.f-link-conv:hover { text-decoration: underline; }
+.f-sep { color: var(--border-strong); }
+/* "Dados do cliente e da venda": botão claro, não mais um tracejado apagado */
+.f-detalhes-cab { display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--border-strong); border-style: solid; background: var(--surface-2); color: var(--text); }
+.f-detalhes-cab b { font-size: 13px; font-weight: 600; }
+.f-detalhes-cab span { font-size: 11.5px; color: var(--muted); }
+.f-detalhes-cab:hover { border-color: var(--accent); }
+.f-dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.f-dl dt { color: var(--muted); }
+.f-dl dd { margin: 0; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.f-dl dd span { overflow-wrap: anywhere; }
+.f-copia { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 2px; font-size: 13px; }
+.f-copia:hover { color: var(--accent); }

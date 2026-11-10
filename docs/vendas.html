@@ -18,14 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-26">
-<script src="config.js?v=091126-26"></script>
+<link rel="stylesheet" href="assets/app.css?v=091126-27">
+<script src="config.js?v=091126-27"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-26"></script>
-<script src="assets/sidebar.js?v=091126-26"></script>
-<script src="assets/conversa.js?v=091126-26"></script>
-<script src="assets/ficha.js?v=091126-26"></script>
-<script src="assets/novavenda.js?v=091126-26"></script>
+<script src="assets/app.js?v=091126-27"></script>
+<script src="assets/sidebar.js?v=091126-27"></script>
+<script src="assets/conversa.js?v=091126-27"></script>
+<script src="assets/ficha.js?v=091126-27"></script>
+<script src="assets/novavenda.js?v=091126-27"></script>
 </head>
 <body>
 <div class="app">
@@ -223,8 +223,8 @@
     const n = (s) => V.filter((v) => s.includes(v.status)).length;
     const inst = n(['3_instalado', '4_ativo_provisorio', '5_comissao_firme']);
     const agu = n(['1_vendido', '2_aguardando_instalacao']);
-    // 0089: "OS + agendar" = etapa 3 com a biometria validada (ainda não é venda; contrato: 4 h).
-    const osAg = doFiltro.filter((v) => v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim());
+    // 0096: "OS / agendar" = biometria validada esperando a OS + OS aberta esperando o agendamento (contrato: 4 h da biometria).
+    const osAg = doFiltro.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim()) || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));
     const agendar = osAg.length;
     const atraso = osAg.filter((v) => Number(v.horas_sem_agendamento) > 4).length;
     const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
@@ -233,11 +233,11 @@
     document.getElementById('kpis').innerHTML = [
       NG.kpi({ rot: meta ? 'Vendas · meta' : 'Vendas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
         nota: meta ? null : esc(per.rotulo.toLowerCase()),
-        dica: 'Venda = OS aberta no portal com o dia e o período, depois da biometria validada (etapa 4), pela data da venda. A lista abaixo filtra pela data de entrada no funil.' }),
-      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} com a OS agendada · ${NG.fmtNum(agendar)} esperando a OS` }),
+        dica: 'Venda = OS aberta no portal depois da biometria validada (etapa 4), pela data da venda. A lista abaixo filtra pela data de entrada no funil.' }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} com a instalação agendada · ${NG.fmtNum(agendar)} esperando a OS ou o agendamento` }),
       NG.kpi({ rot: 'Comissão prevista no período', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da' : 'das'} ${nv(V.length, 'venda', 'vendas')} do período` }),
-      NG.kpi({ rot: 'OS + agendar', val: NG.fmtNum(agendar), cls: atraso ? 'bad' : agendar ? 'warn' : '',
-        nota: atraso ? `${nv(atraso, 'passou', 'passaram')} de 4 h da biometria validada` : agendar ? 'biometria validada · prazo de 4 h' : 'nenhuma biometria esperando a OS',
+      NG.kpi({ rot: 'OS / agendar', val: NG.fmtNum(agendar), cls: atraso ? 'bad' : agendar ? 'warn' : '',
+        nota: atraso ? `${nv(atraso, 'passou', 'passaram')} de 4 h da biometria validada` : agendar ? 'biometria validada · prazo de 4 h' : 'nada esperando a OS ou o agendamento',
         dica: 'Etapa 3 com a biometria validada: falta abrir a OS no portal com o dia e o período — é isso que faz a venda contar.' }),
     ].join('');
   }
@@ -316,8 +316,8 @@
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const COLUNAS_Q = [
     { id: 'qualificado', nome: '2 · Lead qualificado' },
-    { id: 'pedido', nome: '3 · Pedido · biometria' },
-    { id: 'vendido', nome: '4 · Venda · OS agendada' },
+    { id: 'pedido', nome: '3 · Biometria' },
+    { id: 'vendido', nome: '4 · Ativação/Agenda' },
     { id: 'instalado', nome: '5 · Instalada' },
   ];
   // Origem em uma palavra no cartão.
