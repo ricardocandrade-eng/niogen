@@ -994,7 +994,7 @@
       : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viab) ? { s: 'wa', d: (NG.VIAB_NIO[viab] || viab).toLowerCase() }
       : { s: 'no', d: '' };
     const bio = v.biometria_status;
-    const pBio = bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)} ${NG.fmtHora(v.biometria_validada_em)}` : 'validada' }
+    const pBio = bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)}` : 'validada' }
       : v.credito_resultado === 'negado' ? { s: 'wa', d: 'crédito negado' }
       : bio === 'com_risco' ? { s: 'wa', d: 'com risco' }
       : v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
