@@ -1779,3 +1779,57 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .nav-item .badge[data-badge="fila"].alerta { background: #E5484D; color: #fff; }
 .nav-item .badge.fogo { line-height: 16px; padding: 0 6px; }
 .nav-item .badge::before { content: none !important; display: none !important; }   /* 10/11: a bolinha azul genérica do .alerta não entra nos números do menu */
+
+/* ───────── 0112 (regra 18): Funil e Instalações por resultado ───────── */
+.ritmo-funil { padding: 12px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.rf-l { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px 14px; }
+.rf-big { font-size: 22px; font-weight: 600; }
+.rf-frase { font-size: 13px; font-weight: 600; color: var(--text); }
+.rf-frase.ok { color: var(--ok-fg); } .rf-frase.warn { color: var(--warn-fg); } .rf-frase.bad { color: var(--bad-fg); }
+.rf-trilho { position: relative; height: 10px; border-radius: 6px; background: var(--surface-2); overflow: visible; }
+.rf-trilho .rf-feito { position: absolute; inset: 0 auto 0 0; border-radius: 6px; background: var(--accent); }
+.rf-trilho .rf-ideal { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--warn-dot); }
+.rf-leg { font-size: 11.5px; }
+.kpi.kpi-verde { border-color: var(--ok-fg); }
+.gargalo { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: var(--fogo-bg); border: 1px solid var(--fogo-border); }
+.gargalo .g-tit { color: var(--fogo); font-size: 13.5px; }
+.gargalo .g-fluxo { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+.gargalo .g-fluxo span { padding: 2px 8px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); }
+.gargalo .g-fluxo span.z { border-color: var(--bad-border); color: var(--bad-fg); }
+.gargalo .g-fluxo i { font-style: normal; color: var(--muted); }
+.gargalo .g-btn { margin-left: auto; color: var(--fogo); border-color: var(--fogo-border); background: transparent; }
+.col-head .c-soma { font-style: normal; color: var(--ok-fg); font-weight: 600; }
+.qcard.q2 { gap: 5px; }
+.qcard.q2 .q-n { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.qcard.q2 .q-n small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qcard.q2 .q-v { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.qcard.q2 .q-com { font-family: var(--mono); font-size: 13px; color: var(--ok-fg); white-space: nowrap; }
+.qcard.q2 .q-f { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; }
+.qcard.q2 .q-f .chip { white-space: normal; }
+.qcard.q2 .q-bt { pointer-events: none; padding: 2px 8px; font-size: 11.5px; min-height: 0; }
+.qcard.q2 .q-passo .prox { font-size: 11.5px; }
+.or-txt { color: var(--fogo); }
+.qv-motivos { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 8px; }
+.qv-motivos .qm { display: flex; flex-direction: column; gap: 1px; padding: 8px 10px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; }
+.qv-motivos .qm b { font-family: var(--mono); font-size: 16px; }
+.qv-motivos .qm small { font-size: 11.5px; color: var(--muted); }
+.qv-motivos .qm.recup b, .qv-motivos .qm.recup small { color: var(--fogo); }
+/* Instalações */
+.osab-aviso { font-size: 12.5px; font-weight: 600; white-space: nowrap; align-self: center; }
+.osab-aviso.warn { color: var(--warn-fg); } .osab-aviso.bad { color: var(--bad-fg); } .osab-aviso.ok { color: var(--muted); font-weight: 500; }
+.tab tr.risco td { background: var(--warn-bg); }
+.tab tr.risco td:first-child { box-shadow: inset 3px 0 0 var(--warn-dot); }
+.conf { font-size: 12px; font-weight: 600; }
+.conf.ok { color: var(--ok-fg); } .conf.bad { color: var(--bad-fg); } .conf.warn { color: var(--warn-fg); } .conf.dim { color: var(--muted); font-weight: 500; }
+.pend-linha { display: block; font-size: 11.5px; color: var(--warn-fg); margin-top: 2px; }
+.protecao { margin-top: 18px; }
+.protecao h2 { font-size: 15px; margin: 0 0 4px; }
+.prot-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 8px; }
+.prot-c { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-decoration: none; }
+.prot-c:hover { border-color: var(--border-strong); color: var(--text); }
+.prot-c.warn { border-color: var(--warn-border); } .prot-c.bad { border-color: var(--bad-border); }
+.prot-c .pn { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; } .prot-c .pn small { font-weight: 400; color: var(--muted); }
+.prot-c .pl { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; }
+.prot-c .pl span:first-child { color: var(--muted); }
+.prot-c .exemplo { font-size: 11px; font-weight: 700; color: var(--warn-fg); }
+@media (max-width: 760px) { .gargalo .g-btn { margin-left: 0; } .rf-big { font-size: 18px; } }

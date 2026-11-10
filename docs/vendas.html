@@ -7,7 +7,12 @@
      08/11 (0064): aba "Em espera (n)" (pendência com terceiro; ?aba=espera), selo ⏸/⏰ no próximo passo e "· n em espera" no topo da coluna.
      09/11 (0089/0090, jornada única): etapas Lead qualificado · Pedido · biometria · Venda · OS agendada · Instalada (+ Saída);
      "Precisam de ação" e o próximo passo vêm da v_jornada (a mesma regra do Live); o card NÃO se arrasta — a etapa só anda
-     pelo botão da ficha. --><html lang="pt-BR">
+     pelo botão da ficha.
+     10/11 (0112/0113, regra 18 — docs/Prompt_funil_instalacoes_resultado_101126_1645.md): ritmo da meta no topo (painel_meta_ritmo, a
+     mesma conta do Painel; cor por config_regras.ritmo_limiares) · 4 caixas em R$ (R$ em jogo · comissão confirmada pelo OSAB · a 1 passo ·
+     precisam de ação) · faixa do gargalo (mari_ao_vivo, a mesma fonte da tela Mari; limiar gargalo_conversao_min_pct) · cartão = quem ·
+     quanto vale · prazo que corre (4 h agendar, 15 d docs) + botão do passo · coluna com soma da comissão · Saída com resumo sempre visível
+     (recuperáveis/contrato/fora de área em config_oportunidades.O6). --><html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,14 +23,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-21">
-<script src="config.js?v=101126-21"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-22">
+<script src="config.js?v=101126-22"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-21"></script>
-<script src="assets/sidebar.js?v=101126-21"></script>
-<script src="assets/conversa.js?v=101126-21"></script>
-<script src="assets/ficha.js?v=101126-21"></script>
-<script src="assets/novavenda.js?v=101126-21"></script>
+<script src="assets/app.js?v=101126-22"></script>
+<script src="assets/sidebar.js?v=101126-22"></script>
+<script src="assets/conversa.js?v=101126-22"></script>
+<script src="assets/ficha.js?v=101126-22"></script>
+<script src="assets/novavenda.js?v=101126-22"></script>
 </head>
 <body>
 <div class="app">
@@ -45,7 +50,10 @@
       </div>
     </header>
 
-    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+    <!-- 0112 (regra 18): ritmo da meta (painel_meta_ritmo, a mesma conta do Painel) · 4 caixas em R$ · faixa do gargalo da Mari -->
+    <section class="ritmo-funil" id="ritmo" aria-label="Ritmo da meta do mês"></section>
+    <section class="kpis quatro" id="kpis" aria-label="Resumo em R$"></section>
+    <div class="gargalo" id="gargalo" hidden></div>
 
     <div id="abas"></div>
 
@@ -168,15 +176,27 @@
   }
   const sincParceiro = () => { fParceiro.hidden = fOrigem.value !== 'parceiro_pap' || fParceiro.options.length < 2; if (fParceiro.hidden) fParceiro.value = ''; };
 
+  // 0112: ritmo (painel_meta_ritmo), limiares e prazos (config_regras), motivos da Saída (config_oportunidades O6) e o funil do dia
+  // da Mari (mari_ao_vivo — a mesma fonte da tela Mari; só admin/backoffice).
+  let ritmo = null, regras = {}, saidaCfg = null, aoVivo = null;
+  const ehBko = ['admin', 'backoffice'].includes(eu.perfil);
   async function carregarLista() {
-    const [rv, rc, rp, rm, rj] = await Promise.all([
+    const [rv, rc, rp, rm, rj, rr, rg, ro, ra] = await Promise.all([
       NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
       NG.sb.from('config_planos').select('*'),
       NG.sb.from('config_metas').select('*'),
       NG.jornada(),
+      NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
+      NG.sb.from('config_regras').select('chave, valor'),
+      NG.sb.from('config_oportunidades').select('codigo, ativo, parametros').eq('codigo', 'O6').maybeSingle(),
+      ehBko ? NG.sb.rpc('mari_ao_vivo') : Promise.resolve({ data: null }),
     ]);
     jor = rj;
+    ritmo = rr && !rr.error ? rr.data : null;
+    regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
+    saidaCfg = ro && !ro.error ? ro.data : null;
+    aoVivo = ra && !ra.error ? ra.data : null;
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); tbody.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(rv.error))}</td></tr>`; return; }
     vendas = rv.data || [];
     ultimoContato = NG.ultimosContatos(rc.data);
@@ -227,33 +247,93 @@
   };
   const filtradas = () => NG.ordenar(base().filter((v) => naAba(v, abaAtual())), CHAVES, ord);
 
+  // ---------- 0112 (regra 18): ritmo · R$ · gargalo ----------
+  const INST = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  const fmtR = (x) => NG.fmtMoeda(x).replace(/,00$/, '');
+  const comPrev = (v) => (v.comissao_prevista == null ? null : Number(v.comissao_prevista));
+  const somaCom = (l) => l.reduce((s, v) => s + (comPrev(v) || 0), 0);
+  const semCom = (l) => l.filter((v) => comPrev(v) == null).length;
+  const num1 = (x) => Number(x || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+  const doFiltroFn = () => vendas.filter((v) => (!fOrigem.value || v.origem === fOrigem.value) && (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
+    (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
+  const noMes = (d) => d && NG.diaSP(d).slice(0, 7) === NG.diaSP().slice(0, 7);
+  // Comissão "confirmada" = instalada no mês e confirmada pelo OSAB (leitura do OSAB e a Nio não marcou inválida). Ainda é previsão até a conciliação.
+  const confirmadaOsab = (v) => INST.includes(v.status) && noMes(v.instalado_em) && !!v.nio_osab_em && v.nio_venda_valida !== false;
+
+  function renderRitmo() {
+    const el = document.getElementById('ritmo');
+    const r = ritmo;
+    if (!r || !r.meta) { el.innerHTML = `<div class="rf-l"><span class="nota-campo">${r ? 'Sem meta cadastrada para o mês.' : 'Ritmo da meta indisponível agora.'}</span></div>`; return; }
+    const lim = regras.ritmo_limiares || {};
+    const okPct = Number(lim.ok_pct ?? 100), atPct = Number(lim.atencao_pct ?? 80);
+    const precisa = Number(r.por_dia || 0), atual = Number(r.ritmo_dia || 0);
+    const pctRitmo = precisa > 0 ? (atual / precisa) * 100 : 100;
+    const cls = r.faltam === 0 ? 'ok' : !r.dias_passados ? '' : pctRitmo >= okPct ? 'ok' : pctRitmo >= atPct ? 'warn' : 'bad';
+    const plural = (n, um, v) => `${NG.fmtNum(n)} ${n === 1 ? um : v}`;
+    const conta = regras.meta_conta === 'instaladas' || !regras.meta_conta ? 'instaladas' : 'vendas';
+    const frase = r.faltam === 0 ? 'meta batida ✓'
+      : `precisa de ${num1(precisa)} por dia${r.dias_passados ? ` · ritmo atual ${num1(atual)}/dia — no ritmo de hoje fecha o mês com ${NG.fmtNum(r.projecao)}` : ''}`;
+    const pctFeito = Math.max(0, Math.min(100, (r.instaladas / r.meta) * 100));
+    const pctIdeal = Math.max(0, Math.min(100, (Number(r.deveria_hoje || 0) / r.meta) * 100));
+    el.innerHTML = `<div class="rf-l">
+        <div><b class="rf-big mono">${NG.fmtNum(r.instaladas)} / ${NG.fmtNum(r.meta)}</b> <span class="apagado">${conta} · faltam <b>${NG.fmtNum(r.faltam)}</b> em <b>${plural(r.dias_restantes, 'dia útil', 'dias úteis')}</b></span></div>
+        <div class="rf-frase ${cls}">${esc(frase)}</div>
+      </div>
+      <div class="rf-trilho" role="img" aria-label="${NG.fmtNum(r.instaladas)} de ${NG.fmtNum(r.meta)}; hoje deveria estar em ${num1(r.deveria_hoje)}">
+        <i class="rf-feito" style="width:${pctFeito}%"></i><i class="rf-ideal" style="left:${pctIdeal}%" title="onde deveria estar hoje (${num1(r.deveria_hoje)})"></i></div>
+      <div class="rf-leg apagado">A mesma conta do Painel (${conta} no mês, dias úteis sem domingo e feriado) · verde = feito · traço âmbar = onde deveria estar hoje (${num1(r.deveria_hoje)} de ${NG.fmtNum(r.meta)})</div>`;
+  }
+
   function renderKpis() {
-    // KPIs do período escolhido (com origem e vendedor). Vendidas contam pela data da venda (pedido + biometria validada),
-    // não pela data de entrada da lista.
-    const p = per.valor();
-    const doFiltro = vendas.filter((v) => (!fOrigem.value || v.origem === fOrigem.value) && (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
-      (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value));
-    const V = doFiltro.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
-    const n = (s) => V.filter((v) => s.includes(v.status)).length;
-    const inst = n(['3_instalado', '4_ativo_provisorio', '5_comissao_firme']);
-    const agu = n(['1_vendido', '2_aguardando_instalacao']);
-    // 0096: "OS / agendar" = biometria validada esperando a OS + OS aberta esperando o agendamento (contrato: 4 h da biometria).
-    const osAg = doFiltro.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim()) || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));
-    const agendar = osAg.length;
-    const atraso = osAg.filter((v) => Number(v.horas_sem_agendamento) > 4).length;
-    const comissao = V.reduce((s, v) => s + Number(v.comissao_prevista || 0), 0);
-    const meta = ['mes', 'mesant'].includes(p.valor) && p.de ? metaDoMes(p.de.slice(0, 7)) : 0;
+    // 0112: 4 caixas em R$ — o funil ABERTO agora (não depende do Período; filtros de origem/vendedor valem). Toda comissão é previsão.
+    const doFiltro = doFiltroFn();
+    const etapa = (v) => NG.etapaDe(v).id;
+    const emJogo = doFiltro.filter((v) => ['qualificado', 'pedido', 'vendido'].includes(etapa(v)));
+    const conf = doFiltro.filter(confirmadaOsab);
+    const umPasso = doFiltro.filter((v) => v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && !v.instalado_em)
+      .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
+    const acao = doFiltro.filter((v) => v.status !== 'saida' && proximo(v).acao);
+    const urg = acao.map((v) => ({ v, p: proximo(v) })).sort((a, b) => (a.p.nivel === 'bad' ? 0 : 1) - (b.p.nivel === 'bad' ? 0 : 1))[0];
+    const nSem = semCom(emJogo);
+    const prox = umPasso[0];
     const nv = (x, um, varios) => `${NG.fmtNum(x)} ${x === 1 ? um : varios}`;
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: meta ? 'Vendas · meta' : 'Vendas', val: NG.fmtNum(V.length), de: meta || null, pct: meta ? (V.length / meta) * 100 : null,
-        nota: meta ? null : esc(per.rotulo.toLowerCase()),
-        dica: 'Venda = OS aberta no portal depois da biometria validada (etapa 4), pela data da venda. A lista abaixo filtra pela data de entrada no funil.' }),
-      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), nota: `${NG.fmtNum(agu)} com a instalação agendada · ${NG.fmtNum(agendar)} esperando a OS ou o agendamento` }),
-      NG.kpi({ rot: 'Comissão prevista no período', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da' : 'das'} ${nv(V.length, 'venda', 'vendas')} do período` }),
-      NG.kpi({ rot: 'OS / agendar', val: NG.fmtNum(agendar), cls: atraso ? 'bad' : agendar ? 'warn' : '',
-        nota: atraso ? `${nv(atraso, 'passou', 'passaram')} de 4 h da biometria validada` : agendar ? 'biometria validada · prazo de 4 h' : 'nada esperando a OS ou o agendamento',
-        dica: 'Etapa 3 com a biometria validada: falta abrir a OS no portal com o dia e o período — é isso que faz a venda contar.' }),
+      NG.kpi({ rot: 'R$ em jogo no funil', val: `<span class="ok-txt">${esc(fmtR(somaCom(emJogo)))}</span>`, cls: 'kpi-verde',
+        nota: `previsão · ${nv(emJogo.length, 'venda', 'vendas')} nas etapas 2–4 se tudo instalar${nSem ? ` · ${NG.fmtNum(nSem)} sem comissão na config (—)` : ''}`,
+        dica: 'Soma da comissão prevista (config de comissões) das vendas em Lead qualificado, Biometria e Ativação/Agenda. É previsão até a conciliação com a Nio.' }),
+      NG.kpi({ rot: 'Comissão confirmada', val: esc(fmtR(somaCom(conf))),
+        nota: `${nv(conf.length, 'instalada', 'instaladas')} no mês confirmada${conf.length === 1 ? '' : 's'} pelo OSAB · previsão até a conciliação` }),
+      NG.kpi({ rot: 'A 1 passo da comissão', val: esc(fmtR(somaCom(umPasso))),
+        nota: umPasso.length ? `${nv(umPasso.length, 'instalação agendada', 'instalações agendadas')} · próxima ${esc(NG.primeiroNome(prox.cliente_nome))} ${esc(NG.fmtDiaSemana(prox.instalacao_agendada_para).toLowerCase())} ${esc(NG.fmtData(prox.instalacao_agendada_para))}` : 'nenhuma instalação agendada' }),
+      NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: acao.some((v) => proximo(v).nivel === 'bad') ? 'bad' : acao.length ? 'warn' : '',
+        nota: urg ? `${esc(NG.primeiroNome(urg.v.cliente_nome))}: ${esc(urg.p.txt)}` : 'nada parado agora',
+        dica: 'A mesma regra do Live (v_jornada): o que está com você agora.' }),
     ].join('');
+  }
+
+  // Parte 2: faixa do gargalo (laranja) — a mesma fonte do funil da tela Mari (mari_ao_vivo), nunca outra conta.
+  function renderGargalo() {
+    const el = document.getElementById('gargalo');
+    const f = aoVivo && aoVivo.funil;
+    if (!f) { el.hidden = true; return; }
+    const lim = Number(regras.gargalo_conversao_min_pct ?? 10);
+    const passos = [['conversas', Number(f.conversas || 0), 'conversas na Mari'], ['planos', Number(f.viram_planos || 0), 'viram os planos'], ['qualif', Number(f.qualificadas || 0), 'qualificadas']];
+    let g = null;
+    for (let i = 1; i < passos.length; i++) {
+      const ant = passos[i - 1][1], n = passos[i][1];
+      if (ant > 0 && (n === 0 || (n / ant) * 100 < lim)) { g = i; break; }
+    }
+    const nQualFunil = doFiltroFn().filter((v) => NG.etapaDe(v).id === 'qualificado').length;
+    if (g == null && nQualFunil > 0) { el.hidden = true; return; }
+    const tit = g === 2 || (g == null && !nQualFunil) ? 'nenhum lead qualificado' : g === 1 ? 'conversas não chegam aos planos' : 'pouca conversão';
+    const tituloTxt = g == null ? 'Gargalo hoje: nenhum lead qualificado no funil.' : `Gargalo hoje: ${passos[g][1] === 0 ? tit : `só ${NG.fmtNum(passos[g][1])} de ${NG.fmtNum(passos[g - 1][1])} ${passos[g][2]}`}.`;
+    const neg = aoVivo.em_negociacao || {};
+    const nOp = Number(aoVivo.oportunidades || 0);
+    el.hidden = false;
+    el.innerHTML = `<b class="g-tit">${esc(tituloTxt)}</b>
+      <span class="g-fluxo">${passos.map((p, i) => `<span class="${i === g ? 'z' : ''}">${NG.fmtNum(p[1])} ${esc(p[2])}</span>`).join('<i aria-hidden="true">›</i>')}</span>
+      ${Number(neg.valor) ? `<span class="apagado">${esc(fmtR(neg.valor))}/mês em negociação na Mari</span>` : ''}
+      <a class="btn btn-sm g-btn" href="fila.html">🔥 ${NG.fmtNum(nOp)} ${nOp === 1 ? 'oportunidade' : 'oportunidades'} no Live →</a>`;
   }
 
   function renderAbas(b) {
@@ -291,7 +371,9 @@
   function render() {
     const b = base();
     renderParada();
+    renderRitmo();
     renderKpis();
+    renderGargalo();
     renderAbas(b);
     if (vista === 'quadro') renderQuadro(b); else renderLista(b);
   }
@@ -350,19 +432,57 @@
     return proximo(v);
   }
 
-  function qcard(v, pr) {
-    // 10/11: nome · plano e valor em letra menor · data agendada/instalada · próximo passo em UMA linha com a cor da urgência.
-    const sub = [planoCurto(v), Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null].filter(Boolean).join(' · ');
-    const dt = v.instalado_em ? `<span class="q-data ok">Instalada em ${esc(NG.fmtData(v.instalado_em))}</span>`
-      : v.instalacao_agendada_para && v.status !== 'saida' ? `<span class="q-data">Instalação ${esc(NG.fmtDiaSemana(v.instalacao_agendada_para).toLowerCase())} ${esc(NG.fmtData(v.instalacao_agendada_para))} · ${esc(NG.janela(v.instalacao_agendada_para))}</span>` : '';
-    return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}" title="${esc([origemCurta(v), pr && pr.txt].filter(Boolean).join(' · '))}">
-      <b>${esc(v.cliente_nome)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${dt}${chipPortal(v)}${NG.proxPasso(pr)}</a>`;
+  // 0112: o prazo que corre na etapa (contrato): 4 h para agendar depois da biometria; 15 dias para os documentos depois da instalação.
+  // Devolve { txt, cls, resta } — resta em horas (negativo = vencido); cls bad = vencido, warn = ≤ 25 % do prazo.
+  function prazoDe(v) {
+    const pzH = Number(regras.prazo_agendar_horas ?? 4);
+    const pzD = Number(regras.prazo_docs_dias ?? 15);
+    const fmtResta = (h) => (Math.abs(h) < 48 ? NG.fmtHoras(Math.abs(h)) : `${Math.floor(Math.abs(h) / 24)} d`);
+    const agendarPend = (v.status === '0_qualificado' && v.biometria_status === 'validada') || (v.status === '1_vendido') || (v.status === '2_aguardando_instalacao' && !v.instalacao_agendada_para);
+    if (agendarPend && (v.agendar_desde || v.biometria_validada_em)) {
+      const resta = pzH - (Date.now() - new Date(v.agendar_desde || v.biometria_validada_em)) / 3600000;
+      return { resta, cls: resta < 0 ? 'bad' : resta <= pzH * 0.25 ? 'warn' : 'ok',
+        txt: resta < 0 ? `biometria ok · agendar venceu há ${fmtResta(resta)}` : `biometria ok · agendar em ${fmtResta(resta)}` };
+    }
+    if (INST.includes(v.status) && !v.docs_entregues_em && v.docs_prazo_em) {
+      const resta = (new Date(v.docs_prazo_em) - Date.now()) / 3600000;
+      return { resta, cls: resta < 0 ? 'bad' : resta <= pzD * 24 * 0.25 ? 'warn' : 'ok',
+        txt: resta < 0 ? `documentos venceram há ${fmtResta(resta)}` : `documentos em ${fmtResta(resta)}` };
+    }
+    return null;
+  }
+  // Tempo na etapa: desde quando a venda está no passo atual (o "desde" da v_jornada; na Biometria, o crédito aprovado — 0111).
+  function chipTempo(v) {
+    const e = NG.etapaDe(v).id;
+    if (e === 'pedido') return `crédito aprovado há ${NG.haQuanto(v.credito_em || (jor.porVenda[v.id] || {}).desde || v.criado_em)} · biometria pendente`;
+    if (v.instalacao_agendada_para && v.status === '2_aguardando_instalacao') return `instala ${NG.fmtDiaSemana(v.instalacao_agendada_para).toLowerCase()} ${NG.fmtData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}`;
+    if (v.instalado_em) return `instalada há ${NG.haQuanto(v.instalado_em)}`;
+    return `há ${NG.haQuanto((jor.porVenda[v.id] || {}).desde || v.criado_em)} na etapa`;
   }
 
-  // Vermelho primeiro, depois amarelo, depois o mais antigo.
+  function qcard(v, pr) {
+    // 0112: quem · quanto vale · há quanto tempo · o que fazer — nome · cidade / plano · R$ mês · comissão prevista / chip (tempo ou prazo) + botão do próximo passo.
+    const c = comPrev(v);
+    const pz = v.status === 'saida' ? null : prazoDe(v);
+    const jb = (jor.porVenda[v.id] || {}).botao;
+    const bt = jb && pr.acao && NG.BOTAO_PASSO[jb] ? `<span class="btn btn-sm q-bt${pr.nivel === 'bad' ? ' btn-acc' : ''}">${esc(NG.BOTAO_PASSO[jb])}</span>` : '';
+    const chip = pz ? `<span class="chip ${pz.cls}">${esc(pz.txt)}</span>`
+      : `<span class="chip ${v.instalacao_agendada_para && v.status === '2_aguardando_instalacao' ? 'ok' : v.instalado_em ? 'ok' : 'dim'}">${esc(chipTempo(v))}</span>`;
+    return `<a class="qcard q2 ${pz && pz.cls === 'bad' ? 'bad' : pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}" title="${esc([origemCurta(v), pr && pr.txt].filter(Boolean).join(' · '))}">
+      <span class="q-n"><b>${esc(v.cliente_nome)}</b><small>${esc(v.cidade ? `· ${v.cidade}` : '')}</small></span>
+      <span class="q-v"><small>${esc([planoCurto(v), Number(v.valor_mensal) ? `${fmtR(v.valor_mensal)}/mês` : null].filter(Boolean).join(' · '))}</small><b class="q-com" title="Comissão prevista (config de comissões) — previsão até a conciliação">${c == null ? '—' : esc(fmtR(c))}</b></span>
+      ${chipPortal(v)}
+      <span class="q-f">${chip}${bt}</span>
+      ${pr.txt && !(pz && /agendar/.test(pz.txt)) ? `<span class="q-passo">${NG.proxPasso(pr)}</span>` : ''}</a>`;
+  }
+
+  // 0112: prazo vencendo primeiro (vencido → menos tempo restante), depois maior comissão; em espera no fim.
   function ordenarQ(itens) {
-    return itens.map((v) => ({ v, pr: proximoQ(v) }))
-      .sort((a, b) => (URGENCIA[a.pr.nivel] ?? 2) - (URGENCIA[b.pr.nivel] ?? 2) || new Date(a.v.criado_em) - new Date(b.v.criado_em));
+    return itens.map((v) => ({ v, pr: proximoQ(v), pz: prazoDe(v) }))
+      .sort((a, b) => (a.pr.espera ? 1 : 0) - (b.pr.espera ? 1 : 0)
+        || (a.pz ? a.pz.resta : Infinity) - (b.pz ? b.pz.resta : Infinity)
+        || (comPrev(b.v) || 0) - (comPrev(a.v) || 0)
+        || (URGENCIA[a.pr.nivel] ?? 2) - (URGENCIA[b.pr.nivel] ?? 2));
   }
 
   function renderQuadro(b) {
@@ -371,20 +491,44 @@
     const fora = [];
     lista.forEach((v) => { const e = NG.etapaDe(v).id; if (porCol[e]) porCol[e].push(v); else if (e === 'saida') fora.push(v); });
 
+    // Coluna Instalada vazia: "Próxima comissão: <nome>, <dia>" (a próxima instalação agendada, de qualquer período).
+    const proxInst = doFiltroFn().filter((v) => v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && !v.instalado_em)
+      .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para))[0];
+    const diaRel = (d) => { const dd = NG.diaSP(d), h = NG.diaSP(); const am = NG.diaSP(new Date(Date.now() + 86400000));
+      return dd === h ? 'hoje' : dd === am ? 'amanhã' : `${NG.fmtDiaSemana(d).toLowerCase()} ${NG.fmtData(d)}`; };
     boardEl.innerHTML = COLUNAS_Q.map((c) => {
       const itens = ordenarQ(porCol[c.id]);
       const nEsp = itens.filter((x) => x.pr.espera).length;   // "Qualificado 1 · 1 em espera" (0064)
+      const soma = somaCom(itens.map((x) => x.v));
+      const vazia = c.id === 'instalado'
+        ? `<div class="col-vazia">Nenhuma instalada${per.valor().valor === 'mes' ? ' no mês' : ' no período'}.${proxInst ? `<br>Próxima comissão: <b class="ok-txt">${esc(NG.primeiroNome(proxInst.cliente_nome))}, ${esc(diaRel(proxInst.instalacao_agendada_para))}</b>` : ''}</div>`
+        : '<div class="col-vazia">—</div>';
       return `<section class="col qv-col" data-etapa="${c.id}" aria-label="${esc(c.nome)}">
-        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'instalado' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)}${nEsp ? `<span class="c-espera" title="${esc(NG.ajuda.pendencia)}">· ${NG.fmtNum(nEsp)} em espera</span>` : ''}</span></div>
-        <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((x) => qcard(x.v, x.pr)).join('') : '<div class="col-vazia">—</div>'}</div>
+        <div class="col-head"><span class="${c.id === 'qualificado' ? 'c-info' : c.id === 'instalado' ? 'c-ok' : ''}">${esc(c.nome)}</span><span>${NG.fmtNum(itens.length)} · <em class="c-soma" title="Soma da comissão prevista da coluna">${esc(fmtR(soma))}</em>${nEsp ? `<span class="c-espera" title="${esc(NG.ajuda.pendencia)}">· ${NG.fmtNum(nEsp)} em espera</span>` : ''}</span></div>
+        <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((x) => qcard(x.v, x.pr)).join('') : vazia}</div>
       </section>`;
     }).join('');
 
-    // Saída e Interesse futuro: recolhidos numa faixa; abrir mostra os dois grupos.
+    // 0112: Saída recolhida com o resumo SEMPRE visível — "Saída · N · M recuperáveis = R$ X" + contagem por motivo.
+    // Recuperável / não recuperável / fora de área: config_oportunidades.O6 (a mesma lista que traz a venda de volta ao Live, Parte 2).
+    const p6 = (saidaCfg && saidaCfg.parametros) || {};
+    const dias6 = p6.dias || {}, nunca6 = p6.nunca || [], fora6 = p6.fora_area || [];
+    const chaveMot = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : v.motivo_saida || 'Sem motivo');
+    const classe = (v) => { const m = chaveMot(v); return nunca6.includes(v.motivo_saida) || ['ja_cliente_nio', 'suspeita_fraude', 'ja_tem_pedido_nio'].includes(v.conferencia_motivo) ? 'nunca' : m in dias6 ? 'recup' : fora6.includes(v.motivo_saida) ? 'fora' : 'outro'; };
+    const porMot = {};
+    fora.forEach((v) => { const m = chaveMot(v); (porMot[m] = porMot[m] || { m, cls: classe(v), n: 0, com: 0 }); porMot[m].n++; porMot[m].com += comPrev(v) || 0; });
+    const recup = fora.filter((v) => classe(v) === 'recup');
+    const motivos = Object.values(porMot).sort((a, b) => ({ recup: 0, fora: 1, outro: 2, nunca: 3 })[a.cls] - ({ recup: 0, fora: 1, outro: 2, nunca: 3 })[b.cls] || b.n - a.n);
+    const ROT = { recup: (m) => `🔥 volta ao Live em ${dias6[m]} d${m.startsWith('Interesse') ? ' (ou no dia combinado)' : ''}`, nunca: () => 'não recupera (contrato)',
+      fora: () => 'avisar se a cobertura chegar', outro: () => 'sem retomada automática' };
     const fut = fora.filter(ehFuturo).sort((a, b) => String(a.interesse_futuro_em).localeCompare(String(b.interesse_futuro_em)));
     const sai = fora.filter((v) => !ehFuturo(v)).sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
-    faixaFora.innerHTML = `<span>Saída <b>${NG.fmtNum(sai.length)}</b> · Interesse futuro <b>${NG.fmtNum(fut.length)}</b></span><span class="seta" aria-hidden="true">${foraAberto ? '▴' : '▾'}</span>`;
+    faixaFora.innerHTML = `<span>Saída · <b>${NG.fmtNum(fora.length)}</b> ${esc(per.rotulo.toLowerCase())}${recup.length ? ` · <b class="or-txt">${NG.fmtNum(recup.length)} ${recup.length === 1 ? 'recuperável' : 'recuperáveis'} = ${esc(fmtR(somaCom(recup)))} em comissão</b>` : ''}</span><span class="seta" aria-hidden="true">${foraAberto ? '▴' : '▾'}</span>`;
     faixaFora.setAttribute('aria-expanded', String(foraAberto));
+    let motEl = document.getElementById('qv-motivos');
+    if (!motEl) { motEl = document.createElement('div'); motEl.id = 'qv-motivos'; motEl.className = 'qv-motivos'; faixaFora.after(motEl); }
+    motEl.innerHTML = motivos.map((x) => `<div class="qm ${x.cls}"><b>${NG.fmtNum(x.n)}</b><span>${esc(x.m)}</span><small>${esc(ROT[x.cls](x.m))}</small></div>`).join('');
+    motEl.hidden = !motivos.length;
     foraCorpo.hidden = !foraAberto;
     const grupo = (tit, itens) => `<div class="qv-grupo"><h3>${esc(tit)} <span>${NG.fmtNum(itens.length)}</span></h3>
       <div class="qv-grade">${itens.length ? itens.map((v) => qcard(v, proximo(v))).join('') : '<div class="col-vazia">—</div>'}</div></div>`;
