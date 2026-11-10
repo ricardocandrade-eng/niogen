@@ -50,6 +50,7 @@
   let feitoUltimo = null;  // 0082: { resumo, aviso } do último momento (a linha "✓ …" embaixo do próximo passo)
   let detalhes = false;    // 0089: os blocos de antes, recolhidos embaixo
   let pendPreset = null;   // 0092: motivo pré-escolhido no "Abrir pendência" (ex.: viabilidade_confirmar)
+  let convEsperaFechado = false;   // 0103: o operador fechou o ⏸ Aguardar sugerido — não reabrir sozinho
   let planosCache = null;  // 0092: config_planos ativos (trocar plano / upsell)
   let linksCache = null;   // 0092: config_links (DFV, formulário de análise da Nio)
   let cvComp = null;       // 0090: NGConversa montado no painel da ficha
@@ -265,7 +266,7 @@
       cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
     }
     // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
-    const [rph, rmot, rav, rjo, rnm, rbq, rpl, rlk] = await Promise.all([
+    const [rph, rmot, rav, rjo, rnm, rbq, rpl, rlk, rut] = await Promise.all([
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
       NG.sb.rpc('ficha_avisos', { p_venda: id }),
@@ -274,6 +275,7 @@
       convId ? NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', convId).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
       planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
       linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
+      convId ? ultimaFalaTime(convId) : Promise.resolve(null),   // 0103: sugestão do motivo quando o cliente só confirmou
     ]);
     // 10/11: faturas do M-10 (v_adimplencia), conciliação (v_conciliacao) e a regra de previsão do ciclo. As views ainda são
     // rascunho: sem elas, a ficha mostra "aguardando o extrato da Nio" (nunca dado de exemplo).
@@ -306,6 +308,7 @@
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
       lim: rl.data || { hoje: 0, mes: 0 },
       teto: await NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
+      ultTime: rut || null,
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
       convInfo: (rc.data || [])[0] || null,   // 0082: dono no Chatwoot (Assumir só aparece sem dono)
@@ -433,7 +436,7 @@
     pend_abrir: () => formWrap('pend_abrir', 'Abrir pendência (venda em espera)',
       'A venda fica na etapa, sai de "Precisam de ação" até a data de revisão e a cadência da Mari pausa. Na data, volta em vermelho para todos.',
       `<label class="campo">Motivo<select name="motivo_pend" required autofocus><option value="">Escolher…</option>${(d.motivos || []).map((m) => `<option value="${esc(m.codigo)}"${pendPreset === m.codigo ? ' selected' : ''}>${esc(m.nome)} · destrava: ${esc(NG.QUEM_DESTRAVA[m.quem_destrava] || m.quem_destrava)}${m.exige_descricao ? ' (descreva)' : ''}</option>`).join('')}</select></label>
-       <label class="campo">Descrição <span class="nota-campo">(o que falta e com quem; obrigatória em "Outro motivo")</span><textarea name="descricao" maxlength="500"></textarea></label>
+       <label class="campo">Descrição <span class="nota-campo">(o que falta e com quem; obrigatória em "Outro motivo")</span><textarea name="descricao" maxlength="500">${esc(pendDescPreset || '')}</textarea></label>
        ${campoData('Revisar em', 'revisar', proximoDiaUtil(), `min="${hojeISO()}" required`)}`, 'Abrir pendência'),
     pend_adiar: () => formWrap('pend_adiar', 'Adiar a revisão',
       d.pend && d.pend.revisoes >= 1 ? 'Já foi adiada antes: com 2 adiamentos o selo mostra "⚠️ adiada 2×" e sobe para o Ricardo decidir.' : 'Use quando o terceiro pediu mais prazo. Fica registrado no histórico.',
@@ -556,6 +559,21 @@
     return true;
   }
 
+  // 0103: última fala do time na conversa (turno 'humano' ou mensagem do time na outbox) — vira o motivo sugerido do ⏸.
+  async function ultimaFalaTime(cid) {
+    const [rt, ra] = await Promise.all([
+      NG.sb.from('mari_turnos').select('texto, created_at').eq('conversa_id', cid).eq('papel', 'humano').order('created_at', { ascending: false }).limit(1),
+      NG.sb.from('chatwoot_acoes').select('payload, criada_em').eq('conversa_id', cid).eq('tipo', 'mensagem').in('status', ['pendente', 'executando', 'feita']).order('criada_em', { ascending: false }).limit(1),
+    ]);
+    const t = ((rt && rt.data) || [])[0];
+    const a = ((ra && ra.data) || []).filter((x) => x.payload && x.payload.como === 'humano')[0];
+    const ult = !a || (t && new Date(t.created_at) >= new Date(a.criada_em)) ? (t && t.texto) : a.payload.content;
+    return ult ? String(ult).replace(/\s+/g, ' ').trim().slice(0, 80) : null;
+  }
+  // 0103: o cliente só confirmou ("ok", 👍) depois da nossa última fala — v_jornada.confirmou_em (na Sua vez de novo após 4 h úteis).
+  const soConfirmou = (j) => !!(j && j.confirmou_em);
+  let pendDescPreset = null;   // 0103: descrição sugerida no "Abrir pendência" (a última fala do time)
+
   const SALVAR = {
     async conv_espera(fd) { return !!(await rodarEsperaConversa(fd.get('ate'), String(fd.get('motivo') || '').trim())); },
     async pedido(fd) {
@@ -652,7 +670,7 @@
       const motivo = fd.get('motivo_pend');
       if (!motivo) { NG.toast('Escolha o motivo da pendência.', 'bad'); return false; }
       if (!fd.get('revisar')) { NG.toast('Informe a data de revisão.', 'bad'); return false; }
-      pendPreset = null;
+      pendPreset = null; pendDescPreset = null;
       return rpcPendencia('pendencia_abrir', { p_venda: d.v.id, p_motivo: motivo, p_descricao: String(fd.get('descricao') || '').trim() || null, p_revisar_em: fd.get('revisar') },
         'Pendência aberta · a venda está em espera e a cadência da Mari pausou');
     },
@@ -1217,7 +1235,7 @@
     reagendar: 'confirma a nova data ao cliente e resolve a conversa.',
     docs: 'registra a entrega (contrato: 15 dias depois da instalação).',
     pendencia: 'a venda sai da sua vez até a data de revisão e a cadência da Mari pausa.',
-    manual: 'conta no limite do contrato e sai da sua vez.',
+    manual: 'sai da sua vez.',
     responder: 'a resposta sai como pessoa (a Mari não responde).',
   };
 
@@ -1301,13 +1319,17 @@
       faixaConv = quadroPasso('conv', 'bad f-alerta-conv', 'CONVERSA · AGORA', jReal.o_que_fazer,
         `<div class="f-prox-bts">${bc.filter(Boolean).join('')}</div><span class="f-sozinho">O NIOGEN faz sozinho: ${esc(jReal.botao === 'manual' ? SOZINHO.manual : SOZINHO.responder)}</span>`);
     }
+    // 0103: cliente só confirmou → atalho da pendência já à mão, com a última fala do time como descrição.
+    const conf = bo && soConfirmou(jReal) && !d.pend && v.status !== 'saida';
+    const notaConf = conf ? `<div class="f-conf-cli"><span class="f-nota">💬 O cliente só confirmou${d.ultTime ? ` ("${esc(d.ultTime)}")` : ''}. Está esperando a Nio ou outro terceiro? Abra a <b>⏸ Pendência</b> — senão a venda volta para a sua vez em 4 h úteis para você dar o retorno.</span>
+        <div class="f-prox-bts"><button type="button" class="btn btn-sm" data-f="pend-conf">⏸ Pendência com esse motivo</button></div></div>` : '';
     // 10/11: o quadro nasce recolhido (rótulo + uma linha); expandido mostra o botão principal, o "faz sozinho" e as ações do passo.
-    const corpo = `${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}
+    const corpo = `${notaConf}${nota ? `<span class="f-nota">${esc(nota)}</span>` : ''}
         ${bts.filter(Boolean).length && !form ? `<div class="f-prox-bts">${bts.filter(Boolean).join('')}</div>` : ''}
         ${corpoForm ? `<div class="f-prox-form">${corpoForm}</div>` : ''}
         ${sozinho && !form ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
         ${atalhos(v)}`;
-    return `${faixaConv}${quadroPasso('venda', NIVEL_CLS[nivel] || 'dim', NIVEL_ROT[nivel] || 'PRÓXIMO PASSO', texto, corpo, !!form)}${feito}`;
+    return `${faixaConv}${quadroPasso('venda', NIVEL_CLS[nivel] || 'dim', NIVEL_ROT[nivel] || 'PRÓXIMO PASSO', texto, corpo, !!form || conf)}${feito}`;
   }
   let formAtivoPadrao = null;
 
@@ -1733,8 +1755,9 @@
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
     ]);
     const c = rc.data;
+    const ultTime = rj.data && rj.data.confirmou_em ? await ultimaFalaTime(cid) : null;   // 0103
     return {
-      soConversa: true, conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
+      soConversa: true, ultTime, conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
       jor: rj.error ? null : rj.data, q: rq.error ? {} : (rq.data || {}),
       cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data) },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
@@ -1783,8 +1806,12 @@
     if (bo && !silenciada && emEspera) bts.push('<button type="button" class="btn btn-acc" data-cespera="retomar">▶ Retomar agora</button>');
     else if (bo && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time')) bts.push('<button type="button" class="btn" data-f="conv-espera">⏸ Aguardar…</button>');
     const amanhaC = NG.somaDias(NG.diaSP(), 1);
+    // 0103: o cliente só confirmou ("ok") → o ⏸ Aguardar já vem aberto, com a última fala do time como motivo. Um clique resolve.
+    const confC = bo && soConfirmou(j) && !emEspera && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time');
+    if (confC && formAtivo == null && !convEsperaFechado) formAtivo = 'conv_espera';
     const formEspera = formAtivo === 'conv_espera' ? `<form class="f-form" data-form="conv_espera">
-        <label>Aguardando o quê? <input name="motivo" list="f-esp-motivos" maxlength="80" placeholder="ex.: parente decidir" required autofocus></label>
+        ${confC ? `<span class="f-nota">💬 O cliente só confirmou. Se você ficou de dar um retorno, marque a espera — senão a conversa volta para a sua vez em 4 h úteis.</span>` : ''}
+        <label>Aguardando o quê? <input name="motivo" list="f-esp-motivos" maxlength="80" placeholder="ex.: parente decidir" value="${esc(confC && d.ultTime ? d.ultTime : '')}" required autofocus></label>
         <datalist id="f-esp-motivos"><option value="parente/família decidir"><option value="cliente pediu para chamar depois"><option value="cliente mandar os dados"><option value="dia do pagamento do cliente"></datalist>
         <label>Até <input type="date" name="ate" min="${amanhaC}" value="${amanhaC}" required></label>
         <div class="f-prox-bts">${[1, 2, 3, 7].map((n) => `<button type="button" class="btn btn-ghost btn-sm" data-espera-dias="${n}">${n === 1 ? 'amanhã' : `+${n} dias`}</button>`).join('')}</div>
@@ -2010,7 +2037,8 @@
         return;
       }
       if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
-      if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; passoAberto.add('conversa'); render(); return; }
+      if (acao === 'pend-conf') { pendDescPreset = d.ultTime ? `Cliente confirmou: ${d.ultTime}` : null; formAtivo = 'pend_abrir'; render(); return; }
+      if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; convEsperaFechado = formAtivo == null; passoAberto.add('conversa'); render(); return; }
       if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' ? null : 'saida'; render(); return; }
       if (acao === 'mover') { await mover(b.dataset.st); return; }
       if (acao === 'viab-rapido') {
@@ -2051,7 +2079,7 @@
       }
       if (acao === 'editar') { edicao = b.closest('[data-bloco]').dataset.bloco; formAtivo = null; render(); return; }
       if (acao === 'cancelar') {
-        if (b.closest('.f-bloco')) edicao = null; else formAtivo = null;
+        if (b.closest('.f-bloco')) edicao = null; else { if (formAtivo === 'conv_espera') convEsperaFechado = true; formAtivo = null; }
         saidaPreset = null;
         render();
         return;
@@ -2145,7 +2173,7 @@
   }
   async function mostrar(id) {
     if (modo === 'lado') {
-      if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; detalhes = largo; passoAberto = new Set(); sigDados = '';
+      if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; detalhes = largo; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null;
         raiz.innerHTML = '<div class="ficha f-lado"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>'; }
       ladoEl.hidden = false;
       document.body.classList.add('ficha-ao-lado');
@@ -2155,7 +2183,7 @@
     garantirGaveta();
     if (idAtual !== id) {
       idAtual = id;
-      d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; detalhes = largo; passoAberto = new Set(); sigDados = '';
+      d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; detalhes = largo; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null;
       raiz.innerHTML = '<div class="ficha f-gaveta"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>';
     }
     if (!gav.classList.contains('aberta')) {
