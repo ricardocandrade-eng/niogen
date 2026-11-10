@@ -364,6 +364,9 @@
       const d = await rpc('dados_portal', { p_venda_id: item.venda_id });
       if (!d) throw new Error('Não achei essa venda (ou você não tem acesso).');
       S.venda = item; S.dados = d; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; S.etapaManual = null;
+      // 0102 (trava B1): avisos de possível duplicado (⚠️ ↩️ 🏠 📱) da ficha única — com aviso, o Gravar pede a conferência.
+      S.selos = []; S.conferiRecompra = false;
+      try { const av = await rpc('ficha_avisos', { p_venda: item.venda_id }); S.selos = ((av && av.selos) || []).filter((x) => x.venda_id !== item.venda_id); } catch (e) { S.selos = []; }
       S.orelha = 'portal'; S.turnos = null; S.turnosErro = ''; S.conversa = null;
       // a conversa da Mari que gerou a venda (se houver e se o perfil enxerga) — alimenta a orelha "Conversa"
       if (podeVerConversas()) {
@@ -431,10 +434,16 @@
   async function gravaPedido() {
     const ped = S.pedido.trim();
     if (!ped) { aviso('Digite o número do pedido que o portal mostrou.', 'bad'); desenha(); return; }
+    if ((S.selos || []).length && !S.conferiRecompra) {
+      aviso('Marque "Conferi: não é cliente nem endereço Nio" — há aviso de possível duplicado nesta venda.', 'bad'); desenha(); return;
+    }
     S.ocupado = true; aviso(''); desenha();
     try {
+      if ((S.selos || []).length) {
+        try { await rpc('venda_conferencia_recompra', { p_venda: S.dados.venda_id, p_selos: S.selos.map((x) => x.tipo), p_origem: 'extensao' }); } catch (e) { /* não segura a venda */ }
+      }
       // 0082 (fluxo único do backoffice): o momento "pedido" grava o nº e, sozinho, põe a etiqueta biometria-pendente, deixa a
-      // nota e avisa o cliente na conversa (respeitando horário, 2/dia · 15/mês e a janela de 24 h).
+      // nota e avisa o cliente na conversa (janela de 24 h; sem teto de contatos desde 10/11).
       const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao', sem_aviso: !!S.semAviso } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
@@ -601,6 +610,10 @@
           h('input', { type: 'text', id: 'in-pedido', autocomplete: 'off', value: S.pedido, oninput: (ev) => { S.pedido = ev.target.value; } })),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
           ' Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)'),
+        (S.selos || []).length ? h('div', { class: 'aviso bad' },
+          h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
+          h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
+            ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
         h('span', { class: 'sub' }, 'O NIOGEN avisa o cliente sozinho quando você grava — não mande o aviso à mão.'),
         h('button', { class: 'btn btn-acc btn-bloco', type: 'button', disabled: S.ocupado, onclick: gravaPedido }, 'Gravar no NIOGEN'));
     }

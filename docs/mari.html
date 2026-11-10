@@ -23,13 +23,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-07">
-<script src="config.js?v=101126-07"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-08">
+<script src="config.js?v=101126-08"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-07"></script>
-<script src="assets/sidebar.js?v=101126-07"></script>
-<script src="assets/conversa.js?v=101126-07"></script>
-<script src="assets/ficha.js?v=101126-07"></script>
+<script src="assets/app.js?v=101126-08"></script>
+<script src="assets/sidebar.js?v=101126-08"></script>
+<script src="assets/conversa.js?v=101126-08"></script>
+<script src="assets/ficha.js?v=101126-08"></script>
 </head>
 <body>
 <div class="app">
@@ -199,6 +199,7 @@
     + 'chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, chatwoot_sync_em, cadencia_passo';
 
   async function carregar() {
+    teto = await NG.tetoContato();
     const [rc, rk, rp, re, rq, rcol] = await Promise.all([
       NG.sb.from('mari_conversas').select(COLS).order('updated_at', { ascending: false }).limit(2000),
       NG.sb.from('v_mari_cadencia').select('*'),
@@ -455,14 +456,16 @@
     const desde = q.vez === 'cliente' ? q.ultima_em : q.vez_desde || q.ultima_em;
     return `<span class="mq-vez ${q.vez}${vezAtrasada(q) ? ' atrasada' : ''}">● ${esc(VEZ[q.vez])}${desde ? ` · ${esc(ha(desde))}` : ''}</span>`;
   }
-  const noTeto = (q) => !!q && (q.contatos_hoje >= 2 || q.contatos_mes >= 15);
+  // 0102: sem teto de contatos (config nula = sem teto). teto = config_regras.contato_teto_dia/_mes, lido no carregar().
+  let teto = null;
+  const noTeto = (q) => !!q && NG.noTetoContato(q.contatos_hoje, q.contatos_mes, teto);
   function janelaTxt(q) {
     if (!q || !q.janela_24h_fecha_em) return null;
     const m = Math.floor((new Date(q.janela_24h_fecha_em) - Date.now()) / 60000);
     if (m <= 0) return { txt: 'janela fechada', cls: '' };
     return { txt: `janela ${m < 60 ? `${m} min` : `${Math.floor(m / 60)}h`}`, cls: m < 180 ? 'warn' : '' };
   }
-  // Próximo toque da cadência (v_mari_cadencia já respeita horário, domingo e feriado). No teto 2/dia ou 15/mês: nenhum.
+  // Próximo toque da cadência (v_mari_cadencia já respeita horário, domingo e feriado). Teto só se configurado (0102: nenhum).
   function toqueTxt(q) {
     if (!q || q.coluna === 'encerrada') return null;
     if (noTeto(q)) return { txt: 'sem toque (teto do contrato)', cls: 'bad' };
@@ -472,7 +475,7 @@
     const em = q.proximo_toque_em || q.proximo_em;   // 0073: já no horário do contrato (domingo/feriado → próximo dia útil)
     return { txt: `toque ${nome}${em ? ` ${quandoCurto(em)}` : ''}`, cls: '' };
   }
-  const contadorHtml = (q) => (q ? `<span class="${noTeto(q) ? 'mq-teto' : ''}" title="Contatos ativos com este cliente (contrato: 2 por dia, 15 por mês).">hoje ${q.contatos_hoje}/2 · mês ${q.contatos_mes}/15</span>` : '');
+  const contadorHtml = (q) => (q ? `<span class="${noTeto(q) ? 'mq-teto' : ''}" title="Contatos ativos com este cliente (sem teto por dia ou mês desde 10/11).">contatos ${NG.contatosTxt(q.contatos_hoje, q.contatos_mes, teto)}</span>` : '');
   const ALERTA = { desconto: 'pediu desconto', reclamacao_nio: 'reclamação / cliente Nio', nao_pedi_contato: '"não pedi contato"', nao_contatar: 'não contatar', urgencia: 'urgência' };
   // 0081 (alarme de silêncio): selo vermelho quando o cliente falou por último há ≥ 3 min e nem a Mari nem o time responderam.
   const seloSilencio = (q) => (q && semResposta[q.id] != null
@@ -634,7 +637,8 @@
   const faixaFora = document.getElementById('qv-faixa');
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const movel = window.matchMedia('(max-width: 760px)');
-  const podeArrastar = () => !movel.matches;   // celular: sem arrastar (abre a conversa)
+  // 0102: arrastar entre colunas só para admin (o backoffice opera pela Minha vez); celular: sem arrastar (abre a conversa).
+  const podeArrastar = () => ADMIN && !movel.matches;
   let foraAberto = false;
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
 
@@ -741,9 +745,9 @@
     }
     const { data, error } = await NG.sb.rpc('mari_quadro_mover', { p_conversa: id, p_destino: destino, p_motivo: motivo });
     if (error || !data || !data.ok) { NG.toast(error ? NG.msgErro(error) : (data && data.erro) || 'Não foi possível mover.', 'bad'); return; }
-    NG.toast(`Encerrada${data.nao_contatar ? ' · não contatar (use "Cliente pediu para parar" na gaveta para a etiqueta sair sozinha)' : ''}.`, 'ok');
+    NG.toast(`Encerrada${data.nao_contatar ? ' · não contatar' : ''}.`, 'ok');
     await carregar();
-    if (destino === 'humano') abrir(id);   // a gaveta tem o "Abrir no Chatwoot"
+    if (destino === 'humano') abrir(id);   // a gaveta tem o Assumir e o Abrir ficha
   }
 
   // CSV: sem CPF; telefone inteiro (06/11, Ricardo: nada mascarado).
@@ -866,23 +870,18 @@
         ${k ? `${linha('Passo atual', esc(k.passo_atual === 'nenhum' ? 'nenhum ainda' : PASSO[k.passo_atual] || k.passo_atual))}
           ${linha('Próximo', esc(k.proximo_passo ? `${PASSO[k.proximo_passo] || k.proximo_passo}${k.proximo_em ? ` · ${NG.fmtDiaSemana(k.proximo_em)} ${NG.fmtDataHora(k.proximo_em)}` : ''}` : '—'))}
           ${linha('Bloqueio', esc(k.bloqueio && k.bloqueio !== 'aguardando' ? k.bloqueio : '—'))}
-          ${linha('Toques', esc(`${k.toques_hoje} hoje · ${k.toques_mes} no mês (teto 2 · 15)`))}
+          ${linha('Toques', esc(`${k.toques_hoje} hoje · ${k.toques_mes} no mês`))}
           ${linha('Janela de 24 h', esc(k.janela_aberta ? `aberta até ${NG.fmtDataHora(k.janela_fecha_em)}` : 'fechada — só template'))}
           ${k.ligar_sugerido ? '<div class="faixa amarelo">D4–D5: sugestão de ligação do consultor (não é automática).</div>' : ''}`
           : '<span class="nota-campo">Fora da cadência (conversa encerrada, em handoff ou sem mensagem da Mari).</span>'}
       </section>
       ${errs.length ? `<section class="d-sec"><h3>Erros (7 dias)</h3>${errs.map((e) => `<div class="faixa vermelho"><b>${esc(NG.fmtDataHora(e.created_at))} · ${esc(e.no_n8n || '')}</b>${esc(e.mensagem || '')}</div>`).join('')}</section>` : ''}
     `;
+    // 0102 (Ricardo, 10/11): tela Mari = supervisão do piloto automático. Para operar, só Assumir; o resto se faz na ficha
+    // (Minha vez). Saíram daqui: Devolver para a Mari, Cliente pediu para parar, Abrir no Chatwoot.
     const links = [];
-    // "Ver venda": abre a ficha da venda em gaveta nesta mesma tela (#venda=<id>; voltar fecha).
-    if (c.venda_id) links.push(`<a class="btn" href="#venda=${esc(c.venda_id)}">Ver venda</a>`);
-    if (c.chatwoot_conversation_id && CHATWOOT_NIO_ACCOUNT) {
-      // 0082: Assumir (sem dono) · Devolver para a Mari (com dono) · Cliente pediu para parar — o NIOGEN mexe no Chatwoot sozinho.
-      if (!c.chatwoot_agente && !c.humano_atribuido && !c.nao_contatar) links.unshift(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
-      else if (c.chatwoot_agente || c.humano_atribuido) links.push(`<button type="button" class="btn btn-ghost" data-momento="devolver_mari" data-conv="${esc(c.id)}">Devolver para a Mari</button>`);
-      if (!c.nao_contatar) links.push(`<button type="button" class="btn btn-ghost" data-momento="parar" data-conv="${esc(c.id)}">Cliente pediu para parar</button>`);
-      links.push(`<a class="btn" target="_blank" rel="noopener" href="https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${esc(c.chatwoot_conversation_id)}">Abrir no Chatwoot</a>`);
-    }
+    if (c.chatwoot_conversation_id && !c.chatwoot_agente && !c.humano_atribuido && !c.nao_contatar) links.push(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
+    links.push(c.venda_id ? `<a class="btn" href="#venda=${esc(c.venda_id)}">Abrir ficha</a>` : `<a class="btn" href="#conversa=${esc(c.id)}">Abrir ficha</a>`);
     document.getElementById('d-links').innerHTML = links.join('') || '<span class="nota-campo">Sem venda criada e sem conversa no Chatwoot.</span>';
     const conv = corpo.querySelector('.conversa');
     if (conv) conv.scrollTop = conv.scrollHeight;

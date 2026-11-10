@@ -71,6 +71,31 @@
       porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
     };
   }
+  // 0102 (10/11, papel das 3 telas): Conversas deveria contar SEMPRE 0 — cliente esperando há 3 min ou mais que NÃO está na
+  // Minha vez é furo da v_jornada. Devolve os ids (selo "deveria estar na Minha vez") e grava o rastro em mari_erros
+  // (no_n8n = 'jornada_furo', 1 linha por conversa por dia — o banco deduplica).
+  async function furosJornada(j) {
+    const jj = j || await jornada();
+    if (jj.erro) return { ids: new Set(), erro: jj.erro };
+    const naVez = new Set(jj.lista.filter((x) => x.precisa_acao).map((x) => x.conversa_id).filter(Boolean));
+    const rc = await sb.from('v_conversas').select('id').eq('encerrada', false).gte('esperando_min', 3).limit(500);
+    if (rc.error) return { ids: new Set(), erro: msgErro(rc.error) };
+    const ids = (rc.data || []).map((x) => x.id).filter((id) => !naVez.has(id));
+    if (ids.length) sb.rpc('jornada_furo_registrar', { p_conversas: ids }).then(() => {}, () => {});
+    return { ids: new Set(ids) };
+  }
+  // 0102 (Ricardo, 10/11 10h29): o teto 2/dia · 15/mês acabou. Virou config_regras.contato_teto_dia / contato_teto_mes,
+  // nulo = sem teto (valor atual). As telas só mostram "contatos hoje N · mês M" e só marcam teto se alguém configurar um.
+  let tetoCache = null;
+  async function tetoContato() {
+    if (tetoCache) return tetoCache;
+    const { data } = await sb.from('config_regras').select('chave, valor').in('chave', ['contato_teto_dia', 'contato_teto_mes']);
+    const v = (k) => { const x = (data || []).find((r) => r.chave === k); return x && typeof x.valor === 'number' ? x.valor : null; };
+    tetoCache = { dia: v('contato_teto_dia'), mes: v('contato_teto_mes') };
+    return tetoCache;
+  }
+  const noTetoContato = (hoje, mes, t) => !!t && ((t.dia != null && (hoje || 0) >= t.dia) || (t.mes != null && (mes || 0) >= t.mes));
+  const contatosTxt = (hoje, mes, t) => `hoje ${hoje || 0}${t && t.dia != null ? `/${t.dia}` : ''} · mês ${mes || 0}${t && t.mes != null ? `/${t.mes}` : ''}`;
   // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
   const passoJornada = (j) => (j ? { txt: j.o_que_fazer, nivel: NIVEL_COR[j.nivel] || 'dim', acao: !!j.precisa_acao, espera: j.nivel === 'espera', botao: j.botao } : null);
   const ordemJornada = (a, b) => (({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[a.nivel] - ({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[b.nivel])
@@ -1155,10 +1180,10 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, jornada, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, jornada, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
-    selosFicha,   // onda 3.1: ficha única (só aviso)
+    selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,

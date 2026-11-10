@@ -211,7 +211,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -305,6 +305,7 @@
       v,
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
       lim: rl.data || { hoje: 0, mes: 0 },
+      teto: await NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
       convInfo: (rc.data || [])[0] || null,   // 0082: dono no Chatwoot (Assumir só aparece sem dono)
@@ -374,12 +375,12 @@
       `${botoesPortal}<span class="nota-campo mono">${esc(enderecoPortal(v))}</span>
        <div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label></div>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label>
-       <label class="campo">Link da biometria (opcional — só referência; quem manda é a Nio)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>`, 'Salvar'),
+       <label class="campo">Link da biometria (opcional — só referência; quem manda é a Nio)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>${v.status === '0_qualificado' ? checkRecompra() : ''}`, 'Salvar'),
     bio_status: (v) => formWrap('bio_status', 'Biometria e crédito', 'O portal mostra a biometria como Pendente, com Risco ou Validada (Consulta OS). Validada + nº do pedido libera "Registrar venda".',
       `${botoesPortal}<div class="grade2"><label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status)}</select></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>`, 'Salvar'),
-    // Contato (teto do contrato: 2/dia e 15/mês, só saída conta; exceção = o cliente pediu ou autorizou).
-    contato: () => formWrap('contato', 'Registrar contato', `Hoje ${d.lim.hoje} de 2 · mês ${d.lim.mes} de 15 · seg–sex 9–21, sáb 10–16, nunca domingo ou feriado.`,
+    // Contato. 0102 (Ricardo, 10/11): sem teto 2/dia · 15/mês — só vale se alguém configurar contato_teto_dia/_mes.
+    contato: () => formWrap('contato', 'Registrar contato', `Contatos ${NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto)}.`,
       `<div class="grade2"><label class="campo">Canal<select name="canal"><option value="whatsapp">WhatsApp</option><option value="ligacao">Ligação</option><option value="presencial">Presencial</option></select></label>
        <label class="campo">Direção<select name="direcao"><option value="saida">Nós chamamos o cliente</option><option value="entrada">O cliente nos chamou</option></select></label></div>
        <label class="campo">Resumo<textarea name="resumo" maxlength="500"></textarea></label>
@@ -395,7 +396,7 @@
       'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode o crédito e grave aqui o nº do pedido. A Nio manda o link da biometria ao cliente e <b>o NIOGEN avisa o cliente sozinho</b> — não mande o aviso à mão.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (portal PAP)<input type="text" name="pedido" value="${esc(v.nio_pedido || '')}" autocomplete="off" autofocus></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>
-       <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>`, 'Gravar pedido'),
+       <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>${checkRecompra()}`, 'Gravar pedido'),
     // 0096: etapa 3 → 4 (VENDA). Só o nº da OS; agendar é o passo seguinte.
     os: (v) => formWrap('os', 'Abrir a OS = VENDA',
       'Biometria validada. Abra a OS no portal e grave aqui o número — com isso a venda conta. Depois vem o agendamento. Contrato: até 4 h da biometria validada.',
@@ -533,6 +534,28 @@
     return true;
   }
 
+  // 0102 (trava B1): recompra / cliente já Nio = multa R$ 500 + estorno 100 %. "Gravar pedido" com selo de possível duplicado
+  // (⚠️ ↩️ 🏠 📱) ou nota "VENDA NÃO CRIADA" exige marcar a conferência. Não bloqueia a venda; grava o evento conferencia_recompra.
+  const selosRecompra = () => ((d && d.avisos && d.avisos.selos) || []).filter((s) => s.venda_id !== (d.v || {}).id);
+  const naoCriada = () => /VENDA N[ÃA]O CRIADA/i.test(String((d && d.convInfo && d.convInfo.handoff_briefing) || ''));
+  const precisaConferir = () => selosRecompra().length > 0 || naoCriada();
+  const checkRecompra = () => (precisaConferir()
+    ? `<label class="check recompra"><input type="checkbox" name="conferi_recompra"> <b>Conferi: não é cliente nem endereço Nio</b>
+        <small class="apagado">${esc([...new Set(selosRecompra().map((s) => NG.ICONE_SELO[s.tipo] || '⚠️'))].join(' '))}${naoCriada() ? ' ⚠️ VENDA NÃO CRIADA' : ''} · recompra = multa R$ 500; cliente ou endereço já Nio = estorno 100 %</small></label>`
+    : '');
+  async function conferiuRecompra(fd, origem) {
+    if (!precisaConferir()) return true;
+    if (!fd.get('conferi_recompra')) {
+      NG.toast('Marque "Conferi: não é cliente nem endereço Nio" — há aviso de possível duplicado nesta venda.', 'bad');
+      return false;
+    }
+    const { error } = await NG.sb.rpc('venda_conferencia_recompra', {
+      p_venda: d.v.id, p_selos: [...selosRecompra().map((s) => s.tipo), ...(naoCriada() ? ['venda_nao_criada'] : [])], p_origem: origem,
+    });
+    if (error) NG.toast(`Conferência não registrada: ${NG.msgErro(error)}`, 'bad');   // não segura a venda
+    return true;
+  }
+
   const SALVAR = {
     async conv_espera(fd) { return !!(await rodarEsperaConversa(fd.get('ate'), String(fd.get('motivo') || '').trim())); },
     async pedido(fd) {
@@ -554,6 +577,7 @@
       };
       // 0089: pedido novo = momento "pedido" (etapa 3: etiqueta, nota e aviso da biometria pelo sistema). A OS vem depois.
       if (campos.nio_pedido && campos.nio_pedido !== (v.nio_pedido || null) && v.status === '0_qualificado' && ehBO()) {
+        if (!(await conferiuRecompra(fd, 'ficha'))) return false;
         return !!(await rodarMomento('pedido', { pedido: campos.nio_pedido, credito: campos.credito_resultado, link: link || null }));
       }
       return gravar(campos, 'Pedido no portal atualizado');
@@ -580,8 +604,8 @@
     },
     async contato(fd) {
       const saida = fd.get('direcao') === 'saida';
-      if (saida && (d.lim.hoje >= 2 || d.lim.mes >= 15) && !fd.get('autorizado')) {
-        NG.toast('Teto do contrato atingido (2/dia ou 15/mês). Só registre se o cliente pediu ou autorizou.', 'bad');
+      if (saida && NG.noTetoContato(d.lim.hoje, d.lim.mes, d.teto) && !fd.get('autorizado')) {
+        NG.toast('Teto de contatos configurado atingido. Só registre se o cliente pediu ou autorizou.', 'bad');
         return false;
       }
       const resumo = String(fd.get('resumo') || '').trim();
@@ -605,6 +629,7 @@
     async pedido_so(fd) {
       const pedido = String(fd.get('pedido') || '').trim();
       if (!pedido) { NG.toast('Informe o nº do pedido.', 'bad'); return false; }
+      if (!(await conferiuRecompra(fd, 'ficha'))) return false;
       return !!(await rodarMomento('pedido', { pedido, credito: fd.get('credito') || null, sem_aviso: !!fd.get('sem_aviso') }));
     },
     async os(fd) {
@@ -775,7 +800,7 @@
       ${linha('Parceiro', esc(v.parceiro_nome || '—'))}
       ${st === 'pendente' ? linha('Prazo', prazo ? `<span class="${estourou ? 'bad-txt' : ''}">${esc(NG.fmtDataHora(prazo))}${estourou ? ' · estourado' : ''}</span>` : '—') : ''}
       ${st === 'pendente' ? linha('Sem resposta', esc(`${d.semResposta} de ${max} desde a última abertura`)) : ''}
-      ${linha('Teto do cliente', esc(`hoje ${d.lim.hoje} de 2 · mês ${d.lim.mes} de 15`))}
+      ${linha('Contatos', esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto)))}
       ${v.conferencia_motivo ? linha('Motivo', esc(NG.MOTIVOS_CONFERENCIA[v.conferencia_motivo] || v.conferencia_motivo)) : ''}
       ${v.conferencia_obs ? linha('Observação interna', `${esc(v.conferencia_obs)} <small class="apagado">· não aparece para o parceiro</small>`) : ''}
       ${st === 'aprovada' && v.conferencia_em ? linha('Aprovada em', esc(`${NG.fmtDataHora(v.conferencia_em)}${quem ? ' · ' + quem : ''}`)) : ''}
@@ -1344,7 +1369,7 @@
       <div class="f-sb"><span class="f-rot">CHATWOOT · CONVERSA</span>${cw}</div>
       <div class="f-sb"><span class="f-rot">CONTRATO</span>
         ${ck(v.trava_sem_produto_ativo !== false, 'não é cliente Nio')}${ck(v.trava_sem_cancelamento_30d !== false, 'sem cancelamento em 30 d')}${ck(v.trava_area !== false, 'dentro da área')}
-        <span>Contatos hoje ${esc(d.lim.hoje)}/2 · mês ${esc(d.lim.mes)}/15</span></div>
+        <span>Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}</span></div>
     </div>`;
   }
 
@@ -1621,8 +1646,8 @@
       },
       {
         id: 'contatos', titulo: 'Contatos e cadência',
-        resumo: `hoje ${d.lim.hoje} de 2 · mês ${d.lim.mes} de 15${d.contatos[0] ? ` · último ${NG.quando(d.contatos[0].em)}` : ''}`,
-        corpo: () => `<div class="faixa ${d.lim.hoje >= 2 || d.lim.mes >= 15 ? 'amarelo' : 'cinza'}">Contatos que nós fizemos: hoje ${esc(d.lim.hoje)} de 2 · mês ${esc(d.lim.mes)} de 15. Seg–sex 9–21, sáb 10–16, nunca domingo ou feriado.</div>
+        resumo: `${NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto)}${d.contatos[0] ? ` · último ${NG.quando(d.contatos[0].em)}` : ''}`,
+        corpo: () => `<div class="faixa ${NG.noTetoContato(d.lim.hoje, d.lim.mes, d.teto) ? 'amarelo' : 'cinza'}">Contatos que nós fizemos: ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}. Sem teto por dia ou mês; os toques automáticos da Mari só saem seg–sex 9–21, sáb 10–16, nunca domingo ou feriado.</div>
           ${d.contatos.length ? `<div class="timeline">${d.contatos.slice(0, 10).map((c) => `<div class="tl-item"><span class="tl-dot ${c.direcao === 'entrada' ? '' : 'futuro'}"></span><div class="tl-txt"><strong>${esc(CANAIS[c.canal] || c.canal)} · ${c.direcao === 'entrada' ? 'recebido' : 'enviado'} · ${esc(c.por)}</strong><span>${esc(NG.fmtDataHora(c.em))}${c.resumo ? ' · ' + esc(c.resumo) : ''}</span></div></div>`).join('')}</div>` : '<span class="nota-campo">Nenhum contato registrado.</span>'}`,
         rotuloEditar: 'Registrar contato',
         editar: v.status === 'saida' ? null : () => FORMS.contato(v),

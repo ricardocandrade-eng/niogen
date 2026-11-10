@@ -163,11 +163,11 @@
           `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
         total = acao.length;
         // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time) — fora os da Minha vez.
-        const naVez = new Set(acao.map((x) => x.conversa_id).filter(Boolean));
-        const rc = await NG.sb.from('v_conversas').select('id').eq('encerrada', false).gte('esperando_min', 3).limit(500);
-        if (!rc.error) {
-          const n = (rc.data || []).filter((x) => !naVez.has(x.id)).length;
-          pinta(nav, 'conversas', n, n ? 'alerta' : 'info', `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais (fora os que já estão na Minha vez).`);
+        // 0102: esse número deveria ser sempre 0; cada conversa contada é furo da v_jornada e fica gravada (NG.furosJornada).
+        const fu = await NG.furosJornada(j);
+        if (!fu.erro) {
+          const n = fu.ids.size;
+          pinta(nav, 'conversas', n, n ? 'alerta' : 'info', n ? `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais FORA da Minha vez — deveria ser 0 (defeito registrado para corrigir).` : '');
         }
       }
       if (nav.querySelector('[data-badge="vendas"]')) {

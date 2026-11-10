@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-07">
-<script src="config.js?v=101126-07"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-08">
+<script src="config.js?v=101126-08"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-07"></script>
-<script src="assets/sidebar.js?v=101126-07"></script>
-<script src="assets/conversa.js?v=101126-07"></script>
-<script src="assets/ficha.js?v=101126-07"></script>
+<script src="assets/app.js?v=101126-08"></script>
+<script src="assets/sidebar.js?v=101126-08"></script>
+<script src="assets/conversa.js?v=101126-08"></script>
+<script src="assets/ficha.js?v=101126-08"></script>
 </head>
 <body>
 <div class="app">
@@ -45,6 +45,8 @@
       </div>
     </header>
 
+    <!-- 0102: alarmes da operação (só admin/backoffice): respostas fora do NIOGEN hoje · qualidade do número da WABA Nio -->
+    <section class="alarmes-op" id="alarmes-op" aria-label="Alarmes da operação" hidden></section>
     <section class="faixa-meta" id="faixa-meta" aria-label="Meta do mês e vendas paradas"><div class="carregando">Carregando…</div></section>
     <!-- 0087: funil do mês — quantos entraram em cada etapa (lead qualificado ≠ venda; venda = OS aberta) -->
     <section class="funil-mes" id="funil-mes" aria-label="Funil do mês"></section>
@@ -69,6 +71,7 @@
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   const veMari = ['admin', 'backoffice'].includes(eu.perfil);
   let vendas = [], metas = [], ultimoContato = {}, base, osab = null, mari;   // base/mari: undefined = carregando
+  let alarmes = null;   // 0102: {fora: n, fora_conv: n, waba: {quality_rating, lida_em}|null}
   let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
   let ritmo = null, regras = {};
   const ehAdmin = eu.perfil === 'admin';
@@ -102,6 +105,7 @@
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
   async function carregarExtras() {
+    if (veMari) carregarAlarmes();
     const [rz, rmari, rp, rres] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
@@ -113,6 +117,41 @@
     portal = rp && !rp.error ? rp.data : null;
     resumo = !rres ? null : rres.error ? { erro: NG.msgErro(rres.error) } : rres.data;
     render();
+  }
+
+  // 0102: alarmes que não travam nada — fala do time digitada direto no Chatwoot (gatilho em mari_turnos → mari_erros
+  // 'resposta_fora_niogen') e a última leitura do quality_rating do número da WABA Nio (n8n waba_qualidade, 8h e 14h).
+  async function carregarAlarmes() {
+    const ini = new Date(`${NG.diaSP()}T00:00:00-03:00`).toISOString();
+    const [rf, rw] = await Promise.all([
+      NG.sb.from('mari_erros').select('conversa_id').eq('no_n8n', 'resposta_fora_niogen').gte('created_at', ini).limit(1000),
+      NG.sb.from('waba_qualidade').select('quality_rating, status, lida_em').order('lida_em', { ascending: false }).limit(1),
+    ]);
+    alarmes = {
+      fora: rf.error ? null : (rf.data || []).length,
+      fora_conv: rf.error ? null : new Set((rf.data || []).map((x) => x.conversa_id)).size,
+      waba: rw.error ? null : (rw.data || [])[0] || false,
+    };
+    renderAlarmes();
+  }
+  function renderAlarmes() {
+    const el = document.getElementById('alarmes-op');
+    if (!el || !alarmes) return;
+    const itens = [];
+    if (alarmes.fora) {
+      itens.push(`<div class="faixa amarelo"><b>${NG.fmtNum(alarmes.fora)} ${alarmes.fora === 1 ? 'resposta' : 'respostas'} fora do NIOGEN hoje</b>
+        (${NG.fmtNum(alarmes.fora_conv)} ${alarmes.fora_conv === 1 ? 'conversa' : 'conversas'}) — o time respondeu direto no Chatwoot. Responda pela ficha (barra Conversa): é ela que faz a venda andar.</div>`);
+    }
+    const w = alarmes.waba;
+    const velha = w && (Date.now() - new Date(w.lida_em)) > 2 * 86400000;
+    if (w === false || velha) {
+      itens.push(`<div class="faixa cinza">Qualidade do número da WABA Nio: ${w ? `última leitura em ${esc(NG.fmtDataHora(w.lida_em))}` : 'ainda sem leitura'} — o n8n <b>waba_qualidade</b> lê às 8h e às 14h.</div>`);
+    } else if (w && w.quality_rating && w.quality_rating !== 'GREEN') {
+      const cor = w.quality_rating === 'RED' ? 'vermelho' : 'amarelo';
+      itens.push(`<div class="faixa ${cor}"><b>Qualidade do número da WABA Nio: ${esc(w.quality_rating)}</b> (lida ${esc(NG.fmtDataHora(w.lida_em))}). Sem teto de contatos, a Meta é quem freia: diminua os toques frios e confira bloqueios e denúncias antes de seguir.</div>`);
+    }
+    el.hidden = !itens.length;
+    el.innerHTML = itens.join('');
   }
 
   // Mari: conversas que pediram humano e ninguém respondeu ainda (a mesma regra da tela Mari; testes fora).

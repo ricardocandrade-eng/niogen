@@ -1,0 +1,125 @@
+{
+  "name": "waba_qualidade",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,14 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · 8h e 14h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1ee1b7d8-5bca-5285-83e7-121449a18ff6"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403?fields=quality_rating,messaging_limit_tier,status,name_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Graph quality_rating",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "cba22097-f6ce-5582-b8d7-d834cd0a48b8",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/waba_qualidade",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ phone_number_id: '1342993658907403', quality_rating: $json.quality_rating || null, messaging_limit_tier: $json.messaging_limit_tier || null, status: $json.status || null, bruto: $json }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3 · Supabase gravar leitura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "27dc6124-3ace-5530-9865-56993419c2d4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "notes": "Só grava a leitura. O alarme (não GREEN) aparece no Painel do NIOGEN; não trava envio.",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "1 · 8h e 14h": {
+      "main": [
+        [
+          {
+            "node": "2 · Graph quality_rating",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Graph quality_rating": {
+      "main": [
+        [
+          {
+            "node": "3 · Supabase gravar leitura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

@@ -1431,6 +1431,8 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 .cv-item.esperando .cv-l2 { color: var(--text); }
 .cv-l3 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 11.5px; color: var(--muted); }
 .cv-esp { color: var(--warn-fg); font-weight: 600; margin-left: auto; }
+.cv-furo { display: inline-block; font-size: 11px; font-weight: 600; color: var(--bad-fg, #b42318); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
+.mv-semdono { margin: 0 0 8px; }
 .cv-direita { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .cv-vazia { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); font-size: 13px; }
 .cv-topo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; }
@@ -1631,3 +1633,6 @@ select.cvp-pill, .cvp-l1 select.cvp-pill, .cvp-l2 select.cvp-pill { width: auto;
 .cvp-b .cvp-t { white-space: pre-wrap; }
 /* 10/11: chip da objeção contornada pela Mari (tela Mari) */
 .mq-trava.aviso { color: var(--info-fg); border-color: #34507A; }
+/* 0102: alarmes da operação no Painel (respostas fora do NIOGEN · qualidade da WABA) */
+.alarmes-op:not([hidden]) { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; }
+.alarmes-op .faixa { display: block; }

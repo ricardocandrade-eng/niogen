@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-07">
-<script src="config.js?v=101126-07"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-08">
+<script src="config.js?v=101126-08"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-07"></script>
-<script src="assets/sidebar.js?v=101126-07"></script>
-<script src="assets/conversa.js?v=101126-07"></script>
-<script src="assets/ficha.js?v=101126-07"></script>
+<script src="assets/app.js?v=101126-08"></script>
+<script src="assets/sidebar.js?v=101126-08"></script>
+<script src="assets/conversa.js?v=101126-08"></script>
+<script src="assets/ficha.js?v=101126-08"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -99,6 +99,9 @@
   async function carregar() {
     const r = await NG.jornada();
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
+    // 0102 (Ricardo, 10/11): Minha vez = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
+    // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
+    r.lista = r.lista.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
     jor = r;
     render();
     reporConversaFoco();
@@ -137,13 +140,20 @@
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && (!comVez || vez(j))).sort(NG.ordemJornada);
   }
   // Acompanhando: vendas que não pedem nada agora, mas que o time acompanha — biometria, instalação, pendência com terceiro.
-  // (As conversas que a Mari está tocando ficam só em "Todas".)
+  // (As conversas que a Mari está tocando sozinha não aparecem na Minha vez — nem em "Todas" — desde a 0102.)
   // 0101: conversa em espera ("⏸ Aguardando · motivo · até DD/MM") também fica em Acompanhando.
   const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && !!j.pendencia));
   function acompanhando() {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
   }
-  const abas = () => `<div class="mv-abas"><div class="mv-tabs" role="tablist">
+  // 0102 (trava B2): lead que a Mari passou e ninguém assumiu há mais de 30 min (contando só o horário de atendimento).
+  const semDono = () => jor.lista.filter((j) => (j.sem_dono_min || 0) > 30);
+  const faixaSemDono = () => {
+    const l = semDono();
+    if (!l.length) return '';
+    return `<div class="faixa vermelho mv-semdono" role="alert"><b>${l.length} ${l.length === 1 ? 'cliente passado' : 'clientes passados'} pela Mari sem dono há mais de 30 min</b> — aperte <b>Assumir</b> na linha (estão no topo, em vermelho): ${l.slice(0, 4).map((j) => esc(j.nome || 'Contato')).join(', ')}${l.length > 4 ? '…' : ''}</div>`;
+  };
+  const abas = () => `${faixaSemDono()}<div class="mv-abas"><div class="mv-tabs" role="tablist">
       <button type="button" role="tab" data-aba="vez" aria-selected="${soVez}" class="${soVez ? 'on' : ''}" title="O que é para fazer agora e hoje, e embaixo o que você acompanha">Sua vez · ${filtradas(true).length}<span class="mv-acomp-n"> + acompanhando ${acompanhando().length}</span></button>
       <button type="button" role="tab" data-aba="todas" aria-selected="${!soVez}" class="${soVez ? '' : 'on'}">Todas · ${filtradas(false).length}</button></div>
       <span class="apagado">${etapaSel ? `Só ${esc(NG.JORNADA[etapaSel - 1].nome)} · clique de novo na etapa para tirar` : 'Clique numa etapa para filtrar'}</span></div>`;
