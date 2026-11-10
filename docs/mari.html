@@ -30,13 +30,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-12">
-<script src="config.js?v=101126-12"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-13">
+<script src="config.js?v=101126-13"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-12"></script>
-<script src="assets/sidebar.js?v=101126-12"></script>
-<script src="assets/conversa.js?v=101126-12"></script>
-<script src="assets/ficha.js?v=101126-12"></script>
+<script src="assets/app.js?v=101126-13"></script>
+<script src="assets/sidebar.js?v=101126-13"></script>
+<script src="assets/conversa.js?v=101126-13"></script>
+<script src="assets/ficha.js?v=101126-13"></script>
 </head>
 <body>
 <div class="app">
@@ -213,6 +213,7 @@
     + 'chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, chatwoot_sync_em, cadencia_passo';
 
   async function carregar() {
+    const pOp = NG.sb.rpc('oportunidades_abertas');   // 0108: em paralelo com o resto
     teto = await NG.tetoContato();
     const [rc, rk, rp, re, rq, rcol] = await Promise.all([
       NG.sb.from('mari_conversas').select(COLS).order('updated_at', { ascending: false }).limit(2000),
@@ -251,7 +252,7 @@
     ]);
     jorConv = rj && !rj.erro ? rj.porConversa : {};
     // 0107: 🔥 oportunidades (as mesmas do Live: sem as que já pedem ação) — o cartão ganha a borda laranja e "🔥 no Live".
-    const ro = await NG.oportunidades(rj && !rj.erro ? rj : null);
+    const ro = await NG.oportunidades(rj && !rj.erro ? rj : null, pOp);
     opDe = ro.erro ? {} : Object.fromEntries(ro.lista.map((o) => [o.conversa_id, o]));
     semResposta = rsr && !rsr.error ? Object.fromEntries((rsr.data || []).map((x) => [x.id, x.minutos])) : {};
     vendasDe = Object.fromEntries((rvv.data || []).map((v) => [v.id, v]));
@@ -614,7 +615,7 @@
     feedEl.innerHTML = rows.length ? rows.map((r) => {
       const nome = r.conversa_id && convs.some((c) => c.id === r.conversa_id)
         ? `<button type="button" class="link" data-abrir="${esc(r.conversa_id)}">${esc(r.nome)}</button>` : `<b>${esc(r.nome)}</b>`;
-      return `<div class="mav-ev ${esc(r.nivel || '')}${novos.has(chaveFeed(r)) ? ' novo' : ''}"><span class="t">${esc(NG.fmtHora(r.em))}</span><span>${nome} · ${esc(r.texto)}</span></div>`;
+      return `<div class="mav-ev ${esc(r.nivel || '')}${novos.has(chaveFeed(r)) ? ' novo' : ''}"><span class="t">${esc(NG.fmtHora(r.em))}</span><span>${nome === '<b>—</b>' ? '<b>Sistema</b>' : nome} · ${esc(r.texto)}</span></div>`;
     }).join('') : '<span class="apagado">Nada ainda hoje.</span>';
   }
   async function carregarVivo() {

@@ -23,13 +23,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-12">
-<script src="config.js?v=101126-12"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-13">
+<script src="config.js?v=101126-13"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-12"></script>
-<script src="assets/sidebar.js?v=101126-12"></script>
-<script src="assets/conversa.js?v=101126-12"></script>
-<script src="assets/ficha.js?v=101126-12"></script>
+<script src="assets/app.js?v=101126-13"></script>
+<script src="assets/sidebar.js?v=101126-13"></script>
+<script src="assets/conversa.js?v=101126-13"></script>
+<script src="assets/ficha.js?v=101126-13"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -111,13 +111,14 @@
   const vez = (j) => !!j.precisa_acao;
 
   async function carregar() {
+    const pOp = NG.sb.rpc('oportunidades_abertas');   // 0108: em paralelo com a jornada
     const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
     // 0102 (Ricardo, 10/11): Live = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
     // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
     // 0107: 🔥 oportunidades (calculadas sobre a jornada inteira, antes do filtro: o que já pede ação não vira oportunidade).
-    const ro = await NG.oportunidades(r);
+    const ro = await NG.oportunidades(r, pOp);
     ops = ro.erro ? [] : ro.lista;
     if (!opAtualizado || Date.now() - opAtualizado > 5 * 60000) {   // grava "mostrada" e os resultados (idempotente)
       opAtualizado = Date.now();

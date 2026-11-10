@@ -73,8 +73,10 @@
   }
   // 0107: 🔥 oportunidades (v_oportunidades) — fora as conversas que já estão em "Para fazer" (v_jornada.precisa_acao):
   // oportunidade nunca entra no contador de obrigação nem repete uma linha que já pede ação.
-  async function oportunidades(j) {
-    const { data, error } = await sb.from('v_oportunidades').select('*').order('ordem');
+  // 0108: pela RPC oportunidades_abertas (definer, porta admin/backoffice) — a view lida com RLS levava ~6 s.
+  // pronta: a mesma chamada já disparada pela tela (em paralelo com a v_jornada).
+  async function oportunidades(j, pronta) {
+    const { data, error } = await (pronta || sb.rpc('oportunidades_abertas'));
     if (error) return { erro: msgErro(error), lista: [] };
     const acao = new Set(((j && j.lista) || []).filter((x) => x.precisa_acao && x.conversa_id).map((x) => x.conversa_id));
     return { lista: (data || []).filter((o) => !acao.has(o.conversa_id)) };
