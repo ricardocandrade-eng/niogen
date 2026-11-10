@@ -180,6 +180,24 @@
     } else if (e.tipo === 'pedido_aberto_portal') {
       titulo = `Pedido aberto no portal${dt.pedido ? ` · nº ${dt.pedido}` : ''}`;
       texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.origem === 'extensao' ? ' · pela extensão' : ''}`;
+    } else if (e.tipo === 'portal_status') {
+      // 0105: leitura do Histórico de Pedidos do portal (extensão 0.4).
+      titulo = `Portal: ${dt.de ? `${dt.de} → ` : ''}${dt.para || ''}`;
+      cor = dt.para === 'NÃO VENDA' ? 'bad' : dt.para === 'SEM CONTATO COM O CLIENTE' ? 'warn' : '';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem} · pedido ${esc(dt.pedido || '')}`;
+    } else if (e.tipo === 'portal_pedido_casado') {
+      titulo = `Pedido do portal casado com esta venda · nº ${dt.pedido || ''}`;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}${dt.pedido_na_venda && dt.pedido_na_venda !== dt.pedido ? ` · nº na venda: ${esc(dt.pedido_na_venda)}` : ''}`;
+    } else if (e.tipo === 'biometria_ged360') {
+      titulo = `Biometria (GED360): ${dt.para || ''}`;
+      cor = /RISCO|EXPIRADO|REPROVADO/.test(dt.para || '') ? 'bad' : /APTO|APROVADO/.test(dt.para || '') ? '' : 'warn';
+      texto = `${NG.fmtDataHora(e.criado_em)} · protocolo ${esc(dt.protocolo || '')}`;
+    } else if (e.tipo === 'biometria_validada') {
+      titulo = `Biometria validada · ${dt.origem === 'ged360' ? 'GED360' : dt.origem === 'portal' ? 'status do portal' : dt.origem || ''}`;
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
+    } else if (e.tipo === 'instalada_portal') {
+      titulo = 'Instalada · portal (Gross)';
+      texto = `${NG.fmtDataHora(e.criado_em)}${quem}`;
     } else if (e.tipo === 'osab_venda_invalida') {
       titulo = 'Nio: venda inválida / risco de multa ou estorno';
       cor = 'bad';
@@ -281,6 +299,8 @@
     // rascunho: sem elas, a ficha mostra "aguardando o extrato da Nio" (nunca dado de exemplo).
     const bo = ['admin', 'backoffice'].includes(perfil);
     const opc = (q) => q.then((x) => (x.error ? null : x.data), () => null);
+    // 0105: andamento na Nio — status do portal PAP (extensão 0.4) e biometria do GED360 (robô n8n). Só admin/backoffice.
+    const andRow = bo ? await opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle()) : null;
     const [fatRow, concRow, cicloRow] = await Promise.all([
       v.instalado_em ? opc(NG.sb.from('v_adimplencia').select('faturas').eq('venda_id', id).maybeSingle()) : Promise.resolve(null),
       bo && v.comissao_paga != null ? opc(NG.sb.from('v_conciliacao').select('*').eq('venda_id', id).maybeSingle()) : Promise.resolve(null),
@@ -293,6 +313,7 @@
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     return {
       jor: rjo && !rjo.error ? rjo.data : null,
+      andamento: andRow || null,
       faturas: fatRow && Array.isArray(fatRow.faturas) ? fatRow.faturas : null,
       concil: concRow || null,
       cicloRegra: cicloRow && cicloRow.valor && typeof cicloRow.valor === 'object' ? cicloRow.valor : null,
@@ -1407,8 +1428,27 @@
       ${linhaComissao(v)}
       ${linhaFaturas(v)}
       ${linhaEstorno(travas, 'cliente Nio · cancelou < 30 d · área · viabilidade')}
+      ${linhasAndamento()}
       ${d.pend ? `<div class="f-st-g"><span class="f-rot">PENDÊNCIA</span><span class="f-chip espera">⏸ ${esc(d.pend.nome)} · ${esc(d.pend.diaTxt)}</span></div>` : ''}
     </div>`;
+  }
+
+  // 0105: o andamento do pedido na Nio, lido sozinho — PORTAL PAP (status do Histórico, extensão 0.4) e BIOMETRIA (GED360, a cada
+  // 15 min). Alerta vivo aparece em vermelho/amarelo com "Visto" (tira da Minha vez até o status mudar de novo).
+  function linhasAndamento() {
+    const a = d.andamento;
+    if (!a) return '';
+    const NIV = { agora: 'bad', hoje: 'wa' };
+    const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}" title="Tira o alerta da Minha vez até o status mudar de novo">Visto</button>`;
+    const portal = a.portal_status ? `<div class="f-st-g"><span class="f-rot">PORTAL PAP</span>
+        <span class="f-chip ${a.portal_status === 'GROSS' ? 'ok' : a.portal_alerta ? NIV[a.portal_alerta_nivel] || 'wa' : 'info'}">${esc(a.portal_rotulo || a.portal_status)}</span>
+        <span class="apagado">desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))} · nº ${esc(a.portal_pedido)}</span>
+        ${a.portal_alerta ? `<span class="f-chip ${NIV[a.portal_alerta_nivel] || 'wa'}">${esc(a.portal_alerta)}</span>${visto('portal', a.portal_pedido)}` : ''}</div>` : '';
+    const bio = a.bio_resultado ? `<div class="f-st-g"><span class="f-rot">BIOMETRIA</span>
+        <span class="f-chip ${a.bio_acao === 'aprovada' ? 'ok' : a.bio_alerta ? NIV[a.bio_alerta_nivel] || 'wa' : a.bio_desconhecido ? 'wa' : 'espera'}">${esc(a.bio_rotulo || a.bio_resultado)}${a.bio_desconhecido ? ' · texto novo' : ''}</span>
+        <span class="apagado">GED360 · protocolo ${esc(a.bio_protocolo)} · envio ${esc(NG.fmtDataHora(a.bio_envio))}${a.bio_conferencia ? ` · conferência ${esc(NG.fmtDataHora(a.bio_conferencia))}` : a.bio_acao === 'espera' ? ' · aguardando a Nio conferir' : ''} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}</span>
+        ${a.bio_alerta ? `<span class="f-chip ${NIV[a.bio_alerta_nivel] || 'wa'}">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}` : ''}</div>` : '';
+    return portal + bio;
   }
   const botaoConversa = (n) => (d.conversaId ? `<button type="button" class="btn btn-sm f-bt-conv" data-f="conversa">💬 ${convAberta && !hostConversa ? 'Fechar a conversa' : 'Conversa'}${n != null ? ` · ${n}` : ''}</button>` : '');
   // 0096: a conversa vira link no começo da linha do nome — "💬 Conversa · #32 | cidade · plano · origem".
@@ -2088,6 +2128,14 @@
       if (acao === 'conf-aprovar') { b.disabled = true; const ok = await gravar({ conferencia_status: 'aprovada' }, 'Conferência aprovada'); if (!ok && b.isConnected) b.disabled = false; return; }
       if (acao === 'conf-form-reprovar' || acao === 'conf-form-devolver') { formAtivo = acao === 'conf-form-reprovar' ? 'conf_reprovar' : 'conf_devolver'; render(); return; }
       if (acao === 'conf-gerar') { b.disabled = true; await confGerar(); return; }
+      if (acao === 'and-visto') {
+        b.disabled = true;
+        const { error } = await NG.sb.rpc('andamento_alerta_visto', { p_origem: b.dataset.origem, p_chave: b.dataset.chave });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+        NG.toast('Alerta marcado como visto');
+        await recarregar();
+        return;
+      }
       if (acao === 'pend-abrir' || acao === 'pend-adiar' || acao === 'pend-encerrar') {
         formAtivo = acao.replace('-', '_');
         if (formAtivo !== 'pend_abrir') detalhes = true;

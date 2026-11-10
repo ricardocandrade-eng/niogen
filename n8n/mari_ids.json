@@ -8,7 +8,8 @@
     "waba": "58TW1ICGnFrHlnTu",
     "claude_testes": "2EFA7NmCwLSH0WFb",
     "google_drive": "aPnrkEhc9IzKXm7g",
-    "chatwoot_bot": "rMBPTco4UoFYPu0b"
+    "chatwoot_bot": "rMBPTco4UoFYPu0b",
+    "ged360": "gzzXekYKBd2aqO5F"
   },
   "workflow_id": "Nsb1dcL3HWQpKSav",
   "cadencia_workflow_id": "efPnlQ1P4UoiNcFG",
@@ -20,5 +21,6 @@
   "resumo_diario_workflow_id": "6MwLIIqRnxUUth75",
   "alarme_silencio_workflow_id": "ScmdsERY6cqdlyeT",
   "backoffice_chatwoot_workflow_id": "aXTo5Q2djsDQbHD5",
-  "waba_qualidade_workflow_id": "xqibGdWHmvylhAPw"
+  "waba_qualidade_workflow_id": "xqibGdWHmvylhAPw",
+  "ged360_biometria_workflow_id": "o9WcYynXJw9QePFV"
 }

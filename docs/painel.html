@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-10">
-<script src="config.js?v=101126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-11">
+<script src="config.js?v=101126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-10"></script>
-<script src="assets/sidebar.js?v=101126-10"></script>
-<script src="assets/conversa.js?v=101126-10"></script>
-<script src="assets/ficha.js?v=101126-10"></script>
+<script src="assets/app.js?v=101126-11"></script>
+<script src="assets/sidebar.js?v=101126-11"></script>
+<script src="assets/conversa.js?v=101126-11"></script>
+<script src="assets/ficha.js?v=101126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -123,14 +123,16 @@
   // 'resposta_fora_niogen') e a última leitura do quality_rating do número da WABA Nio (n8n waba_qualidade, 8h e 14h).
   async function carregarAlarmes() {
     const ini = new Date(`${NG.diaSP()}T00:00:00-03:00`).toISOString();
-    const [rf, rw] = await Promise.all([
+    const [rf, rw, ran] = await Promise.all([
       NG.sb.from('mari_erros').select('conversa_id').eq('no_n8n', 'resposta_fora_niogen').gte('created_at', ini).limit(1000),
       NG.sb.from('waba_qualidade').select('quality_rating, status, lida_em').order('lida_em', { ascending: false }).limit(1),
+      NG.sb.from('v_andamento_resumo').select('*').maybeSingle(),   // 0105: portal PAP (extensão) + GED360 (robô)
     ]);
     alarmes = {
       fora: rf.error ? null : (rf.data || []).length,
       fora_conv: rf.error ? null : new Set((rf.data || []).map((x) => x.conversa_id)).size,
       waba: rw.error ? null : (rw.data || [])[0] || false,
+      and: ran && !ran.error ? ran.data : null,
     };
     renderAlarmes();
   }
@@ -150,8 +152,29 @@
       const cor = w.quality_rating === 'RED' ? 'vermelho' : 'amarelo';
       itens.push(`<div class="faixa ${cor}"><b>Qualidade do número da WABA Nio: ${esc(w.quality_rating)}</b> (lida ${esc(NG.fmtDataHora(w.lida_em))}). Sem teto de contatos, a Meta é quem freia: diminua os toques frios e confira bloqueios e denúncias antes de seguir.</div>`);
     }
+    // 0105: andamento na Nio. Portal: amarelo com mais de 12 h sem leitura em dia útil (seg–sáb). GED360: 2 rodadas seguidas
+    // com falha → "sem leitura desde HH:MM"; nunca rodou → cinza (robô desligado até a senha entrar no n8n).
+    const an = alarmes.and;
+    if (an) {
+      const util = new Date().getDay() !== 0;
+      const hP = an.portal_ultima_leitura ? (Date.now() - new Date(an.portal_ultima_leitura)) / 3600000 : null;
+      if (hP == null) itens.push('<div class="faixa cinza">Status do portal PAP: ainda sem leitura — no portal, abra <b>Histórico de Pedidos</b> e use <b>Atualizar status no NIOGEN</b> na extensão (manhã e tarde).</div>');
+      else if (util && hP > 12) itens.push(`<div class="faixa amarelo"><b>Portal: última leitura há ${NG.fmtNum(Math.floor(hP))} h</b> — abra o Histórico de Pedidos e use <b>Atualizar status no NIOGEN</b> na extensão.</div>`);
+      if (!an.ged360_ultima_tentativa) itens.push('<div class="faixa cinza">Biometria (GED360): o robô ainda não rodou — fica desligado até a senha do GED360 entrar no n8n.</div>');
+      else if (an.ged360_falhas_seguidas >= 2) itens.push(`<div class="faixa vermelho"><b>GED360 sem leitura desde ${esc(an.ged360_ultima_ok ? NG.fmtDataHora(an.ged360_ultima_ok) : 'sempre')}</b>${an.ged360_ultimo_erro ? ` — ${esc(an.ged360_ultimo_erro)}` : ''}. Até voltar, confira a biometria à mão no GED360.</div>`);
+      if (an.bio_desconhecidos) itens.push(`<div class="faixa amarelo">GED360 trouxe ${NG.fmtNum(an.bio_desconhecidos)} resultado(s) de biometria fora do mapa — o NIOGEN guardou e não mexeu na venda. Avise o Claude Code para completar o mapa.</div>`);
+    }
     el.hidden = !itens.length;
     el.innerHTML = itens.join('');
+    // cartão "Andamento na Nio" (contagens) — desenhado aqui porque os dados chegam junto dos alarmes
+    const card = document.getElementById('and-card');
+    if (card && an) {
+      const lista = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span class="chip dim">${esc(k)} <b>${NG.fmtNum(n)}</b></span>`).join(' ') || '<span class="nota-campo">nenhum</span>';
+      card.innerHTML = `<div class="q-linha"><h2>Andamento na Nio</h2><a class="muted" href="fila.html">Minha vez →</a></div>
+        <div><span class="nota-campo">Portal PAP (pedidos de Venda):</span> ${lista(an.por_status_portal)}</div>
+        <div><span class="nota-campo">Biometria GED360 (30 dias):</span> ${lista(an.por_resultado_bio)}</div>
+        <span class="nota-campo">Portal lido ${an.portal_ultima_leitura ? esc(NG.fmtDataHora(an.portal_ultima_leitura)) : '—'} · GED360 ${an.ged360_ultima_ok ? esc(NG.fmtDataHora(an.ged360_ultima_ok)) : '—'}${an.casar_pedido ? ` · <b>${NG.fmtNum(an.casar_pedido)} pedido(s) para casar</b>` : ''}${an.bio_sem_venda ? ` · ${NG.fmtNum(an.bio_sem_venda)} biometria(s) sem venda` : ''}</span>`;
+    }
   }
 
   // Mari: conversas que pediram humano e ninguém respondeu ainda (a mesma regra da tela Mari; testes fora).
@@ -282,7 +305,9 @@
         <span class="nota-campo">Base de ${esc(NG.fmtDiaISO(base.particao))} · consulta por CEP e número na tela Cobertura</span>`
         : '<span class="nota-campo">Base DFV ainda não carregada.</span>'}
     </section>`);
+    if (veMari) blocos.unshift('<section class="painel bloco-curto" id="and-card"><span class="nota-campo">Carregando o andamento na Nio…</span></section>');
     document.getElementById('blocos').innerHTML = blocos.join('');
+    if (alarmes) renderAlarmes();
     const bc = document.getElementById('copiar-resumo');
     if (bc) bc.onclick = async () => {
       try { await navigator.clipboard.writeText(resumo.texto); NG.toast('Resumo copiado ✓', 'ok'); }

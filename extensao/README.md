@@ -39,10 +39,20 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 - Banco: nenhuma migration — leitura direta de `mari_conversas`, `mari_turnos` e `config_planos` pelo RLS (admin/backoffice).
   Na conversa sem venda nada é gravado (nem `eventos_venda`).
 
+## Novidades da 0.4.0 (10/11/2026)
+- **Status do portal → NIOGEN:** abra **Histórico de Pedidos** no portal e, no painel, **Atualizar status no NIOGEN**. A extensão roda
+  Venda × 7 status (Aguardando tratamento · Contato Agendado · Gross · Não Venda · Pedido Gerado · Sem contato com o cliente · Venda),
+  Pré-Venda e Interesse, nos **últimos 30 dias** (o máximo que o portal aceita), lê todas as páginas e manda o lote em **uma** chamada
+  `portal_status_registrar` (migration `0105`). ~75 s; não mexa no portal enquanto lê. Mostra "N pedidos · X mudanças · Y sem venda · Z alertas".
+- **Lista branca de cliques** (`content.js › cliqueFiltro`, exceção do Ricardo 10/11 11h02): botão Filtros, campos e opções do filtro,
+  datas, Filtrar e próxima página. Detalhar, Carregar pedido, Salvar, Atualizar Pedido, Novo Pedido, Funil e Tramitações: recusados
+  (e registrados no console). Botão **Testar a trava de cliques** no painel prova isso.
+- **Login dura 30 dias** (pedido do Ricardo, 10/11): não precisa entrar de novo ao fechar o Chrome.
+
 ## Regras do código (não negociáveis)
 - **Nunca clica em botão do portal** (`content.js › cliqueSeguro`: só opção de lista e caixa de marcar; botão, link e `[role=button]` são recusados).
 - Não toca em login, token, `localStorage` do portal, rede do portal (`pap-api…`) nem no sufixo cifrado — só o DOM da página aberta por você.
-- Dado de cliente só em memória do painel; sessão do Supabase em `chrome.storage.session`; nada em `storage.local`, console ou log.
+- Dado de cliente só em memória do painel; sessão do Supabase (só os tokens) em `chrome.storage.local` por até **30 dias** desde o login (0.4.0 — antes era `storage.session`, que o Chrome apaga ao fechar); nenhum dado de cliente em storage, console ou log. **Sair** apaga a sessão na hora.
 - Supabase: anon key + login do usuário (RLS). **Nunca** service role.
 - `eventos_venda` guarda só o fato: `portal_extensao_preenchido` (etapa, nº de campos), `portal_extensao_destacado` e `pedido_aberto_portal`. Nunca o conteúdo.
 - Avisos do portal ("já existe outro pedido", "Celular já utilizado anteriormente", "Endereço fora da área") aparecem no painel; a extensão não sugere seguir.

@@ -3,14 +3,16 @@
  * consulta o portal a partir de uma conversa ainda sem venda (mari_conversas, RLS admin/backoffice) e orelha "Conversa" com a
  * negociação (mari_turnos = o que passou pelo Chatwoot). Só leitura no banco; nada novo é gravado.
  * Painel lateral "NIOGEN no Portal". Fala com o Supabase Nio por REST com a anon key + o login do usuário do NIOGEN (o RLS vale).
- * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão só em chrome.storage.session.
+ * NUNCA service role. Dado de cliente só em memória (variável S) enquanto o painel está aberto; sessão (só tokens) em chrome.storage.local por até 30 dias (0.4.0).
  * rev. 09/11 (0082): "Gravar no NIOGEN" chama backoffice_momento('pedido') — etiqueta, nota e aviso ao cliente saem sozinhos.
  * rev. 09/11 (0087, 0.3.1): venda = OS aberta (etapa 7) — o painel pede o nº do pedido E o nº da OS.
  * rev. 09/11 (0092, 0.3.3): na etapa 2 o resultado da viabilidade e na etapa 3 o do crédito vão para o NIOGEN com um toque
  *   (backoffice_momento 'viabilidade' / 'credito'); "Já avisei o cliente" no Gravar pedido (sem o aviso automático).
  * rev. 09/11 (0089, 0.3.2): ordem nova — o painel grava SÓ o nº do pedido (etapa 3). A OS se abre depois da biometria validada,
  * já com o dia e o período, pela ficha do NIOGEN ("Gravar OS e agendamento") — é isso que faz a venda contar.
- * Este arquivo não usa console.* e não grava nada em storage.local/localStorage. Quem escreve no portal é o content.js.
+ * rev. 10/11 (0105, 0.4.0): no Histórico de Pedidos, botão "Atualizar status no NIOGEN" — o content.js lê os 7 status (lista branca
+ *   de cliques) e o painel manda o lote em UMA chamada portal_status_registrar(p_lote).
+ * Este arquivo não usa console.* e não grava dado de cliente em storage (em storage.local só a sessão). Quem escreve no portal é o content.js.
  */
 'use strict';
 (() => {
@@ -50,6 +52,8 @@
     conversa: null,            // conversa aberta (ponto de partida sem venda) ou a conversa ligada à venda aberta
     turnos: null, turnosErro: '', turnosCarregando: false, orelha: 'portal',
     atualizando: false,        // botão "Atualizar" do topo (rev. 08/11 tarde)
+    // 0.4.0 (10/11) — Histórico de Pedidos: status do portal → NIOGEN
+    naHistorico: false, hist: null,   // hist = { rodando, progresso: [], resumo, detalhes, erro, parou_em }
   };
 
   // ------------------------------------------------------------------ DOM
@@ -86,11 +90,27 @@
       if (!res.ok) return false;
       await guardaSessao(await res.json());
       return true;
-    } catch (e) { return false; }
+    } catch (e) { return null; }   // 0.4.0: sem rede não é sessão vencida — não desloga
   }
+  // 0.4.0 (Ricardo, 10/11: "logar toda hora"): a sessão do NIOGEN fica em chrome.storage.local por até 30 dias contados do
+  // login (antes era storage.session, que o Chrome apaga ao fechar). Só os tokens do Supabase + uid + data do login — nunca
+  // dado de cliente. Passou de 30 dias, o painel pede o login de novo. "Sair" apaga na hora.
+  const SESSAO_DIAS = 30;
   async function guardaSessao(j) {
-    S.sess = { access: j.access_token, refresh: j.refresh_token, uid: (j.user && j.user.id) || (S.sess && S.sess.uid) || '' };
-    await chrome.storage.session.set({ niogen_sess: S.sess });
+    const desde = (S.sess && S.sess.desde) || Date.now();
+    S.sess = { access: j.access_token, refresh: j.refresh_token, uid: (j.user && j.user.id) || (S.sess && S.sess.uid) || '', desde };
+    await chrome.storage.local.set({ niogen_sess: S.sess });
+  }
+  async function lerSessaoGuardada() {
+    const g = await chrome.storage.local.get('niogen_sess');
+    let x = g && g.niogen_sess;
+    if (!x) {   // migração da 0.3: a sessão antiga em storage.session vira a nova (conta 30 dias a partir de agora)
+      const v = await chrome.storage.session.get('niogen_sess');
+      x = v && v.niogen_sess ? { ...v.niogen_sess, desde: Date.now() } : null;
+      try { await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
+    }
+    if (x && (!x.desde || Date.now() - x.desde > SESSAO_DIAS * 86400000)) return null;
+    return x;
   }
   async function api(caminho, opcoes = {}, tentar = true) {
     const res = await fetch(CFG.supabaseUrl + caminho, {
@@ -135,7 +155,7 @@
     S.sess = null; S.nome = ''; S.perfil = ''; S.fila = null; S.venda = null; S.dados = null;
     S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = ''; S.os = '';
     S.convs = null; S.conversa = null; S.turnos = null; S.busca = ''; S.aba = 'vendas'; S.orelha = 'portal';
-    try { await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
+    try { await chrome.storage.local.remove('niogen_sess'); await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* aba sem content script */ }
   }
 
@@ -154,7 +174,12 @@
   chrome.runtime.onMessage.addListener((msg, sender) => {
     if (!msg || msg.tipo !== 'estado' || !sender.tab) return;
     if (S.tabId != null && sender.tab.id !== S.tabId) return;
-    S.etapaAuto = msg.etapa || null; S.avisos = msg.avisos || [];
+    S.etapaAuto = msg.etapa || null; S.avisos = msg.avisos || []; S.naHistorico = !!msg.historico;
+    desenha();
+  });
+  chrome.runtime.onMessage.addListener((msg, sender) => {
+    if (!msg || msg.tipo !== 'historico_progresso' || !S.hist) return;
+    S.hist.progresso = [...(S.hist.progresso || []).slice(-11), msg.texto];
     desenha();
   });
   chrome.tabs.onActivated.addListener(async () => { await abaAtiva(); try { await mandar({ tipo: 'estado?' }); } catch (e) { /* ok */ } });
@@ -481,6 +506,50 @@
       h('button', { class: `orelha${ativa === id ? ' ativa' : ''}`, type: 'button', role: 'tab', 'aria-selected': ativa === id ? 'true' : 'false',
         onclick: () => onTroca(id) }, rot)));
   }
+  // ------------------------------------------------------------------ 0.4.0 — Histórico de Pedidos → NIOGEN (status do portal)
+  // A leitura roda no content.js (só cliques da lista branca: filtros, Filtrar, paginação). Aqui: um lote, UMA chamada
+  // portal_status_registrar(p_lote) e o resumo. Dado de cliente só em memória; nada em storage, nada em console.
+  async function atualizarStatusPortal() {
+    if (S.hist && S.hist.rodando) return;
+    S.hist = { rodando: true, progresso: ['Começando… não mexa no portal até terminar (~1 min).'] };
+    desenha();
+    let r;
+    try { r = await mandar({ tipo: 'historico_ler' }); }
+    catch (e) { S.hist = { erro: e.message }; desenha(); return; }
+    if (!r) { S.hist = { erro: 'O portal não respondeu. Recarregue a página do Histórico (F5) e tente de novo.' }; desenha(); return; }
+    const pedidos = r.pedidos || [];
+    try {
+      const res = await rpc('portal_status_registrar', { p_lote: { pedidos, completa: !!r.ok, parou_em: r.ok ? null : (r.parou_em || null), periodo: r.periodo || null } });
+      S.hist = { resumo: res.resumo, detalhes: (res.detalhes || []).filter((d) => d.alerta || d.feito || !d.venda),
+        erro: r.ok ? null : `Parou em "${r.parou_em}": ${r.erro}. O que já tinha sido lido foi gravado.`, feitas: r.feitas || [], periodo: r.periodo };
+    } catch (e) {
+      S.hist = { erro: `A leitura terminou, mas o NIOGEN recusou o lote: ${e.message}` };
+    }
+    desenha();
+  }
+  async function testarListaBranca() {
+    try { const r = await mandar({ tipo: 'historico_teste_lista_branca' }); aviso(r.ok ? `Lista branca OK — ${r.msg}` : r.msg, r.ok ? 'ok' : 'bad'); }
+    catch (e) { aviso(e.message, 'bad'); }
+    desenha();
+  }
+  function telaHistorico() {
+    if (!S.naHistorico || !podeVerConversas()) return null;
+    const H = S.hist || {};
+    return h('div', { class: 'card' },
+      h('h2', {}, 'Status do portal → NIOGEN'),
+      h('span', { class: 'sub' }, 'Lê o Histórico de Pedidos (Venda: os 7 status; Pré-Venda e Interesse) dos últimos 30 dias e atualiza o andamento das vendas no NIOGEN. Só clica nos filtros, em Filtrar e na paginação.'),
+      h('button', { class: 'btn btn-acc btn-bloco', type: 'button', onclick: atualizarStatusPortal, disabled: !!H.rodando },
+        H.rodando ? 'Lendo o portal…' : 'Atualizar status no NIOGEN'),
+      H.rodando && H.progresso ? h('ul', { class: 'lista sub' }, H.progresso.map((t) => h('li', {}, t))) : null,
+      H.resumo ? h('div', { class: 'resultado ok' }, `✓ ${H.resumo}`) : null,
+      H.periodo ? h('span', { class: 'sub' }, `Período lido: ${H.periodo}`) : null,
+      H.erro ? h('div', { class: 'erro' }, H.erro) : null,
+      H.detalhes && H.detalhes.length ? h('ul', { class: 'lista' }, H.detalhes.map((d) => h('li', {},
+        h('b', {}, d.pedido), ` · ${d.status}`, d.feito ? ` · ${d.feito}` : '', !d.venda ? ' · sem venda no NIOGEN (casar na Minha vez)' : '',
+        d.alerta ? h('div', { class: 'resultado bad' }, d.alerta) : null))) : null,
+      h('button', { class: 'btn btn-sm', type: 'button', onclick: testarListaBranca, title: 'Tenta clicar "Detalhar" pelo código: tem que ser recusado' }, 'Testar a trava de cliques'));
+  }
+
   function telaInicio() {
     const nV = S.fila ? ` (${S.fila.length})` : '', nC = S.convs && podeVerConversas() ? ` (${S.convs.length})` : '';
     return [orelhas([['vendas', `Prontas para o portal${nV}`], ['conversas', `Conversas da Mari${nC}`]], S.aba, trocaAba),
@@ -670,6 +739,7 @@
     else if (S.dados) partes.push(telaVenda());
     else {
       if (S.avisos.length) partes.push(S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg)));
+      partes.push(telaHistorico());
       partes.push(telaInicio());
     }
     // rev. 08/11: o recado vai num aviso fixo no rodapé — o painel rola até a próxima etapa e o recado continua à vista
@@ -684,8 +754,8 @@
   // ------------------------------------------------------------------ início
   (async () => {
     try {
-      const g = await chrome.storage.session.get('niogen_sess');
-      if (g && g.niogen_sess) { S.sess = g.niogen_sess; if (await renovar()) { await carregaPerfil(); } else { await sairLocal(); } }
+      const guardada = await lerSessaoGuardada();
+      if (guardada) { S.sess = guardada; const rn = await renovar(); if (rn !== false) { await carregaPerfil(); } else { await sairLocal(); } }
     } catch (e) { S.sess = null; }
     await abaAtiva();
     desenha();

@@ -1,0 +1,359 @@
+{
+  "name": "nio_ged360_biometria",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 7-22 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · 15 min 7h–22h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "341d076f-616a-5443-817d-eb16031175d3"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://ged360.niointernet.com.br/brprontopdv/autenticacao/index",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "2 · GED360 tela de login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "0aecd439-9441-581b-b28c-754eac9f2934",
+      "notes": "Só pega o cookie de sessão. Nenhuma outra tela.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Junta os cookies de sessão (Set-Cookie) das respostas anteriores num cabeçalho Cookie. Nada é logado.\nconst jar = {};\nfor (const it of $input.all()) {\n  const h = (it.json && it.json.headers) || {};\n  let sc = h['set-cookie'] || h['Set-Cookie'] || [];\n  if (!Array.isArray(sc)) sc = [sc];\n  for (const c of sc) { const par = String(c).split(';')[0]; const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }\n}\nconst cookie = Object.entries(jar).map(([k, v]) => k + '=' + v).join('; ');\nreturn [{ json: { cookie, tem_cookie: !!cookie } }];\n"
+      },
+      "name": "3 · Cookies da sessão",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "dc877e71-9399-5a29-b8fb-8713dce46e40"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ged360.niointernet.com.br/brprontopdv/autenticacao/autenticar-usuario",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            },
+            {
+              "name": "Referer",
+              "value": "https://ged360.niointernet.com.br/brprontopdv/autenticacao/index"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "dominio",
+              "value": "1"
+            },
+            {
+              "name": "redirect",
+              "value": ""
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "4 · GED360 login",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "2d05cdec-85e1-526b-ba27-0e52995e6e09",
+      "credentials": {
+        "httpCustomAuth": {
+          "id": "gzzXekYKBd2aqO5F",
+          "name": "GED360 (TT837725)"
+        }
+      },
+      "notes": "Usuário e senha vêm SÓ da credencial \"GED360 (TT837725)\" (Custom Auth, body). Login a cada rodada (a sessão cai em < 1 h).",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Janela: Data de Envio dos últimos 15 dias (pega reanálise), no fuso de São Paulo, formato DD/MM/AAAA.\nconst fmt = (d) => d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });\nconst hoje = new Date();\nconst ini = new Date(hoje.getTime() - 15 * 86400000);\nconst prev = $('3 · Cookies da sessão').first().json.cookie || '';\nconst novos = ($input.first().json.headers || {})['set-cookie'] || [];\nconst jar = {};\nfor (const par of prev.split(';')) { const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }\nfor (const c of (Array.isArray(novos) ? novos : [novos])) { const par = String(c).split(';')[0]; const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }\nconst status = $input.first().json.statusCode;\nconst destino = String((($input.first().json.headers || {}).location) || '');\n// Login aceito = redireciona para fora da tela de autenticação. Voltar para /autenticacao = usuário ou senha errados.\nconst recusado = /autenticacao/i.test(destino) || status >= 400;\nreturn [{ json: { cookie: Object.entries(jar).map(([k, v]) => k + '=' + v).join('; '), ini: fmt(ini), fim: fmt(hoje),\n  login_ok: !recusado, login_status: status } }];\n"
+      },
+      "name": "5 · Datas e cookie",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "8abea888-adab-5332-a52e-b93740a3f50f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ged360.niointernet.com.br/brprontopdv/relatorio/relatorio-detalhado-de-digitalizacoes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
+            },
+            {
+              "name": "Cookie",
+              "value": "={{ $json.cookie }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "dat_envio_inicial",
+              "value": "={{ $json.ini }}"
+            },
+            {
+              "name": "dat_envio_final",
+              "value": "={{ $json.fim }}"
+            },
+            {
+              "name": "num_cpf",
+              "value": ""
+            },
+            {
+              "name": "num_protocolo",
+              "value": ""
+            },
+            {
+              "name": "vizualizacao",
+              "value": "3"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "redirect": {
+            "redirect": {
+              "followRedirects": false
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "name": "6 · Relatório Detalhado (CSV)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "b7dc9c7b-c0c7-5d74-bd2e-40293d26e70d",
+      "notes": "Só leitura: Relatório Detalhado, exportação CSV nativa (vizualizacao=3).",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// CSV do Relatório Detalhado → linhas {protocolo, cpf_cnpj, data_envio, data_conferencia, tipo_servico, resultado}.\n// Separador ; ou , (detecta), aspas, cabeçalho por nome. Nunca loga o conteúdo (CPF é dado do cliente da Nio).\nconst it = $input.first().json;\nconst dados = String(it.data == null ? '' : it.data);\nconst erro = (m) => [{ json: { p_linhas: [], p_erro: m } }];\nif (!$('5 · Datas e cookie').first().json.login_ok) return erro('login recusado (usuário/senha) — HTTP ' + $('5 · Datas e cookie').first().json.login_status);\nif ((it.statusCode || 200) >= 400) return erro('relatório HTTP ' + it.statusCode);\nif (/<html|<form/i.test(dados.slice(0, 400))) return erro('relatório devolveu página HTML (sessão caiu ou tela mudou), não CSV');\nconst linhas = dados.replace(/^﻿/, '').split(/\\r?\\n/).filter((l) => l.trim());\nif (!linhas.length) return [{ json: { p_linhas: [], p_erro: null } }];\nconst sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';\nconst parse = (l) => { const out = []; let cur = '', q = false; for (let i = 0; i < l.length; i++) { const ch = l[i];\n  if (q) { if (ch === '\"') { if (l[i + 1] === '\"') { cur += '\"'; i++; } else q = false; } else cur += ch; }\n  else if (ch === '\"') q = true; else if (ch === sep) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((s) => s.trim()); };\nconst norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');\nconst cab = parse(linhas[0]).map(norm);\nconst col = (...nomes) => cab.findIndex((c) => nomes.some((n) => c.includes(n)));\nconst ix = { protocolo: col('protocolo'), cpf: col('cpf', 'cnpj'), envio: col('datadeenvio', 'envio'), conf: col('conferencia'),\n  tipo: col('tipodeservico', 'servico'), resultado: col('resultado') };\nif (ix.protocolo < 0 || ix.resultado < 0) return erro('CSV sem as colunas Protocolo/Resultado — cabeçalho mudou');\nconst out = [];\nfor (const l of linhas.slice(1)) {\n  const c = parse(l);\n  const g = (k) => (ix[k] >= 0 ? (c[ix[k]] || '') : '');\n  if (!g('protocolo')) continue;\n  out.push({ protocolo: g('protocolo'), cpf_cnpj: g('cpf'), data_envio: g('envio'), data_conferencia: g('conf'),\n    tipo_servico: g('tipo'), resultado: g('resultado') });\n}\nreturn [{ json: { p_linhas: out, p_erro: null } }];\n"
+      },
+      "name": "7 · CSV → linhas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "f1717acd-2188-5780-88d8-eeee872981fc"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/ged360_registrar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_linhas: $json.p_linhas, p_erro: $json.p_erro }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "8 · Supabase ged360_registrar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "id": "0b7525d6-8e8e-5a47-9c01-77d535c6793d",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1 · 15 min 7h–22h": {
+      "main": [
+        [
+          {
+            "node": "2 · GED360 tela de login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · GED360 tela de login": {
+      "main": [
+        [
+          {
+            "node": "3 · Cookies da sessão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Cookies da sessão": {
+      "main": [
+        [
+          {
+            "node": "4 · GED360 login",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · GED360 login": {
+      "main": [
+        [
+          {
+            "node": "5 · Datas e cookie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Datas e cookie": {
+      "main": [
+        [
+          {
+            "node": "6 · Relatório Detalhado (CSV)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Relatório Detalhado (CSV)": {
+      "main": [
+        [
+          {
+            "node": "7 · CSV → linhas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · CSV → linhas": {
+      "main": [
+        [
+          {
+            "node": "8 · Supabase ged360_registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo"
+  },
+  "active": false
+}

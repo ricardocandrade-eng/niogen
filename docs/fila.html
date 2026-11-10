@@ -6,6 +6,8 @@
      clique filtra) · abas Sua vez | Todas · Lista | Quadro (uma coluna por etapa; o card só muda pelo botão, sem arrastar) · ficha ao
      lado (Lista) ou em gaveta (Quadro) · a conversa abre no espaço da lista (Quadro: painel à esquerda da ficha) · depois de cada
      ação, "o NIOGEN fez sozinho" + "Próximo da fila: nome →" · 1º acesso: "Como usar, em 3 passos" (some em "Entendi").
+     10/11 (0105): bloco "Andamento na Nio" no topo da Sua vez — "Casar pedido" (pedido do portal sem venda: botões com as
+     sugestões pelo nome, casa só no clique) e "Biometria sem venda" (GED360) — e etiquetas portal/bio nas linhas.
      Cores discretas: bolinha por etapa, filete fino de urgência, verde cheio só no botão principal da ficha. Sem CPF nem endereço. -->
 <html lang="pt-BR">
 <head>
@@ -18,13 +20,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-10">
-<script src="config.js?v=101126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-11">
+<script src="config.js?v=101126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-10"></script>
-<script src="assets/sidebar.js?v=101126-10"></script>
-<script src="assets/conversa.js?v=101126-10"></script>
-<script src="assets/ficha.js?v=101126-10"></script>
+<script src="assets/app.js?v=101126-11"></script>
+<script src="assets/sidebar.js?v=101126-11"></script>
+<script src="assets/conversa.js?v=101126-11"></script>
+<script src="assets/ficha.js?v=101126-11"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -70,6 +72,7 @@
   const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
 
   let jor = { lista: [], todas: [] };
+  let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
   let soVez = true;
   let etapaSel = null;
   let vista = ['lista', 'quadro'].includes(ls.ler('niogen.fila.vista')) ? ls.ler('niogen.fila.vista') : 'lista';
@@ -97,7 +100,8 @@
   const vez = (j) => !!j.precisa_acao;
 
   async function carregar() {
-    const r = await NG.jornada();
+    const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
+    andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
     // 0102 (Ricardo, 10/11): Minha vez = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
     // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
@@ -167,7 +171,7 @@
     const linha = (j) => `<div class="mv-row ${j.nivel}${vez(j) ? '' : ' acomp'}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
         <span class="mv-et" title="${esc(j.etapa_nome)}">${dot(j.etapa)}<span>${esc(j.etapa_nome)}</span></span>
         <span class="mv-cli"><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}<span class="mv-ha-2"> · há ${esc(haTempo(j.desde))}</span></small></span>
-        <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
+        <span class="mv-oque">${esc(j.o_que_fazer || '')}${j.portal_status ? ` <span class="chip dim" title="Status no portal PAP (Histórico de Pedidos)">portal: ${esc(j.portal_status.toLowerCase())}</span>` : ''}${j.biometria_ged ? ` <span class="chip dim" title="Biometria no GED360">bio: ${esc(j.biometria_ged.toLowerCase())}</span>` : ''}</span>
         <span class="mv-ha apagado">${esc(haTempo(j.desde))}</span>
         ${donoHtml(j)}
         <span class="mv-bt"><button type="button" class="btn btn-sm${vez(j) ? ' mv-go' : ''}" data-bt="${vez(j) ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(vez(j) ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}</button></span>
@@ -175,6 +179,21 @@
     const ac = soVez ? acompanhando() : [];
     const grupo = (tit, sub) => `<div class="mv-grupo"><b>${tit}</b><span class="apagado">${sub}</span></div>`;
     let linhas = l.map(linha).join('');
+    // 0105: andamento na Nio sem venda — "casar pedido" (o nº do portal não bate com nenhuma venda: o BKO escolhe; nunca casa
+    // sozinho pelo nome) e "biometria sem venda" (o CPF do GED360 não tem venda aberta).
+    const andLinha = (p) => p.tipo === 'casar_pedido'
+      ? `<div class="mv-row hoje mv-and"><span class="mv-et">${dot(3)}<span>Casar pedido</span></span>
+          <span class="mv-cli"><b>${esc(p.nome || 'Cliente')}</b><small>portal: ${esc(p.rotulo)} · nº ${esc(p.chave)}${p.oferta ? ` · ${esc(p.oferta)}` : ''}</small></span>
+          <span class="mv-oque">O nº do portal não bate com nenhuma venda. ${(p.sugestoes || []).length ? 'É uma destas?' : 'Nenhuma venda com nome parecido — abra a venda certa e confira o nº.'}
+            ${(p.sugestoes || []).map((x) => `<button type="button" class="btn btn-sm" data-casar="${esc(p.chave)}" data-venda="${esc(x.venda_id)}" data-nome="${esc(x.nome)}">Casar com ${esc(x.nome)}${x.etapa ? ` · ${esc(x.etapa)}` : ''}${x.pedido ? ` · nº ${esc(x.pedido)}` : ''}</button>`).join(' ')}</span>
+          <span class="mv-ha apagado">${esc(haTempo(p.desde))}</span><span class="mv-dono apagado">portal</span><span class="mv-bt"></span></div>`
+      : `<div class="mv-row ${p.alerta ? 'agora' : 'hoje'} mv-and"><span class="mv-et">${dot(3)}<span>Biometria sem venda</span></span>
+          <span class="mv-cli"><b>Protocolo ${esc(p.chave)}</b><small>GED360: ${esc(p.rotulo)}</small></span>
+          <span class="mv-oque">${esc(p.alerta || 'O CPF desta biometria não tem venda aberta no NIOGEN — confira de quem é.')}</span>
+          <span class="mv-ha apagado">${esc(haTempo(p.desde))}</span><span class="mv-dono apagado">GED360</span>
+          <span class="mv-bt"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></span></div>`;
+    const blocoAnd = soVez && andPend.length
+      ? grupo(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN') + andPend.map(andLinha).join('') : '';
     if (soVez) {
       linhas = (l.length ? grupo(`Para fazer · ${l.length}`, 'vermelho = agora · amarelo = hoje') + linhas
         : '<div class="mv-nada">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>')
@@ -182,7 +201,7 @@
     }
     listaEl.innerHTML = `${abas()}
       <div class="mv-rolar"><div class="mv-row mv-cab mono"><span>ETAPA</span><span>CLIENTE</span><span>O QUE FAZER</span><span>HÁ</span><span>DONO</span><span></span></div>
-      ${linhas || `<div class="vazio">${soVez ? 'Nada para fazer nem acompanhar agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
+      ${blocoAnd}${linhas || `<div class="vazio">${soVez ? 'Nada para fazer nem acompanhar agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
       <div class="mv-pe apagado">Vermelho = agora (cliente esperando ou prazo de 4 h) · amarelo = hoje · ⏸ azul = esperando terceiro, fora da sua vez até a data · a lista se atualiza a cada minuto</div>`;
   }
 
@@ -195,7 +214,7 @@
       return `<section class="mv-col"><div class="mv-colh"><b>${dot(e.n)}${e.n} · ${esc(e.nome)}</b><span class="${nv ? 'mv-vz' : 'apagado'}">${L.length}${nv ? ` · ${nv} sua vez` : ''}</span></div>
         <div class="mv-cards">${L.map((j) => `<div class="mv-kc ${j.nivel}${vez(j) ? '' : ' acomp'}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
           <b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small>
-          <span class="mv-oque">${esc(j.o_que_fazer || '')}</span>
+          <span class="mv-oque">${esc(j.o_que_fazer || '')}${j.portal_status ? ` <span class="chip dim" title="Status no portal PAP (Histórico de Pedidos)">portal: ${esc(j.portal_status.toLowerCase())}</span>` : ''}${j.biometria_ged ? ` <span class="chip dim" title="Biometria no GED360">bio: ${esc(j.biometria_ged.toLowerCase())}</span>` : ''}</span>
           <span class="mv-meta">${donoHtml(j)}<span class="apagado">há ${esc(haTempo(j.desde))}</span></span>
           ${vez(j) ? `<button type="button" class="btn btn-sm mv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : ''}
         </div>`).join('') || '<span class="apagado mv-col-vazia">—</span>'}</div></section>`;
@@ -331,7 +350,25 @@
     abrirChave(k);
     entrarFoco(j);
   }
+  async function casar(b) {
+    if (!confirm(`Casar o pedido ${b.dataset.casar} do portal com a venda de ${b.dataset.nome}? O status do portal passa a valer para essa venda.`)) return;
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc('portal_pedido_casar', { p_pedido: b.dataset.casar, p_venda: b.dataset.venda });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    NG.toast(`Pedido casado${data && data.feito ? ` · ${data.feito}` : ''}${data && data.alerta ? ` · ${data.alerta}` : ''}`, data && data.alerta ? 'bad' : 'ok');
+    await carregar();
+  }
+  async function vistoBio(b) {
+    b.disabled = true;
+    const { error } = await NG.sb.rpc('andamento_alerta_visto', { p_origem: 'ged360', p_chave: b.dataset.visto });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    await carregar();
+  }
   function clique(ev) {
+    const bc = ev.target.closest('[data-casar]');
+    if (bc) { ev.stopPropagation(); casar(bc); return; }
+    const bv = ev.target.closest('[data-visto]');
+    if (bv) { ev.stopPropagation(); vistoBio(bv); return; }
     const b = ev.target.closest('[data-bt]');
     if (b) { ev.stopPropagation(); botao(b); return; }
     const t = ev.target.closest('[data-aba]');

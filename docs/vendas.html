@@ -18,14 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-10">
-<script src="config.js?v=101126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-11">
+<script src="config.js?v=101126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-10"></script>
-<script src="assets/sidebar.js?v=101126-10"></script>
-<script src="assets/conversa.js?v=101126-10"></script>
-<script src="assets/ficha.js?v=101126-10"></script>
-<script src="assets/novavenda.js?v=101126-10"></script>
+<script src="assets/app.js?v=101126-11"></script>
+<script src="assets/sidebar.js?v=101126-11"></script>
+<script src="assets/conversa.js?v=101126-11"></script>
+<script src="assets/ficha.js?v=101126-11"></script>
+<script src="assets/novavenda.js?v=101126-11"></script>
 </head>
 <body>
 <div class="app">
@@ -54,6 +54,7 @@
       <select class="sel" id="f-origem" aria-label="Origem"></select>
       <select class="sel" id="f-parceiro" aria-label="Parceiro PAP" hidden></select>
       <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
+      <select class="sel" id="f-portal" aria-label="Status no portal PAP"></select>
       <span id="f-periodo"></span>
       <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
     </div>
@@ -103,6 +104,18 @@
   const fOrigem = document.getElementById('f-origem');
   const fVendedor = document.getElementById('f-vendedor');
   const fParceiro = document.getElementById('f-parceiro');
+  // 0105: status do pedido no portal PAP (lido pela extensão 0.4 no Histórico) — vem na v_jornada (portal_status).
+  const fPortal = document.getElementById('f-portal');
+  const PORTAL_ROT = { 'AGUARDANDO TRATAMENTO': 'Aguardando tratamento', 'CONTATO AGENDADO': 'Contato agendado', 'PEDIDO GERADO': 'Pedido gerado',
+    'SEM CONTATO COM O CLIENTE': 'Sem contato', 'NÃO VENDA': 'Não venda', VENDA: 'Venda (sem instalação)', GROSS: 'Gross (instalada)' };
+  NG.preencherSelect(fPortal, [['_sem', 'Sem leitura do portal'], ...Object.entries(PORTAL_ROT)], 'Portal: todos');
+  const portalDe = (v) => (jor.porVenda[v.id] || {}).portal_status || null;
+  const chipPortal = (v) => {
+    const st = portalDe(v);
+    if (!st) return '';
+    const cls = st === 'GROSS' ? 'ok' : st === 'NÃO VENDA' ? 'bad' : st === 'SEM CONTATO COM O CLIENTE' ? 'warn' : 'dim';
+    return ` <span class="chip ${cls}" title="Status no portal PAP (Histórico de Pedidos)">portal: ${esc(PORTAL_ROT[st] || st)}</span>`;
+  };
   NG.preencherSelect(fOrigem, Object.entries(ORIGENS), 'Todas as origens');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   let vendas = [], metas = [], ultimoContato = {}, nomeCurto = {}, jor = { porVenda: {} };
@@ -197,6 +210,7 @@
       (!fOrigem.value || v.origem === fOrigem.value) &&
       (!fParceiro.value || v.parceiro_id === fParceiro.value) &&
       (!fVendedor.value || v.vendedor_id === fVendedor.value || v.criado_por === fVendedor.value) &&
+      (!fPortal.value || (fPortal.value === '_sem' ? !portalDe(v) : portalDe(v) === fPortal.value)) &&
       (!q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido].some((x) => String(x || '').toLowerCase().includes(q)) ||
         (qd.length >= 3 && [v.cliente_cpf_cnpj, v.cliente_whatsapp, v.nio_pedido].some((x) => NG.soDigitos(x).includes(qd)))));
   }
@@ -289,7 +303,7 @@
       const pr = proximo(v);
       return `<tr class="clicavel ${v.status === 'saida' ? 'saida' : ''}" data-id="${v.id}" tabindex="0" title="Abrir a venda">
         <td class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc(local(v) || '—')}</small></td>
-        <td>${NG.pilulaEtapa(v)}</td>
+        <td>${NG.pilulaEtapa(v)}${chipPortal(v)}</td>
         <td>${NG.proxPasso(pr)}</td>
         <td class="plano-c"><b>${esc(planoCurto(v))}</b><small>${esc(formaTxt(v))}</small></td>
         <td class="apagado col-media">${esc(NG.origemTxt(v))}</td>
@@ -302,7 +316,7 @@
       <a class="cartao ${v.status === 'saida' ? 'saida' : ''}" href="#venda=${v.id}">
         <div class="cli"><b>${esc(v.cliente_nome)}</b><small>${esc([v.bairro, NG.quando(v.criado_em)].filter(Boolean).join(' · '))}</small></div>
         <div class="valor">${esc(fmtCom(v))}</div>
-        <div class="l2">${NG.pilulaEtapa(v)}<span>${esc(planoCurto(v))}</span></div>
+        <div class="l2">${NG.pilulaEtapa(v)}${chipPortal(v)}<span>${esc(planoCurto(v))}</span></div>
         <div class="l2">${NG.proxPasso(proximo(v))}</div>
       </a>`).join('') : '<div class="vazio">Nenhuma venda neste filtro</div>';
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'venda' : 'vendas'} no filtro`;
@@ -342,7 +356,7 @@
     const dt = v.instalado_em ? `<span class="q-data ok">Instalada em ${esc(NG.fmtData(v.instalado_em))}</span>`
       : v.instalacao_agendada_para && v.status !== 'saida' ? `<span class="q-data">Instalação ${esc(NG.fmtDiaSemana(v.instalacao_agendada_para).toLowerCase())} ${esc(NG.fmtData(v.instalacao_agendada_para))} · ${esc(NG.janela(v.instalacao_agendada_para))}</span>` : '';
     return `<a class="qcard ${pr.nivel || ''}" href="#venda=${v.id}" data-id="${v.id}" draggable="${podeArrastar()}" title="${esc([origemCurta(v), pr && pr.txt].filter(Boolean).join(' · '))}">
-      <b>${esc(v.cliente_nome)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${dt}${NG.proxPasso(pr)}</a>`;
+      <b>${esc(v.cliente_nome)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${dt}${chipPortal(v)}${NG.proxPasso(pr)}</a>`;
   }
 
   // Vermelho primeiro, depois amarelo, depois o mais antigo.
@@ -383,7 +397,7 @@
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
 
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
-  [fBusca, fOrigem, fParceiro, fVendedor].forEach((el) => el.addEventListener('input', () => { if (el === fOrigem) sincParceiro(); render(); }));
+  [fBusca, fOrigem, fParceiro, fVendedor, fPortal].forEach((el) => el.addEventListener('input', () => { if (el === fOrigem) sincParceiro(); render(); }));
   // Linha → ficha da venda em gaveta (#venda=<id>); Ctrl/⌘ ou botão do meio → nova aba já com a ficha aberta.
   const abrirVenda = (tr, novaAba) => NG.abrirVenda(tr.dataset.id, novaAba);
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirVenda(tr, ev.ctrlKey || ev.metaKey); });

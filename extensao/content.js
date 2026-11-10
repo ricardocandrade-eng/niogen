@@ -8,7 +8,10 @@
  *  2. Não toca em login, token, localStorage/sessionStorage/cookie do portal, nem na rede (nada de fetch/XHR aqui).
  *  3. Etapas 5, 6 e 7: só DESTACA (contorno); nunca preenche crédito, oferta, pagamento, banco/agência/conta.
  *  4. Dado de cliente existe só na mensagem de preenchimento e nas variáveis locais da chamada: não é guardado, nem logado
- *     (este arquivo não usa console.*).
+ *     (o único console.* é o registro de clique recusado da 0.4, sem dado de cliente).
+ *  5. (0.4.0, Ricardo 10/11 11h02) No Histórico de Pedidos: cliques SÓ na lista branca de cliqueFiltro() (Filtros, campos e opções do
+ *     filtro, datas, Filtrar, próxima página) para LER a tabela. Detalhar, Carregar, Salvar, Atualizar Pedido, Novo Pedido, Funil e
+ *     Tramitações: recusados no código.
  */
 (() => {
   'use strict';
@@ -275,11 +278,187 @@
     return AVISOS.filter(([, frag]) => corpo.includes(frag)).map(([codigo, , msg]) => ({ codigo, msg }));
   }
 
+  // ================================================================== 0.4.0 — Histórico de Pedidos (só leitura)
+  // Exceção do Ricardo (10/11 11h02, regra 5): no Histórico a extensão pode clicar SÓ nos filtros — botão "Filtros", os campos e as
+  // opções do painel de filtros, as datas, "Filtrar" e a paginação — para LER a tabela. Nunca Detalhar, Carregar pedido, Salvar,
+  // Atualizar Pedido, Novo Pedido, Funil de Vendas, Histórico tramitações, nem nada fora do Histórico. Sem API, sem rede, sem token.
+  // Conferido no portal real em 10/11 (Claude Code): filtros react-select no MuiDrawer (Tipo · Status Primário · Status Secundário ·
+  // Pedidos [multi] · Segmento), período = 2 datas MUI (máximo 30 dias — "Período deve ser no máximo de 30 dias"), "Filtrar" fecha o
+  // painel e a tabela MuiTable traz TIPO · STATUS · PEDIDO · DATA · PDV · VENDEDOR · CLIENTE · SEGMENTO · OFERTA · DETALHES.
+  // Único console.* deste arquivo: o registro da recusa (sem dado de cliente).
+  const HIST = /^\/administrativo\/historico\/?$/;
+  const naHistorico = () => HIST.test(location.pathname);
+  const STATUS_VENDA = ['Aguardando tratamento', 'Contato Agendado', 'Gross', 'Não Venda', 'Pedido Gerado', 'Sem contato com o cliente', 'Venda'];
+  const PROIBIDOS = ['detalhar', 'carregar pedido', 'salvar', 'atualizar pedido', 'novo pedido', 'funil de vendas', 'historico tramitacoes'];
+  const gaveta = () => document.querySelector('.MuiDrawer-paper');
+
+  // A lista branca. Tudo o que a leitura do Histórico clica passa por aqui; o resto é recusado e registrado no console.
+  function cliqueFiltro(el, oQue) {
+    const recusa = (motivo) => {
+      console.warn(`niogen: clique recusado (${oQue || '?'}) — ${motivo}`);
+      throw new Error(`niogen: recusado — ${motivo}`);
+    };
+    if (!(el instanceof Element)) recusa('alvo inválido');
+    if (!naHistorico()) recusa('fora do Histórico de Pedidos');
+    const txt = norm(el.textContent);
+    if (PROIBIDOS.some((p) => txt === p || txt.startsWith(p))) recusa(`"${el.textContent.trim().slice(0, 40)}" não está na lista branca`);
+    const g = gaveta();
+    const cls = String(el.getAttribute('class'));
+    const permitido =
+      (el.matches('button#drawer-filter') && /filtros/.test(txt))                                               // abrir o painel de Filtros
+      || (g && g.contains(el) && /-control\b/.test(cls))                                                         // abrir um campo do filtro
+      // escolher uma opção: o react-select abre o menu FORA do painel (portal no <body>) — vale com o painel de Filtros aberto e
+      // só dentro de um menu do react-select (nunca célula de tabela, link ou botão)
+      || (g && /-option\b/.test(cls) && !!el.closest('[class*="-menu"]') && !el.closest('table, nav, a, button'))
+      || (g && g.contains(el) && el.tagName === 'BUTTON' && txt === 'filtrar')                                  // Filtrar
+      || (el.tagName === 'BUTTON' && !!el.closest('.MuiTablePagination-root')
+          && /next page|proxima/.test(norm(el.getAttribute('aria-label') || el.title)));                         // próxima página
+    if (!permitido) recusa(`"${(el.textContent || el.getAttribute('aria-label') || el.tagName).trim().slice(0, 40)}" não está na lista branca`);
+    if (/-control\b/.test(cls)) el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    else el.click();
+  }
+
+  async function abrirFiltros() {
+    if (gaveta() && gaveta().querySelector('label.titulo-status-filter')) return;
+    const b = Array.from(document.querySelectorAll('button#drawer-filter')).find((x) => /filtros/.test(norm(x.textContent)));
+    if (!b) throw new Error('não achei o botão "Filtros" do Histórico');
+    cliqueFiltro(b, 'Filtros');
+    for (let i = 0; i < 50 && !(gaveta() && gaveta().querySelector('label.titulo-status-filter')); i++) await espera(100);
+    if (!gaveta()) throw new Error('o painel de Filtros não abriu');
+    await espera(250);
+  }
+  const blocoFiltro = (nome) => {
+    const l = Array.from(gaveta().querySelectorAll('label.titulo-status-filter')).find((x) => norm(x.textContent) === norm(nome));
+    return l ? l.closest('.row').parentElement : null;
+  };
+  const valoresFiltro = (nome) => {
+    const b = blocoFiltro(nome);
+    return b ? Array.from(b.querySelectorAll('[class*="singleValue"], [class*="multiValue"]')).map((x) => x.textContent.trim()) : [];
+  };
+  async function opcoesFiltro(nome) {
+    await abrirFiltros();
+    const b = blocoFiltro(nome);
+    if (!b) throw new Error(`campo "${nome}" não achado nos filtros`);
+    cliqueFiltro(b.querySelector('[class*="-control"]'), nome);
+    let os = [];
+    for (let i = 0; i < 20; i++) { await espera(100); os = Array.from(document.querySelectorAll('[class*="-menu"] [class*="-option"]')); if (os.length) break; }
+    return os;
+  }
+  async function fecharLista() { if (document.activeElement) document.activeElement.blur(); await espera(200); }
+  async function escolherFiltro(nome, texto) {
+    await abrirFiltros();
+    if (valoresFiltro(nome).some((v) => norm(v) === norm(texto))) return true;
+    const os = await opcoesFiltro(nome);
+    const o = os.find((x) => norm(x.textContent) === norm(texto));
+    if (!o) { await fecharLista(); return false; }
+    cliqueFiltro(o, `${nome}: ${texto}`);
+    for (let i = 0; i < 20 && !valoresFiltro(nome).some((v) => norm(v) === norm(texto)); i++) await espera(100);
+    return valoresFiltro(nome).some((v) => norm(v) === norm(texto));
+  }
+  const fmtData = (d) => d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric' });
+  async function periodo(dias) {
+    await abrirFiltros();
+    const datas = Array.from(gaveta().querySelectorAll('input')).filter((i) => /^\d{2}\/\d{2}\/\d{4}$/.test(i.value));
+    if (datas.length < 2) throw new Error('não achei as duas datas do período');
+    const hoje = new Date();
+    const ini = fmtData(new Date(hoje.getTime() - dias * 86400000)), fim = fmtData(hoje);
+    for (const [el, v] of [[datas[0], ini], [datas[1], fim]]) { if (el.value !== v) { setValor(el, v); await espera(200); el.blur(); await espera(150); } }
+    return `${ini} a ${fim}`;
+  }
+  const toasts = () => Array.from(document.querySelectorAll('.Toastify__toast, [role="alert"]')).map((x) => x.innerText.trim()).filter(Boolean);
+  const assinaturaTabela = () => {
+    const t = document.querySelector('table.MuiTable-root');
+    const pag = document.querySelector('.MuiTablePagination-root');
+    return t ? `${t.querySelectorAll('tbody tr').length}|${pag ? pag.innerText : ''}|${(t.querySelector('tbody tr') || {}).innerText || ''}` : 'sem-tabela';
+  };
+  async function esperaEstavel(antes, maxMs) {
+    // espera a tabela mudar (ou sumir) e ficar parada por 2 leituras seguidas; erro do portal (aviso vermelho) para tudo
+    const t0 = Date.now(); let ult = null; let iguais = 0;
+    await espera(1200);
+    while (Date.now() - t0 < maxMs) {
+      const tt = toasts().find((x) => /deve ser|erro|falha|inv[aá]lid|n[aã]o foi poss/i.test(x));
+      if (tt) throw new Error(`o portal avisou: ${tt.replace(/\s+/g, ' ').slice(0, 120)}`);
+      const a = assinaturaTabela();
+      if (a === ult) { iguais += 1; if (iguais >= 2 && (a !== antes || Date.now() - t0 > 4000)) return; } else { ult = a; iguais = 0; }
+      await espera(500);
+    }
+    throw new Error('o portal está lento (a tabela não respondeu em 20 s)');
+  }
+  function lerLinhas() {
+    const t = document.querySelector('table.MuiTable-root');
+    if (!t) return [];
+    return Array.from(t.querySelectorAll('tbody tr')).map((tr) => Array.from(tr.children).map((td) => td.innerText.trim()))
+      .filter((c) => c.length >= 9 && /\d{4,}/.test(c[2]))
+      .map((c) => ({ tipo: c[0], status: c[1], pedido: c[2], data: c[3], pdv: c[4], vendedor: c[5], cliente: c[6], segmento: c[7], oferta: c[8] }));
+  }
+  async function lerTodasPaginas() {
+    const out = lerLinhas();
+    for (let p = 0; p < 50; p++) {
+      const prox = document.querySelector('.MuiTablePagination-root button[aria-label="next page"], .MuiTablePagination-root button[title*="róxima"]');
+      if (!prox || prox.disabled) break;
+      const antes = assinaturaTabela();
+      cliqueFiltro(prox, 'próxima página');
+      await esperaEstavel(antes, 20000);
+      out.push(...lerLinhas());
+    }
+    return out;
+  }
+  async function pesquisa(tipo, status, dias, progresso) {
+    await abrirFiltros();
+    if (!(await escolherFiltro('Tipo', tipo))) throw new Error(`não consegui escolher o Tipo "${tipo}"`);
+    if (!(await escolherFiltro('Pedidos', 'Todos os Pedidos'))) throw new Error('não consegui escolher "Todos os Pedidos"');
+    if (status && !(await escolherFiltro('Status Primário', status))) throw new Error(`não consegui escolher o status "${status}"`);
+    const per = await periodo(dias);
+    const filtrar = Array.from(gaveta().querySelectorAll('button')).find((b) => norm(b.textContent) === 'filtrar');
+    if (!filtrar || filtrar.disabled) throw new Error('"Filtrar" desabilitado');
+    const antes = assinaturaTabela();
+    progresso(`${tipo}${status ? ` · ${status}` : ''}…`);
+    cliqueFiltro(filtrar, 'Filtrar');
+    await esperaEstavel(antes, 20000);
+    const linhas = await lerTodasPaginas();
+    return { linhas, periodo: per };
+  }
+  let lendo = false;
+  async function lerHistorico(progresso) {
+    if (!naHistorico()) throw new Error('Abra "Histórico de Pedidos" no portal antes.');
+    if (lendo) throw new Error('A leitura já está rodando.');
+    lendo = true;
+    const vistos = new Map(); const feitas = []; let per = '';
+    const DIAS = 30;   // o máximo que o portal aceita (conferido em 10/11)
+    try {
+      const roteiro = STATUS_VENDA.map((s) => ['Venda', s]);
+      for (const tipo of ['Pré-Venda', 'Interesse']) {
+        // só os status que a lista oferecer; se não oferecer nenhum, uma pesquisa sem status (o portal aceita para esses tipos)
+        if (!(await escolherFiltro('Tipo', tipo))) continue;
+        const os = (await opcoesFiltro('Status Primário')).map((x) => x.textContent.trim()).filter(Boolean);
+        await fecharLista();
+        if (os.length) os.forEach((s) => roteiro.push([tipo, s])); else roteiro.push([tipo, null]);
+      }
+      for (const [tipo, status] of roteiro) {
+        let r;
+        try { r = await pesquisa(tipo, status, DIAS, progresso); }
+        catch (e) { return { ok: false, pedidos: Array.from(vistos.values()), feitas, periodo: per, parou_em: `${tipo}${status ? ' · ' + status : ''}`, erro: e.message }; }
+        per = r.periodo;
+        r.linhas.forEach((l) => vistos.set(l.pedido, l));
+        feitas.push({ tipo, status, n: r.linhas.length });
+        progresso(`${tipo}${status ? ` · ${status}` : ''}: ${r.linhas.length}`);
+        await espera(2000);   // freio entre pesquisas
+      }
+      return { ok: true, pedidos: Array.from(vistos.values()), feitas, periodo: per };
+    } finally { lendo = false; }
+  }
+  // Prova da lista branca (teste 3 do prompt): tenta clicar "Detalhar" pelo código e devolve a recusa. Não clica em nada.
+  function testarListaBranca() {
+    const alvo = Array.from(document.querySelectorAll('button, a, [role="button"], td, span')).find((x) => norm(x.textContent) === 'detalhar');
+    if (!alvo) return { ok: false, msg: 'nenhum "Detalhar" na tela (faça uma pesquisa antes)' };
+    try { cliqueFiltro(alvo, 'teste'); return { ok: false, msg: 'ERRO: o clique passou' }; } catch (e) { return { ok: true, msg: e.message }; }
+  }
+
   // ------------------------------------------------------------------ conversa com o painel
   let ultimo = '';
   function empurraEstado(forca) {
-    const estado = { tipo: 'estado', etapa: detectarEtapa(), avisos: detectarAvisos() };
-    const chave = JSON.stringify([estado.etapa, estado.avisos.map((a) => a.codigo)]);
+    const estado = { tipo: 'estado', etapa: detectarEtapa(), avisos: detectarAvisos(), historico: naHistorico() };
+    const chave = JSON.stringify([estado.etapa, estado.avisos.map((a) => a.codigo), estado.historico]);
     if (!forca && chave === ultimo) return;
     ultimo = chave;
     try { chrome.runtime.sendMessage(estado, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ }
@@ -292,6 +471,12 @@
     if (!msg || typeof msg !== 'object') return false;
     if (msg.tipo === 'estado?') { empurraEstado(true); responde({ ok: true }); return false; }
     if (msg.tipo === 'limpar') { limparDestaques(); responde({ ok: true }); return false; }
+    if (msg.tipo === 'historico_ler') {
+      const prog = (texto) => { try { chrome.runtime.sendMessage({ tipo: 'historico_progresso', texto }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ } };
+      lerHistorico(prog).then((r) => responde(r), (e) => responde({ ok: false, pedidos: [], feitas: [], erro: e.message, parou_em: 'início' }));
+      return true;
+    }
+    if (msg.tipo === 'historico_teste_lista_branca') { responde(testarListaBranca()); return false; }
     if (msg.tipo === 'preencher') {
       limparDestaques();
       preencher(Array.isArray(msg.campos) ? msg.campos : []).then((resultados) => responde({ ok: true, resultados, etapa: detectarEtapa() }));
