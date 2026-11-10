@@ -1508,3 +1508,14 @@ a.selo-ficha:hover { filter: brightness(1.15); }
   .mv-row .mv-bt .btn { padding: 0 8px; }
   .mv-tabs button { padding: 4px 8px; }
 }
+/* Acabamento da ficha (09/11 ~23h30, print do Ricardo) */
+/* A pílula "Conversa" herdava a caixa antiga .conversa (altura, borda, coluna): volta a ser pílula. */
+.pill.conversa { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; max-height: none; overflow: visible; padding: 3px 10px; border: 0; border-radius: 999px; background: #222B45; color: #AFC0FF; }
+/* Linha de baixo do nome: pílula + cidade · plano · origem na mesma linha. */
+.f-local { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
+.f-local .pill { margin-right: 0; }
+/* Jornada: nomes inteiros (quebram em 2 linhas se precisar), sem "…". */
+.f-jornada li span { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; font-size: 11px; }
+/* Ações: à esquerda, numa linha que quebra natural; a conversa primeiro. */
+.f-atalhos { justify-content: flex-start; gap: 6px; margin-top: 0; }
+.f-atalhos .btn { min-height: 32px; }
