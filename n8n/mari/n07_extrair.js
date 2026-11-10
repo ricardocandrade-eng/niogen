@@ -118,12 +118,13 @@ const tags = {
   carrossel: temTag('CARROSSEL_PLANOS') || imitado.carrossel || null,
   botoes: tag('BOTOES') || imitado.botoes,
   pista_nio: tag('PISTA_NIO'),
+  objecao: tag('OBJECAO'),   // 10/11 (rodada única, Bloco 4b): objeção contornada neste turno
   handoff: handoffYaml,
 };
 Object.keys(tags).forEach((k) => { if (tags[k] === null) delete tags[k]; });
 
 // ── 3. limpeza ──
-const NOMES_TAG = 'CIDADE_DETECTADA|ENDERECO|ELEGIBILIDADE|SEGMENTO|PLANO_ESCOLHIDO|UPSELL_OFERECIDO|DADOS_COLETADOS|SINAL_URGENCIA|AGENDAMENTO_RETORNO|AVALIACAO|CARROSSEL_PLANOS|BOTOES|PISTA_NIO';
+const NOMES_TAG = 'CIDADE_DETECTADA|ENDERECO|ELEGIBILIDADE|SEGMENTO|PLANO_ESCOLHIDO|UPSELL_OFERECIDO|DADOS_COLETADOS|SINAL_URGENCIA|AGENDAMENTO_RETORNO|AVALIACAO|CARROSSEL_PLANOS|BOTOES|PISTA_NIO|OBJECAO';
 let texto = bruto
   .replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '')
   .replace(new RegExp(`\\[(?:${NOMES_TAG})(?:\\s*:[^\\]]*)?\\]`, 'gi'), '')
@@ -155,7 +156,8 @@ if (conv0.lgpd_enviada) {
 // escolhido (varejo = R$ 540 / 12 meses = o texto do Ricardo palavra por palavra; Empresas = 24 meses; sem fidelidade =
 // taxa na 1ª fatura, porque "ZERO" seria benefício fora da tabela).
 const VERc = Number((String(ctx.promptVersao || '').match(/mari_v(\d+)/) || [])[1] || 0);
-const COND_ABRE = 'Antes de fechar, rapidinho as condições do seu plano:';
+// 10/11 (rodada única): texto APROVADO pelo Ricardo em 09/11 ~00h15 — "isenta", sem "grátis"; o Wi-Fi vem do plano.
+const COND_ABRE = 'As condições do seu plano:';
 let condicoesInseridas = false;
 function blocoCondicoes() {
   const codTag = String(tag('PLANO_ESCOLHIDO') || '').toUpperCase().match(/[VE]-[A-Z0-9]+-[A-Z]+/);
@@ -165,13 +167,14 @@ function blocoCondicoes() {
   const taxaTxt = `R$ ${Number.isInteger(taxa) ? taxa : taxa.toFixed(2).replace('.', ',')}`;
   const meses = pl ? pl.isencao_meses : 12;
   const linhaTaxa = meses
-    ? `• Taxa de instalação (${taxaTxt}) ZERO ao manter o plano por ${meses} meses.`
-    : `• Taxa de instalação (${taxaTxt}) cobrada na 1ª fatura (versão sem fidelidade).`;
+    ? `• Taxa de instalação isenta, com fidelidade de ${meses} meses`
+    : `• Taxa de instalação (${taxaTxt}) cobrada na 1ª fatura (versão sem fidelidade)`;
+  const wifi = pl && pl.wifi ? String(pl.wifi).trim() : 'Wi-Fi';
   return [COND_ABRE, '',
-    '• Preço fixo garantido até janeiro/2030 (sem reajuste anual).',
+    '• Preço fixo até janeiro/2030',
     linhaTaxa,
-    '• Roteador em comodato incluído sem custo extra.',
-    '• 1ª fatura: 25 dias após a instalação no boleto (ou no dia da instalação no cartão).',
+    `• Roteador ${wifi} incluído, sem custo`,
+    '• 1ª fatura 25 dias depois da instalação (no cartão, no dia da instalação)',
     '', 'A velocidade real depende do aparelho e do Wi-Fi.'].join('\n');
 }
 if (VERc >= 5 && /\[CONDI[CÇ][OÕ]ES\]/i.test(texto)) {
@@ -189,6 +192,7 @@ const PROIBIDAS = [
   ['dh' + 'arma', 'o nome da empresa revendedora'], ['gratis', '"grátis"'], ['gratuit', '"gratuito"'], ['combo', '"combo"'], ['pacote', '"pacote"'],
   ['bundle', '"bundle"'], ['nio 5g', '"Nio 5G"'], ['nio movel', '"Nio Móvel"'], ['nio cel', '"Nio Cel"'], ['nio mobile', '"Nio Mobile"'],
   ['chip da nio', '"chip da Nio"'], ['2028', '"2028"'], ['cobertura confirmada', '"cobertura confirmada"'],
+  ['fibra dedicada', '"fibra dedicada"'],   // 10/11 (rodada única, §9)
 ];
 // v3 (Bloco 2, itens 4 e 5) — só para o prompt v3 (a v2 usa ✅ 🎯 📍 💰 1️⃣ de propósito).
 // Expressão de robô → pede reescrita. Emoji → o motor corrige sozinho (sem gastar outra chamada) e conta.
@@ -292,6 +296,22 @@ function upsellForaDaConta(t) {
   return ditos.filter((c) => !ok.has(c)).map((c) => `${R(c)}${ch && ok.size ? ` (a diferença certa a partir do ${String(ch.nome || '').replace(/^Nio (Empresas )?/, '').split(' ')[0]} é ${[...ok].sort((a, b) => a - b).map(R).join(' ou ')})` : ''}`);
 }
 
+// 10/11 (rodada única, Bloco 4b): objeção não é despedida. Conversas reais 09/11: #39 "não, pago 119,90 por um giga" →
+// recusa_compra no 1º não; #36 "vou ver com meu filho" → despedida. Detecta a objeção na mensagem do cliente e, se a Mari
+// encerrou sem ter contornado 2 vezes (e sem um "não quero" explícito), pede reescrita.
+const OBJ_RE = {
+  consultar_alguem: /\b(ver|falar|conversar|consultar|decidir|olhar) com (o |a )?(meu |minha )?(marido|esposa|mulher|esposo|filh[oa]s?|pai|mae|socio|socia|familia|patrao|chefe)\b/,
+  pensar: /\b(vou|deixa eu|preciso|vou ter que) pensar\b|\bdepois (eu )?(vejo|olho|falo|decido|te falo)\b|\bvou (ver|olhar) (direitinho|com calma)\b/,
+  preco: /\b(ta|esta|e|achei|muito|meio|bem) (car[oa]|salgad[oa])\b|\bcar[oa] demais\b|\bpreco (ta |esta |e )?(alto|salgado)\b|\bnao cabe no (meu )?bolso\b/,
+  ja_tem: /\bja tenho (internet|net|fibra|wi-?fi|plano)\b|\bja (uso|sou cliente)\b|\bme atende (bem|super bem)\b|\bto satisfeit|\bestou satisfeit|\bpago (so )?(r\$ ?)?\d+|\bfidelizad/,
+  marca: /\bnao conhec\w* (a )?nio\b|\bmarca nova\b|\bnunca ouvi\b|\b(e|eh) a oi\b|\boi com outro nome\b/,
+  sem_5g: /\bnao (preciso|quero|uso) (d[oe] )?(5g|chip|celular|internet movel)\b/,
+};
+const NAO_QUERO_RE = /\bnao (tenho|tem) interesse\b|\bnao quero\b|\bpode parar\b|\bnao me (mand|cham|lig)\w*\b|\bpara de me\b|\bchega\b|\bvou bloquear\b|\bme (tira|remove) da lista\b|\bsem interesse\b/;
+const msgObj = norm((prep.consolidado || {}).mensagem || '');
+const objecaoDaMsg = Object.keys(OBJ_RE).find((k) => OBJ_RE[k].test(msgObj)) || null;
+const naoQuero = NAO_QUERO_RE.test(msgObj);
+const objecoesAntes = (((ctx.conversa || {}).dados || {}).objecoes) || {};
 function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
@@ -320,7 +340,7 @@ function violacoesDe(t) {
       v.push('falou de link de pagamento ou de cobrança pela revenda (quem cobra é a própria Nio; escolhida a forma, segue direto para manhã ou tarde)');
     }
     // Guard-rail 14: "sem custo" só na linha do roteador do bloco de condições (texto do Ricardo).
-    if (n.replace(/roteador em comodato incluido sem custo extra/g, '').includes('sem custo')) v.push('usou "sem custo" (proibido; a única exceção é a linha do roteador nas condições)');
+    if (n.replace(/roteador em comodato incluido sem custo extra|roteador [^\n]{0,20}incluido, sem custo/g, '').includes('sem custo')) v.push('usou "sem custo" (proibido; a única exceção é a linha do roteador nas condições)');
     // C7: condições só pelo bloco exato ([CONDICOES]); escritas com as próprias palavras → reescrever.
     if (!t.includes(COND_ABRE) && /2030/.test(n) && /roteador/.test(n)) {
       v.push('escreveu as condições com as próprias palavras — use a marca [CONDICOES] sozinha num balão (o sistema põe o texto exato)');
@@ -355,6 +375,14 @@ function violacoesDe(t) {
     const okCpf = (x) => { if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); };
     const cands = [...String((prep.consolidado || {}).mensagem || '').matchAll(/\d[\d.\s-]{9,16}\d/g)].map((m) => m[0].replace(/\D/g, ''));
     if (cands.some(okCpf)) v.push('disse que o CPF está incompleto/errado, mas o CPF que o cliente mandou é válido: emita [DADOS_COLETADOS: …; cpf=…] e siga para o próximo dado');
+  }
+  // 10/11 (rodada única, §9): economia prometida em reais não existe — pode perguntar quanto o cliente paga hoje.
+  if (V7 && /\beconomiz\w*\b[^.?!\n]{0,40}r\$\s*\d|\b(sobra|fica) (r\$\s*\d+[^.?!\n]{0,15}) (a menos|mais barato)/.test(n)) {
+    v.push('prometeu economia em reais ("você economiza R$X") — proibido: pergunte quanto o cliente paga hoje e mostre o que a Nio traz');
+  }
+  if (V7 && handoffYaml && objecaoDaMsg && !naoQuero && Number(objecoesAntes[objecaoDaMsg] || 0) < 2
+    && ['recusa_compra', 'multiplos_decisores', 'interesse_caindo'].includes(norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, ''))) {
+    v.push(`encerrou a conversa numa objeção (${objecaoDaMsg}) que ainda não foi contornada 2 vezes — objeção não é despedida: tire o [HANDOFF], responda a objeção com UM argumento do Bloco 4b, termine com uma pergunta e emita [OBJECAO: ${objecaoDaMsg}]`);
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
@@ -455,6 +483,17 @@ if (V7 && !handoffYaml && baloes.length) {
     .filter(Boolean).join('\n\n')).filter((b) => b.trim());
   if (limpos.length || tags.botoes || tags.carrossel) baloes = limpos;
 }
+// 10/11 (rodada única, item "sem emoji em pedido de dado"): parágrafo que pede nome, CPF, e-mail, CEP, número,
+// complemento ou referência sai sem emoji ("…pode me mandar? 😊" → "…pode me mandar?").
+if (V7 && !handoffYaml && baloes.length) {
+  const pedeDado = (p) => {
+    const q = norm(p);
+    return /(nome completo|\bcpf\b|e-?mail|\bcep\b|numero da casa|\bo numero\b|complemento|ponto de referencia|\breferencia\b)/.test(q)
+      && /(me (manda|passa|fala|diz|confirma)|pode (me )?(mandar|passar)|qual (o |e o )?(seu|sua)|preciso d|me conta|\?)/.test(q);
+  };
+  baloes = baloes.map((b) => b.split('\n\n').map((p) => (pedeDado(p) && !/^•/.test(p.trim())
+    ? p.replace(/[ \t]*\p{Extended_Pictographic}️?/gu, '').replace(/[ \t]+([?.!,])/g, '$1').trim() : p)).join('\n\n'));
+}
 texto = baloes.join('\n\n');
 
 // ── 5. atualizações da conversa ──
@@ -479,6 +518,46 @@ if (V7 && !tel && !((c.dados || {}).telefone) && c.telefone) {
 }
 if (tel) dados.telefone = tel;
 if (email && email !== '—') dados.email = email.toLowerCase();
+// 10/11 (rodada única, parte 5): o termômetro precisa destes — antes o motor não gravava.
+const foneWaC = com9(String(c.telefone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''));
+if (V7 && tel && foneWaC && tel === foneWaC) dados.telefone_confirmado = true;   // o próprio WhatsApp = confirmado
+const cnpj = String(d.cnpj || hy.cnpj || '').replace(/\D/g, '');
+if (V7 && cnpj.length === 14) dados.cnpj = cnpj;
+const nasc = String(d.nascimento || hy.nascimento || '').trim();
+if (V7 && nasc && nasc !== '—' && !/^null$/i.test(nasc)) dados.nascimento = nasc;
+if (V7) {
+  // Marcas de alerta da conversa (o termômetro e a gaveta mostram): desconto, reclamação/já cliente, "não pedi contato".
+  const mAl = norm((prep.consolidado || {}).mensagem || '');
+  const al = { ...(((c.dados || {}).alertas) || {}) };
+  const agoraIso = new Date().toISOString();
+  let novoAl = false;
+  if (/descont|abaixa\w* (o |esse )?(preco|valor)|mais barat|faz (um |por )?menos/.test(mAl) && !al.desconto) { al.desconto = agoraIso; novoAl = true; }
+  if (/reclama|sem internet|internet (caiu|parou|lenta|ruim|nao funciona)|tecnico nao (veio|apareceu)|ja sou cliente/.test(mAl) && !al.reclamacao) { al.reclamacao = agoraIso; novoAl = true; }
+  if (/nao (pedi|solicitei|autorizei)|como (vc|voce|voces) (conseguiu|pegou|achou) meu|nao me (mande|chame|ligue)/.test(mAl) && !al.nao_pedi) { al.nao_pedi = agoraIso; novoAl = true; }
+  if (/migra(cao|r)|operadora parceira|outra operadora|desligamento|(pedido|contrato|instalacao) (foi )?cancelad/.test(mAl) && !al.golpe) { al.golpe = agoraIso; novoAl = true; }
+  if (novoAl) dados.alertas = al;
+  // Objeção contornada (tag do modelo; sem tag, a objeção que a mensagem do cliente trouxe e que a Mari não encerrou).
+  const OBJS = ['preco', 'ja_tem', 'marca', 'sem_5g', 'pensar', 'consultar_alguem'];
+  const tObj = norm(tags.objecao || '').replace(/[^a-z_]/g, '');
+  const objAgora = OBJS.includes(tObj) ? tObj : (!handoffYaml && objecaoDaMsg ? objecaoDaMsg : null);
+  if (objAgora && !posHandoff) {
+    const ob = { ...(((c.dados || {}).objecoes) || {}) };
+    ob[objAgora] = Number(ob[objAgora] || 0) + 1;
+    dados.objecoes = ob;
+    dados.objecao = objAgora;
+    dados.objecoes_n = Number(((c.dados || {}).objecoes_n) || 0) + 1;
+  }
+  // E-mail repetido para confirmar (Valdo, 09/11): e-mail novo na mensagem do cliente = a confirmar; "sim" depois = confirmado.
+  const msgEm = String((prep.consolidado || {}).mensagem || '').match(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i);
+  const dAnt = c.dados || {};
+  if (msgEm) {
+    const e1 = msgEm[0].toLowerCase().replace(/[.,;]+$/, '');
+    if (e1 !== String(dAnt.email || '').toLowerCase() || dAnt.email_confirmado === false) { dados.email = e1; dados.email_confirmado = false; }
+  } else if (dAnt.email && dAnt.email_confirmado === false
+    && /^(sim|s|ss|isso|isso mesmo|exato|correto|certo|certinho|ta certo|esta certo|esta certinho|ta certinho|confirmo|e esse|esse mesmo|pode ser|positivo|aham|uhum|ok|isso ai)\b/.test(norm((prep.consolidado || {}).mensagem || '').trim())) {
+    dados.email_confirmado = true;
+  }
+}
 
 const pag = norm(d.pagamento || hy.forma_pagamento || '');
 if (pag) {
@@ -656,12 +735,22 @@ if (motivo) {
         ? `Pronto, anotado! Agora o nosso time abre o seu pedido e te manda aqui mesmo, ${prazo}, o link da biometria — é rapidinho, você faz pelo celular. Depois a gente confirma a data da instalação por aqui 😊`
         : `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
       recusa_compra: 'Sem problema! Se mudar de ideia, é só me chamar aqui. Foi um prazer conversar com você 😊',
-      fora_de_area: 'Por enquanto a gente atende só algumas cidades de Minas 😕 Pra sua cidade, o televendas da Nio ajuda: 0800 031 0453.',
+      fora_de_area: 'Por enquanto a gente atende só algumas cidades de Minas 😕 Obrigada pelo contato!',
       ja_cliente_nio: 'Como o endereço já tem Nio, é direto com eles: App Nio ou 0800 001 1000 😊',
     }[motivo] || `Vou te passar pra um dos nossos consultores, que te chama aqui mesmo ${prazo} 😊`;
   }
 }
 
+// 10/11 (Ricardo, 09/11 23h46): fora da área = comunica, agradece e despede, num balão só — nada de televendas, "anotei",
+// "vou passar pra Nio" ou "te aviso quando chegar". Texto fixo (não depende do modelo).
+if (V7 && handoff && motivo === 'fora_de_area') {
+  const dd = { ...(c.dados || {}), ...dados };
+  const p1 = String(dd.nome || '').trim().split(/\s+/)[0];
+  const nm = p1 && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : null;
+  const cid = String(c.cidade || '').trim();
+  texto = `Poxa${nm ? `, ${nm}` : ''}, por enquanto a gente atende só algumas cidades de Minas${cid ? `, e ${cid} ainda não está entre elas` : ''} 😕 Obrigada pelo contato!`;
+  baloes = [texto];
+}
 // Balões finais: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
 let baloesFinais = baloes.length && baloes.join('\n\n') === texto ? baloes : (texto ? [texto] : []);
 // 💚 na despedida: todo handoff começa com o coração ("💚 Pronto, Ricardo, anotado!").
@@ -786,7 +875,7 @@ if (V7 && !erro && tags.carrossel) {
 // Idem o telefone: "é esse mesmo / este número / o do WhatsApp" = o telefone desta conversa.
 if (V7 && !m.dados.telefone && /\b(esse|este) (mesmo|numero|n[uú]mero)|mesmo (numero|n[uú]mero)|do (proprio )?whats/.test(norm((prep.consolidado || {}).mensagem))) {
   const tw = String((ctx.conversa || {}).telefone || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
-  if (tw) { dados.telefone = tw; upd.dados = { ...(upd.dados || {}), telefone: tw }; m.dados.telefone = tw; }
+  if (tw) { dados.telefone = tw; dados.telefone_confirmado = true; upd.dados = { ...(upd.dados || {}), telefone: tw, telefone_confirmado: true }; m.dados.telefone = tw; }
 }
 if (V7 && !m.dados.email) {
   const em = String((prep.consolidado || {}).mensagem || '').match(/[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i);
@@ -823,7 +912,8 @@ if (V7 && !cpfOk(m.dados.cpf)) {
   const telConf = ultMari.match(/confirmando:?\s*\(?(\d{2})\)?\s*(9?\d{4})[\s-]?(\d{4})\s*\?/i);
   if (V7 && !m.dados.telefone && telConf && /^(sim|s|ss|isso|isso mesmo|exato|correto|certo|confirmo|esse mesmo|e esse|e sim|positivo)\b/.test(norm(msgC))) {
     const tc = telConf.slice(1).join('');
-    dados.telefone = tc; m.dados.telefone = tc; upd.dados = { ...(upd.dados || {}), telefone: tc };
+    dados.telefone = tc; dados.telefone_confirmado = true; m.dados.telefone = tc;
+    upd.dados = { ...(upd.dados || {}), telefone: tc, telefone_confirmado: true };
   }
 }
 // Forma de pagamento tocada no botão (ou digitada) e não registrada pelo modelo — o sistema registra.
@@ -851,6 +941,7 @@ if (V7 && m.dados.email && /[^\s@<>()]+@[^\s@<>()]+\.[a-z]{2,}/i.test(String((pr
 const ultimaFala = norm(baloesFinais[baloesFinais.length - 1] || '');
 const outraPergunta = ultimaFala.includes('?') && !/manha ou (a )?tarde|instalacao, voce prefere/.test(ultimaFala);
 if (V7 && !erro && !handoff && !tags.botoes && !m.forma_pagamento && m.plano_escolhido && m.dados.telefone && m.dados.email
+  && m.dados.email_confirmado !== false   // 10/11: o e-mail repetido espera o "sim" antes do pagamento
   && !outraPergunta && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))) {
   baloesFinais = baloesFinais.map((b) => b.split('\n\n').filter((p) => !/manha ou (a )?tarde|instalacao, voce prefere/.test(norm(p))).join('\n\n')).filter((b) => b.trim());
   tags.botoes = 'pagamento';

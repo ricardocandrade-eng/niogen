@@ -1629,3 +1629,5 @@ select.cvp-pill, .cvp-l1 select.cvp-pill, .cvp-l2 select.cvp-pill { width: auto;
 /* Balão: só o texto quebra linha como digitado; o resto do HTML não vira linha em branco (balões altos e vazios). */
 .cvp-b { white-space: normal; }
 .cvp-b .cvp-t { white-space: pre-wrap; }
+/* 10/11: chip da objeção contornada pela Mari (tela Mari) */
+.mq-trava.aviso { color: var(--info-fg); border-color: #34507A; }

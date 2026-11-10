@@ -211,7 +211,13 @@ const cepAtual = out.p_cep || conv.cep;
 
 // (2b) Complemento explícito (o "não tem" vem pela tag [ENDERECO] do modelo).
 if (cepAtual && ['abertura', 'endereco', 'elegibilidade'].includes(conv.etapa)) {
-  const c = resto.match(/\b(ap(?:to|artamento)?\.?\s*\d+\s*[a-z]?|bloco\s*\w+(?:\s*ap(?:to)?\.?\s*\d+)?|casa\s+(?:dos\s+)?fundos|fundos|lote\s*\d+\w*|sala\s*\d+\w*|loja\s*\d+\w*)\b/i);
+  // 10/11 (rodada única): "Casa A/B/C" e "Loja" (sem número) são o complemento que o Novo Pedido da Nio pede num menu.
+  // Letra maiúscula ("Casa B") em qualquer mensagem; minúscula só na resposta curta ("casa b") — "casa e trabalho" não é.
+  let c = resto.match(/\b(ap(?:to|artamento)?\.?\s*\d+\s*[a-z]?|bloco\s*\w+(?:\s*ap(?:to)?\.?\s*\d+)?|casa\s+(?:dos\s+)?fundos|fundos|lote\s*\d+\w*|sala\s*\d+\w*|loja\s*\d+\w*)\b/i);
+  if (!c) {
+    const casa = resto.match(/\b([Cc]asa\s+[A-E])(?![A-Za-z0-9])/) || (resto.trim().length <= 24 ? resto.match(/\b(casa\s+[a-e])(?![a-z0-9])/i) : null);
+    if (casa) c = [casa[0], casa[1].replace(/\s+/g, ' ').replace(/^casa/i, 'Casa').replace(/[a-e]$/, (x) => x.toUpperCase())];
+  }
   if (c) {
     out.p_complemento = c[1].replace(/\s+/g, ' ').trim();
     resto = resto.replace(c[1], ' ');   // número da casa não pode sair do complemento

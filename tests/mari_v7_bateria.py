@@ -163,6 +163,7 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     c.diz('Edson Teste da Silva, CPF 529.982.247-25')
     r = c.diz('O telefone é esse mesmo do WhatsApp')
     r = c.diz('edson.teste@exemplo.com')
+    r = confirma_email(c, r, 'edson.teste@exemplo.com', 'a')
     if (r.get('interativo') or {}).get('chave') != 'pagamento':
         c.falha('(a) forma de pagamento sem os botões')
     r = c.diz('Cartão de crédito')
@@ -312,7 +313,7 @@ def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua
     c.exige('pode deixar' not in norm(r.get('resposta')), f'(o) comentou a operadora: «{(r.get("resposta") or "")[:80]}»')
     r = c.diz('Quero o Super')
     t = norm(r.get('resposta'))
-    c.exige('rapidinho as condicoes' in t and ('nome completo' not in t or t.index('rapidinho as condicoes') < t.index('nome completo')),
+    c.exige('as condicoes do seu plano' in t and ('nome completo' not in t or t.index('as condicoes do seu plano') < t.index('nome completo')),
             '(o) pedido de nome/CPF antes das condições')
     r = c.diz('Ricardo Teste - 529.982.247-25')
     sem_anotado(r, 'nome/CPF')
@@ -321,6 +322,7 @@ def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua
         r = c.diz('Sim')
     r = c.diz('ricardo.teste@exemplo.com')
     sem_anotado(r, 'e-mail')
+    r = confirma_email(c, r, 'ricardo.teste@exemplo.com', 'o')
     c.exige((r.get('interativo') or {}).get('chave') == 'pagamento', '(o) pagamento sem os botões')
     r = c.diz('Cartão de crédito')
     sem_anotado(r, 'pagamento')
@@ -356,12 +358,22 @@ def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800
         r = c.diz('Quero esse mesmo')
         t = norm(r.get('resposta'))
     # 08/11 00h36: confirmação → condições → "Fechou? Me manda seu nome completo e CPF…" (nunca o pedido antes das condições)
-    c.exige('rapidinho as condicoes' in t and 'nome completo' in t and t.index('rapidinho as condicoes') < t.index('nome completo'),
+    c.exige('as condicoes do seu plano' in t and 'nome completo' in t and t.index('as condicoes do seu plano') < t.index('nome completo'),
             f'(p) condições fora de ordem: «{(r.get("resposta") or "")[:220]}»')
     c.exige('preciso confirmar seus dados' not in t, '(p) pedido de dados confuso ("Agora preciso confirmar seus dados")')
     r = c.diz('Ricardo Teste - 529.982.247-25')
     t = norm(r.get('resposta'))
     c.exige('mail' in t and 'telefone' not in t, f'(p) perguntou o telefone (ou não pediu o e-mail): «{(r.get("resposta") or "")[:160]}»')
+
+
+def confirma_email(c, r, email, rot):
+    """10/11 (rodada única): a Mari repete o e-mail para o cliente confirmar antes do pagamento."""
+    t = norm((r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or ''))
+    if (r.get('interativo') or {}).get('chave') == 'pagamento':
+        c.falha(f'({rot}) foi para o pagamento sem repetir o e-mail para confirmar')
+        return r
+    c.exige(email.lower() in t, f'({rot}) não repetiu o e-mail para confirmar: «{t[:160]}»')
+    return c.diz('Sim, está certinho')
 
 
 # ── abertura B2 (08/11, docs/Prompt_mari_abertura_b2_081126_1310.md): saudação fixa + 3 botões, sem o Claude ──
@@ -372,7 +384,9 @@ RX_RS = r'r\$\s*\d'
 def exige_abertura(c, r, inicio, rot):
     it = r.get('interativo') or {}
     c.exige(it.get('chave') == 'abertura', f'({rot}) 1ª resposta sem a abertura B2 com botões: {it or (r.get("resposta") or "")[:120]}')
-    c.exige((it.get('corpo') or '').startswith(inicio), f'({rot}) saudação errada: «{(it.get("corpo") or "")[:60]}» (esperado «{inicio}…»)')
+    corpo = it.get('corpo') or ''
+    c.exige(corpo.startswith(inicio) or corpo.startswith(inicio.replace('😊', '💚')),
+            f'({rot}) saudação errada: «{corpo[:60]}» (esperado «{inicio.replace("😊", "💚")}…»)')
     c.exige([b.get('title') for b in it.get('botoes') or []] == BOTOES_B2, f'({rot}) botões errados: {it.get("botoes")}')
     c.exige(all(len(b.get('title') or '') <= 20 for b in it.get('botoes') or []), f'({rot}) título de botão com mais de 20 caracteres')
     c.exige(r.get('modelo') == 'abertura_b2', f'({rot}) a abertura passou pelo Claude (modelo {r.get("modelo")!r})')

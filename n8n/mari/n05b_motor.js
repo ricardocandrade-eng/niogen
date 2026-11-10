@@ -30,8 +30,10 @@ const partes = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
 }).formatToParts(agora).map((p) => [p.type, p.value]));
 const hora = Number(partes.hour) % 24;
 const dia = partes.weekday; // Mon..Sun
-const dentroHorario = (['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(dia) && hora >= 9 && hora < 21)
-  || (dia === 'Sat' && hora >= 10 && hora < 16);
+// 10/11 (rodada única, 0099): o banco diz se agora é horário de contato COM feriado (mari_no_horario pela cidade); sem a
+// chave (banco antigo), a conta da semana de sempre. A Mari responde igual — muda só o prazo do consultor.
+const dentroHorario = typeof db.no_horario === 'boolean' ? db.no_horario
+  : ((['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].includes(dia) && hora >= 9 && hora < 21) || (dia === 'Sat' && hora >= 10 && hora < 16));
 const dataHora = agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const horarioTxt = dentroHorario
   ? 'HORARIO_COMERCIAL: true — prazo do consultor: "em até 2 horas"'
@@ -176,7 +178,7 @@ if (!dados.nome) faltando.push('nome');
 if (!dados.cpf || !cpfOk) faltando.push('cpf');
 // 08/11: sem telefone guardado, vale o do WhatsApp (o 7 · Extrair grava) — telefone só "falta" se nem esse servir.
 if (!(dados.telefone && telValido(dados.telefone)) && !telValido(foneWa(conv.telefone))) faltando.push('telefone');
-if (!dados.email || !emailValido(dados.email)) faltando.push('email');
+if (!dados.email || !emailValido(dados.email) || dados.email_confirmado === false) faltando.push('email');
 if (!conv.forma_pagamento) faltando.push('pagamento');
 if (!(conv.instalacao_preferencia || conv.visita_preferencia)) faltando.push(V4 ? 'instalacao' : 'visita');
 if (V7 && !dados.referencia) faltando.push('referencia');   // o portal exige na etapa 2 (prompt 27 A5)
@@ -258,6 +260,16 @@ L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviad
 L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || '—'}` : `visita=${conv.visita_preferencia || '—'}`}`
   + (V7 ? `; referencia=${dados.referencia || '—'}; operadora_atual=${dados.operadora_atual || '—'}` : ''));
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
+// 10/11 (rodada única): e-mail repetido para o cliente confirmar (Valdo, 09/11: e-mail errado travou o portal).
+if (V7 && dados.email && dados.email_confirmado === false) {
+  L.push(`email_a_confirmar: SIM — o cliente mandou «${dados.email}» e ainda não confirmou: repita o e-mail e pergunte se está certinho; não siga para o pagamento antes do "sim" (se ele corrigir, repita o novo).`);
+}
+// 10/11 (rodada única, Bloco 4b): quantas vezes cada objeção já foi contornada — no 3º "não" firme à mesma, despede.
+if (V7) {
+  const ob = dados.objecoes && typeof dados.objecoes === 'object' ? dados.objecoes : {};
+  const ks = Object.keys(ob).filter((k) => Number(ob[k]) > 0);
+  L.push(`objecoes_contornadas: ${ks.length ? ks.map((k) => `${k}=${ob[k]}`).join(', ') + ' (até 2 contornos por objeção; depois disso, despedida com a porta aberta)' : 'nenhuma'}`);
+}
 // v3 (regra de emoji): quantos emojis a Mari já usou e se o cliente usa — o 7 · Extrair aplica o teto.
 const EMOJI_RE = /\p{Extended_Pictographic}/gu;
 const nEmoji = (s) => (String(s || '').replace(/💚/gu, '').match(EMOJI_RE) || []).length;   // 💚 (saudação/despedida, 05/11) não conta
@@ -275,7 +287,9 @@ if (v3) {
   const cid = String(conv.id || '');
   if (!sdv._variacoes[cid]) {
     const d6 = () => 1 + Math.floor(Math.random() * 6);
-    sdv._variacoes[cid] = [d6(), d6(), d6()];
+    // 10/11 (pend. 48): 11 confirmações no prompt (a confirmação repetia até 6× em 10 conversas).
+    const d11 = () => 1 + Math.floor(Math.random() * 11);
+    sdv._variacoes[cid] = [d6(), d6(), d11()];
     const chaves = Object.keys(sdv._variacoes);
     if (chaves.length > 2000) chaves.slice(0, chaves.length - 2000).forEach((k) => delete sdv._variacoes[k]);
   }
@@ -288,7 +302,7 @@ if (v3) {
     if (i < 0) return [];
     const out = [];
     for (const l of pb.slice(i + titulo.length).split('\n').slice(1)) {
-      const m = l.match(/^\s*\d\.\s+"(.+)"\s*$/);
+      const m = l.match(/^\s*\d{1,2}\.\s+"(.+)"\s*$/);
       if (m) out.push(m[1]); else if (out.length) break;
     }
     return out;
@@ -451,7 +465,7 @@ return [{ json: {
     cluster, btu, dentroArea: conv.dentro_area, dentroHorario, segmento: seg,
     planos: planos.map((p) => ({ codigo: p.codigo, nome: p.nome, portfolio: p.portfolio, variante: p.variante, preco: p.preco, preco_cartao: p.preco_cartao,
       taxa_habilitacao: p.taxa_habilitacao, isencao_meses: p.isencao_meses,
-      velocidade_mb: p.velocidade_mb })),   // 0030/prompt 18: bloco [CONDICOES]; 07/11: trava de valor/plano fora da tabela (7 · Extrair)
+      velocidade_mb: p.velocidade_mb, wifi: p.wifi })),   // 10/11: o roteador das condições vem do plano (Wi-Fi 5 / Wi-Fi 6)   // 0030/prompt 18: bloco [CONDICOES]; 07/11: trava de valor/plano fora da tabela (7 · Extrair)
     conversa: { etapa: conv.etapa, cep: conv.cep, numero: conv.numero, complemento: conv.complemento, cidade: conv.cidade,
       elegibilidade: conv.elegibilidade, plano_escolhido: conv.plano_escolhido, forma_pagamento: conv.forma_pagamento,
       visita_preferencia: conv.visita_preferencia, instalacao_preferencia: conv.instalacao_preferencia,
@@ -460,7 +474,8 @@ return [{ json: {
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?
-    condicoesEnviadas: historico.some((h) => h.papel === 'mari' && String(h.texto || '').includes('Antes de fechar, rapidinho as condições')),
+    // 10/11: frase nova do bloco ("As condições do seu plano:"); a antiga vale para as conversas de antes.
+    condicoesEnviadas: historico.some((h) => h.papel === 'mari' && /Antes de fechar, rapidinho as condições|As condições do seu plano:/.test(String(h.texto || ''))),
     turnoIds: cons.turno_ids || [],
     estado: estadoTxt,
     emojiMari, emojiCliente,
