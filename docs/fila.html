@@ -23,13 +23,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-17">
-<script src="config.js?v=101126-17"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-18">
+<script src="config.js?v=101126-18"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-17"></script>
-<script src="assets/sidebar.js?v=101126-17"></script>
-<script src="assets/conversa.js?v=101126-17"></script>
-<script src="assets/ficha.js?v=101126-17"></script>
+<script src="assets/app.js?v=101126-18"></script>
+<script src="assets/sidebar.js?v=101126-18"></script>
+<script src="assets/conversa.js?v=101126-18"></script>
+<script src="assets/ficha.js?v=101126-18"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -255,12 +255,15 @@
   function opLinha(o, i) {
     const cid = esc(o.conversa_id);
     const jan = o.janela_fecha_em ? (new Date(o.janela_fecha_em) - Date.now()) / 60000 : -1;
+    const ligar = o.canal === 'ligar';   // 0110: janela fechada e o template da oportunidade ainda não aprovado → ligar
+    const tel = telFmt(o.telefone);
     const janTxt = o.canal === 'template' ? ' · <span class="warn-txt">janela fechada → template</span>'
+      : ligar ? ' · <span class="warn-txt">janela fechada → ligar</span>'
       : jan > 0 && jan <= 240 && o.codigo !== 'O1' ? ` · <span class="warn-txt">janela fecha em ${jan < 60 ? `${Math.round(jan)} min` : `${Math.floor(jan / 60)} h`}</span>` : '';
     const valor = o.valor_mes != null ? `${NG.fmtMoeda(o.valor_mes)}/mês` : '';
     const acoes = opAberta === o.conversa_id
       ? `<span class="apagado">Por quê?</span>${motivosDispensa.map((m) => `<button type="button" class="btn btn-sm" data-opd="${cid}" data-motivo="${esc(m.codigo)}">${esc(m.nome)}</button>`).join('')}<button type="button" class="btn btn-sm btn-ghost" data-opx="${cid}" aria-label="Cancelar">×</button>`
-      : `<details class="mv-op-menu"><summary class="btn btn-sm" title="Mais opções">▾</summary><button type="button" class="btn btn-sm" data-opm="${cid}" data-assumir="1" title="Manda e atribui a você: a Mari cala e a cadência para">Mandar e assumir</button></details>
+      : `${ligar ? '' : `<details class="mv-op-menu"><summary class="btn btn-sm" title="Mais opções">▾</summary><button type="button" class="btn btn-sm" data-opm="${cid}" data-assumir="1" title="Manda e atribui a você: a Mari cala e a cadência para">Mandar e assumir</button></details>`}
          <button type="button" class="btn btn-sm" data-opn="${cid}" title="Some até amanhã (pede o motivo em 1 clique)">Agora não</button>`;
     return `<div class="mv-row mv-op${i === 0 ? ' prim' : ''}" data-k="c:${cid}" tabindex="0" role="button">
         <span class="mv-et" title="Oportunidade (${esc((o.regras || []).join(' + '))} · ${esc(String(o.pontos))} pontos)"><span class="mv-fogo" aria-hidden="true">🔥</span><span>Oportunidade</span></span>
@@ -268,8 +271,12 @@
         <span class="mv-oque">${esc(o.motivo || '')}${janTxt}</span>
         <span class="mv-ha apagado">${esc(haTempo(o.parado_desde))}</span>
         <span class="mv-dono mari">${ICO_ROBO}Mari</span>
-        <span class="mv-bt"><button type="button" class="btn btn-sm mv-go" data-opm="${cid}">${o.canal === 'template' ? 'Mandar template' : 'Mandar mensagem'}</button></span>
-        <div class="mv-op-pe"><span class="mv-sug">${o.canal === 'template' ? 'Template (janela fechada)' : 'Sugestão (editável)'}: “${esc(o.texto_sugerido || '')}”</span><span class="mv-op-acoes">${acoes}</span></div>
+        <span class="mv-bt">${ligar
+          ? `<a class="btn btn-sm mv-go" href="tel:+${esc(String(o.telefone || '').replace(/\D/g, ''))}" data-oplig="${cid}" title="Liga e registra a ligação (nota no Chatwoot)">📞 Ligar</a>`
+          : `<button type="button" class="btn btn-sm mv-go" data-opm="${cid}">${o.canal === 'template' ? 'Mandar template' : 'Mandar mensagem'}</button>`}</span>
+        <div class="mv-op-pe"><span class="mv-sug">${ligar
+          ? `Janela de 24 h fechada e o template da oportunidade ainda não foi aprovado: ligue para <b>${esc(tel)}</b>. Sem mensagem.`
+          : `${o.canal === 'template' ? 'Template (janela fechada)' : 'Sugestão (editável)'}: “${esc(o.texto_sugerido || '')}”`}</span><span class="mv-op-acoes">${acoes}</span></div>
       </div>`;
   }
   async function mandarOp(cid, assumir) {
@@ -292,6 +299,17 @@
     const { data, error } = await NG.sb.rpc('oportunidade_enviar', { p_conversa: cid, p_texto: op.template ? '' : String(fd.get('texto') || ''), p_assumir: !!assumir, p_template: op.template });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast((data && data.resumo) || 'Mensagem enviada', 'ok');
+    await carregar();
+  }
+  const telFmt = (t) => {
+    const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+    return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : d || '—';
+  };
+  // 0110: Ligar = abre o discador (tel:) e registra a ligação (enviada, canal ligar) com nota no Chatwoot.
+  async function ligarOp(cid) {
+    const { data, error } = await NG.sb.rpc('oportunidade_ligar', { p_conversa: cid });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast((data && data.resumo) || 'Ligação registrada', 'ok');
     await carregar();
   }
   async function dispensarOp(cid, motivo) {
@@ -471,6 +489,8 @@
     if (on) { ev.stopPropagation(); opAberta = on.dataset.opn; render(); return; }
     const ox = ev.target.closest('[data-opx]');
     if (ox) { ev.stopPropagation(); opAberta = null; render(); return; }
+    const olg = ev.target.closest('[data-oplig]');
+    if (olg) { ev.stopPropagation(); ligarOp(olg.dataset.oplig); return; }   // o link tel: segue e abre o discador
     const od = ev.target.closest('[data-opd]');
     if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
     if (ev.target.closest('.mv-op-pe')) return;
