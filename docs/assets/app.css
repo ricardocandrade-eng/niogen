@@ -1778,3 +1778,4 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .nav-item .badge[data-badge="fila"] { background: var(--accent); color: #06200F; border: 1px solid transparent; min-width: 20px; text-align: center; line-height: 16px; padding: 0 6px; }
 .nav-item .badge[data-badge="fila"].alerta { background: #E5484D; color: #fff; }
 .nav-item .badge.fogo { line-height: 16px; padding: 0 6px; }
+.nav-item .badge::before { content: none !important; display: none !important; }   /* 10/11: a bolinha azul genérica do .alerta não entra nos números do menu */
