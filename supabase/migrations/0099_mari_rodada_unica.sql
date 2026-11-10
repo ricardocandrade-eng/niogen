@@ -17,9 +17,9 @@ alter table public.config_feriados add constraint config_feriados_escopo_check c
 comment on table public.config_feriados is 'Feriados sem toque ativo (cadência, régua, lembretes). escopo: nacional · estadual (uf) · municipal (cidade). A área de atuação é toda MG: estadual vale para UF = MG.';
 
 insert into public.config_feriados (data, nome, escopo, cidade, uf) values
-  ('2026-11-20', 'Dia Nacional de Zumbi e da Consciência Negra', 'nacional', '', null),
-  ('2026-12-25', 'Natal', 'nacional', '', null),
-  ('2027-01-01', 'Confraternização Universal', 'nacional', '', null)
+  ('2026-11-20', 'Dia Nacional de Zumbi e da Consciência Negra', 'nacional', '', ''),
+  ('2026-12-25', 'Natal', 'nacional', '', ''),
+  ('2027-01-01', 'Confraternização Universal', 'nacional', '', '')
 on conflict (data, escopo, cidade) do nothing;
 
 create or replace function public.mari_dia_permitido(p_dia date, p_cidade text default null::text)
@@ -28,7 +28,7 @@ returns boolean language sql stable set search_path to 'public' as $function$
      and not exists (select 1 from public.config_feriados f
                       where f.data = p_dia
                         and (f.escopo = 'nacional'
-                             or (f.escopo = 'estadual' and upper(coalesce(f.uf, 'MG')) = 'MG')
+                             or (f.escopo = 'estadual' and upper(coalesce(nullif(f.uf, ''), 'MG')) = 'MG')
                              or (f.escopo = 'municipal' and lower(f.cidade) = lower(btrim(coalesce(p_cidade, ''))))))
 $function$;
 
@@ -43,7 +43,7 @@ begin
        and not exists (select 1 from public.config_feriados f
                         where f.data = d
                           and (f.escopo = 'nacional'
-                               or (f.escopo = 'estadual' and upper(coalesce(f.uf, 'MG')) = 'MG')
+                               or (f.escopo = 'estadual' and upper(coalesce(nullif(f.uf, ''), 'MG')) = 'MG')
                                or (f.escopo = 'municipal' and lower(f.cidade) = lower(btrim(coalesce(p_cidade, '')))))) then
       return d;
     end if;
