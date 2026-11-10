@@ -1756,3 +1756,4 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .painel-op:not([hidden]) { display: block; margin: 0 0 12px; padding: 9px 14px; border: 1px solid var(--fogo-border); border-radius: 10px; background: var(--fogo-bg); color: var(--text); font-size: 13px; text-decoration: none; }
 .painel-op b { color: var(--fogo); }
 .painel-op:hover { border-color: var(--fogo); }
+.nav-item .badge.fogo { white-space: nowrap; flex: none; }
