@@ -970,16 +970,20 @@
     if (cvComp && cvComp.id === d.conversaId && host.firstChild) return;
     if (cvComp) cvComp.destruir();
     cvComp = NGConversa.montar(host, { conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : null, rotuloFechar: '× Fechar',
-      aoFechar: () => { convAberta = false; render(); }, aoMudar: () => recarregar() });
+      aoFechar: () => { convAberta = false; render(); }, aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
   }
-  function reporConversa(vivo) {
+  function reporConversa(vivo, foco) {
     const host = raiz.querySelector('.f-conv-host');
-    if (vivo && host && cvComp && cvComp.id === d.conversaId) { host.appendChild(vivo); return; }
+    if (vivo && host && cvComp && cvComp.id === d.conversaId) {
+      host.appendChild(vivo);
+      if (foco && vivo.contains(foco)) foco.focus({ preventScroll: true });   // mover o nó tira o cursor da caixa: devolve
+      return;
+    }
     if (cvComp) { cvComp.destruir(); cvComp = null; }
     montarConversaInterna();
   }
   function abrirConversa() {
-    if (hostConversa) { hostConversa({ conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : (d.conv && d.conv.nome), aoMudar: () => recarregar() }); return; }
+    if (hostConversa) { hostConversa({ conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : (d.conv && d.conv.nome), aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) }); return; }
     convAberta = true;
     render();
   }
@@ -1483,6 +1487,7 @@
     const etapa = d.jor ? d.jor.etapa : (NG.etapaDe(v).n || 0);
     const datas = { 2: v.criado_em, 3: v.nio_pedido_em || v.biometria_link_enviado_em, 4: v.vendido_em, 5: v.instalado_em, fim: !!v.docs_entregues_em };
     const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;   // a conversa aberta não perde o rascunho
+    const focoAntes = document.activeElement;
 
     raiz.innerHTML = `<div class="ficha f-${modo}${convAberta && d.conversaId && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
@@ -1517,7 +1522,7 @@
     </div>`;
     const corpo = raiz.querySelector('.f-corpo');
     if (corpo && modo !== 'pagina') corpo.scrollTop = rolagem;
-    reporConversa(vivo);
+    reporConversa(vivo, focoAntes);
     ligarDfvSeEditando();
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f && formAtivo) f.focus({ preventScroll: true });
@@ -1562,6 +1567,7 @@
   }
   function renderConversa() {
     const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;
+    const focoAntes = document.activeElement;
     const c = d.conv;
     const j = d.jor || {};
     const q = d.q || {};
@@ -1616,7 +1622,7 @@
         </div>
       </div>
     </div>`;
-    reporConversa(vivo);
+    reporConversa(vivo, focoAntes);
   }
 
   function ligarDfvSeEditando() {
@@ -1635,12 +1641,21 @@
     });
   }
 
-  async function recarregar() {
+  // quieto (10/11): recarga automática (eco da conversa, refresh de 60 s da Minha vez) — só redesenha se o dado mudou e nunca
+  // por cima de um formulário aberto (não apaga o que a pessoa está digitando).
+  let sigDados = '';
+  async function recarregar(op) {
     if (!idAtual) return;
+    const quieto = !!(op && op.quieto);
+    if (quieto && (formAtivo || edicao)) return;
     const id = idAtual;
     const ehConv = String(id).startsWith('c:');
     const r = ehConv ? await carregarConversa(id.slice(2)) : await carregar(id);
     if (id !== idAtual) return;   // trocou de venda no meio
+    let sig = '';
+    try { sig = JSON.stringify(r); } catch (e) { sig = String(Date.now()); }
+    if (quieto && (sig === sigDados || formAtivo || edicao)) return;
+    sigDados = sig;
     if (r.venda) { idAtual = r.venda; abrir(r.venda); return; }   // a conversa virou venda: abre a ficha da venda
     if (r.erro) {
       d = null;
@@ -1969,7 +1984,7 @@
     // A tela abre a conversa no lugar dela (Minha vez: no espaço da lista). fn({conversaId, nome, aoMudar}); null desliga.
     aoConversa(fn) { hostConversa = fn; },
     aoFechar(fn) { ouvintesFechar.push(fn); },
-    recarregar: () => recarregar(),
+    recarregar: (op) => recarregar(op),
     get atual() { return idAtual; },
     pagina,
     // Ouvinte chamado depois de cada gravação (a tela recarrega a lista).

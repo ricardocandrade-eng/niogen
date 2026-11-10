@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=091126-27">
-<script src="config.js?v=091126-27"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-01">
+<script src="config.js?v=101126-01"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=091126-27"></script>
-<script src="assets/sidebar.js?v=091126-27"></script>
-<script src="assets/conversa.js?v=091126-27"></script>
-<script src="assets/ficha.js?v=091126-27"></script>
+<script src="assets/app.js?v=101126-01"></script>
+<script src="assets/sidebar.js?v=101126-01"></script>
+<script src="assets/conversa.js?v=101126-01"></script>
+<script src="assets/ficha.js?v=101126-01"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -267,12 +267,12 @@
       avisoFeito(r);
       abrirChave(k);
       await carregar();
-      if (j.conversa_id && vista === 'lista' && !movel.matches) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: () => NGFicha.recarregar() });
+      if (j.conversa_id && vista === 'lista' && !movel.matches) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) }) });
       return;
     }
     abrirChave(k);
     if (b.dataset.bt === 'responder' && j.conversa_id && vista === 'lista' && !movel.matches) {
-      setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: () => NGFicha.recarregar() }), 50);
+      setTimeout(() => abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) }) }), 50);
     }
   }
   function clique(ev) {
@@ -310,7 +310,8 @@
   await carregar();
   NGFicha.iniciar();
   render();
-  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
+  // 10/11: o refresh de 1 min também atualiza a ficha aberta (quieto: só redesenha se mudou, nunca por cima de formulário).
+  setInterval(() => { if (document.visibilityState === 'visible') { carregar(); if (NGFicha.atual) NGFicha.recarregar({ quieto: true }); } }, 60000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
 })();
 </script>

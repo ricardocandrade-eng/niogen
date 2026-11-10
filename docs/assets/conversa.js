@@ -105,6 +105,12 @@
       st.d = { c: rc.data, turnos: (rt.data || []).reverse(), acoes: (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
       // A mensagem local some quando a ação dela aparece na fila do banco.
       st.locais = st.locais.filter((l) => !(l.acao_id && st.d.acoes.some((a) => a.id === l.acao_id)));
+      // 10/11: a ficha/lista de quem abriu a conversa recarrega quando a fala aparece (turno novo, do cliente ou do time) ou a
+      // ação enviada muda de estado (🕓 → ✓ / ⚠) — antes só recarregava no instante do envio e a pendência ficava presa.
+      const ultT = st.d.turnos[st.d.turnos.length - 1];
+      const sigFala = `${st.d.turnos.length}:${ultT ? ultT.id : ''}|${st.d.acoes.map((a) => `${a.id}:${a.status}`).join(',')}`;
+      if (st.sigFala != null && st.sigFala !== sigFala && o.aoMudar) o.aoMudar({ eco: true });
+      st.sigFala = sigFala;
       desenhar();
       if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); st.foco = false; }
     }
