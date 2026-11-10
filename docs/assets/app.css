@@ -1610,3 +1610,18 @@ body.mv-foco .main.mv > .cab { margin-bottom: 4px; }
 .qcard .q-data { font-size: 12px; font-weight: 600; color: var(--info-fg); }
 .qcard .q-data.ok { color: var(--ok-fg); }
 .qcard .prox { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+/* Cabeçalho da conversa no padrão da ficha (10/11): nome + Chatwoot ↗ · chips pequenos · etiquetas finas */
+.cvp-l1 { flex-direction: column; align-items: stretch; gap: 6px; padding: 10px 12px 8px; }
+.cvp-topo { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cvp-topo .cvp-nome { flex: 1; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cvp-topo .cvp-cw { margin-left: 0; flex: 0 0 auto; font-size: 12px; }
+.cvp-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+select.cvp-pill, .cvp-l1 select.cvp-pill, .cvp-l2 select.cvp-pill { height: 26px; padding: 0 24px 0 10px; border-radius: 999px; border: 1px solid var(--border); background-color: transparent; color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+select.cvp-pill:hover { border-color: var(--border-strong); }
+select.cvp-pill:disabled { opacity: .6; cursor: default; }
+span.cvp-pill.fixo { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-size: 12px; white-space: nowrap; }
+span.cvp-pill.fixo.warn { color: var(--warn-fg); border-color: var(--warn-border); }
+.cvp-l2 { gap: 6px; padding: 6px 12px 8px; }
+.cvp-rot { font-family: var(--mono); font-size: 10.5px; letter-spacing: .04em; color: var(--muted); margin-right: 2px; }
+.cvp-l2 .cvp-tg { font-size: 11.5px; padding: 1px 4px 1px 8px; }
+.cvp-l2 select.cvp-mais { color: var(--muted); border-style: dashed; }
