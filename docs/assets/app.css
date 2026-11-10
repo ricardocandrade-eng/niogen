@@ -1757,3 +1757,18 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .painel-op b { color: var(--fogo); }
 .painel-op:hover { border-color: var(--fogo); }
 .nav-item .badge.fogo { white-space: nowrap; flex: none; }
+/* 10/11 (Ricardo): Live em blocos (Para fazer · Acompanhando) com espaço entre eles; 🔥 Oportunidades presas no rodapé, sobem ao clicar */
+.mv-bloco { margin: 12px 12px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: clip; }
+.mv-bloco:last-child { margin-bottom: 12px; }
+.mv-bloco > .mv-grupo { top: 34px; border-radius: 10px 10px 0 0; }
+.mv-bloco > .mv-row:last-child, .mv-bloco > .mv-nada:last-child { border-bottom: 0; }
+.mv-op-dock { flex: none; display: flex; flex-direction: column; max-height: 62%; border-top: 2px solid var(--fogo-border); background: var(--fogo-bg); box-shadow: 0 -8px 18px rgba(0, 0, 0, .35); position: sticky; bottom: 0; z-index: 3; }
+.mv-op-dock-cab { all: unset; box-sizing: border-box; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; width: 100%; padding: 10px 14px; cursor: pointer; font-size: 12px; }
+.mv-op-dock-cab b { color: var(--fogo); font-size: 12.5px; }
+.mv-op-dock-cab:hover { background: #33210F; }
+.mv-op-dock-cab:focus-visible { outline: 2px solid var(--fogo); outline-offset: -2px; }
+.mv-op-seta { margin-left: auto; color: var(--fogo); font-size: 13px; }
+.mv-op-dock-corpo { overflow-y: auto; min-height: 0; background: var(--surface); border-top: 1px solid var(--fogo-border); animation: mv-op-sobe .22s ease-out; }
+@keyframes mv-op-sobe { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mv-op-dock-corpo { animation: none; } }
+@media (max-width: 900px) { .mv-op-dock { max-height: 70vh; } .mv-bloco { margin: 10px 8px 0; } }

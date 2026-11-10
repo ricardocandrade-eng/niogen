@@ -23,13 +23,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-14">
-<script src="config.js?v=101126-14"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-15">
+<script src="config.js?v=101126-15"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-14"></script>
-<script src="assets/sidebar.js?v=101126-14"></script>
-<script src="assets/conversa.js?v=101126-14"></script>
-<script src="assets/ficha.js?v=101126-14"></script>
+<script src="assets/app.js?v=101126-15"></script>
+<script src="assets/sidebar.js?v=101126-15"></script>
+<script src="assets/conversa.js?v=101126-15"></script>
+<script src="assets/ficha.js?v=101126-15"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -79,6 +79,7 @@
   let ops = [];       // 0107: 🔥 oportunidades (v_oportunidades, sem as que já pedem ação)
   let opAtualizado = 0;
   let opAberta = null;   // conversa_id da linha com "Agora não" aberto (motivos em 1 clique)
+  let opDock = ls.ler('niogen.fila.opdock') === '1';   // faixa 🔥 do rodapé aberta (lembrada no navegador)
   let motivosDispensa = [{ codigo: 'ja_falei', nome: 'Já falei' }, { codigo: 'nao_vale', nome: 'Não vale' }, { codigo: 'depois', nome: 'Depois' }];
   NG.sb.from('config_oportunidades').select('parametros').eq('codigo', 'geral').maybeSingle().then(({ data }) => {
     const m = data && data.parametros && data.parametros.dispensa_motivos;
@@ -211,20 +212,41 @@
           <span class="mv-oque">${esc(p.alerta || 'O CPF desta biometria não tem venda aberta no NIOGEN — confira de quem é.')}</span>
           <span class="mv-ha apagado">${esc(haTempo(p.desde))}</span><span class="mv-dono apagado">GED360</span>
           <span class="mv-bt"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></span></div>`;
+    // 10/11 (Ricardo): cada grupo é um bloco separado, com espaço entre eles, na ordem Para fazer · Acompanhando; as
+    // 🔥 Oportunidades ficam numa faixa presa no rodapé da lista, que sobe ao clicar (e desce clicando de novo).
+    const bloco = (html, cls = '') => `<section class="mv-bloco${cls ? ` ${cls}` : ''}">${html}</section>`;
     const blocoAnd = soVez && andPend.length
-      ? grupo(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN') + andPend.map(andLinha).join('') : '';
+      ? bloco(grupo(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN') + andPend.map(andLinha).join('')) : '';
+    let dock = '';
     if (soVez) {
       const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
-      linhas = (l.length ? grupo(`Para fazer · ${l.length}`, 'vermelho = agora · amarelo = hoje') + linhas
+      linhas = bloco(l.length ? grupo(`Para fazer · ${l.length}`, 'vermelho = agora · amarelo = hoje') + linhas
         : '<div class="mv-nada">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>')
-        + (opL.length ? `<div class="mv-grupo mv-grupo-op"><b>🔥 Oportunidades · a Mari acha que uma mensagem sua esquenta · ${opL.length}</b><span class="apagado">não é obrigação: mande, assuma ou "Agora não". Depois de mandar, a Mari segue a conversa.</span></div>`
-          + opL.map((o, i) => opLinha(o, i)).join('') : '')
-        + (ac.length ? grupo(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — biometria, instalação, pendência. Volta para "Para fazer" sozinha quando precisar.') + ac.map(linha).join('') : '');
+        + (ac.length ? bloco(grupo(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — biometria, instalação, pendência. Volta para "Para fazer" sozinha quando precisar.') + ac.map(linha).join('')) : '');
+      if (opL.length) {
+        dock = `<section class="mv-op-dock${opDock ? ' aberto' : ''}" aria-label="Oportunidades">
+          <button type="button" class="mv-op-dock-cab" data-opdock aria-expanded="${opDock}" title="${opDock ? 'Recolher' : 'Abrir'} as oportunidades">
+            <b>🔥 Oportunidades · a Mari acha que uma mensagem sua esquenta · ${opL.length}</b>
+            <span class="apagado">não é obrigação: mande, assuma ou "Agora não" — depois de mandar, a Mari segue a conversa</span>
+            <span class="mv-op-seta" aria-hidden="true">${opDock ? '▾' : '▴'}</span></button>
+          ${opDock ? `<div class="mv-op-dock-corpo">${opL.map((o, i) => opLinha(o, i)).join('')}</div>` : ''}</section>`;
+      }
+    } else if (linhas) {
+      linhas = bloco(linhas);
     }
+    const rolAntes = listaEl.querySelector('.mv-rolar');
+    const dockAntes = listaEl.querySelector('.mv-op-dock-corpo');
+    const posRol = rolAntes ? rolAntes.scrollTop : 0, posDock = dockAntes ? dockAntes.scrollTop : 0;
     listaEl.innerHTML = `${abas()}
       <div class="mv-rolar"><div class="mv-row mv-cab mono"><span>ETAPA</span><span>CLIENTE</span><span>O QUE FAZER</span><span>HÁ</span><span>DONO</span><span></span></div>
       ${blocoAnd}${linhas || `<div class="vazio">${soVez ? 'Nada para fazer nem acompanhar agora ✅ — veja "Todas".' : 'Nenhuma linha.'}</div>`}</div>
+      ${dock}
       <div class="mv-pe apagado">Vermelho = agora (cliente esperando ou prazo de 4 h) · amarelo = hoje · ⏸ azul = esperando terceiro, fora da sua vez até a data · a lista se atualiza a cada minuto</div>`;
+    // A recarga de 1 min não joga a lista nem a faixa de volta para o topo.
+    const rolDepois = listaEl.querySelector('.mv-rolar');
+    if (rolDepois) rolDepois.scrollTop = posRol;
+    const dockDepois = listaEl.querySelector('.mv-op-dock-corpo');
+    if (dockDepois) dockDepois.scrollTop = posDock;
   }
 
   // ---------- 🔥 oportunidades (0107) ----------
@@ -442,6 +464,7 @@
   function clique(ev) {
     // 0107: 🔥 oportunidades
     if (ev.target.closest('.mv-op-menu summary')) { ev.stopPropagation(); return; }
+    if (ev.target.closest('[data-opdock]')) { ev.stopPropagation(); opDock = !opDock; ls.gravar('niogen.fila.opdock', opDock ? '1' : '0'); render(); return; }
     const om = ev.target.closest('[data-opm]');
     if (om) { ev.stopPropagation(); mandarOp(om.dataset.opm, om.dataset.assumir === '1'); return; }
     const on = ev.target.closest('[data-opn]');
