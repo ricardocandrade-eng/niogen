@@ -262,6 +262,36 @@ function foraDaTabela(t) {
   return [...new Set(fora)];
 }
 
+// Trava do upsell (portão 09/11, cenário p): "Essencial R$140… por mais R$15 tem o Super" passava na trava geral porque
+// R$15 existe na tabela (desconto do cartão). Aqui "por mais R$X" só vale se X for a diferença real entre o plano escolhido
+// e um plano acima do mesmo segmento (boleto ou cartão); sem plano identificado, a diferença entre dois planos na mesma forma.
+function upsellForaDaConta(t) {
+  const n = norm(t);
+  const pls = ctx.planos || [];
+  const RSX = /por mais r\$\s*(\d+)(?:,(\d{1,2}))?/g;
+  const ditos = [...n.matchAll(RSX)].map((m) => Number(m[1]) * 100 + (m[2] ? Number(m[2].padEnd(2, '0')) : 0));
+  if (!ditos.length || !pls.length) return [];
+  const cents = (v) => Math.round(Number(v) * 100);
+  const codTag = String(tags.plano_escolhido || '').toUpperCase().match(/[VE]-[A-Z0-9]+-[A-Z]+/);
+  const cod = (codTag && codTag[0]) || (ctx.conversa || {}).plano_escolhido;
+  let ch = pls.find((p) => p.codigo === cod) || null;
+  if (!ch) {   // "Boa! O Essencial por R$140…" sem a marca: plano pelo nome, antes do "por mais"
+    const antes = n.slice(0, n.indexOf('por mais r$'));
+    const fam = ['ultra', 'super', 'essencial', 'fibra'].filter((f) => antes.includes(f)).pop();
+    const seg0 = ctx.segmento || 'varejo';
+    if (fam) ch = pls.find((p) => p.portfolio === seg0 && ['regular', 'oferta50'].includes(p.variante) && norm(p.nome).includes(fam)) || null;
+  }
+  const ok = new Set();
+  const par = (a, b) => {
+    if (Number(b.preco) > Number(a.preco)) ok.add(cents(b.preco) - cents(a.preco));
+    if (a.preco_cartao != null && b.preco_cartao != null && Number(b.preco_cartao) > Number(a.preco_cartao)) ok.add(cents(b.preco_cartao) - cents(a.preco_cartao));
+  };
+  if (ch) pls.filter((o) => o.portfolio === ch.portfolio && o.variante === ch.variante).forEach((o) => par(ch, o));
+  else pls.forEach((a) => pls.filter((b) => b.portfolio === a.portfolio && b.variante === a.variante).forEach((b) => par(a, b)));
+  const R = (c) => `R$${c % 100 ? (c / 100).toFixed(2).replace('.', ',') : c / 100}`;
+  return ditos.filter((c) => !ok.has(c)).map((c) => `${R(c)}${ch && ok.size ? ` (a diferença certa a partir do ${String(ch.nome || '').replace(/^Nio (Empresas )?/, '').split(' ')[0]} é ${[...ok].sort((a, b) => a - b).map(R).join(' ou ')})` : ''}`);
+}
+
 function violacoesDe(t) {
   const n = norm(t);
   const v = PROIBIDAS.filter(([k]) => n.includes(k)).map(([, r]) => `usou a palavra proibida ${r}`);
@@ -309,6 +339,8 @@ function violacoesDe(t) {
         ? `citou valor, velocidade ou plano que não existe na tabela desta cidade (${fora.join('; ')}): use só os planos e valores do [INTERNAL DATA], copiados como estão`
         : `citou preço ou plano sem ter planos no estado (${fora.join('; ')}) — a cidade ainda não foi identificada pelo CEP: não invente nomes nem valores, peça o CEP e o número`);
     }
+    const upErr = upsellForaDaConta(t);
+    if (upErr.length) v.push(`upsell com a diferença errada ("por mais ${upErr.join('; ')}"): copie o valor do campo upsell do plano escolhido no [INTERNAL DATA]`);
   }
   // Teste real 08/11 00h15: "por mais R$30 o Super já vem com o dobro de velocidade (1 Giga)" — Essencial 800 Mega × Super
   // 1 Giga (+25 %). Comparação ("o dobro", "duas vezes mais", "3x mais", "o triplo", "metade") sobre velocidade, internet ou

@@ -234,6 +234,13 @@ def cen_j_portao(c):   # regressão BTU (j original) + P18: pessoa física em ci
     c.exige(re.search(r'\b800 mega\b', t) and '1 giga' in t, f'[P18] faltou 800 Mega / 1 Giga da tabela Varejo: «{t[:200]}»')
 
 
+def cen_p_portao(c):   # P9 P10 (p original) + P19: em JF o upsell Essencial → Super é "por mais R$30" (nunca o R$15 do cartão)
+    B.cen_p(c)
+    for x in c.log:
+        for m in re.finditer(r'por mais r\$\s*(\d+)', norm(x.get('mari'))):
+            c.exige(m.group(1) == '30', f'[P19] upsell com a diferença errada (R${m.group(1)}; certo R$30): «{(x.get("mari") or "")[:160]}»')
+
+
 def cen_q(c):   # P15 — controle: fora do assunto → volta ao fluxo sem inventar
     c.diz('Oi')
     c.diz('Você torce pra qual time? Aqui é Tupi kkkk')
@@ -250,7 +257,7 @@ PORTAO = {
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'regressão operadora'), 'i': (7, B.cen_i, 'regressão botão'),
     'j': (8, cen_j_portao, 'regressão BTU + P18'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
     'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14 P16'),
-    'p': (14, B.cen_p, 'P9 P10'), 'q': (15, cen_q, 'P15'),
+    'p': (14, cen_p_portao, 'P9 P10 P19'), 'q': (15, cen_q, 'P15'),
     # 08/11 — abertura B2 (saudação fixa + 3 botões): sem nome, com nome, 1ª mensagem já com CEP, toque em cada botão.
     'r': (16, B.cen_r, 'B2 sem nome'), 's': (17, B.cen_s, 'B2 com nome'), 't': (18, B.cen_t, 'B2 com CEP'), 'u': (19, B.cen_u, 'B2 botões'),
 }

@@ -94,6 +94,19 @@ function linhaDia(p) {
   return cartao ? `preco_dia: ${porDia(p.preco)} · no cartão ${porDia(p.preco_cartao)}` : `preco_dia: ${porDia(p.preco)}`;
 }
 
+// upsell (Passo 3b): a diferença vem calculada — portão 09/11 (p): "Essencial R$140… por mais R$15 tem o Super" (o 15 era
+// o desconto do cartão; o certo é R$30). Plano seguinte do mesmo segmento, até R$40 a mais; o modelo só copia.
+function linhaUpsell(p) {
+  const acima = planos.filter((o) => o.portfolio === p.portfolio && o.variante === p.variante && Number(o.preco) > Number(p.preco)
+    && Number(o.preco) - Number(p.preco) <= 40).sort((a, b) => a.preco - b.preco)[0];
+  if (!acima) return 'upsell: — (não há plano acima até R$40; não ofereça upgrade)';
+  const dif = Number(acima.preco) - Number(p.preco);
+  const difC = !btu && p.preco_cartao != null && acima.preco_cartao != null ? Number(acima.preco_cartao) - Number(p.preco_cartao) : null;
+  return `upsell: ${nomeCurto(acima.nome)} (${acima.codigo}) por mais ${R(dif)}/mês`
+    + (difC != null && difC !== dif ? ` (no cartão, por mais ${R(difC)})` : '')
+    + ' — use EXATAMENTE este valor em "por mais R$…"';
+}
+
 function linhaPlano(p, semFidelidade) {
   const campos = [
     `codigo: ${p.codigo}`,
@@ -106,6 +119,7 @@ function linhaPlano(p, semFidelidade) {
   campos.push(`preco: ${R(p.preco)}/mês`);
   if (!btu) campos.push(p.preco_cartao != null ? `preco_cartao: ${R(p.preco_cartao)}/mês` : 'preco_cartao: — (mesmo preço no cartão)');
   if (!semFidelidade) campos.push(linhaDia(p));
+  if (!semFidelidade) campos.push(linhaUpsell(p));
   if (semFidelidade) campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)} inteira na 1ª fatura`);
   else campos.push(`taxa_instalacao: ${R(p.taxa_habilitacao)}, isenta com ${p.isencao_meses} meses`);
   return '- ' + campos.join(' | ');
