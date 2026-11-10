@@ -934,7 +934,7 @@
         <div class="f-ctl"><div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
           <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         ${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-      <div class="f-local">${esc(linha2 || '—')}</div>
+      <div class="f-local">${NG.pilulaEtapa(v)} ${esc(linha2 || '—')}</div>
     </header>`;
   }
 
@@ -1001,14 +1001,14 @@
   const SOZINHO = {
     assumir: 'atribui a você no Chatwoot, cala a Mari e para a cadência.',
     viabilidade: 'nota no Chatwoot. Sem viabilidade: tente variações de CEP/rua/nº ou abra a pendência "Nio confirma".',
-    pedido: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria (dentro do horário e do limite 2/dia · 15/mês).',
+    pedido: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria.',
     biometria: 'Validada: o próximo passo vira abrir a OS e agendar (4 h). Negado: pede outro CPF ao cliente e abre a pendência.',
     os_agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
     reagendar: 'confirma a nova data ao cliente e resolve a conversa.',
     docs: 'registra a entrega (contrato: 15 dias depois da instalação).',
     pendencia: 'a venda sai da sua vez até a data de revisão e a cadência da Mari pausa.',
     manual: 'conta no limite do contrato e sai da sua vez.',
-    responder: 'a resposta sai como pessoa (a Mari não responde); responder a quem falou por último não conta no limite.',
+    responder: 'a resposta sai como pessoa (a Mari não responde).',
   };
 
   function faixaProximo(v, pr) {
@@ -1098,18 +1098,18 @@
   let formAtivoPadrao = null;
 
   function atalhos(v) {
-    if (v.status === 'saida') return '';
     const bo = ehBO();
     const cv = d.convInfo;
     const temCw = cv && cv.chatwoot_conversation_id;
     const dono = temCw ? donoConversa(cv).tipo : null;
     const b = [];
+    if (v.status === 'saida' && d.conversaId) return `<div class="f-atalhos">${botaoConversa(d.nMsgs)}</div>`;
     if (bo && !d.pend && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="pend-abrir" title="A venda sai da sua vez até a data de revisão; a cadência da Mari pausa">⏸ Pendência</button>');
     if (bo && temCw && (dono === 'pessoa' || dono === 'time')) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari" title="Tira a atribuição no Chatwoot e deixa nota: a Mari continua com o contexto">Devolver para a Mari</button>');
     if (bo && temCw && !cv.nao_contatar) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar" title="Etiqueta nao-contatar, nota, resolve a conversa e para tudo">Cliente pediu para parar</button>');
     if (bo && NG.etapaDe(v).n >= 2 && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="trocar-plano" title="Upsell ou troca feita no portal: o valor e a comissão se recalculam">Trocar plano</button>');
     b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="saida-form">Saída…</button>');
-    return `<div class="f-atalhos">${b.join('')}</div>`;
+    return `<div class="f-atalhos">${botaoConversa(d.nMsgs)}${b.join('')}</div>`;
   }
 
   function barraJornada(etapaAtual, datas = {}) {
@@ -1160,6 +1160,30 @@
     </div>`;
   }
 
+  // 0096 (Ricardo, 09/11: "a ficha é muito confusa, não sabe pra onde olhar"): UM destaque (o próximo passo); o status vira
+  // uma linha curta de chips; o resto fica em "Mais detalhes".
+  const chip = (ok, txt, cls) => `<span class="f-chip ${cls || (ok ? 'ok' : 'no')}">${ok === true ? '✓' : ok === false ? '○' : ''} ${txt}</span>`;
+  function linhaStatus(v) {
+    const cv = d.convInfo;
+    const dono = donoConversa(cv);
+    const travas = [v.trava_sem_produto_ativo === false && 'já é cliente Nio', v.trava_sem_cancelamento_30d === false && 'cancelou há < 30 d', v.trava_area === false && 'fora da área'].filter(Boolean);
+    const nio = [
+      chip(NG.portalViavel(v), 'Viabilidade'), chip(!!v.nio_pedido, v.nio_pedido ? `Pedido ${esc(v.nio_pedido)}` : 'Pedido'),
+      chip(v.biometria_status === 'validada', v.biometria_status === 'com_risco' ? 'Biometria com risco' : 'Biometria', v.biometria_status === 'com_risco' ? 'bad' : null),
+      chip(!!v.nio_os, v.nio_os ? `OS ${esc(v.nio_os)}` : 'OS'),
+      chip(!!v.instalado_em, v.instalado_em ? `Instalada ${esc(NG.fmtData(v.instalado_em))}` : v.instalacao_agendada_para ? `Instalação ${esc(NG.fmtData(v.instalacao_agendada_para))}` : 'Instalação'),
+    ].join('');
+    const conv = cv && cv.chatwoot_conversation_id
+      ? `<span class="f-chip">${cv.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span><span class="f-chip">${dono.html}</span><span class="f-chip">Janela ${esc(janelaTxt(cv))}</span>`
+      : '<span class="f-chip">sem conversa</span>';
+    return `<div class="f-linha-status">
+      <div class="f-st-g"><span class="f-rot">NIO</span>${nio}</div>
+      <div class="f-st-g"><span class="f-rot">CONVERSA</span>${conv}</div>
+      <div class="f-st-g"><span class="f-rot">CONTRATO</span>${travas.length ? travas.map((x) => `<span class="f-chip bad">✕ ${esc(x)}</span>`).join('') : '<span class="f-chip ok">✓ ok</span>'}${d.pend ? `<span class="f-chip espera">⏸ ${esc(d.pend.nome)} · ${esc(d.pend.diaTxt)}</span>` : ''}</div>
+    </div>`;
+  }
+  const botaoConversa = (n) => (d.conversaId ? `<button type="button" class="btn btn-sm f-bt-conv" data-f="conversa">💬 ${convAberta && !hostConversa ? 'Fechar a conversa' : 'Conversa'}${n != null ? ` · ${n}` : ''}</button>` : '');
+
   // Lembretes automáticos da etapa: o que já saiu (✓), o próximo com horário, parada quando há dono, Pausar = pendência.
   function lembretes(v) {
     const etapa = d.jor ? d.jor.etapa : (NG.etapaDe(v).n || 0);
@@ -1195,7 +1219,7 @@
       return `${i ? '<i class="f-cad-s">›</i>' : ''}<span class="f-cad-p ${saiu ? 'ok' : proxEste ? 'cur' : ''}" title="${esc(saiu ? `enviada ${NG.fmtDataHora(saiu.em)}` : proxEste && prox.em ? `próxima ${NG.fmtDataHora(prox.em)}` : '')}">${saiu ? '✓ ' : ''}${esc(p.rot)}</span>`;
     }).join('')}</div>` : '';
     const proxTxt = prox && !comDono && !d.pend && v.status !== 'saida' && prox.em
-      ? `<span>Próximo: <b>${esc(PASSO_ROT[prox.cod] || prox.cod)} · ${esc(NG.fmtDiaSemana(prox.em))} ${esc(NG.fmtDataHora(prox.em))}</b> · dentro do horário e do limite 2/dia · 15/mês${prox.bloqueio && prox.bloqueio !== 'aguardando' ? ` · ${esc(prox.bloqueio)}` : ''}</span>` : '';
+      ? `<span>Próximo: <b>${esc(PASSO_ROT[prox.cod] || prox.cod)} · ${esc(NG.fmtDiaSemana(prox.em))} ${esc(NG.fmtDataHora(prox.em))}</b>${prox.bloqueio && prox.bloqueio !== 'aguardando' ? ` · ${esc(prox.bloqueio)}` : ''}</span>` : '';
     const pausar = ehBO() && v.status !== 'saida' && !d.pend ? '<button type="button" class="btn btn-sm" data-f="pend-abrir" title="Pausar = abrir uma pendência com data de revisão (a cadência para até lá)">Pausar</button>' : '';
     return `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">LEMBRETES AUTOMÁTICOS · ${esc(nome.toUpperCase())}</span>${pausar}</div>${trilha}${proxTxt}${obs ? `<span class="apagado">${esc(obs)}</span>` : ''}</div>`;
   }
@@ -1443,18 +1467,17 @@
       ${painelConversa()}
       ${cabecalho(v)}
       <div class="f-corpo">
-        ${barraConversa()}
         ${etapa === 0 ? `<div class="f-saida-linha">Saída · ${esc(v.motivo_saida || 'sem motivo')}${v.interesse_futuro_em ? ` · volta ${esc(NG.fmtDiaISO(v.interesse_futuro_em))}` : ''}</div>` : barraJornada(etapa, datas)}
         ${faixaProximo(v, pr)}
         ${atalhos(v)}
         ${formAtivo === 'saida' || formAtivo === 'pend_abrir' ? `<div class="f-form-solto">${FORMS[formAtivo](v)}</div>` : ''}
         ${v.status === 'saida' ? '' : NG.selosFicha(d.avisos, { ignorar: v.id })}
-        ${quadrosStatus(v)}
-        ${lembretes(v)}
+        ${linhaStatus(v)}
         ${cartaoPendencia(v)}
-        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}">${detalhes ? '▾' : '▸'} Detalhes · viabilidade, dados para o portal, cliente, plano, pedido, instalação, comissão, contatos, histórico</button>
+        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}">${detalhes ? '▾' : '▸'} Mais detalhes · lembretes, viabilidade, dados para o portal, cliente, plano, pedido, instalação, comissão, histórico</button>
         <div class="f-detalhes"${detalhes ? '' : ' hidden'}>
-        ${detalhes ? `${cartaoViabilidade(v)}
+        ${detalhes ? `${lembretes(v)}
+        ${cartaoViabilidade(v)}
         ${cartaoPortal(v)}
         ${cartaoConferencia(v)}
         ${blocos(v).map((b) => {
@@ -1523,7 +1546,7 @@
       bts.push('<button type="button" class="btn btn-acc" data-f="conversa">Abrir a conversa e responder</button>');
       sozinho = SOZINHO.responder;
     }
-    const at = [];
+    const at = [botaoConversa(d.nMsgs)];
     if (bo && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
     if (bo && !c.nao_contatar && c.chatwoot_conversation_id) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar">Cliente pediu para parar</button>');
     at.push(`<a class="btn btn-ghost btn-sm" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>`);
@@ -1534,9 +1557,8 @@
     raiz.innerHTML = `<div class="ficha f-${modo}${convAberta && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
       <header class="f-cab"><div class="f-linha1"><h2>${esc(c.nome)}</h2><div class="f-ctl">${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-        <div class="f-local">${esc([c.cidade, q.plano_nome, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).join(' · ') || '—')}</div></header>
+        <div class="f-local"><span class="pill conversa">Conversa</span> ${esc([c.cidade, q.plano_nome, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).join(' · ') || '—')}</div></header>
       <div class="f-corpo">
-        ${barraConversa(c)}
         ${barraJornada(1)}
         <section class="f-prox ${NIVEL_CLS[nivel] || 'dim'}" aria-label="Próximo passo">
           <div class="f-prox-txt"><span class="f-rot">${esc(NIVEL_ROT[nivel] || 'PRÓXIMO PASSO')}</span><b>${esc(j.o_que_fazer || 'Mari atendendo')}</b>
@@ -1545,17 +1567,19 @@
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
         </section>${feito}
         <div class="f-atalhos">${at.join('')}</div>
-        <div class="f-status">
-          <div class="f-sb"><span class="f-rot">NIOGEN</span><strong style="color:${NG.JORNADA[0].cor}">Conversa</strong><span>ainda não é venda · dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</span><span class="f-dono">dono: ${dono.html}</span></div>
-          <div class="f-sb"><span class="f-rot">NIO · PORTAL</span>${ck(c.nio_viab_resultado === 'viavel', `Viabilidade${c.nio_viab_resultado ? `: ${esc((NG.VIAB_NIO[c.nio_viab_resultado] || c.nio_viab_resultado).toLowerCase())}` : ' (a Mari consulta pelo CEP)'}`)}${ck(false, 'Pedido · biometria · OS (depois do lead qualificado)')}</div>
-          <div class="f-sb"><span class="f-rot">CHATWOOT · CONVERSA</span>${c.chatwoot_conversation_id ? `<strong>${c.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</strong><span class="f-dono">${dono.html}</span><span>Janela 24 h: ${esc(janelaTxt(c))}</span>` : '<span>Sem conversa no Chatwoot.</span>'}</div>
-          <div class="f-sb"><span class="f-rot">CONTRATO</span>${ck(q.trava_cliente_nio !== 'bloqueia', 'não é cliente Nio')}${ck(q.trava_endereco_nio !== 'bloqueia', 'endereço livre')}${ck(q.trava_viabilidade !== 'bloqueia', 'dentro da área / viável')}<span>Contatos hoje ${esc(q.contatos_hoje ?? 0)}/2 · mês ${esc(q.contatos_mes ?? 0)}/15</span></div>
+        <div class="f-linha-status">
+          <div class="f-st-g"><span class="f-rot">MARI</span><span class="f-chip">dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</span>${c.nio_viab_resultado ? chip(c.nio_viab_resultado === 'viavel', `Viabilidade ${esc((NG.VIAB_NIO[c.nio_viab_resultado] || c.nio_viab_resultado).toLowerCase())}`) : ''}</div>
+          <div class="f-st-g"><span class="f-rot">CONVERSA</span>${c.chatwoot_conversation_id ? `<span class="f-chip">${c.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span><span class="f-chip">${dono.html}</span><span class="f-chip">Janela ${esc(janelaTxt(c))}</span>` : '<span class="f-chip">sem Chatwoot</span>'}</div>
+          <div class="f-st-g"><span class="f-rot">CONTRATO</span>${[q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean).map((x) => `<span class="f-chip bad">✕ ${esc(x)}</span>`).join('') || '<span class="f-chip ok">✓ ok</span>'}</div>
         </div>
-        <div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">LEMBRETES AUTOMÁTICOS · CADÊNCIA DO LEAD</span></div>
+        <button type="button" class="f-detalhes-cab" data-f="detalhes" aria-expanded="${detalhes}">${detalhes ? '▾' : '▸'} Mais detalhes · lembretes da Mari e dados coletados</button>
+        <div class="f-detalhes"${detalhes ? '' : ' hidden'}>
+        ${detalhes ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">LEMBRETES AUTOMÁTICOS · CADÊNCIA DO LEAD</span></div>
           <div class="f-cad">${['24 h', 'D3', 'Ligação', 'D7', 'D15'].map((x, i) => `${i ? '<i class="f-cad-s">›</i>' : ''}<span class="f-cad-p">${esc(x)}</span>`).join('')}</div>
           ${dono.tipo === 'pessoa' || dono.tipo === 'time' ? '<span class="apagado">Parada: a conversa está com uma pessoa. Volta se devolver para a Mari.</span>'
             : k && k.proximo_passo && k.proximo_em ? `<span>Próximo: <b>${esc(k.proximo_passo)} · ${esc(NG.fmtDiaSemana(k.proximo_em))} ${esc(NG.fmtDataHora(k.proximo_em))}</b>${k.bloqueio && k.bloqueio !== 'aguardando' ? ` · ${esc(k.bloqueio)}` : ''}</span>` : '<span class="apagado">Nenhum lembrete marcado agora.</span>'}</div>
-        ${itens.length ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">DADOS QUE A MARI COLETOU</span></div><div class="f-itens">${itens.map((x) => `<span class="f-item ${ESTADO[x.estado] || 'no'}">${x.estado === 'validado' ? '✓' : x.estado === 'vazio' ? '○' : '◐'} ${esc(x.nome)}</span>`).join('')}</div></div>` : ''}
+        ${itens.length ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">DADOS QUE A MARI COLETOU</span></div><div class="f-itens">${itens.map((x) => `<span class="f-item ${ESTADO[x.estado] || 'no'}">${x.estado === 'validado' ? '✓' : x.estado === 'vazio' ? '○' : '◐'} ${esc(x.nome)}</span>`).join('')}</div></div>` : ''}` : ''}
+        </div>
       </div>
     </div>`;
     reporConversa(vivo);

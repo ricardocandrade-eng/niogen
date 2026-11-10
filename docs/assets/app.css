@@ -1451,3 +1451,51 @@ a.selo-ficha:hover { filter: brightness(1.15); }
   body.tela-conversas .main.cv-main { height: 100vh; min-height: 0; overflow: hidden; padding-bottom: 16px; }
   body.tela-conversas .cv-trab { flex: 1; min-height: 0; height: auto; }
 }
+/* Conversa no jeito do WhatsApp Web (conversa.js rev. 09/11 ~23h) */
+.cvp-meio { position: relative; flex: 1; min-height: 0; display: flex; }
+.cvp-meio .cvp-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px; gap: 4px; }
+.cvp-dia { display: flex; justify-content: center; margin: 10px 0 6px; }
+.cvp-dia span { padding: 3px 10px; border-radius: 8px; background: var(--surface-2); color: var(--muted); font-size: 11.5px; }
+.cvp-b { position: relative; max-width: min(72%, 560px); padding: 6px 9px 18px; border-radius: 10px; font-size: 13.5px; line-height: 1.42; margin-top: 2px; }
+.cvp-b .cvp-t { white-space: pre-wrap; overflow-wrap: anywhere; display: block; }
+.cvp-b .cvp-quem { display: block; font-size: 11px; font-weight: 600; color: var(--info-fg); margin-bottom: 1px; }
+.cvp-b.hum .cvp-quem { color: var(--ok-fg); }
+.cvp-b.nota .cvp-quem { color: var(--warn-fg); }
+.cvp-b .cvp-h { position: absolute; right: 8px; bottom: 3px; font-size: 10.5px; color: var(--muted); white-space: nowrap; }
+.cvp-b .cvp-tick { font-style: normal; margin-left: 2px; }
+.cvp-b.cli { border-top-left-radius: 2px; }
+.cvp-b.mari, .cvp-b.hum, .cvp-b.nota { border-top-right-radius: 2px; }
+.cvp-b.pend { opacity: .85; border-style: solid; }
+.cvp-b.falhou { border-color: var(--bad-border); }
+.cvp-erro { display: block; margin-top: 4px; font-size: 11.5px; color: var(--bad-fg); }
+.cvp-erro .link { border: 0; background: none; padding: 0; color: var(--link); font: inherit; text-decoration: underline; cursor: pointer; }
+.cvp-b.sis { padding: 2px 6px; }
+.cvp-novas { position: absolute; right: 18px; bottom: 12px; z-index: 2; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.4); }
+.cvp-novas[hidden] { display: none; }
+.cvp-caixa textarea { min-height: 42px; max-height: 150px; resize: none; overflow-y: auto; line-height: 1.4; }
+.cvp-caixa textarea[readonly] { opacity: .85; }
+.cvp-caixa .btn { min-height: 42px; }
+/* Minha vez: tela fixa no computador (como Conversas) — lista, ficha e quadro vão até o pé da janela; só o conteúdo rola. */
+@media (min-width: 901px) {
+  body.tela-fila { height: 100vh; overflow: hidden; }
+  body.tela-fila .app { height: 100vh; min-height: 0; flex-wrap: nowrap; overflow: hidden; }
+  body.tela-fila .nav { height: 100vh; overflow-y: auto; }
+  body.tela-fila .main.mv { height: 100vh; min-height: 0; overflow: hidden; padding-bottom: 14px; }
+  body.tela-fila .mv-trab, body.tela-fila .mv-trab.com-conversa { flex: 1; min-height: 0; height: auto; }
+  body.tela-fila .mv-quadro:not([hidden]) { flex: 1; min-height: 0; display: flex; }
+  body.tela-fila .mv-board { flex: 1; min-height: 0; align-items: stretch; }
+  body.tela-fila .mv-col { min-height: 0; }
+  body.tela-fila .mv-cards { flex: 1; min-height: 0; max-height: none; }
+}
+/* Ficha mais simples (0096): linha curta de status em chips; o próximo passo é o único destaque */
+.f-linha-status { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-dim); }
+.f-st-g { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; }
+.f-st-g .f-rot { width: 76px; flex: 0 0 auto; }
+.f-chip { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-size: 12px; white-space: nowrap; }
+.f-chip.ok { color: var(--ok-fg); border-color: #2F5A37; }
+.f-chip.bad { color: var(--bad-fg); border-color: var(--bad-border); }
+.f-chip.espera { color: var(--info-fg); border-color: #34507A; }
+.f-atalhos { align-items: center; }
+.f-bt-conv { border-color: var(--border-strong); }
+.f-local .pill { margin-right: 4px; vertical-align: 1px; }
+.f-prox { box-shadow: 0 0 0 1px rgba(255,255,255,.03), 0 6px 18px rgba(0,0,0,.25); }

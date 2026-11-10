@@ -1,29 +1,25 @@
-/* NIOGEN | docs/assets/conversa.js | 09/11/2026 — Claude Code (docs/Prompt_ajustes_operacao_ficha_conversa_091126_1535.md · ponto 4)
- * A conversa do cliente DENTRO do NIOGEN (o Chatwoot vira reserva: áudio, foto). Um componente, dois lugares:
- *   · Minha vez: abre no espaço da lista (a ficha fica ao lado) — fila.html;
- *   · ficha nas outras telas: painel à esquerda da ficha (gaveta) — ficha.js.
- * Linha 1: ← Lista · nome · Status (Aberta/Resolvida) · Atribuída (Sem dono · Mari atende / você / pessoa / time) · janela 24 h ·
- *          Abrir no Chatwoot ↗.  Linha 2: etiquetas + "+ etiqueta".
- * Pé fixo: Responder | Nota privada · Respostas rápidas (config_mari_textos rr_*: "Rótulo::texto"; janela fechada → templates
- * aprovados) · caixa + Enviar. Só as mensagens rolam; abre na última.
- * Tudo vai pela outbox chatwoot_acoes (RPC backoffice_responder / backoffice_conversa, 0090) — o front não tem token.
- * Os freios (horário, 2/dia · 15/mês, janela 24 h) são do banco: a mensagem do RAISE volta como aviso.
+/* NIOGEN | docs/assets/conversa.js | 09/11/2026 — Claude Code
+ * A conversa do cliente DENTRO do NIOGEN, no jeito do WhatsApp Web. Um componente, três lugares: Conversas (conversas.html),
+ * Minha vez (no lugar da lista) e a ficha (painel à esquerda da gaveta).
+ * rev. 09/11 ~23h (Ricardo: "Enter falhando… telas não estão robustas… funcionamento similar ao WhatsApp Web"):
+ *   · O esqueleto é montado UMA vez. A caixa de digitar nunca é redesenhada: o texto e o cursor ficam onde estão. Antes, cada
+ *     atualização redesenhava tudo — depois do Enter o texto voltava para a caixa e o cursor sumia (parecia que não enviou).
+ *   · Enviar = a mensagem aparece na hora (🕓), a caixa esvazia e o cursor continua nela; ✓ quando o Chatwoot recebeu; ⚠ com
+ *     "Reenviar" se falhar. Pode mandar várias seguidas (saem na ordem).
+ *   · Só as mensagens se atualizam (a cada 4 s com a aba visível); cabeçalho e etiquetas só quando mudam, e nunca enquanto um
+ *     menu deles está aberto. Fora do fim da conversa, chega "↓ novas mensagens" em vez de pular.
+ *   · Separador de dia (Hoje, Ontem, data), hora no canto do balão, caixa que cresce até 6 linhas, Enter envia, Shift+Enter pula.
+ *   · Sem limite de horário nem de quantidade (0095). Fica só a janela de 24 h do WhatsApp: fechada, só template aprovado.
+ * Tudo vai pela outbox chatwoot_acoes (RPC backoffice_responder / backoffice_conversa) — o front não tem token.
  * Uso: const c = NGConversa.montar(el, { conversaId, nome, aoFechar, rotuloFechar, aoMudar }); c.recarregar(); c.destruir().
  */
 (function () {
   'use strict';
   const { esc } = NG;
-  // Etiquetas que o time usa no Chatwoot da Nio (as de automação ficam: handoff-*, biometria-pendente, instalacao-agendada).
   const ETIQUETAS = ['interesse-futuro', 'nao-contatar', 'handoff-humano', 'handoff-venda', 'biometria-pendente', 'instalacao-agendada'];
   let rapidasCache = null;
   let tplCache = null;
 
-  const ha = (iso) => {
-    const m = Math.max(0, (Date.now() - new Date(iso)) / 60000);
-    if (m < 60) return `${Math.round(m)} min`;
-    if (m < 48 * 60) return `${Math.floor(m / 60)} h`;
-    return `${Math.floor(m / 1440)} d`;
-  };
   // Texto do turno: mídia vira "📎 … · ouvir/ver no Chatwoot"; marcações internas da Mari somem.
   function textoTurno(t) {
     let s = String(t || '');
@@ -35,6 +31,9 @@
     s = s.replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '').replace(/\[[A-Z_]{3,}(?::[^\]]*)?\]/g, '');
     return s.trim();
   }
+  // *negrito* e _itálico_ do WhatsApp, depois de escapar.
+  const fmtWa = (s) => esc(s).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, '$1<i>$2</i>');
+  const normal = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
   async function rapidas() {
     if (rapidasCache) return rapidasCache;
@@ -48,34 +47,66 @@
   async function templates() {
     if (tplCache) return tplCache;
     const { data } = await NG.sb.from('config_templates_waba').select('nome, corpo, status').eq('status', 'APPROVED').like('nome', 'nio\\_%').order('nome');
-    // Só os de 1 parâmetro (o nome): os outros precisam de dados que a caixa não tem.
     tplCache = (data || []).filter((t) => (String(t.corpo || '').match(/\{\{\d+\}\}/g) || []).length <= 1);
     return tplCache;
   }
+  const diaRot = (iso) => {
+    const d = NG.diaSP(iso);
+    const h = NG.diaSP();
+    if (d === h) return 'Hoje';
+    if (d === NG.somaDias(h, -1)) return 'Ontem';
+    return `${NG.fmtDiaSemana(iso)} ${NG.fmtData(iso)}`;
+  };
 
   function montar(host, opts) {
     const o = { rotuloFechar: '← Lista', ...opts };
-    // Raiz própria: os ouvintes ficam nela e somem com ela (montar de novo no mesmo lugar não duplica clique).
     host.innerHTML = '';
     const el = document.createElement('div');
     el.className = 'cvp-raiz';
     host.appendChild(el);
-    const st = { d: null, nota: false, tpl: null, rascunho: '', enviando: false, timer: null, fim: true, vivo: true };
+    const st = { d: null, nota: false, tpl: null, vivo: true, locais: [], seq: 0, fila: Promise.resolve(), sig: {}, nMsgs: 0, foco: true };
 
+    el.innerHTML = `<section class="cvp">
+      <div class="cvp-l1" data-cab><b class="cvp-nome">${esc(o.nome || 'Conversa')}</b></div>
+      <div class="cvp-l2" data-etq></div>
+      <div class="cvp-meio"><div class="cvp-msgs" data-msgs tabindex="0" aria-label="Mensagens" aria-live="polite"><div class="carregando">Carregando a conversa…</div></div>
+        <button type="button" class="cvp-novas" data-cv="descer" hidden>↓ novas mensagens</button></div>
+      <div class="cvp-pe">
+        <div class="cvp-ctl">
+          <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button></div>
+          <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
+          <span class="cvp-ajuda" data-ajuda></span>
+        </div>
+        <div class="cvp-caixa"><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+          <button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
+      </div>
+    </section>`;
+    const $ = (s) => el.querySelector(s);
+    const cab = $('[data-cab]'), etqEl = $('[data-etq]'), msgs = $('[data-msgs]'), novas = $('[data-cv="descer"]');
+    const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
+    const secao = $('.cvp');
+
+    // ---------- dados ----------
     async function carregar() {
       const id = o.conversaId;
-      const [rc, rt, ra, rq, rr, rtpl] = await Promise.all([
+      const meu = ++st.seq;
+      const [rc, rt, ra, rr, rtpl] = await Promise.all([
         NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at').eq('id', id).maybeSingle(),
-        NG.sb.from('mari_turnos').select('id, papel, texto, tags, created_at').eq('conversa_id', id).order('created_at').order('id').limit(500),
-        NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em').limit(300),
-        NG.sb.from('v_mari_quadro').select('contatos_hoje, contatos_mes, janela_24h_fecha_em').eq('id', id).maybeSingle(),
+        NG.sb.from('mari_turnos').select('id, papel, texto, tags, created_at').eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400),
+        NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200),
         rapidas(),
         templates(),
       ]);
-      if (!st.vivo) return;
-      if (rc.error || !rc.data) { st.d = { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' }; desenhar(); return; }
-      st.d = { c: rc.data, turnos: rt.data || [], acoes: ra.data || [], q: rq.data || {}, rapidas: rr || [], tpls: rtpl || [] };
+      if (!st.vivo || meu !== st.seq) return;
+      if (rc.error || !rc.data) {
+        msgs.innerHTML = `<div class="vazio">${esc(rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).')}</div>`;
+        return;
+      }
+      st.d = { c: rc.data, turnos: (rt.data || []).reverse(), acoes: (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
+      // A mensagem local some quando a ação dela aparece na fila do banco.
+      st.locais = st.locais.filter((l) => !(l.acao_id && st.d.acoes.some((a) => a.id === l.acao_id)));
       desenhar();
+      if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); st.foco = false; }
     }
 
     const meuNome = () => ((NG.usuario || {}).nome || '').trim();
@@ -87,186 +118,216 @@
       if (c.chatwoot_time) return { v: 'time', txt: 'Time backoffice' };
       return { v: 'mari', txt: 'Sem dono · Mari atende' };
     }
-    function janela(c, q) {
-      const fecha = q.janela_24h_fecha_em || (c.ultima_msg_lead_at ? new Date(new Date(c.ultima_msg_lead_at).getTime() + 24 * 3600000).toISOString() : null);
-      if (!fecha) return { aberta: false, txt: 'Janela 24 h · fechada (cliente ainda não escreveu)' };
-      const min = (new Date(fecha) - Date.now()) / 60000 - 60;   // a Mari usa 23 h de folga: o banco também
-      if (min <= 0) return { aberta: false, txt: 'Janela 24 h · fechada · só template' };
+    function janela() {
+      const d = st.d;
+      const ult = d.turnos.filter((t) => t.papel === 'lead').map((t) => t.created_at).pop() || d.c.ultima_msg_lead_at;
+      if (!ult) return { aberta: false, txt: 'Janela 24 h fechada · o cliente ainda não escreveu · só template' };
+      const min = (new Date(ult).getTime() + 23 * 3600000 - Date.now()) / 60000;
+      if (min <= 0) return { aberta: false, txt: 'Janela 24 h fechada · só template' };
       return { aberta: true, txt: `Janela 24 h · fecha em ${min < 60 ? `${Math.round(min)} min` : `${Math.floor(min / 60)} h`}` };
     }
-    function mensagens(d) {
-      const nome = NG.primeiroNome(d.c.dados && d.c.dados.nome ? d.c.dados.nome : (o.nome || d.c.nome_contato || 'Cliente'));
-      const itens = [];
+
+    // ---------- desenho (cada parte só quando muda) ----------
+    const troca = (chave, alvo, html) => {
+      if (st.sig[chave] === html) return;
+      if (alvo.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') return;   // menu aberto: espera
+      st.sig[chave] = html;
+      alvo.innerHTML = html;
+    };
+    function desenhar() {
+      if (!st.d) return;
+      const c = st.d.c;
+      const dn = dono(c);
+      const jn = janela();
+      const nome = (c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente';
+      const link = NG.linkChatwoot(c.chatwoot_conversation_id);
+      const optsDono = [['mari', 'Sem dono · Mari atende'], ['eu', 'Você'], ['time', 'Time backoffice']];
+      if (dn.v === 'outro') optsDono.push(['outro', dn.txt]);
+      troca('cab', cab, `${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
+        <b class="cvp-nome">${esc(nome)}</b>
+        <label class="cvp-f">Status<select data-cv="status"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select></label>
+        <label class="cvp-f">Atribuída<select data-cv="dono"${c.nao_contatar ? ' disabled' : ''}>${optsDono.map(([v, t]) => `<option value="${v}"${v === dn.v ? ' selected' : ''}${v === 'outro' ? ' disabled' : ''}>${esc(t)}</option>`).join('')}</select></label>
+        <span class="cvp-f ${jn.aberta ? '' : 'warn-txt'}">${esc(jn.txt)}</span>
+        ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}`);
+      const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
+      troca('etq', etqEl, `<span class="cvp-f">Etiquetas</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
+        <select data-cv="etiqueta" aria-label="Pôr etiqueta"><option value="">+ etiqueta</option>${ETIQUETAS.filter((x) => !etq.includes(x)).map((x) => `<option>${esc(x)}</option>`).join('')}</select>`);
+      desenharMsgs();
+      desenharPe(jn, dn, nome);
+    }
+
+    function itensMsgs() {
+      const d = st.d;
+      const its = [];
+      const turnosOut = d.turnos.filter((t) => t.papel === 'humano' || t.papel === 'mari');
       d.turnos.forEach((t) => {
         const txt = textoTurno(t.texto);
         if (!txt) return;
-        if (t.papel === 'sistema') { itens.push({ em: t.created_at, html: `<div class="cvp-b sis">${esc(txt.replace(/^\[|\]$/g, ''))} · ${esc(NG.fmtHora(t.created_at))}</div>` }); return; }
-        const quem = t.papel === 'lead' ? nome : t.papel === 'mari' ? (t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : 'Time';
-        itens.push({ em: t.created_at, html: `<div class="cvp-b ${t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum'}"><small>${esc(quem)} · ${esc(NG.fmtDataHora(t.created_at))}</small>${esc(txt)}</div>` });
+        if (t.papel === 'sistema') { its.push({ em: t.created_at, tipo: 'sis', txt: txt.replace(/^\[|\]$/g, '') }); return; }
+        its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt,
+          quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
       });
-      // Notas privadas (nunca viram turno) e mensagens que ainda não saíram (ou não vão sair).
       d.acoes.forEach((a) => {
         const txt = (a.payload || {}).content || '';
         if (a.tipo === 'nota') {
-          const s = a.status === 'feita' ? '' : a.status === 'erro' ? ' · ⚠ não foi ao Chatwoot' : ' · salvando…';
-          itens.push({ em: a.criada_em, html: `<div class="cvp-b nota"><small>Nota privada · ${esc(a.momento === 'nota' ? 'time' : 'NIOGEN')} · ${esc(NG.fmtDataHora(a.criada_em))}${esc(s)}</small>${esc(txt)}</div>` });
+          its.push({ em: a.criada_em, tipo: 'nota', txt, quem: 'Nota privada', tick: a.status === 'feita' ? '✓' : a.status === 'erro' ? '⚠' : '🕓',
+            erro: a.status === 'erro' ? (a.erro || 'não foi ao Chatwoot') : '' });
           return;
         }
-        if (a.status === 'feita') return;   // já virou turno (Mari pelo resultado; Time pelo motor da Mari)
-        const s = a.status === 'bloqueada' ? `⚠ não saiu: ${a.erro || 'freio do contrato'} — mande à mão` : a.status === 'erro' ? `⚠ erro: ${a.erro || ''}`
-          : a.status === 'cancelada' ? 'cancelada' : new Date(a.criada_em) < new Date(Date.now() - 3 * 60000) ? 'na fila do envio' : 'enviando…';
-        itens.push({ em: a.criada_em, html: `<div class="cvp-b hum pend${['bloqueada', 'erro'].includes(a.status) ? ' falhou' : ''}"><small>${esc((a.payload || {}).como === 'humano' ? 'Você' : 'NIOGEN')} · ${esc(s)}</small>${esc(txt)}</div>` });
+        // Já virou fala (o motor grava a do time; o resultado grava a da Mari)? Então não repete.
+        if (a.status === 'feita' && turnosOut.some((t) => normal(t.texto) === normal(txt) && new Date(t.created_at) >= new Date(new Date(a.criada_em).getTime() - 15000))) return;
+        if (a.status === 'cancelada') return;
+        const falhou = ['bloqueada', 'erro'].includes(a.status);
+        its.push({ em: a.criada_em, tipo: 'hum', txt, quem: (a.payload || {}).como === 'humano' ? 'Você' : 'NIOGEN',
+          tick: a.status === 'feita' ? '✓' : falhou ? '⚠' : '🕓', erro: falhou ? (a.erro || 'não saiu') : '', reenviar: falhou && (a.payload || {}).como === 'humano' ? txt : '' });
       });
-      itens.sort((a, b) => new Date(a.em) - new Date(b.em));
-      return itens.map((x) => x.html).join('') || '<div class="cvp-b sis">Sem mensagens ainda</div>';
+      st.locais.forEach((l) => its.push({ em: l.em, tipo: l.nota ? 'nota' : 'hum', txt: l.texto, quem: l.nota ? 'Nota privada' : 'Você',
+        tick: l.estado === 'erro' ? '⚠' : '🕓', erro: l.estado === 'erro' ? l.erro : '', reenviar: l.estado === 'erro' ? l.texto : '', local: l.id }));
+      its.sort((a, b) => new Date(a.em) - new Date(b.em));
+      return its;
     }
-
-    function desenhar() {
-      if (!st.vivo) return;
-      const d = st.d;
-      if (!d) { el.innerHTML = '<section class="cvp"><div class="cvp-msgs"><div class="carregando">Carregando a conversa…</div></div></section>'; return; }
-      if (d.erro) { el.innerHTML = `<section class="cvp"><div class="cvp-l1"><button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button></div><div class="cvp-msgs"><div class="vazio">${esc(d.erro)}</div></div></section>`; return; }
-      const c = d.c;
-      const dn = dono(c);
-      const jn = janela(c, d.q);
-      const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
-      const link = NG.linkChatwoot(c.chatwoot_conversation_id);
-      const nome = c.dados && c.dados.nome ? c.dados.nome : (o.nome || c.nome_contato || 'Cliente');
-      const msgsAntes = el.querySelector('.cvp-msgs');
-      const rolagem = msgsAntes ? msgsAntes.scrollTop : 0;
-      const noFim = msgsAntes ? msgsAntes.scrollHeight - msgsAntes.scrollTop - msgsAntes.clientHeight < 40 : true;
-      const txtAntes = el.querySelector('[data-cv-txt]');
-      if (txtAntes) st.rascunho = txtAntes.value;
-      const optsDono = [['mari', 'Sem dono · Mari atende'], ['eu', 'Você'], ['time', 'Time backoffice']];
-      if (dn.v === 'outro') optsDono.push(['outro', dn.txt]);
+    function desenharMsgs() {
+      const its = itensMsgs();
+      let dia = '';
+      const html = its.map((x) => {
+        const sep = diaRot(x.em) !== dia ? `<div class="cvp-dia"><span>${esc((dia = diaRot(x.em)))}</span></div>` : '';
+        if (x.tipo === 'sis') return `${sep}<div class="cvp-b sis">${esc(x.txt)} · ${esc(NG.fmtHora(x.em))}</div>`;
+        return `${sep}<div class="cvp-b ${x.tipo}${x.erro ? ' falhou' : ''}${x.tick === '🕓' ? ' pend' : ''}">${x.quem ? `<small class="cvp-quem">${esc(x.quem)}</small>` : ''}<span class="cvp-t">${fmtWa(x.txt)}</span>
+          <span class="cvp-h">${esc(NG.fmtHora(x.em))}${x.tick ? ` <i class="cvp-tick" title="${x.tick === '✓' ? 'entregue ao Chatwoot' : x.tick === '🕓' ? 'enviando' : 'não saiu'}">${x.tick}</i>` : ''}</span>
+          ${x.erro ? `<span class="cvp-erro">${esc(x.erro)}${x.reenviar ? ` · <button type="button" class="link" data-cv="reenviar" data-txt="${esc(x.reenviar)}"${x.local ? ` data-local="${esc(x.local)}"` : ''}>Reenviar</button>` : ''}</span>` : ''}</div>`;
+      }).join('') || '<div class="cvp-b sis">Sem mensagens ainda</div>';
+      if (st.sig.msgs === html) return;
+      const noFim = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60 || !st.sig.msgs;
+      const antes = st.nMsgs;
+      st.sig.msgs = html;
+      const topo = msgs.scrollTop;
+      msgs.innerHTML = html;
+      st.nMsgs = its.length;
+      if (noFim || st.descer) { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; st.descer = false; }
+      else { msgs.scrollTop = topo; if (its.length > antes) novas.hidden = false; }
+    }
+    function desenharPe(jn, dn, nome) {
+      secao.classList.toggle('nota', st.nota);
+      el.querySelectorAll('[data-cv="modo"]').forEach((b) => b.classList.toggle('on', (b.dataset.m === 'nota') === st.nota));
       const usaTpl = !st.nota && !jn.aberta;
-      const ajuda = st.nota ? 'Nota privada: só o time vê no Chatwoot.'
-        : !jn.aberta ? 'Janela de 24 h fechada: só template aprovado (escolha em Respostas rápidas).'
-        : dn.v === 'eu' ? 'Você é o dono · a Mari está calada.'
-        : 'Enviar assume a conversa antes (a Mari cala).';
-      el.innerHTML = `<section class="cvp${st.nota ? ' nota' : ''}" aria-label="Conversa com ${esc(nome)}">
-        <div class="cvp-l1">
-          ${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
-          <b class="cvp-nome">${esc(nome)}</b><span class="cvp-sep"></span>
-          <label class="cvp-f">Status<select data-cv="status"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select></label>
-          <label class="cvp-f">Atribuída<select data-cv="dono"${c.nao_contatar ? ' disabled' : ''}>${optsDono.map(([v, t]) => `<option value="${v}"${v === dn.v ? ' selected' : ''}${v === 'outro' ? ' disabled' : ''}>${esc(t)}</option>`).join('')}</select></label>
-          <span class="cvp-sep"></span>
-          <span class="cvp-f ${jn.aberta ? '' : 'warn-txt'}">${esc(jn.txt)}</span>
-          ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}
-        </div>
-        <div class="cvp-l2"><span class="cvp-f">Etiquetas</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
-          <select data-cv="etiqueta" aria-label="Pôr etiqueta"><option value="">+ etiqueta</option>${ETIQUETAS.filter((x) => !etq.includes(x)).map((x) => `<option>${esc(x)}</option>`).join('')}</select></div>
-        <div class="cvp-msgs" tabindex="0" aria-label="Mensagens">${mensagens(d)}</div>
-        <div class="cvp-pe">
-          <div class="cvp-ctl">
-            <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="${st.nota ? '' : 'on'}">Responder</button><button type="button" data-cv="modo" data-m="nota" class="${st.nota ? 'on' : ''}">Nota privada</button></div>
-            <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option>
-              ${usaTpl ? '' : d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
-              ${!st.nota && d.tpls.length ? `<optgroup label="Templates aprovados${jn.aberta ? ' (janela fechada)' : ''}">${d.tpls.map((t) => `<option value="t:${esc(t.nome)}"${st.tpl === t.nome ? ' selected' : ''}>${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}
-            </select>
-            <span class="cvp-ajuda">${esc(ajuda)} · Enter envia, Shift+Enter pula linha · contatos hoje ${esc(d.q.contatos_hoje ?? 0)}/2 · mês ${esc(d.q.contatos_mes ?? 0)}/15</span>
-          </div>
-          <div class="cvp-caixa"><textarea data-cv-txt rows="2" placeholder="${st.nota ? 'Escrever nota privada…' : st.tpl ? 'Template escolhido — o texto sai como aprovado' : `Responder ${esc(NG.primeiroNome(nome))}…`}"${st.tpl ? ' readonly' : ''}>${esc(st.rascunho)}</textarea>
-            <button type="button" class="btn btn-acc" data-cv="enviar"${st.enviando || c.nao_contatar ? ' disabled' : ''}>${st.nota ? 'Salvar nota' : 'Enviar'}</button></div>
-        </div>
-      </section>`;
-      const msgs = el.querySelector('.cvp-msgs');
-      if (msgs) msgs.scrollTop = st.fim || noFim ? msgs.scrollHeight : rolagem;
-      st.fim = false;
+      ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
+      ta.readOnly = !!st.tpl || (usaTpl && !st.tpl);
+      btEnviar.textContent = st.nota ? 'Salvar nota' : 'Enviar';
+      btEnviar.disabled = !!st.d.c.nao_contatar && !st.nota;
+      const opRap = `<option value="">Respostas rápidas…</option>${usaTpl ? '' : st.d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
+        ${!st.nota && st.d.tpls.length ? `<optgroup label="Templates aprovados">${st.d.tpls.map((t) => `<option value="t:${esc(t.nome)}">${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}`;
+      if (st.sig.rap !== opRap && document.activeElement !== selRap) { st.sig.rap = opRap; selRap.innerHTML = opRap; }
+      const aj = st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
+        : st.nota ? 'Nota privada: só o time vê.'
+        : st.tpl ? 'Template escolhido · Esc cancela'
+        : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
+        : dn.v === 'eu' ? 'Você é o dono · a Mari está calada.' : 'Enviar assume a conversa (a Mari cala).';
+      ajudaEl.textContent = `${aj} · Enter envia · Shift+Enter pula linha`;
     }
 
-    async function conversaAcao(acao, valor, aviso) {
-      const { data, error } = acao === 'momento'
-        ? await NG.sb.rpc('backoffice_momento', { p_venda: null, p_momento: valor, p_dados: { conversa_id: o.conversaId } })
-        : await NG.sb.rpc('backoffice_conversa', { p_conversa: o.conversaId, p_acao: acao, p_valor: valor });
-      if (error) { NG.toast(NG.msgErro(error), 'bad'); await carregar(); return; }
-      NG.toast((data && data.resumo) || aviso || 'Feito', 'ok');
-      if (o.aoMudar) o.aoMudar(data);
-      await carregar();
-      depois();
-    }
-    // Depois de um clique, olha de novo algumas vezes (o n8n executa na hora; o motor grava a fala logo depois).
-    function depois() {
-      clearTimeout(st.timer);
-      let n = 0;
-      const passo = async () => { n += 1; if (!st.vivo) return; await carregar(); if (n < 6) st.timer = setTimeout(passo, 5000); };
-      st.timer = setTimeout(passo, 3000);
-    }
-
-    async function enviar() {
-      const ta = el.querySelector('[data-cv-txt]');
-      const txt = ta ? ta.value.trim() : '';
-      if (!st.tpl && !txt) { NG.toast(st.nota ? 'Escreva a nota.' : 'Escreva a mensagem.', 'bad'); return; }
-      st.enviando = true;
-      st.rascunho = txt;
-      desenhar();
-      const { data, error } = await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: st.tpl ? '' : txt, p_nota: st.nota, p_template: st.nota ? null : st.tpl });
-      st.enviando = false;
-      if (error) { NG.toast(NG.msgErro(error), 'bad'); desenhar(); return; }
-      st.rascunho = '';
+    // ---------- enviar (aparece na hora; a caixa esvazia e o cursor fica) ----------
+    let nLocal = 0;
+    function enviar() {
+      if (!st.d) return;
+      const txt = ta.value.trim();
+      if (!st.tpl && !txt) { ta.focus(); return; }
+      const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, tpl: st.nota ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando' };
+      st.locais.push(item);
+      ta.value = '';
       st.tpl = null;
-      st.fim = true;
-      NG.toast(data.resumo, 'ok');
-      if (o.aoMudar) o.aoMudar(data);
-      await carregar();
-      depois();
+      ajusta();
+      ta.focus();
+      st.descer = true;
+      desenhar();
+      st.fila = st.fila.then(() => enviarUm(item));
+    }
+    async function enviarUm(item) {
+      const { data, error } = await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_nota: item.nota, p_template: item.tpl });
+      if (!st.vivo) return;
+      if (error) {
+        item.estado = 'erro';
+        item.erro = NG.msgErro(error);
+        NG.toast(item.erro, 'bad');
+      } else {
+        item.acao_id = data.acao_id;
+        if (data.assumiu) NG.toast('Conversa assumida: a Mari calou', 'ok');
+        if (o.aoMudar) o.aoMudar(data);
+      }
+      desenharMsgs();
+      setTimeout(carregar, 1200);
     }
 
+    async function conversaAcao(acao, valor) {
+      const { data, error } = await NG.sb.rpc('backoffice_conversa', { p_conversa: o.conversaId, p_acao: acao, p_valor: valor });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); st.sig.cab = st.sig.etq = null; await carregar(); return; }
+      NG.toast((data && data.resumo) || 'Feito', 'ok');
+      if (o.aoMudar) o.aoMudar(data);
+      await carregar();
+      setTimeout(carregar, 3000);
+    }
+
+    const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`; };
+    ta.addEventListener('input', ajusta);
+    // Enter envia; Shift+Enter pula linha. No meio de um acento (IME) não envia. Esc cancela o template.
+    ta.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); ev.stopPropagation(); enviar(); return; }
+      if (ev.key === 'Escape' && st.tpl) { ev.stopPropagation(); st.tpl = null; ta.value = ''; ajusta(); desenhar(); }
+    });
+    msgs.addEventListener('scroll', () => { if (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60) novas.hidden = true; });
     el.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-cv]');
       if (!b || b.tagName === 'SELECT') return;
       const a = b.dataset.cv;
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
-      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; desenhar(); const t = el.querySelector('[data-cv-txt]'); if (t) t.focus(); return; }
       if (a === 'enviar') { enviar(); return; }
-      if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); }
+      if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
+      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
+      if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
+      if (a === 'reenviar') {
+        if (b.dataset.local) st.locais = st.locais.filter((l) => l.id !== b.dataset.local);
+        ta.value = b.dataset.txt || '';
+        ajusta(); ta.focus(); desenharMsgs();
+      }
     });
     el.addEventListener('change', (ev) => {
       const s = ev.target.closest('select[data-cv]');
       if (!s) return;
       const a = s.dataset.cv;
       if (a === 'status') { conversaAcao('status', s.value); return; }
-      if (a === 'dono') {
-        if (s.value === 'eu') conversaAcao('atribuir', 'eu');
-        else if (s.value === 'mari') conversaAcao('atribuir', 'mari');
-        else if (s.value === 'time') conversaAcao('atribuir', 'time');
-        return;
-      }
+      if (a === 'dono') { if (['eu', 'mari', 'time'].includes(s.value)) conversaAcao('atribuir', s.value); return; }
       if (a === 'etiqueta' && s.value) {
         if (s.value === 'nao-contatar' && !window.confirm('O cliente pediu para não ser contatado?\n\nUse "Cliente pediu para parar" na ficha: além da etiqueta, para tudo e resolve a conversa.')) { s.value = ''; return; }
         conversaAcao('etiqueta_add', s.value);
         return;
       }
       if (a === 'rapida' && s.value) {
-        const ta = el.querySelector('[data-cv-txt]');
         if (s.value.startsWith('r:')) {
           const r = st.d.rapidas[Number(s.value.slice(2))];
           st.tpl = null;
-          st.rascunho = r ? r.texto : '';
-          desenhar();
-          const t2 = el.querySelector('[data-cv-txt]');
-          if (t2) { t2.focus(); t2.setSelectionRange(t2.value.length, t2.value.length); }
+          ta.readOnly = false;
+          ta.value = r ? r.texto : '';
         } else if (s.value.startsWith('t:')) {
-          const nome = s.value.slice(2);
-          const tpl = st.d.tpls.find((t) => t.nome === nome);
-          st.tpl = nome;
-          st.rascunho = tpl ? NG.renderTpl(tpl.corpo, [NG.nomeCadencia((st.d.c.dados || {}).nome || st.d.c.nome_contato)]) : '';
-          desenhar();
+          const nomeT = s.value.slice(2);
+          const tpl = st.d.tpls.find((t) => t.nome === nomeT);
+          st.tpl = nomeT;
+          ta.value = tpl ? NG.renderTpl(tpl.corpo, [NG.nomeCadencia((st.d.c.dados || {}).nome || st.d.c.nome_contato)]) : '';
         }
-        if (ta) ta.focus();
+        s.value = '';
+        desenhar();
+        ajusta();
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
       }
     });
-    // Enter envia; Shift+Enter quebra a linha (como no WhatsApp Web). Não envia no meio da composição de acento (IME).
-    el.addEventListener('keydown', (ev) => {
-      if (ev.target.matches('[data-cv-txt]') && ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); if (!st.enviando) enviar(); }
-    });
-    const intervalo = setInterval(() => { if (document.visibilityState === 'visible' && !st.enviando) carregar(); }, 20000);
+    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 4000);
+    const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
 
-    desenhar();
     carregar();
     return {
       recarregar: carregar,
-      destruir() { st.vivo = false; clearTimeout(st.timer); clearInterval(intervalo); el.remove(); },
+      destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); el.remove(); },
+      focar() { ta.focus(); },
       get id() { return o.conversaId; },
     };
   }
