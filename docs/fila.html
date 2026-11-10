@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-05">
-<script src="config.js?v=101126-05"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-06">
+<script src="config.js?v=101126-06"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-05"></script>
-<script src="assets/sidebar.js?v=101126-05"></script>
-<script src="assets/conversa.js?v=101126-05"></script>
-<script src="assets/ficha.js?v=101126-05"></script>
+<script src="assets/app.js?v=101126-06"></script>
+<script src="assets/sidebar.js?v=101126-06"></script>
+<script src="assets/conversa.js?v=101126-06"></script>
+<script src="assets/ficha.js?v=101126-06"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -101,6 +101,7 @@
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
     jor = r;
     render();
+    reporConversaFoco();
   }
 
   // ---------- como usar (1º acesso) ----------
@@ -252,9 +253,14 @@
   });
 
   // ---------- conversa no lugar da lista ----------
+  // 10/11 (Ricardo: "a janela da conversa fecha … clico em Abrir a conversa para responder e nada acontece"): se a mesma conversa
+  // já está viva na tela, só traz o cursor para a caixa; se o estado ficou preso (conversa "aberta" sem estar na tela), monta de novo.
+  function conversaViva() { return !!(conv && conv.comp && listaEl.querySelector('.cvp-raiz') && trabEl.classList.contains('com-conversa') && !trabEl.classList.contains('so-ficha')); }
   function abrirConversaLista({ conversaId, nome, aoMudar }) {
-    if (conv && conv.id === conversaId) return;
+    if (conv && conv.id === conversaId && conversaViva()) { conv.comp.focar(); return; }
+    if (foco && trabEl.classList.contains('so-ficha')) { trabEl.classList.remove('so-ficha'); NGFicha.largo(false); }
     if (conv && conv.comp) conv.comp.destruir();
+    conv = null;
     conv = { id: conversaId, nome };
     trabEl.classList.add('com-conversa');
     render();
@@ -346,7 +352,22 @@
   }));
   movel.addEventListener('change', () => { modoFicha(); render(); });
   // Trocou de ficha pelo endereço (#venda= / #conversa=): a conversa aberta no lugar da lista era do cliente anterior — fecha.
-  window.addEventListener('hashchange', () => { if (conv) { fecharConversa(); render(); } else setTimeout(render, 0); });
+  // 10/11: só fecha se o endereço apontar para OUTRO cliente — o mesmo cliente (venda ↔ conversa dele) mantém a conversa aberta.
+  window.addEventListener('hashchange', () => {
+    if (!conv) { setTimeout(render, 0); return; }
+    const h = location.hash;
+    const m = h.match(/#conversa=([0-9a-f-]+)/i);
+    const mv = h.match(/#venda=([0-9a-f-]+)/i);
+    const mesmo = (m && m[1] === conv.id) || (mv && jor.lista.some((j) => j.venda_id === mv[1] && j.conversa_id === conv.id));
+    if (!mesmo) { if (foco) sairFoco(); else { fecharConversa(); render(); } }
+  });
+  // Modo foco sem a conversa (fechou por fora): reabre a conversa do cliente da ficha em vez de mostrar a lista no lugar dela.
+  function reporConversaFoco() {
+    if (!foco || conv || trabEl.classList.contains('so-ficha')) return;
+    const k = NGFicha.atual;
+    const j = k && jor.lista.find((x) => chaveFicha(x) === k);
+    if (j && j.conversa_id) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: ecoFicha });
+  }
 
   NG.botaoAtualizar(() => carregar());
   modoFicha();

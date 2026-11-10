@@ -491,6 +491,25 @@
     avisarOuvintes(r);
     return r;
   }
+  // 0100 (Ricardo, 10/11: "não consigo jogar o cliente para Saída … botão para silenciar … somos revenda, não suporte da Nio"):
+  // conversa SEM venda → Saída (perdida / fora de área / já cliente) ou Silenciar (cliente Nio · suporte) · Reativar desfaz.
+  const SAIDA_CONV = {
+    suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai da Minha vez e NÃO volta quando ele escrever. No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
+    perdida: 'Mandar para Saída · Perdida (sem interesse)?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para a Minha vez.',
+    fora_area: 'Mandar para Saída · Fora de área?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para a Minha vez.',
+    ja_cliente: 'Mandar para Saída · Já é cliente Nio?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta — para não voltar mais, use "Silenciar".',
+    reativar: 'Reativar a conversa?\n\nEla volta para a Minha vez com o time (a Mari segue calada; para ela voltar, "Devolver para a Mari").',
+  };
+  async function rodarSaidaConversa(motivo) {
+    if (!SAIDA_CONV[motivo] || !window.confirm(SAIDA_CONV[motivo])) return null;
+    const { data, error } = await NG.sb.rpc('backoffice_conversa_saida', { p_conversa: d.conversaId, p_motivo: motivo });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return null; }
+    NG.toast(data.resumo || 'Feito', 'ok');
+    feitoUltimo = { resumo: data.resumo };
+    await recarregar();
+    avisarOuvintes(data);
+    return data;
+  }
   // 0064: as três ações da pendência vão por RPC (SECURITY DEFINER, checam admin/backoffice e gravam em eventos_venda).
   async function rpcPendencia(fn, args, msgOk) {
     const { error } = await NG.sb.rpc(fn, args);
@@ -1664,7 +1683,7 @@
   // ---------- ficha de CONVERSA (etapa 1: conversa sem venda) ----------
   async function carregarConversa(cid) {
     const [rc, rj, rq, rk] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo').eq('id', cid).maybeSingle(),
       NG.sb.from('v_jornada').select('*').eq('conversa_id', cid).maybeSingle(),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
@@ -1719,9 +1738,18 @@
       bts.push('<button type="button" class="btn btn-acc" data-f="conversa">Abrir a conversa e responder</button>');
       sozinho = SOZINHO.responder;
     }
+    const silenciada = c.quadro_encerrada_motivo === 'suporte_nio';
+    if (silenciada) { bts.length = 0; sozinho = ''; }
     const at = [];
-    if (bo && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
+    if (bo && !silenciada && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
     if (bo && !c.nao_contatar && c.chatwoot_conversation_id) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar">Cliente pediu para parar</button>');
+    // 0100: Saída e Silenciar (conversa sem venda) · Reativar quando silenciada.
+    if (bo && silenciada) at.unshift('<button type="button" class="btn btn-sm" data-csaida="reativar">🔔 Reativar</button>');
+    else if (bo && !c.nao_contatar) {
+      at.unshift('<button type="button" class="btn btn-sm" data-csaida="suporte_nio" title="Cliente Nio pedindo suporte ou reclamando: não é venda. A Mari cala e ele não volta para a Minha vez.">📵 Cliente Nio · suporte — silenciar</button>');
+      at.push(`<span class="f-menu"><button type="button" class="btn btn-ghost btn-sm" data-f="menu" aria-expanded="false">Saída ▾</button>
+        <span class="f-menu-lista" hidden><button type="button" data-csaida="perdida">Perdida (sem interesse)</button><button type="button" data-csaida="fora_area">Fora de área</button><button type="button" data-csaida="ja_cliente">Já é cliente Nio</button></span></span>`);
+    }
     at.push(`<a class="btn btn-ghost btn-sm" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>`);
     const itens = Array.isArray(q.itens) ? q.itens.filter((x) => x.obrigatorio !== false) : [];
     const ESTADO = { validado: 'ok', coletado: 'meio', vazio: 'no' };
@@ -1733,7 +1761,8 @@
       { nome: 'Pedido', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'OS', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
-    const corpoPasso = `${dono.tipo === 'mari' && nivel !== 'agora' ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
+    const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para a Minha vez, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
+          ${dono.tipo === 'mari' && nivel !== 'agora' && !silenciada ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
           ${bts.length ? `<div class="f-prox-bts">${bts.join('')}</div>` : ''}
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
           <div class="f-atalhos">${at.join('')}</div>`;
@@ -1743,7 +1772,8 @@
         <div class="f-local">${linkConversa()}${chipsConversa(c)}<span class="f-local-txt">${esc([c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).join(' · ') || '—')}</span></div></header>
       <div class="f-corpo"><div class="f-col-a">
         ${regua(passosConv)}
-        ${quadroPasso('conversa', NIVEL_CLS[nivel] || 'dim', NIVEL_ROT[nivel] || 'PRÓXIMO PASSO', j.o_que_fazer || 'Mari atendendo', corpoPasso)}${feito}
+        ${quadroPasso('conversa', silenciada ? 'dim' : (NIVEL_CLS[nivel] || 'dim'), silenciada ? 'SILENCIADA' : (NIVEL_ROT[nivel] || 'PRÓXIMO PASSO'),
+          silenciada ? 'Cliente Nio · suporte — fora da Minha vez' : (j.o_que_fazer || 'Mari atendendo'), corpoPasso, true)}${feito}
         <div class="f-linha-status">
           <div class="f-st-g"><span class="f-rot">MARI</span><span class="f-chip">dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</span></div>
           ${linhaEstorno(travasC, 'cliente Nio · cancelou < 30 d · endereço · área · viabilidade')}
@@ -1822,6 +1852,14 @@
         mo.disabled = true;
         const r = d.soConversa ? await rodarMomentoConversa(qual) : await rodarMomento(qual, res ? { resultado: res } : {});
         if (!r && mo.isConnected) mo.disabled = false;
+        return;
+      }
+      const cs = ev.target.closest('[data-csaida]');
+      if (cs && d && d.soConversa) {
+        fecharMenus();
+        cs.disabled = true;
+        const res = await rodarSaidaConversa(cs.dataset.csaida);
+        if (!res && cs.isConnected) cs.disabled = false;
         return;
       }
       const r = ev.target.closest('[data-resolver]');
