@@ -88,13 +88,24 @@ def main():
     if '--status' in sys.argv:
         r = graph('GET', f'/{WABA_NIO}/message_templates?fields=name,status,id,category&limit=200')
         nomes = {t['nome'] for t in linhas}
+        if 'erro' in r:
+            raise SystemExit(f'Meta recusou a leitura: {r}')
+        achados = 0
         for m in r.get('data', []):
             if m['name'] in nomes:
+                achados += 1
                 sql(f"update public.config_templates_waba set status = '{m['status']}', meta_id = '{m['id']}', "
                     f"categoria = '{m['category']}', atualizado_em = now() where nome = '{m['name']}'")
-                print(f"{m['name']}: {m['status']} ({m['category']}, id {m['id']})")
-        if 'erro' in r:
-            print(r)
+                # 10/11: confere no banco — antes, uma gravação que não pegava passava em silêncio (o Live seguia em "Ligar").
+                banco = sql(f"select status from public.config_templates_waba where nome = '{m['name']}'")
+                gravado = banco[0]['status'] if banco else None
+                print(f"{m['name']}: Meta {m['status']} ({m['category']}, id {m['id']}) · banco {gravado}")
+                if gravado != m['status']:
+                    raise SystemExit(f"ATENÇÃO: o banco não gravou {m['status']} para {m['name']} — rode de novo no clone niogen.")
+                if gravado == 'APPROVED':
+                    print('  → as 🔥 com a janela fechada passam de "Ligar" para "Mandar template" na próxima atualização do Live.')
+        if not achados:
+            print('Nenhum template de oportunidade encontrado na Meta.')
         return
 
     for t in linhas:
