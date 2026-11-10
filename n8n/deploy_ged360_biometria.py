@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # NIOGEN | n8n/deploy_ged360_biometria.py | 10/11/2026 — Claude Code (docs/Prompt_status_portal_extensao_101126_1106.md, parte A2)
 # Workflow n8n "nio_ged360_biometria": a cada 15 min, 7h–22h, todos os dias (fuso de São Paulo):
-#   login no GED360 / BrPronto (login TT837725 — Joysse) → Relatório Detalhado em CSV (Data de Envio dos últimos 15 dias)
+#   login no GED360 / BrPronto (login TT837722 — usuário próprio do robô (Ricardo, 10/11 15h)) → Relatório Detalhado em CSV (Data de Envio dos últimos 15 dias)
 #   → RPC ged360_registrar(p_linhas, p_erro) no Supabase Nio (tabela nio_biometria, casa pelo CPF, aplica o mapa).
 # Regra 5 (exceção do Ricardo, 10/11 12h39): só login + Relatório Detalhado (leitura/CSV). Nenhuma outra tela, nenhum envio de
-# link, nenhuma reanálise. Sem contornar bloqueio de IP. Senha SÓ na credencial do n8n "GED360 (TT837725)" (Custom Auth,
+# link, nenhuma reanálise. Sem contornar bloqueio de IP. Senha SÓ na credencial do n8n "GED360 (TT837722 · robô)" (Custom Auth,
 # o Ricardo grava). Nunca em arquivo, log, chat ou Supabase.
 # 10/11 ~14h40 (1ª rodada): o login do GED360 é AJAX (login.js) e manda os campos CODIFICADOS — prkUsuario = btoa(usuário) e
 # desSenha = btoa(encodeURIComponent(senha)); em texto puro a resposta é {"erro":"Falha ao tentar autenticar no sistema."}.
-# A credencial guarda os valores já codificados: {"body": {"dominio": "1", "prkUsuario": "VFQ4Mzc3MjU=", "desSenha": "<btoa(encodeURIComponent(senha))>"}}.
+# A credencial guarda os valores já codificados: {"body": {"dominio": "1", "prkUsuario": "VFQ4Mzc3MjI=", "desSenha": "<btoa(encodeURIComponent(senha))>"}}.
 # Falha (login, CSV, rede) → a RPC recebe p_erro e o Painel avisa depois de 2 rodadas seguidas. Nada de retry em laço.
 #
-# Credenciais (só nomes, nunca valores): "Supabase Nio (service role)", "GED360 (TT837725)". Chave da API do n8n: N8N_API_KEY_NIO.
+# Credenciais (só nomes, nunca valores): "Supabase Nio (service role)", "GED360 (TT837722 · robô)". Chave da API do n8n: N8N_API_KEY_NIO.
 #
 # Uso:
 #   python n8n/deploy_ged360_biometria.py teste_ip   # workflow temporário (webhook) faz GET no login do GED360 a partir da VPS e diz o HTTP; apaga depois
@@ -36,12 +36,14 @@ REPO = os.path.dirname(AQUI)
 EXPORT = os.path.join(AQUI, 'ged360_biometria.json')
 WF_NOME = 'nio_ged360_biometria'
 ID_KEY = 'ged360_biometria_workflow_id'
-CRED_GED = 'GED360 (TT837725)'
+CRED_GED = 'GED360 (TT837722 · robô)'
 BASE = 'https://ged360.niointernet.com.br/brprontopdv'
 LOGIN_PAGINA = f'{BASE}/autenticacao/index'
 LOGIN_POST = f'{BASE}/autenticacao/autenticar-usuario'
 # Levantamento do Cowork (09/11): Relatórios › Detalhado = POST "relatorio-detalhado-de-digitalizacoes", CSV com vizualizacao=3.
-RELATORIO = f'{BASE}/relatorio/relatorio-detalhado-de-digitalizacoes'
+# Caminho real (menu "Relatórios › Detalhado", lido em 10/11 ~15h40 com o login do robô): relatorios/ (plural).
+RELATORIO = f'{BASE}/relatorios/relatorio-detalhado-de-digitalizacoes'
+LOGOUT = f'{BASE}/autenticacao/logout'
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
 
 COOKIES_JS = r"""
@@ -77,16 +79,66 @@ return [{ json: { cookie: Object.entries(jar).map(([k, v]) => k + '=' + v).join(
   login_ok: !recusado, login_status: status, login_erro: corpo.erro ? String(corpo.erro).slice(0, 120) : null } }];
 """
 
+EXPORTAR_JS = r"""
+// Exportação CSV como a tela faz (relatorio-detalhado-de-digitalizacoes.js › exportCSV): POST AJAX do formulário com
+// vizualizacao=3, pagina=0 e file_export=''; o GED360 responde {file, concluido, file_final}; enquanto não concluir, repete com
+// pagina+1 e file_export=file; no fim baixa file_final. SEMPRE sai (autenticacao/logout) no fim — o GED360 não aceita sessões
+// simultâneas e a sessão presa bloquearia a rodada seguinte. Nunca loga o conteúdo.
+const lg = $input.first().json;
+const UA = '__UA__';
+const base = { 'User-Agent': UA, Cookie: lg.cookie };
+const saida = { data: '', statusCode: 0, erro: null };
+if (!lg.login_ok) return [{ json: { ...saida, erro: 'login recusado pelo GED360: ' + (lg.login_erro || ('HTTP ' + lg.login_status)) } }];
+const form = (o) => Object.entries(o).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+const campos = { pagina: 0, file_export: '', request: 1, total: '', num_cpf: '', num_cnpj: '', num_acesso: '', num_protocolo: '',
+  num_protocolo_fixa: '', dat_envio_inicial: lg.ini, dat_envio_final: lg.fim, dat_conferencia_inicial: '', dat_conferencia_final: '',
+  dat_conferencia_ini_rel: '', dat_conferencia_fin_rel: '', tab_digitalizacao: '', vizualizacao: 3 };
+try {
+  let r = null;
+  for (let pg = 0; pg < 60; pg++) {
+    const resp = await this.helpers.httpRequest({ method: 'POST', url: '__REL__', body: form(campos), json: false,
+      headers: { ...base, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', Referer: '__REL__' },
+      returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true });
+    if (resp.statusCode >= 300) { saida.erro = 'exportação HTTP ' + resp.statusCode + ' (sessão não autenticada?)'; break; }
+    try { r = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { r = null; }
+    if (!r || typeof r !== 'object') { saida.erro = 'exportação não devolveu JSON (a tela mudou?)'; break; }
+    if (r.erro) { saida.erro = 'GED360: ' + String(r.erro).slice(0, 150); break; }
+    if (!r.file) { saida.erro = 'exportação sem "file" na resposta'; break; }
+    if (r.concluido) break;
+    campos.pagina = pg + 1; campos.file_export = r.file;
+  }
+  if (!saida.erro && r && r.concluido) {
+    let u = String(r.file_final || '');
+    if (u && !/^https?:/.test(u)) u = '__BASE__/' + u.replace(/^\/?(brprontopdv\/)?/, '');
+    const arq = await this.helpers.httpRequest({ method: 'GET', url: u, headers: base, encoding: 'arraybuffer', json: false,
+      returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true });
+    const buf = Buffer.from(arq.body);
+    let txt = buf.toString('utf8');
+    if (txt.includes('�')) txt = buf.toString('latin1');   // CSV em ISO-8859-1
+    saida.statusCode = arq.statusCode; saida.data = txt;
+    if (arq.statusCode >= 300) saida.erro = 'download do CSV HTTP ' + arq.statusCode;
+  } else if (!saida.erro) {
+    saida.erro = 'exportação não concluiu em 60 páginas';
+  }
+} catch (e) {
+  saida.erro = 'falha na exportação: ' + String(e.message || e).slice(0, 150);
+} finally {
+  try { await this.helpers.httpRequest({ method: 'GET', url: '__LOGOUT__', headers: base, json: false,
+    returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true }); saida.saiu = true; }
+  catch (e) { saida.saiu = false; }
+}
+return [{ json: saida }];
+"""
+
 CSV_JS = r"""
 // CSV do Relatório Detalhado → linhas {protocolo, cpf_cnpj, data_envio, data_conferencia, tipo_servico, resultado}.
 // Separador ; ou , (detecta), aspas, cabeçalho por nome. Nunca loga o conteúdo (CPF é dado do cliente da Nio).
 const it = $input.first().json;
 const dados = String(it.data == null ? '' : it.data);
 const erro = (m) => [{ json: { p_linhas: [], p_erro: m } }];
-const lg = $('5 · Datas e cookie').first().json;
-if (!lg.login_ok) return erro('login recusado pelo GED360: ' + (lg.login_erro || ('HTTP ' + lg.login_status)));
-if ((it.statusCode || 200) >= 300) return erro('relatório HTTP ' + it.statusCode + ((it.statusCode < 400) ? ' (redirecionou: sessão não autenticada ou endereço do relatório mudou)' : ''));
-if (/<html|<form/i.test(dados.slice(0, 400))) return erro('relatório devolveu página HTML (sessão caiu ou tela mudou), não CSV');
+if (it.erro) return erro(it.erro);
+if (/<html|<form/i.test(dados.slice(0, 400))) return erro('o CSV veio como página HTML (sessão caiu ou tela mudou)');
 const linhas = dados.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
 if (!linhas.length) return [{ json: { p_linhas: [], p_erro: null } }];
 const sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';
@@ -144,18 +196,12 @@ def build(ids):
         'sendBody': True, 'contentType': 'form-urlencoded',
         'bodyParameters': {'parameters': [{'name': 'dominio', 'value': '1'}, {'name': 'redirect', 'value': ''}]},
         'options': full}, 660, 0, credentials=ged_cred,
-        notes='Usuário e senha vêm SÓ da credencial "GED360 (TT837725)" (Custom Auth, body). Login a cada rodada (a sessão cai em < 1 h).',
+        notes='Usuário e senha vêm SÓ da credencial "GED360 (TT837722 · robô)" (Custom Auth, body). Login a cada rodada (a sessão cai em < 1 h).',
         notesInFlow=True)
     add('5 · Datas e cookie', 'n8n-nodes-base.code', 2, {'jsCode': DATAS_JS}, 880, 0)
-    add('6 · Relatório Detalhado (CSV)', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST', 'url': RELATORIO, 'sendHeaders': True,
-        'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}, {'name': 'Cookie', 'value': '={{ $json.cookie }}'}]},
-        'sendBody': True, 'contentType': 'form-urlencoded',
-        'bodyParameters': {'parameters': [
-            {'name': 'dat_envio_inicial', 'value': '={{ $json.ini }}'}, {'name': 'dat_envio_final', 'value': '={{ $json.fim }}'},
-            {'name': 'num_cpf', 'value': ''}, {'name': 'num_protocolo', 'value': ''}, {'name': 'vizualizacao', 'value': '3'}]},
-        'options': {**full, 'redirect': {'redirect': {'followRedirects': False}}}}, 1100, 0,
-        notes='Só leitura: Relatório Detalhado, exportação CSV nativa (vizualizacao=3).', notesInFlow=True)
+    js6 = EXPORTAR_JS.replace('__UA__', UA).replace('__REL__', RELATORIO).replace('__LOGOUT__', LOGOUT).replace('__BASE__', BASE)
+    add('6 · Relatório Detalhado (CSV) e sair', 'n8n-nodes-base.code', 2, {'jsCode': js6}, 1100, 0,
+        notes='Só leitura: Relatório Detalhado, exportação CSV nativa (vizualizacao=3) e logout sempre.', notesInFlow=True)
     add('7 · CSV → linhas', 'n8n-nodes-base.code', 2, {'jsCode': CSV_JS}, 1320, 0)
     add('8 · Supabase ged360_registrar', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': f'{dm.SB}/rest/v1/rpc/ged360_registrar',
@@ -165,7 +211,7 @@ def build(ids):
         'options': {'timeout': 30000}}, 1540, 0, credentials=sb_cred)
 
     ordem = ['1 · 15 min 7h–22h', '2 · GED360 tela de login', '3 · Cookies da sessão', '4 · GED360 login',
-             '5 · Datas e cookie', '6 · Relatório Detalhado (CSV)', '7 · CSV → linhas', '8 · Supabase ged360_registrar']
+             '5 · Datas e cookie', '6 · Relatório Detalhado (CSV) e sair', '7 · CSV → linhas', '8 · Supabase ged360_registrar']
     conns = {}
     for o, d in zip(ordem, ordem[1:]):
         conns.setdefault(o, {'main': [[]]})['main'][0].append({'node': d, 'type': 'main', 'index': 0})
@@ -252,7 +298,7 @@ def cmd_estrutura():
 def cmd_ativar():
     ids = dm.ler_ids()
     if not ids.get('credenciais', {}).get('ged360'):
-        raise SystemExit('credencial "GED360 (TT837725)" ainda não registrada em mari_ids.json (credenciais.ged360) — nada ligado.')
+        raise SystemExit('credencial "GED360 (TT837722 · robô)" ainda não registrada em mari_ids.json (credenciais.ged360) — nada ligado.')
     dm.api('POST', f'/workflows/{ids[ID_KEY]}/activate')
     print('ligado:', dm.api('GET', f'/workflows/{ids[ID_KEY]}').get('active'))
     cmd_exportar()

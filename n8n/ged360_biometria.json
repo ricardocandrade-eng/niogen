@@ -149,11 +149,11 @@
       "id": "2d05cdec-85e1-526b-ba27-0e52995e6e09",
       "credentials": {
         "httpCustomAuth": {
-          "id": "gzzXekYKBd2aqO5F",
-          "name": "GED360 (TT837725)"
+          "id": "Gac1r8b9xdReUMtY",
+          "name": "GED360 (TT837722 · robô)"
         }
       },
-      "notes": "Usuário e senha vêm SÓ da credencial \"GED360 (TT837725)\" (Custom Auth, body). Login a cada rodada (a sessão cai em < 1 h).",
+      "notes": "Usuário e senha vêm SÓ da credencial \"GED360 (TT837722 · robô)\" (Custom Auth, body). Login a cada rodada (a sessão cai em < 1 h).",
       "notesInFlow": true
     },
     {
@@ -171,77 +171,22 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://ged360.niointernet.com.br/brprontopdv/relatorio/relatorio-detalhado-de-digitalizacoes",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
-            },
-            {
-              "name": "Cookie",
-              "value": "={{ $json.cookie }}"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "form-urlencoded",
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "dat_envio_inicial",
-              "value": "={{ $json.ini }}"
-            },
-            {
-              "name": "dat_envio_final",
-              "value": "={{ $json.fim }}"
-            },
-            {
-              "name": "num_cpf",
-              "value": ""
-            },
-            {
-              "name": "num_protocolo",
-              "value": ""
-            },
-            {
-              "name": "vizualizacao",
-              "value": "3"
-            }
-          ]
-        },
-        "options": {
-          "response": {
-            "response": {
-              "fullResponse": true,
-              "neverError": true,
-              "responseFormat": "text"
-            }
-          },
-          "redirect": {
-            "redirect": {
-              "followRedirects": false
-            }
-          },
-          "timeout": 30000
-        }
+        "jsCode": "\n// Exportação CSV como a tela faz (relatorio-detalhado-de-digitalizacoes.js › exportCSV): POST AJAX do formulário com\n// vizualizacao=3, pagina=0 e file_export=''; o GED360 responde {file, concluido, file_final}; enquanto não concluir, repete com\n// pagina+1 e file_export=file; no fim baixa file_final. SEMPRE sai (autenticacao/logout) no fim — o GED360 não aceita sessões\n// simultâneas e a sessão presa bloquearia a rodada seguinte. Nunca loga o conteúdo.\nconst lg = $input.first().json;\nconst UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36';\nconst base = { 'User-Agent': UA, Cookie: lg.cookie };\nconst saida = { data: '', statusCode: 0, erro: null };\nif (!lg.login_ok) return [{ json: { ...saida, erro: 'login recusado pelo GED360: ' + (lg.login_erro || ('HTTP ' + lg.login_status)) } }];\nconst form = (o) => Object.entries(o).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');\nconst campos = { pagina: 0, file_export: '', request: 1, total: '', num_cpf: '', num_cnpj: '', num_acesso: '', num_protocolo: '',\n  num_protocolo_fixa: '', dat_envio_inicial: lg.ini, dat_envio_final: lg.fim, dat_conferencia_inicial: '', dat_conferencia_final: '',\n  dat_conferencia_ini_rel: '', dat_conferencia_fin_rel: '', tab_digitalizacao: '', vizualizacao: 3 };\ntry {\n  let r = null;\n  for (let pg = 0; pg < 60; pg++) {\n    const resp = await this.helpers.httpRequest({ method: 'POST', url: 'https://ged360.niointernet.com.br/brprontopdv/relatorios/relatorio-detalhado-de-digitalizacoes', body: form(campos), json: false,\n      headers: { ...base, 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json, text/javascript, */*; q=0.01',\n        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', Referer: 'https://ged360.niointernet.com.br/brprontopdv/relatorios/relatorio-detalhado-de-digitalizacoes' },\n      returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true });\n    if (resp.statusCode >= 300) { saida.erro = 'exportação HTTP ' + resp.statusCode + ' (sessão não autenticada?)'; break; }\n    try { r = typeof resp.body === 'string' ? JSON.parse(resp.body) : resp.body; } catch (e) { r = null; }\n    if (!r || typeof r !== 'object') { saida.erro = 'exportação não devolveu JSON (a tela mudou?)'; break; }\n    if (r.erro) { saida.erro = 'GED360: ' + String(r.erro).slice(0, 150); break; }\n    if (!r.file) { saida.erro = 'exportação sem \"file\" na resposta'; break; }\n    if (r.concluido) break;\n    campos.pagina = pg + 1; campos.file_export = r.file;\n  }\n  if (!saida.erro && r && r.concluido) {\n    let u = String(r.file_final || '');\n    if (u && !/^https?:/.test(u)) u = 'https://ged360.niointernet.com.br/brprontopdv/' + u.replace(/^\\/?(brprontopdv\\/)?/, '');\n    const arq = await this.helpers.httpRequest({ method: 'GET', url: u, headers: base, encoding: 'arraybuffer', json: false,\n      returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true });\n    const buf = Buffer.from(arq.body);\n    let txt = buf.toString('utf8');\n    if (txt.includes('�')) txt = buf.toString('latin1');   // CSV em ISO-8859-1\n    saida.statusCode = arq.statusCode; saida.data = txt;\n    if (arq.statusCode >= 300) saida.erro = 'download do CSV HTTP ' + arq.statusCode;\n  } else if (!saida.erro) {\n    saida.erro = 'exportação não concluiu em 60 páginas';\n  }\n} catch (e) {\n  saida.erro = 'falha na exportação: ' + String(e.message || e).slice(0, 150);\n} finally {\n  try { await this.helpers.httpRequest({ method: 'GET', url: 'https://ged360.niointernet.com.br/brprontopdv/autenticacao/logout', headers: base, json: false,\n    returnFullResponse: true, ignoreHttpStatusErrors: true, disableFollowRedirect: true }); saida.saiu = true; }\n  catch (e) { saida.saiu = false; }\n}\nreturn [{ json: saida }];\n"
       },
-      "name": "6 · Relatório Detalhado (CSV)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "name": "6 · Relatório Detalhado (CSV) e sair",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         1100,
         0
       ],
-      "id": "b7dc9c7b-c0c7-5d74-bd2e-40293d26e70d",
-      "notes": "Só leitura: Relatório Detalhado, exportação CSV nativa (vizualizacao=3).",
+      "id": "dfa4d7e6-fa85-58ab-b4b7-1868242f0d9d",
+      "notes": "Só leitura: Relatório Detalhado, exportação CSV nativa (vizualizacao=3) e logout sempre.",
       "notesInFlow": true
     },
     {
       "parameters": {
-        "jsCode": "\n// CSV do Relatório Detalhado → linhas {protocolo, cpf_cnpj, data_envio, data_conferencia, tipo_servico, resultado}.\n// Separador ; ou , (detecta), aspas, cabeçalho por nome. Nunca loga o conteúdo (CPF é dado do cliente da Nio).\nconst it = $input.first().json;\nconst dados = String(it.data == null ? '' : it.data);\nconst erro = (m) => [{ json: { p_linhas: [], p_erro: m } }];\nconst lg = $('5 · Datas e cookie').first().json;\nif (!lg.login_ok) return erro('login recusado pelo GED360: ' + (lg.login_erro || ('HTTP ' + lg.login_status)));\nif ((it.statusCode || 200) >= 300) return erro('relatório HTTP ' + it.statusCode + ((it.statusCode < 400) ? ' (redirecionou: sessão não autenticada ou endereço do relatório mudou)' : ''));\nif (/<html|<form/i.test(dados.slice(0, 400))) return erro('relatório devolveu página HTML (sessão caiu ou tela mudou), não CSV');\nconst linhas = dados.replace(/^﻿/, '').split(/\\r?\\n/).filter((l) => l.trim());\nif (!linhas.length) return [{ json: { p_linhas: [], p_erro: null } }];\nconst sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';\nconst parse = (l) => { const out = []; let cur = '', q = false; for (let i = 0; i < l.length; i++) { const ch = l[i];\n  if (q) { if (ch === '\"') { if (l[i + 1] === '\"') { cur += '\"'; i++; } else q = false; } else cur += ch; }\n  else if (ch === '\"') q = true; else if (ch === sep) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((s) => s.trim()); };\nconst norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');\nconst cab = parse(linhas[0]).map(norm);\nconst col = (...nomes) => cab.findIndex((c) => nomes.some((n) => c.includes(n)));\nconst ix = { protocolo: col('protocolo'), cpf: col('cpf', 'cnpj'), envio: col('datadeenvio', 'envio'), conf: col('conferencia'),\n  tipo: col('tipodeservico', 'servico'), resultado: col('resultado') };\nif (ix.protocolo < 0 || ix.resultado < 0) return erro('CSV sem as colunas Protocolo/Resultado — cabeçalho mudou');\nconst out = [];\nfor (const l of linhas.slice(1)) {\n  const c = parse(l);\n  const g = (k) => (ix[k] >= 0 ? (c[ix[k]] || '') : '');\n  if (!g('protocolo')) continue;\n  out.push({ protocolo: g('protocolo'), cpf_cnpj: g('cpf'), data_envio: g('envio'), data_conferencia: g('conf'),\n    tipo_servico: g('tipo'), resultado: g('resultado') });\n}\nreturn [{ json: { p_linhas: out, p_erro: null } }];\n"
+        "jsCode": "\n// CSV do Relatório Detalhado → linhas {protocolo, cpf_cnpj, data_envio, data_conferencia, tipo_servico, resultado}.\n// Separador ; ou , (detecta), aspas, cabeçalho por nome. Nunca loga o conteúdo (CPF é dado do cliente da Nio).\nconst it = $input.first().json;\nconst dados = String(it.data == null ? '' : it.data);\nconst erro = (m) => [{ json: { p_linhas: [], p_erro: m } }];\nif (it.erro) return erro(it.erro);\nif (/<html|<form/i.test(dados.slice(0, 400))) return erro('o CSV veio como página HTML (sessão caiu ou tela mudou)');\nconst linhas = dados.replace(/^﻿/, '').split(/\\r?\\n/).filter((l) => l.trim());\nif (!linhas.length) return [{ json: { p_linhas: [], p_erro: null } }];\nconst sep = (linhas[0].split(';').length >= linhas[0].split(',').length) ? ';' : ',';\nconst parse = (l) => { const out = []; let cur = '', q = false; for (let i = 0; i < l.length; i++) { const ch = l[i];\n  if (q) { if (ch === '\"') { if (l[i + 1] === '\"') { cur += '\"'; i++; } else q = false; } else cur += ch; }\n  else if (ch === '\"') q = true; else if (ch === sep) { out.push(cur); cur = ''; } else cur += ch; } out.push(cur); return out.map((s) => s.trim()); };\nconst norm = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');\nconst cab = parse(linhas[0]).map(norm);\nconst col = (...nomes) => cab.findIndex((c) => nomes.some((n) => c.includes(n)));\nconst ix = { protocolo: col('protocolo'), cpf: col('cpf', 'cnpj'), envio: col('datadeenvio', 'envio'), conf: col('conferencia'),\n  tipo: col('tipodeservico', 'servico'), resultado: col('resultado') };\nif (ix.protocolo < 0 || ix.resultado < 0) return erro('CSV sem as colunas Protocolo/Resultado — cabeçalho mudou');\nconst out = [];\nfor (const l of linhas.slice(1)) {\n  const c = parse(l);\n  const g = (k) => (ix[k] >= 0 ? (c[ix[k]] || '') : '');\n  if (!g('protocolo')) continue;\n  out.push({ protocolo: g('protocolo'), cpf_cnpj: g('cpf'), data_envio: g('envio'), data_conferencia: g('conf'),\n    tipo_servico: g('tipo'), resultado: g('resultado') });\n}\nreturn [{ json: { p_linhas: out, p_erro: null } }];\n"
       },
       "name": "7 · CSV → linhas",
       "type": "n8n-nodes-base.code",
@@ -330,14 +275,14 @@
       "main": [
         [
           {
-            "node": "6 · Relatório Detalhado (CSV)",
+            "node": "6 · Relatório Detalhado (CSV) e sair",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "6 · Relatório Detalhado (CSV)": {
+    "6 · Relatório Detalhado (CSV) e sair": {
       "main": [
         [
           {
@@ -367,5 +312,5 @@
     "saveManualExecutions": true,
     "timezone": "America/Sao_Paulo"
   },
-  "active": false
+  "active": true
 }
