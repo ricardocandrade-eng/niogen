@@ -92,6 +92,10 @@ def precos_permitidos():
             ok.add(round(float(r['preco']), 2))
     for vs in por_cluster.values():
         ok.update(round(abs(a - b), 2) for a in vs for b in vs if a != b)
+        # 10/11 (portão, P3 falso): preço por dia que o 5b · Motor calcula (preco_dia): centavos para cima e o "menos de R$N"
+        for v in vs:
+            c = -(-round(v * 100) // 30)
+            ok.update({round(c / 100, 2), float(c // 100 + 1)})
     return ok
 
 

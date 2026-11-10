@@ -381,7 +381,10 @@ function violacoesDe(t) {
     v.push('prometeu economia em reais ("você economiza R$X") — proibido: pergunte quanto o cliente paga hoje e mostre o que a Nio traz');
   }
   if (V7 && handoffYaml && objecaoDaMsg && !naoQuero && Number(objecoesAntes[objecaoDaMsg] || 0) < 2
-    && ['recusa_compra', 'multiplos_decisores', 'interesse_caindo'].includes(norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, ''))) {
+    && (['recusa_compra', 'multiplos_decisores', 'interesse_caindo'].includes(norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, ''))
+      // portão 10/11 (P21): "continua caro" sem pedir desconto não é insistência de desconto — handoff objecao também é despedida
+      || (objecaoDaMsg === 'preco' && !/descont|abaix|faz (um |por )?menos|mais barat/.test(msgObj)
+        && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'objecao'))) {
     v.push(`encerrou a conversa numa objeção (${objecaoDaMsg}) que ainda não foi contornada 2 vezes — objeção não é despedida: tire o [HANDOFF], responda a objeção com UM argumento do Bloco 4b, termine com uma pergunta e emita [OBJECAO: ${objecaoDaMsg}]`);
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
