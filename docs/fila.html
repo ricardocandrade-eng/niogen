@@ -18,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-06">
-<script src="config.js?v=101126-06"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-07">
+<script src="config.js?v=101126-07"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-06"></script>
-<script src="assets/sidebar.js?v=101126-06"></script>
-<script src="assets/conversa.js?v=101126-06"></script>
-<script src="assets/ficha.js?v=101126-06"></script>
+<script src="assets/app.js?v=101126-07"></script>
+<script src="assets/sidebar.js?v=101126-07"></script>
+<script src="assets/conversa.js?v=101126-07"></script>
+<script src="assets/ficha.js?v=101126-07"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -138,7 +138,8 @@
   }
   // Acompanhando: vendas que não pedem nada agora, mas que o time acompanha — biometria, instalação, pendência com terceiro.
   // (As conversas que a Mari está tocando ficam só em "Todas".)
-  const acompanha = (j) => !vez(j) && !!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora';
+  // 0101: conversa em espera ("⏸ Aguardando · motivo · até DD/MM") também fica em Acompanhando.
+  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && !!j.pendencia));
   function acompanhando() {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
   }

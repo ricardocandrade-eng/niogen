@@ -156,15 +156,19 @@
       const osAg = j.lista.filter((x) => x.botao === 'os' || x.botao === 'os_agendar' || (x.botao === 'agendar' && x.nivel === 'agora'));
       pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} esperando abrir a OS ou agendar a instalação (contrato: até 4 h da biometria).`);
       if (['admin', 'backoffice'].includes(u.perfil)) {
-        const conv = acao.filter((x) => x.conversa_id);
-        pinta(nav, 'mari', conv.length, verm(conv) ? 'alerta' : 'info',
-          `${conv.length} ${conv.length === 1 ? 'conversa precisa' : 'conversas precisam'} de ação (a mesma regra da Minha vez) · ${verm(conv)} agora. ${NG.ajuda.menu_mari}`);
+        // 10/11 (Ricardo: "não pode o mesmo cliente trazer 2 notificações no menu lateral"): cada cliente conta UMA vez.
+        // Minha vez conta tudo o que precisa de ação; Mari não repete esse número; Conversas conta só quem espera e NÃO está na Minha vez.
+        pinta(nav, 'mari', 0, 'info', '');
         pinta(nav, 'fila', acao.length, verm(acao) ? 'alerta' : 'info',
           `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
         total = acao.length;
-        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time).
-        const rc = await NG.sb.from('v_conversas').select('id', { count: 'exact', head: true }).eq('encerrada', false).gte('esperando_min', 3);
-        if (!rc.error) pinta(nav, 'conversas', rc.count || 0, rc.count ? 'alerta' : 'info', `${rc.count || 0} ${rc.count === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais.`);
+        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time) — fora os da Minha vez.
+        const naVez = new Set(acao.map((x) => x.conversa_id).filter(Boolean));
+        const rc = await NG.sb.from('v_conversas').select('id').eq('encerrada', false).gte('esperando_min', 3).limit(500);
+        if (!rc.error) {
+          const n = (rc.data || []).filter((x) => !naVez.has(x.id)).length;
+          pinta(nav, 'conversas', n, n ? 'alerta' : 'info', `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais (fora os que já estão na Minha vez).`);
+        }
       }
       if (nav.querySelector('[data-badge="vendas"]')) {
         const rs = await NG.sb.from('usuario_vistos').select('visto_em').eq('tela', 'vendas').maybeSingle();

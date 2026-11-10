@@ -510,6 +510,17 @@
     avisarOuvintes(data);
     return data;
   }
+  // 0101: espera da conversa (ate = 'AAAA-MM-DD'; nulo = Retomar agora).
+  async function rodarEsperaConversa(ate, motivo) {
+    const { data, error } = await NG.sb.rpc('backoffice_conversa_espera', { p_conversa: d.conversaId, p_ate: ate, p_motivo: motivo });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return null; }
+    NG.toast(data.resumo || 'Feito', 'ok');
+    feitoUltimo = { resumo: data.resumo };
+    formAtivo = null;
+    await recarregar();
+    avisarOuvintes(data);
+    return data;
+  }
   // 0064: as três ações da pendência vão por RPC (SECURITY DEFINER, checam admin/backoffice e gravam em eventos_venda).
   async function rpcPendencia(fn, args, msgOk) {
     const { error } = await NG.sb.rpc(fn, args);
@@ -523,6 +534,7 @@
   }
 
   const SALVAR = {
+    async conv_espera(fd) { return !!(await rodarEsperaConversa(fd.get('ate'), String(fd.get('motivo') || '').trim())); },
     async pedido(fd) {
       const v = d.v;
       const pedido = String(fd.get('pedido') || '').trim();
@@ -1683,7 +1695,7 @@
   // ---------- ficha de CONVERSA (etapa 1: conversa sem venda) ----------
   async function carregarConversa(cid) {
     const [rc, rj, rq, rk] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em').eq('id', cid).maybeSingle(),
       NG.sb.from('v_jornada').select('*').eq('conversa_id', cid).maybeSingle(),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
@@ -1739,7 +1751,20 @@
       sozinho = SOZINHO.responder;
     }
     const silenciada = c.quadro_encerrada_motivo === 'suporte_nio';
-    if (silenciada) { bts.length = 0; sozinho = ''; }
+    // 0101 (Ricardo, Valdirene: "agora eu tenho é que aguardar, deixar em standby"): espera ativa = marcada e o cliente não
+    // escreveu depois. Some da Sua vez até o dia (09h) e volta como "Retomar · motivo"; se ele escrever antes, a espera cai.
+    const emEspera = !!c.espera_ate && (!c.ultima_msg_lead_at || new Date(c.ultima_msg_lead_at) <= new Date(c.espera_em));
+    if (silenciada || (emEspera && new Date(c.espera_ate) > new Date())) { bts.length = 0; sozinho = ''; }
+    if (bo && !silenciada && emEspera) bts.push('<button type="button" class="btn btn-acc" data-cespera="retomar">▶ Retomar agora</button>');
+    else if (bo && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time')) bts.push('<button type="button" class="btn" data-f="conv-espera">⏸ Aguardar…</button>');
+    const amanhaC = NG.somaDias(NG.diaSP(), 1);
+    const formEspera = formAtivo === 'conv_espera' ? `<form class="f-form" data-form="conv_espera">
+        <label>Aguardando o quê? <input name="motivo" list="f-esp-motivos" maxlength="80" placeholder="ex.: parente decidir" required autofocus></label>
+        <datalist id="f-esp-motivos"><option value="parente/família decidir"><option value="cliente pediu para chamar depois"><option value="cliente mandar os dados"><option value="dia do pagamento do cliente"></datalist>
+        <label>Até <input type="date" name="ate" min="${amanhaC}" value="${amanhaC}" required></label>
+        <div class="f-prox-bts">${[1, 2, 3, 7].map((n) => `<button type="button" class="btn btn-ghost btn-sm" data-espera-dias="${n}">${n === 1 ? 'amanhã' : `+${n} dias`}</button>`).join('')}</div>
+        <span class="f-nota">Sai da Minha vez e da contagem até o dia, às 9h (aparece em "Acompanhando"). Se o cliente escrever antes, volta na hora. No Chatwoot: nota e conversa adiada até o dia. A Mari continua calada.</span>
+        <div class="f-prox-bts"><button type="submit" class="btn btn-acc btn-sm">Aguardar</button><button type="button" class="btn btn-ghost btn-sm" data-f="cancelar">Cancelar</button></div></form>` : '';
     const at = [];
     if (bo && !silenciada && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
     if (bo && !c.nao_contatar && c.chatwoot_conversation_id) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar">Cliente pediu para parar</button>');
@@ -1763,7 +1788,9 @@
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
     const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para a Minha vez, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
           ${dono.tipo === 'mari' && nivel !== 'agora' && !silenciada ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
+          ${emEspera && !silenciada ? `<span class="f-nota">⏸ Em espera até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}. Volta para a Minha vez no dia, ou antes se o cliente escrever.</span>` : ''}
           ${bts.length ? `<div class="f-prox-bts">${bts.join('')}</div>` : ''}
+          ${formEspera}
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
           <div class="f-atalhos">${at.join('')}</div>`;
     raiz.innerHTML = `<div class="ficha f-${modo}${largo ? ' f-largo' : ''}${convAberta && !hostConversa ? ' conv-on' : ''}">
@@ -1773,7 +1800,7 @@
       <div class="f-corpo"><div class="f-col-a">
         ${regua(passosConv)}
         ${quadroPasso('conversa', silenciada ? 'dim' : (NIVEL_CLS[nivel] || 'dim'), silenciada ? 'SILENCIADA' : (NIVEL_ROT[nivel] || 'PRÓXIMO PASSO'),
-          silenciada ? 'Cliente Nio · suporte — fora da Minha vez' : (j.o_que_fazer || 'Mari atendendo'), corpoPasso, true)}${feito}
+          silenciada ? 'Cliente Nio · suporte — fora da Minha vez' : (j.o_que_fazer || 'Mari atendendo'), corpoPasso, formAtivo === 'conv_espera')}${feito}
         <div class="f-linha-status">
           <div class="f-st-g"><span class="f-rot">MARI</span><span class="f-chip">dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</span></div>
           ${linhaEstorno(travasC, 'cliente Nio · cancelou < 30 d · endereço · área · viabilidade')}
@@ -1852,6 +1879,16 @@
         mo.disabled = true;
         const r = d.soConversa ? await rodarMomentoConversa(qual) : await rodarMomento(qual, res ? { resultado: res } : {});
         if (!r && mo.isConnected) mo.disabled = false;
+        return;
+      }
+      const ed = ev.target.closest('[data-espera-dias]');
+      if (ed) { const i = ed.form && ed.form.querySelector('[name="ate"]'); if (i) i.value = NG.somaDias(NG.diaSP(), Number(ed.dataset.esperaDias)); return; }
+      const ce = ev.target.closest('[data-cespera]');
+      if (ce && d && d.soConversa) {
+        if (!window.confirm('Retomar agora?\n\nA conversa volta para a Minha vez e reabre no Chatwoot.')) return;
+        ce.disabled = true;
+        const ok = await rodarEsperaConversa(null, null);
+        if (!ok && ce.isConnected) ce.disabled = false;
         return;
       }
       const cs = ev.target.closest('[data-csaida]');
@@ -1948,6 +1985,7 @@
         return;
       }
       if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
+      if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; passoAberto.add('conversa'); render(); return; }
       if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' ? null : 'saida'; render(); return; }
       if (acao === 'mover') { await mover(b.dataset.st); return; }
       if (acao === 'viab-rapido') {
