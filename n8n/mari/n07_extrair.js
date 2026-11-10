@@ -127,6 +127,10 @@ Object.keys(tags).forEach((k) => { if (tags[k] === null) delete tags[k]; });
 const NOMES_TAG = 'CIDADE_DETECTADA|ENDERECO|ELEGIBILIDADE|SEGMENTO|PLANO_ESCOLHIDO|UPSELL_OFERECIDO|DADOS_COLETADOS|SINAL_URGENCIA|AGENDAMENTO_RETORNO|AVALIACAO|CARROSSEL_PLANOS|BOTOES|PISTA_NIO|OBJECAO';
 let texto = bruto
   .replace(/\[HANDOFF\][\s\S]*?(\[\/HANDOFF\]|$)/gi, '')
+  // Portão 10/11 08h59 (cenário j): o modelo copiou o bloco de estado ("[ESTADO_INTERNO] etapa: … [/ESTADO_INTERNO]")
+  // para a fala. Bloco [X]…[/X] em maiúsculas sai inteiro; marca solta [X] / [/X] numa linha também.
+  .replace(/\[([A-Z][A-Z_]{3,})\][\s\S]*?\[\/\1\]/g, '')
+  .replace(/^[ \t]*\[\/?(?:ESTADO|INTERNAL|INTERNO|CONTEXTO)[A-Z_ ]*\][ \t]*$/gim, '')
   .replace(new RegExp(`\\[(?:${NOMES_TAG})(?:\\s*:[^\\]]*)?\\]`, 'gi'), '')
   .replace(/^\s*\[?(INTERNAL DATA|ESTADO_ATUAL[^\]]*)\]?.*$/gim, '')
   .replace(/[ \t]+\n/g, '\n')
@@ -269,6 +273,18 @@ function foraDaTabela(t) {
 // Trava do upsell (portão 09/11, cenário p): "Essencial R$140… por mais R$15 tem o Super" passava na trava geral porque
 // R$15 existe na tabela (desconto do cartão). Aqui "por mais R$X" só vale se X for a diferença real entre o plano escolhido
 // e um plano acima do mesmo segmento (boleto ou cartão); sem plano identificado, a diferença entre dois planos na mesma forma.
+// Portão 10/11 (cenário p, 2 rodadas seguidas): "por mais R$30 tem o Nio Super, que já vem com 20 GB…" sem dizer que vai
+// de 800 Mega pra 1 Giga. O parágrafo do upsell tem de trazer a velocidade — exceto Super → Ultra (mesma velocidade, P16).
+function upsellSemVelocidade(t) {
+  const paras = norm(t).split(/\n\s*\n/);
+  const par = paras.find((p) => /por mais r\$/.test(p));
+  if (!par || /\b\d+\s*(mega|giga)\b/.test(par)) return false;
+  const codTag = String(tags.plano_escolhido || '').toUpperCase().match(/[VE]-[A-Z0-9]+-[A-Z]+/);
+  const cod = (codTag && codTag[0]) || (ctx.conversa || {}).plano_escolhido;
+  const ch = (ctx.planos || []).find((p) => p.codigo === cod);
+  const nomeCh = norm((ch && ch.nome) || par.slice(0, par.indexOf('por mais r$')));
+  return !/\b(super|ultra)\b/.test(nomeCh);
+}
 function upsellForaDaConta(t) {
   const n = norm(t);
   const pls = ctx.planos || [];
@@ -361,6 +377,7 @@ function violacoesDe(t) {
     }
     const upErr = upsellForaDaConta(t);
     if (upErr.length) v.push(`upsell com a diferença errada ("por mais ${upErr.join('; ')}"): copie o valor do campo upsell do plano escolhido no [INTERNAL DATA]`);
+    if (upsellSemVelocidade(t)) v.push('upsell sem as velocidades: diga os números da tabela ("por mais R$30 o Super vai de 800 Mega pra 1 Giga e já vem com 20 GB de internet 5G e Globoplay por 12 meses")');
   }
   // Teste real 08/11 00h15: "por mais R$30 o Super já vem com o dobro de velocidade (1 Giga)" — Essencial 800 Mega × Super
   // 1 Giga (+25 %). Comparação ("o dobro", "duas vezes mais", "3x mais", "o triplo", "metade") sobre velocidade, internet ou
@@ -763,7 +780,8 @@ if (V6 && handoff && motivo === 'dados_completos' && baloesFinais.length) {
   if (!ps[0].endsWith(CORACAO)) ps[0] = `${ps[0]} ${CORACAO}`;
   baloesFinais = [ps.join('\n\n'), ...baloesFinais.slice(1)];
   texto = baloesFinais.join('\n\n');
-} else if (VER >= 5 && handoff && baloesFinais.length && !baloesFinais[0].startsWith(CORACAO)) {
+} else if (VER >= 5 && handoff && motivo !== 'fora_de_area' && baloesFinais.length && !baloesFinais[0].startsWith(CORACAO)) {
+  // fora_de_area (rodada única 10/11): texto literal da Parte 2, já com 😕 — sem o 💚 na frente.
   baloesFinais = [`${CORACAO} ${baloesFinais[0]}`, ...baloesFinais.slice(1)];
   texto = baloesFinais.join('\n\n');
 }
