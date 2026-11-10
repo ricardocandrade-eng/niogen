@@ -173,7 +173,8 @@
       // etiquetas em chips finos com o "+ etiqueta" do mesmo tamanho.
       troca('cab', cab, `<div class="cvp-topo">${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
         <b class="cvp-nome" title="${esc(nome)}">${esc(nome)}</b>
-        ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}</div>
+        ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}
+        ${o.aoConcluir ? '<button type="button" class="btn btn-acc btn-sm" data-cv="concluir" title="Terminou com este cliente? Fecha o caso e abre o próximo da fila. Até apertar aqui, a conversa fica aberta.">✓ Concluir</button>' : ''}</div>
         <div class="cvp-chips">
         <select class="cvp-pill" data-cv="status" aria-label="Status da conversa" title="Status da conversa"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select>
         <select class="cvp-pill" data-cv="dono" aria-label="Atribuída a" title="Atribuída a"${c.nao_contatar ? ' disabled' : ''}>${optsDono.map(([v, t]) => `<option value="${v}"${v === dn.v ? ' selected' : ''}${v === 'outro' ? ' disabled' : ''}>${esc(t)}</option>`).join('')}</select>
@@ -316,6 +317,7 @@
       if (!b || b.tagName === 'SELECT') return;
       const a = b.dataset.cv;
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
+      if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
       if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }

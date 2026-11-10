@@ -23,13 +23,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-20">
-<script src="config.js?v=101126-20"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-21">
+<script src="config.js?v=101126-21"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-20"></script>
-<script src="assets/sidebar.js?v=101126-20"></script>
-<script src="assets/conversa.js?v=101126-20"></script>
-<script src="assets/ficha.js?v=101126-20"></script>
+<script src="assets/app.js?v=101126-21"></script>
+<script src="assets/sidebar.js?v=101126-21"></script>
+<script src="assets/conversa.js?v=101126-21"></script>
+<script src="assets/ficha.js?v=101126-21"></script>
 </head>
 <body class="tela-fila">
 <div class="app">
@@ -115,7 +115,7 @@
     const pOp = NG.sb.rpc('oportunidades_abertas');   // 0108: em paralelo com a jornada
     const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
     andPend = ap.error ? [] : (ap.data || []);
-    if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
+    if (r.erro) { if (!conv) listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }   // erro na recarga não apaga a conversa aberta
     // 0102 (Ricardo, 10/11): Live = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
     // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
     // 0107: 🔥 oportunidades (calculadas sobre a jornada inteira, antes do filtro: o que já pede ação não vira oportunidade).
@@ -364,6 +364,10 @@
   // sem conversa, a ficha usa a largura toda em 2 colunas. "← Lista" e Esc voltam para a lista no mesmo lugar.
   let foco = false;
   let rolagemLista = 0;
+  // 10/11 (Ricardo: "mando a primeira mensagem e a tela da conversa fecha … o cliente saiu do Live e não consegui mais falar"):
+  // o caso aberto fica preso aqui até o BKO apertar ✓ Concluir (ou ← Lista / Esc / ×). Responder tira o cliente da lista,
+  // mas não fecha a tela: a conversa é reaberta a partir do caso, não da lista.
+  let caso = null;   // { k, conversa_id, nome }
   const podeFoco = () => vista === 'lista' && !movel.matches;
   const ecoFicha = (r) => NGFicha.recarregar({ quieto: !!(r && r.eco) });
   function entrarFoco(j, oportunidade) {
@@ -371,6 +375,7 @@
     const rol = listaEl.querySelector('.mv-rolar');
     if (!foco && rol) rolagemLista = rol.scrollTop;
     foco = true;
+    caso = { k: chaveFicha(j), conversa_id: j.conversa_id || null, nome: j.nome };
     const temConv = !!j.conversa_id;
     document.body.classList.add('mv-foco');
     trabEl.classList.add('foco');
@@ -382,6 +387,7 @@
   function sairFoco(quieto) {
     if (!foco) return;
     foco = false;
+    caso = null;
     document.body.classList.remove('mv-foco');
     trabEl.classList.remove('foco', 'so-ficha');
     NGFicha.aoVoltar(null);
@@ -411,6 +417,7 @@
     trabEl.classList.add('com-conversa');
     render();
     conv.comp = NGConversa.montar(listaEl, { conversaId, nome, rotuloFechar: '← Lista', oportunidade: oportunidade || null,
+      aoConcluir: foco ? concluirCaso : null,
       aoFechar: () => { if (foco) sairFoco(); else { fecharConversa(); render(); } },
       aoMudar: (r) => { carregar(); if (aoMudar) aoMudar(r); } });
   }
@@ -536,15 +543,27 @@
     const h = location.hash;
     const m = h.match(/#conversa=([0-9a-f-]+)/i);
     const mv = h.match(/#venda=([0-9a-f-]+)/i);
-    const mesmo = (m && m[1] === conv.id) || (mv && jor.lista.some((j) => j.venda_id === mv[1] && j.conversa_id === conv.id));
+    // 10/11: procura também em "todas" (o cliente que você acabou de responder já saiu da lista) e no caso aberto.
+    const mesmo = (m && m[1] === conv.id) || (mv && caso && caso.k === mv[1])
+      || (mv && [...jor.lista, ...(jor.todas || [])].some((j) => j.venda_id === mv[1] && j.conversa_id === conv.id));
     if (!mesmo) { if (foco) sairFoco(); else { fecharConversa(); render(); } }
   });
-  // Modo foco sem a conversa (fechou por fora): reabre a conversa do cliente da ficha em vez de mostrar a lista no lugar dela.
+  // Modo foco sem a conversa (fechou por fora): reabre a conversa do caso aberto em vez de mostrar a lista no lugar dela.
+  // 10/11: vem do caso, não da lista — depois de responder o cliente sai da lista e antes a tela voltava para a lista.
   function reporConversaFoco() {
     if (!foco || conv || trabEl.classList.contains('so-ficha')) return;
     const k = NGFicha.atual;
     const j = k && jor.lista.find((x) => chaveFicha(x) === k);
-    if (j && j.conversa_id) abrirConversaLista({ conversaId: j.conversa_id, nome: j.nome, aoMudar: ecoFicha });
+    const alvo = (j && j.conversa_id) ? j : (caso && caso.conversa_id ? caso : null);
+    if (alvo) abrirConversaLista({ conversaId: alvo.conversa_id, nome: alvo.nome, aoMudar: ecoFicha });
+  }
+  // ✓ Concluir: o BKO terminou com este cliente → fecha o caso e abre o próximo de "Para fazer" (ou volta para a lista).
+  function concluirCaso() {
+    const k = caso && caso.k;
+    const prox = filtradas(true).find((j) => chaveFicha(j) !== k);
+    sairFoco();
+    if (prox) { abrirLinha(chaveFicha(prox)); NG.toast(`Caso concluído · próximo: ${NG.primeiroNome(prox.nome || 'Contato')}`, 'ok'); }
+    else NG.toast('Caso concluído · fila zerada ✅', 'ok');
   }
 
   NG.botaoAtualizar(() => carregar());
