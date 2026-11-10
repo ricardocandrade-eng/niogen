@@ -1099,9 +1099,12 @@
       : { s: 'no', d: '' };
     return [
       { nome: 'Viabilidade', ...pViab },
-      { nome: 'Pedido', s: v.nio_pedido ? 'ok' : 'no', d: v.nio_pedido ? `nº ${v.nio_pedido}` : '' },
+      // 0111: o 2º passo é o crédito (o nº do pedido = a OS, no 4º passo).
+      { nome: 'Crédito', ...(['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
+        : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' } : v.credito_resultado === 'pendente' ? { s: 'wa', d: 'pendente' }
+        : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
       { nome: 'Biometria', ...pBio },
-      { nome: 'OS', s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' },
+      { nome: 'Pedido (OS)', s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' },
       { nome: 'Instalação', ...pInst },
     ];
   }
@@ -1872,7 +1875,7 @@
     const viabC = c.nio_viab_resultado;
     const passosConv = [
       { nome: 'Viabilidade', s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' },
-      { nome: 'Pedido', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'OS', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
+      { nome: 'Crédito', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
     const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para o Live, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
