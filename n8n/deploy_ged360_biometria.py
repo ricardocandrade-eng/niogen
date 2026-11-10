@@ -5,7 +5,10 @@
 #   → RPC ged360_registrar(p_linhas, p_erro) no Supabase Nio (tabela nio_biometria, casa pelo CPF, aplica o mapa).
 # Regra 5 (exceção do Ricardo, 10/11 12h39): só login + Relatório Detalhado (leitura/CSV). Nenhuma outra tela, nenhum envio de
 # link, nenhuma reanálise. Sem contornar bloqueio de IP. Senha SÓ na credencial do n8n "GED360 (TT837725)" (Custom Auth,
-# o Ricardo grava: {"body": {"prkUsuario": "TT837725", "desSenha": "<senha>"}}). Nunca em arquivo, log, chat ou Supabase.
+# o Ricardo grava). Nunca em arquivo, log, chat ou Supabase.
+# 10/11 ~14h40 (1ª rodada): o login do GED360 é AJAX (login.js) e manda os campos CODIFICADOS — prkUsuario = btoa(usuário) e
+# desSenha = btoa(encodeURIComponent(senha)); em texto puro a resposta é {"erro":"Falha ao tentar autenticar no sistema."}.
+# A credencial guarda os valores já codificados: {"body": {"dominio": "1", "prkUsuario": "VFQ4Mzc3MjU=", "desSenha": "<btoa(encodeURIComponent(senha))>"}}.
 # Falha (login, CSV, rede) → a RPC recebe p_erro e o Painel avisa depois de 2 rodadas seguidas. Nada de retry em laço.
 #
 # Credenciais (só nomes, nunca valores): "Supabase Nio (service role)", "GED360 (TT837725)". Chave da API do n8n: N8N_API_KEY_NIO.
@@ -50,6 +53,7 @@ for (const it of $input.all()) {
   if (!Array.isArray(sc)) sc = [sc];
   for (const c of sc) { const par = String(c).split(';')[0]; const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }
 }
+jar.cookieAceitaBrProntoPDV = 'true';   // o aceite de cookies que a tela de login exige (login.js)
 const cookie = Object.entries(jar).map(([k, v]) => k + '=' + v).join('; ');
 return [{ json: { cookie, tem_cookie: !!cookie } }];
 """
@@ -65,11 +69,12 @@ const jar = {};
 for (const par of prev.split(';')) { const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }
 for (const c of (Array.isArray(novos) ? novos : [novos])) { const par = String(c).split(';')[0]; const i = par.indexOf('='); if (i > 0) jar[par.slice(0, i).trim()] = par.slice(i + 1).trim(); }
 const status = $input.first().json.statusCode;
-const destino = String((($input.first().json.headers || {}).location) || '');
-// Login aceito = redireciona para fora da tela de autenticação. Voltar para /autenticacao = usuário ou senha errados.
-const recusado = /autenticacao/i.test(destino) || status >= 400;
+// O login responde JSON: {"erro": "..."} = recusado (usuário/senha, conta bloqueada…). Sem "erro" = aceito.
+let corpo = {};
+try { corpo = JSON.parse(String($input.first().json.data || '{}')); } catch (e) { corpo = { erro: 'resposta do login não é JSON' }; }
+const recusado = status >= 400 || !!corpo.erro;
 return [{ json: { cookie: Object.entries(jar).map(([k, v]) => k + '=' + v).join('; '), ini: fmt(ini), fim: fmt(hoje),
-  login_ok: !recusado, login_status: status } }];
+  login_ok: !recusado, login_status: status, login_erro: corpo.erro ? String(corpo.erro).slice(0, 120) : null } }];
 """
 
 CSV_JS = r"""
@@ -78,8 +83,9 @@ CSV_JS = r"""
 const it = $input.first().json;
 const dados = String(it.data == null ? '' : it.data);
 const erro = (m) => [{ json: { p_linhas: [], p_erro: m } }];
-if (!$('5 · Datas e cookie').first().json.login_ok) return erro('login recusado (usuário/senha) — HTTP ' + $('5 · Datas e cookie').first().json.login_status);
-if ((it.statusCode || 200) >= 400) return erro('relatório HTTP ' + it.statusCode);
+const lg = $('5 · Datas e cookie').first().json;
+if (!lg.login_ok) return erro('login recusado pelo GED360: ' + (lg.login_erro || ('HTTP ' + lg.login_status)));
+if ((it.statusCode || 200) >= 300) return erro('relatório HTTP ' + it.statusCode + ((it.statusCode < 400) ? ' (redirecionou: sessão não autenticada ou endereço do relatório mudou)' : ''));
 if (/<html|<form/i.test(dados.slice(0, 400))) return erro('relatório devolveu página HTML (sessão caiu ou tela mudou), não CSV');
 const linhas = dados.replace(/^﻿/, '').split(/\r?\n/).filter((l) => l.trim());
 if (!linhas.length) return [{ json: { p_linhas: [], p_erro: null } }];
@@ -131,7 +137,10 @@ def build(ids):
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpCustomAuth',
         'sendHeaders': True, 'headerParameters': {'parameters': [
             {'name': 'User-Agent', 'value': UA}, {'name': 'Cookie', 'value': '={{ $json.cookie }}'},
-            {'name': 'Referer', 'value': LOGIN_PAGINA}]},
+            {'name': 'Referer', 'value': LOGIN_PAGINA}, {'name': 'X-Requested-With', 'value': 'XMLHttpRequest'},
+            {'name': 'Accept', 'value': 'application/json, text/javascript, */*; q=0.01'},
+            # a Custom Auth junta o body da credencial e, sem este cabeçalho, o n8n manda JSON; o GED360 só lê formulário
+            {'name': 'Content-Type', 'value': 'application/x-www-form-urlencoded; charset=UTF-8'}]},
         'sendBody': True, 'contentType': 'form-urlencoded',
         'bodyParameters': {'parameters': [{'name': 'dominio', 'value': '1'}, {'name': 'redirect', 'value': ''}]},
         'options': full}, 660, 0, credentials=ged_cred,
