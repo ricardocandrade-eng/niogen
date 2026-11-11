@@ -1851,3 +1851,9 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
   .opc-selo, .opc-oque { grid-column: 1 / -1; }
   .opc-bt { grid-column: 1 / -1; justify-content: flex-start; }
 }
+/* Na faixa 🔥 do Live a coluna é estreita: a linha do canal empilha (quem · valor / o quê / botões). */
+.mv-op-dock .opc-bloco { margin: 6px 8px 10px; }
+.mv-op-dock .opc-linha { grid-template-columns: 1fr auto; gap: 4px 10px; }
+.mv-op-dock .opc-selo, .mv-op-dock .opc-oque, .mv-op-dock .opc-bt { grid-column: 1 / -1; }
+.mv-op-dock .opc-bt { justify-content: flex-start; }
+.mv-op-dock .opc-oque small { white-space: normal; }
