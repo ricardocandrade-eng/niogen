@@ -147,16 +147,21 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
-              'sem_viabilidade', 'erro_receita', 'nao_classificado', 'erro')
+              'sem_viabilidade', 'erro_receita', 'contato_repetido', 'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
 RE_RECEITA = re.compile(r'ops,?\s*ocorreu um erro', re.I)
+# Etapa 4 (11/11 18h50): "Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições
+# de mesmo número permitidas." — a Nio limita o mesmo celular em vários pedidos; a consulta precisa do celular do cliente.
+RE_CONTATO = re.compile(r'repeti[cç][õo]es de mesmo n[úu]mero|telefone de contato informado', re.I)
 
 
 def classificar_popup(titulo, texto, etapa=None):
     """Classifica um popup visível. 'receita_retry' = erro da Receita na Etapa 3 (o fluxo tenta 1× de novo)."""
     t = f'{titulo or ""} {texto or ""}'
+    if RE_CONTATO.search(t):
+        return 'contato_repetido'
     if RE_ANDAMENTO.search(t):
         return 'pedido_em_andamento'
     if RE_RECEITA.search(t) and etapa == 3:

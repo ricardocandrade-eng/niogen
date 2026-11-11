@@ -118,6 +118,8 @@ ok(cr.classificar_popup('Pedido encontrado', 'Não é possível abrir um novo pe
 ok(cr.classificar_popup('OPS, OCORREU UM ERRO!', '', 3) == 'receita_retry', 'erro da Receita na Etapa 3 → nova tentativa')
 ok(cr.classificar_popup('Crédito', 'Cliente não aprovado na análise', 5) == 'negado', 'não aprovado → negado')
 ok(cr.classificar_popup('Análise', 'Aguarde 24 h', 5) == 'pendente', 'aguarde 24 h → pendente')
+ok(cr.classificar_popup('Atenção!', 'Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições de mesmo número permitidas. Informe outro número para prosseguir.', 4)
+   == 'contato_repetido', 'celular repetido na Etapa 4 → contato_repetido')
 ok(cr.classificar_popup('Aviso', 'Algo novo', 5) == 'nao_classificado', 'outro → nao_classificado')
 ok(cr.classificar_formas(['BOLETO', 'CREDITO', 'DACC']) == 'aprovado_todas', '3 formas → aprovado_todas')
 ok(cr.classificar_formas(['CREDITO']) == 'aprovado_cartao', 'só cartão → aprovado_cartao')

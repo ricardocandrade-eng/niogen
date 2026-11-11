@@ -15,16 +15,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-6">
-<script src="config.js?v=111126-6"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-7">
+<script src="config.js?v=111126-7"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-6"></script>
-<script src="assets/sidebar.js?v=111126-6"></script>
+<script src="assets/app.js?v=111126-7"></script>
+<script src="assets/sidebar.js?v=111126-7"></script>
 <style>
   .cred-form { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: end; }
   .cred-form .cred-opc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
   .cred-form details { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
   .cred-form details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .cred-cont { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 4px; }
   .cred-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
   .cred-aut { grid-column: 1 / -1; display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
   .cred-aut input { margin-top: 2px; }
@@ -67,14 +68,14 @@
               <label class="campo">Referência<input type="text" name="referencia" placeholder="perto de…" autocomplete="off"></label>
             </div>
           </details>
-          <details id="det-cont">
-            <summary>Contato do cliente <span class="muted">(opcional)</span></summary>
-            <span class="nota-campo">Recolhido = contato padrão do backoffice. A Nio usa este contato na análise.</span>
+          <div id="det-cont" class="cred-cont">
+            <strong style="font-size:13px">Contato do cliente</strong>
+            <span class="nota-campo">Obrigatório: o celular e o e-mail <b>do cliente</b>. A Nio grava este contato no pedido, manda a comunicação para ele e recusa um mesmo celular repetido em vários pedidos.</span>
             <div class="cred-grid">
-              <label class="campo">Celular (com DDD)<input type="tel" name="celular" inputmode="numeric" placeholder="(32) 90000-0000" autocomplete="off"></label>
-              <label class="campo" style="grid-column: span 2">E-mail<input type="email" name="email" placeholder="cliente@email.com" autocomplete="off"></label>
+              <label class="campo">Celular (com DDD)<input type="tel" name="celular" inputmode="numeric" placeholder="(32) 90000-0000" autocomplete="off" required></label>
+              <label class="campo" style="grid-column: span 2">E-mail<input type="email" name="email" placeholder="cliente@email.com" autocomplete="off" required></label>
             </div>
-          </details>
+          </div>
         </div>
         <label class="cred-aut"><input type="checkbox" name="autorizado"> <span>O titular autorizou a consulta de crédito e o contato da Nio (WhatsApp e e-mail)</span></label>
         <div class="cred-acoes"><button type="submit" class="btn btn-acc" id="btn-consultar" disabled>Consultar</button></div>
@@ -119,6 +120,7 @@
     pendente: ['Pendente', 'warn', 'A Nio deixou a análise pendente. Consulte de novo mais tarde (o portal costuma pedir 24 h).'],
     nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia o texto abaixo e confira no portal.'],
     sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado.'],
+    contato_repetido: ['Celular recusado pelo portal', 'warn', 'A Nio não aceitou este celular: ele já aparece em pedidos demais. Use o celular do próprio cliente (outro número dele, se tiver) e consulte de novo.'],
     erro_receita: ['Erro da Receita', 'warn', 'A consulta à Receita Federal falhou duas vezes. Tente de novo em alguns minutos.'],
     erro: ['Erro na consulta', 'warn', 'A consulta não terminou. Tente de novo em alguns minutos.'],
   };
@@ -134,6 +136,7 @@
     const e = r.endereco || {};
     const acoes = [];
     if (r.resultado === 'sem_viabilidade') acoes.push('<button type="button" class="btn" data-padrao>Consultar com o endereço padrão</button>');
+    if (r.resultado === 'contato_repetido') acoes.push('<button type="button" class="btn" data-contato>Trocar o celular</button>');
     if (r.resultado === 'erro_receita' || r.resultado === 'erro') acoes.push('<button type="button" class="btn" data-denovo>Tentar de novo</button>');
     const ofertas = (r.ofertas || []).filter((o) => o.nome || o.preco);
     resEl.innerHTML = `
@@ -177,9 +180,7 @@
     if (!padrao && document.getElementById('det-end').open && cep) {
       d.endereco = { cep, numero: F.numero.value.trim(), complemento: F.complemento.value.trim(), referencia: F.referencia.value.trim() };
     }
-    if (document.getElementById('det-cont').open && (F.celular.value.trim() || F.email.value.trim())) {
-      d.contato = { celular: NG.soDigitos(F.celular.value), email: F.email.value.trim() };
-    }
+    d.contato = { celular: NG.soDigitos(F.celular.value), email: F.email.value.trim() };   // sempre o do cliente (11/11)
     return d;
   }
   async function consultar(padrao) {
@@ -188,7 +189,8 @@
     if (!d.autorizado) { NG.toast('Marque que o titular autorizou a consulta.', 'bad'); return; }
     if (!NG.documentoValido(d.cpf) || d.cpf.length !== 11) { NG.toast('CPF inválido — confira os dígitos.', 'bad'); F.cpf.focus(); return; }
     if (d.endereco && d.endereco.cep.length !== 8) { NG.toast('CEP do cliente com 8 dígitos (ou recolha o endereço).', 'bad'); return; }
-    if (d.contato && (![10, 11].includes(d.contato.celular.length) || !d.contato.email.includes('@'))) { NG.toast('Contato do cliente: celular com DDD e e-mail (ou recolha o contato).', 'bad'); return; }
+    if (![10, 11].includes(d.contato.celular.length)) { NG.toast('Informe o celular do cliente com DDD.', 'bad'); F.celular.focus(); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.contato.email)) { NG.toast('Informe o e-mail do cliente.', 'bad'); F.email.focus(); return; }
     rodando = true; travar();
     andamento({ estado: 'fila', posicao_fila: 0 });
     try {
@@ -217,6 +219,7 @@
   resEl.addEventListener('click', (ev) => {
     if (ev.target.closest('[data-padrao]')) consultar(true);
     else if (ev.target.closest('[data-denovo]')) consultar(false);
+    else if (ev.target.closest('[data-contato]')) { F.celular.focus(); F.celular.select(); }
   });
 
   // ?cpf= preenche, mas NÃO dispara: a autorização do titular é marcada à mão.
