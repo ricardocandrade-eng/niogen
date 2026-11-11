@@ -84,6 +84,16 @@ for c in ('api/portal/interesse/salvar', 'api/portal/prevenda', 'api/portal/nova
        f'{c} barrado DEPOIS da Etapa 2')
 ok(cr.rede_bloqueada('https://pap.niointernet.com.br/static/js/checkout.chunk.js', 'GET', 'script') is None,
    'script estático com "checkout" no nome não é pedido (passa)')
+ok(cr.rede_bloqueada('https://pap-api.niointernet.com.br/api/portal/novafibra/portabilidadenovafibra/consultaDDDPorUF/MG', 'GET', 'xhr', True) is None,
+   'GET consultaDDDPorUF/MG (lista de DDDs da Etapa 5) passa')
+ok(cr.rede_bloqueada('https://pap-api.niointernet.com.br/api/portal/novafibra/portabilidadenovafibra/consultaOperadoras', 'GET', 'xhr', True) is None,
+   'consultaOperadoras (lista de operadoras da Etapa 5) passa')
+ok(bool(cr.rede_bloqueada('https://pap-api.niointernet.com.br/api/portal/novafibra/portabilidadenovafibra/consultaOperadoras/a/b', 'GET', 'xhr', True)),
+   'consulta com caminho mais fundo continua barrada')
+ok(bool(cr.rede_bloqueada('https://pap-api.niointernet.com.br/api/portal/novafibra/portabilidadenovafibra', 'POST', 'xhr', True)),
+   'POST na portabilidade (sem consulta) continua barrado')
+ok(bool(cr.rede_bloqueada('https://pap-api.niointernet.com.br/api/portal/novafibra/portabilidadenovafibra/solicitar', 'GET', 'xhr', True)),
+   'outra rota de portabilidade (GET) continua barrada')
 ok(cr.caminho_de('https://x.com/a/b?cpf=1') == 'a/b', 'caminho sem query (o log nunca leva a query)')
 
 print('3. CPF e privacidade')
@@ -97,6 +107,10 @@ ok('a@b.com.br' not in cr.sem_pii('erro em 52998224725 e a@b.com.br'), 'sem_pii 
 r = cr.redigir({'cpf': '1', 'nomeCliente': 'X', 'status': 'APROVADO', 'dados': [{'emailContato': 'a@b', 'codigo': 7}]})
 ok(r['cpf'] == '<redigido>' and r['nomeCliente'] == '<redigido>' and r['status'] == 'APROVADO'
    and r['dados'][0]['emailContato'] == '<redigido>' and r['dados'][0]['codigo'] == 7, 'amostra redige PII e mantém status')
+
+r2 = cr.redigir({'sexo': 'Masculino', 'statusInteresse': 'PROPOSTA_CONSULTADA', 'cep': '1', 'logradouro': 'x'})
+ok(r2['sexo'] == '<redigido>' and r2['cep'] == '<redigido>' and r2['logradouro'] == '<redigido>'
+   and r2['statusInteresse'] == 'PROPOSTA_CONSULTADA', 'amostra redige sexo/cep/logradouro e mantém o status da proposta')
 
 print('4. Classificação')
 ok(cr.classificar_popup('Pedido encontrado', 'Não é possível abrir um novo pedido, pois já existe outro pedido (Nova Fibra) em andamento para este cliente.', 3)

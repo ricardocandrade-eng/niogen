@@ -63,6 +63,13 @@ O operador passa as Etapas 1–4 do **Novo Pedido** na tela (como o humano) e **
 (contato padrão do backoffice — o Ricardo passa) · `CREDITO_LIMITE_HORA` (20) · `CREDITO_LIMITE_DIA` (60) · `CREDITO_SAL` (sal do hash;
 sem ele usa o segredo do serviço) · `CREDITO_AMOSTRAS_DIR` (`/amostras` no container).
 
+**Exceção na trava de rede (11/11, aceite):** a Etapa 5 consulta sozinha `portabilidadenovafibra/consultaDDDPorUF/<UF>` e
+`.../consultaOperadoras` (portabilidade do móvel, só leitura); barrar quebra a tela ("OPS, OCORREU UM ERRO!"). Só rotas
+`portabilidadenovafibra/consulta…` passam (`LIBERADOS` em `credito.py`); qualquer outra rota de portabilidade segue barrada.
+
+**Aceite (11/11, PC do Ricardo):** Felipe → `pedido_em_andamento` na Etapa 3 (13 s) · Ricardo → `aprovado_todas` na Etapa 5 (22 s) ·
+repetição → `cache: true` (0 ms) · log e amostras sem CPF/nome/contato.
+
 **Resultados:** `aprovado_todas` · `aprovado_cartao` · `aprovado_parcial` · `pendente` · `negado` · `pedido_em_andamento` · `sem_viabilidade` ·
 `erro_receita` · `nao_classificado` · `erro`. Só os seis primeiros vão para o cache de 24 h (os outros podem ser refeitos).
 Log: `credito <job> · origem · resultado · ms · etapa` (stdout e `amostras/credito_log.jsonl`) — **nunca** CPF, nome, telefone ou e-mail.

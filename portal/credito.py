@@ -30,6 +30,12 @@ REDE_POS_ETAPA2 = re.compile(r'interesse|prevenda|preVenda|SAVE_LEAD', re.I)
 # Só pedidos que fazem algo: chamadas de API (xhr/fetch), documentos e qualquer método que não seja GET.
 # Script/estilo/imagem estáticos não gravam nada no portal e não são barrados (um chunk "checkout.js" não é pedido).
 TIPOS_VIGIADOS = ('xhr', 'fetch', 'document', 'eventsource', 'websocket', 'other')
+# Consultas que a tela da Etapa 5 faz sozinha ao abrir (portabilidade do móvel: lista de DDDs da UF e de operadoras) e que
+# casam "portabilidade" sem gravar nada. Barrar quebra a tela ("OPS, OCORREU UM ERRO!", visto em 11/11 17h40 e 18h16).
+# Lista fechada: só rotas "consulta…" da portabilidade; qualquer outra rota de portabilidade segue barrada.
+LIBERADOS = (
+    re.compile(r'^api/portal/novafibra/portabilidadenovafibra/consulta[A-Za-z]+(/[A-Za-z0-9_-]{1,40})?$'),
+)
 
 
 def caminho_de(url):
@@ -46,6 +52,8 @@ def rede_bloqueada(url, metodo='GET', tipo='fetch', pos_etapa2=False):
     if tipo not in TIPOS_VIGIADOS and str(metodo).upper() == 'GET':
         return None
     c = '/' + caminho_de(url)
+    if any(p.match(c.lstrip('/')) for p in LIBERADOS):
+        return None
     if REDE_SEMPRE.search(c):
         return c.lstrip('/')
     if pos_etapa2 and REDE_POS_ETAPA2.search(c):
@@ -172,7 +180,7 @@ def classificar_formas(formas):
 
 
 # ----------------------------------------------------------------------------------------------- amostras redigidas
-RE_CHAVE_PII = re.compile(r'cpf|documento|nome|mae|nascimento|email|telefone|celular|endereco', re.I)
+RE_CHAVE_PII = re.compile(r'cpf|documento|nome|mae|nascimento|email|telefone|celular|endereco|sexo|genero|rg$|logradouro|cep|numero|whatsapp', re.I)
 RE_URL_AMOSTRA = re.compile(r'analiseCredito|propostaCredito|elegibilidade|duplicidadepedido', re.I)
 
 
@@ -340,7 +348,7 @@ class Consulta:
             barrado = None
         if barrado:
             if not self.trava:
-                self.trava = barrado
+                self.trava = f'{request.method} {barrado}'
             return route.abort()
         return route.continue_()
 
@@ -676,7 +684,16 @@ class Consulta:
         self.out['formas_liberadas'] = formas
         try:
             if self.p['origem_endereco'] == 'cliente':
-                self.out['ofertas'] = [ler_oferta(t) for t in self.page.evaluate(OFERTAS_JS) or []]
+                vistas, ofertas = set(), []
+                for t in self.page.evaluate(OFERTAS_JS) or []:
+                    o = ler_oferta(t)
+                    chave = (o['nome'], o['velocidade'], o['preco'])
+                    # cartão de plano = nome + velocidade + preço; fora: só preço, resumo repetido, aviso de taxa
+                    if not o['velocidade'] or not o['preco'] or o['nome'].startswith('R$') or chave in vistas:
+                        continue
+                    vistas.add(chave)
+                    ofertas.append(o)
+                self.out['ofertas'] = ofertas
         except Exception:  # noqa: BLE001
             pass
         cls = classificar_formas(formas)
