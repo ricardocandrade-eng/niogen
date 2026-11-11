@@ -13,14 +13,8 @@ services:
       - /opt/niogen/portal-tunel:/chave:ro
     environment:
       VPS_BR: ${VPS_BR:?defina VPS_BR=ip-da-vps-brasil no .env ao lado}
-    command: >
-      sh -c "apk add --no-cache openssh-client >/dev/null &&
-             while true; do
-               ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3
-                   -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/chave/known_hosts
-                   -i /chave/id_ed25519 -L 0.0.0.0:8090:127.0.0.1:8090 tunel@$$VPS_BR;
-               echo 'túnel caiu, reabrindo em 10 s'; sleep 10;
-             done"
+    # Uma linha só: no bloco ">" do YAML, linhas mais recuadas mantêm a quebra e o sh as lê como comandos (11/11).
+    command: ["sh", "-c", "apk add --no-cache openssh-client >/dev/null && while true; do ssh -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/chave/known_hosts -i /chave/id_ed25519 -L 0.0.0.0:8090:127.0.0.1:8090 tunel@$$VPS_BR; echo 'túnel caiu, reabrindo em 10 s'; sleep 10; done"]
 networks:
   renata_web:
     external: true
