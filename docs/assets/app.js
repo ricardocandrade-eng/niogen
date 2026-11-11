@@ -508,6 +508,18 @@
     if (error) throw error;
     return (data || [])[0] || null;
   }
+  // Cobertura ao vivo (11/11): edge function dfv-consulta → operador DFV na VPS (painel DFV Sudeste da Nio, todas as
+  // cidades). Se o operador não responder, a própria função cai na dfv_consultar e devolve { fonte: 'base_congelada', rpc }.
+  // Consulta-só: nada é gravado. A venda (ligarDfvAuto) segue na dfv_consultar até a próxima rodada.
+  async function dfvAoVivo(e) {
+    const { data, error } = await sb.functions.invoke('dfv-consulta', { body: e });
+    if (error) {
+      let m = error.message;
+      try { const c = await error.context.json(); if (c && c.error) m = c.error; } catch (_) { /* corpo não-JSON */ }
+      throw new Error(m);
+    }
+    return data;
+  }
 
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
@@ -1316,7 +1328,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

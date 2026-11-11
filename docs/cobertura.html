@@ -3,7 +3,10 @@
      Consulta rápida em cartão no topo (dfv_consultar; nada é gravado) com o resultado em pílula de cor; "Criar venda com este
      endereço" abre a gaveta Nova venda AQUI (assets/novavenda.js), sem trocar de tela. Abaixo: resumo de JF (KPIs), bairros de JF
      em tabela padrão (busca, ordenação, cartões no celular) e o painel DFV Sudeste da Nio (fallback), recolhido.
-     A v_dfv_resumo pode estourar o statement timeout: carrega depois e não segura a consulta. Todos os perfis. -->
+     A v_dfv_resumo pode estourar o statement timeout: carrega depois e não segura a consulta. Todos os perfis.
+     11/11/2026: a consulta rápida passa a ser AO VIVO no painel DFV Sudeste da Nio (edge function dfv-consulta → operador DFV
+     na VPS; todas as cidades, com faixa de crédito do bairro, fachadas viáveis da rua e nota dos 200 m). Se o operador não
+     responder, a função cai na dfv_consultar e a tela marca "base congelada de JF (DD/MM)". Consulta-só: nada é gravado. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -15,12 +18,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-3">
-<script src="config.js?v=111126-3"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-4">
+<script src="config.js?v=111126-4"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-3"></script>
-<script src="assets/sidebar.js?v=111126-3"></script>
-<script src="assets/novavenda.js?v=111126-3"></script>
+<script src="assets/app.js?v=111126-4"></script>
+<script src="assets/sidebar.js?v=111126-4"></script>
+<script src="assets/novavenda.js?v=111126-4"></script>
 </head>
 <body>
 <div class="app">
@@ -43,7 +46,7 @@
         <button type="submit" class="btn btn-acc">Consultar</button>
       </form>
       <div id="resultado" aria-live="polite" hidden></div>
-      <span class="nota-campo">A base é uma foto da Nio e só traz endereços viáveis de Juiz de Fora. Não encontrado = conferir no painel abaixo ou no portal PAP (tente variações de CEP, rua e número). A palavra final é sempre a do portal no pedido — e ela não nega a venda sozinha: quem decide é o nosso time. Consulta oficial automática ("Consultar na Nio") em espera: falta usuário de integração da Nio.</span>
+      <span class="nota-campo">Consulta ao vivo no painel DFV Sudeste da Nio (todas as cidades, atualizado todo dia; o painel só traz endereços viáveis). Número fora da lista não nega a venda: a Nio instala até 200 m da última casa viável — confira no mapa do painel abaixo. Se o painel não responder, a tela usa a base congelada de Juiz de Fora e avisa. A palavra final é sempre a do portal no pedido.</span>
     </section>
 
     <section class="kpis quatro" id="kpis" aria-label="Resumo de Juiz de Fora"></section>
@@ -141,25 +144,88 @@
       <div class="f-form-acoes" style="justify-content:flex-start"><button type="button" class="btn btn-acc" data-criar>＋ Criar venda com este endereço</button></div>`;
     resEl.hidden = false;
   }
+  // ------------------------------------------------------------ resultado AO VIVO (operador DFV, painel da Nio)
+  const MATCH = {
+    exato: ['Viável', 'ok', 'A fachada está na base de viáveis do painel da Nio.'],
+    sem_numero: ['Rua com fachadas viáveis', 'ok', 'Informe o número para conferir a fachada; abaixo, as viáveis deste CEP.'],
+    nao_encontrado: ['Número fora da lista', 'warn', 'Este número não aparece entre as fachadas viáveis do CEP. Não é "sem viabilidade": confira os 200 m no mapa do painel e variações de número/CEP no portal.'],
+    vazio: ['Nenhuma fachada viável no CEP', 'bad', 'O painel não traz nenhuma fachada viável neste CEP. Confira o CEP (e o da rua vizinha) no portal antes de descartar.'],
+  };
+  const comp = (f) => [f.complemento, f.complemento2, f.complemento3].filter(Boolean).join(' · ');
+  function renderVivo(r, e) {
+    ultimo = e;
+    const chave = r.match === 'nao_encontrado' && !r.total_fachadas_no_cep ? 'vazio' : r.match;
+    const [rot, cor, txt] = MATCH[chave] || [r.match, '', ''];
+    const pill = { ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '';
+    const dado = (k, v) => `<div class="d-l"><span>${esc(k)}</span><b>${v == null || v === '' ? '—' : v}</b></div>`;
+    const f = r.fachada || {};
+    const regra = r.regra_200m || {};
+    const unidades = (r.unidades || []).length > 1
+      ? `<div class="dfv-opcoes"><span class="nota-campo">${NG.fmtNum(r.unidades.length)} unidades viáveis nesta fachada:</span>
+          <div class="dfv-opcoes-lista">${r.unidades.slice(0, 120).map((u) => `<button type="button" class="chip ok" data-num="${esc(u.numero || '')}" data-comp="${esc(u.complemento || '')}">${esc(comp(u) || `nº ${u.numero}`)}</button>`).join('')}</div></div>`
+      : '';
+    const fach = r.fachadas_no_cep || [];
+    const vizinhas = fach.length && r.match !== 'exato'
+      ? `<div class="dfv-opcoes"><span class="nota-campo">${NG.fmtNum(r.total_fachadas_no_cep)} fachadas viáveis neste CEP${fach.length < r.total_fachadas_no_cep ? ` (mostrando ${fach.length})` : ''} — toque numa para consultar:</span>
+          <div class="dfv-opcoes-lista">${fach.slice(0, 150).map((x) => `<button type="button" class="chip ok" data-num="${esc(x.numero || '')}" data-comp="${esc(x.complemento || '')}"
+            title="${esc(`${x.logradouro || ''} · HP livre ${x.hp_livre ?? '—'} · ${x.faixa_credito || ''}`)}">${esc(`${x.numero}${comp(x) ? ` · ${comp(x)}` : ''}`)}</button>`).join('')}</div>
+          ${fach.length > 150 ? '<span class="nota-campo">Lista cortada em 150: digite o número e consulte.</span>' : ''}</div>`
+      : '';
+    const nota200 = regra.status && regra.status !== 'dentro'
+      ? `<div class="faixa amarelo"><strong>Regra dos 200 m</strong><span>${esc(regra.nota || '')} <a href="#" data-abrir-painel>Abrir o mapa do painel ↓</a></span></div>`
+      : '';
+    resEl.innerHTML = `
+      <div class="cob-res cob-${cor}">
+        <div class="cob-res-topo"><span class="pill ${pill} cob-pill">${esc(rot)}</span><span class="muted">ao vivo · painel atualizado ${esc((r.atualizado_painel || '—').slice(0, 5))}</span></div>
+        <span>${esc(txt)}</span>
+      </div>
+      ${nota200}
+      ${unidades}
+      ${r.logradouro || r.bairro ? `<div class="cob-dados">
+        ${dado('Faixa de crédito do bairro', esc(r.faixa_credito_bairro || ''))}
+        ${dado('Rua', esc(r.logradouro || ''))}
+        ${dado('Bairro', esc(r.bairro || ''))}
+        ${dado('HP livre', f.hp_livre != null ? NG.fmtNum(f.hp_livre) : null)}
+        ${dado('HCs (já com Nio)', f.hcs != null ? NG.fmtNum(f.hcs) : null)}
+        ${dado('Célula', esc(r.celula || ''))}
+        ${dado('Classificação', esc(r.classificacao ? r.classificacao.toLowerCase() : ''))}
+      </div>` : ''}
+      ${vizinhas}
+      <div class="f-form-acoes" style="justify-content:flex-start"><button type="button" class="btn btn-acc" data-criar>＋ Criar venda com este endereço</button></div>`;
+    resEl.hidden = false;
+  }
   async function consultar() {
     const e = endereco();
     if (e.cep.length !== 8) { NG.toast('Informe o CEP com 8 dígitos.', 'bad'); F.cep.focus(); return; }
     F.cep.value = `${e.cep.slice(0, 5)}-${e.cep.slice(5)}`;
     resEl.hidden = false;
-    resEl.innerHTML = '<span class="carregando">Consultando a base DFV…</span>';
+    resEl.innerHTML = '<span class="carregando">Consultando o painel DFV da Nio…</span>';
     try {
-      const r = await NG.dfvConsultar(e.cep, e.numero, e.complemento);
+      const r = await NG.dfvAoVivo(e);
       if (!r) throw new Error('resposta vazia');
-      render(r, e);
+      if (r.fonte === 'base_congelada') {
+        if (!r.rpc) throw new Error(`painel ao vivo indisponível (${r.motivo || 'sem motivo'}) e a base congelada não respondeu`);
+        render(r.rpc, e);
+        resEl.insertAdjacentHTML('afterbegin', `<div class="faixa amarelo"><strong>Base congelada de JF (${esc(base(r.particao))})</strong><span>O painel ao vivo não respondeu (${esc(r.motivo || '—')}). Este resultado é a foto antiga de Juiz de Fora — confira no painel abaixo.</span></div>`);
+        return;
+      }
+      renderVivo(r, e);
     } catch (err) {
-      resEl.innerHTML = `<div class="faixa amarelo"><strong>Base DFV indisponível</strong><span>${esc(NG.msgErro(err))} — use o painel DFV Sudeste abaixo.</span></div>`;
+      resEl.innerHTML = `<div class="faixa amarelo"><strong>Consulta DFV indisponível</strong><span>${esc(NG.msgErro(err))} — use o painel DFV Sudeste abaixo.</span></div>`;
     }
   }
   form.addEventListener('submit', (ev) => { ev.preventDefault(); consultar(); });
   resEl.addEventListener('click', async (ev) => {
     if (ev.target.closest('[data-criar]')) { (await novaVenda).abrir(ultimo); return; }
+    if (ev.target.closest('[data-abrir-painel]')) {
+      ev.preventDefault();
+      det.open = true;
+      det.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
     const b = ev.target.closest('[data-comp]');
     if (!b) return;
+    if (b.dataset.num != null) F.numero.value = b.dataset.num;
     F.complemento.value = b.dataset.comp;
     consultar();
   });
