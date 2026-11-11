@@ -10,12 +10,21 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
-## Como usar
-1. Entre com o e-mail e a senha **do NIOGEN** (não é o login do portal).
-2. Escolha a venda em **Prontas para o portal** (faltas em vermelho).
-3. No portal, abra **Novo Pedido**. O painel acompanha a etapa aberta (ou troque no seletor).
-4. **Preencher esta etapa** escreve os campos. Confira, e clique **você** em Buscar / Continuar / Avançar.
-5. Ao terminar o pedido, digite o **Número do pedido** no painel e **Gravar no NIOGEN**.
+## Painel da venda (0.5.0, 10/11/2026) — jornada fixa, sem rolagem
+1. Entre com o e-mail e a senha **do NIOGEN** (não é o login do portal) e escolha a venda em **Prontas para o portal**.
+2. **Jornada das 7 etapas sempre à vista**, no alto do painel: a etapa aberta no portal **acende sozinha** (●); as já feitas ficam com ✓ e
+   **continuam acesas até "Concluir"** (se o portal voltar uma etapa, ela vira "aberta" e segue com ✓). "N faltam" em vermelho = dado que o
+   NIOGEN não tem. Ao lado da 2 e da 3 aparece o resultado registrado (Viável, Aprovado…).
+3. **Etapa em foco** (a única parte que rola, por dentro): linhas da etapa, avisos do portal, **Preencher esta etapa** (1–4) ou
+   **Destacar no portal** (5), resultados e o registro no NIOGEN (viabilidade na 2, crédito na 3). Clique numa etapa da jornada para ver
+   outra; **↺ seguir o portal** volta ao automático. Quem clica em Buscar / Continuar / Avançar no portal é **você**.
+4. **📋 Todos os dados** (rodapé): camada com os dados de todas as etapas, cada linha com **Copiar** (no formato que o portal aceita) e
+   **Copiar tudo** (texto simples `Rótulo: valor`, agrupado por etapa). Fecha com × ou Esc. Nunca traz banco, agência, conta, cartão nem senha.
+5. **Pedido (OS) e agendamento não são gravados aqui** (decisão do Ricardo, 10/11 22h45): na etapa 7, **Abrir a ficha** leva à ficha da venda
+   no NIOGEN (`NIOGEN_URL` do `config.js`; padrão `https://niogen.dharmatelecom.com.br`).
+6. **Concluir** (rodapé) fecha a venda e apaga as luzes guardadas. Fechar e reabrir o painel, ou sair e voltar em **← Vendas**, não perde as luzes
+   (ficam em `chrome.storage.session`: só números de etapa e resultados, nunca dado de cliente).
+- Permissão nova: `clipboardWrite` (para copiar). Atualizar: `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
 | Etapa | A extensão faz |
 |---|---|

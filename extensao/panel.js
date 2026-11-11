@@ -14,6 +14,9 @@
  * já com o dia e o período, pela ficha do NIOGEN ("Gravar OS e agendamento") — é isso que faz a venda contar.
  * rev. 10/11 (0105, 0.4.0): no Histórico de Pedidos, botão "Atualizar status no NIOGEN" — o content.js lê os 7 status (lista branca
  *   de cliques) e o painel manda o lote em UMA chamada portal_status_registrar(p_lote).
+ * rev. 10/11 (0.5.0): jornada das 7 etapas fixa e sem rolagem (a etapa aberta no portal acende; as feitas ficam acesas até Concluir;
+ *   estado em chrome.storage.session, só etapas/resultados — nunca dado de cliente); área só da etapa em foco; botão "📋 Todos os dados"
+ *   (copiar). Pedido (OS) e agendamento: só na ficha do NIOGEN (link "Abrir a ficha"). Nada escrito no portal por este botão.
  * Este arquivo não usa console.* e não grava dado de cliente em storage (em storage.local só a sessão). Quem escreve no portal é o content.js.
  */
 'use strict';
@@ -45,7 +48,12 @@
     + 'visita_preferencia,instalacao_preferencia,dados,venda_id,chatwoot_conversation_id,chatwoot_status,handoff_motivo,updated_at,ultima_msg_lead_at,'
     + 'venda:vendas(status,nio_pedido)';
 
+  // 0.5.0 — endereço do NIOGEN para "Abrir a ficha" (config.js pode sobrescrever com NIOGEN_URL; regra 15: nada fixo só no código)
+  const NIOGEN_URL = String(CFG.NIOGEN_URL || 'https://niogen.dharmatelecom.com.br').replace(/\/+$/, '');
+  const ROT_REG = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado', aprovado: 'Aprovado', so_cartao: 'Só cartão', pendente: 'Pendente', negado: 'Negado' };
+
   const S = {
+    feitas: {}, todos: false,   // 0.5.0: etapas acesas (n → true) e camada "Todos os dados"
     sess: null, nome: '', perfil: '', fila: null, filaErro: '', carregando: false,
     venda: null, dados: null, etapaAuto: null, etapaManual: null, avisos: [], resultados: {},
     matricula: '', pedido: '', msg: null, tabId: null, ocupado: false,
@@ -157,6 +165,7 @@
     S.sess = null; S.nome = ''; S.perfil = ''; S.fila = null; S.venda = null; S.dados = null;
     S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = ''; S.os = '';
     S.convs = null; S.conversa = null; S.turnos = null; S.busca = ''; S.aba = 'vendas'; S.orelha = 'portal';
+    S.feitas = {}; S.todos = false; S.registro = null; S.etapaManual = null;
     try { await chrome.storage.local.remove('niogen_sess'); await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* aba sem content script */ }
   }
@@ -177,6 +186,7 @@
     if (!msg || msg.tipo !== 'estado' || !sender.tab) return;
     if (S.tabId != null && sender.tab.id !== S.tabId) return;
     S.etapaAuto = msg.etapa || null; S.avisos = msg.avisos || []; S.naHistorico = !!msg.historico;
+    if (S.dados) acendeAnteriores();
     desenha();
   });
   chrome.runtime.onMessage.addListener((msg, sender) => {
@@ -378,7 +388,8 @@
     try {
       const plano = await planoDaConversa(c);
       S.venda = null; S.conversa = c; S.dados = dadosDaConversa(c, plano);
-      S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; S.etapaManual = null; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
+      S.matricula = ''; S.pedido = ''; S.os = ''; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
+      await carregaJornada();
       window.scrollTo(0, 0);
       if (S.orelha === 'conversa') carregaTurnos();
       try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
@@ -390,7 +401,8 @@
     try {
       const d = await rpc('dados_portal', { p_venda_id: item.venda_id });
       if (!d) throw new Error('Não achei essa venda (ou você não tem acesso).');
-      S.venda = item; S.dados = d; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; S.etapaManual = null;
+      S.venda = item; S.dados = d; S.matricula = ''; S.pedido = ''; S.os = '';
+      await carregaJornada();
       // 0102 (trava B1): avisos de possível duplicado (⚠️ ↩️ 🏠 📱) da ficha única — com aviso, o Gravar pede a conferência.
       S.selos = []; S.conferiRecompra = false;
       try { const av = await rpc('ficha_avisos', { p_venda: item.venda_id }); S.selos = ((av && av.selos) || []).filter((x) => x.venda_id !== item.venda_id); } catch (e) { S.selos = []; }
@@ -408,6 +420,7 @@
   }
   async function voltar() {
     S.venda = null; S.dados = null; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; aviso('');
+    S.feitas = {}; S.registro = null; S.etapaManual = null; S.todos = false;   // ficam guardados em storage.session; reabrir acende de novo
     S.conversa = null; S.turnos = null; S.orelha = 'portal';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
     desenha();
@@ -421,11 +434,34 @@
     S.aba = a; desenha();
     if (a === 'conversas' && S.convs == null) carregaConversas();
   }
-  // rev. 08/11 — rola o painel até o bloco da etapa (o cabeçalho fixo fica de fora pelo scroll-margin-top do CSS)
-  function rolarPara(n, bloco) {
-    const el = document.getElementById(`etapa-${n}`);   // desenha() já trocou o DOM (síncrono)
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: bloco || 'start' });
+  // ---- 0.5.0 — jornada: etapas acesas até "Concluir". Guarda só números de etapa, resultados do preenchimento e do registro
+  //      (nada de dado de cliente) em chrome.storage.session, por venda/conversa.
+  const chaveJornada = () => (S.dados ? `jornada:${S.dados.venda_id || S.dados.conversa_id || ''}` : null);
+  async function salvaJornada() {
+    const k = chaveJornada(); if (!k) return;
+    try { await chrome.storage.session.set({ [k]: { feitas: S.feitas, resultados: S.resultados, registro: S.registro || null, manual: S.etapaManual || null } }); } catch (e) { /* ok */ }
   }
+  async function carregaJornada() {
+    S.feitas = {}; S.resultados = {}; S.registro = null; S.etapaManual = null; S.todos = false;
+    const k = chaveJornada(); if (!k) return;
+    try {
+      const g = (await chrome.storage.session.get(k))[k];
+      if (g) { S.feitas = g.feitas || {}; S.resultados = g.resultados || {}; S.registro = g.registro || null; S.etapaManual = g.manual || null; }
+    } catch (e) { /* ok */ }
+  }
+  async function limpaJornada() {
+    const k = chaveJornada();
+    S.feitas = {}; S.resultados = {}; S.registro = null; S.etapaManual = null; S.todos = false;
+    if (k) { try { await chrome.storage.session.remove(k); } catch (e) { /* ok */ } }
+  }
+  const acende = (n) => { if (!S.feitas[n]) { S.feitas[n] = true; salvaJornada(); } };
+  function acendeAnteriores() {   // o portal mostrou uma etapa maior → as anteriores estão feitas
+    let mudou = false;
+    for (let i = 1; i < (S.etapaAuto || 0); i++) if (!S.feitas[i]) { S.feitas[i] = true; mudou = true; }
+    if (mudou) salvaJornada();
+  }
+  // etapa em foco: escolha manual > a aberta no portal > a primeira ainda não feita
+  const etapaFoco = () => S.etapaManual || S.etapaAuto || ([1, 2, 3, 4, 5, 6, 7].find((i) => !S.feitas[i]) || 1);
   const etapaAtual = () => S.etapaManual || S.etapaAuto;
 
   async function preencherEtapa(n) {
@@ -440,12 +476,13 @@
       // Etapa fechada (tudo escrito/destacado, ou o que falta é dado que não temos) → o painel desce para a próxima.
       // Se algum campo pede você (não apareceu ainda, opção ambígua, portal recusou), fica nesta etapa mostrando o resultado.
       fechou = n < 7 && S.resultados[n].every((x) => ['ok', 'ja', 'destacado', 'sem_valor'].includes(x.estado));
+      if (fechou) S.feitas[n] = true;
+      salvaJornada();
       if (ok && S.dados.venda_id) { api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' },
         body: { venda_id: S.dados.venda_id, tipo: n === 5 ? 'portal_extensao_destacado' : 'portal_extensao_preenchido', detalhe: { etapa: n, campos: ok } } }).catch(() => {}); }
       aviso(n === 5 ? 'Destaquei no portal o que a venda tem. Confira e clique você.' : 'Pronto — confira os campos no portal e clique você mesmo em Buscar/Avançar.', 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
-    if (fechou) rolarPara(n + 1); else if (S.resultados[n]) rolarPara(n, 'nearest');
   }
   // 0092: registra no NIOGEN o que o portal respondeu (viabilidade na etapa 2, crédito na etapa 3) — o mesmo botão da ficha.
   // 0111 (Ricardo, 10/11): o nº do pedido só existe na OS. Crédito aprovado aqui = etapa Biometria no NIOGEN (etiqueta + aviso do link).
@@ -462,12 +499,14 @@
       }
       const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao', sem_aviso: !!S.semAviso } });
       S.registro = { ...(S.registro || {}), [qual]: resultado };
+      S.feitas[qual === 'viabilidade' ? 2 : 3] = true; salvaJornada();
       aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
   async function concluiVenda() {
     S.fila = (S.fila || []).filter((x) => x.venda_id !== (S.venda || {}).venda_id);
+    await limpaJornada();   // "Concluir" apaga as luzes guardadas desta venda
     S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null;
     S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
@@ -646,11 +685,10 @@
     ];
   }
 
-  function blocoEtapa(n) {
-    const atual = etapaAtual() === n;
+  // ---- 0.5.0 — etapa em foco (a única área que pode rolar por dentro) e jornada fixa
+  function blocoFoco(n) {
+    const atual = S.etapaAuto === n;
     const linhas = linhasEtapa(n);
-    const falt = faltasDaEtapa(n);
-    const res = {}; (S.resultados[n] || []).forEach((r) => { res[r.id] = r.estado; });
     const corpo = linhas.map(([rot, val, obrig, conf, nota]) => {
       const sem = !val && obrig;
       const vEl = val ? h('span', { class: `val${conf ? ' conf' : ''}` }, val) : sem ? h('span', { class: 'val falta' }, 'falta') : h('span', { class: 'val conf' }, nota || '—');
@@ -668,11 +706,14 @@
       : n === 3 ? 'Depois de preencher, clique você em Buscar (o nome vem da Receita).'
       : n === 5 ? 'Crédito, oferta, forma de pagamento e dados bancários são com você: eu só destaco o que a venda tem. Banco, agência e conta, nunca.'
       : n === 6 || n === 7 ? 'Nada é preenchido aqui. Antes da biometria, o cliente precisa ter ouvido:' : '';
-    return h('section', { class: 'card', id: `etapa-${n}` },
-      h('div', { class: `etapa-tit${atual ? ' atual' : ''}` }, `Etapa ${n} · ${ETAPAS[n - 1]}${atual ? ' — aberta no portal' : ''}`,
-        ' ', falt ? h('span', { class: 'chip bad' }, `${falt} ${falt === 1 ? 'falta' : 'faltam'}`) : null),
+    const idVenda = S.dados && S.dados.venda_id;
+    return h('section', { class: 'foco' },
+      h('div', { class: `etapa-tit${atual ? ' atual' : ''}` }, `Etapa ${n} · ${ETAPAS[n - 1]}${atual ? ' — aberta no portal' : ''}`),
       corpo, extraTxt ? h('span', { class: 'sub' }, extraTxt) : null,
       n === 6 || n === 7 ? h('ul', { class: 'lista sub' }, CHECKLIST.map((x) => h('li', {}, x))) : null,
+      // Decisão do Ricardo (10/11 22h45): o nº do pedido (OS) e o agendamento só se gravam na ficha do NIOGEN — nenhum campo deles aqui.
+      n === 7 ? h('div', { class: 'dica' }, h('div', {}, 'Pedido (OS) e agendamento: grave na ficha do NIOGEN.'),
+        idVenda ? h('a', { class: 'btn btn-sm', target: '_blank', rel: 'noopener', href: `${NIOGEN_URL}/vendas.html#venda=${encodeURIComponent(idVenda)}` }, 'Abrir a ficha') : null) : null,
       acao, resultados, registroNiogen(n));
   }
   // 0092: botões "registrar no NIOGEN" das etapas 2 (viabilidade) e 3 (crédito). Só com venda aberta no painel.
@@ -680,7 +721,6 @@
     if (!S.venda || !S.dados || !S.dados.venda_id || (n !== 2 && n !== 3)) return null;
     const feito = (S.registro || {})[n === 2 ? 'viabilidade' : 'credito'];
     const B = (qual, res, rot, forte) => h('button', { class: `btn ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, onclick: () => registra(qual, res) }, rot);
-    const ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado', aprovado: 'Aprovado', so_cartao: 'Só cartão', pendente: 'Pendente', negado: 'Negado' };
     return h('div', { class: 'registro' },
       h('span', { class: 'sub' }, n === 2 ? 'O portal respondeu a viabilidade? Registre no NIOGEN:' : 'O portal respondeu o crédito? Registre no NIOGEN:'),
       n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
@@ -692,56 +732,106 @@
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
           ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
       n === 3 ? h('span', { class: 'sub' }, 'Aprovado: a venda vai para Biometria e o NIOGEN avisa o cliente do link sozinho. Não há nº de pedido aqui — ele só existe na OS.') : null,
-      feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT[feito] || feito}`) : null);
+      feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT_REG[feito] || feito}`) : null);
   }
 
-  function fimDoPedido() {
-    if (S.venda) {
-      // 0111: sem nº de pedido aqui (só existe na OS, gravada pela ficha depois da biometria validada).
-      const cred = (S.registro || {}).credito;
-      const ok = ['aprovado', 'so_cartao'].includes(cred);
-      return h('section', { class: 'card' },
-        h('h2', {}, ok ? 'Crédito aprovado → biometria' : 'Falta o crédito'),
-        h('span', { class: 'sub' }, ok
-          ? 'A Nio manda o link da biometria ao cliente e o NIOGEN já avisou. Com a biometria validada, abra a OS e grave o nº do pedido (= OS) na ficha do NIOGEN.'
-          : 'Registre o resultado do crédito na etapa 3 acima — é ele que leva a venda para Biometria. O nº do pedido só existe na OS.'),
-        h('button', { class: 'btn btn-bloco', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir e fechar esta venda'));
-    }
+  // Jornada fixa: uma linha por etapa. atual (aberta no portal) · feita (✓ acesa até Concluir) · pendente (○) · "N faltam".
+  function jornada(foco) {
+    const reg = S.registro || {};
+    const linhas = ETAPAS.map((nome, i) => {
+      const n = i + 1, atual = S.etapaAuto === n, feita = !!S.feitas[n], falt = faltasDaEtapa(n);
+      const estado = atual ? 'atual' : feita ? 'feita' : 'pendente';
+      const resultado = n === 2 ? reg.viabilidade : n === 3 ? reg.credito : null;
+      return h('button', { class: `jor ${estado}${n >= 4 ? ' meia' : ''}${foco === n ? ' foco' : ''}`, type: 'button', 'aria-current': foco === n ? 'step' : 'false',
+        title: 'Ver esta etapa', onclick: () => { S.etapaManual = n; salvaJornada(); desenha(); } },
+        h('span', { class: 'jor-ico' }, atual ? '●' : feita ? '✓' : '○'),
+        h('span', { class: 'jor-nome' }, `${n} ${nome}`),
+        atual ? h('span', { class: 'jor-nota' }, 'aberta no portal') : null,
+        resultado ? h('span', { class: 'chip ok' }, ROT_REG[resultado] || resultado) : null,
+        falt && n <= 5 ? h('span', { class: 'chip bad' }, `${falt} ${falt === 1 ? 'falta' : 'faltam'}`) : null);
+    });
+    return h('div', { class: 'jornada' }, linhas,
+      S.etapaManual ? h('button', { class: 'btn btn-sm jor-seguir', type: 'button', onclick: () => { S.etapaManual = null; salvaJornada(); desenha(); } }, '↺ seguir o portal') : null);
+  }
+
+  // ---- botão "📋 Todos os dados": camada com os valores de todas as etapas, cada um copiável (formato que o portal aceita).
+  // Nunca entram banco, agência, conta, cartão, senha nem matrícula de outro vendedor. Nada é escrito no portal.
+  function itensCopia() {
+    const d = S.dados; if (!d) return [];
+    const v = d.viabilidade, c = d.cliente, k = d.contato, o = d.oferta;
+    const L = (rot, valor, obrig) => ({ rot, valor: valor == null ? '' : String(valor), obrig: !!obrig });
+    return [
+      [1, [L('UF', d.pdv.uf, true), L('PDV', d.pdv.codigo, true), L('Matrícula do vendedor', MATRICULA_PAP, true)]],
+      [2, [L('CEP', fmtCep(v.cep), true), L('Número', v.numero, true), L('Complemento', v.complemento, false), L('Referência', v.referencia, true),
+        L('Rua', v.logradouro, false), L('Bairro', v.bairro, false), L('Cidade', [v.cidade, v.uf].filter(Boolean).join('/'), false)]],
+      [3, [L(c.tipo, so(c.documento), true), L('Nome', c.nome, false)]],
+      [4, [L('Celular', celular(k.celular), true), L('E-mail', k.email, true)]],
+      [5, [L('Plano', o.plano, true), L('Adicionais', (o.adicionais || []).map((a) => `${a.nome} × ${a.qtd}`).join(', '), false),
+        L('Forma de pagamento', o.forma_pagamento ? FORMAS[o.forma_pagamento][0] : '', true)]],
+      [6, [L('Período preferido', d.agendamento.preferencia, false)]],
+    ];
+  }
+  async function copiar(texto, rotulo) {
+    try { await navigator.clipboard.writeText(texto); aviso(`Copiado: ${rotulo}`, 'ok'); }
+    catch (e) { aviso('Não consegui copiar — o Chrome bloqueou a área de transferência.', 'bad'); }
+    desenha();
+  }
+  function copiarTudo() {
+    const txt = itensCopia().map(([n, itens]) => {
+      const lin = itens.filter((i) => i.valor).map((i) => `${i.rot}: ${i.valor}`);
+      return lin.length ? [`${n} · ${ETAPAS[n - 1]}`, ...lin].join('\n') : '';
+    }).filter(Boolean).join('\n\n');
+    copiar(txt, 'todos os dados');
+  }
+  function camadaTodos() {
+    const grupos = itensCopia().map(([n, itens]) => h('div', { class: 'tg' },
+      h('div', { class: 'etapa-tit' }, `${n} · ${ETAPAS[n - 1]}`),
+      itens.map((i) => h('div', { class: 'linha' },
+        h('span', { class: 'rot' }, i.rot),
+        i.valor ? h('span', { class: 'val' }, i.valor) : i.obrig ? h('span', { class: 'val falta' }, 'falta') : h('span', { class: 'val conf' }, '—'),
+        i.valor ? h('button', { class: 'btn btn-sm', type: 'button', onclick: () => copiar(i.valor, i.rot) }, 'Copiar') : h('span')))));
+    return h('div', { class: 'camada', role: 'dialog', 'aria-label': 'Todos os dados' },
+      h('div', { class: 'camada-topo' }, h('h2', { style: 'flex:1' }, 'Todos os dados'),
+        h('button', { class: 'btn btn-sm btn-acc', type: 'button', onclick: copiarTudo }, 'Copiar tudo'),
+        h('button', { class: 'btn btn-sm', type: 'button', 'aria-label': 'Fechar', onclick: () => { S.todos = false; desenha(); } }, '×')),
+      h('div', { class: 'camada-corpo' }, grupos));
+  }
+
+  // Rodapé fixo: linha curta + [📋 Todos os dados] [Concluir]
+  function rodape() {
     const c = S.conversa;
-    return h('section', { class: 'card' },
-      h('h2', {}, 'Ainda não é venda'),
-      c && c.venda_id
-        ? [h('span', { class: 'sub' }, 'Esta conversa já virou venda no NIOGEN. Para gravar o número do pedido, abra a venda.'),
-          h('button', { class: 'btn btn-bloco', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda')]
-        : h('span', { class: 'sub' }, 'Daqui dá para consultar a viabilidade e adiantar o pedido. O número do pedido só se grava depois que a venda existir no NIOGEN (Mari ou vendedor qualifica).'));
+    let linha, fim;
+    if (S.venda) {
+      const ok = ['aprovado', 'so_cartao'].includes((S.registro || {}).credito);
+      linha = ok ? 'Crédito aprovado → biometria. OS e agendamento: na ficha do NIOGEN.' : 'Falta o crédito: registre na etapa 3 — é ele que leva a venda para Biometria.';
+      fim = h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir');
+    } else {
+      linha = c && c.venda_id ? 'Esta conversa já virou venda. Para registrar viabilidade e crédito, abra a venda.' : 'Ainda não é venda — daqui só dá para consultar a viabilidade.';
+      fim = c && c.venda_id ? h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda') : null;
+    }
+    return h('footer', { class: 'rodape' }, h('span', { class: 'sub' }, linha),
+      h('div', { class: 'rodape-bt' }, h('button', { class: 'btn grow', type: 'button', onclick: () => { S.todos = !S.todos; desenha(); } }, '📋 Todos os dados'), fim));
   }
 
   function telaVenda() {
-    const d = S.dados, n = etapaAtual();
+    const d = S.dados, n = etapaFoco();
     const titulo = S.venda ? (S.venda.cliente_nome || '—') : nomeConversa(S.conversa || {});
-    const cab = h('div', { class: 'card' },
+    const cab = h('div', { class: 'cab' },
       h('div', { style: 'display:flex;align-items:center;gap:8px' },
-        h('div', { style: 'flex:1' }, h('h2', {}, titulo),
+        h('div', { style: 'flex:1;min-width:0' }, h('h2', {}, titulo),
           h('span', { class: 'sub' }, [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · ')),
           !S.venda ? h('div', {}, h('span', { class: 'chip acc' }, 'Conversa da Mari · sem venda qualificada')) : null),
         h('button', { class: 'btn btn-sm', type: 'button', onclick: voltar }, S.aba === 'conversas' ? '← Conversas' : '← Vendas')),
-      orelhas([['portal', 'Preencher no portal'], ['conversa', '💬 Conversa (Chatwoot)']], S.orelha, trocaOrelha, 'orelhas-sub'));
-    if (S.orelha === 'conversa') return [cab, telaConversa()];
+      orelhas([['portal', 'Preencher no portal'], ['conversa', '💬 Conversa']], S.orelha, trocaOrelha, 'orelhas-sub'));
     const avisosPortal = S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg));
-    const regua = h('div', { class: 'regua' }, ETAPAS.map((_, i) => h('span', { class: n === i + 1 ? 'atual' : n && i + 1 < n ? 'feito' : '' })));
-    const seletor = h('label', { class: 'campo' }, 'Etapa (automática; troque se eu errar)',
-      h('select', { id: 'sel-etapa', onchange: (ev) => { S.etapaManual = ev.target.value ? Number(ev.target.value) : null; desenha(); } },
-        h('option', { value: '' }, S.etapaAuto ? `Automática — etapa ${S.etapaAuto} · ${ETAPAS[S.etapaAuto - 1]}` : 'Automática — não identifiquei a etapa'),
-        ETAPAS.map((nome, i) => h('option', { value: i + 1, selected: S.etapaManual === i + 1 }, `${i + 1} · ${nome}`))));
-    const ordem = [1, 2, 3, 4, 5, 6, 7];
-    cab.append(regua, seletor);
-    return [
+    const portal = S.orelha !== 'conversa';
+    return h('div', { class: 'venda-wrap' },
       cab,
-      avisosPortal,
-      !n ? h('div', { class: 'dica' }, 'Abra o Novo Pedido no portal (menu Novo Pedido) para eu identificar a etapa.') : null,
-      ordem.map(blocoEtapa),
-      fimDoPedido(),
-    ];
+      portal ? jornada(n) : null,
+      h('div', { class: 'area' },
+        portal ? [avisosPortal, !S.etapaAuto ? h('div', { class: 'dica' }, 'Abra o Novo Pedido no portal (menu Novo Pedido) para eu identificar a etapa.') : null, blocoFoco(n)] : telaConversa()),
+      S.todos ? camadaTodos() : null,
+      rodape());
   }
 
   function desenha() {
@@ -766,11 +856,16 @@
     // rev. 08/11: o recado vai num aviso fixo no rodapé — o painel rola até a próxima etapa e o recado continua à vista
     if (S.msg) partes.push(h('div', { class: `toast ${S.msg.tipo === 'bad' ? 'bad' : 'ok'}`, role: 'status' },
       h('span', { class: 'grow' }, S.msg.texto), h('button', { class: 'btn btn-sm', type: 'button', 'aria-label': 'Fechar', onclick: () => { aviso(''); desenha(); } }, '×')));
+    raiz.className = S.sess && S.dados ? 'venda' : '';   // 0.5.0: na venda o corpo não rola; só a etapa em foco
+    const area = raiz.querySelector('.area'), posArea = area ? area.scrollTop : 0;   // a etapa em foco guarda a rolagem entre redesenhos
     raiz.replaceChildren(...partes.flat(Infinity).filter(Boolean));
+    const areaNova = raiz.querySelector('.area'); if (areaNova && posArea) areaNova.scrollTop = posArea;
     const nova = document.getElementById('conv-box');
     if (nova) nova.scrollTop = posConv && !posConv.noFim ? posConv.top : nova.scrollHeight;
     if (idAtivo) { const el = document.getElementById(idAtivo); if (el) { el.focus(); try { if (ini != null) el.setSelectionRange(ini, fim); } catch (e) { /* select/email */ } } }
   }
+
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && S.todos) { S.todos = false; desenha(); } });
 
   // ------------------------------------------------------------------ início
   (async () => {

@@ -6,4 +6,6 @@
 window.NIOGEN_CONFIG = {
   supabaseUrl: 'https://SEU-PROJETO.supabase.co',
   supabaseAnonKey: 'COLE-AQUI-A-CHAVE-ANON',
+  // Endereço do NIOGEN (botão "Abrir a ficha" na etapa 7). Opcional: sem ele a extensão usa https://niogen.dharmatelecom.com.br
+  NIOGEN_URL: 'https://niogen.dharmatelecom.com.br',
 };
