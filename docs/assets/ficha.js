@@ -54,6 +54,7 @@
   let convEsperaFechado = false;   // 0103: o operador fechou o ⏸ Aguardar sugerido — não reabrir sozinho
   let planosCache = null;  // 0092: config_planos ativos (trocar plano / upsell)
   let linksCache = null;   // 0092: config_links (DFV, formulário de análise da Nio)
+  let cicloCache;          // 11/11: config_regras.comissao_ciclo_regra (lida uma vez por página)
   let cvComp = null;       // 0090: NGConversa montado no painel da ficha
   let hostConversa = null; // 0090: a tela abre a conversa no lugar dela (Live)
   let ladoEl = null;       // 0090: ficha ao lado (Live · Lista), sem gaveta
@@ -222,9 +223,15 @@
   }
 
   // ---------- dados ----------
-  async function carregar(id) {
+  // 11/11 (Live lenta): eram ~8 esperas em fila (cada uma ~0,3 s de rede); agora são 2 rodadas em paralelo — a 1ª com tudo
+  // o que só depende do id da venda, a 2ª com o que depende da conversa/da própria venda. A linha da jornada vem da carga
+  // compartilhada (NG.jornadaLinha). fresco = depois de uma ação: descarta o cache antes.
+  async function carregar(id, fresco) {
+    if (fresco) NG.limparCache();
     const perfil = (NG.usuario || {}).perfil;
-    const [rv, re, rl, ra, rc, rk, ru] = await Promise.all([
+    const bo = ['admin', 'backoffice'].includes(perfil);
+    const opc = (q) => Promise.resolve(q).then((x) => (x.error ? null : x.data), () => null);
+    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto] = await Promise.all([
       NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
@@ -235,30 +242,64 @@
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
+      // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
+      // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
+      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
+      // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
+      NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
+      motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
+      NG.sb.rpc('ficha_avisos', { p_venda: id }),
+      NG.jornadaLinha({ venda: id }),   // 0090: etapa, próximo passo, precisa de ação
+      planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
+      linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
+      // 0105: andamento na Nio — status do portal PAP (extensão 0.4) e biometria do GED360 (robô n8n). Só admin/backoffice.
+      bo ? opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle()) : null,
+      bo ? (cicloCache !== undefined ? cicloCache : opc(NG.sb.from('config_regras').select('valor').eq('chave', 'comissao_ciclo_regra').maybeSingle())) : null,
+      NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
+    if (bo && cicloRow) cicloCache = cicloRow;
+    if (!rpl.error) planosCache = rpl.data || [];
+    if (!rlk.error) linksCache = rlk.data || [];
+    if (!rmot.error) motivosCache = rmot.data || [];
     const v = rv.data;
-    // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela.
-    const rx27 = await NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em').eq('id', id).maybeSingle();
-    if (rx27.data) Object.assign(v, rx27.data);
-    let nomeCurto = null;
-    if (v.plano_id) {
-      const rp = await NG.sb.from('config_planos').select('nome_curto').eq('id', v.plano_id).maybeSingle();
-      nomeCurto = (rp.data || {}).nome_curto || null;
+    const ehParc = v.origem === 'parceiro_pap' && bo;
+    if (rx27.data) {
+      const { conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em, ...viab } = rx27.data;
+      Object.assign(v, viab, ehParc ? { conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em } : {});
     }
-    const nomeDe = Object.fromEntries(ru.map((u) => [u.id, u.nome]));
-    // Venda de parceiro (admin/backoffice): máximo de tentativas, comissão configurada e se o lançamento já saiu.
-    let parc = null;
-    if (v.origem === 'parceiro_pap' && ['admin', 'backoffice'].includes(perfil)) {
-      // Obs. interna, quem e quando aprovou não estão em v_funil (só prazo, status e motivo): lê da tabela.
-      const rx = await NG.sb.from('vendas').select('conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle();
-      if (rx.data) Object.assign(v, rx.data);
-      const [rcfg, rcom, rpag] = await Promise.all([
+    const convId = ((rc.data || [])[0] || {}).id || null;
+    const planoLista = v.plano_id ? (planosCache || []).find((p) => p.id === v.plano_id) : null;
+    // 2ª rodada: o que depende da conversa (cadência, nº de mensagens, bloqueio, última fala) e da venda (parceiro, faturas).
+    const [rpCurto, rparc, rcad, rnm, rbq, rut, fatRow, concRow] = await Promise.all([
+      v.plano_id && !planoLista ? NG.sb.from('config_planos').select('nome_curto').eq('id', v.plano_id).maybeSingle() : null,   // plano inativo: fora da lista
+      // Venda de parceiro (admin/backoffice): máximo de tentativas, comissão configurada e se o lançamento já saiu.
+      ehParc ? Promise.all([
         NG.sb.from('config_parceiros').select('conferencia_max_tentativas').maybeSingle(),
         v.plano_id ? NG.sb.from('parceiro_comissao').select('parceiro_id, valor').eq('plano_id', v.plano_id) : Promise.resolve({ data: [] }),
         NG.sb.from('parceiro_pagamentos').select('id, tipo, status').eq('venda_id', id),
-      ]);
+      ]) : null,
+      // Prompt 28: avisos automáticos da Mari para a venda (BIO1 · BIO3 · INSTALACAO · VESPERA) — só admin/backoffice.
+      convId ? Promise.all([
+        NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', convId).maybeSingle(),
+        NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', convId).eq('papel', 'mari')
+          .not('tags->>cadencia', 'is', null).order('created_at'),
+        NG.tplCadencia(),
+      ]) : null,
+      convId ? NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', convId).in('papel', ['lead', 'mari', 'humano']) : { count: 0 },
+      convId ? NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', convId).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1) : { data: [] },
+      convId ? ultimaFalaTime(convId) : null,   // 0103: sugestão do motivo quando o cliente só confirmou
+      // 10/11: faturas do M-10 (v_adimplencia) e conciliação (v_conciliacao). As views ainda são rascunho: sem elas, a ficha
+      // mostra "aguardando o extrato da Nio" (nunca dado de exemplo).
+      v.instalado_em ? opc(NG.sb.from('v_adimplencia').select('faturas').eq('venda_id', id).maybeSingle()) : null,
+      bo && v.comissao_paga != null ? opc(NG.sb.from('v_conciliacao').select('*').eq('venda_id', id).maybeSingle()) : null,
+    ]);
+    const nomeCurto = planoLista ? planoLista.nome_curto || null : ((rpCurto && rpCurto.data) || {}).nome_curto || null;
+    const nomeDe = Object.fromEntries(ru.map((u) => [u.id, u.nome]));
+    let parc = null;
+    if (rparc) {
+      const [rcfg, rcom, rpag] = rparc;
       const linhasCom = (rcom.data || []).filter((x) => x.parceiro_id === v.parceiro_id || x.parceiro_id === null);
       const doParc = linhasCom.find((x) => x.parceiro_id === v.parceiro_id);
       const padrao = linhasCom.find((x) => x.parceiro_id === null);
@@ -272,48 +313,15 @@
     const abertura = [...(re.data || [])].reverse().find((e) => e.tipo === 'conferencia' && (e.detalhe || {}).para === 'pendente');
     const desde = abertura ? new Date(abertura.criado_em) : new Date(v.criado_em);
     const semResposta = (rk.data || []).filter((c) => c.toque === 'CONF_SEM_RESPOSTA' && new Date(c.em) >= desde).length;
-    // Prompt 28: avisos automáticos da Mari para a venda (BIO1 · BIO3 · INSTALACAO · VESPERA) — só admin/backoffice.
-    const convId = ((rc.data || [])[0] || {}).id || null;
     let cad = null;
-    if (convId) {
-      const [rkc, rtc, tpl] = await Promise.all([
-        NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', convId).maybeSingle(),
-        NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', convId).eq('papel', 'mari')
-          .not('tags->>cadencia', 'is', null).order('created_at'),
-        NG.tplCadencia(),
-      ]);
+    if (rcad) {
+      const [rkc, rtc, tpl] = rcad;
       cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
     }
-    // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
-    const [rph, rmot, rav, rjo, rnm, rbq, rpl, rlk, rut] = await Promise.all([
-      NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
-      motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
-      NG.sb.rpc('ficha_avisos', { p_venda: id }),
-      NG.sb.from('v_jornada').select('*').eq('venda_id', id).maybeSingle(),   // 0090: etapa, próximo passo, precisa de ação
-      convId ? NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', convId).in('papel', ['lead', 'mari', 'humano']) : Promise.resolve({ count: 0 }),
-      convId ? NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', convId).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1) : Promise.resolve({ data: [] }),
-      planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
-      linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
-      convId ? ultimaFalaTime(convId) : Promise.resolve(null),   // 0103: sugestão do motivo quando o cliente só confirmou
-    ]);
-    // 10/11: faturas do M-10 (v_adimplencia), conciliação (v_conciliacao) e a regra de previsão do ciclo. As views ainda são
-    // rascunho: sem elas, a ficha mostra "aguardando o extrato da Nio" (nunca dado de exemplo).
-    const bo = ['admin', 'backoffice'].includes(perfil);
-    const opc = (q) => q.then((x) => (x.error ? null : x.data), () => null);
-    // 0105: andamento na Nio — status do portal PAP (extensão 0.4) e biometria do GED360 (robô n8n). Só admin/backoffice.
-    const andRow = bo ? await opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle()) : null;
-    const [fatRow, concRow, cicloRow] = await Promise.all([
-      v.instalado_em ? opc(NG.sb.from('v_adimplencia').select('faturas').eq('venda_id', id).maybeSingle()) : Promise.resolve(null),
-      bo && v.comissao_paga != null ? opc(NG.sb.from('v_conciliacao').select('*').eq('venda_id', id).maybeSingle()) : Promise.resolve(null),
-      bo ? opc(NG.sb.from('config_regras').select('valor').eq('chave', 'comissao_ciclo_regra').maybeSingle()) : Promise.resolve(null),
-    ]);
-    if (!rpl.error) planosCache = rpl.data || [];
-    if (!rlk.error) linksCache = rlk.data || [];
-    if (!rmot.error) motivosCache = rmot.data || [];
     const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     return {
-      jor: rjo && !rjo.error ? rjo.data : null,
+      jor: jo || null,
       andamento: andRow || null,
       faturas: fatRow && Array.isArray(fatRow.faturas) ? fatRow.faturas : null,
       concil: concRow || null,
@@ -329,7 +337,7 @@
       v,
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
       lim: rl.data || { hoje: 0, mes: 0 },
-      teto: await NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
+      teto,
       ultTime: rut || null,
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
@@ -1802,25 +1810,26 @@
   }
 
   // ---------- ficha de CONVERSA (etapa 1: conversa sem venda) ----------
-  async function carregarConversa(cid) {
-    const [rc, rj, rq, rk] = await Promise.all([
+  // 11/11: uma rodada só (antes eram 3 em fila) e a linha da jornada vem da carga compartilhada.
+  async function carregarConversa(cid, fresco) {
+    if (fresco) NG.limparCache();
+    const [rc, jo, rq, rk, rn, rt, rb, ultFala] = await Promise.all([
       NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em').eq('id', cid).maybeSingle(),
-      NG.sb.from('v_jornada').select('*').eq('conversa_id', cid).maybeSingle(),
+      NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
-    ]);
-    if (rc.error || !rc.data) return { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' };
-    if (rc.data.venda_id) return { venda: rc.data.venda_id };
-    const [rn, rt, rb] = await Promise.all([
       NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', cid).in('papel', ['lead', 'mari', 'humano']),
       NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari').not('tags->>cadencia', 'is', null).order('created_at'),
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
+      ultimaFalaTime(cid),   // 0103 (só usada se o cliente apenas confirmou)
     ]);
+    if (rc.error || !rc.data) return { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' };
+    if (rc.data.venda_id) return { venda: rc.data.venda_id };
     const c = rc.data;
-    const ultTime = rj.data && rj.data.confirmou_em ? await ultimaFalaTime(cid) : null;   // 0103
+    const ultTime = jo && jo.confirmou_em ? ultFala : null;   // 0103
     return {
       soConversa: true, ultTime, conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
-      jor: rj.error ? null : rj.data, q: rq.error ? {} : (rq.data || {}),
+      jor: jo || null, q: rq.error ? {} : (rq.data || {}),
       cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data) },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
@@ -1958,7 +1967,8 @@
     if (quieto && (formAtivo || edicao)) return;
     const id = idAtual;
     const ehConv = String(id).startsWith('c:');
-    const r = ehConv ? await carregarConversa(id.slice(2)) : await carregar(id);
+    const fresco = !quieto && !(op && op.abrindo);   // depois de ação: dado fresco; ao abrir ou no eco, o que já está em memória
+    const r = ehConv ? await carregarConversa(id.slice(2), fresco) : await carregar(id, fresco);
     if (id !== idAtual) return;   // trocou de venda no meio
     let sig = '';
     try { sig = JSON.stringify(r); } catch (e) { sig = String(Date.now()); }
@@ -2249,7 +2259,7 @@
         raiz.innerHTML = '<div class="ficha f-lado"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>'; }
       ladoEl.hidden = false;
       document.body.classList.add('ficha-ao-lado');
-      await recarregar();
+      await recarregar({ abrindo: true });
       return;
     }
     garantirGaveta();
@@ -2262,7 +2272,7 @@
       tituloOriginal = document.title;
       NG.gaveta.abrir(gav, { foco: false, aoFechar: aoFecharGaveta });
     }
-    await recarregar();
+    await recarregar({ abrindo: true });
   }
   function abrir(id) {
     if (!id) return;

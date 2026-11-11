@@ -89,25 +89,42 @@
     const secao = $('.cvp');
 
     // ---------- dados ----------
-    async function carregar() {
+    const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
+    const SEL_TURNO = 'id, papel, texto, tags, created_at';
+    const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200);
+    // 11/11 (Live lenta): leve = a atualização de 4 s. Antes cada rodada baixava de novo as 400 mensagens, as 200 ações e a
+    // v_jornada; agora traz só as mensagens novas (depois da última), o cabeçalho e as ações. A carga completa fica para a
+    // abertura, a volta à aba e depois de uma ação. A linha da jornada vem da carga compartilhada (NG.jornadaLinha).
+    async function carregar(leve) {
       const id = o.conversaId;
       const meu = ++st.seq;
-      const [rc, rt, ra, rr, rtpl, rj] = await Promise.all([
-        NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at').eq('id', id).maybeSingle(),
-        NG.sb.from('mari_turnos').select('id, papel, texto, tags, created_at').eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400),
-        NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200),
+      const ult = leve === true && st.d && st.d.turnos.length ? st.d.turnos[st.d.turnos.length - 1].created_at : null;
+      const qTurnos = ult
+        ? NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
+        : NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400);
+      const [rc, rt, ra, rr, rtpl, vj] = await Promise.all([
+        NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
+        qTurnos,
+        qAcoes(id),
         rapidas(),
         templates(),
         // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
-        NG.sb.from('v_jornada').select('venda_id, etapa_nome, botao, o_que_fazer').eq('conversa_id', id).not('venda_id', 'is', null).limit(1),
+        NG.jornadaLinha({ conversaComVenda: id }).catch(() => null),
       ]);
       if (!st.vivo || meu !== st.seq) return;
       if (rc.error || !rc.data) {
+        if (ult) return;   // falha passageira na atualização leve: mantém o que está na tela
         msgs.innerHTML = `<div class="vazio">${esc(rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).')}</div>`;
         return;
       }
-      st.venda = rj && !rj.error ? (rj.data || [])[0] || null : null;
-      st.d = { c: rc.data, turnos: (rt.data || []).reverse(), acoes: (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
+      st.venda = vj || null;
+      let turnos = (rt.data || []).reverse();
+      if (ult) {
+        if (rt.error) return;
+        const tem = new Set(st.d.turnos.map((t) => t.id));
+        turnos = st.d.turnos.concat(turnos.filter((t) => !tem.has(t.id)));
+      }
+      st.d = { c: rc.data, turnos, acoes: ra.error && st.d ? st.d.acoes : (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
       // A mensagem local some quando a ação dela aparece na fila do banco.
       st.locais = st.locais.filter((l) => !(l.acao_id && st.d.acoes.some((a) => a.id === l.acao_id)));
       // 10/11: a ficha/lista de quem abriu a conversa recarrega quando a fala aparece (turno novo, do cliente ou do time) ou a
@@ -292,7 +309,7 @@
         if (o.aoMudar) o.aoMudar(data);
       }
       desenharMsgs();
-      setTimeout(carregar, 1200);
+      setTimeout(() => carregar(), 1200);
     }
 
     async function conversaAcao(acao, valor) {
@@ -301,7 +318,7 @@
       NG.toast((data && data.resumo) || 'Feito', 'ok');
       if (o.aoMudar) o.aoMudar(data);
       await carregar();
-      setTimeout(carregar, 3000);
+      setTimeout(() => carregar(), 3000);
     }
 
     const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`; };
@@ -358,13 +375,13 @@
         ta.setSelectionRange(ta.value.length, ta.value.length);
       }
     });
-    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 4000);
+    const intervalo = setInterval(() => { if (document.visibilityState === 'visible') carregar(true); }, 4000);
     const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
     document.addEventListener('visibilitychange', aoVoltar);
 
     carregar();
     return {
-      recarregar: carregar,
+      recarregar: () => carregar(),
       destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); el.remove(); },
       focar() { ta.focus(); },
       get id() { return o.conversaId; },

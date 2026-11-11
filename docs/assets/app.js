@@ -79,15 +79,42 @@
   const limparCache = () => _memo.clear();
   const jornada = () => memo('jornada', jornadaBusca);
   const rpcOportunidades = () => memo('op_abertas', () => sb.rpc('oportunidades_abertas'));
+  const jornadaMonta = (data) => ({
+    lista: (data || []).filter((j) => j.etapa > 0), todas: data || [],
+    porVenda: Object.fromEntries((data || []).filter((j) => j.venda_id).map((j) => [j.venda_id, j])),
+    porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
+  });
+  // 11/11 (0121): admin/backoffice leem pela RPC jornada_live (definer, sem o custo do RLS linha a linha); os outros perfis
+  // (e qualquer falha da RPC) seguem pela view, com o RLS de sempre.
+  const SNAP_JORNADA = 'niogen.jornada.snap';
+  let rpcJornada = true;
   async function jornadaBusca() {
-    const { data, error } = await sb.from('v_jornada').select('*');
-    if (error) return { erro: msgErro(error), lista: [], porVenda: {}, porConversa: {} };
-    const lista = (data || []).filter((j) => j.etapa > 0);
-    return {
-      lista, todas: data || [],
-      porVenda: Object.fromEntries((data || []).filter((j) => j.venda_id).map((j) => [j.venda_id, j])),
-      porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
-    };
+    let r = null;
+    if (rpcJornada && usuarioAtual && ['admin', 'backoffice'].includes(usuarioAtual.perfil)) {
+      r = await sb.rpc('jornada_live');
+      if (r.error) { if (['PGRST202', '42883'].includes(String(r.error.code))) rpcJornada = false; r = null; }
+    }
+    if (!r) r = await sb.from('v_jornada').select('*');
+    if (r.error) return { erro: msgErro(r.error), lista: [], porVenda: {}, porConversa: {} };
+    try { sessionStorage.setItem(SNAP_JORNADA, JSON.stringify({ t: Date.now(), uid: (usuarioAtual || {}).id || null, data: r.data || [] })); } catch (e) { /* sem armazenamento: só não pinta na hora */ }
+    return jornadaMonta(r.data);
+  }
+  // A última jornada vista nesta aba (até 10 min): a tela pinta na hora com ela e troca pelo dado novo assim que chega.
+  function jornadaSnap() {
+    try {
+      const s = JSON.parse(sessionStorage.getItem(SNAP_JORNADA) || 'null');
+      if (!s || !Array.isArray(s.data) || Date.now() - s.t > 10 * 60000 || s.uid !== ((usuarioAtual || {}).id || null)) return null;
+      return jornadaMonta(s.data);
+    } catch (e) { return null; }
+  }
+  // Uma linha da jornada (por venda ou por conversa) a partir da carga compartilhada — ficha e conversa não pedem a v_jornada
+  // de novo: usam a que o Live/menu acabou de buscar (ou entram no mesmo pedido em andamento).
+  async function jornadaLinha({ venda, conversa, conversaComVenda }) {
+    const j = await jornada();
+    if (j.erro) return null;
+    if (venda) return j.porVenda[venda] || null;
+    if (conversaComVenda) return j.todas.find((x) => x.conversa_id === conversaComVenda && x.venda_id) || null;
+    return j.todas.find((x) => x.conversa_id === conversa) || null;
   }
   // 0107: 🔥 oportunidades (v_oportunidades) — fora as conversas que já estão em "Para fazer" (v_jornada.precisa_acao):
   // oportunidade nunca entra no contador de obrigação nem repete uma linha que já pede ação.
@@ -661,21 +688,45 @@
       location.replace('index.html');
       return new Promise(() => {});
     }
-    const { data: u, error } = await sb.from('usuarios').select('*').eq('id', data.session.user.id).maybeSingle();
+    const uid = data.session.user.id;
+    const busca = () => sb.from('usuarios').select('*').eq('id', uid).maybeSingle();
+    // 11/11: o perfil já visto neste navegador libera a tela na hora (antes eram ~0,5 s parados antes de qualquer dado);
+    // a conferência no banco segue em segundo plano: perfil desativado sai, perfil alterado recarrega. O RLS continua valendo.
+    let guardado = null;
+    try { guardado = JSON.parse(localStorage.getItem(EU_CACHE) || 'null'); } catch (e) { guardado = null; }
+    if (guardado && guardado.id === uid && guardado.u && guardado.u.ativo) {
+      usuarioAtual = { ...guardado.u, email: data.session.user.email };
+      busca().then(async ({ data: u, error }) => {
+        if (error) return;
+        if (!u || !u.ativo) { limparLocal(); await sb.auth.signOut(); location.replace('index.html?erro=perfil'); return; }
+        const mudou = JSON.stringify(u) !== JSON.stringify(guardado.u);
+        try { localStorage.setItem(EU_CACHE, JSON.stringify({ id: uid, u })); } catch (e) { /* sem armazenamento */ }
+        if (mudou && ['perfil', 'nome', 'parceiro_id'].some((k) => u[k] !== guardado.u[k])) location.reload();
+      }, () => {});
+      return usuarioAtual;
+    }
+    const { data: u, error } = await busca();
     if (error) {
       // Falha de rede/configuração não é "sem perfil": mostra o erro real e mantém a sessão.
       location.replace('index.html?erro=' + encodeURIComponent(msgErro(error)));
       return new Promise(() => {});
     }
     if (!u || !u.ativo) {
+      limparLocal();
       await sb.auth.signOut();
       location.replace('index.html?erro=perfil');
       return new Promise(() => {});
     }
+    try { localStorage.setItem(EU_CACHE, JSON.stringify({ id: uid, u })); } catch (e) { /* sem armazenamento */ }
     usuarioAtual = { ...u, email: data.session.user.email };
     return usuarioAtual;
   }
+  const EU_CACHE = 'niogen.eu';
+  function limparLocal() {
+    try { localStorage.removeItem(EU_CACHE); sessionStorage.removeItem(SNAP_JORNADA); } catch (e) { /* sem armazenamento */ }
+  }
   async function sair() {
+    limparLocal();
     await sb.auth.signOut();
     location.replace('index.html');
   }
@@ -1250,7 +1301,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
