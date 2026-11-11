@@ -308,7 +308,8 @@ def novo_job_credito(b):
             raise pl.Falha(400, 'CEP do cliente inválido')
         endereco = {'cep': cr.so_digitos(end_in.get('cep')), 'numero': str(end_in.get('numero') or '').strip()[:20],
                     'complemento': str(end_in.get('complemento') or '').strip()[:60],
-                    'referencia': str(end_in.get('referencia') or '').strip()[:80] or 'Sem referência'}
+                    'referencia': str(end_in.get('referencia') or '').strip()[:80] or 'Sem referência',
+                    'opcao': str(end_in.get('opcao') or '').strip()[:200]}
         origem_end = 'cliente'
     else:
         if len(cfg['end_cep']) != 8:

@@ -62,6 +62,7 @@ Deno.serve(async (req) => {
         corpo.endereco = {
           cep: so(e.cep), numero: String(e.numero ?? '').trim().slice(0, 20),
           complemento: String(e.complemento ?? '').trim().slice(0, 60), referencia: String(e.referencia ?? '').trim().slice(0, 80),
+          opcao: String(e.opcao ?? '').trim().slice(0, 200),   // endereço escolhido na lista do portal (botão da tela)
         };
       }
       const c = b.contato ?? null;

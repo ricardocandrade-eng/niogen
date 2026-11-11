@@ -668,14 +668,18 @@ class Consulta:
                 ops = info['opcoes']
                 num = str(e.get('numero') or '').strip()
                 alvo = None
-                if num:
+                escolhida = str(e.get('opcao') or '').strip()     # opção tocada na tela do NIOGEN (texto exato)
+                if escolhida:
+                    alvo = next((o for o in ops if o.strip() == escolhida), None) or escolher_opcao(ops, escolhida)
+                if alvo is None and num:
                     alvo = next((o for o in ops if tem_numero(o, num)), None)
                 if alvo is None and len(ops) == 1:
                     alvo = ops[0]
                 if alvo is None:
                     raise Parar('nao_classificado', texto_tela=sem_pii('CEP com mais de um endereço; nenhum com o número '
                                                                           f'informado. Opções: ' + ' · '.join(ops[:15])),
-                                motivo='CEP com vários endereços — confira o número/complemento')
+                                motivo='CEP com vários endereços — escolha o endereço certo',
+                                opcoes={'tipo': 'endereco', 'lista': ops[:30]})
                 li = self.page.locator('input[placeholder="Endereço de instalação"] ~ ul li', has_text=alvo).first
                 self.clicar(li)
                 self.page.wait_for_timeout(1500)
@@ -705,7 +709,8 @@ class Consulta:
             if alvo is None:
                 raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
                                                                       + ' · '.join(ops[:20])),
-                            motivo='complemento fora da lista do portal')
+                            motivo='complemento fora da lista do portal — escolha uma opção',
+                            opcoes={'tipo': 'complemento', 'lista': ops[:30]})
             sel.first.select_option(label=alvo)
             return
         comp = None
@@ -730,7 +735,8 @@ class Consulta:
         if alvo is None:
             raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
                                                                   + ' · '.join(ops[:20])),
-                        motivo='complemento fora da lista do portal')
+                        motivo='complemento fora da lista do portal — escolha uma opção',
+                        opcoes={'tipo': 'complemento', 'lista': ops[:30]})
         li = comp.locator('xpath=ancestor::div[1]/..').locator('li, [role=option]', has_text=alvo).first
         self.clicar(li)
         pg.wait_for_timeout(800)
@@ -894,6 +900,8 @@ class Consulta:
             out['motivo'] = sem_pii(extra['motivo'])
         if extra.get('texto_tela'):
             out['texto_tela'] = extra['texto_tela']
+        if extra.get('opcoes'):
+            out['opcoes'] = extra['opcoes']       # a tela mostra como botões; tocar refaz a consulta com a escolhida
         if extra.get('trava'):
             out['trava'] = True
         if self.p['origem_endereco'] != 'cliente':
