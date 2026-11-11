@@ -46,3 +46,43 @@ SSH key = a mesma do PC (`id_ed25519_vero.pub`) · hostname `niogen-portal-br`. 
 ## Limites (prompt 16)
 1 consulta por endereço por conversa · cache 7 d · nunca em laço (freio de 40 chamadas/min no serviço) · pausa de
 10 min em 429/5xx · tudo assina como TT837725 (Datadog da Nio vê) · **nível C proibido** (lista em `PERMITIDOS`).
+
+## Crédito — operador de consulta (11/11/2026, `docs/Prompt_operador_credito_consulta_111126_1650.md`)
+**Autorização:** Rogério (gerência SDE MG, 11/11) — consulta de crédito antecipada, **só consulta**; Ricardo 11/11 16h15/16h41.
+O operador passa as Etapas 1–4 do **Novo Pedido** na tela (como o humano) e **lê** a Etapa 5. Nunca Avançar na 5, nunca
+**Salvar interesse**, nunca Resumo/OS/biometria/pagamento. Não usa `/chamar` nem mexe em `PERMITIDOS`/`PROIBIDOS`.
+
+| Peça | O quê |
+|---|---|
+| `credito.py` | fluxo (Etapas 0–5), travas de clique (`clicar()` — lista negra + Avançar só nas etapas 1–4) e de rede (`page.route`), leitura do popup/radios/ofertas, amostras redigidas |
+| `servico.py` | `ThreadingHTTPServer` + **uma thread do navegador com fila**; `POST /credito` → 202 `{job_id, posicao_fila}`; `GET /credito/{job_id}`; fila máx. 3; cache 24 h por CPF (sha256 + sal, só memória) |
+| `testar_travas.py` | prova as travas sem navegador → `VERDE` |
+
+**`.env` (fora do repo; nada fixo no código — regra 15):** `CREDITO_MATRICULA` (TT837725) · `CREDITO_END_CEP` / `CREDITO_END_NUMERO` /
+`CREDITO_END_REFERENCIA` (endereço viável padrão: 36013-260, 420, Centro JF) · `CREDITO_CONTATO_CELULAR` / `CREDITO_CONTATO_EMAIL`
+(contato padrão do backoffice — o Ricardo passa) · `CREDITO_LIMITE_HORA` (20) · `CREDITO_LIMITE_DIA` (60) · `CREDITO_SAL` (sal do hash;
+sem ele usa o segredo do serviço) · `CREDITO_AMOSTRAS_DIR` (`/amostras` no container).
+
+**Resultados:** `aprovado_todas` · `aprovado_cartao` · `aprovado_parcial` · `pendente` · `negado` · `pedido_em_andamento` · `sem_viabilidade` ·
+`erro_receita` · `nao_classificado` · `erro`. Só os seis primeiros vão para o cache de 24 h (os outros podem ser refeitos).
+Log: `credito <job> · origem · resultado · ms · etapa` (stdout e `amostras/credito_log.jsonl`) — **nunca** CPF, nome, telefone ou e-mail.
+
+**Amostras (temporário):** respostas de `analiseCredito|propostaCredito|elegibilidade|duplicidadepedido` com toda chave pessoal
+redigida, um JSON por consulta em `amostras/` (apagadas com mais de 7 dias). Servem para mapear `negado`, `pendente` e `aprovado_cartao`
+no primeiro caso real — conferir a classificação e avisar o Ricardo.
+
+**Rodar no PC (fase 0, IP do Brasil, enquanto a VPS BR não existe):**
+```
+set NIO_PORTAL_ENV=C:\Users\ricar\niogen-local\portal\.env
+set NIO_PORTAL_CANAL=chrome
+set CREDITO_AMOSTRAS_DIR=C:\Users\ricar\niogen-local\portal\amostras
+python portal\servico.py
+curl -s -X POST 127.0.0.1:8090/credito -H "X-Portal-Secret: <segredo>" -H "Content-Type: application/json" -d "{\"cpf\":\"<cpf>\"}"
+curl -s 127.0.0.1:8090/credito/<job_id> -H "X-Portal-Secret: <segredo>"
+```
+O `.env` local leva `NIO_PORTAL_USER`, `NIO_PORTAL_PASS`, `NIO_PORTAL_DOMINIO=vtalcorp.onmicrosoft.com`, `NIO_PORTAL_SERVICO_SECRET` e os `CREDITO_*`.
+`NIO_PORTAL_HEADLESS=0` mostra a janela do Chrome (bom para o 1º aceite).
+
+**Caminho da tela até o operador (quando a VPS BR existir):** edge function `credito-consulta` → `CREDITO_OP_URL` = rota no Caddy da
+VPS do n8n (`/opt/renata/Caddyfile`, `handle_path /niogen-credito/*` → `niogen-portal-tunel:8090`, repassando **só** `/credito` e
+`/credito/*`) → túnel SSH → `127.0.0.1:8090` na VPS BR. `/chamar` e `/renovar` não ficam expostos.

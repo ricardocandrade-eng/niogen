@@ -521,6 +521,24 @@
     return data;
   }
 
+  // 11/11: Consulta de crédito (edge function credito-consulta → operador de crédito no niogen-portal). Assíncrona:
+  // creditoIniciar devolve {job_id, posicao_fila, estado}; a tela chama creditoStatus a cada 3 s. Só admin/backoffice.
+  async function creditoFn(corpo) {
+    const { data, error } = await sb.functions.invoke('credito-consulta', { body: corpo });
+    if (error) {
+      let m = error.message;
+      let extra = {};
+      try { const c = await error.context.json(); if (c && c.error) { m = c.error; extra = c; } } catch (_) { /* corpo não-JSON */ }
+      const e = new Error(m);
+      e.naoInstalado = !!extra.nao_instalado;
+      e.status = error.context && error.context.status;
+      throw e;
+    }
+    return data;
+  }
+  const creditoIniciar = (dados) => creditoFn({ acao: 'iniciar', ...dados });
+  const creditoStatus = (jobId) => creditoFn({ acao: 'status', job_id: jobId });
+
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
     v = v || {};
@@ -1328,7 +1346,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

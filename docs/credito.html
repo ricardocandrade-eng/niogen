@@ -1,0 +1,229 @@
+<!doctype html>
+<!-- NIOGEN | docs/credito.html | 11/11/2026 — Claude Code (docs/Prompt_operador_credito_consulta_111126_1650.md)
+     Consulta de crédito: o backoffice vê, em ~2 min e antes de gastar tempo de vendedor, se o CPF passa no crédito da Nio
+     e se já tem pedido em andamento. Edge function credito-consulta → operador de crédito no niogen-portal (consulta-só:
+     Etapas 1–4 do Novo Pedido e leitura da 5; nunca Salvar interesse nem Avançar na 5). Assíncrona: polling a cada 3 s.
+     Só admin/backoffice. Nada é gravado no Supabase. Mesmo padrão da Cobertura (DFV). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Consulta de crédito · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=111126-6">
+<script src="config.js?v=111126-6"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=111126-6"></script>
+<script src="assets/sidebar.js?v=111126-6"></script>
+<style>
+  .cred-form { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: end; }
+  .cred-form .cred-opc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
+  .cred-form details { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  .cred-form details summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+  .cred-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+  .cred-aut { grid-column: 1 / -1; display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+  .cred-aut input { margin-top: 2px; }
+  .cred-acoes { grid-column: 1 / -1; display: flex; gap: 8px; }
+  .cred-popup { white-space: pre-wrap; font-size: 12px; padding: 10px; border-radius: 8px; background: var(--surface-dim); border: 1px solid var(--border); }
+  .cred-ofertas { display: grid; gap: 6px; }
+  #resultado { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  @media (max-width: 760px) {
+    .cred-form { grid-template-columns: 1fr; }
+    .cred-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="credito"></nav>
+  <main class="main">
+    <div class="faixa amarelo" id="sem-acesso" hidden>A consulta de crédito é só para admin e backoffice.</div>
+    <header class="cab" id="cab">
+      <div>
+        <h1>Consulta de crédito</h1>
+        <div class="sub">Ver o crédito de um CPF na Nio sem abrir pedido</div>
+      </div>
+    </header>
+
+    <section class="painel cob-consulta" id="cartao" aria-labelledby="t-consulta">
+      <h2 id="t-consulta">Consulta rápida</h2>
+      <div class="faixa amarelo" id="nao-instalado" hidden><strong>Operador de crédito ainda não instalado</strong><span>A consulta roda no portal da Nio a partir de um servidor no Brasil, que ainda está sendo montado. Até lá, consulte direto no portal PAP.</span></div>
+      <form class="cred-form" id="form-cred" novalidate>
+        <label class="campo">CPF<input type="text" name="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" autocomplete="off" required></label>
+        <div></div>
+        <div class="cred-opc">
+          <details id="det-end">
+            <summary>Endereço do cliente <span class="muted">(opcional)</span></summary>
+            <span class="nota-campo">Recolhido = endereço padrão (Centro de JF). Com o endereço do cliente, vem junto a viabilidade oficial dele e as ofertas que valem para ele.</span>
+            <div class="cred-grid">
+              <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off"></label>
+              <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off"></label>
+              <label class="campo">Complemento<input type="text" name="complemento" placeholder="apto, bloco" autocomplete="off"></label>
+              <label class="campo">Referência<input type="text" name="referencia" placeholder="perto de…" autocomplete="off"></label>
+            </div>
+          </details>
+          <details id="det-cont">
+            <summary>Contato do cliente <span class="muted">(opcional)</span></summary>
+            <span class="nota-campo">Recolhido = contato padrão do backoffice. A Nio usa este contato na análise.</span>
+            <div class="cred-grid">
+              <label class="campo">Celular (com DDD)<input type="tel" name="celular" inputmode="numeric" placeholder="(32) 90000-0000" autocomplete="off"></label>
+              <label class="campo" style="grid-column: span 2">E-mail<input type="email" name="email" placeholder="cliente@email.com" autocomplete="off"></label>
+            </div>
+          </details>
+        </div>
+        <label class="cred-aut"><input type="checkbox" name="autorizado"> <span>O titular autorizou a consulta de crédito e o contato da Nio (WhatsApp e e-mail)</span></label>
+        <div class="cred-acoes"><button type="submit" class="btn btn-acc" id="btn-consultar" disabled>Consultar</button></div>
+      </form>
+      <div id="resultado" aria-live="polite" hidden></div>
+      <span class="nota-campo">A consulta aparece no portal da Nio no nome da Joysse (TT837725) e faz análise de crédito no Serasa. Só consulte com autorização do titular. O resultado vale para o CPF; as ofertas só valem quando o endereço é o do cliente.</span>
+    </section>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.getElementById('sem-acesso').hidden = false;
+    document.querySelectorAll('#cab, #cartao').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
+    return;
+  }
+
+  const form = document.getElementById('form-cred');
+  const F = form.elements;
+  const btn = document.getElementById('btn-consultar');
+  const resEl = document.getElementById('resultado');
+  const naoInst = document.getElementById('nao-instalado');
+  let rodando = false;
+
+  // ---------------------------------------------------------------- máscaras e trava da autorização
+  const fmtCpf = (d) => d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+  F.cpf.addEventListener('input', () => { F.cpf.value = fmtCpf(NG.soDigitos(F.cpf.value).slice(0, 11)); });
+  F.cep.addEventListener('input', () => { const d = NG.soDigitos(F.cep.value).slice(0, 8); F.cep.value = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d; });
+  const travar = () => { btn.disabled = rodando || !F.autorizado.checked; };
+  F.autorizado.addEventListener('change', travar);
+
+  // ---------------------------------------------------------------- resultado
+  const ROT = {
+    aprovado_todas: ['Aprovado — todas as formas', 'ok', 'Crédito liberado em boleto, cartão e débito automático. Pode seguir com a venda.'],
+    aprovado_cartao: ['Aprovado — só cartão', 'ok', 'Crédito liberado só no cartão de crédito. Ofereça o pagamento no cartão.'],
+    aprovado_parcial: ['Aprovado', 'ok', 'Crédito liberado nas formas abaixo.'],
+    negado: ['Negado', 'bad', 'A Nio não aprovou o crédito deste CPF. Não abra pedido.'],
+    pedido_em_andamento: ['Já tem pedido em andamento', 'bad', 'Não dá para abrir pedido: o cliente já tem pedido Nova Fibra em andamento. Confira na Consulta OS do portal antes de falar com ele.'],
+    pendente: ['Pendente', 'warn', 'A Nio deixou a análise pendente. Consulte de novo mais tarde (o portal costuma pedir 24 h).'],
+    nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia o texto abaixo e confira no portal.'],
+    sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado.'],
+    erro_receita: ['Erro da Receita', 'warn', 'A consulta à Receita Federal falhou duas vezes. Tente de novo em alguns minutos.'],
+    erro: ['Erro na consulta', 'warn', 'A consulta não terminou. Tente de novo em alguns minutos.'],
+  };
+  const FORMA = { BOLETO: 'Boleto', CREDITO: 'Cartão de crédito', DACC: 'Débito automático' };
+  const dado = (k, v) => `<div class="d-l"><span>${esc(k)}</span><b>${v == null || v === '' ? '—' : v}</b></div>`;
+
+  function render(r) {
+    const formas = r.formas_liberadas || [];
+    let [rot, cor, txt] = ROT[r.resultado] || [r.resultado, 'warn', ''];
+    if (r.resultado === 'aprovado_parcial') rot = `Aprovado — ${formas.map((f) => FORMA[f] || f).join(', ')}`;
+    const pill = { ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '';
+    const quando = r.consultado_em ? NG.fmtHora(r.consultado_em) : '';
+    const e = r.endereco || {};
+    const acoes = [];
+    if (r.resultado === 'sem_viabilidade') acoes.push('<button type="button" class="btn" data-padrao>Consultar com o endereço padrão</button>');
+    if (r.resultado === 'erro_receita' || r.resultado === 'erro') acoes.push('<button type="button" class="btn" data-denovo>Tentar de novo</button>');
+    const ofertas = (r.ofertas || []).filter((o) => o.nome || o.preco);
+    resEl.innerHTML = `
+      <div class="cob-res cob-${cor}">
+        <div class="cob-res-topo"><span class="pill ${pill} cob-pill">${esc(rot)}</span>
+          <span class="muted">${esc(r.cpf_mascara || '')}${quando ? ` · resultado de ${esc(quando)}${r.cache ? ' (cache)' : ''}` : ''}${r.ms && !r.cache ? ` · ${Math.round(r.ms / 1000)} s` : ''}</span></div>
+        <span>${esc(txt)}</span>
+        ${r.motivo && ['erro', 'nao_classificado'].includes(r.resultado) ? `<span class="muted">${esc(r.motivo)}</span>` : ''}
+      </div>
+      <div class="cob-dados">
+        ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
+        ${dado('Formas liberadas', formas.length ? `<span class="chips">${formas.map((f) => `<span class="chip ok">${esc(FORMA[f] || f)}</span>`).join('')}</span>` : '')}
+        ${dado('Pedido em rascunho no portal', r.pedido_portal ? `<span class="mono">${esc(r.pedido_portal)}</span>` : '')}
+        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : e.origem === 'padrao' ? 'padrão (Centro JF)' : ''))}
+        ${dado('Endereço no portal', esc(e.resolvido || ''))}
+        ${dado('Viabilidade', esc(e.viabilidade || ''))}
+      </div>
+      ${ofertas.length ? `<div><h3 class="secao-tit">Ofertas para este endereço</h3><div class="cred-ofertas">${ofertas.map((o) =>
+        `<div class="d-l"><span>${esc(o.nome)}</span><b>${esc([o.velocidade, o.preco, o.fidelidade === true ? 'com fidelidade' : o.fidelidade === false ? 'sem fidelidade' : ''].filter(Boolean).join(' · '))}</b></div>`).join('')}</div></div>` : ''}
+      ${r.popup ? `<div><h3 class="secao-tit">Texto do portal${r.popup.titulo ? ` — ${esc(r.popup.titulo)}` : ''}</h3><div class="cred-popup">${esc(r.popup.texto || '')}</div></div>` : ''}
+      ${!r.popup && r.texto_tela && r.resultado === 'nao_classificado' ? `<div><h3 class="secao-tit">Texto da tela</h3><div class="cred-popup">${esc(r.texto_tela)}</div></div>` : ''}
+      ${acoes.length ? `<div class="f-form-acoes" style="justify-content:flex-start">${acoes.join('')}</div>` : ''}`;
+    resEl.hidden = false;
+  }
+
+  function andamento(s) {
+    const n = s.etapa_atual || 0;
+    const txt = s.estado === 'fila'
+      ? `Na fila (posição ${s.posicao_fila || 1})…`
+      : n ? `Etapa ${n} de 5 · ${esc({ 1: 'Identificação PDV', 2: 'Viabilidade do endereço', 3: 'Receita Federal e duplicidade de pedido', 4: 'Contato', 5: 'Lendo o crédito' }[n] || s.etapa_nome || '')}…`
+        : 'Abrindo o portal da Nio…';
+    resEl.hidden = false;
+    resEl.innerHTML = `<span class="carregando">${txt}</span><span class="nota-campo">Leva cerca de 2 minutos. Pode deixar esta aba aberta e seguir trabalhando.</span>`;
+  }
+
+  // ---------------------------------------------------------------- consulta (assíncrona)
+  const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  function dados(padrao) {
+    const d = { cpf: NG.soDigitos(F.cpf.value), autorizado: F.autorizado.checked };
+    const cep = NG.soDigitos(F.cep.value);
+    if (!padrao && document.getElementById('det-end').open && cep) {
+      d.endereco = { cep, numero: F.numero.value.trim(), complemento: F.complemento.value.trim(), referencia: F.referencia.value.trim() };
+    }
+    if (document.getElementById('det-cont').open && (F.celular.value.trim() || F.email.value.trim())) {
+      d.contato = { celular: NG.soDigitos(F.celular.value), email: F.email.value.trim() };
+    }
+    return d;
+  }
+  async function consultar(padrao) {
+    if (rodando) return;
+    const d = dados(padrao);
+    if (!d.autorizado) { NG.toast('Marque que o titular autorizou a consulta.', 'bad'); return; }
+    if (!NG.documentoValido(d.cpf) || d.cpf.length !== 11) { NG.toast('CPF inválido — confira os dígitos.', 'bad'); F.cpf.focus(); return; }
+    if (d.endereco && d.endereco.cep.length !== 8) { NG.toast('CEP do cliente com 8 dígitos (ou recolha o endereço).', 'bad'); return; }
+    if (d.contato && (![10, 11].includes(d.contato.celular.length) || !d.contato.email.includes('@'))) { NG.toast('Contato do cliente: celular com DDD e e-mail (ou recolha o contato).', 'bad'); return; }
+    rodando = true; travar();
+    andamento({ estado: 'fila', posicao_fila: 0 });
+    try {
+      let s = await NG.creditoIniciar(d);
+      naoInst.hidden = true;
+      const fim = Date.now() + 4 * 60 * 1000;
+      while (s && !['pronto', 'erro'].includes(s.estado)) {
+        if (Date.now() > fim) {
+          resEl.innerHTML = '<div class="faixa amarelo"><strong>Demorou demais</strong><span>Tente de novo em alguns minutos.</span></div>';
+          return;
+        }
+        andamento(s);
+        await pausa(3000);
+        s = await NG.creditoStatus(s.job_id);
+      }
+      render(s);
+    } catch (err) {
+      if (err.naoInstalado) { naoInst.hidden = false; resEl.hidden = true; return; }
+      resEl.hidden = false;
+      resEl.innerHTML = `<div class="faixa amarelo"><strong>Consulta de crédito indisponível</strong><span>${esc(NG.msgErro(err))}</span></div>`;
+    } finally {
+      rodando = false; travar();
+    }
+  }
+  form.addEventListener('submit', (ev) => { ev.preventDefault(); consultar(false); });
+  resEl.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-padrao]')) consultar(true);
+    else if (ev.target.closest('[data-denovo]')) consultar(false);
+  });
+
+  // ?cpf= preenche, mas NÃO dispara: a autorização do titular é marcada à mão.
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('cpf')) F.cpf.value = fmtCpf(NG.soDigitos(qs.get('cpf')).slice(0, 11));
+  travar();
+})();
+</script>
+</body>
+</html>

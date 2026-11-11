@@ -35,6 +35,7 @@
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura (DFV)', href: 'cobertura.html' },
+      { id: 'credito', ico: '◐', nome: 'Consulta de crédito', href: 'credito.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
     ]],
     ['Mari', [
