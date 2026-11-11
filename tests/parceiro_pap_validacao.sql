@@ -136,8 +136,8 @@ begin
   r := r || jsonb_build_object('t', '19 garantia: 570 pts em nov depois de 900 em out → R$ 300', 'ok',
         (x ->> 'garantia_vale')::boolean and (x ->> 'ajuda_prevista')::numeric = 300 and x ->> 'garantia_ate' = '2027-01-01', 'x', x);
   x := public.parceiro_resumo();
-  r := r || jsonb_build_object('t', '20 resumo: próxima sexta 27/11 com R$ 220 líquido e saldo da largada 200', 'ok',
-        x #>> '{proximo,recebe_em}' = '2026-11-27' and (x #>> '{proximo,valor}')::numeric = 220 and (x #>> '{largada,saldo}')::numeric = 200, 'proximo', x -> 'proximo');
+  r := r || jsonb_build_object('t', '20 resumo: próxima sexta 27/11 com R$ 120 líquido (220 − 100 da largada; sem boas-vindas desde a 0117) e saldo 200', 'ok',
+        x #>> '{proximo,recebe_em}' = '2026-11-27' and (x #>> '{proximo,valor}')::numeric = 120 and (x #>> '{largada,saldo}')::numeric = 200, 'proximo', x -> 'proximo');
   select count(*) into n from public.parceiro_meus_pagamentos() where tipo = 'largada' and valor = 300;
   r := r || jsonb_build_object('t', '21 extrato mostra a largada paga', 'ok', n = 1);
   reset role;

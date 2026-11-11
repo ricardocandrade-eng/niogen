@@ -17,13 +17,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-23">
-<script src="config.js?v=101126-23"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-24">
+<script src="config.js?v=101126-24"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-23"></script>
-<script src="assets/sidebar.js?v=101126-23"></script>
-<script src="assets/conversa.js?v=101126-23"></script>
-<script src="assets/ficha.js?v=101126-23"></script>
+<script src="assets/app.js?v=101126-24"></script>
+<script src="assets/sidebar.js?v=101126-24"></script>
+<script src="assets/conversa.js?v=101126-24"></script>
+<script src="assets/ficha.js?v=101126-24"></script>
 </head>
 <body>
 <div class="app">
@@ -100,18 +100,20 @@
   const hojeSP = () => NG.diaSP();
   const seteDias = () => NG.somaDias(hojeSP(), 7);
 
-  let G = [], P = {}, APAGAR = {};
+  let G = [], P = {}, APAGAR = {}, NIO_PAGOU = {};   // 0117: sexta do parceiro → a Nio já pagou o ciclo?
   async function carregar() {
-    const [rg, rp, rap] = await Promise.all([
+    const [rg, rp, rap, rcal] = await Promise.all([
       NG.sb.from('parceiro_pagamentos').select('*').order('vence_em', { ascending: true }).limit(5000),
       NG.sb.from('parceiros').select('id, nome, status, forma_pagamento, pix_chave, pix_titular_conferido_em'),
       NG.sb.from('v_parceiro_a_pagar').select('*'),
+      NG.sb.from('parceiro_calendario').select('parceiro_recebe_em, confirmado, ciclo, nio_paga_em'),
     ]);
     const erro = [rg, rp, rap].find((r) => r.error);
     if (erro) { document.getElementById('tbody').innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(erro.error))}</td></tr>`; NG.toast(NG.msgErro(erro.error), 'bad'); return; }
     G = rg.data || [];
     P = Object.fromEntries((rp.data || []).map((x) => [x.id, x]));
     APAGAR = Object.fromEntries((rap.data || []).map((x) => [x.pagamento_id, x]));
+    NIO_PAGOU = Object.fromEntries(((rcal && rcal.data) || []).map((c) => [c.parceiro_recebe_em, c]));
     const manter = (sel, valores, todos) => { const a = sel.value; NG.preencherSelect(sel, valores, todos); sel.value = valores.some(([v]) => v === a) ? a : ''; };
     manter(fParceiro, Object.values(P).sort((a, b) => a.nome.localeCompare(b.nome)).map((x) => [x.id, x.nome]), 'Todos os parceiros');
     render();
@@ -237,12 +239,14 @@
       const s = sit(gr);
       const pp = podePagar(gr.itens[0]);
       const tipos = [...new Set(gr.itens.map((g) => NG.PAGAMENTO_TIPO[g.tipo]))].join(' · ');
-      const prox = s === 'confirmar' ? { txt: 'Cadastre o ciclo no calendário', nivel: 'warn', acao: true } : !pp.ok ? { txt: `Barrado: ${pp.motivo}`.slice(0, 80), nivel: 'bad', acao: true }
+      const cic = NIO_PAGOU[gr.vence];
+      const prox = s === 'confirmar' ? { txt: 'Cadastre o ciclo no calendário', nivel: 'warn', acao: true }
+        : cic && !cic.confirmado ? { txt: `Aguardando a Nio pagar (${NG.fmtDiaISO(cic.nio_paga_em).slice(0, 5)})`, nivel: 'dim' } : !pp.ok ? { txt: `Barrado: ${pp.motivo}`.slice(0, 80), nivel: 'bad', acao: true }
         : s === 'atrasado' ? { txt: 'Pagar · atrasado', nivel: 'bad', acao: true } : s === 'hoje' ? { txt: 'Pagar hoje', nivel: 'warn', acao: true } : { txt: `Sexta ${NG.fmtDiaISO(gr.vence).slice(0, 5)}`, nivel: 'ok' };
       return `<tr class="clicavel" data-grupo="${i}" tabindex="0" title="Abrir a sexta do parceiro">
         <td class="cli"><b>${esc((P[gr.parceiro_id] || {}).nome || '—')}</b><small>${NG.fmtNum(gr.itens.length)} ${gr.itens.length === 1 ? 'lançamento' : 'lançamentos'}</small></td>
         <td>${esc(tipos)}</td><td class="apagado">${esc(diaTxt(gr.vence))}</td><td class="num">${esc(moeda(liq))}</td>
-        <td><span class="pill pg-${s === 'atrasado' ? 'atrasado' : 'previsto'}">${esc(SIT_TXT[s])}</span></td><td>${NG.proxPasso(prox)}</td></tr>`;
+        <td><span class="pill pg-${s === 'atrasado' ? 'atrasado' : 'previsto'}">${esc(cic && !cic.confirmado ? 'Aguardando a Nio pagar' : SIT_TXT[s])}</span></td><td>${NG.proxPasso(prox)}</td></tr>`;
     }).join('') : '<tr><td colspan="6" class="vazio">Nada a pagar: as próximas sextas aparecem quando houver instalação confirmada.</td></tr>';
     cartoesEl.innerHTML = GRUPOS.length ? GRUPOS.map((gr, i) => `<a class="cartao" href="#sexta" data-grupo="${i}">
         <div class="cli"><b>${esc((P[gr.parceiro_id] || {}).nome || '—')}</b><small>${gr.vence ? 'sexta ' + esc(NG.fmtDiaISO(gr.vence).slice(0, 5)) : 'data a confirmar'}</small></div>
@@ -261,6 +265,7 @@
       ${linha('Líquido a pagar', `<span class="mono">${esc(moeda(liq))}</span>`)}
       ${linha('Chave Pix', `<span class="mono">${esc(p.pix_chave || '—')}</span>`)}
       ${linha('Titular do Pix', p.pix_titular_conferido_em ? '<span class="ok-txt">conferido ✓</span>' : '<span class="bad-txt">não conferido</span>')}
+      ${gr.vence && NIO_PAGOU[gr.vence] && !NIO_PAGOU[gr.vence].confirmado ? `<div class="faixa amarelo">Aguardando a Nio pagar o ciclo ${esc(NIO_PAGOU[gr.vence].ciclo)} (quinta ${esc(NG.fmtDiaISO(NIO_PAGOU[gr.vence].nio_paga_em))}). A Dharma não adianta caixa: quando o dinheiro cair, marque "a Nio pagou" em Configurações › Programa Parceiro › Calendário.</div>` : ''}
       ${!gr.vence ? '<div class="faixa amarelo">O ciclo destas instalações ainda não está no calendário (Configurações › Programa Parceiro). Cadastre o ciclo para a sexta aparecer.</div>' : ''}
       ${ehAdmin && gr.vence ? `<form class="f-formulario" id="form-pagar" novalidate><h3>Marcar a sexta como paga</h3>
           <p>Pague o líquido pelo Pix e anexe o comprovante. Todos os lançamentos acima ficam pagos com o mesmo comprovante.</p>

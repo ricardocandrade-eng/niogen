@@ -18,14 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-23">
-<script src="config.js?v=101126-23"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-24">
+<script src="config.js?v=101126-24"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=101126-23"></script>
-<script src="assets/sidebar.js?v=101126-23"></script>
-<script src="assets/osab.js?v=101126-23"></script>
-<script src="assets/dfv.js?v=101126-23"></script>
+<script src="assets/app.js?v=101126-24"></script>
+<script src="assets/sidebar.js?v=101126-24"></script>
+<script src="assets/osab.js?v=101126-24"></script>
+<script src="assets/dfv.js?v=101126-24"></script>
 </head>
 <body>
 <div class="app">
@@ -611,15 +611,15 @@
           <p>1 real contratado = 1 ponto, no mês da instalação confirmada. Vale só o maior degrau atingido; a ajuda de custo é apurada no dia da apuração do mês seguinte e paga na 1ª sexta do calendário depois dele. Mês com venda indevida: sem ajuda de custo.</p>
           <div id="degraus">${degrausHtml()}</div>
           ${ehAdmin ? '<div><button type="button" class="btn btn-sm" data-pc="add-degrau">＋ Adicionar degrau</button></div>' : ''}</div>
-        <div class="cfg-bloco"><h3>Garantia Bronze e boas-vindas</h3>
-          <p>Quem atinge o gatilho numa competência recebe o piso nas competências seguintes em que fizer o mínimo de pontos (vale o maior entre o degrau e o piso). Pagamento é só quinzenal, sem incentivo (10/11).</p>
+        <div class="cfg-bloco"><h3>Garantia Bronze e largada</h3>
+          <p>Quem atinge o gatilho numa competência recebe o piso nas competências seguintes em que fizer o mínimo de pontos (vale o maior entre o degrau e o piso). A largada em confiança substituiu o bônus de boas-vindas (desligado em 10/11): o valor é sugestão na gaveta do parceiro; o abatimento por venda vale para todo parceiro novo. Pagamento é só quinzenal, sem incentivo.</p>
           <div class="cfg-grade">
             ${campo('Gatilho, pontos no mês', 'g_gat', c.garantia_gatilho_pontos, 'step="1" min="1" required')}
             ${campo('Piso, R$ por mês', 'g_piso', c.garantia_piso, 'step="0.01" min="0" required')}
             ${campo('Meses de garantia', 'g_meses', c.garantia_meses, 'step="1" min="0" max="12" required', '(0 = sem garantia)')}
             ${campo('Mínimo de pontos para valer', 'g_min', c.garantia_min_pontos, 'step="1" min="0" required')}
-            ${campo('Boas-vindas, R$ na 1ª venda instalada', 'bv_valor', c.bonus_boas_vindas_valor, 'step="0.01" min="0"')}
-            ${campo('Prazo das boas-vindas, em dias', 'bv_prazo', c.bonus_boas_vindas_prazo_dias, 'step="1" min="1"', '(contados da aprovação)')}</div></div>
+            ${campo('Largada, R$ (sugestão)', 'lg_valor', c.largada_valor_padrao, 'step="0.01" min="0" required')}
+            ${campo('Largada, abatimento por venda instalada (R$)', 'lg_abat', c.largada_abatimento_padrao, 'step="0.01" min="1" required')}</div></div>
         <div class="cfg-bloco"><h3>Conferência e apuração</h3>
           <p>O prazo da conferência conta só dentro do horário de contato do contrato. O limite de envios protege contra erro e abuso no Pocket.</p>
           <div class="cfg-grade">
@@ -631,10 +631,10 @@
       </form>
 
       <div class="cfg-bloco" id="bloco-calendario"><h3>Calendário de pagamento</h3>
-        <p>O parceiro recebe na <b>sexta seguinte à quinta em que a Nio paga a Dharma</b> o ciclo da instalação — a Dharma nunca adianta caixa. Ciclo sem cadastro = "data a confirmar" no Pocket. Mudou o calendário, os vencimentos ainda não pagos se ajustam sozinhos. Fonte: calendário Posto Fiscal da Nio.</p>
-        <div class="rolagem-s"><table class="tab"><thead><tr><th>Ciclo</th><th>Instalações</th><th>Nio paga</th><th>Parceiro recebe</th><th>Situação</th>${ehAdmin ? '<th></th>' : ''}</tr></thead><tbody>
+        <p>O parceiro recebe na <b>sexta seguinte à quinta em que a Nio paga a Dharma</b> o ciclo da instalação — a Dharma nunca adianta caixa. Marque "a Nio pagou" quando o dinheiro do ciclo cair: até lá, Pagamentos mostra "aguardando a Nio pagar". Ciclo sem cadastro = "data a confirmar" no Pocket. Mudou o calendário, os vencimentos ainda não pagos se ajustam sozinhos. Fonte: calendário Posto Fiscal da Nio.</p>
+        <div class="rolagem-s"><table class="tab"><thead><tr><th>Ciclo</th><th>Instalações</th><th>Nio paga</th><th>Parceiro recebe</th><th>A Nio pagou?</th>${ehAdmin ? '<th></th>' : ''}</tr></thead><tbody>
         ${PC.cal.map((c) => `<tr><td><b>${esc(c.ciclo)}</b></td><td>${esc(NG.fmtDiaISO(c.instalacoes_de).slice(0, 5))} a ${esc(NG.fmtDiaISO(c.instalacoes_ate).slice(0, 5))}</td>
-            <td>${esc(NG.fmtDiaISO(c.nio_paga_em))}</td><td><b>${esc(NG.fmtDiaISO(c.parceiro_recebe_em))}</b></td><td>${c.confirmado ? '<span class="chip ok">confirmado</span>' : '<span class="chip">previsto</span>'}</td>
+            <td>${esc(NG.fmtDiaISO(c.nio_paga_em))}</td><td><b>${esc(NG.fmtDiaISO(c.parceiro_recebe_em))}</b></td><td>${c.confirmado ? '<span class="chip ok">pagou ✓</span>' : '<span class="chip">aguardando</span>'}${ehAdmin ? ` <button type="button" class="btn btn-sm" data-pc="nio-pagou" data-id="${c.id}">${c.confirmado ? 'Desfazer' : 'Marcar: a Nio pagou'}</button>` : ''}</td>
             ${ehAdmin ? `<td><button type="button" class="btn btn-sm" data-pc="del-ciclo" data-id="${c.id}">Apagar</button></td>` : ''}</tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum ciclo cadastrado.</td></tr>'}
         </tbody></table></div>
         ${ehAdmin ? `<form id="form-ciclo" class="secao" novalidate><h3>Novo ciclo</h3>
@@ -644,7 +644,7 @@
             <label class="campo">Instalações até<input type="date" name="ate" required></label>
             <label class="campo">Nio paga em (quinta)<input type="date" name="nio" required></label>
             <label class="campo">Parceiro recebe em <span class="nota-campo">(vazio = sexta seguinte; feriado → dia útil)</span><input type="date" name="recebe"></label>
-            <label class="campo">Confirmado<select name="conf"><option value="true">Sim</option><option value="false">Ainda previsto</option></select></label></div>
+            <label class="campo">A Nio já pagou?<select name="conf"><option value="false">Ainda não</option><option value="true">Sim</option></select></label></div>
           <div class="cfg-acoes"><button type="submit" class="btn">Cadastrar ciclo</button></div></form>` : ''}</div>
 
       <div class="cfg-bloco" id="bloco-comissao"><h3>Comissão padrão por plano</h3>
@@ -691,15 +691,14 @@
     const obj = {
       degraus: g.degraus,
       garantia_gatilho_pontos: n('g_gat'), garantia_piso: n('g_piso'), garantia_meses: intOuNull('g_meses'), garantia_min_pontos: n('g_min'),
-      bonus_boas_vindas_valor: n('bv_valor'), bonus_boas_vindas_prazo_dias: intOuNull('bv_prazo'),
+      largada_valor_padrao: n('lg_valor'), largada_abatimento_padrao: n('lg_abat'),
       sla_conferencia_horas: intOuNull('sla'), conferencia_max_tentativas: intOuNull('max_t'), dia_apuracao: intOuNull('dia_ap'),
       envios_por_dia: intOuNull('envios'),
     };
-    if ([obj.bonus_boas_vindas_valor, obj.bonus_boas_vindas_prazo_dias].some((x) => Number.isNaN(x))
+    if ([obj.largada_valor_padrao, obj.largada_abatimento_padrao].some((x) => x == null || Number.isNaN(x))
       || [obj.garantia_gatilho_pontos, obj.garantia_piso, obj.garantia_meses, obj.garantia_min_pontos, obj.sla_conferencia_horas, obj.conferencia_max_tentativas, obj.dia_apuracao, obj.envios_por_dia].some((x) => x == null || Number.isNaN(x))) {
-      NG.toast('Confira os números: garantia, SLA, tentativas, dia da apuração e envios por dia são obrigatórios.', 'bad'); return;
+      NG.toast('Confira os números: garantia, largada, SLA, tentativas, dia da apuração e envios por dia são obrigatórios.', 'bad'); return;
     }
-    if ((obj.bonus_boas_vindas_valor == null) !== (obj.bonus_boas_vindas_prazo_dias == null)) { NG.toast('Boas-vindas: preencha o valor e o prazo juntos (ou deixe os dois em branco).', 'bad'); return; }
     const bt = ev.target.querySelector('[type=submit]');
     bt.disabled = true;
     const { error } = await NG.sb.from('config_parceiros').update(obj).eq('id', true);
@@ -738,6 +737,15 @@
       degraus = l;
       document.getElementById('degraus').innerHTML = degrausHtml();
     } else if (a === 'salvar-comissao') await salvarComissaoPadrao(b);
+    else if (a === 'nio-pagou') {
+      const c = PC.cal.find((x) => String(x.id) === b.dataset.id);
+      if (!c) return;
+      b.disabled = true;
+      const { error } = await NG.sb.from('parceiro_calendario').update({ confirmado: !c.confirmado }).eq('id', c.id);
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+      NG.toast(c.confirmado ? `Ciclo ${c.ciclo}: voltou para aguardando` : `Ciclo ${c.ciclo}: a Nio pagou · liberado para pagar na sexta`, 'ok');
+      await carregarParceiro();
+    }
     else if (a === 'del-ciclo') {
       const c = PC.cal.find((x) => String(x.id) === b.dataset.id);
       if (!c || !confirm(`Apagar o ciclo ${c.ciclo}? Os pagamentos ainda não feitos desse ciclo voltam para "data a confirmar".`)) return;

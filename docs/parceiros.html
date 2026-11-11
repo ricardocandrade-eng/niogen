@@ -6,7 +6,10 @@
      Admin escreve; backoffice só vê (o RLS já barra e a tela esconde os botões). Layout: docs/PADRAO_TELAS_NIOGEN_041126_1225.md. Nenhum número sugerido.
      10/11 (Pocket do Parceiro, 0115): só quinzenal (sai a forma de pagamento e o incentivo); bloco "Acesso ao Pocket" com Enviar acesso (edge function
      parceiro-acesso → link de uso único aberto no WhatsApp do Ricardo); bloco "Largada e ajuda de custo" (largada valor/pago em/abatimento, garantia
-     ativa até); cidade do parceiro; venda indevida aparece na lista de vendas do parceiro (marca-se na ficha). -->
+     ativa até); cidade do parceiro; venda indevida aparece na lista de vendas do parceiro (marca-se na ficha).
+     10/11 (0117, docs/Prompt_parceiros_admin_v2_101126_2150.md): topo = resultado (ativos · enviadas/instaladas no mês · margem do canal
+     no mês · a pagar na próxima sexta, de parceiro_canal_resumo); 🔥 oportunidades do canal (parceiro_oportunidades_abertas, também no
+     Live); lista por resultado (nível do mês, faltam pontos, próxima sexta, garantia até, indevidas — parceiro_lista_admin). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -18,13 +21,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-23">
-<script src="config.js?v=101126-23"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-24">
+<script src="config.js?v=101126-24"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-23"></script>
-<script src="assets/sidebar.js?v=101126-23"></script>
-<script src="assets/conversa.js?v=101126-23"></script>
-<script src="assets/ficha.js?v=101126-23"></script>
+<script src="assets/app.js?v=101126-24"></script>
+<script src="assets/sidebar.js?v=101126-24"></script>
+<script src="assets/conversa.js?v=101126-24"></script>
+<script src="assets/ficha.js?v=101126-24"></script>
 </head>
 <body>
 <div class="app">
@@ -41,7 +44,8 @@
       </div>
     </header>
 
-    <section class="kpis quatro" id="kpis" aria-label="Resumo do programa"></section>
+    <section class="kpis quatro" id="kpis" aria-label="Resultado do canal"></section>
+    <section class="opc-bloco" id="opc" aria-label="Oportunidades do canal" hidden></section>
     <div id="abas"></div>
 
     <div class="barra-filtros">
@@ -54,13 +58,15 @@
           <thead><tr>
             <th data-ord="nome">Parceiro</th>
             <th data-ord="situacao">Situação</th>
-            <th data-ord="cidade" class="col-media">Cidade</th>
-            <th data-ord="vendas" data-dir="desc" class="num">Vendas no mês</th>
-            <th data-ord="pontos" data-dir="desc" class="num">Pontos do mês</th>
-            <th data-ord="reprov" data-dir="desc" class="num">% reprovadas</th>
+            <th data-ord="nivel" data-dir="desc">Nível do mês</th>
+            <th data-ord="faltam" class="num">Faltam</th>
+            <th data-ord="vendas" data-dir="desc" class="num col-media">Vendas no mês</th>
+            <th data-ord="sexta" data-dir="desc" class="num">Próxima sexta</th>
+            <th data-ord="garantia" class="col-media">Garantia até</th>
+            <th data-ord="indevidas" data-dir="desc" class="num col-media">Indevidas</th>
             <th>Próximo passo</th>
           </tr></thead>
-          <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          <tbody id="tbody"><tr><td colspan="9" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
       <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir o parceiro</span></div>
@@ -124,11 +130,11 @@
   const CONFIRMADA = (v) => ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status) && v.nio_situacao === 'Concluído' && v.nio_venda_valida === true && !!v.instalado_em;
 
   // ---------- dados ----------
-  let PTS_TODOS = [];
+  let PTS_TODOS = [], RES = {}, LST = {}, OPC = [];
   let P = [], PTS = {}, IND = {}, APAGAR = [], VENDAS = [], COM = [], PLANOS = [], CFG = {}, PAG = [], USUARIOS = {};
   async function carregar() {
     const hoje = NG.diaSP();
-    const [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg, ru] = await Promise.all([
+    const [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg, ru, rres, rlst, ropc] = await Promise.all([
       NG.sb.from('parceiros').select('*').order('nome'),
       NG.sb.from('v_parceiro_pontos_mes').select('*'),
       NG.sb.from('v_parceiro_indicadores').select('*'),
@@ -139,6 +145,9 @@
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_pagamentos').select('id, parceiro_id, tipo, venda_id, competencia, status, valor, vence_em, pago_em, comprovante_path').order('vence_em', { ascending: false }).limit(5000),
       NG.carregarUsuarios(),
+      NG.sb.rpc('parceiro_canal_resumo'),
+      NG.sb.rpc('parceiro_lista_admin'),
+      NG.oportunidadesCanal(),
     ]);
     const erro = [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg].find((r) => r.error);
     if (erro) { document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro.error))}</td></tr>`; NG.toast(NG.msgErro(erro.error), 'bad'); return; }
@@ -153,6 +162,9 @@
     CFG = rcfg.data || {};
     PAG = rpg.data || [];
     USUARIOS = Object.fromEntries((ru || []).map((u) => [u.id, u.nome]));
+    RES = rres.error ? {} : (rres.data || {});
+    LST = Object.fromEntries((rlst.error ? [] : rlst.data || []).map((x) => [x.parceiro_pap_id, x]));
+    OPC = ropc.lista || [];
     const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
     document.getElementById('sub').textContent = `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} · vendedores externos aprovados pelo Ricardo · conferência de qualidade antes de ativar`;
     render();
@@ -214,33 +226,41 @@
   const CHAVES = {
     nome: (p) => p.nome,
     situacao: (p) => SIT_IDX[p.status],
-    cidade: (p) => p.cidade || '',
+    nivel: (p) => Number((LST[p.id] || {}).pontos || 0),
+    faltam: (p) => ((LST[p.id] || {}).faltam == null ? 1e9 : Number(LST[p.id].faltam)),
     vendas: (p) => resumo(p).noMes,
-    pontos: (p) => Number((PTS[p.id] || {}).pontos || 0),
-    reprov: (p) => ((IND[p.id] || {}).pct_reprovadas == null ? null : Number(IND[p.id].pct_reprovadas)),
+    sexta: (p) => Number((LST[p.id] || {}).a_receber || 0),
+    garantia: (p) => (LST[p.id] || {}).garantia_ate || '',
+    indevidas: (p) => Number((LST[p.id] || {}).indevidas || 0),
   };
   function base() {
     const q = fBusca.value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     return P.filter((p) => !q || p.nome.toLowerCase().includes(q) || (qd.length >= 3 && (NG.soDigitos(p.cpf).includes(qd) || NG.soDigitos(p.whatsapp).includes(qd))));
   }
+  // 0117: topo = resultado do canal (parceiro_canal_resumo).
   function renderKpis() {
-    const n = (s) => P.filter((p) => p.status === s).length;
-    const pend = VENDAS.filter((v) => v.conferencia_status === 'pendente');
-    const prazos = pend.filter((v) => v.conferencia_prazo_ate).map((v) => new Date(v.conferencia_prazo_ate).getTime()).sort((a, b) => a - b);
-    const atrasadas = prazos.filter((t) => t < Date.now()).length;
-    const aPagar = APAGAR.reduce((s, x) => s + Number(x.valor || 0), 0);
-    const hojeN = APAGAR.filter((x) => x.situacao === 'hoje').length;
-    const atrasN = APAGAR.length - hojeN;
+    const r = RES || {};
+    const n = (st) => P.filter((p) => p.status === st).length;
+    const margem = Number(r.margem_mes || 0);
+    const sexta = r.proxima_sexta;
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: 'Ativos', val: NG.fmtNum(n('ativo')), nota: `${NG.fmtNum(n('suspenso'))} suspensos · ${NG.fmtNum(n('desligado'))} desligados` }),
-      NG.kpi({ rot: 'Aguardando aprovação', val: NG.fmtNum(n('aguardando')), cls: n('aguardando') ? 'warn' : '', nota: n('aguardando') ? 'cadastros para o Ricardo aprovar' : 'nenhum cadastro esperando' }),
-      NG.kpi({ rot: 'Vendas em conferência', val: NG.fmtNum(pend.length), cls: atrasadas ? 'bad' : pend.length ? 'warn' : '',
-        nota: !pend.length ? 'nenhuma esperando' : atrasadas ? `a mais atrasada: há ${NG.fmtHoras((Date.now() - prazos[0]) / 3600000)} do prazo` : `a mais próxima vence ${esc(NG.fmtDataHora(new Date(prazos[0])))}`,
-        dica: 'Vendas de parceiro em Qualificado com a conferência de qualidade pendente. O prazo é o SLA configurado, contado só no horário de contato do contrato.' }),
-      NG.kpi({ rot: 'A pagar hoje', val: esc(moeda(aPagar)), cls: atrasN ? 'bad' : aPagar ? 'warn' : '',
-        nota: APAGAR.length ? `${NG.fmtNum(hojeN)} vencem hoje · ${NG.fmtNum(atrasN)} atrasados` : 'nada vencido', dica: 'Pagamentos previstos que vencem hoje ou já venceram (view v_parceiro_a_pagar). Marcar pago é na tela Pagamentos a parceiros.' }),
+      NG.kpi({ rot: 'Parceiros ativos', val: NG.fmtNum(r.ativos ?? n('ativo')), cls: n('aguardando') ? 'warn' : '',
+        nota: n('aguardando') ? `${NG.fmtNum(n('aguardando'))} esperando aprovação` : `${NG.fmtNum(n('suspenso'))} suspensos · ${NG.fmtNum(n('desligado'))} desligados` }),
+      NG.kpi({ rot: 'Vendas no mês', val: `${NG.fmtNum(r.enviadas_mes || 0)} <small class="apagado">enviadas</small> · ${NG.fmtNum(r.instaladas_mes || 0)} <small class="apagado">instaladas</small>`,
+        nota: 'instalada = confirmada pela Nio (OSAB), sem venda indevida', dica: 'Enviadas: vendas de origem Parceiro PAP criadas no mês. Instaladas: Concluído + venda válida na Nio, com instalação no mês.' }),
+      NG.kpi({ rot: 'Margem do canal no mês', val: esc(moeda(margem)), cls: margem < 0 ? 'bad' : margem > 0 ? 'ok' : '',
+        nota: `Nio ${moeda(r.comissao_nio_mes || 0)} − parceiros ${moeda(r.custo_parceiros_mes || 0)} − ajuda prevista ${moeda(r.ajuda_prevista_mes || 0)}`,
+        dica: 'Comissão Nio prevista das vendas de parceiro instaladas no mês, menos o que o canal paga por elas (comissão, abatimento da largada) e a ajuda de custo que o mês já rende (degrau ou garantia).' }),
+      NG.kpi({ rot: sexta ? `A pagar sexta ${NG.fmtDiaISO(sexta).slice(0, 5)}` : 'A pagar na próxima sexta', val: esc(moeda(r.a_pagar_sexta || 0)),
+        cls: sexta && r.nio_pagou_sexta === false ? 'warn' : '',
+        nota: sexta ? `${NG.fmtNum(r.parceiros_sexta || 0)} parceiro(s) · ${r.nio_pagou_sexta ? 'a Nio já pagou o ciclo' : 'aguardando a Nio pagar'}${Number(r.a_confirmar) ? ` · ${moeda(r.a_confirmar)} sem data` : ''}`
+          : Number(r.a_confirmar) ? `${moeda(r.a_confirmar)} sem data (cadastre o ciclo)` : 'nada previsto',
+        dica: 'Líquido da próxima sexta do calendário (comissão + ajuda − abatimento da largada). Pagar em Pagamentos a parceiros › Por sexta.' }),
     ].join('');
+    const opc = document.getElementById('opc');
+    opc.hidden = !OPC.length;
+    opc.innerHTML = OPC.length ? `<h2>🔥 Quem cutucar agora · ${OPC.length} <small>oportunidades do canal — não é obrigação</small></h2>${OPC.map((o) => NG.opCanalLinha(o)).join('')}` : '';
   }
   function render() {
     const b = base();
@@ -248,22 +268,25 @@
     NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: b.filter((p) => naAba(p, id)).length, alerta: id === 'acao' })), aba, (id) => { aba = id; render(); });
     const lista = NG.ordenar(b.filter((p) => naAba(p, aba)), CHAVES, ord);
     tbody.innerHTML = lista.length ? lista.map((p) => {
-      const r = resumo(p), pt = PTS[p.id] || {}, ind = IND[p.id] || {}, pr = proximo(p);
+      const r = resumo(p), l = LST[p.id] || {}, pr = proximo(p);
+      const gar = l.garantia_ate && l.garantia_ate >= mesISO();
       return `<tr class="clicavel" data-id="${p.id}" tabindex="0" title="Abrir o parceiro">
-        <td class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></td>
+        <td class="cli"><b>${esc(p.nome)}</b><small>${esc([p.cidade, fmtTel(p.whatsapp)].filter(Boolean).join(' · '))}${p.cadastro_origem === 'pocket' ? ' · pelo Pocket' : ''}</small></td>
         <td><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span></td>
-        <td class="col-media">${esc(p.cidade || '—')}${p.cadastro_origem === 'pocket' ? '<small class="apagado"> · pelo Pocket</small>' : ''}</td>
-        <td class="num">${NG.fmtNum(r.noMes)}</td>
-        <td class="num">${NG.fmtNum(pt.pontos || 0)}${pt.degrau_pontos != null ? `<small class="apagado"> · degrau ${NG.fmtNum(pt.degrau_pontos)}</small>` : ''}</td>
-        <td class="num">${ind.pct_reprovadas == null ? '—' : esc(String(ind.pct_reprovadas).replace('.', ',')) + ' %'}</td>
+        <td>${l.nivel ? `<b>${esc(l.nivel)}</b>` : '<span class="apagado">—</span>'}<small class="apagado"> · ${NG.fmtNum(l.pontos || 0)} pts</small></td>
+        <td class="num">${l.faltam != null ? `${NG.fmtNum(l.faltam)}<small class="apagado"> pts${l.exemplo ? ` · ${esc(l.exemplo)}` : ''} → ${esc(moeda(l.proximo_premio))}</small>` : '<span class="apagado">topo</span>'}</td>
+        <td class="num col-media">${NG.fmtNum(r.noMes)}<small class="apagado"> · ${NG.fmtNum(l.instaladas_mes || 0)} inst.</small></td>
+        <td class="num">${l.proxima_sexta ? `${esc(moeda(l.a_receber))}<small class="apagado"> · ${esc(NG.fmtDiaISO(l.proxima_sexta).slice(0, 5))}</small>` : '<span class="apagado">—</span>'}</td>
+        <td class="col-media">${l.garantia_ate ? `<span class="${gar ? 'ok-txt' : 'apagado'}">${esc(fmtMes(l.garantia_ate))}</span>` : '<span class="apagado">—</span>'}</td>
+        <td class="num col-media">${Number(l.indevidas) ? `<span class="bad-txt">${NG.fmtNum(l.indevidas)}</span>` : '<span class="apagado">0</span>'}</td>
         <td>${NG.proxPasso(pr)}</td>
       </tr>`;
-    }).join('') : `<tr><td colspan="7" class="vazio">Nenhum parceiro neste filtro</td></tr>`;
+    }).join('') : `<tr><td colspan="9" class="vazio">Nenhum parceiro neste filtro</td></tr>`;
     cartoesEl.innerHTML = lista.length ? lista.map((p) => {
-      const r = resumo(p), pt = PTS[p.id] || {};
+      const r = resumo(p), l = LST[p.id] || {};
       return `<a class="cartao" href="#parceiro=${p.id}" data-id="${p.id}">
-        <div class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></div>
-        <div class="valor">${NG.fmtNum(pt.pontos || 0)} pts</div>
+        <div class="cli"><b>${esc(p.nome)}</b><small>${esc(l.nivel || 'sem nível')} · ${NG.fmtNum(l.pontos || 0)} pts${l.faltam != null ? ` · faltam ${NG.fmtNum(l.faltam)}` : ''}</small></div>
+        <div class="valor">${l.proxima_sexta ? esc(moeda(l.a_receber)) : '—'}</div>
         <div class="l2"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(p.cidade || '—')} · ${NG.fmtNum(r.noMes)} no mês</span></div>
         <div class="l2">${NG.proxPasso(proximo(p))}</div>
       </a>`;
@@ -271,6 +294,7 @@
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'parceiro' : 'parceiros'} no filtro`;
   }
   NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  NG.ligarOpCanal(document.getElementById('opc'), () => recarregarTudo());
   fBusca.addEventListener('input', render);
   tbody.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr) abrirParceiro(tr.dataset.id); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-id]'); if (tr && ev.key === 'Enter') abrirParceiro(tr.dataset.id); });
@@ -438,7 +462,7 @@
     if (!ehAdmin) return info;
     return `${info}<form class="f-formulario" data-form="largada" novalidate><h3>Largada em confiança</h3>
       <p>Só para convidado aprovado pelo Ricardo. Paga no aceite; abate o valor por venda instalada até zerar (linha negativa no extrato do parceiro). Sem cobrança se não vender.</p>
-      <div class="grade2"><label class="campo">Valor (R$)<input type="number" step="0.01" min="0" name="valor" value="${Number(p.largada_valor) || ''}"></label>
+      <div class="grade2"><label class="campo">Valor (R$)<input type="number" step="0.01" min="0" name="valor" value="${Number(p.largada_valor) || ''}" placeholder="${CFG.largada_valor_padrao != null ? 'sugestão ' + esc(moeda(CFG.largada_valor_padrao)) : ''}"></label>
       <label class="campo">Paga em<input type="date" name="paga" value="${esc(p.largada_paga_em || '')}"></label>
       <label class="campo">Abatimento por venda (R$)<input type="number" step="0.01" min="1" name="abat" value="${p.largada_abatimento_por_venda ?? 100}"></label></div>
       <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar largada</button></div></form>`;
@@ -490,11 +514,13 @@
   // ----- Pagamentos do parceiro -----
   function blocoPagamentos(p) {
     const l = PAG.filter((g) => g.parceiro_id === p.id);
-    return l.length ? `<div class="rolagem-s"><table class="tab"><thead><tr><th>Tipo</th><th>Vence</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody>${l.slice(0, 40).map((g) => `<tr>
+    const larg = p.largada_paga_em && Number(p.largada_valor) > 0
+      ? `<div class="faixa cinza">Largada ${esc(moeda(p.largada_valor))} paga em ${esc(NG.fmtDiaISO(p.largada_paga_em))} · saldo a abater ${esc(moeda(saldoLargada(p)))}</div>` : '';
+    return larg + (l.length ? `<div class="rolagem-s"><table class="tab"><thead><tr><th>Tipo</th><th>Vence</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody>${l.slice(0, 40).map((g) => `<tr>
         <td>${esc(NG.PAGAMENTO_TIPO[g.tipo])}</td><td>${esc(g.vence_em ? NG.fmtDiaISO(g.vence_em) : "a confirmar")}</td><td class="num">${esc(moeda(g.valor))}</td>
         <td><span class="pill pg-${g.status}">${esc(NG.PAGAMENTO_STATUS[g.status])}</span></td></tr>`).join('')}</tbody></table></div>
       <a class="btn btn-sm" href="pagamentos.html?parceiro=${esc(p.id)}">Abrir em Pagamentos a parceiros</a>`
-      : '<span class="nota-campo">Nenhum pagamento ainda: nasce na instalação confirmada pela Nio.</span>';
+      : '<span class="nota-campo">Nenhum pagamento ainda: nasce na instalação confirmada pela Nio.</span>');
   }
 
   // ----- Vendas -----

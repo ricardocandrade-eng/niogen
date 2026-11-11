@@ -1833,3 +1833,21 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .prot-c .pl span:first-child { color: var(--muted); }
 .prot-c .exemplo { font-size: 11px; font-weight: 700; color: var(--warn-fg); }
 @media (max-width: 760px) { .gargalo .g-btn { margin-left: 0; } .rf-big { font-size: 18px; } }
+
+/* 0117: 🔥 oportunidades do canal parceiro (Parceiros PAP e Live) */
+.opc-bloco { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 12px; }
+.opc-bloco > h2 { font-size: 14px; margin: 0; display: flex; gap: 8px; align-items: baseline; }
+.opc-bloco > h2 small { font-weight: 400; color: var(--muted); }
+.opc-linha { display: grid; grid-template-columns: 130px minmax(140px, 1fr) minmax(200px, 2.2fr) 100px auto; gap: 10px; align-items: center;
+  background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px; padding: 8px 12px; }
+.opc-selo { font-size: 12px; font-weight: 700; color: var(--warn-fg); white-space: nowrap; }
+.opc-quem, .opc-oque, .opc-valor { display: flex; flex-direction: column; min-width: 0; }
+.opc-quem small, .opc-valor small { color: var(--muted); font-size: 12px; }
+.opc-oque small { font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opc-valor { text-align: right; }
+.opc-bt { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 860px) {
+  .opc-linha { grid-template-columns: 1fr auto; }
+  .opc-selo, .opc-oque { grid-column: 1 / -1; }
+  .opc-bt { grid-column: 1 / -1; justify-content: flex-start; }
+}

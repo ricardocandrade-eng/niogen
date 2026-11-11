@@ -1185,6 +1185,44 @@
   const faturasBolinhas = (bolas, rotulo) => `<span class="fat10" aria-label="${esc(rotulo || `${bolas.filter((b) => b.e.cls === 'paga').length} de ${N_FATURAS} faturas pagas`)}">${bolas.map((b) =>
     `<i class="${b.e.cls}${b.e.pagoCom > LIMITE_M10 ? ' tarde' : ''}" title="${esc(faturaDica(b))}"></i>`).join('')}</span>`;
 
+  // ---------- 0117: 🔥 oportunidades do canal parceiro (Parceiros PAP e Live) ----------
+  // P1 perto do degrau · P2 parado · P3 garantia em risco · P4 conferência atrasada · P5 cadastro esperando. Não é obrigação
+  // (fora do contador): "Mandar mensagem" abre o wa.me do parceiro com o texto sugerido e registra "enviada"; "Agora não"
+  // some por config_regras.parceiro_oportunidades.dispensa_horas. Nada é enviado sozinho.
+  async function oportunidadesCanal() {
+    const { data, error } = await sb.rpc('parceiro_oportunidades_abertas');
+    return error ? { erro: msgErro(error), lista: [] } : { lista: data || [] };
+  }
+  function opCanalLinha(o, base = '') {
+    const zap = o.whatsapp ? `https://wa.me/${soDigitos(o.whatsapp)}${o.texto_sugerido ? `?text=${encodeURIComponent(o.texto_sugerido)}` : ''}` : null;
+    const dados = `data-opc-p="${esc(o.parceiro_pap_id)}" data-opc-c="${esc(o.codigo)}"${o.venda_id ? ` data-opc-v="${esc(o.venda_id)}"` : ''}`;
+    const bt = o.acao === 'whatsapp' && zap
+      ? `<a class="btn btn-sm btn-acc" href="${esc(zap)}" target="_blank" rel="noopener" data-opc-zap ${dados}>Mandar mensagem</a>`
+      : o.acao === 'venda' ? `<a class="btn btn-sm btn-acc" href="${base}#venda=${esc(o.venda_id)}" data-opc-ir ${dados}>Abrir a venda</a>`
+        : `<a class="btn btn-sm btn-acc" href="${base}parceiros.html#parceiro=${esc(o.parceiro_pap_id)}" data-opc-ir ${dados}>Abrir o cadastro</a>`;
+    return `<div class="opc-linha" title="${esc(o.codigo)} · ${esc(String(o.pontos))} pontos">
+      <span class="opc-selo"><span aria-hidden="true">🔥</span> Canal parceiro</span>
+      <span class="opc-quem"><b>${esc(o.parceiro_nome || '—')}</b><small>${esc(o.nome || '')}</small></span>
+      <span class="opc-oque">${esc(o.motivo || '')}${o.texto_sugerido ? `<small class="apagado">Sugestão: “${esc(o.texto_sugerido)}”</small>` : ''}</span>
+      <span class="opc-valor">${o.valor != null ? `<b>${esc(fmtMoeda(o.valor))}</b><small>em jogo</small>` : ''}</span>
+      <span class="opc-bt">${bt}<button type="button" class="btn btn-sm btn-ghost" data-opc-nao ${dados} title="Some por um tempo (config)">Agora não</button></span>
+    </div>`;
+  }
+  // Liga os botões dentro de `el`. aoMudar() recarrega a lista depois de registrar.
+  function ligarOpCanal(el, aoMudar) {
+    el.addEventListener('click', async (ev) => {
+      const b = ev.target.closest('[data-opc-zap], [data-opc-nao], [data-opc-ir]');
+      if (!b) return;
+      const tipo = b.hasAttribute('data-opc-nao') ? 'dispensada' : 'enviada';
+      if (b.hasAttribute('data-opc-ir')) return;   // só navega (a ação é na venda ou no cadastro)
+      if (tipo === 'dispensada') b.disabled = true;
+      const { error } = await sb.rpc('parceiro_oportunidade_registrar', { p_parceiro: b.dataset.opcP, p_codigo: b.dataset.opcC, p_tipo: tipo, p_venda: b.dataset.opcV || null, p_motivo: null });
+      if (error) { toast(msgErro(error), 'bad'); if (b.disabled) b.disabled = false; return; }
+      if (tipo === 'dispensada') toast('Some por agora; volta se continuar valendo.');
+      if (aoMudar) setTimeout(aoMudar, tipo === 'enviada' ? 800 : 0);
+    });
+  }
+
   // ---------- service worker ----------
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -1195,7 +1233,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, oportunidades, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
