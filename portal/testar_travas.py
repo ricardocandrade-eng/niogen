@@ -111,6 +111,18 @@ ok(cr.classificar_formas(['BOLETO', 'CREDITO']) == 'aprovado_parcial', 'subconju
 o = cr.ler_oferta('Nio Essencial\n800 Mega\nR$ 140,00/mês\nCom fidelidade')
 ok(o == {'nome': 'Nio Essencial', 'velocidade': '800 Mega', 'preco': 'R$ 140,00', 'fidelidade': True}, 'lê cartão de oferta')
 
+print('5. JS injetado na página (sintaxe, se houver node)')
+import shutil, subprocess, tempfile
+if shutil.which('node'):
+    for nome in ('POPUP_JS', 'RADIOS_JS', 'OFERTAS_JS', 'ENDERECO_JS', 'NOME_JS'):
+        with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f:
+            f.write('const f = ' + getattr(cr, nome) + ';')
+        r = subprocess.run(['node', '--check', f.name], capture_output=True)
+        os.unlink(f.name)
+        ok(r.returncode == 0, f'{nome} compila')
+else:
+    print('  (sem node: pulado)')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')

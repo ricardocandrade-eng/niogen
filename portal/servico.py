@@ -376,7 +376,13 @@ class Handler(BaseHTTPRequestHandler):
         n = int(self.headers.get('Content-Length') or 0)
         if n > 20000:
             raise pl.Falha(9, 'corpo grande demais')
-        return json.loads(self.rfile.read(n) or b'{}') if n else {}
+        if not n:
+            return {}
+        bruto = self.rfile.read(n) or b'{}'
+        try:
+            return json.loads(bruto.decode('utf-8'))
+        except UnicodeDecodeError:          # curl no terminal do Windows manda cp1252 (visto em 11/11)
+            return json.loads(bruto.decode('cp1252'))
 
     def _rota(self, metodo):
         t0 = time.time()

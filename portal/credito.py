@@ -207,20 +207,27 @@ def limpar_amostras(pasta, dias=7):
 # ----------------------------------------------------------------------------------------------- JS de leitura da tela
 POPUP_JS = r"""
 () => {
+  // Os modais do portal (11/11) são uma camada position:fixed, z-index alto, do tamanho da tela, sem role nem classe
+  // semântica (styled-components), com um cartão e os botões dentro. Carregando ("Consultando…") = mesma camada SEM botão.
   const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el);
     return r.width > 60 && r.height > 40 && s.visibility !== 'hidden' && s.display !== 'none' && +s.opacity > 0.05; };
-  const fixo = (el) => { for (let e = el, i = 0; e && i < 8; e = e.parentElement, i++) {
-    const p = getComputedStyle(e).position; if (p === 'fixed') return true; } return false; };
-  const sel = '[role=dialog],[role=alertdialog],[aria-modal=true],.modal-content,.MuiDialog-paper,.swal2-popup,' +
-              '.ReactModal__Content,[class*=modal i],[class*=Modal],[class*=popup i]';
-  const cands = [...document.querySelectorAll(sel)].filter((el) => vis(el) && fixo(el)
-    && (el.innerText || '').trim().length > 3 && el.querySelector('button,[role=button]'));
+  const temBotao = (el) => [...el.querySelectorAll('button,[role=button]')].some((b) => vis(b) && (b.innerText || '').trim());
+  const sel = '[role=dialog],[role=alertdialog],[aria-modal=true],.modal-content,.MuiDialog-paper,.swal2-popup,.ReactModal__Content';
+  let cands = [...document.querySelectorAll(sel)].filter((el) => vis(el) && temBotao(el));
+  if (!cands.length) {
+    cands = [...document.querySelectorAll('body *')].filter((el) => {
+      const s = getComputedStyle(el);
+      if (s.position !== 'fixed' || !(+s.zIndex >= 100)) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= innerWidth * 0.5 && r.height >= innerHeight * 0.5 && vis(el) && temBotao(el);
+    });
+  }
   if (!cands.length) return null;
-  // o mais interno: o que não contém outro candidato
   const el = cands.find((c) => !cands.some((o) => o !== c && c.contains(o))) || cands[0];
   const h = el.querySelector('h1,h2,h3,h4,h5,h6,[class*=title i],[class*=Title]');
+  const texto = (el.innerText || '').trim();
   const botoes = [...el.querySelectorAll('button,[role=button]')].filter(vis).map((b) => (b.innerText || '').trim()).filter(Boolean);
-  return { titulo: h ? (h.innerText || '').trim() : '', texto: (el.innerText || '').trim().slice(0, 1200), botoes };
+  return { titulo: h ? (h.innerText || '').trim() : (texto.split(/\r?\n/)[0] || ''), texto: texto.slice(0, 1200), botoes };
 }
 """
 
@@ -247,9 +254,23 @@ OFERTAS_JS = r"""
 
 ENDERECO_JS = r"""
 () => {
+  for (const i of document.querySelectorAll('input[placeholder="Endereço de instalação"]')) {
+    if ((i.value || '').trim()) return i.value.trim();
+  }
   for (const s of document.querySelectorAll('select')) {
     const t = [...s.selectedOptions].map((o) => o.textContent.trim()).join(' ');
     if (t && !/selecione/i.test(t)) return t;
+  }
+  return null;
+}
+"""
+
+NOME_JS = r"""
+() => {
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  for (const e of document.querySelectorAll('input')) {
+    const k = `${e.name || ''} ${e.placeholder || ''} ${e.id || ''}`;
+    if (vis(e) && /nome/i.test(k) && !/m[aã]e|social/i.test(k) && (e.value || '').trim()) return e.value.trim();
   }
   return null;
 }
@@ -355,8 +376,8 @@ class Consulta:
     def campo(self, *nomes, exato=False):
         """Primeiro input visível por placeholder, depois por label/name."""
         for n in nomes:
-            for loc in (self.page.get_by_placeholder(n, exact=exato), self.page.get_by_label(n, exact=exato),
-                        self.page.locator(f'input[name="{n}"]')):
+            for loc in (self.page.locator(f'input[name="{n}"]'), self.page.get_by_placeholder(n, exact=exato),
+                        self.page.get_by_label(n, exact=exato)):
                 try:
                     for i in range(min(loc.count(), 4)):
                         if loc.nth(i).is_visible():
@@ -392,9 +413,9 @@ class Consulta:
                 return 5
             if self.visivel(pg.locator('input[name="contato"]')):
                 return 4
-            if self.campo('CPF/CNPJ', 'CPF'):
+            if self.campo('documento', 'CPF/CNPJ'):
                 return 3
-            if self.campo('Endereço ou CEP'):
+            if self.campo('cep', 'Endereço ou CEP'):
                 return 2
             if self.campo('Informe a matrícula do vendedor'):
                 return 1
@@ -476,6 +497,12 @@ class Consulta:
         mat = self.esperar(lambda: self.campo('Informe a matrícula do vendedor'), 30)
         if not mat:
             raise Parar('erro', motivo='Etapa 1 não abriu (página em branco?)')
+        # UF (MG) e PDV (1069521) chegam preenchidos alguns segundos DEPOIS do campo aparecer (visto em 11/11):
+        # espera até 12 s antes de decidir que estão vazios.
+        def _cheio(*nomes):
+            loc = self.campo(*nomes)
+            return loc is not None and (loc.input_value() or '').strip()
+        self.esperar(lambda: _cheio('Informe a UF') and _cheio('Insira o código ou nome do seu PDV'), 12)
         uf = self.campo('Informe a UF')
         if uf is not None and not (uf.input_value() or '').strip():   # reescolher a UF limpa o PDV: só se vazia
             self.preencher(uf, 'MG')
@@ -492,25 +519,25 @@ class Consulta:
 
     def etapa2(self):
         e = self.p['endereco']
-        cep = self.esperar(lambda: self.campo('Endereço ou CEP'), 30)
+        cep = self.esperar(lambda: self.campo('cep', 'Endereço ou CEP'), 30)   # input name="cep" (visto em 11/11)
         self._ir_etapa(2)
         if not cep:
             raise Parar('erro', motivo='Etapa 2 não abriu')
         self.ler_pedido()
         self.preencher(cep, so_digitos(e['cep']))
-        num = self.campo('Número', exato=True)
+        num = self.campo('numero', 'Número')
         if e.get('numero'):
             if num is not None:
                 self.preencher(num, e['numero'], devagar=False)
         else:
-            sn = self.page.get_by_label(re.compile(r'sem n[uú]mero', re.I))
-            if self.visivel(sn):
-                sn.first.check()
+            sn = self.page.locator('input[name="semNumero"]')
+            if self.visivel(sn) and not sn.first.is_checked():
+                sn.first.check(force=True)
         b = self.botao(r'^\s*buscar\s*$')
         if b:
             self.clicar(b)
         ref = self.esperar(lambda: (lambda r: r if r is not None and r.is_enabled() else None)(
-            self.campo('Referência (Obrigatório)', 'Referência')), 30)
+            self.campo('referencia', 'Referência (Obrigatório)')), 30)
         pp = self.popup()
         if pp and not ref:
             self.out['popup'] = pp
@@ -548,7 +575,7 @@ class Consulta:
         raise Parar('sem_viabilidade')
 
     def etapa3(self):
-        cpf = self.esperar(lambda: self.campo('CPF/CNPJ', 'CPF'), 30)
+        cpf = self.esperar(lambda: self.campo('documento', 'CPF/CNPJ'), 30)   # input name="documento" (11/11)
         if not cpf:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='Etapa 3 não abriu')
         self._ir_etapa(3)
@@ -565,9 +592,9 @@ class Consulta:
                 pp = self.popup()
                 if pp:
                     return ('popup', pp)
-                nome = self.campo('Nome completo')
-                if nome is not None and (nome.input_value() or '').strip():
-                    return ('nome', nome.input_value().strip())
+                nome = self.page.evaluate(NOME_JS)
+                if nome:
+                    return ('nome', nome)
                 return None
             r = self.esperar(pronto, 45, passo=1)    # Receita 5–20 s
             if not r:
