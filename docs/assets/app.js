@@ -76,7 +76,8 @@
     p.then((r) => { if (r && (r.error || r.erro) && _memo.get(chave) === reg) _memo.delete(chave); }, () => { if (_memo.get(chave) === reg) _memo.delete(chave); });
     return p;
   }
-  const limparCache = () => _memo.clear();
+  let jornadaUlt = null;   // { t, v }: a última jornada que chegou (a que a tela está mostrando) — zera junto com o cache
+  const limparCache = () => { _memo.clear(); jornadaUlt = null; };
   const jornada = () => memo('jornada', jornadaBusca);
   const rpcOportunidades = () => memo('op_abertas', () => sb.rpc('oportunidades_abertas'));
   const jornadaMonta = (data) => ({
@@ -97,7 +98,8 @@
     if (!r) r = await sb.from('v_jornada').select('*');
     if (r.error) return { erro: msgErro(r.error), lista: [], porVenda: {}, porConversa: {} };
     try { sessionStorage.setItem(SNAP_JORNADA, JSON.stringify({ t: Date.now(), uid: (usuarioAtual || {}).id || null, data: r.data || [] })); } catch (e) { /* sem armazenamento: só não pinta na hora */ }
-    return jornadaMonta(r.data);
+    jornadaUlt = { t: Date.now(), v: jornadaMonta(r.data) };
+    return jornadaUlt.v;
   }
   // A última jornada vista nesta aba (até 10 min): a tela pinta na hora com ela e troca pelo dado novo assim que chega.
   function jornadaSnap() {
@@ -109,12 +111,18 @@
   }
   // Uma linha da jornada (por venda ou por conversa) a partir da carga compartilhada — ficha e conversa não pedem a v_jornada
   // de novo: usam a que o Live/menu acabou de buscar (ou entram no mesmo pedido em andamento).
-  async function jornadaLinha({ venda, conversa, conversaComVenda }) {
-    const j = await jornada();
-    if (j.erro) return null;
+  // Abrir uma linha usa a jornada que a tela já tem (até 90 s; toda ação zera o cache e o Live se refaz a cada 60 s) em vez
+  // de esperar uma busca nova. jornadaEspia: a mesma linha, só se estiver em memória (sem buscar) — para adiantar consultas.
+  const linhaDe = (j, { venda, conversa, conversaComVenda }) => {
+    if (!j || j.erro) return null;
     if (venda) return j.porVenda[venda] || null;
     if (conversaComVenda) return j.todas.find((x) => x.conversa_id === conversaComVenda && x.venda_id) || null;
     return j.todas.find((x) => x.conversa_id === conversa) || null;
+  };
+  const jornadaEmMemoria = () => (jornadaUlt && Date.now() - jornadaUlt.t < 90000 ? jornadaUlt.v : null);
+  const jornadaEspia = (q) => linhaDe(jornadaEmMemoria(), q);
+  async function jornadaLinha(q) {
+    return linhaDe(jornadaEmMemoria() || await jornada(), q);
   }
   // 0107: 🔥 oportunidades (v_oportunidades) — fora as conversas que já estão em "Para fazer" (v_jornada.precisa_acao):
   // oportunidade nunca entra no contador de obrigação nem repete uma linha que já pede ação.
@@ -1301,7 +1309,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)

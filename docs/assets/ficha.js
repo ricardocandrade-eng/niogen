@@ -231,6 +231,22 @@
     const perfil = (NG.usuario || {}).perfil;
     const bo = ['admin', 'backoffice'].includes(perfil);
     const opc = (q) => Promise.resolve(q).then((x) => (x.error ? null : x.data), () => null);
+    // O que depende da conversa (cadência, nº de mensagens, bloqueio, última fala). Se a jornada em memória já diz qual é a
+    // conversa da venda, isso sai junto com a 1ª rodada; a 2ª só confere (e refaz se a conversa for outra).
+    const daConversa = (cid) => Promise.all([
+      // Prompt 28: avisos automáticos da Mari para a venda (BIO1 · BIO3 · INSTALACAO · VESPERA) — só admin/backoffice.
+      Promise.all([
+        NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
+        NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari')
+          .not('tags->>cadencia', 'is', null).order('created_at'),
+        NG.tplCadencia(),
+      ]),
+      NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', cid).in('papel', ['lead', 'mari', 'humano']),
+      NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
+      ultimaFalaTime(cid),   // 0103: sugestão do motivo quando o cliente só confirmou
+    ]);
+    const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
+    const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
     const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto] = await Promise.all([
       NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
@@ -271,8 +287,8 @@
     }
     const convId = ((rc.data || [])[0] || {}).id || null;
     const planoLista = v.plano_id ? (planosCache || []).find((p) => p.id === v.plano_id) : null;
-    // 2ª rodada: o que depende da conversa (cadência, nº de mensagens, bloqueio, última fala) e da venda (parceiro, faturas).
-    const [rpCurto, rparc, rcad, rnm, rbq, rut, fatRow, concRow] = await Promise.all([
+    // 2ª rodada: o que depende da conversa (se não saiu adiantado) e da venda (parceiro, faturas).
+    const [rpCurto, rparc, rconv, fatRow, concRow] = await Promise.all([
       v.plano_id && !planoLista ? NG.sb.from('config_planos').select('nome_curto').eq('id', v.plano_id).maybeSingle() : null,   // plano inativo: fora da lista
       // Venda de parceiro (admin/backoffice): máximo de tentativas, comissão configurada e se o lançamento já saiu.
       ehParc ? Promise.all([
@@ -280,21 +296,13 @@
         v.plano_id ? NG.sb.from('parceiro_comissao').select('parceiro_id, valor').eq('plano_id', v.plano_id) : Promise.resolve({ data: [] }),
         NG.sb.from('parceiro_pagamentos').select('id, tipo, status').eq('venda_id', id),
       ]) : null,
-      // Prompt 28: avisos automáticos da Mari para a venda (BIO1 · BIO3 · INSTALACAO · VESPERA) — só admin/backoffice.
-      convId ? Promise.all([
-        NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', convId).maybeSingle(),
-        NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', convId).eq('papel', 'mari')
-          .not('tags->>cadencia', 'is', null).order('created_at'),
-        NG.tplCadencia(),
-      ]) : null,
-      convId ? NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', convId).in('papel', ['lead', 'mari', 'humano']) : { count: 0 },
-      convId ? NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', convId).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1) : { data: [] },
-      convId ? ultimaFalaTime(convId) : null,   // 0103: sugestão do motivo quando o cliente só confirmou
+      !convId ? null : (convId === convPrev && pPrev ? pPrev.then((x) => x || daConversa(convId)) : daConversa(convId)),
       // 10/11: faturas do M-10 (v_adimplencia) e conciliação (v_conciliacao). As views ainda são rascunho: sem elas, a ficha
       // mostra "aguardando o extrato da Nio" (nunca dado de exemplo).
       v.instalado_em ? opc(NG.sb.from('v_adimplencia').select('faturas').eq('venda_id', id).maybeSingle()) : null,
       bo && v.comissao_paga != null ? opc(NG.sb.from('v_conciliacao').select('*').eq('venda_id', id).maybeSingle()) : null,
     ]);
+    const [rcad, rnm, rbq, rut] = rconv || [null, { count: 0 }, { data: [] }, null];
     const nomeCurto = planoLista ? planoLista.nome_curto || null : ((rpCurto && rpCurto.data) || {}).nome_curto || null;
     const nomeDe = Object.fromEntries(ru.map((u) => [u.id, u.nome]));
     let parc = null;

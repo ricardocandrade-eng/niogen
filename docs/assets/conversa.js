@@ -102,14 +102,19 @@
       const qTurnos = ult
         ? NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
         : NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400);
-      const [rc, rt, ra, rr, rtpl, vj] = await Promise.all([
+      // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
+      // 11/11: não segura as mensagens — entra quando a jornada chegar.
+      NG.jornadaLinha({ conversaComVenda: id }).then((vj) => {
+        if (!st.vivo || o.conversaId !== id) return;
+        st.venda = vj || null;
+        if (st.d) desenhar();
+      }, () => {});
+      const [rc, rt, ra, rr, rtpl] = await Promise.all([
         NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
         qTurnos,
         qAcoes(id),
         rapidas(),
         templates(),
-        // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
-        NG.jornadaLinha({ conversaComVenda: id }).catch(() => null),
       ]);
       if (!st.vivo || meu !== st.seq) return;
       if (rc.error || !rc.data) {
@@ -117,7 +122,6 @@
         msgs.innerHTML = `<div class="vazio">${esc(rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).')}</div>`;
         return;
       }
-      st.venda = vj || null;
       let turnos = (rt.data || []).reverse();
       if (ult) {
         if (rt.error) return;
