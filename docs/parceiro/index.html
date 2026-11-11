@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- NIOGEN | docs/parceiro/index.html | 10/11/2026 — Claude Code (docs/Prompt_pocket_parceiro_101126_2025.md)
+     Pocket do Parceiro: página de celular do Programa Parceiro PAP, modo escuro sempre. Layout = artboards "Pocket ·" do canvas
+     claude.ai/artifact/Um88gemrtUnU9MRhQjEZEE (Início, Minhas vendas, Enviar venda) e as outras telas no mesmo estilo.
+     Telas: Entrar · Seja parceiro · Início · Minhas vendas · Enviar venda · Pagamentos · Eu. Lógica em pocket.js.
+     Dados: SÓ as funções SECURITY DEFINER do parceiro (0115/0116) — nenhum select direto em tabela. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0F14">
+<meta name="color-scheme" content="dark">
+<meta name="robots" content="noindex">
+<title>Parceiro Dharma</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="pocket.css?v=101126-1">
+<script src="../config.js?v=101126-1"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="../assets/markdown.js?v=101126-1"></script>
+</head>
+<body>
+<div class="app">
+  <main id="tela" class="tela" aria-live="polite"><div class="carregando">Carregando…</div></main>
+  <nav class="menu" id="menu" hidden aria-label="Menu">
+    <a href="#inicio" data-tab="inicio"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/></svg>Início</a>
+    <a href="#vendas" data-tab="vendas"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Vendas</a>
+    <a href="#pagamentos" data-tab="pagamentos"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18"/></svg>Pagamentos</a>
+    <a href="#eu" data-tab="eu"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>Eu</a>
+  </nav>
+</div>
+<div class="toast" id="toast" role="status" hidden></div>
+<script src="pocket.js?v=101126-1"></script>
+</body>
+</html>

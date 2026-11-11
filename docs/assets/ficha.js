@@ -6,6 +6,7 @@
  * Gravação: os mesmos updates de antes (vendas / contatos_cliente) com os mesmos campos; as travas são do banco (triggers)
  * e a mensagem do RAISE volta como toast. Nada de regra de negócio aqui.
  * 06/11 (prompt 25): cartão da CONFERÊNCIA DE QUALIDADE (só origem parceiro_pap), origem "Parceiro PAP · nome" e "Gerar lançamentos".
+ * 10/11 (Pocket do Parceiro, 0115): no mesmo cartão, "Marcar venda indevida…" / "Desmarcar" (só admin; RPC parceiro_marcar_indevida).
  * 06/11 (prompt 27): cartão VIABILIDADE com o portal PAP na frente (Consultar no portal · Registrar resultado; DFV vira "pista")
  * e cartão DADOS PARA O PORTAL PAP (campos na ordem das etapas do Novo Pedido, copiar por campo e Copiar tudo; em
  * eventos_venda só o fato "dados copiados"). Os dois aparecem em Qualificado e em Saída.
@@ -251,7 +252,7 @@
     let parc = null;
     if (v.origem === 'parceiro_pap' && ['admin', 'backoffice'].includes(perfil)) {
       // Obs. interna, quem e quando aprovou não estão em v_funil (só prazo, status e motivo): lê da tabela.
-      const rx = await NG.sb.from('vendas').select('conferencia_obs, conferencia_em, conferencia_por').eq('id', id).maybeSingle();
+      const rx = await NG.sb.from('vendas').select('conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle();
       if (rx.data) Object.assign(v, rx.data);
       const [rcfg, rcom, rpag] = await Promise.all([
         NG.sb.from('config_parceiros').select('conferencia_max_tentativas').maybeSingle(),
@@ -443,6 +444,10 @@
       'A venda vai para Saída com este motivo e o parceiro vê só o motivo da lista. Suspeita de fraude: avise o Ricardo na hora.', formMotivoConf(), 'Reprovar e encerrar'),
     conf_devolver: () => formWrap('conf_devolver', 'Devolver ao parceiro',
       'A venda volta ao parceiro com o motivo da lista para ele corrigir e reenviar. Continua em Qualificado.', formMotivoConf(), 'Devolver ao parceiro'),
+    // 0115: venda indevida (só admin) — não paga, cancela o que estava previsto e zera a ajuda de custo do mês do parceiro.
+    conf_indevida: () => formWrap('conf_indevida', 'Marcar venda indevida',
+      'Venda fora das regras do programa (fraude, cliente que já era Nio, dado falso…). O que esta venda ia pagar é cancelado e o parceiro fica sem a ajuda de custo do mês. O parceiro vê só "Venda fora das regras do programa". Dá para desmarcar.',
+      '<label class="campo">Motivo interno (obrigatório)<textarea name="motivo_ind" maxlength="300" required></textarea></label>', 'Marcar indevida'),
     // Viabilidade do portal (prompt 27): os 4 estados; "Não consultado" apaga o registro. Abre dentro do cartão Viabilidade.
     viab: (v) => formWrap('viab', 'Registrar o resultado do portal', 'O que o portal PAP respondeu na consulta de viabilidade (etapa 2 do Novo Pedido). Só "Viável" libera a venda; "Sem viabilidade" ou "não encontrado" = tente variações de CEP, rua e número antes de encerrar.',
       `<div class="grade2"><label class="campo">Resultado no portal<select name="viab" autofocus>${NG.opcoes(NG.VIAB_PORTAL_REGISTRO, ['viavel', 'sem_viabilidade', 'nao_encontrado'].includes(v.nio_viab_resultado) ? v.nio_viab_resultado : '', 'Não consultado')}</select></label>
@@ -721,6 +726,11 @@
     },
     async conf_reprovar(fd) { return confSalvar(fd, 'reprovada'); },
     async conf_devolver(fd) { return confSalvar(fd, 'devolvida'); },
+    async conf_indevida(fd) {
+      const motivo = String(fd.get('motivo_ind') || '').trim();
+      if (!motivo) { NG.toast('Escreva o motivo da venda indevida.', 'bad'); return false; }
+      return confIndevida(true, motivo);
+    },
     async mover_aguardando(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
       return gravar({ status: '2_aguardando_instalacao', instalacao_agendada_para: quandoDe(fd), instalacao_turno: turnoDe(fd) }, `${NG.primeiroNome(d.v.cliente_nome)} → ${STATUS_MAP['2_aguardando_instalacao'].curto}`);
@@ -803,6 +813,15 @@
     await recarregar();
     ouvintes.forEach((f) => { try { f(d && d.v); } catch (e) { /* tela que ouve */ } });
   }
+  async function confIndevida(marcar, motivo) {
+    const { data, error } = await NG.sb.rpc('parceiro_marcar_indevida', { p_venda: d.v.id, p_indevida: marcar, p_motivo: motivo || null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+    NG.toast(marcar ? `Venda indevida · ${data.pagamentos_mudados} pagamento(s) cancelado(s)${data.ajuda_mudada ? ' · ajuda de custo do mês cancelada' : ''}` : 'Venda desmarcada: o que foi cancelado voltou a previsto', 'ok');
+    formAtivo = null;
+    await recarregar();
+    avisarOuvintes(null);
+    return true;
+  }
   async function confGerar() {
     const { data, error } = await NG.sb.rpc('parceiro_lancar_instalacao_admin', { p_venda: d.v.id });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
@@ -845,6 +864,9 @@
       ${d.avisoBanco ? `<div class="faixa amarelo">${esc(d.avisoBanco)}</div>` : ''}
       ${d.avisoTent ? `<div class="faixa amarelo">${esc(d.avisoTent)} (nada foi gravado)</div>` : ''}
       ${botoes}${form}
+      ${v.parceiro_indevida ? `<div class="faixa vermelho">Venda indevida${v.parceiro_indevida_em ? ` desde ${esc(NG.fmtDataHora(v.parceiro_indevida_em))}` : ''}: ${esc(v.parceiro_indevida_motivo || '')}. Não paga e o mês do parceiro fica sem ajuda de custo.
+          ${perfil === 'admin' ? '<button type="button" class="btn btn-sm" data-f="conf-desmarcar-indevida">Desmarcar</button>' : ''}</div>`
+        : perfil === 'admin' && !form ? '<div class="conf-botoes"><button type="button" class="btn btn-sm" data-f="conf-form-indevida">Marcar venda indevida…</button></div>' : ''}
       ${semLancar ? `<div class="faixa amarelo">${d.parc.comissaoValor ? 'Instalação confirmada, mas a comissão do parceiro ainda não foi lançada.' : 'Instalada sem comissão configurada para este plano: configure em Configurações › Programa Parceiro.'}
           ${perfil === 'admin' ? '<button type="button" class="btn btn-sm" data-f="conf-gerar">Gerar lançamentos</button>' : '<span class="nota-campo">O admin gera os lançamentos.</span>'}</div>` : ''}
     </section>`;
@@ -2128,6 +2150,8 @@
       if (acao === 'conf-aprovar') { b.disabled = true; const ok = await gravar({ conferencia_status: 'aprovada' }, 'Conferência aprovada'); if (!ok && b.isConnected) b.disabled = false; return; }
       if (acao === 'conf-form-reprovar' || acao === 'conf-form-devolver') { formAtivo = acao === 'conf-form-reprovar' ? 'conf_reprovar' : 'conf_devolver'; render(); return; }
       if (acao === 'conf-gerar') { b.disabled = true; await confGerar(); return; }
+      if (acao === 'conf-form-indevida') { formAtivo = 'conf_indevida'; render(); return; }
+      if (acao === 'conf-desmarcar-indevida') { b.disabled = true; if (!(await confIndevida(false, null)) && b.isConnected) b.disabled = false; return; }
       if (acao === 'and-visto') {
         b.disabled = true;
         const { error } = await NG.sb.rpc('andamento_alerta_visto', { p_origem: b.dataset.origem, p_chave: b.dataset.chave });

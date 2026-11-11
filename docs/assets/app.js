@@ -137,7 +137,7 @@
     ja_tem_pedido_nio: 'Já tem pedido na Nio', cancelou_30d: 'Cancelou a Nio há menos de 30 dias', suspeita_fraude: 'Suspeita de fraude', outro: 'Outro motivo',
   };
   const CONFERENCIA_STATUS = { pendente: 'Em conferência', aprovada: 'Aprovada', reprovada: 'Reprovada', devolvida: 'Devolvida ao parceiro' };
-  const PAGAMENTO_TIPO = { comissao: 'Comissão', incentivo_quinzenal: 'Incentivo quinzenal', premio_degrau: 'Prêmio de degrau', bonus_boas_vindas: 'Bônus de boas-vindas' };
+  const PAGAMENTO_TIPO = { comissao: 'Comissão', premio_degrau: 'Ajuda de custo (degrau)', bonus_boas_vindas: 'Bônus de boas-vindas', largada_abatimento: 'Abatimento da largada', incentivo_quinzenal: 'Incentivo quinzenal (antigo)' };
   const PAGAMENTO_STATUS = { previsto: 'Previsto', pago: 'Pago', cancelado: 'Cancelado' };
   const FORMAS = { boleto: 'Boleto', cartao: 'Cartão', dacc: 'DACC' };
   const SEGMENTOS = { PF: 'PF · Varejo', MEI: 'PJ · MEI', NMEI: 'PJ · NMEI' };

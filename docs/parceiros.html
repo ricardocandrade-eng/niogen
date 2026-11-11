@@ -3,7 +3,10 @@
      4 KPIs (Ativos · Aguardando aprovação · Vendas em conferência · A pagar hoje), abas Todos · Precisam de ação · Ativos · Suspensos · Desligados,
      lista com situação, forma, vendas e pontos do mês, % reprovadas e próximo passo; gaveta do parceiro em blocos (dados + conferência do titular do Pix,
      status com motivo, forma de pagamento e incentivos, comissão por plano, indicadores, extrato de pontos com ajuste, pagamentos, vendas).
-     Admin escreve; backoffice só vê (o RLS já barra e a tela esconde os botões). Layout: docs/PADRAO_TELAS_NIOGEN_041126_1225.md. Nenhum número sugerido. -->
+     Admin escreve; backoffice só vê (o RLS já barra e a tela esconde os botões). Layout: docs/PADRAO_TELAS_NIOGEN_041126_1225.md. Nenhum número sugerido.
+     10/11 (Pocket do Parceiro, 0115): só quinzenal (sai a forma de pagamento e o incentivo); bloco "Acesso ao Pocket" com Enviar acesso (edge function
+     parceiro-acesso → link de uso único aberto no WhatsApp do Ricardo); bloco "Largada e ajuda de custo" (largada valor/pago em/abatimento, garantia
+     ativa até); cidade do parceiro; venda indevida aparece na lista de vendas do parceiro (marca-se na ficha). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -15,13 +18,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-22">
-<script src="config.js?v=101126-22"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-23">
+<script src="config.js?v=101126-23"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=101126-22"></script>
-<script src="assets/sidebar.js?v=101126-22"></script>
-<script src="assets/conversa.js?v=101126-22"></script>
-<script src="assets/ficha.js?v=101126-22"></script>
+<script src="assets/app.js?v=101126-23"></script>
+<script src="assets/sidebar.js?v=101126-23"></script>
+<script src="assets/conversa.js?v=101126-23"></script>
+<script src="assets/ficha.js?v=101126-23"></script>
 </head>
 <body>
 <div class="app">
@@ -51,7 +54,7 @@
           <thead><tr>
             <th data-ord="nome">Parceiro</th>
             <th data-ord="situacao">Situação</th>
-            <th data-ord="forma" class="col-media">Pagamento</th>
+            <th data-ord="cidade" class="col-media">Cidade</th>
             <th data-ord="vendas" data-dir="desc" class="num">Vendas no mês</th>
             <th data-ord="pontos" data-dir="desc" class="num">Pontos do mês</th>
             <th data-ord="reprov" data-dir="desc" class="num">% reprovadas</th>
@@ -81,12 +84,8 @@
         <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="(32) 90000-0000" autocomplete="off"></label>
       </div>
       <label class="campo">Chave Pix <span class="nota-campo">(opcional agora; tem que ser do mesmo CPF)</span><input type="text" name="pix" autocomplete="off"></label>
-      <div class="campo"><span>Forma de pagamento</span>
-        <div class="seg" role="radiogroup" aria-label="Forma de pagamento">
-          <label><input type="radio" name="forma" value="diario" checked>Diário</label>
-          <label><input type="radio" name="forma" value="quinzenal">Quinzenal</label>
-        </div></div>
-      <span class="nota-campo">A comissão por plano, os degraus e o incentivo se configuram depois (Configurações › Programa Parceiro e a gaveta do parceiro). Esta tela não sugere valores.</span>
+      <label class="campo">Cidade <span class="nota-campo">(define a tabela de comissão que o Pocket mostra)</span><input type="text" name="cidade" autocomplete="off" placeholder="Juiz de Fora"></label>
+      <span class="nota-campo">Pagamento só quinzenal: o parceiro recebe na sexta seguinte à quinta em que a Nio paga o ciclo da instalação. Comissão, degraus e calendário: Configurações › Programa Parceiro.</span>
     </div>
     <div class="g-pe"><div class="g-botoes"><button type="button" class="btn btn-ghost" data-fechar>Cancelar</button><button type="submit" class="btn btn-acc">Cadastrar parceiro</button></div></div>
   </form>
@@ -125,15 +124,16 @@
   const CONFIRMADA = (v) => ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status) && v.nio_situacao === 'Concluído' && v.nio_venda_valida === true && !!v.instalado_em;
 
   // ---------- dados ----------
+  let PTS_TODOS = [];
   let P = [], PTS = {}, IND = {}, APAGAR = [], VENDAS = [], COM = [], PLANOS = [], CFG = {}, PAG = [], USUARIOS = {};
   async function carregar() {
     const hoje = NG.diaSP();
     const [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg, ru] = await Promise.all([
       NG.sb.from('parceiros').select('*').order('nome'),
-      NG.sb.from('v_parceiro_pontos_mes').select('*').eq('competencia', mesISO()),
+      NG.sb.from('v_parceiro_pontos_mes').select('*'),
       NG.sb.from('v_parceiro_indicadores').select('*'),
       NG.sb.from('v_parceiro_a_pagar').select('*'),
-      NG.sb.from('vendas').select('id, parceiro_id, status, criado_em, cliente_nome, cidade, plano_id, conferencia_status, conferencia_prazo_ate, nio_situacao, nio_venda_valida, instalado_em').not('parceiro_id', 'is', null).order('criado_em', { ascending: false }).limit(5000),
+      NG.sb.from('vendas').select('id, parceiro_id, status, criado_em, cliente_nome, cidade, plano_id, conferencia_status, conferencia_prazo_ate, nio_situacao, nio_venda_valida, instalado_em, parceiro_indevida').not('parceiro_id', 'is', null).order('criado_em', { ascending: false }).limit(5000),
       NG.sb.from('parceiro_comissao').select('*'),
       NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
@@ -143,7 +143,8 @@
     const erro = [rp, rpts, rind, rap, rv, rcom, rpl, rcfg, rpg].find((r) => r.error);
     if (erro) { document.getElementById('tbody').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro.error))}</td></tr>`; NG.toast(NG.msgErro(erro.error), 'bad'); return; }
     P = rp.data || [];
-    PTS = Object.fromEntries((rpts.data || []).map((x) => [x.parceiro_id, x]));
+    PTS_TODOS = rpts.data || [];
+    PTS = Object.fromEntries(PTS_TODOS.filter((x) => x.competencia === mesISO()).map((x) => [x.parceiro_id, x]));
     IND = Object.fromEntries((rind.data || []).map((x) => [x.parceiro_id, x]));
     APAGAR = rap.data || [];
     VENDAS = rv.data || [];
@@ -163,6 +164,17 @@
     const b = COM.find((x) => x.parceiro_id === null && x.plano_id === planoId);
     return a ? Number(a.valor) : b ? Number(b.valor) : null;
   };
+  // Garantia Bronze (0115): último mês com pontos ≥ gatilho + meses de garantia (a mesma conta de parceiro_garantia_ate).
+  const garantiaAte = (pid) => {
+    const gat = Number(CFG.garantia_gatilho_pontos || 0), meses = Number(CFG.garantia_meses || 0);
+    if (!gat || !meses) return null;
+    const ms = PTS_TODOS.filter((x) => x.parceiro_id === pid && Number(x.pontos) >= gat).map((x) => x.competencia).sort();
+    if (!ms.length) return null;
+    const d = new Date(`${ms[ms.length - 1]}T12:00:00-03:00`);
+    d.setUTCMonth(d.getUTCMonth() + meses);
+    return NG.diaSP(d).slice(0, 8) + '01';
+  };
+  const saldoLargada = (p) => Number(p.largada_valor || 0) + PAG.filter((g) => g.parceiro_id === p.id && g.tipo === 'largada_abatimento' && g.status !== 'cancelado').reduce((t, g) => t + Number(g.valor), 0);
   const planoNome = (id) => { const p = PLANOS.find((x) => x.id === id); return p ? (p.nome_curto || p.nome) : '—'; };
 
   // Situação de cada parceiro: vendas, pontos, pendências.
@@ -182,6 +194,7 @@
     if (p.status === 'suspenso' && !p.pix_chave) return { txt: `Suspenso${p.status_motivo ? ' · ' + p.status_motivo : ''}`.slice(0, 70), nivel: 'dim' };
     if (!p.pix_chave) return { txt: 'Cadastrar a chave Pix', nivel: 'warn', acao: true };
     if (!p.pix_titular_conferido_em) return { txt: 'Conferir o titular do Pix', nivel: 'warn', acao: true };
+    if (p.status === 'ativo' && !p.auth_user_id) return { txt: 'Enviar o acesso ao Pocket', nivel: 'warn', acao: true };
     if (r.semComissao.length) return { txt: `Configurar a comissão do plano (${planoNome(r.semComissao[0].plano_id)})`, nivel: 'warn', acao: true };
     if (r.atrasadas.length) return { txt: `${r.atrasadas.length} ${r.atrasadas.length === 1 ? 'venda' : 'vendas'} para conferir · atrasada`, nivel: 'bad' };
     if (r.emConf.length) return { txt: `${r.emConf.length} ${r.emConf.length === 1 ? 'venda' : 'vendas'} em conferência`, nivel: 'ok' };
@@ -201,7 +214,7 @@
   const CHAVES = {
     nome: (p) => p.nome,
     situacao: (p) => SIT_IDX[p.status],
-    forma: (p) => p.forma_pagamento,
+    cidade: (p) => p.cidade || '',
     vendas: (p) => resumo(p).noMes,
     pontos: (p) => Number((PTS[p.id] || {}).pontos || 0),
     reprov: (p) => ((IND[p.id] || {}).pct_reprovadas == null ? null : Number(IND[p.id].pct_reprovadas)),
@@ -239,7 +252,7 @@
       return `<tr class="clicavel" data-id="${p.id}" tabindex="0" title="Abrir o parceiro">
         <td class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></td>
         <td><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span></td>
-        <td class="col-media">${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])}</td>
+        <td class="col-media">${esc(p.cidade || '—')}${p.cadastro_origem === 'pocket' ? '<small class="apagado"> · pelo Pocket</small>' : ''}</td>
         <td class="num">${NG.fmtNum(r.noMes)}</td>
         <td class="num">${NG.fmtNum(pt.pontos || 0)}${pt.degrau_pontos != null ? `<small class="apagado"> · degrau ${NG.fmtNum(pt.degrau_pontos)}</small>` : ''}</td>
         <td class="num">${ind.pct_reprovadas == null ? '—' : esc(String(ind.pct_reprovadas).replace('.', ',')) + ' %'}</td>
@@ -251,7 +264,7 @@
       return `<a class="cartao" href="#parceiro=${p.id}" data-id="${p.id}">
         <div class="cli"><b>${esc(p.nome)}</b><small>${esc(fmtTel(p.whatsapp))}</small></div>
         <div class="valor">${NG.fmtNum(pt.pontos || 0)} pts</div>
-        <div class="l2"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])} · ${NG.fmtNum(r.noMes)} no mês</span></div>
+        <div class="l2"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(p.cidade || '—')} · ${NG.fmtNum(r.noMes)} no mês</span></div>
         <div class="l2">${NG.proxPasso(proximo(p))}</div>
       </a>`;
     }).join('') : '<div class="vazio">Nenhum parceiro neste filtro</div>';
@@ -285,7 +298,7 @@
     if (!zap.startsWith('55')) zap = '55' + zap;
     const bt = fNovo.querySelector('[type=submit]');
     bt.disabled = true;
-    const { data, error } = await NG.sb.from('parceiros').insert({ nome, cpf, whatsapp: zap, pix_chave: f.pix.value.trim() || null, forma_pagamento: f.forma.value }).select('id').single();
+    const { data, error } = await NG.sb.from('parceiros').insert({ nome, cpf, whatsapp: zap, pix_chave: f.pix.value.trim() || null, cidade: f.cidade.value.trim() || null }).select('id').single();
     bt.disabled = false;
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast(`${nome} cadastrado · aguardando aprovação`, 'ok');
@@ -338,7 +351,7 @@
       <header class="f-cab">
         <div class="f-linha1"><h2>${esc(p.nome)}</h2><button type="button" class="g-fechar" data-p="fechar" aria-label="Fechar">×</button></div>
         <div class="f-local">${esc(fmtTel(p.whatsapp))} · CPF ${esc(fmtCpf(p.cpf))}</div>
-        <div class="f-linha3"><div class="f-meta"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(NG.PARCEIRO_FORMA[p.forma_pagamento])}</span>
+        <div class="f-linha3"><div class="f-meta"><span class="pill p-${p.status}">${esc(NG.PARCEIRO_STATUS[p.status])}</span><span>${esc(p.cidade || 'sem cidade')}</span>
           <span>· ${esc(NG.fmtNum(pt.pontos || 0))} pontos em ${esc(fmtMes(mesISO()))}</span></div></div>
       </header>
       <div class="f-corpo">
@@ -346,7 +359,8 @@
         ${!ehAdmin ? '<div class="faixa cinza">Você é backoffice: vê o parceiro, mas só o admin altera dados, status, comissão e pagamentos.</div>' : ''}
         ${bloco('dados', 'Dados e Pix', p.pix_titular_conferido_em ? 'titular do Pix conferido' : p.pix_chave ? 'titular do Pix NÃO conferido' : 'sem chave Pix', () => blocoDados(p))}
         ${bloco('status', 'Situação', NG.PARCEIRO_STATUS[p.status] + (p.status_motivo ? ` · ${p.status_motivo}` : ''), () => blocoStatus(p))}
-        ${bloco('pagamento', 'Forma de pagamento e incentivo', `${NG.PARCEIRO_FORMA[p.forma_pagamento]}${p.incentivo_valor_override != null || p.multiplicador_override != null ? ' · com ajuste do parceiro' : ''}`, () => blocoPagamento(p))}
+        ${bloco('acesso', 'Acesso ao Pocket', p.auth_user_id ? (p.acesso_enviado_em ? `último link ${NG.fmtDataHora(p.acesso_enviado_em)}` : 'com login') : 'sem acesso ainda', () => blocoAcesso(p))}
+        ${bloco('largada', 'Largada e ajuda de custo', `${Number(p.largada_valor) > 0 ? `largada ${moeda(p.largada_valor)} · saldo ${moeda(saldoLargada(p))}` : 'sem largada'}${garantiaAte(p.id) && garantiaAte(p.id) >= mesISO() ? ' · garantia ativa' : ''}`, () => blocoLargada(p))}
         ${bloco('comissao', 'Comissão por plano', `${COM.filter((x) => x.parceiro_id === p.id).length} plano(s) com valor próprio`, () => blocoComissao(p))}
         ${bloco('indicadores', 'Indicadores', ind.pct_reprovadas == null ? 'sem vendas enviadas' : `${String(ind.pct_reprovadas).replace('.', ',')} % reprovadas`, () => blocoIndicadores(ind))}
         ${bloco('pontos', 'Extrato de pontos', `${NG.fmtNum(pt.pontos || 0)} no mês${pt.degrau_pontos != null ? ` · degrau ${NG.fmtNum(pt.degrau_pontos)}` : ''}`, () => blocoPontos(p, pt))}
@@ -365,13 +379,14 @@
           ${ehAdmin ? `<button type="button" class="btn btn-sm" data-p="pix-ok" ${p.pix_chave ? '' : 'disabled title="Grave a chave Pix antes de conferir"'}>Conferi: a chave Pix é do mesmo CPF</button>` : ''}</div>`;
     if (!ehAdmin) {
       return `${linha('Nome', esc(p.nome))}${linha('CPF', `<span class="mono">${esc(fmtCpf(p.cpf))}</span>`)}${linha('WhatsApp', esc(fmtTel(p.whatsapp)))}
-        ${linha('Chave Pix', `<span class="mono">${esc(p.pix_chave || '—')}</span>`)}${conf}${linha('Cadastro', esc(NG.fmtDataAno(p.criado_em)))}`;
+        ${linha('Chave Pix', `<span class="mono">${esc(p.pix_chave || '—')}</span>`)}${linha('Cidade', esc(p.cidade || '—'))}${conf}${linha('Cadastro', esc(NG.fmtDataAno(p.criado_em)))}`;
     }
     return `<form class="f-formulario" data-form="dados" novalidate>
         <label class="campo">Nome completo<input type="text" name="nome" value="${esc(p.nome)}" required></label>
         <div class="grade2"><label class="campo">CPF<input type="text" name="cpf" inputmode="numeric" value="${esc(fmtCpf(p.cpf))}"></label>
         <label class="campo">WhatsApp<input type="tel" name="whatsapp" value="${esc(fmtTel(p.whatsapp))}"></label></div>
         <label class="campo">Chave Pix <span class="nota-campo">(do mesmo CPF; trocar a chave zera a conferência do titular)</span><input type="text" name="pix" value="${esc(p.pix_chave || '')}" autocomplete="off"></label>
+        <label class="campo">Cidade <span class="nota-campo">(tabela de comissão do Pocket)</span><input type="text" name="cidade" value="${esc(p.cidade || '')}" autocomplete="off"></label>
         <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar dados</button></div></form>
       ${conf}
       ${linha('Cadastro', esc(NG.fmtDataAno(p.criado_em)))}`;
@@ -401,23 +416,32 @@
       ${p.status === 'aguardando' ? '<span class="nota-campo">Aprovar é aguardando → ativo. Depois confira o titular do Pix e configure a comissão para o primeiro pagamento sair.</span>' : ''}`;
   }
 
-  // ----- Forma de pagamento e incentivo -----
-  function blocoPagamento(p) {
-    const padV = CFG.incentivo_quinzenal_valor, padM = CFG.incentivo_quinzenal_multiplicador;
-    const rotPad = (v, m) => (v == null ? 'padrão: não configurado' : `padrão: ${m ? m : moeda(v)}`);
-    if (!ehAdmin) {
-      return `${linha('Forma', esc(NG.PARCEIRO_FORMA[p.forma_pagamento]))}${linha('Incentivo (R$ por venda)', esc(p.incentivo_valor_override != null ? moeda(p.incentivo_valor_override) : 'padrão'))}
-        ${linha('Multiplicador de pontos', esc(p.multiplicador_override != null ? String(p.multiplicador_override).replace('.', ',') : 'padrão'))}`;
-    }
-    return `<form class="f-formulario" data-form="pagamento" novalidate>
-      <div class="campo"><span>Forma de pagamento <span class="nota-campo">(diário: 1 dia útil após a instalação confirmada · quinzenal: dias ${esc((CFG.quinzenal_dias || [20, 5]).join(' e '))})</span></span>
-        <div class="seg" role="radiogroup" aria-label="Forma de pagamento">
-          <label><input type="radio" name="forma" value="diario" ${p.forma_pagamento === 'diario' ? 'checked' : ''}>Diário</label>
-          <label><input type="radio" name="forma" value="quinzenal" ${p.forma_pagamento === 'quinzenal' ? 'checked' : ''}>Quinzenal</label></div></div>
-      <div class="grade2">
-        <label class="campo">Incentivo quinzenal, R$ por venda <span class="nota-campo">(vazio = ${esc(rotPad(padV, null))})</span><input type="number" step="0.01" min="0" name="inc" value="${p.incentivo_valor_override ?? ''}"></label>
-        <label class="campo">Multiplicador de pontos <span class="nota-campo">(vazio = ${padM == null ? 'padrão: não configurado' : 'padrão: ' + esc(String(padM).replace('.', ','))}; mínimo 1)</span><input type="number" step="0.01" min="1" name="mult" value="${p.multiplicador_override ?? ''}"></label></div>
-      <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar</button></div></form>`;
+  // ----- Acesso ao Pocket (0115) -----
+  // Gera um link de uso único pela edge function parceiro-acesso (service role) e abre o WhatsApp do Ricardo com a mensagem.
+  function blocoAcesso(p) {
+    const info = `${linha('Login do Pocket', p.auth_user_id ? 'criado' : 'ainda não')}${p.acesso_enviado_em ? linha('Último link gerado', esc(NG.fmtDataHora(p.acesso_enviado_em))) : ''}
+      ${linha('Cadastro', p.cadastro_origem === 'pocket' ? 'pelo Pocket (Seja parceiro)' : 'pelo NIOGEN')}`;
+    if (!ehAdmin) return info + '<span class="nota-campo">Só o admin envia o acesso.</span>';
+    if (p.status !== 'ativo') return info + '<span class="nota-campo">Aprove o parceiro para enviar o acesso.</span>';
+    return `${info}<div class="f-form-acoes"><button type="button" class="btn btn-acc" data-p="enviar-acesso">Enviar acesso pelo WhatsApp</button></div>
+      <span class="nota-campo">O link vale uma vez e por pouco tempo (prazo do login do Supabase, 1 h). Depois de entrar, o parceiro fica logado no celular. Perdeu? Gere outro.</span>`;
+  }
+  // ----- Largada e ajuda de custo (0115) -----
+  function blocoLargada(p) {
+    const ga = garantiaAte(p.id);
+    const garantia = ga && ga >= mesISO()
+      ? `<div class="faixa verde">Garantia Bronze ativa até ${esc(fmtMes(ga))}: piso de ${esc(moeda(CFG.garantia_piso))} no mês que fizer ${esc(NG.fmtNum(CFG.garantia_min_pontos))} pontos.</div>`
+      : '<span class="nota-campo">Sem garantia ativa (nasce quando o parceiro chega ao gatilho num mês).</span>';
+    const saldo = saldoLargada(p);
+    const info = `${linha('Largada', Number(p.largada_valor) > 0 ? `${esc(moeda(p.largada_valor))}${p.largada_paga_em ? ` · paga em ${esc(NG.fmtDiaISO(p.largada_paga_em))}` : ' · ainda não paga'}` : '—')}
+      ${Number(p.largada_valor) > 0 ? linha('Saldo a abater', esc(moeda(saldo))) : ''}${garantia}`;
+    if (!ehAdmin) return info;
+    return `${info}<form class="f-formulario" data-form="largada" novalidate><h3>Largada em confiança</h3>
+      <p>Só para convidado aprovado pelo Ricardo. Paga no aceite; abate o valor por venda instalada até zerar (linha negativa no extrato do parceiro). Sem cobrança se não vender.</p>
+      <div class="grade2"><label class="campo">Valor (R$)<input type="number" step="0.01" min="0" name="valor" value="${Number(p.largada_valor) || ''}"></label>
+      <label class="campo">Paga em<input type="date" name="paga" value="${esc(p.largada_paga_em || '')}"></label>
+      <label class="campo">Abatimento por venda (R$)<input type="number" step="0.01" min="1" name="abat" value="${p.largada_abatimento_por_venda ?? 100}"></label></div>
+      <div class="f-form-acoes"><button type="submit" class="btn btn-acc">Salvar largada</button></div></form>`;
   }
 
   // ----- Comissão por plano -----
@@ -467,7 +491,7 @@
   function blocoPagamentos(p) {
     const l = PAG.filter((g) => g.parceiro_id === p.id);
     return l.length ? `<div class="rolagem-s"><table class="tab"><thead><tr><th>Tipo</th><th>Vence</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody>${l.slice(0, 40).map((g) => `<tr>
-        <td>${esc(NG.PAGAMENTO_TIPO[g.tipo])}</td><td>${esc(NG.fmtDiaISO(g.vence_em))}</td><td class="num">${esc(moeda(g.valor))}</td>
+        <td>${esc(NG.PAGAMENTO_TIPO[g.tipo])}</td><td>${esc(g.vence_em ? NG.fmtDiaISO(g.vence_em) : "a confirmar")}</td><td class="num">${esc(moeda(g.valor))}</td>
         <td><span class="pill pg-${g.status}">${esc(NG.PAGAMENTO_STATUS[g.status])}</span></td></tr>`).join('')}</tbody></table></div>
       <a class="btn btn-sm" href="pagamentos.html?parceiro=${esc(p.id)}">Abrir em Pagamentos a parceiros</a>`
       : '<span class="nota-campo">Nenhum pagamento ainda: nasce na instalação confirmada pela Nio.</span>';
@@ -478,7 +502,8 @@
     if (!r.vs.length) return '<span class="nota-campo">Nenhuma venda enviada ainda.</span>';
     return `<div class="rolagem-s"><table class="tab"><thead><tr><th>Cliente</th><th>Etapa</th><th>Conferência</th></tr></thead><tbody>${r.vs.slice(0, 20).map((v) => `<tr>
       <td><a href="#venda=${esc(v.id)}">${esc(NG.primeiroNome(v.cliente_nome))}</a><small class="apagado"> · ${esc(planoNome(v.plano_id))}</small></td>
-      <td>${NG.pilulaEtapa(v.status)}</td><td><span class="pill cf-${esc(v.conferencia_status || 'pendente')}">${esc(NG.CONFERENCIA_STATUS[v.conferencia_status] || '—')}</span></td></tr>`).join('')}</tbody></table></div>
+      <td>${NG.pilulaEtapa(v.status)}</td><td><span class="pill cf-${esc(v.conferencia_status || 'pendente')}">${esc(NG.CONFERENCIA_STATUS[v.conferencia_status] || '—')}</span>${v.parceiro_indevida ? ' <span class="pill pg-atrasado">indevida</span>' : ''}</td></tr>`).join('')}</tbody></table></div>
+      <span class="nota-campo">Venda indevida (não paga e zera a ajuda de custo do mês): abra a venda e use "Marcar venda indevida…" no cartão da conferência.</span>
       ${r.vs.length > 20 ? `<span class="nota-campo">Mostrando 20 de ${r.vs.length}. O resto está em Vendas, filtrando por origem Parceiro PAP.</span>` : ''}`;
   }
 
@@ -506,6 +531,19 @@
     if (acao === 'status-desligar') { formStatus = 'desligado'; renderParc(); return; }
     if (acao === 'status-cancelar') { formStatus = null; renderParc(); return; }
     if (acao === 'salvar-comissao') { b.disabled = true; await salvarComissao(p); b.disabled = false; }
+    if (acao === 'enviar-acesso') {
+      b.disabled = true;
+      const { data, error } = await NG.sb.functions.invoke('parceiro-acesso', { body: { parceiro_id: p.id } });
+      b.disabled = false;
+      let msgErro = error ? (data && data.error) || NG.msgErro(error) : data && data.error;
+      if (error && error.context && typeof error.context.json === 'function') { try { const j = await error.context.json(); msgErro = j.error || msgErro; } catch (e) { /* sem corpo */ } }
+      if (msgErro || !data || !data.token_hash) { NG.toast(`Acesso não gerado: ${msgErro || 'sem resposta'}`, 'bad'); return; }
+      const link = new URL(`parceiro/?acesso=${encodeURIComponent(data.token_hash)}`, location.href).href;
+      const texto = `Oi, ${NG.primeiroNome(p.nome)}! Aqui é a Dharma. Este é o seu acesso ao app do Parceiro Dharma: ${link}\n\nToque no link em até 1 hora. Ele vale uma vez só. Depois você fica logado no celular.`;
+      window.open(`https://wa.me/${NG.soDigitos(p.whatsapp)}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
+      NG.toast('Link gerado: confira e envie no WhatsApp', 'ok');
+      await recarregarTudo();
+    }
   });
   raiz.addEventListener('submit', async (ev) => {
     const form = ev.target.closest('[data-form]');
@@ -526,16 +564,17 @@
         if (zap.length < 10) { NG.toast('WhatsApp inválido: informe DDD + número.', 'bad'); return; }
         if (!zap.startsWith('55')) zap = '55' + zap;
         const pix = f.pix.value.trim() || null;
-        ok = await atualizarParceiro({ nome: f.nome.value.trim(), cpf, whatsapp: zap, pix_chave: pix }, pix !== p.pix_chave && p.pix_titular_conferido_em ? 'Dados salvos · chave Pix mudou: confira o titular de novo' : 'Dados salvos');
+        ok = await atualizarParceiro({ nome: f.nome.value.trim(), cpf, whatsapp: zap, pix_chave: pix, cidade: f.cidade.value.trim() || null }, pix !== p.pix_chave && p.pix_titular_conferido_em ? 'Dados salvos · chave Pix mudou: confira o titular de novo' : 'Dados salvos');
       } else if (form.dataset.form === 'status') {
         const motivo = f.motivo.value.trim();
         if (!motivo) { NG.toast(`Informe o motivo para ${formStatus === 'suspenso' ? 'suspender' : 'desligar'}.`, 'bad'); return; }
         ok = await atualizarParceiro({ status: formStatus, status_motivo: motivo }, formStatus === 'suspenso' ? `${p.nome} suspenso` : `${p.nome} desligado`);
-      } else if (form.dataset.form === 'pagamento') {
-        const inc = numOuNull(f.inc.value), mult = numOuNull(f.mult.value);
-        if (Number.isNaN(inc) || (inc != null && inc < 0)) { NG.toast('Incentivo inválido.', 'bad'); return; }
-        if (Number.isNaN(mult) || (mult != null && mult < 1)) { NG.toast('O multiplicador de pontos é no mínimo 1.', 'bad'); return; }
-        ok = await atualizarParceiro({ forma_pagamento: f.forma.value, incentivo_valor_override: inc, multiplicador_override: mult }, 'Forma de pagamento e incentivo salvos');
+      } else if (form.dataset.form === 'largada') {
+        const valor = numOuNull(f.valor.value), abat = numOuNull(f.abat.value);
+        if (Number.isNaN(valor) || (valor != null && valor < 0)) { NG.toast('Valor da largada inválido.', 'bad'); return; }
+        if (abat == null || Number.isNaN(abat) || abat <= 0) { NG.toast('O abatimento por venda tem que ser maior que zero.', 'bad'); return; }
+        if (valor && !f.paga.value) { NG.toast('Informe quando a largada foi paga (só abate depois de paga).', 'bad'); return; }
+        ok = await atualizarParceiro({ largada_valor: valor || 0, largada_paga_em: valor ? f.paga.value : null, largada_abatimento_por_venda: abat }, 'Largada salva');
       } else if (form.dataset.form === 'ajuste') {
         const pontos = numOuNull(f.pontos.value);
         const obs = f.obs.value.trim();

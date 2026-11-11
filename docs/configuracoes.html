@@ -4,7 +4,9 @@
      A leitura (NGOsab/NGDfv), a prévia obrigatória e o aplicar_osab são os mesmos de antes; a base DFV segue com carga pelo CLI.
      Tabela vigente: planos, adicionais, bônus e área como listas padrão (busca, ordenação, cartões no celular), só leitura.
      06/11 (prompt 25): aba "Programa Parceiro" (#parceiro) — degraus, incentivo quinzenal, boas-vindas, SLA da conferência, apuração,
-     comissão padrão por plano e termo do programa. Edição só admin; valores em branco até o Ricardo preencher (a tela não sugere número). -->
+     comissão padrão por plano e termo do programa. Edição só admin; valores em branco até o Ricardo preencher (a tela não sugere número).
+     10/11 (Pocket do Parceiro, 0115): degraus com nome e ajuda de custo em R$, garantia Bronze, calendário de pagamento (quinta da Nio → sexta
+     do parceiro), envios por dia; saíram o pagamento diário e o incentivo do quinzenal. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -16,14 +18,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=101126-22">
-<script src="config.js?v=101126-22"></script>
+<link rel="stylesheet" href="assets/app.css?v=101126-23">
+<script src="config.js?v=101126-23"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=101126-22"></script>
-<script src="assets/sidebar.js?v=101126-22"></script>
-<script src="assets/osab.js?v=101126-22"></script>
-<script src="assets/dfv.js?v=101126-22"></script>
+<script src="assets/app.js?v=101126-23"></script>
+<script src="assets/sidebar.js?v=101126-23"></script>
+<script src="assets/osab.js?v=101126-23"></script>
+<script src="assets/dfv.js?v=101126-23"></script>
 </head>
 <body>
 <div class="app">
@@ -569,29 +571,32 @@
   const dis = ehAdmin ? '' : 'disabled';
   async function carregarParceiro() {
     const hoje = NG.diaSP();
-    const [rc, rcom, rpl, rt] = await Promise.all([
+    const [rc, rcom, rpl, rt, rcal] = await Promise.all([
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_comissao').select('*').is('parceiro_id', null),
       NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('termos_programa').select('*').order('vigente_desde', { ascending: false }),
+      NG.sb.from('parceiro_calendario').select('*').order('instalacoes_de', { ascending: false }),
     ]);
-    const erro = [rc, rcom, rpl, rt].find((r) => r.error);
+    const erro = [rc, rcom, rpl, rt, rcal].find((r) => r.error);
     if (erro) { document.getElementById('parc-conteudo').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro.error))}</div>`; return; }
     PC = {
       cfg: rc.data || {},
       comissao: rcom.data || [],
       planos: (rpl.data || []).filter((p) => p.vigencia_inicio <= hoje && (!p.vigencia_fim || p.vigencia_fim >= hoje)),
       termos: rt.data || [],
+      cal: rcal.data || [],
     };
-    degraus = (PC.cfg.degraus || []).map((x) => ({ pontos: x.pontos, premio: x.premio }));
+    degraus = (PC.cfg.degraus || []).map((x) => ({ pontos: x.pontos, premio: x.premio, nome: x.nome || '' }));
     document.getElementById('parc-ro').hidden = ehAdmin;
     renderParceiro();
     renderAbas();
   }
   function degrausHtml() {
     return degraus.map((d, i) => `<div class="cfg-degrau" data-i="${i}">
+        <label class="campo">Nome<input type="text" maxlength="20" data-g="nome" value="${esc(d.nome || '')}" placeholder="Bronze" ${dis}></label>
         <label class="campo">Pontos no mês<input type="number" min="1" step="1" data-g="pontos" value="${d.pontos ?? ''}" ${dis}></label>
-        <label class="campo">Prêmio (R$)<input type="number" min="0" step="0.01" data-g="premio" value="${d.premio ?? ''}" ${dis}></label>
+        <label class="campo">Ajuda de custo (R$)<input type="number" min="0" step="0.01" data-g="premio" value="${d.premio ?? ''}" ${dis}></label>
         ${ehAdmin ? `<button type="button" class="btn btn-sm" data-pc="del-degrau" data-i="${i}" aria-label="Remover o degrau">Remover</button>` : '<span></span>'}</div>`).join('')
       || '<span class="nota-campo">Nenhum degrau configurado: a apuração do dia 5 não roda até haver ao menos um.</span>';
   }
@@ -602,27 +607,45 @@
     const vigente = c.termo_versao_vigente;
     document.getElementById('parc-conteudo').innerHTML = `
       <form id="form-cfg" class="secao" novalidate>
-        <div class="cfg-bloco"><h3>Degraus de pontos do mês</h3>
-          <p>1 real contratado = 1 ponto, no mês da instalação confirmada. Vale só o maior degrau atingido; o prêmio é apurado e pago no dia da apuração do mês seguinte.</p>
+        <div class="cfg-bloco"><h3>Degraus de pontos do mês · ajuda de custo</h3>
+          <p>1 real contratado = 1 ponto, no mês da instalação confirmada. Vale só o maior degrau atingido; a ajuda de custo é apurada no dia da apuração do mês seguinte e paga na 1ª sexta do calendário depois dele. Mês com venda indevida: sem ajuda de custo.</p>
           <div id="degraus">${degrausHtml()}</div>
           ${ehAdmin ? '<div><button type="button" class="btn btn-sm" data-pc="add-degrau">＋ Adicionar degrau</button></div>' : ''}</div>
-        <div class="cfg-bloco"><h3>Incentivo quinzenal e boas-vindas</h3>
-          <p>O incentivo vale para quem escolhe pagamento quinzenal (cada parceiro pode ter valor próprio na gaveta dele). Em branco = não existe.</p>
+        <div class="cfg-bloco"><h3>Garantia Bronze e boas-vindas</h3>
+          <p>Quem atinge o gatilho numa competência recebe o piso nas competências seguintes em que fizer o mínimo de pontos (vale o maior entre o degrau e o piso). Pagamento é só quinzenal, sem incentivo (10/11).</p>
           <div class="cfg-grade">
-            ${campo('Incentivo, R$ por venda', 'inc_valor', c.incentivo_quinzenal_valor, 'step="0.01" min="0"')}
-            ${campo('Multiplicador de pontos', 'inc_mult', c.incentivo_quinzenal_multiplicador, 'step="0.01" min="1"', '(mínimo 1)')}
+            ${campo('Gatilho, pontos no mês', 'g_gat', c.garantia_gatilho_pontos, 'step="1" min="1" required')}
+            ${campo('Piso, R$ por mês', 'g_piso', c.garantia_piso, 'step="0.01" min="0" required')}
+            ${campo('Meses de garantia', 'g_meses', c.garantia_meses, 'step="1" min="0" max="12" required', '(0 = sem garantia)')}
+            ${campo('Mínimo de pontos para valer', 'g_min', c.garantia_min_pontos, 'step="1" min="0" required')}
             ${campo('Boas-vindas, R$ na 1ª venda instalada', 'bv_valor', c.bonus_boas_vindas_valor, 'step="0.01" min="0"')}
             ${campo('Prazo das boas-vindas, em dias', 'bv_prazo', c.bonus_boas_vindas_prazo_dias, 'step="1" min="1"', '(contados da aprovação)')}</div></div>
-        <div class="cfg-bloco"><h3>Conferência e calendário</h3>
-          <p>O prazo da conferência conta só dentro do horário de contato do contrato. Quinzenal: instalações de 1–15 pagas no 1º dia; de 16–fim, no 2º dia do mês seguinte.</p>
+        <div class="cfg-bloco"><h3>Conferência e apuração</h3>
+          <p>O prazo da conferência conta só dentro do horário de contato do contrato. O limite de envios protege contra erro e abuso no Pocket.</p>
           <div class="cfg-grade">
             ${campo('SLA da conferência, em horas', 'sla', c.sla_conferencia_horas, 'step="1" min="1" required')}
             ${campo('Máximo de tentativas sem resposta', 'max_t', c.conferencia_max_tentativas, 'step="1" min="1" required')}
-            ${campo('Dia da apuração dos prêmios', 'dia_ap', c.dia_apuracao, 'step="1" min="1" max="28" required')}
-            ${campo('Quinzenal · 1º pagamento (dia 16–28)', 'qz1', (c.quinzenal_dias || [])[0], 'step="1" min="16" max="28" required')}
-            ${campo('Quinzenal · 2º pagamento (dia 1–15)', 'qz2', (c.quinzenal_dias || [])[1], 'step="1" min="1" max="15" required')}</div></div>
+            ${campo('Dia da apuração da ajuda de custo', 'dia_ap', c.dia_apuracao, 'step="1" min="1" max="28" required')}
+            ${campo('Envios por parceiro em 24 h', 'envios', c.envios_por_dia, 'step="1" min="1" required')}</div></div>
         ${ehAdmin ? '<div class="cfg-acoes"><button type="submit" class="btn btn-acc">Salvar configuração do programa</button></div>' : ''}
       </form>
+
+      <div class="cfg-bloco" id="bloco-calendario"><h3>Calendário de pagamento</h3>
+        <p>O parceiro recebe na <b>sexta seguinte à quinta em que a Nio paga a Dharma</b> o ciclo da instalação — a Dharma nunca adianta caixa. Ciclo sem cadastro = "data a confirmar" no Pocket. Mudou o calendário, os vencimentos ainda não pagos se ajustam sozinhos. Fonte: calendário Posto Fiscal da Nio.</p>
+        <div class="rolagem-s"><table class="tab"><thead><tr><th>Ciclo</th><th>Instalações</th><th>Nio paga</th><th>Parceiro recebe</th><th>Situação</th>${ehAdmin ? '<th></th>' : ''}</tr></thead><tbody>
+        ${PC.cal.map((c) => `<tr><td><b>${esc(c.ciclo)}</b></td><td>${esc(NG.fmtDiaISO(c.instalacoes_de).slice(0, 5))} a ${esc(NG.fmtDiaISO(c.instalacoes_ate).slice(0, 5))}</td>
+            <td>${esc(NG.fmtDiaISO(c.nio_paga_em))}</td><td><b>${esc(NG.fmtDiaISO(c.parceiro_recebe_em))}</b></td><td>${c.confirmado ? '<span class="chip ok">confirmado</span>' : '<span class="chip">previsto</span>'}</td>
+            ${ehAdmin ? `<td><button type="button" class="btn btn-sm" data-pc="del-ciclo" data-id="${c.id}">Apagar</button></td>` : ''}</tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum ciclo cadastrado.</td></tr>'}
+        </tbody></table></div>
+        ${ehAdmin ? `<form id="form-ciclo" class="secao" novalidate><h3>Novo ciclo</h3>
+          <div class="cfg-grade">
+            <label class="campo">Ciclo<input type="text" name="ciclo" maxlength="20" placeholder="1QJAN27" required></label>
+            <label class="campo">Instalações de<input type="date" name="de" required></label>
+            <label class="campo">Instalações até<input type="date" name="ate" required></label>
+            <label class="campo">Nio paga em (quinta)<input type="date" name="nio" required></label>
+            <label class="campo">Parceiro recebe em <span class="nota-campo">(vazio = sexta seguinte; feriado → dia útil)</span><input type="date" name="recebe"></label>
+            <label class="campo">Confirmado<select name="conf"><option value="true">Sim</option><option value="false">Ainda previsto</option></select></label></div>
+          <div class="cfg-acoes"><button type="submit" class="btn">Cadastrar ciclo</button></div></form>` : ''}</div>
 
       <div class="cfg-bloco" id="bloco-comissao"><h3>Comissão padrão por plano</h3>
         <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (gaveta dele). Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
@@ -648,9 +671,10 @@
     const out = [];
     for (const row of document.querySelectorAll('#degraus .cfg-degrau')) {
       const pontos = numOuNull(row.querySelector('[data-g=pontos]').value), premio = numOuNull(row.querySelector('[data-g=premio]').value);
+      const nome = (row.querySelector('[data-g=nome]').value || '').trim();
       if (pontos == null && premio == null) continue;                  // linha em branco: descartada
       if (pontos == null || premio == null || Number.isNaN(pontos) || Number.isNaN(premio) || pontos <= 0 || premio < 0) return { erro: 'Cada degrau precisa de pontos (maior que zero) e prêmio (zero ou mais).' };
-      out.push({ pontos, premio });
+      out.push(nome ? { pontos, premio, nome } : { pontos, premio });
     }
     out.sort((a, b) => a.pontos - b.pontos);
     for (let i = 1; i < out.length; i++) if (out[i].pontos === out[i - 1].pontos) return { erro: 'Há dois degraus com os mesmos pontos.' };
@@ -666,16 +690,15 @@
     const intOuNull = (nome) => { const v = n(nome); return v == null ? null : Math.trunc(v); };
     const obj = {
       degraus: g.degraus,
-      incentivo_quinzenal_valor: n('inc_valor'), incentivo_quinzenal_multiplicador: n('inc_mult'),
+      garantia_gatilho_pontos: n('g_gat'), garantia_piso: n('g_piso'), garantia_meses: intOuNull('g_meses'), garantia_min_pontos: n('g_min'),
       bonus_boas_vindas_valor: n('bv_valor'), bonus_boas_vindas_prazo_dias: intOuNull('bv_prazo'),
       sla_conferencia_horas: intOuNull('sla'), conferencia_max_tentativas: intOuNull('max_t'), dia_apuracao: intOuNull('dia_ap'),
-      quinzenal_dias: [intOuNull('qz1'), intOuNull('qz2')],
+      envios_por_dia: intOuNull('envios'),
     };
-    if ([obj.incentivo_quinzenal_valor, obj.incentivo_quinzenal_multiplicador, obj.bonus_boas_vindas_valor, obj.bonus_boas_vindas_prazo_dias].some((x) => Number.isNaN(x))
-      || obj.quinzenal_dias.some((x) => x == null || Number.isNaN(x)) || [obj.sla_conferencia_horas, obj.conferencia_max_tentativas, obj.dia_apuracao].some((x) => x == null || Number.isNaN(x))) {
-      NG.toast('Confira os números: SLA, tentativas, dia da apuração e os dois dias do quinzenal são obrigatórios.', 'bad'); return;
+    if ([obj.bonus_boas_vindas_valor, obj.bonus_boas_vindas_prazo_dias].some((x) => Number.isNaN(x))
+      || [obj.garantia_gatilho_pontos, obj.garantia_piso, obj.garantia_meses, obj.garantia_min_pontos, obj.sla_conferencia_horas, obj.conferencia_max_tentativas, obj.dia_apuracao, obj.envios_por_dia].some((x) => x == null || Number.isNaN(x))) {
+      NG.toast('Confira os números: garantia, SLA, tentativas, dia da apuração e envios por dia são obrigatórios.', 'bad'); return;
     }
-    if (obj.incentivo_quinzenal_multiplicador != null && obj.incentivo_quinzenal_multiplicador < 1) { NG.toast('O multiplicador de pontos é no mínimo 1.', 'bad'); return; }
     if ((obj.bonus_boas_vindas_valor == null) !== (obj.bonus_boas_vindas_prazo_dias == null)) { NG.toast('Boas-vindas: preencha o valor e o prazo juntos (ou deixe os dois em branco).', 'bad'); return; }
     const bt = ev.target.querySelector('[type=submit]');
     bt.disabled = true;
@@ -715,6 +738,15 @@
       degraus = l;
       document.getElementById('degraus').innerHTML = degrausHtml();
     } else if (a === 'salvar-comissao') await salvarComissaoPadrao(b);
+    else if (a === 'del-ciclo') {
+      const c = PC.cal.find((x) => String(x.id) === b.dataset.id);
+      if (!c || !confirm(`Apagar o ciclo ${c.ciclo}? Os pagamentos ainda não feitos desse ciclo voltam para "data a confirmar".`)) return;
+      b.disabled = true;
+      const { error } = await NG.sb.from('parceiro_calendario').delete().eq('id', c.id);
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+      NG.toast(`Ciclo ${c.ciclo} apagado`, 'ok');
+      await carregarParceiro();
+    }
     else if (a === 'definir-termo') {
       const v = document.getElementById('termo-vigente').value || null;
       b.disabled = true;
@@ -727,10 +759,24 @@
   });
   // Mantém o que já foi digitado nas linhas ao adicionar/remover (lê os inputs como estão, sem validar).
   function lerDegrausBruto() {
-    return [...document.querySelectorAll('#degraus .cfg-degrau')].map((row) => ({ pontos: row.querySelector('[data-g=pontos]').value, premio: row.querySelector('[data-g=premio]').value }));
+    return [...document.querySelectorAll('#degraus .cfg-degrau')].map((row) => ({ nome: row.querySelector('[data-g=nome]').value, pontos: row.querySelector('[data-g=pontos]').value, premio: row.querySelector('[data-g=premio]').value }));
   }
   document.getElementById('parceiro').addEventListener('submit', async (ev) => {
     if (ev.target.id === 'form-cfg') return salvarConfig(ev);
+    if (ev.target.id === 'form-ciclo') {
+      ev.preventDefault();
+      if (!ehAdmin) return;
+      const f = ev.target.elements;
+      if (!f.ciclo.value.trim() || !f.de.value || !f.ate.value || !f.nio.value) { NG.toast('Preencha ciclo, instalações de/até e a quinta em que a Nio paga.', 'bad'); return; }
+      const linha = { ciclo: f.ciclo.value.trim().toUpperCase(), instalacoes_de: f.de.value, instalacoes_ate: f.ate.value, nio_paga_em: f.nio.value, confirmado: f.conf.value === 'true' };
+      if (f.recebe.value) linha.parceiro_recebe_em = f.recebe.value;
+      else { const { data: sx, error: es } = await NG.sb.rpc('parceiro_sexta_de', { p_nio: f.nio.value }); if (es) { NG.toast(NG.msgErro(es), 'bad'); return; } linha.parceiro_recebe_em = sx; }
+      const { error } = await NG.sb.from('parceiro_calendario').insert(linha);
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+      NG.toast(`Ciclo ${linha.ciclo} cadastrado · parceiro recebe ${NG.fmtDiaISO(linha.parceiro_recebe_em)}`, 'ok');
+      await carregarParceiro();
+      return;
+    }
     if (ev.target.id === 'form-termo') {
       ev.preventDefault();
       if (!ehAdmin) return;
