@@ -64,7 +64,22 @@
   // ---------- v_jornada (0090): a regra única de "precisa de ação" ----------
   // nivel do banco → cor das telas: agora = vermelho · hoje = amarelo · espera = azul (terceiro) · ok/fora = cinza.
   const NIVEL_COR = { agora: 'bad', hoje: 'warn', espera: 'espera', ok: 'ok', fora: 'dim' };
-  async function jornada() {
+  // 11/11 (Live lenta): barra lateral e tela pediam v_jornada / oportunidades_abertas ao mesmo tempo, cada uma por si.
+  // memo() junta pedidos simultâneos e guarda o resultado por TTL curto; limparCache() após qualquer ação que muda dado.
+  const _memo = new Map();
+  function memo(chave, fn, ttl = 15000) {
+    const m = _memo.get(chave);
+    if (m && Date.now() - m.t < ttl) return m.p;
+    const p = Promise.resolve().then(fn);
+    const reg = { t: Date.now(), p };
+    _memo.set(chave, reg);
+    p.then((r) => { if (r && (r.error || r.erro) && _memo.get(chave) === reg) _memo.delete(chave); }, () => { if (_memo.get(chave) === reg) _memo.delete(chave); });
+    return p;
+  }
+  const limparCache = () => _memo.clear();
+  const jornada = () => memo('jornada', jornadaBusca);
+  const rpcOportunidades = () => memo('op_abertas', () => sb.rpc('oportunidades_abertas'));
+  async function jornadaBusca() {
     const { data, error } = await sb.from('v_jornada').select('*');
     if (error) return { erro: msgErro(error), lista: [], porVenda: {}, porConversa: {} };
     const lista = (data || []).filter((j) => j.etapa > 0);
@@ -79,7 +94,7 @@
   // 0108: pela RPC oportunidades_abertas (definer, porta admin/backoffice) — a view lida com RLS levava ~6 s.
   // pronta: a mesma chamada já disparada pela tela (em paralelo com a v_jornada).
   async function oportunidades(j, pronta) {
-    const { data, error } = await (pronta || sb.rpc('oportunidades_abertas'));
+    const { data, error } = await (pronta || rpcOportunidades());
     if (error) return { erro: msgErro(error), lista: [] };
     const acao = new Set(((j && j.lista) || []).filter((x) => x.precisa_acao && x.conversa_id).map((x) => x.conversa_id));
     return { lista: (data || []).filter((o) => !acao.has(o.conversa_id)) };
@@ -307,6 +322,7 @@
       b.classList.add('girando');
       b.setAttribute('aria-busy', 'true');
       try {
+        limparCache();
         await Promise.all([fn(), window.NGSidebar && NGSidebar.avisos ? NGSidebar.avisos() : null]);
         const h = fmtHora(new Date().toISOString());
         b.title = `Atualizado às ${h} — clique para buscar de novo`;
@@ -333,6 +349,7 @@
     const { data, error } = await sb.rpc('backoffice_momento', { p_venda: vendaId || null, p_momento: qual, p_dados: dados || {} });
     if (error) { toast(msgErro(error), 'bad'); return null; }
     toast(data.aviso ? `${data.resumo} · ${data.aviso}` : data.resumo, data.aviso ? 'bad' : 'ok');
+    limparCache();
     if (window.NGSidebar && NGSidebar.avisos) NGSidebar.avisos();
     return data;
   }
@@ -1190,7 +1207,7 @@
   // (fora do contador): "Mandar mensagem" abre o wa.me do parceiro com o texto sugerido e registra "enviada"; "Agora não"
   // some por config_regras.parceiro_oportunidades.dispensa_horas. Nada é enviado sozinho.
   async function oportunidadesCanal() {
-    const { data, error } = await sb.rpc('parceiro_oportunidades_abertas');
+    const { data, error } = await memo('op_canal', () => sb.rpc('parceiro_oportunidades_abertas'));
     return error ? { erro: msgErro(error), lista: [] } : { lista: data || [] };
   }
   function opCanalLinha(o, base = '') {
@@ -1233,7 +1250,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)

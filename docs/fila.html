@@ -113,26 +113,27 @@
   const chaveFicha = (j) => (j.venda_id ? j.venda_id : `c:${j.conversa_id}`);
   const vez = (j) => !!j.precisa_acao;
 
-  async function carregar() {
-    const pOp = NG.sb.rpc('oportunidades_abertas');   // 0108: em paralelo com a jornada
+  // fresco=true (padrão): após ação/Atualizar, descarta o cache. Carga inicial e timer usam o que a barra lateral já buscou.
+  async function carregar(fresco = true) {
+    if (fresco) NG.limparCache();
+    const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada (compartilha o pedido com a barra lateral)
     const pOpc = NG.oportunidadesCanal();              // 0117: canal parceiro
     const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { if (!conv) listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }   // erro na recarga não apaga a conversa aberta
-    // 0102 (Ricardo, 10/11): Live = só o que é humano. Linha que precisa de ação ou com dono pessoa/time; conversa que a
-    // Mari está tocando sozinha sai também do "Todas" (supervisão dela é na tela Mari IA).
-    // 0107: 🔥 oportunidades (calculadas sobre a jornada inteira, antes do filtro: o que já pede ação não vira oportunidade).
-    const ro = await NG.oportunidades(r, pOp);
+    // 11/11: a lista aparece assim que a jornada chega; 🔥 oportunidades entram logo depois, sem segurar a tela.
+    const base = r.lista.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
+    jor = { ...r, lista: base };
+    render();
+    reporConversaFoco();
+    const [ro, rc] = await Promise.all([NG.oportunidades(r, pOp), pOpc]);
     ops = ro.erro ? [] : ro.lista;
-    opsCanal = (await pOpc).lista || [];
+    opsCanal = (rc && rc.lista) || [];
     if (!opAtualizado || Date.now() - opAtualizado > 5 * 60000) {   // grava "mostrada" e os resultados (idempotente)
       opAtualizado = Date.now();
       NG.sb.rpc('oportunidades_atualizar').then(() => {}, () => {});
     }
-    r.lista = r.lista.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
-    jor = r;
     render();
-    reporConversaFoco();
   }
 
   // ---------- como usar (1º acesso) ----------
@@ -573,12 +574,12 @@
 
   NG.botaoAtualizar(() => carregar());
   modoFicha();
-  await carregar();
+  await carregar(false);
   NGFicha.iniciar();
   render();
   // 10/11: o refresh de 1 min também atualiza a ficha aberta (quieto: só redesenha se mudou, nunca por cima de formulário).
-  setInterval(() => { if (document.visibilityState === 'visible') { carregar(); if (NGFicha.atual) NGFicha.recarregar({ quieto: true }); } }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+  setInterval(() => { if (document.visibilityState === 'visible') { carregar(false); if (NGFicha.atual) NGFicha.recarregar({ quieto: true }); } }, 60000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(false); });
 })();
 </script>
 </body>

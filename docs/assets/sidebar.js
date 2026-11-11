@@ -115,7 +115,7 @@
       await NG.sb.from('usuario_vistos').upsert({ usuario_id: u.id, tela: 'vendas', visto_em: new Date().toISOString() }, { onConflict: 'usuario_id,tela' });
     }
     await avisos(nav);
-    setInterval(() => avisos(nav), 60000);
+    setInterval(() => { if (document.visibilityState === 'visible') avisos(nav); }, 60000);   // 11/11: aba oculta não consulta
   }
 
   // ---------- Guia do Backoffice (08/11): "• atualizado" se foi publicado depois da última vez que você abriu ----------
@@ -167,11 +167,9 @@
           `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
         total = acao.length;
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
-        const op = await NG.oportunidades(j);
+        // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.
+        const [op, fu] = await Promise.all([NG.oportunidades(j), NG.furosJornada(j)]);
         if (!op.erro) pinta(nav, 'oport', op.lista.length, '', `${op.lista.length} ${op.lista.length === 1 ? 'oportunidade' : 'oportunidades'}: a Mari acha que uma mensagem sua esquenta a conversa. Não é obrigação.`);
-        // 0094: Conversas = clientes esperando resposta há 3 min ou mais (a Mari não respondeu nem o time) — fora os do Live.
-        // 0102: esse número deveria ser sempre 0; cada conversa contada é furo da v_jornada e fica gravada (NG.furosJornada).
-        const fu = await NG.furosJornada(j);
         if (!fu.erro) {
           const n = fu.ids.size;
           pinta(nav, 'conversas', n, n ? 'alerta' : 'info', n ? `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais FORA do Live — deveria ser 0 (defeito registrado para corrigir).` : '');
