@@ -397,7 +397,8 @@
         telaEnviada();
       } catch (e) {
         envio.enviando = false;
-        toast(erroTxt(e), 'bad');
+        const m = erroTxt(e);
+        toast(/Sem internet/.test(m) ? 'A conexão caiu. Veja em Minhas vendas se ela entrou antes de enviar de novo.' : m, 'bad');
         b.disabled = false; b.textContent = 'Enviar venda';
       }
     }
