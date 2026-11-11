@@ -129,6 +129,11 @@ ok(cr.escolher_opcao(['CASA A', 'CASA B'], 'Casa  A') == 'CASA A', 'complemento:
 ok(cr.escolher_opcao(['APTO 101 BL 1', 'APTO 102 BL 1'], '101') == 'APTO 101 BL 1', 'complemento: "101" escolhe a única que contém')
 ok(cr.escolher_opcao(['CASA A', 'CASA B'], 'CASA') is None, 'complemento: ambíguo não escolhe')
 ok(cr.escolher_opcao(['CASA A'], 'FUNDOS') is None, 'complemento: fora da lista não escolhe')
+APTOS = ['Apartamento 101', 'Apartamento 102', 'Apartamento 103', 'Apartamento 301', 'Apartamento 302', 'Apartamento 1403']
+ok(cr.escolher_opcao(APTOS, '403') is None, 'complemento: 403 fora da lista não vira 1403 (unidade nunca é trocada)')
+ok(cr.escolher_opcao(APTOS, '03') is None, 'complemento: "03" não vira 103')
+ok(cr.escolher_opcao(APTOS, '302') == 'Apartamento 302', 'complemento: "302" escolhe Apartamento 302')
+ok(cr.escolher_opcao(APTOS, 'apto 302') is None, 'complemento: "apto 302" (escrita diferente) não escolhe sozinho → botões')
 ok(cr.classificar_formas(['BOLETO', 'CREDITO', 'DACC']) == 'aprovado_todas', '3 formas → aprovado_todas')
 ok(cr.classificar_formas(['CREDITO']) == 'aprovado_cartao', 'só cartão → aprovado_cartao')
 ok(cr.classificar_formas(['BOLETO', 'CREDITO']) == 'aprovado_parcial', 'subconjunto → aprovado_parcial')

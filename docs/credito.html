@@ -15,11 +15,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-8">
-<script src="config.js?v=111126-8"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-10">
+<script src="config.js?v=111126-10"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-8"></script>
-<script src="assets/sidebar.js?v=111126-8"></script>
+<script src="assets/app.js?v=111126-10"></script>
+<script src="assets/sidebar.js?v=111126-10"></script>
 <style>
   .cred-form { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: end; }
   .cred-form .cred-opc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
@@ -102,7 +102,9 @@
   const resEl = document.getElementById('resultado');
   const naoInst = document.getElementById('nao-instalado');
   let rodando = false;
-  let opcaoEndereco = '';   // endereço tocado na lista do portal (vai como endereco.opcao na próxima consulta)
+  let opcaoEndereco = '';
+  let linkCadastro = null;   // Forms da Nio para cadastrar apartamento/complemento (config_links.nio_cadastro_unidade)
+  NG.linkConfig('nio_cadastro_unidade').then((u) => { linkCadastro = u; }).catch(() => {});   // endereço tocado na lista do portal (vai como endereco.opcao na próxima consulta)
 
   // ---------------------------------------------------------------- máscaras e trava da autorização
   const fmtCpf = (d) => d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
@@ -122,6 +124,7 @@
     pendente: ['Pendente', 'warn', 'A Nio deixou a análise pendente. Consulte de novo mais tarde (o portal costuma pedir 24 h).'],
     nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia o texto abaixo e confira no portal.'],
     sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado.'],
+    complemento_fora_lista: ['Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal para este endereço. Pode ser que já tenha Nio nela (aí não dá para vender — confira na Cobertura) ou que não esteja cadastrada: nesse caso, peça o cadastro à Nio pelo formulário abaixo e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, consulte com o endereço padrão.'],
     contato_repetido: ['Celular recusado pelo portal', 'warn', 'A Nio não aceitou este celular: ele já aparece em pedidos demais. Use o celular do próprio cliente (outro número dele, se tiver) e consulte de novo.'],
     erro_receita: ['Erro da Receita', 'warn', 'A consulta à Receita Federal falhou duas vezes. Tente de novo em alguns minutos.'],
     erro: ['Erro na consulta', 'warn', 'A consulta não terminou. Tente de novo em alguns minutos.'],
@@ -137,6 +140,10 @@
     const quando = r.consultado_em ? NG.fmtHora(r.consultado_em) : '';
     const e = r.endereco || {};
     const acoes = [];
+    if (r.resultado === 'complemento_fora_lista') {
+      if (linkCadastro) acoes.push(`<a class="btn btn-acc" href="${esc(linkCadastro)}" target="_blank" rel="noopener noreferrer">Pedir o cadastro da unidade à Nio (formulário) ↗</a>`);
+      acoes.push('<button type="button" class="btn" data-padrao>Consultar com o endereço padrão</button>', '<a class="btn" href="cobertura.html" target="_blank" rel="noopener">Conferir na Cobertura (DFV) ↗</a>');
+    }
     if (r.resultado === 'sem_viabilidade') acoes.push('<button type="button" class="btn" data-padrao>Consultar com o endereço padrão</button>');
     if (r.resultado === 'contato_repetido') acoes.push('<button type="button" class="btn" data-contato>Trocar o celular</button>');
     if (r.resultado === 'erro_receita' || r.resultado === 'erro') acoes.push('<button type="button" class="btn" data-denovo>Tentar de novo</button>');
@@ -161,7 +168,7 @@
       ${r.popup ? `<div><h3 class="secao-tit">Texto do portal${r.popup.titulo ? ` — ${esc(r.popup.titulo)}` : ''}</h3><div class="cred-popup">${esc(r.popup.texto || '')}</div></div>` : ''}
       ${!r.popup && r.texto_tela && r.resultado === 'nao_classificado' ? `<div><h3 class="secao-tit">Texto da tela</h3><div class="cred-popup">${esc(r.texto_tela)}</div></div>` : ''}
       ${r.opcoes && (r.opcoes.lista || []).length ? `<div class="dfv-opcoes"><span class="nota-campo">${r.opcoes.tipo === 'complemento'
-        ? 'O portal só aceita um destes complementos. Toque no certo e a consulta recomeça com ele:'
+        ? '<b>Unidades que o portal aceita neste endereço.</b> Toque só se uma delas for a do cliente (escrita de outro jeito) — nunca escolha outra unidade para fazer a consulta passar:'
         : 'Este CEP tem mais de um endereço no portal. Toque no do cliente e a consulta recomeça com ele:'}</span>
         <div class="dfv-opcoes-lista">${r.opcoes.lista.map((o) => `<button type="button" class="chip ok" data-opcao-tipo="${esc(r.opcoes.tipo)}" data-opcao="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>` : ''}
       ${acoes.length ? `<div class="f-form-acoes" style="justify-content:flex-start">${acoes.join('')}</div>` : ''}`;

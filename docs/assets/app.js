@@ -472,6 +472,15 @@
     if (v.dfv_dispensado) return selo('DFV dispensado (admin)', 'warn', `Admin dispensou a consulta: ${v.dfv_dispensa_motivo || '—'}`);
     return selo('DFV não consultado', 'warn', `${TEXTOS_DFV.opcoes.nao_consultado} ${TEXTOS_DFV.trava}`);
   }
+  // 11/11: link qualquer de config_links por chave (só logado lê; o repo é público). Ex.: 'nio_cadastro_unidade' (Forms da Nio).
+  const linksCache = {};
+  async function linkConfig(chave) {
+    if (!(chave in linksCache)) {
+      const { data } = await sb.from('config_links').select('url').eq('chave', chave).maybeSingle();
+      linksCache[chave] = (data && data.url) || null;
+    }
+    return linksCache[chave];
+  }
   // Link e acesso do DFV vêm do banco (config_links, só para logado) — nunca do repo, que é público.
   let dfvCache;
   async function dadosDfv() {
@@ -1346,7 +1355,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

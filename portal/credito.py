@@ -147,7 +147,7 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
-              'sem_viabilidade', 'erro_receita', 'contato_repetido', 'nao_classificado', 'erro')
+              'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
@@ -192,6 +192,9 @@ def escolher_opcao(opcoes, valor):
     iguais = [o for o in opcoes if n(o) == v]
     if iguais:
         return iguais[0]
+    if str(valor).strip().isdigit():          # "403" casa "Apartamento 403", nunca "Apartamento 1403" nem "03" → "103"
+        num = [o for o in opcoes if tem_numero(o, str(valor).strip())]
+        return num[0] if len(num) == 1 else None
     contem = [o for o in opcoes if v in n(o)]
     return contem[0] if len(contem) == 1 else None
 
@@ -695,49 +698,52 @@ class Consulta:
             self.page.wait_for_timeout(700)
         return ref_ok()
 
+    def lista_complementos(self, comp):
+        """Abre a lista do campo Complemento (só aparece com o clique — visto em 11/11) e devolve os textos das opções."""
+        try:
+            comp.click(timeout=8000)
+        except Exception:  # noqa: BLE001
+            return []
+        self.page.wait_for_timeout(1500)
+        try:
+            return [t.strip() for t in comp.locator('xpath=following-sibling::ul//li').all_inner_texts()
+                    if t.strip() and not re.search(r'nenhum resultado', t, re.I)][:60]
+        except Exception:  # noqa: BLE001
+            return []
+
     def complemento(self, valor):
-        """Complemento: campo livre, <select> ou lista sugerida pelo portal ("CASA A", "CASA B"… — Ricardo, 11/11 19h).
-        Com valor: escolhe a opção igual (ou que contém); sem opção que bata, para e devolve as opções. Sem valor: não mexe
-        (se o portal exigir, o Avançar não habilita e a tela mostra as opções)."""
-        if not valor:
-            return
+        """Complemento do portal = lista FECHADA das unidades cadastradas no endereço ("Apartamento 101", "CASA A"…), que só
+        abre com o clique; texto solto não vale e o Avançar não habilita (11/11). Escolhe a opção que bate com o informado
+        ("403" → "Apartamento 403"). Unidade fora da lista NUNCA é trocada por outra: para com complemento_fora_lista
+        (pode já ter Nio na unidade ou ela não estar cadastrada) e devolve as opções."""
         pg = self.page
         sel = pg.locator('select[name*="omplement" i]')
         if self.visivel(sel):
             ops = [o.strip() for o in sel.first.locator('option').all_inner_texts() if o.strip()]
-            alvo = escolher_opcao(ops, valor)
+            alvo = escolher_opcao(ops, valor) if valor else None
             if alvo is None:
-                raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
-                                                                      + ' · '.join(ops[:20])),
-                            motivo='complemento fora da lista do portal — escolha uma opção',
-                            opcoes={'tipo': 'complemento', 'lista': ops[:30]})
+                raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': ops[:40]},
+                            motivo=f'complemento "{valor}" não está na lista do portal' if valor else 'o portal pede o complemento')
             sel.first.select_option(label=alvo)
             return
         comp = None
-        for loc in (pg.locator('input[name*="omplement" i]'), pg.locator('input[placeholder*="omplement" i]')):
+        for loc in (pg.locator('input[placeholder="Complemento"]'), pg.locator('input[name*="omplement" i]'),
+                    pg.locator('input[placeholder*="omplement" i]')):
             if self.visivel(loc) and loc.first.is_enabled():
                 comp = loc.first
                 break
         if comp is None:
-            return
-        self.preencher(comp, valor, devagar=True)
-        pg.wait_for_timeout(1500)
-        try:
-            ops = comp.evaluate("""(i) => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
-              const c = i.closest('div') && i.closest('div').parentElement || i.parentElement;
-              return [...c.querySelectorAll('li,[role=option]')].filter(vis).map((l) => (l.innerText || '').trim())
-                .filter((t) => t && !/nenhum resultado/i.test(t)).slice(0, 40); }""")
-        except Exception:  # noqa: BLE001
-            ops = []
+            return                          # endereço sem campo de complemento (casa): segue
+        ops = self.lista_complementos(comp)
         if not ops:
-            return                       # campo livre: fica o texto digitado
-        alvo = escolher_opcao(ops, valor)
+            return                          # campo sem lista: segue (se o portal exigir, o Avançar dirá)
+        alvo = escolher_opcao(ops, valor) if valor else None
         if alvo is None:
-            raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
-                                                                  + ' · '.join(ops[:20])),
-                        motivo='complemento fora da lista do portal — escolha uma opção',
-                        opcoes={'tipo': 'complemento', 'lista': ops[:30]})
-        li = comp.locator('xpath=ancestor::div[1]/..').locator('li, [role=option]', has_text=alvo).first
+            pg.keyboard.press('Escape')
+            raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': ops[:40]},
+                        motivo=(f'complemento "{valor}" não está na lista do portal' if valor
+                                else 'o endereço tem unidades e o portal pede o complemento'))
+        li = comp.locator('xpath=following-sibling::ul//li', has_text=alvo).first
         self.clicar(li)
         pg.wait_for_timeout(800)
 
