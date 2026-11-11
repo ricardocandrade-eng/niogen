@@ -5,7 +5,7 @@
 // Só monta os pedidos; os nós 9e/9f/9h chamam a API (onError = segue, o handoff nunca derruba a resposta ao cliente).
 
 const TIME_BACKOFFICE = 15102;
-const NIOGEN = 'https://ricardocandrade-eng.github.io/niogen/vendas.html';
+const NIOGEN = 'https://niogen.dharmatelecom.com.br/vendas.html';
 
 const e = $('2 · Entrada').first().json;
 const s = $('10 · Salvar turno').first().json;
