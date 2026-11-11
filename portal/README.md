@@ -90,6 +90,8 @@ curl -s 127.0.0.1:8090/credito/<job_id> -H "X-Portal-Secret: <segredo>"
 O `.env` local leva `NIO_PORTAL_USER`, `NIO_PORTAL_PASS`, `NIO_PORTAL_DOMINIO=vtalcorp.onmicrosoft.com`, `NIO_PORTAL_SERVICO_SECRET` e os `CREDITO_*`.
 `NIO_PORTAL_HEADLESS=0` mostra a janela do Chrome (bom para o 1º aceite).
 
-**Caminho da tela até o operador (quando a VPS BR existir):** edge function `credito-consulta` → `CREDITO_OP_URL` = rota no Caddy da
+**No ar desde 11/11/2026 ~18h45:** VPS BR `niogen-portal-br` `216.128.168.202` (Vultr São Paulo, 1 GB + swap 2 GB). Teste pela tela: aprovado todas em 39 s.
+
+**Caminho da tela até o operador:** edge function `credito-consulta` → `CREDITO_OP_URL` = rota no Caddy da
 VPS do n8n (`/opt/renata/Caddyfile`, `handle_path /niogen-credito/*` → `niogen-portal-tunel:8090`, repassando **só** `/credito` e
-`/credito/*`) → túnel SSH → `127.0.0.1:8090` na VPS BR. `/chamar` e `/renovar` não ficam expostos.
+`/credito/*`; aplicada 11/11, backup `Caddyfile.bak-111126-credito`) → túnel SSH → `127.0.0.1:8090` na VPS BR. `/chamar` e `/renovar` não ficam expostos.
