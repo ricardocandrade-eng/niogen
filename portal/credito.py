@@ -173,6 +173,29 @@ def classificar_popup(titulo, texto, etapa=None):
     return 'nao_classificado'
 
 
+def tem_numero(opcao, numero):
+    """A opção de endereço traz o número informado como número (não como parte de outro: 52 casa "Rua X, 52", não "520")."""
+    return bool(re.search(r'(^|[\s,º°nN.-])' + re.escape(str(numero).strip()) + r'(?!\d)', str(opcao or '')))
+
+
+def _sem_acento(t):
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', str(t or '')) if unicodedata.category(c) != 'Mn')
+
+
+def escolher_opcao(opcoes, valor):
+    """Opção da lista do portal que corresponde ao valor digitado: igual (sem caixa/acento/espaços) ou, se só uma, que contém."""
+    n = lambda t: re.sub(r'\W+', '', _sem_acento(t).lower())   # noqa: E731
+    v = n(valor)
+    if not v:
+        return None
+    iguais = [o for o in opcoes if n(o) == v]
+    if iguais:
+        return iguais[0]
+    contem = [o for o in opcoes if v in n(o)]
+    return contem[0] if len(contem) == 1 else None
+
+
 def classificar_formas(formas):
     f = {str(x).upper() for x in formas or []}
     if not f:
@@ -286,6 +309,37 @@ NOME_JS = r"""
     if (vis(e) && /nome/i.test(k) && !/m[aã]e|social/i.test(k) && (e.value || '').trim()) return e.value.trim();
   }
   return null;
+}
+"""
+
+ETAPA_JS = r"""
+() => {
+  // Retrato da área do pedido (sem o menu lateral): campos, opções abertas, avisos e botões. Sem valores digitados.
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const raiz = document.querySelector('main') || document.body;
+  const campos = [...raiz.querySelectorAll('input,select,textarea')].filter(vis).map((e) =>
+    `${e.name || e.placeholder || e.type}${e.disabled ? ' (bloqueado)' : ''}${(e.value || '').trim() ? ' [preenchido]' : ' [vazio]'}`);
+  const opcoes = [...raiz.querySelectorAll('li,[role=option]')].filter(vis).map((e) => (e.innerText || '').trim())
+    .filter((t) => t && t.length < 160 && !/^etapa|^(identifica|consulta|cadastro|contato|pagamento)/i.test(t)).slice(0, 15);
+  const avisos = [...raiz.querySelectorAll('[class*=error i],[class*=erro i],[class*=invalid i],[class*=feedback i],small,span')]
+    .filter(vis).map((e) => (e.innerText || '').trim())
+    .filter((t) => t && t.length < 200 && /n[aã]o|inv[aá]lid|obrigat|encontrad|informe|erro/i.test(t)).slice(0, 8);
+  const botoes = [...raiz.querySelectorAll('button')].filter(vis).map((b) => `${(b.innerText || '').trim()}${b.disabled ? ' (bloqueado)' : ''}`).filter(Boolean);
+  return { campos, opcoes, avisos: [...new Set(avisos)], botoes };
+}
+"""
+
+ENDERECO_OPCOES_JS = r"""
+() => {
+  // Lista aberta sob o campo "Endereço de instalação" (o CEP trouxe mais de um endereço).
+  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  const inp = document.querySelector('input[placeholder="Endereço de instalação"]');
+  if (!inp) return null;
+  const caixa = inp.parentElement;
+  const lis = [...(caixa ? caixa.querySelectorAll('li') : [])].filter(vis)
+    .filter((l) => !l.hasAttribute('disabled') && !/nenhum resultado/i.test(l.innerText || ''));
+  return { aberto: lis.length > 0, opcoes: lis.map((l) => (l.innerText || '').trim()).slice(0, 30),
+           vazio: !(inp.value || '').trim(), bloqueado: inp.disabled };
 }
 """
 
@@ -454,10 +508,19 @@ class Consulta:
             return None
 
     def texto_tela(self):
+        """Retrato da área do pedido (campos, opções, avisos, botões) — não o menu lateral do portal."""
         try:
-            return sem_pii((self.page.inner_text('body') or '')[:800])
+            r = self.page.evaluate(ETAPA_JS) or {}
+            partes = [f'Etapa {self.etapa} · {ETAPAS.get(self.etapa, "")}']
+            for chave, rot in (('avisos', 'Avisos'), ('opcoes', 'Opções na tela'), ('campos', 'Campos'), ('botoes', 'Botões')):
+                if r.get(chave):
+                    partes.append(f'{rot}: ' + ' · '.join(r[chave]))
+            return sem_pii(chr(10).join(partes))[:900]
         except Exception:  # noqa: BLE001
-            return ''
+            try:
+                return sem_pii((self.page.inner_text('main') or '')[:800])
+            except Exception:  # noqa: BLE001
+                return ''
 
     def ler_pedido(self):
         try:
@@ -549,21 +612,14 @@ class Consulta:
         b = self.botao(r'^\s*buscar\s*$')
         if b:
             self.clicar(b)
-        ref = self.esperar(lambda: (lambda r: r if r is not None and r.is_enabled() else None)(
-            self.campo('referencia', 'Referência (Obrigatório)')), 30)
+        ref = self.resolver_endereco(e)
         pp = self.popup()
         if pp and not ref:
             self.out['popup'] = pp
             raise Parar('sem_viabilidade')
         if not ref:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='endereço não resolveu na Etapa 2')
-        if e.get('complemento'):
-            comp = self.campo('Complemento')
-            if comp is not None and comp.is_enabled():
-                try:
-                    self.preencher(comp, e['complemento'], devagar=False)
-                except Exception:  # noqa: BLE001
-                    pass
+        self.complemento(str(e.get('complemento') or '').strip())
         self.preencher(ref, e.get('referencia') or 'Sem referência', devagar=False)
         try:
             resolvido = self.page.evaluate(ENDERECO_JS)
@@ -586,6 +642,98 @@ class Consulta:
         self.out['popup'] = pp
         self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
         raise Parar('sem_viabilidade')
+
+    def resolver_endereco(self, e):
+        """Depois do Buscar: espera a Referência habilitar. Se o CEP trouxe mais de um endereço, o portal abre uma lista
+        em "Endereço de instalação" e espera a escolha (visto em 11/11 com um CEP de várias ruas/complementos): escolhe a
+        opção com o número informado, ou a única opção; com várias e nenhuma clara, para e devolve a lista."""
+        def ref_ok():
+            r = self.campo('referencia', 'Referência (Obrigatório)')
+            return r if r is not None and r.is_enabled() else None
+        fim = time.time() + 35
+        abriu = False
+        while time.time() < fim:
+            self._checar_trava()
+            r = ref_ok()
+            if r is not None:
+                return r
+            if self.popup():
+                return None
+            info = None
+            try:
+                info = self.page.evaluate(ENDERECO_OPCOES_JS)
+            except Exception:  # noqa: BLE001
+                pass
+            if info and info.get('aberto'):
+                ops = info['opcoes']
+                num = str(e.get('numero') or '').strip()
+                alvo = None
+                if num:
+                    alvo = next((o for o in ops if tem_numero(o, num)), None)
+                if alvo is None and len(ops) == 1:
+                    alvo = ops[0]
+                if alvo is None:
+                    raise Parar('nao_classificado', texto_tela=sem_pii('CEP com mais de um endereço; nenhum com o número '
+                                                                          f'informado. Opções: ' + ' · '.join(ops[:15])),
+                                motivo='CEP com vários endereços — confira o número/complemento')
+                li = self.page.locator('input[placeholder="Endereço de instalação"] ~ ul li', has_text=alvo).first
+                self.clicar(li)
+                self.page.wait_for_timeout(1500)
+                continue
+            if info and info.get('vazio') and not info.get('bloqueado') and not abriu and time.time() > fim - 27:
+                abriu = True            # campo liberado e vazio: abre a lista para ver as opções
+                try:
+                    self.clicar(self.page.locator('input[placeholder="Endereço de instalação"]').first)
+                except TravaAcionada:
+                    raise
+                except Exception:  # noqa: BLE001
+                    pass
+            self.page.wait_for_timeout(700)
+        return ref_ok()
+
+    def complemento(self, valor):
+        """Complemento: campo livre, <select> ou lista sugerida pelo portal ("CASA A", "CASA B"… — Ricardo, 11/11 19h).
+        Com valor: escolhe a opção igual (ou que contém); sem opção que bata, para e devolve as opções. Sem valor: não mexe
+        (se o portal exigir, o Avançar não habilita e a tela mostra as opções)."""
+        if not valor:
+            return
+        pg = self.page
+        sel = pg.locator('select[name*="omplement" i]')
+        if self.visivel(sel):
+            ops = [o.strip() for o in sel.first.locator('option').all_inner_texts() if o.strip()]
+            alvo = escolher_opcao(ops, valor)
+            if alvo is None:
+                raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
+                                                                      + ' · '.join(ops[:20])),
+                            motivo='complemento fora da lista do portal')
+            sel.first.select_option(label=alvo)
+            return
+        comp = None
+        for loc in (pg.locator('input[name*="omplement" i]'), pg.locator('input[placeholder*="omplement" i]')):
+            if self.visivel(loc) and loc.first.is_enabled():
+                comp = loc.first
+                break
+        if comp is None:
+            return
+        self.preencher(comp, valor, devagar=True)
+        pg.wait_for_timeout(1500)
+        try:
+            ops = comp.evaluate("""(i) => { const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+              const c = i.closest('div') && i.closest('div').parentElement || i.parentElement;
+              return [...c.querySelectorAll('li,[role=option]')].filter(vis).map((l) => (l.innerText || '').trim())
+                .filter((t) => t && !/nenhum resultado/i.test(t)).slice(0, 40); }""")
+        except Exception:  # noqa: BLE001
+            ops = []
+        if not ops:
+            return                       # campo livre: fica o texto digitado
+        alvo = escolher_opcao(ops, valor)
+        if alvo is None:
+            raise Parar('nao_classificado', texto_tela=sem_pii('Complemento não está na lista do portal. Opções: '
+                                                                  + ' · '.join(ops[:20])),
+                        motivo='complemento fora da lista do portal')
+        li = comp.locator('xpath=ancestor::div[1]/..').locator('li, [role=option]', has_text=alvo).first
+        self.clicar(li)
+        pg.wait_for_timeout(800)
 
     def etapa3(self):
         cpf = self.esperar(lambda: self.campo('documento', 'CPF/CNPJ'), 30)   # input name="documento" (11/11)

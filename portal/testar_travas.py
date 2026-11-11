@@ -121,6 +121,14 @@ ok(cr.classificar_popup('Análise', 'Aguarde 24 h', 5) == 'pendente', 'aguarde 2
 ok(cr.classificar_popup('Atenção!', 'Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições de mesmo número permitidas. Informe outro número para prosseguir.', 4)
    == 'contato_repetido', 'celular repetido na Etapa 4 → contato_repetido')
 ok(cr.classificar_popup('Aviso', 'Algo novo', 5) == 'nao_classificado', 'outro → nao_classificado')
+ok(cr.tem_numero('Rua Elder Gonçalves De Souza, 52 - Conjunto', '52'), 'endereço: escolhe a opção com o número 52')
+ok(not cr.tem_numero('Rua Elder Gonçalves De Souza, 520 - Conjunto', '52'), 'endereço: não confunde 520 com 52')
+ok(not cr.tem_numero('Rua 52, 10 - Centro', '5'), 'endereço: não pega dígito de outro número')
+ok(cr.escolher_opcao(['CASA A', 'CASA B', 'APTO 101'], 'casa b') == 'CASA B', 'complemento: "casa b" escolhe CASA B')
+ok(cr.escolher_opcao(['CASA A', 'CASA B'], 'Casa  A') == 'CASA A', 'complemento: ignora caixa e espaços')
+ok(cr.escolher_opcao(['APTO 101 BL 1', 'APTO 102 BL 1'], '101') == 'APTO 101 BL 1', 'complemento: "101" escolhe a única que contém')
+ok(cr.escolher_opcao(['CASA A', 'CASA B'], 'CASA') is None, 'complemento: ambíguo não escolhe')
+ok(cr.escolher_opcao(['CASA A'], 'FUNDOS') is None, 'complemento: fora da lista não escolhe')
 ok(cr.classificar_formas(['BOLETO', 'CREDITO', 'DACC']) == 'aprovado_todas', '3 formas → aprovado_todas')
 ok(cr.classificar_formas(['CREDITO']) == 'aprovado_cartao', 'só cartão → aprovado_cartao')
 ok(cr.classificar_formas(['BOLETO', 'CREDITO']) == 'aprovado_parcial', 'subconjunto → aprovado_parcial')
@@ -130,7 +138,7 @@ ok(o == {'nome': 'Nio Essencial', 'velocidade': '800 Mega', 'preco': 'R$ 140,00'
 print('5. JS injetado na página (sintaxe, se houver node)')
 import shutil, subprocess, tempfile
 if shutil.which('node'):
-    for nome in ('POPUP_JS', 'RADIOS_JS', 'OFERTAS_JS', 'ENDERECO_JS', 'NOME_JS'):
+    for nome in ('POPUP_JS', 'RADIOS_JS', 'OFERTAS_JS', 'ENDERECO_JS', 'NOME_JS', 'ETAPA_JS', 'ENDERECO_OPCOES_JS'):
         with tempfile.NamedTemporaryFile('w', suffix='.js', delete=False, encoding='utf-8') as f:
             f.write('const f = ' + getattr(cr, nome) + ';')
         r = subprocess.run(['node', '--check', f.name], capture_output=True)
