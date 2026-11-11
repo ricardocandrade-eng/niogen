@@ -15,11 +15,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-10">
-<script src="config.js?v=111126-10"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-11">
+<script src="config.js?v=111126-11"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-10"></script>
-<script src="assets/sidebar.js?v=111126-10"></script>
+<script src="assets/app.js?v=111126-11"></script>
+<script src="assets/sidebar.js?v=111126-11"></script>
 <style>
   .cred-form { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; align-items: end; }
   .cred-form .cred-opc { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; }
@@ -159,9 +159,13 @@
         ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
         ${dado('Formas liberadas', formas.length ? `<span class="chips">${formas.map((f) => `<span class="chip ok">${esc(FORMA[f] || f)}</span>`).join('')}</span>` : '')}
         ${dado('Pedido em rascunho no portal', r.pedido_portal ? `<span class="mono">${esc(r.pedido_portal)}</span>` : '')}
-        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : e.origem === 'padrao' ? 'padrão (Centro JF)' : ''))}
-        ${dado('Endereço no portal', esc(e.resolvido || ''))}
-        ${dado('Viabilidade', esc(e.viabilidade || ''))}
+        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : e.origem === 'padrao' ? 'padrão (só para ler o crédito)' : ''))}
+        ${e.origem === 'padrao'   // 11/11 (Ricardo): o endereço padrão não é do cliente — não mostra a rua nem a viabilidade dele
+          ? dado('Endereço no portal', '<span class="muted">oculto — endereço padrão, não é o do cliente</span>')
+          : dado('Endereço no portal', esc(e.resolvido || ''))}
+        ${e.origem === 'padrao'
+          ? dado('Viabilidade', '<span class="muted">não consultada para o cliente</span>')
+          : dado('Viabilidade', esc(e.viabilidade || ''))}
       </div>
       ${ofertas.length ? `<div><h3 class="secao-tit">Ofertas para este endereço</h3><div class="cred-ofertas">${ofertas.map((o) =>
         `<div class="d-l"><span>${esc(o.nome)}</span><b>${esc([o.velocidade, o.preco, o.fidelidade === true ? 'com fidelidade' : o.fidelidade === false ? 'sem fidelidade' : ''].filter(Boolean).join(' · '))}</b></div>`).join('')}</div></div>` : ''}
