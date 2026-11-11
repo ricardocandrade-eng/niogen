@@ -1,9 +1,8 @@
 <!doctype html>
 <!-- NIOGEN | docs/cobertura.html | 03/11/2026 · 05/11 rodada noturna — Cobertura (DFV) no padrão de telas.
      Consulta rápida em cartão no topo (dfv_consultar; nada é gravado) com o resultado em pílula de cor; "Criar venda com este
-     endereço" abre a gaveta Nova venda AQUI (assets/novavenda.js), sem trocar de tela. Abaixo: resumo de JF (KPIs), bairros de JF
-     em tabela padrão (busca, ordenação, cartões no celular) e o painel DFV Sudeste da Nio (fallback), recolhido.
-     A v_dfv_resumo pode estourar o statement timeout: carrega depois e não segura a consulta. Todos os perfis.
+     endereço" abre a gaveta Nova venda AQUI (assets/novavenda.js), sem trocar de tela. Abaixo: o painel DFV Sudeste da Nio, recolhido.
+     11/11 (pedido do Ricardo): saíram os KPIs e a tabela de bairros de JF (base congelada nio_hp) — bairros seguem em Meta Ads.
      11/11/2026: a consulta rápida passa a ser AO VIVO no painel DFV Sudeste da Nio (edge function dfv-consulta → operador DFV
      na VPS; todas as cidades, com faixa de crédito do bairro, fachadas viáveis da rua e nota dos 200 m). Se o operador não
      responder, a função cai na dfv_consultar e a tela marca "base congelada de JF (DD/MM)". Consulta-só: nada é gravado. -->
@@ -18,12 +17,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-4">
-<script src="config.js?v=111126-4"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-5">
+<script src="config.js?v=111126-5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-4"></script>
-<script src="assets/sidebar.js?v=111126-4"></script>
-<script src="assets/novavenda.js?v=111126-4"></script>
+<script src="assets/app.js?v=111126-5"></script>
+<script src="assets/sidebar.js?v=111126-5"></script>
+<script src="assets/novavenda.js?v=111126-5"></script>
 </head>
 <body>
 <div class="app">
@@ -49,33 +48,9 @@
       <span class="nota-campo">Consulta ao vivo no painel DFV Sudeste da Nio (todas as cidades, atualizado todo dia; o painel só traz endereços viáveis). Número fora da lista não nega a venda: a Nio instala até 200 m da última casa viável — confira no mapa do painel abaixo. Se o painel não responder, a tela usa a base congelada de Juiz de Fora e avisa. A palavra final é sempre a do portal no pedido.</span>
     </section>
 
-    <section class="kpis quatro" id="kpis" aria-label="Resumo de Juiz de Fora"></section>
-
-    <div class="barra-filtros">
-      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar bairro" placeholder="Buscar bairro de Juiz de Fora"></label>
-      <div class="dir"><a class="btn btn-ghost" href="metaads.html">Bairros prioritários (Meta Ads) →</a></div>
-    </div>
-
-    <section class="lista padrao" aria-label="Bairros de Juiz de Fora">
-      <div class="rolagem">
-        <table class="tab">
-          <thead><tr>
-            <th data-ord="bairro">Bairro</th>
-            <th data-ord="livre" data-dir="desc" class="num">HP livre</th>
-            <th data-ord="pct" data-dir="desc" class="num col-media">% livre</th>
-            <th data-ord="hc" data-dir="desc" class="num col-media">Já com Nio</th>
-            <th data-ord="aprov" data-dir="desc" class="num">Aprov. crédito</th>
-          </tr></thead>
-          <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
-        </table>
-      </div>
-      <div class="rodape-lista"><span id="contagem"></span><span>Aprovação abaixo de 50 %: PAP com DFV na mão, não anúncio</span></div>
-    </section>
-    <div class="cartoes" id="cartoes" aria-label="Bairros de Juiz de Fora"></div>
-
-    <!-- Painel DFV Sudeste embutido (fallback manual) -->
+    <!-- Painel DFV Sudeste embutido (mapa para a regra dos 200 m) -->
     <details class="painel cob-det" id="cob-det">
-      <summary><h2>Painel DFV Sudeste (Power BI da Nio)</h2><span class="muted">fallback quando a base não acha o endereço</span></summary>
+      <summary><h2>Painel DFV Sudeste (Power BI da Nio)</h2><span class="muted">mapa das fachadas viáveis · regra dos 200 m</span></summary>
       <div class="duas cob-painel" style="align-items:flex-start">
         <section class="cob-entrar" style="flex:1 1 260px;display:flex;flex-direction:column;gap:10px">
           <h3 class="secao-tit">Como entrar no painel</h3>
@@ -107,7 +82,6 @@
   const form = document.getElementById('form-cob');
   const F = form.elements;
   const resEl = document.getElementById('resultado');
-  const pc = (v) => (v == null ? '—' : `${(Number(v) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`);
   const base = (p) => (p ? NG.fmtDiaISO(p).slice(0, 5) : '—');
   // Gaveta "Nova venda" (a mesma de Vendas): salvar aqui não recarrega nada — a venda aparece em Vendas.
   const novaVenda = NGNovaVenda.montar({ eu, aoSalvar: (v) => NG.toast('Venda criada — está em Vendas.', 'ok') });
@@ -277,61 +251,6 @@
   det.addEventListener('toggle', () => { if (det.open) montarPainel(); });
   if (qs.get('painel') === '1') det.open = true;
 
-  // ------------------------------------------------------------ resumo de JF + bairros (carregam depois)
-  const fBusca = document.getElementById('f-busca');
-  const tbody = document.getElementById('tbody');
-  const ord = { chave: 'livre', dir: -1 };
-  let bairros = [];
-  const CHAVES = {
-    bairro: (b) => b.bairro || '',
-    livre: (b) => Number(b.hp_livre || 0),
-    pct: (b) => Number(b.pct_livre || 0),
-    hc: (b) => Number(b.hc_tot || 0),
-    aprov: (b) => (b.aprov_estimada ? null : Number(b.pct_aprov_bairro)),
-  };
-  const baixo = (b) => !b.aprov_estimada && b.pct_aprov_bairro != null && Number(b.pct_aprov_bairro) < 0.5;
-  const aprovTxt = (b) => (b.aprov_estimada ? '<span class="apagado" title="A Nio não informou a aprovação deste bairro">n/i</span>'
-    : `<span class="${baixo(b) ? 'bad-txt' : ''}">${pc(b.pct_aprov_bairro)}</span>`);
-  function renderBairros() {
-    const q = fBusca.value.trim().toLowerCase();
-    const lista = NG.ordenar(bairros.filter((b) => !q || String(b.bairro || '').toLowerCase().includes(q)), CHAVES, ord);
-    tbody.innerHTML = lista.length ? lista.map((b) => `<tr>
-      <td class="cli"><b>${esc(b.bairro)}</b><small>${NG.fmtNum(b.fachadas)} fachadas</small></td>
-      <td class="num">${NG.fmtNum(b.hp_livre)}</td>
-      <td class="num col-media">${pc(b.pct_livre)}</td>
-      <td class="num col-media">${NG.fmtNum(b.hc_tot)}</td>
-      <td class="num">${aprovTxt(b)}</td></tr>`).join('') : `<tr><td colspan="5" class="vazio">${bairros.length ? 'Nenhum bairro neste filtro' : 'Base DFV ainda não carregada'}</td></tr>`;
-    document.getElementById('cartoes').innerHTML = lista.length ? lista.map((b) => `<div class="cartao">
-      <div class="cli"><b>${esc(b.bairro)}</b><small>${NG.fmtNum(b.fachadas)} fachadas · ${NG.fmtNum(b.hc_tot)} já com Nio</small></div>
-      <div class="valor">${NG.fmtNum(b.hp_livre)}</div>
-      <div class="l2"><span>HP livre · ${pc(b.pct_livre)}</span><span>· aprovação ${aprovTxt(b)}</span></div></div>`).join('') : '<div class="vazio">Nenhum bairro neste filtro</div>';
-    document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'bairro' : 'bairros'} no filtro`;
-  }
-  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, renderBairros);
-  fBusca.addEventListener('input', renderBairros);
-
-  const kpisEl = document.getElementById('kpis');
-  kpisEl.innerHTML = ['HPs', 'HP livre', 'Ocupação', 'Data da base'].map((r) => NG.kpi({ rot: r, val: '—', nota: 'carregando…' })).join('');
-  NG.sb.from('v_dfv_bairros').select('bairro, fachadas, hp_livre, pct_livre, hc_tot, pct_aprov_bairro, aprov_estimada, particao').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA')
-    .then(({ data, error }) => {
-      if (error) { tbody.innerHTML = `<tr><td colspan="5" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
-      bairros = data || [];
-      renderBairros();
-    });
-  NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle().then(({ data: z, error }) => {
-    if (error || !z) {
-      const msg = error ? `resumo indisponível agora (${NG.msgErro(error)})` : 'base DFV ainda não carregada';
-      kpisEl.innerHTML = ['HPs', 'HP livre', 'Ocupação', 'Data da base'].map((r) => NG.kpi({ rot: r, val: '—', nota: esc(msg) })).join('');
-      return;
-    }
-    document.getElementById('sub').textContent = `Consultar um endereço sem abrir uma venda · base DFV de Juiz de Fora de ${NG.fmtDiaISO(z.particao)}`;
-    kpisEl.innerHTML = [
-      NG.kpi({ rot: 'HPs na base', val: NG.fmtNum(z.hp_tot), nota: `${NG.fmtNum(z.fachadas)} fachadas · ${NG.fmtNum(z.bairros)} bairros` }),
-      NG.kpi({ rot: 'HP livre', val: NG.fmtNum(z.hp_livre), nota: 'portas para vender' }),
-      NG.kpi({ rot: 'Ocupação', val: pc(z.pct_ocupacao), nota: `${NG.fmtNum(z.hc_tot)} HCs · ${NG.fmtNum(z.casas_ocupadas)} casas já com Nio` }),
-      NG.kpi({ rot: 'Data da base', val: esc(base(z.particao)), nota: 'foto da Nio · só viáveis' }),
-    ].join('');
-  });
 })();
 </script>
 </body>
