@@ -1,2 +1,4 @@
 # portal/ roda em Linux (VPS): fim de linha LF sempre
 portal/** text eol=lf
+# scripts de shell rodam no Git Bash: com CRLF o bash não os executa
+*.sh text eol=lf
