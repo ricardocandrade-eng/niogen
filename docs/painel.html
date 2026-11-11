@@ -187,7 +187,7 @@
       card.innerHTML = `<div class="q-linha"><h2>Andamento na Nio</h2><a class="muted" href="fila.html">Live →</a></div>
         <div><span class="nota-campo">Portal PAP (pedidos de Venda):</span> ${lista(an.por_status_portal)}</div>
         <div><span class="nota-campo">Biometria GED360 (30 dias):</span> ${lista(an.por_resultado_bio)}</div>
-        <span class="nota-campo">Portal lido ${an.portal_ultima_leitura ? esc(NG.fmtDataHora(an.portal_ultima_leitura)) : '—'} · GED360 ${an.ged360_ultima_ok ? esc(NG.fmtDataHora(an.ged360_ultima_ok)) : '—'}${an.casar_pedido ? ` · <b>${NG.fmtNum(an.casar_pedido)} pedido(s) para casar</b>` : ''}${an.bio_sem_venda ? ` · ${NG.fmtNum(an.bio_sem_venda)} biometria(s) sem venda` : ''}</span>`;
+        <span class="nota-campo">Portal lido ${an.portal_ultima_leitura ? esc(NG.fmtDataHora(an.portal_ultima_leitura)) : '—'} · GED360 ${an.ged360_ultima_ok ? esc(NG.fmtDataHora(an.ged360_ultima_ok)) : '—'}${an.casar_pedido ? ` · <b>${NG.fmtNum(an.casar_pedido)} pedido(s) para casar</b>` : ''}</span>`;
     }
   }
 
