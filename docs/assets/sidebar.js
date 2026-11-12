@@ -243,6 +243,117 @@
     balancoBotao();
   }
 
+  // ---------- Auditoria da Mari (0130, Ricardo 12/11 ~01h20) ----------
+  // Claude (Sonnet 5.5) lê as conversas e aponta falhas de prompt, contrato, venda perdida, cadência, handoff, erro e tom, com a
+  // correção sugerida. Diária às 7h30 (seg–sáb) ou pedida aqui (admin/backoffice): o pedido vira linha 'pedido' e o n8n pega em
+  // até 2 min, das 8h às 22h. NG.auditoria.abrir(id?) abre o modal; NG.auditoria.pedir(conversaId?) pede e abre; .nova() diz se a
+  // diária mais recente ainda não foi vista neste navegador (localStorage niogen.auditoria.vista).
+  const AUD_KEY = 'niogen.auditoria.vista';
+  const AUD_TIPO = { venda_perdida: 'venda perdida', contrato: 'contrato', prompt: 'prompt', cadencia_template: 'cadência/template',
+    handoff: 'handoff', erro_tecnico: 'erro técnico', tom: 'tom' };
+  const AUD_COLS = 'id, modo, conversa_id, status, pedido_em, inicio, fim, janela_de, janela_ate, modelo, tokens_in, tokens_out, resumo, achados, numeros, erro';
+  async function audNova() {
+    try {
+      const { data } = await NG.sb.from('auditoria_mari').select('id').eq('modo', 'diaria').eq('status', 'pronta')
+        .order('fim', { ascending: false }).limit(1).maybeSingle();
+      if (!data) return null;
+      let visto = null;
+      try { visto = localStorage.getItem(AUD_KEY); } catch (e) { return null; }
+      return visto === String(data.id) ? null : data.id;
+    } catch (e) { return null; }
+  }
+  function audTexto(a) {
+    const n = a.numeros || {};
+    const linhas = [`Auditoria da Mari #${a.id} · nota ${n.nota ?? '?'}/10 · ${NG.fmtDataHora(a.janela_de)} a ${NG.fmtDataHora(a.janela_ate)}`, '', a.resumo || '', ''];
+    (a.achados || []).forEach((x, k) => {
+      linhas.push(`${k + 1}. [${x.gravidade}] ${AUD_TIPO[x.tipo] || x.tipo} — ${x.titulo}`, `   O que aconteceu: ${x.o_que_aconteceu}`,
+        `   Evidência: ${x.evidencia}`, `   Corrigir: ${x.correcao}`);
+      if (x.trecho_prompt) linhas.push(`   Trecho do prompt: ${x.trecho_prompt}`);
+      if ((x.conversa_ids || []).length) linhas.push(`   Conversas: ${x.conversa_ids.join(', ')}`);
+      linhas.push('');
+    });
+    return linhas.join('\n');
+  }
+  function audCorpo(a) {
+    const esc = NG.esc;
+    if (!a) return '<p class="muted">Nenhuma auditoria ainda. Clique em <b>Auditar 24 h</b>.</p>';
+    if (a.status === 'pedido' || a.status === 'rodando') {
+      const h = Number(new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, hour: 'numeric', hour12: false }).format(new Date()));
+      return `<div class="faixa amarelo">${a.status === 'rodando' ? '⏳ O Claude está lendo as conversas (cerca de 1 minuto)…'
+        : `⏳ Na fila. ${h >= 8 && h < 22 ? 'O n8n pega em até 2 minutos.' : 'O n8n busca pedidos das 8h às 22h — sai às 8h.'}`}
+        Esta janela atualiza sozinha.</div>`;
+    }
+    if (a.status === 'erro') return `<div class="faixa vermelho"><b>A auditoria falhou.</b> ${esc(a.erro || '')}</div>`;
+    const n = a.numeros || {};
+    const COR = { alta: 'var(--bad-dot)', media: 'var(--warn-dot)', baixa: 'var(--muted)' };
+    const conv = (ids) => (ids || []).map((id, k) => `<a href="mari.html?conversa=${esc(id)}">conversa ${k + 1}</a>`).join(' · ');
+    const custo = a.tokens_in ? ` · ${Math.round(a.tokens_in / 1000)} mil + ${Math.round((a.tokens_out || 0) / 1000)} mil tokens (~US$ ${((a.tokens_in * 2 + (a.tokens_out || 0) * 10) / 1e6).toFixed(2)})` : '';
+    return `<p class="aud-meta"><b class="aud-nota">${n.nota ?? '–'}<small>/10</small></b>
+        <span>${a.conversa_id ? '1 conversa' : `${n.conversas ?? '?'} conversas`} · ${esc(NG.fmtDataHora(a.janela_de))} a ${esc(NG.fmtDataHora(a.janela_ate))}<br>
+        <span class="muted">${a.modo === 'diaria' ? 'diária' : 'pedida'} · ${esc(a.modelo || '')}${custo}</span></span></p>
+      ${a.resumo ? `<p class="resumo-txt">${esc(a.resumo)}</p>` : ''}
+      ${(n.bons || []).length ? `<div class="aud-bons"><b>Funcionou bem</b><ul>${n.bons.map((b) => `<li>${esc(b)}</li>`).join('')}</ul></div>` : ''}
+      ${(a.achados || []).map((x) => `<div class="bal-item">
+        <div class="bal-l1"><i class="mv-dot" style="--c:${COR[x.gravidade] || 'var(--muted)'}" title="gravidade ${esc(x.gravidade)}"></i>
+          <span class="aud-tipo">${esc(AUD_TIPO[x.tipo] || x.tipo)}</span><b>${esc(x.titulo)}</b></div>
+        <p>${esc(x.o_que_aconteceu)}</p>
+        <p class="muted"><b>Evidência:</b> ${esc(x.evidencia)}</p>
+        <p class="bal-fazer"><b>Corrigir:</b> ${esc(x.correcao)}</p>
+        ${x.trecho_prompt ? `<pre class="resumo-txt aud-trecho">${esc(x.trecho_prompt)}</pre>` : ''}
+        ${(x.conversa_ids || []).length ? `<p class="aud-conv">${conv(x.conversa_ids)}</p>` : ''}
+      </div>`).join('') || '<p class="muted">Nenhum achado no período.</p>'}
+      <p class="nota-campo">Escrito pelo Claude com as falas do período (CPF, telefone e e-mail mascarados). É diagnóstico: confira na conversa antes de mexer no prompt.</p>`;
+  }
+  async function audAbrir(idAlvo) {
+    const { data: lista, error } = await NG.sb.from('auditoria_mari').select(AUD_COLS).order('pedido_em', { ascending: false }).limit(15);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    let atual = (lista || []).find((a) => String(a.id) === String(idAlvo)) || (lista || [])[0] || null;
+    const esc = NG.esc;
+    const opcao = (a) => `<option value="${a.id}"${atual && a.id === atual.id ? ' selected' : ''}>#${a.id} · ${a.modo === 'diaria' ? 'diária' : a.conversa_id ? 'conversa' : '24 h'} · ${esc(NG.fmtDataHora(a.pedido_em))}${a.status === 'pronta' ? ` · ${(a.achados || []).length} achado(s)` : ` · ${a.status}`}</option>`;
+    const d = document.createElement('dialog');
+    d.className = 'modal bal-modal aud-modal';
+    d.innerHTML = `<div class="bal-cab"><h3>Auditoria da Mari</h3>
+        <select class="sel" data-hist aria-label="Auditorias anteriores">${(lista || []).map(opcao).join('')}</select>
+        <button type="button" class="btn btn-sm" data-copiar title="Copia o texto dos achados (para colar numa conversa com o Claude e corrigir o prompt)">Copiar</button>
+        <button type="button" class="btn btn-sm btn-acc" data-pedir title="Pede ao Claude a auditoria das últimas 24 h">Auditar 24 h</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-fechar aria-label="Fechar">✕</button></div>
+      <div class="bal-corpo" data-corpo>${audCorpo(atual)}</div>`;
+    document.body.appendChild(d);
+    let timer = null;
+    const pintar = () => {
+      d.querySelector('[data-corpo]').innerHTML = audCorpo(atual);
+      d.querySelector('[data-copiar]').disabled = !atual || atual.status !== 'pronta';
+      if (atual && atual.modo === 'diaria' && atual.status === 'pronta') { try { localStorage.setItem(AUD_KEY, String(atual.id)); } catch (e) { /* ok */ } }
+      clearInterval(timer);
+      if (atual && ['pedido', 'rodando'].includes(atual.status)) {
+        timer = setInterval(async () => {
+          const { data } = await NG.sb.from('auditoria_mari').select(AUD_COLS).eq('id', atual.id).maybeSingle();
+          if (data && data.status !== atual.status) { atual = data; pintar(); }
+        }, 10000);
+      }
+    };
+    const fechar = () => { clearInterval(timer); d.close(); d.remove(); };
+    d.querySelector('[data-fechar]').addEventListener('click', fechar);
+    d.addEventListener('cancel', (ev) => { ev.preventDefault(); fechar(); });
+    d.addEventListener('click', (ev) => { if (ev.target === d) fechar(); });
+    d.querySelector('[data-hist]').addEventListener('change', (ev) => { atual = lista.find((a) => String(a.id) === ev.target.value) || atual; pintar(); });
+    d.querySelector('[data-copiar]').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(audTexto(atual)); NG.toast('Achados copiados ✓', 'ok'); }
+      catch (e) { NG.toast('Não deu para copiar', 'bad'); }
+    });
+    d.querySelector('[data-pedir]').addEventListener('click', async (ev) => { ev.target.disabled = true; fechar(); await audPedir(null); });
+    d.showModal();
+    pintar();
+  }
+  async function audPedir(conversaId) {
+    const { data, error } = await NG.sb.rpc('auditoria_mari_pedir', { p_conversa: conversaId || null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    if (!data || !data.ok) { NG.toast((data && data.motivo) || 'Não deu para pedir a auditoria', 'bad'); return; }
+    NG.toast(data.ja_havia ? 'Já havia uma auditoria na fila — abrindo' : 'Auditoria pedida ✓', 'ok');
+    await audAbrir(data.id);
+  }
+  NG.auditoria = { abrir: audAbrir, pedir: audPedir, nova: audNova };
+
   // ---------- contadores do menu (prompt 27) ----------
   let tituloBase = '';
   function pinta(nav, chave, n, cls, titulo) {

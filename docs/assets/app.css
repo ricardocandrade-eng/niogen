@@ -2231,3 +2231,18 @@ body.lv-com-cliente .mv-feito { display: none; }
 .cvp-quem-ico.mari { color: #A990FF; background: rgba(169,144,255,.08); }
 .cvp-quem-ico.time { color: #57D38C; background: rgba(87,211,140,.08); }
 .cvp-raiz.cheia .cvp-caixa { align-items: flex-end; }
+
+/* Auditoria da Mari (0130, 12/11) — mesmo modal do balanço */
+.aud-novo { margin-left: 6px; font-family: var(--dm); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; background: var(--warn-dot); color: var(--bg); }
+.aud-modal .bal-cab { flex-wrap: wrap; }
+.aud-modal .bal-cab .sel { max-width: 260px; min-height: 32px; font-size: 12px; }
+.aud-modal .bal-item .muted { color: var(--muted); font-size: 12px; }
+.aud-meta { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 13px; }
+.aud-meta .muted { font-size: 11px; }
+.aud-nota { font-size: 28px; font-weight: 800; line-height: 1; }
+.aud-nota small { font-size: 13px; color: var(--muted); font-weight: 600; }
+.aud-tipo { font-family: var(--dm); font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; white-space: nowrap; }
+.aud-bons { font-size: 12px; color: var(--muted); }
+.aud-bons ul { margin: 4px 0 0; padding-left: 18px; }
+.aud-trecho { font-size: 12px; white-space: pre-wrap; border-left: 2px solid var(--warn-dot); padding-left: 8px; margin: 0; }
+.aud-conv { font-size: 12px; }

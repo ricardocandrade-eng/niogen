@@ -30,11 +30,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=121126-19">
+<link rel="stylesheet" href="assets/app.css?v=121126-20">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=111126-12"></script>
-<script src="assets/sidebar.js?v=121126-19"></script>
+<script src="assets/sidebar.js?v=121126-20"></script>
 <script src="assets/conversa.js?v=121126-17"></script>
 <script src="assets/ficha.js?v=121126-12"></script>
 </head>
@@ -53,6 +53,7 @@
           <label><input type="radio" name="vista" value="lista">Lista</label>
           <label><input type="radio" name="vista" value="quadro">Quadro</label>
         </div>
+        <button type="button" class="btn" id="btn-auditoria" title="Auditoria da Mari pelo Claude: falhas de prompt, contrato, venda perdida, cadência, handoff">🔎 Auditoria<span class="aud-novo" id="aud-novo" hidden>nova</span></button>
         <a class="btn acao-principal desab" id="btn-chatwoot" aria-disabled="true" title="A conta Nio no Chatwoot ainda não existe">Abrir Chatwoot</a>
       </div>
     </header>
@@ -129,6 +130,11 @@
     return;
   }
   const ADMIN = eu.perfil === 'admin';
+  // 0130: Auditoria da Mari (modal no sidebar.js). "nova" = diária pronta ainda não vista neste navegador.
+  const audBtn = document.getElementById('btn-auditoria');
+  const audMarca = async () => { document.getElementById('aud-novo').hidden = !(await NG.auditoria.nova()); };
+  audBtn.addEventListener('click', async () => { await NG.auditoria.abrir(); audMarca(); });
+  audMarca();
 
   const CHATWOOT_NIO_ACCOUNT = NG.CHATWOOT_NIO_ACCOUNT;   // definida no app.js (a ficha da venda usa a mesma)
   const NUMERO_MARI = '31 2888-1265';
@@ -1034,12 +1040,15 @@
     const links = [];
     if (c.chatwoot_conversation_id && !c.chatwoot_agente && !c.humano_atribuido && !c.nao_contatar) links.push(`<button type="button" class="btn btn-acc" data-momento="assumir" data-conv="${esc(c.id)}" title="Atribui a você no Chatwoot (a Mari cala) e para a cadência">Assumir</button>`);
     links.push(c.venda_id ? `<a class="btn" href="#venda=${esc(c.venda_id)}">Abrir ficha</a>` : `<a class="btn" href="#conversa=${esc(c.id)}">Abrir ficha</a>`);
+    links.push(`<button type="button" class="btn btn-ghost" data-auditar="${esc(c.id)}" title="O Claude lê esta conversa (até 7 dias) e aponta o que a Mari errou e como corrigir">🔎 Auditar esta conversa</button>`);
     document.getElementById('d-links').innerHTML = links.join('') || '<span class="nota-campo">Sem venda criada e sem conversa no Chatwoot.</span>';
     const conv = corpo.querySelector('.conversa');
     if (conv) conv.scrollTop = conv.scrollHeight;
   }
 
   document.getElementById('d-links').addEventListener('click', async (ev) => {
+    const au = ev.target.closest('[data-auditar]');
+    if (au) { au.disabled = true; await NG.auditoria.pedir(au.dataset.auditar); au.disabled = false; return; }
     const b = ev.target.closest('[data-momento]');
     if (!b) return;
     const qual = b.dataset.momento;
