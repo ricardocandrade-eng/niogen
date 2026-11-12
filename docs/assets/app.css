@@ -2131,3 +2131,6 @@ body.lv-com-cliente .mv-feito { display: none; }
 }
 .cvp-raiz.cheia .cvp-nome { display: none; }
 .fc-ag-bts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
+.fc-ficha { grid-template-columns: minmax(0, 1fr); }
+.fc-agora-w, .fc-cards, .fc-card { min-width: 0; }
+.fc-ag-bt { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
