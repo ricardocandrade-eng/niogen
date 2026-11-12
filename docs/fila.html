@@ -85,6 +85,18 @@
   const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
 
   let jor = { lista: [], todas: [] };
+  // 13/11 (Ricardo: "destino também no Live"): etapa/destino de cada conversa (0147), por conversa e por venda.
+  let funilMap = {};
+  let fnome = { etapa: {}, destino: {} };
+  const funilDe = (j) => funilMap[j.conversa_id] || (j.venda_id ? funilMap[`v:${j.venda_id}`] : null);
+  const funilHtml = (j) => {
+    const f = funilDe(j);
+    if (!f || !f.funil_etapa) return '';
+    if (f.funil_destino && !['em_andamento', 'teste_duplicada'].includes(f.funil_destino)) {
+      return ` · <span class="cv-dest" title="Destino${f.funil_detalhe ? ': ' + esc(f.funil_detalhe) : ''}">${f.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[f.funil_destino] || f.funil_destino)}</span>`;
+    }
+    return ` · <span class="cv-etp" title="Etapa mais alta alcançada">${esc(fnome.etapa[f.funil_etapa] || f.funil_etapa)}</span>`;
+  };
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -151,7 +163,14 @@
     if (fresco) NG.limparCache();
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde')]);
+    const [r, ap, rf, fn] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+      NG.sb.from('mari_conversas').select('id, venda_id, funil_etapa, funil_destino, funil_detalhe').eq('canal', 'whatsapp').order('created_at', { ascending: false }).limit(1000),
+      NG.funilNomes()]);
+    fnome = fn || fnome;
+    if (rf && !rf.error) {
+      funilMap = {};
+      (rf.data || []).slice().reverse().forEach((c) => { funilMap[c.id] = c; if (c.venda_id) funilMap[`v:${c.venda_id}`] = c; });   // a mais recente da venda vence
+    }
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
     jor = { ...r, lista: filtroBase(r.lista) };
@@ -212,7 +231,7 @@
   // ---------- lista ----------
   const situacao = (j) => [j.etapa_nome, j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
   const linha = (j, paraFazer) => `<div class="lv-row n-${esc(j.nivel || 'ok')}${NGFicha.atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
-      <div class="lv-who"><i class="lv-dot" aria-hidden="true"></i><div><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')} · há ${esc(haTempo(j.desde))}</small></div></div>
+      <div class="lv-who"><i class="lv-dot" aria-hidden="true"></i><div><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')} · há ${esc(haTempo(j.desde))}${funilHtml(j)}</small></div></div>
       <div class="lv-sit">${esc(situacao(j) || '—')}</div>
       <div class="lv-prox">${esc(j.o_que_fazer || '—')}</div>
       <div>${donoHtml(j)}</div>

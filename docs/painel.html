@@ -78,6 +78,8 @@
   let ritmo = null, regras = {};
   const ehAdmin = eu.perfil === 'admin';
   let funil = null;   // 0087: funil_mes()
+  let funilConv;      // 13/11 (0147): etapa/destino das conversas — undefined = carregando
+  let fnome = { etapa: {}, destino: {} };
   let jor = { lista: [], porVenda: {} };   // 0090: v_jornada (a regra única de "precisa de ação")
   let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
@@ -120,12 +122,16 @@
   }
   async function carregarExtras() {
     if (veMari) { carregarAlarmes(); carregarOportunidades(); }
-    const [rz, rmari, rp, rres] = await Promise.all([
+    const [rz, rmari, rp, rres, rfc, rfn] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
       veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
       ehAdmin ? NG.sb.rpc('resumo_diario', { p_dia: NG.somaDias(NG.diaSP(), -1) }) : Promise.resolve(null),
+      veMari ? NG.sb.from('mari_conversas').select('created_at, funil_etapa, funil_destino').eq('canal', 'whatsapp').neq('funil_destino', 'teste_duplicada').limit(5000) : Promise.resolve(null),
+      veMari ? NG.funilNomes() : Promise.resolve(null),
     ]);
+    funilConv = !rfc ? null : rfc.error ? { erro: NG.msgErro(rfc.error) } : (rfc.data || []);
+    if (rfn) fnome = rfn;
     base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
     mari = rmari || { lista: [] };
     portal = rp && !rp.error ? rp.data : null;
@@ -277,6 +283,31 @@
         <div class="q-trilho"><i class="et-${e.id}" style="width:${(porEtapa[e.id] / maxE) * 100}%"></i></div></a>`).join('')}
       <span class="nota-campo">Saída: ${NG.fmtNum(porEtapa.saida)} no período · abertas aparecem sempre</span>
     </section>`);
+    // 13/11 (Ricardo: "destino também no Painel"): funil das conversas do período — até onde chegaram e como terminaram (0147).
+    if (veMari) {
+      if (funilConv === undefined) blocos.push('<section class="painel bloco-curto"><div class="q-linha"><h2>Conversas · etapa e destino</h2></div><span class="nota-campo">Carregando…</span></section>');
+      else if (funilConv && funilConv.erro) blocos.push(`<section class="painel bloco-curto"><div class="q-linha"><h2>Conversas · etapa e destino</h2></div><span class="nota-campo">Indisponível agora (${esc(funilConv.erro)}).</span></section>`);
+      else if (funilConv) {
+        const cs = funilConv.filter((c) => NG.noPeriodo(c.created_at, p));
+        const ordem = Object.keys(fnome.etapa);
+        const idx = (k) => ordem.indexOf(k || 'nova');
+        const chegou = (k) => cs.filter((c) => idx(c.funil_etapa) >= idx(k)).length;
+        const qual = cs.filter((c) => idx(c.funil_etapa) >= idx('qualificada') && !['ja_cliente_nio', 'credito_negado'].includes(c.funil_destino)).length;
+        const passos = ['respondeu', 'cep', 'area_ok', 'viavel', 'viu_planos', 'qualificada', 'pedido', 'instalada'];
+        const dest = Object.entries(fnome.destino).filter(([k]) => k !== 'teste_duplicada')
+          .map(([k, nome]) => [k, nome, cs.filter((c) => (c.funil_destino || 'em_andamento') === k).length]).filter((x) => x[2]);
+        const tot = Math.max(1, cs.length);
+        blocos.push(`<section class="painel bloco-curto">
+          <div class="q-linha"><h2 title="Etapa = até onde a conversa chegou (só sobe). Destino = como terminou (um só). Testes fora. Período pelo dia em que a conversa nasceu.">Conversas · etapa e destino</h2><a class="muted" href="conversas.html?filtro=todas">Conversas →</a></div>
+          <div class="bc-num"><span class="mono">${NG.fmtNum(qual)}</span><span class="muted">qualificada${qual === 1 ? '' : 's'} de ${NG.fmtNum(cs.length)} conversa${cs.length === 1 ? '' : 's'} (${NG.fmtNum(Math.round((qual / tot) * 100))} %)</span></div>
+          ${passos.map((k) => { const n = chegou(k); return `<a class="q-item" href="conversas.html?filtro=todas&amp;etapa=${k}" title="chegaram até ${esc(fnome.etapa[k] || k)} ou além">
+            <div class="q-linha"><span>${esc(fnome.etapa[k] || k)}</span><span class="mono">${NG.fmtNum(n)}</span></div>
+            <div class="q-trilho"><i style="width:${(n / tot) * 100}%;background:var(--accent)"></i></div></a>`; }).join('')}
+          <div class="fu-dest">${dest.map(([k, nome, n]) => `<a class="bc-linha" href="conversas.html?filtro=todas&amp;destino=${k}"><span>${k === 'em_andamento' ? '' : k === 'instalada' ? '✅ ' : '⛔ '}${esc(nome)}</span><span class="mono">${NG.fmtNum(n)}</span></a>`).join('')}</div>
+          <span class="nota-campo">Barras: chegaram até a etapa ou além · lista: destino de cada conversa (soma = ${NG.fmtNum(cs.length)})</span>
+        </section>`);
+      }
+    }
     // Em espera (0064): pendências com terceiro, as que vencem primeiro no topo → Vendas ?aba=espera
     const espera = vendas.map((v) => ({ v, pe: NG.pendencia(v) })).filter((x) => x.pe)
       .sort((a, b) => a.pe.revisar_em.localeCompare(b.pe.revisar_em));
