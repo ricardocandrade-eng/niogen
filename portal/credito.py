@@ -234,6 +234,16 @@ def limpar_amostras(pasta, dias=7):
         return 0
     limite = time.time() - dias * 86400
     n = 0
+    prints = os.path.join(pasta, 'prints')
+    if os.path.isdir(prints):
+        for nome in os.listdir(prints):
+            p = os.path.join(prints, nome)
+            try:
+                if nome.endswith('.jpg') and os.path.getmtime(p) < limite:
+                    os.remove(p)
+                    n += 1
+            except OSError:
+                pass
     for nome in os.listdir(pasta):
         if not nome.endswith('.json'):
             continue
@@ -917,6 +927,7 @@ class Consulta:
                 resultado, extra = 'erro', {'motivo': f'trava acionada: {self.trava}', 'trava': True}
             self.ler_pedido_seguro()
             self.amostras_corpos = self._ler_amostras()
+            self.print_jpeg = self.print_seguro(resultado)
             try:
                 self.page.close()        # para sair de qualquer popup: fechar a página, nunca um botão dele
             except Exception:  # noqa: BLE001
@@ -934,6 +945,18 @@ class Consulta:
         if self.p['origem_endereco'] != 'cliente':
             out['ofertas'] = []
         return out
+
+    def print_seguro(self, resultado):
+        """11/11 (Ricardo): print da tela do portal quando a VIABILIDADE não sai. Só no modo viabilidade (Etapas 0–2,
+        sem CPF nem contato na tela); nunca no crédito (Etapas 3–5 mostram CPF e nome). Só a tela visível, em JPEG."""
+        if self.modo != 'viabilidade' or resultado == 'viavel':
+            return None
+        try:
+            if self.page and not self.page.is_closed():
+                return self.page.screenshot(type='jpeg', quality=60, full_page=False, timeout=5000)
+        except Exception:  # noqa: BLE001
+            return None
+        return None
 
     def ler_pedido_seguro(self):
         try:

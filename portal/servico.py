@@ -21,11 +21,13 @@
 # Rodar fora do Docker (fase 0, PC com IP do Brasil): NIO_PORTAL_ENV=C:\caminho\.env  NIO_PORTAL_CANAL=chrome
 # python servico.py   (o .env fica FORA do repo; NIO_PORTAL_HEADLESS=0 mostra a janela)
 
+import base64
 import datetime
 import hmac
 import json
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -174,7 +176,7 @@ class Operador:
             try:
                 out = c.rodar()
                 self.estado['ultimo_uso'] = agora()
-                return out, getattr(c, 'amostras_corpos', [])
+                return out, getattr(c, 'amostras_corpos', []), getattr(c, 'print_jpeg', None)
             except cr.SessaoCaida:
                 if tentativa == 2:
                     raise pl.Falha(8, 'portal pediu login de novo logo após o login')
@@ -277,6 +279,26 @@ def log_credito(job_id, origem, resultado, ms, etapa, cache=False, extra=''):
         pass
 
 
+def _arquivo_print(pasta, job_id):
+    jid = re.sub(r'[^0-9a-f]', '', str(job_id or ''))[:32]
+    return os.path.join(pasta, 'prints', f'{jid}.jpg') if len(jid) == 32 and pasta else None
+
+
+def gravar_print(pasta, job_id, jpeg):
+    """Print da tela do portal (só viabilidade, sem CPF). Fica na VPS, em amostras/prints (chmod 700), 7 dias."""
+    arq = _arquivo_print(pasta, job_id)
+    if not arq:
+        return False
+    try:
+        os.makedirs(os.path.dirname(arq), exist_ok=True)
+        os.chmod(os.path.dirname(arq), 0o700)
+        with open(arq, 'wb') as f:
+            f.write(jpeg)
+        return True
+    except OSError:
+        return False
+
+
 def _rodar_job(job_id, params, cfg):
     def tarefa(op):
         j = JOBS[job_id]
@@ -285,8 +307,9 @@ def _rodar_job(job_id, params, cfg):
 
         def progresso(**k):
             j.update(k)
+        jpeg = None
         try:
-            out, corpos = op.consultar_credito(params, cfg, progresso)
+            out, corpos, jpeg = op.consultar_credito(params, cfg, progresso)
         except pl.Falha as f:
             out, corpos = {'resultado': 'erro', 'motivo': cr.sem_pii(f), 'ms': 0,
                            'etapa_parada': j.get('etapa_atual')}, []
@@ -294,6 +317,8 @@ def _rodar_job(job_id, params, cfg):
             out, corpos = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}', 'ms': 0,
                            'etapa_parada': j.get('etapa_atual')}, []
         out.update(consultado_em=agora_br(), cache=False)
+        if jpeg and params.get('modo') == 'viabilidade' and gravar_print(cfg['amostras'], job_id, jpeg):
+            out['print_job'] = job_id      # o cache leva junto: quem pegar o resultado do cache vê o mesmo print
         j['resultado'] = out
         j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
         viab = params.get('modo') == 'viabilidade'
@@ -433,7 +458,7 @@ class Handler(BaseHTTPRequestHandler):
     def _rota(self, metodo):
         t0 = time.time()
         rota = self.path.split('?')[0].rstrip('/') or '/'
-        rota_log = '/credito/<job>' if rota.startswith('/credito/') else rota
+        rota_log = '/credito/print/<job>' if rota.startswith('/credito/print/') else '/credito/<job>' if rota.startswith('/credito/') else rota
         if not self._autorizado():
             self._resp(401, {'ok': False, 'erro': 'segredo inválido'})
             pl.log(f'{metodo} {rota_log} → 401 (segredo)')
@@ -467,6 +492,15 @@ class Handler(BaseHTTPRequestHandler):
             elif metodo == 'POST' and rota == '/credito':
                 code, r = novo_job_credito(self._json())
                 self._resp(code, r)
+                return
+            elif metodo == 'GET' and rota.startswith('/credito/print/'):
+                arq = _arquivo_print(cfg_credito()['amostras'], rota.split('/credito/print/', 1)[1])
+                if not arq or not os.path.isfile(arq):
+                    self._resp(404, {'ok': False, 'erro': 'print inexistente ou expirado (7 dias)'})
+                else:
+                    with open(arq, 'rb') as f:
+                        self._resp(200, {'ok': True, 'tipo': 'image/jpeg', 'base64': base64.b64encode(f.read()).decode(),
+                                         'em': datetime.datetime.fromtimestamp(os.path.getmtime(arq)).strftime('%d/%m %H:%M')})
                 return
             elif metodo == 'GET' and rota.startswith('/credito/'):
                 jid = rota.split('/credito/', 1)[1][:64]

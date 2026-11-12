@@ -5,6 +5,8 @@
 //   {acao: 'status', job_id}                               → GET {CREDITO_OP_URL}/credito/{job_id}
 //   {acao: 'viabilidade', endereco}                       → POST {CREDITO_OP_URL}/credito/viabilidade — SÓ Etapas 0–2 do
 //        portal, sem CPF/contato (11/11 ~21h, docs/Prompt_consulta_unificada_111126_2045.md). Qualquer usuário logado.
+//   {acao: 'print', job_id}                                → GET {CREDITO_OP_URL}/credito/print/{job_id} — print da tela do portal
+//        quando a viabilidade NÃO saiu (11/11 ~22h30, pedido do Ricardo). Só Etapas 0–2, sem CPF; fica 7 dias na VPS. Só admin/backoffice.
 // A consulta leva ~2 min no portal: a tela faz polling; esta função nunca segura a conexão aberta.
 // Segredos (Supabase › Edge Functions › Secrets): CREDITO_OP_URL, NIO_PORTAL_SERVICO_SECRET. Nada no front nem no repo.
 // Nada é gravado no Supabase nesta rodada. Log: usuário, ação, resultado, ms — nunca o CPF.
@@ -46,7 +48,7 @@ Deno.serve(async (req) => {
     const b = await req.json().catch(() => ({}));
     acao = String(b.acao ?? '');
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
-    if (acao === 'iniciar' && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
+    if (['iniciar', 'print'].includes(acao) && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');
     const segredo = Deno.env.get('NIO_PORTAL_SERVICO_SECRET') ?? '';
     if (!opUrl || !segredo) { log('503 nao_instalado'); return json({ error: 'Operador de crédito ainda não instalado.', nao_instalado: true }, 503); }
@@ -88,8 +90,16 @@ Deno.serve(async (req) => {
       const id = String(b.job_id ?? '');
       if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
       r = await fetch(`${opUrl}/credito/${id}`, { headers: hdr, signal: AbortSignal.timeout(10000) });
+    } else if (acao === 'print') {
+      const id = String(b.job_id ?? '');
+      if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
+      r = await fetch(`${opUrl}/credito/print/${id}`, { headers: hdr, signal: AbortSignal.timeout(15000) });
+      const d = await r.json().catch(() => null);
+      if (!d || !r.ok || d.ok === false) { log(`print ${r.status}`); return json({ error: d?.erro ?? `Operador respondeu ${r.status}.` }, r.status === 404 ? 404 : 502); }
+      log('print ok');
+      return json({ tipo: d.tipo, base64: d.base64, em: d.em });
     } else {
-      return json({ error: 'acao deve ser iniciar, viabilidade ou status.' }, 400);
+      return json({ error: 'acao deve ser iniciar, viabilidade, status ou print.' }, 400);
     }
     const d = await r.json().catch(() => null);
     if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON (rota do proxy?).` }, 502); }
