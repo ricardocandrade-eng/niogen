@@ -193,8 +193,10 @@
     { id: 11, re: 'interesse', posEtapa2: true },
   ];
   const LIBERADOS = [
-    { id: 101, re: 'portabilidadenovafibra/consulta[a-z]+(/[a-z0-9_-]{1,40})?(\\?.*)?$' },
-    { id: 102, re: 'aberturaos/carrinho(/[a-z0-9_-]{1,60})?(\\?.*)?$', metodos: ['get'] },
+    // Sem repetição contada ({n,m}): o Chrome (RE2) recusa regex que passe de 2 KB compilada — a 0.6.0 caiu nisso
+    // ("Rule with id 7401 … exceeded the 2KB memory limit"). [^/?]* = um segmento só, então …/enviar continua barrado.
+    { id: 101, re: 'portabilidadenovafibra/consulta[^/?]*(/[^/?]*)?(\\?.*)?$' },
+    { id: 102, re: 'aberturaos/carrinho(/[^/?]*)?(\\?.*)?$', metodos: ['get'] },
   ];
   const ID_BASE = 7300;   // faixa das regras de sessão da condução (não colide com nada; a extensão não tem outras)
   function regrasRede(tabId, posEtapa2) {

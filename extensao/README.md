@@ -12,6 +12,8 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
 ## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
+
+> **0.6.1 (12/11):** as regras de liberação (portabilidade, leitura do carrinho) usavam `{1,40}` e o Chrome recusava a 7401 por passar de 2 KB compilada ("Travas de rede desligadas"). Agora sem repetição contada; o painel confere cada regex com `isRegexSupported` antes de ligar e o teste barra `{n,m}`.
 Regra 5 do `CLAUDE.md` (rev. 12/11): na sessão do humano logado no portal, a extensão percorre as Etapas 1–5 do Novo Pedido e **para no
 Resumo sem salvar**. Só o humano clica no que grava o pedido ou manda algo ao cliente (botão final do Resumo, Abrir OS, biometria, link de
 pagamento, agendamento). Uso autorizado pelo Rogério (Nio) — Ricardo, 12/11 00h52.

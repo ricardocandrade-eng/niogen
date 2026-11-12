@@ -96,6 +96,13 @@ caso('rede: interesse só depois da E2', !T.regrasRede(1, false).some((r) => r.c
   && T.regrasRede(1, true).some((r) => r.condition.regexFilter === 'interesse'));
 caso('rede: ids na faixa da condução', T.regrasRede(1, true).every((r) => T.idsRegras().includes(r.id)));
 caso('rede: regexFilter sem lookahead (RE2)', T.regrasRede(1, true).every((r) => !/\(\?[=!<]/.test(r.condition.regexFilter)));
+// 0.6.1: o Chrome recusou a 7401 (> 2 KB compilada) por causa de {1,40}. Sem repetição contada e regex curta.
+caso('rede: regexFilter sem repetição contada {n,m} (limite de 2 KB do Chrome)', T.regrasRede(1, true).every((r) => !/\{\d/.test(r.condition.regexFilter) && r.condition.regexFilter.length <= 80));
+caso('rede: consulta da portabilidade liberada (com id e query)', B('https://x/api/portabilidadenovafibra/consultaPlanos/ABC-12?uf=MG', 'GET') === null);
+caso('rede: portabilidade fora da consulta barrada', B('https://x/api/portabilidadenovafibra/consultaPlanos/1/salvar') !== null);
+caso('rede: leitura do carrinho liberada (GET com id)', B('https://x/api/aberturaos/carrinho/9f3a?x=1', 'GET') === null);
+caso('rede: carrinho/<id>/enviar barrado mesmo em GET', B('https://x/api/aberturaos/carrinho/9f3a/enviar', 'GET') !== null);
+caso('rede: carrinho em POST barrado', B('https://x/api/aberturaos/carrinho/9f3a', 'POST') !== null);
 
 // ── 6. forma de pagamento e oferta ──
 caso('DACC para', !T.formaDaVenda('dacc').ok && T.formaDaVenda('dacc').motivo === 'dacc');

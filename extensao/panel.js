@@ -529,6 +529,11 @@
   }
   async function redeLigar(posEtapa2) {
     if (S.tabId == null) return;
+    // Confere cada regex no próprio Chrome antes de ligar: se uma for recusada, a mensagem diz qual (e a condução não começa).
+    for (const r of TR.regrasRede(S.tabId, !!posEtapa2)) {
+      const ok = await chrome.declarativeNetRequest.isRegexSupported({ regex: r.condition.regexFilter, isCaseSensitive: false });
+      if (!ok.isSupported) throw new Error(`trava de rede ${r.id} recusada pelo Chrome (${ok.reason}) — avise o Claude Code`);
+    }
     await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: TR.idsRegras(), addRules: TR.regrasRede(S.tabId, !!posEtapa2) });
   }
   async function redeDesligar() {
