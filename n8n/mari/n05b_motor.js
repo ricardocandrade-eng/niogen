@@ -243,6 +243,9 @@ if (V4) {
     L.push(`cobertura_decisao (uso interno, nunca citar portal/sistema/consulta): ${cd}`
       + (unid.length ? ` | unidades_cadastradas: ${unid.join('; ')}` : '')
       + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
+    // 0138: crédito pela Mari — o sistema pede a autorização com botões e consulta sozinho; a Mari só usa o resultado (Bloco 9).
+    L.push(`credito (uso interno): ${conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
+      : conv.credito_autorizado_em ? 'autorizado — consultando' : conv.credito_recusado_em ? 'o cliente NÃO autorizou a consulta' : 'ainda não pedido'}`);
     L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)' : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
       + (dados.pedido_aberto_resposta ? ` | o cliente já respondeu: ${dados.pedido_aberto_resposta}` : ''));
   }
@@ -485,7 +488,11 @@ return [{ json: {
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei,
       // 12/11 (0133): decisão do operador e pedido Nio em andamento — o 7 · Extrair decide/anota com eles (portão P27/P28)
       cobertura_decisao: conv.cobertura_decisao, cobertura_detalhe: conv.cobertura_detalhe, nio_pedido_aberto: conv.nio_pedido_aberto,
-      nome_confiavel: conv.nome_confiavel },
+      nome_confiavel: conv.nome_confiavel,
+      // 0138: crédito pela Mari (autorização do titular gravada → n8n mari_credito)
+      credito_autorizado_em: conv.credito_autorizado_em, credito_autorizacao_frase: conv.credito_autorizacao_frase,
+      credito_recusado_em: conv.credito_recusado_em, credito_resultado: conv.credito_resultado, credito_formas: conv.credito_formas,
+      status: conv.status },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?
     // 10/11: frase nova do bloco ("As condições do seu plano:"); a antiga vale para as conversas de antes.

@@ -15,7 +15,9 @@
 # Credenciais (só IDs/nomes): "Supabase Nio (service role)" (as edges aceitam a service role só para viabilidade, duplicidade
 # e status — 0131), "MARI_TESTE_SECRET" (rota de teste). Chave do n8n: N8N_API_KEY_NIO.
 #
-# Uso: python n8n/deploy_mari_viabilidade.py [--dup] build | criar | estrutura | ativar | desativar | exportar | rodar
+#  "mari_credito" (a cada 1 min, 7h–23h — 0138): conversa com a autorização do titular gravada (mari_credito_pendentes) → crédito
+#   pelo operador (acao 'iniciar', autorizado, endereço padrão, celular do WhatsApp + e-mail do cliente) → mari_credito_gravar.
+# Uso: python n8n/deploy_mari_viabilidade.py [--dup | --cred] build | criar | estrutura | ativar | desativar | exportar | rodar
 #      (--dup = o workflow mari_duplicidade)
 
 import datetime
@@ -30,15 +32,17 @@ import deploy_mari as dm   # noqa: E402
 AQUI = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(AQUI)
 DUP = '--dup' in sys.argv
-if DUP:
-    sys.argv.remove('--dup')
-WF_NOME = 'mari_duplicidade' if DUP else 'mari_viabilidade'
+CRED = '--cred' in sys.argv          # 0138: crédito pela Mari, só com a autorização do titular gravada
+for _f in ('--dup', '--cred'):
+    if _f in sys.argv:
+        sys.argv.remove(_f)
+WF_NOME = 'mari_credito' if CRED else 'mari_duplicidade' if DUP else 'mari_viabilidade'
 ID_KEY = f'{WF_NOME}_workflow_id'
 EXPORT = os.path.join(AQUI, f'{WF_NOME}.json')
 ROTA_TESTE = f'niogen-{WF_NOME.replace("_", "-")}-teste'
 EDGE_CRED = f'{dm.SB}/functions/v1/credito-consulta'
 EDGE_DFV = f'{dm.SB}/functions/v1/dfv-consulta'
-MAX_VOLTAS = 12 if DUP else 10       # duplicidade passa pela Receita (Etapa 3): mais lenta
+MAX_VOLTAS = 18 if CRED else 12 if DUP else 10       # crédito vai até a Etapa 5 (~40 s + fila); duplicidade passa pela Receita
 
 JS_ESTADO = r"""
 // Cabeça do laço: chega do "3 · Pedir" (1ª vez) ou do "7 · Status" (voltas). Decide: fim (gravar) ou esperar mais.
@@ -89,11 +93,17 @@ def build(ids):
                            'combinator': 'and'}, 'options': {}}, x, y)
 
     add('1 · a cada 2 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
-        {'rule': {'interval': [{'field': 'cronExpression', 'expression': ('1-59/2' if DUP else '*/2') + ' 7-23 * * *'}]}}, 0, 0)
+        {'rule': {'interval': [{'field': 'cronExpression', 'expression': ('*/1' if CRED else '1-59/2' if DUP else '*/2') + ' 7-23 * * *'}]}}, 0, 0)
     add('1t · rota de teste', 'n8n-nodes-base.webhook', 2,
         {'httpMethod': 'POST', 'path': ROTA_TESTE, 'authentication': 'headerAuth', 'responseMode': 'lastNode', 'options': {}},
         0, 200, credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, f'niogen/{WF_NOME}/webhook')))
-    if DUP:
+    if CRED:
+        http('2 · Supabase pendentes', f'{dm.SB}/rest/v1/rpc/mari_credito_pendentes', '={{ JSON.stringify({ p_limite: 1 }) }}', 240, 100,
+             retryOnFail=True, maxTries=2, waitBetweenTries=5000)
+        http('3 · Pedir ao portal', EDGE_CRED,
+             "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email } }) }}",
+             480, 100, full=True, onError='continueRegularOutput')
+    elif DUP:
         http('2 · Supabase pendentes', f'{dm.SB}/rest/v1/rpc/mari_dup_pendentes', '={{ JSON.stringify({ p_limite: 1 }) }}', 240, 100,
              retryOnFail=True, maxTries=2, waitBetweenTries=5000)
         http('3 · Pedir ao portal', EDGE_CRED, "={{ JSON.stringify({ acao: 'duplicidade', cpf: $json.cpf }) }}", 480, 100,
@@ -110,8 +120,8 @@ def build(ids):
         webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, f'niogen/{WF_NOME}/espera')))
     http('7 · Status', EDGE_CRED, "={{ JSON.stringify({ acao: 'status', job_id: $json.job_id }) }}", 1380, 260, full=True,
          onError='continueRegularOutput')
-    if DUP:
-        http('8 · Supabase gravar', f'{dm.SB}/rest/v1/rpc/mari_dup_gravar',
+    if DUP or CRED:
+        http('8 · Supabase gravar', f'{dm.SB}/rest/v1/rpc/{"mari_credito_gravar" if CRED else "mari_dup_gravar"}',
              '={{ JSON.stringify({ p_conversa: $json.conversa_id, p_saida: $json.saida }) }}', 1160, 0,
              retryOnFail=True, maxTries=2, waitBetweenTries=5000)
     else:
@@ -128,15 +138,15 @@ def build(ids):
     ligacoes = [('1 · a cada 2 min', '2 · Supabase pendentes'), ('1t · rota de teste', '2 · Supabase pendentes'),
                 ('2 · Supabase pendentes', '3 · Pedir ao portal'), ('3 · Pedir ao portal', '4 · Estado'),
                 ('4 · Estado', '5 · Terminou?'), ('6 · Espera 12 s', '7 · Status'), ('7 · Status', '4 · Estado')]
-    if not DUP:
+    if not (DUP or CRED):
         ligacoes.append(('5c · DFV', '8 · Supabase gravar'))
     conns = {}
     for o, d in ligacoes:
         conns.setdefault(o, {'main': [[]]})['main'][0].append({'node': d, 'type': 'main', 'index': 0})
-    destino_fim = '8 · Supabase gravar' if DUP else '5b · Consultar o DFV?'
+    destino_fim = '8 · Supabase gravar' if (DUP or CRED) else '5b · Consultar o DFV?'
     conns['5 · Terminou?'] = {'main': [[{'node': destino_fim, 'type': 'main', 'index': 0}],
                                        [{'node': '6 · Espera 12 s', 'type': 'main', 'index': 0}]]}
-    if not DUP:   # operador ocupado: grava o "retry" sem DFV (a conversa volta para a fila)
+    if not (DUP or CRED):   # operador ocupado: grava o "retry" sem DFV (a conversa volta para a fila)
         conns['5b · Consultar o DFV?'] = {'main': [[{'node': '5c · DFV', 'type': 'main', 'index': 0}],
                                                    [{'node': '8 · Supabase gravar', 'type': 'main', 'index': 0}]]}
     settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'none',
@@ -212,5 +222,5 @@ if __name__ == '__main__':
     acoes = {'build': lambda: salvar(build(dm.ler_ids())), 'criar': cmd_criar, 'estrutura': cmd_estrutura,
              'ativar': cmd_ativar, 'desativar': lambda: cmd_ativar(False), 'exportar': cmd_exportar, 'rodar': cmd_rodar}
     if len(sys.argv) < 2 or sys.argv[1] not in acoes:
-        raise SystemExit('uso: [--dup] ' + ' | '.join(acoes))
+        raise SystemExit('uso: [--dup | --cred] ' + ' | '.join(acoes))
     acoes[sys.argv[1]]()

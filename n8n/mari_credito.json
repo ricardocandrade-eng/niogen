@@ -1,0 +1,348 @@
+{
+  "name": "mari_credito",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/1 7-23 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · a cada 2 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "8759f08a-976d-5926-8232-574e2833fd01"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-mari-credito-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "0333061c-a4b9-5dc6-97ce-06034a4248eb",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "3f7fdde4-4f3d-5c7c-92f0-7fe101eb810d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_credito_pendentes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_limite: 1 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Supabase pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "d2e086bd-2cf9-5822-a990-3e6ddda69fb0",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/functions/v1/credito-consulta",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email } }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "3 · Pedir ao portal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "1f357185-d816-5dd8-98cc-12557be61622",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cabeça do laço: chega do \"3 · Pedir\" (1ª vez) ou do \"7 · Status\" (voltas). Decide: fim (gravar) ou esperar mais.\nconst r = $input.first().json || {};\nconst alvo = $('2 · Supabase pendentes').first().json;\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst volta = $runIndex;\nlet fim = false, saida = null, erro = null, ocupado = false;\nif (sc && sc !== 200 && sc !== 202) {\n  fim = true;\n  if (sc === 429 || sc >= 500) { saida = { retry: true }; ocupado = true; }   // operador ocupado/fora: volta para a fila\n  else { saida = { resultado: 'erro', motivo: 'HTTP ' + sc + ' ' + String(b.error || '').slice(0, 150) }; erro = saida.motivo; }\n} else if (b.estado === 'pronto' || b.estado === 'erro') {\n  fim = true; saida = b;\n} else if (volta >= 18) {\n  fim = true; saida = { resultado: 'nao_classificado', motivo: 'o portal demorou mais que o n8n espera' };\n}\nreturn [{ json: { fim, ocupado, conversa_id: alvo.conversa_id, job_id: b.job_id || $json.job_id || null, saida, erro, volta } }];"
+      },
+      "name": "4 · Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "0f948352-d0de-51a4-a4ab-e5f1de8a8957"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "15ba7c69-88e5-5902-846b-b5b2b264c52c",
+              "leftValue": "={{ $json.fim }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "5 · Terminou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        100
+      ],
+      "id": "f067d736-e9f4-5d20-b634-0641f86f03f7"
+    },
+    {
+      "parameters": {
+        "amount": 12,
+        "unit": "seconds"
+      },
+      "name": "6 · Espera 12 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1160,
+        260
+      ],
+      "id": "4409472e-e7fb-5ac9-9d5f-40e6106ab5f4",
+      "webhookId": "1ba4e893-3439-544d-9c0e-dbcf1d357cab"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/functions/v1/credito-consulta",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ acao: 'status', job_id: $json.job_id }) }}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "7 · Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        260
+      ],
+      "id": "05466f98-1484-57c0-8c9b-985f6e915bf0",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_credito_gravar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversa_id, p_saida: $json.saida }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "8 · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        0
+      ],
+      "id": "e48cf3c3-5a41-5127-b506-5e5d0765385c",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "1 · a cada 2 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase pendentes": {
+      "main": [
+        [
+          {
+            "node": "3 · Pedir ao portal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Pedir ao portal": {
+      "main": [
+        [
+          {
+            "node": "4 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Estado": {
+      "main": [
+        [
+          {
+            "node": "5 · Terminou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Espera 12 s": {
+      "main": [
+        [
+          {
+            "node": "7 · Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Status": {
+      "main": [
+        [
+          {
+            "node": "4 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Terminou?": {
+      "main": [
+        [
+          {
+            "node": "8 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6 · Espera 12 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

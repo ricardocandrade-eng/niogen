@@ -84,3 +84,24 @@ process.exitCode = falhas ? 1 : 0;
   console.log((ok ? 'ok   ' : 'FALHOU ') + 'k · lista escrita vira carrossel | ' + (r.interativo && r.interativo.tipo) + ' | ' + r.texto.replace(/\n/g, ' ').slice(0, 90));
   if (!ok) process.exitCode = 1;
 }
+// 0138 — crédito pela Mari (12/11)
+{
+  const base = { forma_pagamento: null, etapa: 'coleta', dados: { nome: 'Eli Teste', cpf: '52998224725', telefone: '31999999999', email: 'a@b.com', referencia: 'x' } };
+  const c1 = rodar('Show!\n[BOTOES:pagamento]', base, 'Sim, está certinho');
+  const ok1 = c1.interativo && c1.interativo.chave === 'credito' && c1.interativo.botoes.length === 2;
+  console.log((ok1 ? 'ok   ' : 'FALHOU ') + 'C1 · e-mail confirmado → pede a autorização do crédito (no lugar do pagamento) | ' + (c1.interativo && c1.interativo.chave));
+  const pergunta = [{ papel: 'mari', texto: 'Antes da forma de pagamento: você autoriza a gente a consultar o seu CPF na análise de crédito da Nio?' }];
+  const c2 = rodar('Obrigada!\n[BOTOES:pagamento]', base, 'Sim, autorizo', pergunta);
+  const ok2 = c2.upd && c2.upd.dados && c2.upd.dados.credito_autorizado_em && c2.upd.dados.credito_autorizacao_frase === 'Sim, autorizo' && c2.interativo && c2.interativo.chave === 'pagamento';
+  console.log((ok2 ? 'ok   ' : 'FALHOU ') + 'C2 · "Sim, autorizo" grava quando + frase e segue para o pagamento | ' + (c2.interativo && c2.interativo.chave));
+  const c2b = rodar('Tudo bem!\n[BOTOES:pagamento]', base, 'Não autorizo', pergunta);
+  const ok2b = c2b.upd && c2b.upd.dados && c2b.upd.dados.credito_recusado_em && !c2b.upd.dados.credito_autorizado_em && c2b.interativo && c2b.interativo.chave === 'pagamento';
+  console.log((ok2b ? 'ok   ' : 'FALHOU ') + 'C2b · "Não autorizo" grava a recusa e segue para o pagamento');
+  const c3 = rodar('Perfeito!', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'aprovado_cartao', credito_autorizado_em: '2026-11-12T12:00:00Z' }), 'Sex, 13/11');
+  const ok3 = /liberou o seu pedido só no cartão/.test(c3.texto) && c3.upd.dados && c3.upd.dados.credito_cartao_avisado === true;
+  console.log((ok3 ? 'ok   ' : 'FALHOU ') + 'C3 · aprovado só no cartão + boleto → avisa (cartão ou outro titular)');
+  const c4 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_autorizado_em: '2026-11-12T12:00:00Z' }), 'Manhã');
+  const ok4 = c4.handoff && c4.handoff.motivo === 'pedido_humano' && /não aprovou o pedido neste CPF/.test(c4.texto);
+  console.log((ok4 ? 'ok   ' : 'FALHOU ') + 'C4 · negado → avisa e chama o time');
+  if (!(ok1 && ok2 && ok2b && ok3 && ok4)) process.exitCode = 1;
+}

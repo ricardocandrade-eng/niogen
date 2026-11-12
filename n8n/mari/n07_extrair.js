@@ -98,7 +98,7 @@ bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
   // A marca DE VERDADE ([BOTOES:pagamento|resumo|sim_nao]) também casa com este padrão (o /i) e era apagada aqui — o
   // pagamento nunca saía pela marca, só pelas travas. Conversa #5 (07/11 18h53): a Mari respondeu só "[BOTOES:pagamento]",
   // a marca sumiu, o texto ficou vazio e o cliente ficou sem resposta. A marca certa fica para o tag('BOTOES').
-  if (/^\s*(pagamento|resumo|sim_nao|data|turno)\s*$/.test(t)) return m;
+  if (/^\s*(pagamento|resumo|sim_nao|data|turno|credito)\s*$/.test(t)) return m;
   // Só pagamento e resumo: "Sim / Não" copiado caía em pergunta aberta (complemento + referência) — teste real 06/11.
   imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : null;
   return '';
@@ -558,6 +558,18 @@ if (V7 && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'se
   tags.handoff = handoffYaml;
   delete tags.carrossel; delete tags.botoes;
 }
+// 0138: a análise de crédito da Nio NEGOU (consulta autorizada) → a Mari avisa e chama o time (determinístico).
+{
+  const cc = ctx.conversa || {};
+  if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado' && !((cc.dados || {}).credito_negado_avisado)) {
+    texto = 'Uma informação importante: a análise de crédito da Nio não aprovou o pedido neste CPF 😕\n\n'
+      + 'Vou te passar pro nosso time, que vê com você as opções — por exemplo, outra pessoa da casa ser a titular do pedido.';
+    handoffYaml = { motivo_handoff: 'pedido_humano',
+      briefing_humano: 'Crédito NEGADO pela análise da Nio (consulta automática, autorizada pelo cliente). A Mari avisou. Ver com o cliente outra pessoa da casa como titular (com autorização dela).' };
+    tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+    dados.credito_negado_avisado = true;
+  }
+}
 const hy = handoffYaml || {};
 const nome = d.nome || hy.nome;
 const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');
@@ -716,6 +728,23 @@ const ag = tags.agendamento_retorno || null;
 const agm = ag && ag.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
 if (agm) upd.agendamento_retorno = `${agm[1]}T${agm[2]}:00-03:00`;
 
+// 0138 (regra 5 revista, 12/11): resposta à pergunta da autorização do crédito → grava quando e com qual frase (dados → gatilho
+// 0139 copia para as colunas que o n8n mari_credito lê).
+{
+  const cc = ctx.conversa || {};
+  const histA = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultMA = [...histA].reverse().find((h) => h.papel === 'mari');
+  const pediuAut = ultMA && /autoriza/.test(norm(ultMA.texto)) && /credito/.test(norm(ultMA.texto));
+  const msgOrig = String((prep.consolidado || {}).mensagem || '').trim();
+  const msgA = norm(msgOrig);
+  if (V7 && !posHandoff && pediuAut && !cc.credito_autorizado_em && !cc.credito_recusado_em && msgA) {
+    if (/^n(ao)?\b|nao autorizo|prefiro nao|nao quero/.test(msgA)) dados.credito_recusado_em = new Date().toISOString();
+    else if (/^(sim|s|pode|claro|ok|okay|autorizo|com certeza|beleza|blz|tudo bem)\b|\bautorizo\b|pode consultar/.test(msgA)) {
+      dados.credito_autorizado_em = new Date().toISOString();
+      dados.credito_autorizacao_frase = msgOrig.slice(0, 200);
+    }
+  }
+}
 if (Object.keys(dados).length) upd.dados = dados;
 
 // ── etapa (determinística, a partir do estado + atualizações) ──
@@ -788,6 +817,16 @@ if (motivo) {
       viavel: '✅ viável', sem_viabilidade: '❌ SEM viabilidade neste número — conferir o endereço e os 200 m (Cobertura)',
       nao_encontrado: '⚠️ unidade fora da lista do portal (Cobertura)' }[c.nio_viab_resultado];
     if (viabAuto) topo.splice(1, 0, `COBERTURA (consulta automática): ${viabAuto}`);
+    // 0138: crédito pela Mari (autorizado) — o resultado vai na nota; se chegar depois, vai uma nota no Chatwoot (0140).
+    {
+      const CR = { aprovado_todas: 'APROVADO — todas as formas', aprovado_parcial: `APROVADO — formas: ${(c.credito_formas || []).join(', ') || '?'}`,
+        aprovado_cartao: 'APROVADO SÓ NO CARTÃO (a Mari avisou; sem cartão, outra pessoa da casa como titular)', pendente: 'PENDENTE (a Nio responde em até 24 h)',
+        negado: 'NEGADO neste CPF', pedido_em_andamento: 'pedido Nio em andamento no CPF', nao_decidiu: 'o portal não decidiu — consultar na Cobertura' };
+      const autQuando = c.credito_autorizado_em || (dados.credito_autorizado_em);
+      if (c.credito_resultado) topo.push(`💳 CRÉDITO (consulta automática autorizada pelo cliente): ${CR[c.credito_resultado] || c.credito_resultado} — grave na ficha`);
+      else if (autQuando) topo.push(`💳 CRÉDITO: o cliente autorizou («${(c.credito_autorizacao_frase || dados.credito_autorizacao_frase || '').slice(0, 60)}») — consulta automática em andamento; o resultado chega como nota`);
+      else if (c.credito_recusado_em || dados.credito_recusado_em) topo.push('💳 CRÉDITO: o cliente NÃO autorizou a consulta pela Mari — pedir a autorização antes de consultar');
+    }
     // 0133: pedido Nio em andamento no CPF (Etapa 3 do portal) — recompra = multa R$ 500.
     if (c.nio_pedido_aberto === 'sim') {
       const resp = dados.pedido_aberto_resposta || (c.dados || {}).pedido_aberto_resposta;
@@ -1082,6 +1121,33 @@ if (V7 && !erro && !handoff && !m.forma_pagamento && !m.dados.email && cpfOk(m.d
   baloesFinais.push('Antes da forma de pagamento, me passa seu melhor e-mail?');
   texto = baloesFinais.join('\n\n');
 }
+// 0138: antes da forma de pagamento, a autorização do crédito (botões). Sem ela, segue o pagamento como antes.
+{
+  const cc = ctx.conversa || {};
+  const autorizou = cc.credito_autorizado_em || dados.credito_autorizado_em;
+  const recusou = cc.credito_recusado_em || dados.credito_recusado_em;
+  const perguntaPag = tags.botoes === 'pagamento' || baloesFinais.some((b) => frases(b).some(ehPerguntaPag));
+  if (V7 && !posHandoff && !erro && !handoff && !m.forma_pagamento && !autorizou && !recusou && perguntaPag
+    && cpfOk(m.dados.cpf) && m.dados.email && m.dados.email_confirmado !== false) {
+    baloesFinais = baloesFinais.map((b) => b.split('\n\n').map((p) => p.split(/(?<=[.!?])\s+/).filter((f) => !ehPerguntaPag(f)).join(' ').trim())
+      .filter((p) => p && !/desconto|^de: r\$|^por: r\$/.test(norm(p)) && !/💳/.test(p)).join('\n\n')).filter((b) => b.trim());
+    texto = baloesFinais.join('\n\n');
+    tags.botoes = 'credito';
+  }
+}
+// 0138: crédito aprovado SÓ NO CARTÃO e o cliente não está no cartão → avisa uma vez (cartão ou outro titular da casa).
+{
+  const cc = ctx.conversa || {};
+  const fp = upd.forma_pagamento || m.forma_pagamento;
+  if (V7 && !posHandoff && !erro && !handoff && cc.credito_resultado === 'aprovado_cartao' && fp !== 'cartao'
+    && !((cc.dados || {}).credito_cartao_avisado) && !dados.credito_cartao_avisado) {
+    baloesFinais = ['Uma informação importante: a análise de crédito da Nio liberou o seu pedido só no cartão de crédito. '
+      + 'Se preferir, seguimos no cartão — e, se você não usa cartão, outra pessoa da casa pode ser a titular do pedido.', ...baloesFinais];
+    texto = baloesFinais.join('\n\n');
+    dados.credito_cartao_avisado = true;
+    upd.dados = { ...(upd.dados || {}), credito_cartao_avisado: true };
+  }
+}
 // 12/11 (portão P28, determinístico): há pedido Nio em andamento no CPF e a Mari ainda não perguntou → a pergunta fixa sai
 // nesta resposta (as outras perguntas do modelo ficam para depois: uma pergunta por vez). O atendimento segue.
 {
@@ -1155,6 +1221,7 @@ if (V7 && !erro && tags.botoes) {
     sim_nao: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }],
     resumo: [{ id: 'resumo:ok', title: 'Sim, está certo' }, { id: 'resumo:corrigir', title: 'Corrigir' }],
     data: datasInstalacao(),
+    credito: [{ id: 'cred:sim', title: 'Sim, autorizo' }, { id: 'cred:nao', title: 'Não autorizo' }],
     turno: [{ id: 'turno:manha', title: 'Manhã' }, { id: 'turno:tarde', title: 'Tarde' }, { id: 'turno:qualquer', title: 'Tanto faz' }],
     pagamento: [{ id: 'pg:cartao', title: 'Cartão de crédito' }, { id: 'pg:boleto', title: 'Boleto bancário' }, { id: 'pg:debito', title: 'Débito automático' }],
   }[chave];
@@ -1166,6 +1233,8 @@ if (V7 && !erro && tags.botoes) {
       corpo = pl && !ctx.btu && pl.preco_cartao != null && txts.pagamento_corpo
         ? txts.pagamento_corpo.replace('{de}', moeda(pl.preco)).replace('{por}', moeda(pl.preco_cartao))
         : (txts.pagamento_corpo_sem_desconto || 'Como você quer pagar?');
+    } else if (chave === 'credito') {
+      corpo = txts.credito_autorizacao_corpo || 'Antes da forma de pagamento: você autoriza a gente a consultar o seu CPF na análise de crédito da Nio? É ela que diz quais formas de pagamento ficam liberadas pro seu pedido.';
     } else if (chave === 'data') {
       corpo = txts.instalacao_data_corpo || 'Qual destas datas você prefere para a instalação? É só a sua preferência: o nosso time confirma a data pela agenda da Nio 😊';
     } else if (chave === 'turno') {

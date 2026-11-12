@@ -46,13 +46,14 @@ Deno.serve(async (req) => {
     const quem = createClient(url, chave, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
     const [{ data: perfilUsuario, error: ePerfil }, { data: u }, { data: servico }] =
       await Promise.all([quem.rpc('meu_perfil'), quem.auth.getUser(), quem.rpc('sou_service_role')]);
-    // O n8n (mari_viabilidade) só pode viabilidade, duplicidade e status (nunca crédito nem print).
+    // O n8n só pode viabilidade, duplicidade, status e — 0138 (regra 5 revista, 12/11) — o crédito da Mari, que ele só pede
+    // depois de a autorização do titular estar gravada na conversa (mari_credito_pendentes). Print nunca.
     const perfil = servico === true ? 'n8n' : perfilUsuario;
     usuario = servico === true ? 'n8n' : (u?.user?.id?.slice(0, 8) ?? '?');
     if (servico !== true && (ePerfil || !perfil)) { log('403 sem login'); return json({ error: 'Entre no NIOGEN para consultar.' }, 403); }
     const b = await req.json().catch(() => ({}));
     acao = String(b.acao ?? '');
-    if (servico === true && !['viabilidade', 'status', 'duplicidade'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
+    if (servico === true && !['viabilidade', 'status', 'duplicidade', 'iniciar'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
     if (['iniciar', 'print', 'duplicidade'].includes(acao) && servico !== true && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');
