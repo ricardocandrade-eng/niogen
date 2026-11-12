@@ -247,14 +247,14 @@
     ]);
     const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
     const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
-    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto] = await Promise.all([
+    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome] = await Promise.all([
       NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, funil_etapa, funil_destino, funil_detalhe, funil_alerta').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -272,6 +272,7 @@
       bo ? opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle()) : null,
       bo ? (cicloCache !== undefined ? cicloCache : opc(NG.sb.from('config_regras').select('valor').eq('chave', 'comissao_ciclo_regra').maybeSingle())) : null,
       NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
+      NG.funilNomes(),    // 0147: nomes de etapa e destino (cache da página)
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
@@ -350,6 +351,7 @@
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
       convInfo: (rc.data || [])[0] || null,   // 0082: dono no Chatwoot (Assumir só aparece sem dono)
+      fnome,                                  // 0147: nomes do funil
       chatwoot: NG.linkChatwoot(((rc.data || [])[0] || {}).chatwoot_conversation_id),
       contatos: rk.data || [],
       usuarios: ru,
@@ -1270,6 +1272,17 @@
   // 12/11 (Ricardo: "na Live a conversa volta para o topo o tempo todo"): o redesenho tira o nó da conversa do DOM e
   // o devolve — e o navegador zera a rolagem de quem sai do DOM. Lê a rolagem ANTES do innerHTML e devolve depois:
   // quem estava no fim continua no fim (inclusive com mensagem nova); quem subiu para ler fica onde estava.
+  // 13/11 (Ricardo: "o destino também na ficha da venda"): destino e etapa da conversa que gerou a venda (0147).
+  function linhaFunilVenda() {
+    const cv = d && d.convInfo;
+    if (!cv || !cv.funil_etapa) return '';
+    const fn = d.fnome || { etapa: {}, destino: {} };
+    const dest = cv.funil_destino && cv.funil_destino !== 'em_andamento'
+      ? `${cv.funil_destino === 'instalada' ? '✅' : '⛔'} Destino: <b>${esc(fn.destino[cv.funil_destino] || cv.funil_destino)}</b>${cv.funil_detalhe ? ` (${esc(cv.funil_detalhe)})` : ''} · `
+      : 'Destino: <b>em andamento</b> · ';
+    return `<div class="f-funil-linha">${dest}Etapa: <b>${esc(fn.etapa[cv.funil_etapa] || cv.funil_etapa)}</b></div>`
+      + (cv.funil_alerta ? `<div class="f-funil-linha warn">⚠ ${esc(NG.FUNIL_ALERTA[cv.funil_alerta] || cv.funil_alerta)}</div>` : '');
+  }
   function guardarRolagemConv(vivo) {
     const m = vivo && vivo.querySelector('[data-msgs]');
     if (!m) return () => {};
@@ -1826,6 +1839,7 @@
       ${painelConversa()}
       ${cabecalho(v)}
       <div class="f-corpo"><div class="f-col-a">
+        ${linhaFunilVenda()}
         ${etapa === 0 ? `<div class="f-saida-linha">Saída · ${esc(v.motivo_saida || 'sem motivo')}${v.interesse_futuro_em ? ` · volta ${esc(NG.fmtDiaISO(v.interesse_futuro_em))}` : ''}</div>` : ''}
         ${regua(passosVenda(v))}
         ${faixaProximo(v, pr)}
