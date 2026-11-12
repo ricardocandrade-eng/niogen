@@ -82,10 +82,36 @@ Se não for nenhum dos quatro, não se constrói — vira doc de ideia e espera.
 - Relatórios da Nio ficam em `referencia-nio/` (exemplos) e, quando reais, **só no Supabase** — nunca copiados para outra pasta ou projeto.
 - Convenção de nome: `nome_do_arquivo_DDMMAA_HHMM.ext`; todo arquivo gerado abre com o bloco de cabeçalho (projeto, data/hora, resumo).
 
-### 5. Segurança, sem exceção
-Nenhum segredo em arquivo versionado, HTML ou chat. Token da WABA Nio (system user `Nio_API`), service role do Supabase Nio, token do Meta Ads Nio,
-chave Claude: `.env` da VPS, credencial do n8n, gerenciador de senhas. Chave exposta = rotacionar na hora. O app Meta "Renata Digital" serve as duas
-WABAs: **webhook da Nio sempre por override da WABA `1419511943295487`, nunca no nível do app**. Base de clientes da Nio não vai para chip comum/Evolution. **Portal PAP (05/11, prompt 16):** a Nio não tem API e autorizou o login BO (TT837725) para a viabilidade; o login automático por navegador (Playwright) é permitido **só numa VPS no Brasil**, com as chamadas feitas **dentro da página** do portal pela função do próprio front — nunca reproduzir o sufixo cifrado do front nem contornar o bloqueio de IP. Usuário e senha só no `.env` da VPS do portal; o token não sai do navegador do serviço (nunca em arquivo, repo, Drive, `config_links`, chat ou log). Só nível A (viabilidade); nível C (pedido, crédito, biometria, OS) recusado no código. **Exceção (Ricardo, 06/11 21h19):** a extensão "NIOGEN no Portal" (prompt 28) pode **preencher** campos do Novo Pedido na sessão do humano logado — nunca clica em botão do portal, não chama a API, não preenche crédito/oferta/pagamento/biometria/OS (só destaca); o humano confere e clica em tudo. **Exceção (Ricardo, 10/11 11h02):** no **Histórico de Pedidos** a extensão pode clicar **só nos filtros** (campos, opções, datas, "Filtrar", paginação) **para ler** a tabela e mandar tipo/status ao NIOGEN — lista branca no código; nunca Detalhar, Carregar, Salvar, Atualizar Pedido, Novo Pedido, Funil ou Tramitações. **GED360 / BrPronto (Ricardo, 10/11 12h39):** o robô do n8n pode usar um login próprio — **TT837722** desde 10/11 15h (o GED360 não aceita sessões simultâneas; o TT837725 é da Joysse) — para **ler** o Relatório Detalhado (CSV) e trazer o status da biometria — senha só na credencial do n8n/`.env`; nenhuma outra tela; sem contornar bloqueio de IP. **Crédito (Rogério, 11/11; Ricardo 11/11 16h41):** o `niogen-portal` pode passar as Etapas 1–4 do Novo Pedido e **ler** a Etapa 5 para saber o crédito do CPF — nunca Avançar na 5, nunca Salvar interesse, nunca Resumo/OS/biometria; travas de clique e de rede no código (`portal/credito.py`, testadas em `portal/testar_travas.py`); só admin/backoffice; titular autoriza; marca sempre o aceite de comunicação por WhatsApp (o portal exige). **Exceção (Ricardo, 03/11):** usuário e as 2 senhas do painel DFV Nio (filtro do relatório, não uma conta) ficam no Supabase Nio, em `config_links.acesso`, visíveis só para usuário logado no NIOGEN — gravadas pelo CLI, **nunca** em arquivo versionado, HTML, Drive ou INFRA.
+### 5. Segurança e robôs nos sistemas da Nio (rev. 12/11/2026)
+**Segredos.** Nenhum segredo em arquivo versionado, HTML, Drive, cartão do Trello, chat ou log. Token da WABA Nio (system user `Nio_API`), service role do Supabase Nio,
+token do Meta Ads Nio, chave Claude e logins da Nio (portal PAP, GED360): `.env` da VPS, credencial do n8n, gerenciador de senhas. Chave exposta = rotacionar na hora.
+Única exceção: usuário e as 2 senhas do painel DFV (filtro do relatório, não uma conta) ficam em `config_links.acesso` no Supabase Nio, gravados pelo CLI e visíveis só
+para usuário logado no NIOGEN (Ricardo, 03/11) — nunca em arquivo versionado, HTML, Drive ou INFRA.
+
+**Meta e WhatsApp.** O app Meta "Renata Digital" serve as duas WABAs: **webhook da Nio sempre por override da WABA `1419511943295487`, nunca no nível do app**.
+Base de clientes da Nio não vai para chip comum/Evolution.
+
+**Robôs nos sistemas da Nio** (operador `niogen-portal`, operador DFV, robô do GED360, extensão "NIOGEN no Portal"). A Nio não tem API; vale para todos:
+- **Pela página, como gente:** navegador real e chamadas feitas **dentro da página** pela função do próprio front. Nunca reproduzir o sufixo cifrado do front, nunca
+  contornar bloqueio de IP nem controle antifraude da Nio (ex.: trocar de celular para driblar o limite de repetição do mesmo número).
+- **Onde roda:** navegador automático no portal PAP só com IP do Brasil (VPS `niogen-portal-br` ou o PC do Ricardo).
+- **Login:** um por robô sempre que a Nio der (GED360 = TT837722; portal PAP = TT837725, dividido com a Joysse até sair um próprio — não rodar o operador com ela no
+  meio de um pedido). Senha só no `.env`/credencial do n8n; o token não sai do navegador do serviço (nunca em arquivo, repo, Drive, `config_links`, chat ou log).
+- **Travas no código, com teste:** lista branca do que se clica e bloqueio de rede do que não pode (`portal/credito.py` + `portal/testar_travas.py`). Etapa nova
+  ganha trava e teste antes de rodar.
+- **Quem dispara:** a consulta de crédito sai **sozinha pela Mari** (pelo operador `niogen-portal`) assim que ela tem o CPF e o e-mail confirmado, **sem perguntar** ao cliente (Ricardo, 12/11/2026 ~10h: "nem o WhatsApp oficial da Nio pede autorização; isso pode travar o cliente") — a linha da LGPD não muda; negado → a Mari oferece o CPF de um parente/familiar como titular (1 nova consulta). Admin/backoffice também consultam pela tela. O clique que grava o pedido continua só do humano admin/backoffice. Aceite de comunicação por WhatsApp sempre marcado (o portal exige).
+
+**Novo Pedido: o robô vai até o fim, o humano dá o clique que grava (Ricardo, 12/11/2026 00h47).** O robô — operador ou extensão — pode percorrer **todas as etapas**
+(viabilidade, cadastro, contato, crédito, oferta e forma de pagamento **da venda registrada**) e chegar ao Resumo com tudo preenchido, como na Consulta de cobertura,
+e **para sem salvar o pedido**. **Só o humano clica** no que grava o pedido ou manda algo ao cliente: confirmar/enviar o Resumo (checkout), Abrir OS, envio da
+biometria, link de pagamento, agendamento. Se o portal mandar algo ao cliente antes do Resumo (um "Continuar" que dispara a biometria, por exemplo), o robô para ali.
+Nunca, em etapa nenhuma: **Salvar interesse**, oferta ou forma de pagamento diferente da venda, dados de cartão ou de conta (DACC) — esses o humano digita.
+O pedido que vale é o feito pela extensão na sessão do humano logado, que confere e clica; o operador na VPS (sem humano na tela) serve de consulta e larga o rascunho.
+Uso do robô autorizado pelo Rogério (Nio) — Ricardo, 12/11/2026 00h52. Pedido errado, sem consentimento ou recompra (estorno, multa de R$ 500 na matrícula): risco assumido pelo Ricardo em 11/11/2026.
+
+**Leitura de acompanhamento.** No **Histórico de Pedidos** a extensão clica só nos filtros (campos, opções, datas, "Filtrar", paginação) para ler tipo/status —
+nunca Detalhar, Carregar, Salvar, Atualizar Pedido, Funil ou Tramitações. No **GED360/BrPronto** o robô do n8n só lê o Relatório Detalhado (CSV) da biometria.
+No **painel DFV** o operador só consulta.
 
 ### 6. Deploy
 Front: Claude Code publica no clone → push → hospedagem (Cloudflare Pages ou GitHub Pages — decidir, INFRA). **Sempre bumpar o `CACHE` do `sw.js`** se houver.
