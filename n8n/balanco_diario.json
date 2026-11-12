@@ -1,0 +1,352 @@
+{
+  "name": "balanco_diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "45 7 * * 1-6"
+            }
+          ]
+        }
+      },
+      "name": "1 · 7h45 seg–sáb",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "dd384149-dba1-5a23-9dd1-9a39fd16a9b8",
+      "notes": "Antes do resumo das 8h, que avisa no WhatsApp quantas respostas sugeridas há no Painel.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-balanco-diario-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "e9a5ab7c-10b1-529d-af0d-94a86458a39b",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "dda70b92-3fbc-566d-8cf0-776b666d9821"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/balanco_diario_entrada",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Supabase entrada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "d5433778-ecf1-5cab-b54e-dcc5aebf7708",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const e = $input.first().json;\nconst conversas = e.conversas || [];\nconst pedido = {\n  model: \"claude-opus-5-5\", max_tokens: 16000,\n  fallbacks: 'default',\n  output_config: { effort: 'medium', format: { type: 'json_schema', schema: {\"type\": \"object\", \"additionalProperties\": false, \"required\": [\"resumo\", \"itens\"], \"properties\": {\"resumo\": {\"type\": \"string\"}, \"itens\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"additionalProperties\": false, \"required\": [\"conversa_id\", \"nome\", \"urgencia\", \"situacao\", \"acao\", \"resposta_sugerida\"], \"properties\": {\"conversa_id\": {\"type\": \"string\"}, \"nome\": {\"type\": \"string\"}, \"urgencia\": {\"type\": \"string\", \"enum\": [\"alta\", \"media\", \"baixa\"]}, \"situacao\": {\"type\": \"string\"}, \"acao\": {\"type\": \"string\"}, \"resposta_sugerida\": {\"type\": \"string\"}}}}}} } },\n  system: \"Você ajuda o backoffice de uma revenda credenciada (PAP) da Nio Internet a não deixar cliente esperando.\\nRecebe, em JSON, as conversas de WhatsApp em que o cliente mandou a última mensagem e ninguém do time respondeu há horas.\\nPara cada conversa, leia as últimas falas e o resumo da Mari (a assistente de IA que atende primeiro) e devolva:\\n- situacao: o que está acontecendo, em uma frase curta (quem é, o que quer, onde travou).\\n- urgencia: \\\"alta\\\" (venda em risco, cliente irritado ou esperando muito), \\\"media\\\" ou \\\"baixa\\\" (só agradeceu, só confirmou).\\n- acao: o que o time deve fazer agora, em uma frase (ex.: consultar crédito com outro CPF, ouvir os áudios, confirmar o turno).\\n- resposta_sugerida: a mensagem pronta para colar no WhatsApp, em português do Brasil, curta, humana, sem formalidade excessiva,\\n  no máximo um emoji. Peça desculpas pela demora quando a espera passar de 2 horas.\\n\\nRegras que a resposta NUNCA pode quebrar (contrato com a Nio):\\n- Nunca ofereça desconto, brinde, prazo ou benefício. Só cite plano e valor que já apareceram na conversa; na dúvida, não cite valor.\\n- Nunca prometa data ou horário de instalação: diga que o time confirma a data assim que a Nio liberar a agenda.\\n- A venda é 100 % remota: o pedido é aberto no sistema da Nio e a própria Nio manda o link da biometria por WhatsApp e e-mail.\\n- Cliente que já é Nio e quer suporte ou reclamar: somos revenda, não o suporte. Indique o App Nio, o atendimento 0800 001 1000,\\n  o WhatsApp oficial (21) 3605-1000 ou a Ouvidoria 0800 001 0646.\\n- Crédito aprovado \\\"só no cartão\\\" e cliente sem cartão: a saída possível é outra pessoa da casa ser a titular (com autorização dela).\\n- Não invente dado que não está na conversa. Se faltar informação para responder, a resposta pede essa informação ao cliente.\\n- [MIDIA:audio] é um áudio que você não ouviu: diga na ação que o time precisa ouvir antes de responder.\\n\\nTambém devolva resumo: 1 ou 2 frases para o dono da empresa, com os números do dia e o que mais pede atenção.\\nOrdene os itens da maior para a menor urgência.\",\n  messages: [{ role: 'user', content: 'Agora: ' + e.agora + '. Parada = cliente esperando há mais de ' + e.horas_parada + ' h.\\n'\n    + 'Números: ' + JSON.stringify(e.numeros) + '\\n\\nConversas paradas:\\n' + JSON.stringify(conversas) }],\n};\nreturn [{ json: { tem: conversas.length > 0, n: conversas.length, numeros: e.numeros, pedido } }];"
+      },
+      "name": "3 · Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "30e163ef-c54f-5c04-827f-0315a66ea3ba"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e8ceba6e-f4a8-5de0-ba73-367d4043e08b",
+              "leftValue": "={{ $json.tem }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "4 · Tem conversa parada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "7c2c6613-95ff-5bee-8ea6-82c84ce3f1a5"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedido) }}",
+        "options": {
+          "timeout": 240000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "5 · Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "4818a012-06de-5d0c-bddb-bef0b78df11a",
+      "credentials": {
+        "anthropicApi": {
+          "id": "7TR9FOfOVcCzLYi0",
+          "name": "Claude API Nio"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 10000,
+      "notes": "Opus 5.5, effort medium, saída JSON pelo schema. Thinking não é desligável neste modelo: o texto é o bloco type=text.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $('3 · Montar pedido').first().json;\nconst r = $input.first().json || {};\nlet resumo = null, itens = [], erro = null;\nif (r.error) erro = 'API do Claude: ' + (r.error.message || JSON.stringify(r.error)).slice(0, 300);\nelse if (r.stop_reason === 'refusal') erro = 'Claude recusou (' + ((r.stop_details || {}).category || 'sem categoria') + ')';\nelse if (r.stop_reason === 'max_tokens') erro = 'resposta cortada (max_tokens)';\nelse {\n  const t = (r.content || []).find((b) => b.type === 'text');\n  try { const j = JSON.parse(t ? t.text : ''); resumo = j.resumo; itens = j.itens || []; }\n  catch (x) { erro = 'JSON inválido na resposta do Claude'; }\n}\nconst u = r.usage || {};\nreturn [{ json: { linha: { modelo: r.model || null, tokens_in: u.input_tokens || null, tokens_out: u.output_tokens || null,\n  resumo, itens, erro } } }];"
+      },
+      "name": "6 · Ler resposta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "1f9cbd80-7d10-5f79-882f-2c870387215c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const m = $input.first().json;\nconst n = m.numeros || {};\nreturn [{ json: { linha: { modelo: null, tokens_in: null, tokens_out: null, itens: [], erro: null,\n  resumo: 'Nenhuma conversa parada. Ontem: ' + (n.leads_ontem ?? '?') + ' lead(s); Mari respondeu ' + (n.mari_respostas_24h ?? '?')\n    + ' vez(es) em 24 h (média ' + (n.mari_latencia_media_s ?? '?') + ' s).' } } }];"
+      },
+      "name": "6b · Sem conversa parada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        220
+      ],
+      "id": "e050718f-c530-527c-a28f-ae52749c102f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/balanco_diario",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.linha) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "7 · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "40f08848-dea3-5ed7-8146-080ac9f2d3f3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    }
+  ],
+  "connections": {
+    "1 · 7h45 seg–sáb": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase entrada": {
+      "main": [
+        [
+          {
+            "node": "3 · Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "4 · Tem conversa parada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Claude": {
+      "main": [
+        [
+          {
+            "node": "6 · Ler resposta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Ler resposta": {
+      "main": [
+        [
+          {
+            "node": "7 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6b · Sem conversa parada": {
+      "main": [
+        [
+          {
+            "node": "7 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Tem conversa parada?": {
+      "main": [
+        [
+          {
+            "node": "5 · Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6b · Sem conversa parada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

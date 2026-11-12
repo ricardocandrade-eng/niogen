@@ -1857,3 +1857,8 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .mv-op-dock .opc-selo, .mv-op-dock .opc-oque, .mv-op-dock .opc-bt { grid-column: 1 / -1; }
 .mv-op-dock .opc-bt { justify-content: flex-start; }
 .mv-op-dock .opc-oque small { white-space: normal; }
+/* 0127 · balanço das conversas paradas (Painel) */
+.balanco .bal-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--border); }
+.balanco .bal-item .q-linha { align-items: flex-start; gap: 8px; }
+.balanco .bal-item .mv-dot { margin-right: 6px; }
+.balanco .bal-resp { flex: 1 1 auto; margin: 0; }

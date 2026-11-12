@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-12">
+<link rel="stylesheet" href="assets/app.css?v=121126-4">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=111126-12"></script>
@@ -79,6 +79,7 @@
   const ehAdmin = eu.perfil === 'admin';
   let funil = null;   // 0087: funil_mes()
   let jor = { lista: [], porVenda: {} };   // 0090: v_jornada (a regra única de "precisa de ação")
+  let balanco;   // 0127: última linha de balanco_diario (n8n balanco_diario, 7h45, Claude) — undefined = carregando
   let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
@@ -120,12 +121,14 @@
   }
   async function carregarExtras() {
     if (veMari) { carregarAlarmes(); carregarOportunidades(); }
-    const [rz, rmari, rp, rres] = await Promise.all([
+    const [rz, rmari, rp, rres, rbal] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
       veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
       ehAdmin ? NG.sb.rpc('resumo_diario', { p_dia: NG.somaDias(NG.diaSP(), -1) }) : Promise.resolve(null),
+      veMari ? NG.sb.from('balanco_diario').select('dia, criado_em, resumo, itens, erro').order('criado_em', { ascending: false }).limit(1).maybeSingle() : Promise.resolve(null),
     ]);
+    balanco = !rbal ? null : rbal.error ? { erro: NG.msgErro(rbal.error) } : (rbal.data || false);
     base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
     mari = rmari || { lista: [] };
     portal = rp && !rp.error ? rp.data : null;
@@ -266,6 +269,26 @@
           : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Às 8h (seg–sáb) este resumo chega no seu WhatsApp.</span>`}
       </section>`);
     }
+    // 0127: balanço das conversas paradas (Claude, 7h45 seg–sáb) — situação, ação e resposta pronta para copiar.
+    if (veMari && balanco !== null) {
+      const b = balanco;
+      const itensB = b && !b.erro ? (b.itens || []) : [];
+      const COR_U = { alta: 'var(--bad-dot)', media: 'var(--warn-dot)', baixa: 'var(--muted)' };
+      const quandoB = b && b.criado_em ? `${NG.diaSP(new Date(b.criado_em)) === NG.diaSP() ? 'hoje' : NG.fmtData(b.criado_em).slice(0, 5)} às ${NG.fmtHora(new Date(b.criado_em))}` : '';
+      blocos.push(`<section class="painel bloco-curto resumo-ontem balanco">
+        <div class="q-linha"><h2 title="Escrito pelo Claude às 7h45 (seg–sáb) com as conversas em que o cliente espera o time há mais de 2 h. Confira antes de mandar: é sugestão.">Balanço das conversas paradas</h2><span class="muted">${esc(quandoB)}</span></div>
+        ${b === undefined ? '<span class="nota-campo">Carregando…</span>' : !b ? '<span class="nota-campo">O primeiro balanço sai às 7h45 (seg–sáb).</span>'
+          : b.erro ? `<span class="nota-campo">O balanço não saiu: ${esc(b.erro)}</span>`
+          : `${b.resumo ? `<p class="resumo-txt">${esc(b.resumo)}</p>` : ''}
+            ${itensB.map((i, k) => `<div class="bal-item">
+              <div class="q-linha"><span><i class="mv-dot" style="--c:${COR_U[i.urgencia] || 'var(--muted)'}" title="urgência ${esc(i.urgencia)}"></i><b>${esc(i.nome)}</b> · ${esc(i.situacao)}</span>
+                <a class="btn btn-sm" href="conversas.html#c=${esc(i.conversa_id)}">Abrir</a></div>
+              <span class="nota-campo">Fazer: ${esc(i.acao)}</span>
+              <div class="q-linha"><pre class="resumo-txt bal-resp">${esc(i.resposta_sugerida)}</pre><button type="button" class="btn btn-sm" data-bal-copiar="${k}">Copiar</button></div>
+            </div>`).join('')}
+            <span class="nota-campo">Sugestão do Claude: confira (áudio, valor, data) antes de mandar.</span>`}
+      </section>`);
+    }
     // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
     const porEtapa = Object.fromEntries(ETAPAS.map((e) => [e.id, 0]));
     vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v).id; if (e in porEtapa) porEtapa[e] += 1; });
@@ -322,6 +345,11 @@
     if (veMari) blocos.unshift('<section class="painel bloco-curto" id="and-card"><span class="nota-campo">Carregando o andamento na Nio…</span></section>');
     document.getElementById('blocos').innerHTML = blocos.join('');
     if (alarmes) renderAlarmes();
+    document.querySelectorAll('[data-bal-copiar]').forEach((bt) => { bt.onclick = async () => {
+      const i = ((balanco && balanco.itens) || [])[Number(bt.dataset.balCopiar)];
+      try { await navigator.clipboard.writeText(i.resposta_sugerida); NG.toast('Resposta copiada ✓', 'ok'); }
+      catch (e) { NG.toast('Não deu para copiar — selecione o texto e copie à mão', 'bad'); }
+    }; });
     const bc = document.getElementById('copiar-resumo');
     if (bc) bc.onclick = async () => {
       try { await navigator.clipboard.writeText(resumo.texto); NG.toast('Resumo copiado ✓', 'ok'); }
