@@ -669,7 +669,9 @@ def checar_sem_segredo(wf):
     for padrao in (r'sk-ant-', r'sb_secret_', r'eyJhbGciOi', r'service_role"\s*:\s*"ey'):
         if re.search(padrao, s):
             raise SystemExit(f'export contém algo com cara de segredo ({padrao}) — abortado.')
-    if re.search(r'dharma', s, re.I):
+    # 12/11: o domínio do NIOGEN (niogen.dharmatelecom.com.br, links da nota interna do 9d — commit ad102b7) não é o nome da
+    # revenda falado ao cliente; só ele é tirado antes da checagem. Qualquer outro "Dharma" segue abortando.
+    if re.search(r'dharma', re.sub(r'niogen\.dharmatelecom\.com\.br', '', s, flags=re.I), re.I):
         raise SystemExit('export contém "Dharma" — abortado.')
     if 'zfunugupwvktcggvicuk' in s or '159121' in s:
         raise SystemExit('export contém ID da Vero (Supabase/Chatwoot) — abortado.')

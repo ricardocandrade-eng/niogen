@@ -41,12 +41,18 @@ Deno.serve(async (req) => {
   try {
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const quem = createClient(url, anon, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
-    const [{ data: perfil, error: ePerfil }, { data: u }] = await Promise.all([quem.rpc('meu_perfil'), quem.auth.getUser()]);
-    usuario = u?.user?.id?.slice(0, 8) ?? '?';
-    if (ePerfil || !perfil) { log('403 sem login'); return json({ error: 'Entre no NIOGEN para consultar.' }, 403); }
+    // 12/11 (0131): a chave do pedido segue adiante — com a do n8n (service role), o banco responde sou_service_role() = true.
+    const chave = req.headers.get('apikey') || anon;
+    const quem = createClient(url, chave, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+    const [{ data: perfilUsuario, error: ePerfil }, { data: u }, { data: servico }] =
+      await Promise.all([quem.rpc('meu_perfil'), quem.auth.getUser(), quem.rpc('sou_service_role')]);
+    // O n8n mari_viabilidade só pode viabilidade e status (nunca crédito nem print).
+    const perfil = servico === true ? 'n8n' : perfilUsuario;
+    usuario = servico === true ? 'n8n' : (u?.user?.id?.slice(0, 8) ?? '?');
+    if (servico !== true && (ePerfil || !perfil)) { log('403 sem login'); return json({ error: 'Entre no NIOGEN para consultar.' }, 403); }
     const b = await req.json().catch(() => ({}));
     acao = String(b.acao ?? '');
+    if (servico === true && !['viabilidade', 'status'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
     if (['iniciar', 'print'].includes(acao) && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');

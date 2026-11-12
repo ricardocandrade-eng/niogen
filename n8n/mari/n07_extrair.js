@@ -422,6 +422,17 @@ if (!erroApi) {
   if (v.length) {
     erro = { no: '7r · Extrair (correção)', mensagem: `filtro de saída: ${v.join('; ')}`, payload: { texto_bloqueado: texto, prompt: ctx.promptVersao } };
     texto = 'Só um instante, vou confirmar essa informação com nosso time e já te respondo 😊';
+    // 12/11 (achado 4 da auditoria — Cristiano, 10/11 22h45): esta frase promete o time, mas sem [HANDOFF] ninguém era
+    // chamado — o cliente esperou até a cadência do dia seguinte. Agora a promessa vira handoff pedido_humano de verdade
+    // (na janela pós-handoff o bloco de lá zera o handoff: a venda já está com o time).
+    if (!handoffYaml) {
+      handoffYaml = {
+        motivo_handoff: 'pedido_humano',
+        briefing_humano: `A Mari travou no filtro de saída (${v.join('; ').slice(0, 220)}) e disse ao cliente que o time confirma e já responde. `
+          + `Responder a última mensagem dele: «${String((prep.consolidado || {}).mensagem || '').slice(0, 200)}».`,
+      };
+      tags.handoff = handoffYaml;
+    }
   }
   if (tentativa === 2) {
     try { violacoesCorrigidas = $('7 · Extrair').first().json.violacoes || null; } catch (e) { violacoesCorrigidas = null; }
@@ -726,6 +737,19 @@ if (motivo) {
       dd.rua_informada ? `Rua: o cliente escreveu «${dd.rua_informada}»${dd.rua_confirmada ? ` e confirmou «${dd.rua_confirmada}»` : ''} — conferir no portal` : null,
       dd.pista_nio ? `PISTA: cliente citou Nio/Oi (${dd.pista_nio}) — conferir posse e recompra no portal (etapa 2)` : null,
     ].filter(Boolean);
+    // 12/11 (achado 1 da auditoria, 0131): o n8n mari_viabilidade já consultou o portal quando o endereço chegou.
+    const viabAuto = { viavel: `✅ viável${c.nio_viab_velocidade ? ` (até ${c.nio_viab_velocidade})` : ''}`,
+      sem_viabilidade: '❌ SEM viabilidade neste número — antes de tudo: conferir o endereço e a regra dos 200 m (Cobertura) com o cliente',
+      nao_encontrado: '⚠️ unidade (complemento) fora da lista do portal — escolher a unidade ou pedir o cadastro (Cobertura)' }[c.nio_viab_resultado];
+    if (viabAuto) topo.splice(1, 0, `PORTAL (consulta automática): ${viabAuto}`);
+    // 12/11 (achado 2 da auditoria — Edvaldo, Andriene): cliente sem cartão descobria só no fim que o crédito saiu "só no
+    // cartão". Se ele disse que não tem/não usa cartão, o time consulta o crédito ANTES da biometria e já oferece a saída.
+    const falasCliente = norm([(prep.consolidado || {}).mensagem, ...(Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [])
+      .filter((h) => h.papel === 'lead').map((h) => h.texto)].join(' \n '));
+    if (/\bn(ao|um)\b[^.?!\n]{0,25}\b(tenho|uso|possuo|tem)\b[^.?!\n]{0,25}\bcart(ao|oes)\b|\bsem cart(ao|oes)\b/.test(falasCliente)) {
+      topo.push('⚠️ CLIENTE DISSE QUE NÃO TEM/NÃO USA CARTÃO DE CRÉDITO: consultar o crédito ANTES de abrir o pedido e da biometria. '
+        + 'Se aprovar só no cartão, a saída é outra pessoa da casa ser a titular (com autorização dela).');
+    }
   }
   const briefing = [...topo, hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
     tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, V7 ? null : notaDfv].filter(Boolean).join('\n');
