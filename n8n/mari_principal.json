@@ -347,7 +347,12 @@
       "id": "454fc7c2-d4a5-56d4-a9c4-a69d43eed5d3",
       "onError": "continueRegularOutput",
       "notes": "0145 — transcrição em português (gpt-4o-mini-transcribe), credencial \"Transcrição Nio\" (só no n8n). Sem a credencial o nó fica DESLIGADO: o áudio cai na frase fixa do 2c e o motivo vai para mari_erros.",
-      "disabled": true
+      "credentials": {
+        "openAiApi": {
+          "id": "BXg4w8W7R1jsIh0P",
+          "name": "Transcrição Nio"
+        }
+      }
     },
     {
       "parameters": {
