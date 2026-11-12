@@ -1,25 +1,50 @@
 {
   "manifest_version": 3,
   "name": "NIOGEN no Portal",
-  "version": "0.5.0",
-  "description": "Painel lateral do NIOGEN sobre o portal PAP da Nio: mostra as vendas prontas e preenche os campos da etapa aberta do Novo Pedido. A pessoa confere e clica em tudo. No Histórico de Pedidos, lê o status dos pedidos (só filtros) e atualiza o NIOGEN.",
+  "version": "0.6.0",
+  "description": "Painel lateral do NIOGEN sobre o portal PAP da Nio: mostra as vendas prontas, preenche a etapa aberta do Novo Pedido e conduz as Etapas 1–5 até o Resumo, sem salvar — o clique que grava o pedido, a biometria e o pagamento são da pessoa. No Histórico de Pedidos, lê o status dos pedidos (só filtros) e atualiza o NIOGEN.",
   "minimum_chrome_version": "116",
-  "permissions": ["sidePanel", "storage", "clipboardWrite"],
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "clipboardWrite",
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback"
+  ],
   "host_permissions": [
     "https://pap.niointernet.com.br/*",
     "https://zlrfwbkblytnokuexjti.supabase.co/*"
   ],
-  "side_panel": { "default_path": "panel.html" },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
   "action": {
     "default_title": "NIOGEN no Portal",
-    "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
-  "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
-  "background": { "service_worker": "background.js" },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_scripts": [
     {
-      "matches": ["https://pap.niointernet.com.br/administrativo/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://pap.niointernet.com.br/administrativo/*"
+      ],
+      "js": [
+        "travas.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

@@ -26,3 +26,17 @@ chrome.runtime.onInstalled.addListener(async () => {
   const abas = await chrome.tabs.query({ url: 'https://pap.niointernet.com.br/administrativo/*' });
   abas.forEach((t) => ajusta(t.id, t.url));
 });
+
+// 0.6.0 (12/11/2026): as travas de rede da condução até o Resumo são regras de SESSÃO presas à aba do portal (o painel liga e
+// desliga). Cinto de segurança: aba fechada ou extensão recarregada → nenhuma regra fica para trás.
+const IDS_CONDUCAO = Array.from({ length: 300 }, (_, i) => 7300 + i);
+async function limpaTravas(tabId) {
+  try {
+    const regras = await chrome.declarativeNetRequest.getSessionRules();
+    const ids = regras.filter((r) => IDS_CONDUCAO.includes(r.id) && (tabId == null || ((r.condition || {}).tabIds || []).includes(tabId))).map((r) => r.id);
+    if (ids.length) await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids });
+  } catch (e) { /* sem regras */ }
+}
+chrome.tabs.onRemoved.addListener((tabId) => { limpaTravas(tabId); });
+chrome.runtime.onStartup.addListener(() => { limpaTravas(null); });
+chrome.runtime.onInstalled.addListener(() => { limpaTravas(null); });

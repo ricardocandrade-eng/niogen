@@ -504,6 +504,184 @@
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
+  // ================================================================== 0.6.0 — Conduzir até o Resumo (12/11/2026)
+  // O painel liga as travas de rede SÓ na aba do portal (regras de sessão do declarativeNetRequest com tabIds) enquanto o content.js
+  // conduz; desliga ao parar ou chegar ao Resumo. Passo a passo: cada botão do portal passa por aqui (Seguir / Parar).
+  // Dado de cliente só em memória (S); o evento portal_extensao_conduzido guarda só etapa, motivo, modo, duração e popup redigido.
+  const TR = window.NIOGEN_TRAVAS;
+  const CHAVE_MODO = 'niogen_modo_conduzir';
+  S.cond = null;   // { rodando, modo, log: [], pergunta, pausa, fim, posEtapa2, trava }
+  S.modoConduzir = 'passo';
+  chrome.storage.local.get(CHAVE_MODO).then((g) => { if (g && g[CHAVE_MODO] === 'direto') S.modoConduzir = 'direto'; }).catch(() => {});
+  const podeConduzir = () => ['admin', 'backoffice'].includes(S.perfil) && !!S.venda;
+  function faltasConduzir() {
+    const d = S.dados; if (!d) return ['venda'];
+    const v = d.viabilidade, f = [];
+    if (!v.cep) f.push('CEP');
+    if (!v.numero) f.push('número (ou "sem número")');
+    if (!d.cliente.documento) f.push('CPF');
+    if (!d.contato.celular) f.push('celular');
+    if (!d.contato.email) f.push('e-mail');
+    if (!d.oferta.plano) f.push('plano');
+    if (!d.oferta.forma_pagamento) f.push('forma de pagamento');
+    if ((S.selos || []).length && !S.conferiRecompra) f.push('a conferência de recompra (etapa 3)');
+    return f;
+  }
+  async function redeLigar(posEtapa2) {
+    if (S.tabId == null) return;
+    await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: TR.idsRegras(), addRules: TR.regrasRede(S.tabId, !!posEtapa2) });
+  }
+  async function redeDesligar() {
+    try { await chrome.declarativeNetRequest.updateSessionRules({ removeRuleIds: TR.idsRegras() }); } catch (e) { /* ok */ }
+  }
+  // trava de rede disparou (extensão sem compactação: onRuleMatchedDebug) → para a condução e mostra só o caminho, sem query
+  try {
+    chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((info) => {
+      if (!S.cond || !S.cond.rodando || !info || !info.rule || !TR.idsRegras().includes(info.rule.ruleId)) return;
+      const req = info.request || {};
+      if (req.tabId !== S.tabId) return;
+      let caminho = '';
+      try { caminho = new URL(req.url).pathname; } catch (e) { caminho = '?'; }
+      if (info.rule.ruleId - 7300 >= 100) return;   // regra de liberação (portabilidade consulta, leitura do carrinho)
+      S.cond.trava = `${(req.method || '').toUpperCase()} ${caminho}`;
+      condLog(`Trava de rede: o portal tentou ${S.cond.trava} — barrei e parei.`);
+      mandar({ tipo: 'conduzir_parar' }).catch(() => {});
+      desenha();
+    });
+  } catch (e) { /* sem a permissão de feedback: a trava continua barrando, só não avisa */ }
+  function condLog(t) { if (!S.cond) return; S.cond.log = [...S.cond.log.slice(-7), t]; }
+  async function planoPortal() {
+    const o = S.dados.oferta;
+    const r = await api(`/rest/v1/config_planos?select=nome,nome_curto,velocidade_mb,preco,preco_cartao&ativo=eq.true&nome=eq.${encodeURIComponent(o.plano)}`).catch(() => []);
+    const cartao = o.forma_pagamento === 'cartao';
+    const megas = [...new Set((r || []).map((p) => p.velocidade_mb).filter(Boolean))];
+    return {
+      nomes: [o.plano, ...(r || []).map((p) => p.nome_curto).filter(Boolean)],
+      megas: megas.length === 1 ? megas[0] : null,
+      precos: [...new Set((r || []).map((p) => Number(cartao && p.preco_cartao != null ? p.preco_cartao : p.preco)).filter((x) => !Number.isNaN(x)))],
+    };
+  }
+  async function conduzir() {
+    if (!podeConduzir() || (S.cond && S.cond.rodando)) return;
+    const falta = faltasConduzir();
+    if (falta.length) { aviso(`Falta: ${falta.join(', ')}.`, 'bad'); desenha(); return; }
+    await abaAtiva();
+    S.cond = { rodando: true, modo: S.modoConduzir, log: [], pergunta: null, pausa: null, fim: null, posEtapa2: false, trava: null, t0: Date.now() };
+    aviso(''); desenha();
+    let r = null;
+    try {
+      await redeLigar(false);
+      condLog(`Travas de rede ligadas nesta aba. Modo: ${S.modoConduzir === 'passo' ? 'Passo a passo' : 'Direto'}.`);
+      desenha();
+      const d = S.dados;
+      const venda = { modo: S.modoConduzir, pdv: d.pdv, matricula: MATRICULA_PAP, viabilidade: d.viabilidade, cliente: d.cliente, contato: d.contato,
+        oferta: d.oferta, planoPortal: await planoPortal() };
+      r = await mandar({ tipo: 'conduzir', venda });
+    } catch (e) { r = { ok: false, motivo: 'popup', texto: e.message, etapa: null }; }
+    finally { await redeDesligar(); }
+    if (S.cond.trava && r && r.motivo !== 'resumo') r = { ...r, motivo: 'trava', texto: `Trava de rede: ${S.cond.trava}` };
+    const regras = await chrome.declarativeNetRequest.getSessionRules().catch(() => []);
+    S.cond = { ...S.cond, rodando: false, pergunta: null, pausa: null, fim: r || { ok: false, motivo: 'popup', texto: 'sem resposta da aba' },
+      regrasAtivas: (regras || []).filter((x) => TR.idsRegras().includes(x.id)).length };
+    if (r && r.motivo === 'resumo') { [1, 2, 3, 4, 5].forEach((n) => { S.feitas[n] = true; }); salvaJornada(); }
+    // evento (regra 18: medir em 7 dias) — sem CPF/telefone/e-mail
+    if (S.dados && S.dados.venda_id) {
+      const motivoEv = { resumo: 'resumo', recompra: 'recompra', credito: 'credito', oferta: 'oferta', dacc: 'dacc', timeout: 'timeout', humano: 'humano', parou: 'parou', painel: 'parou', trava: 'trava' }[r && r.motivo] || 'popup';
+      api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: { venda_id: S.dados.venda_id, tipo: 'portal_extensao_conduzido',
+        detalhe: { etapa_parada: (r && r.etapa) || null, motivo: motivoEv, modo: S.cond.modo, duracao_s: (r && r.duracao_s) || Math.round((Date.now() - S.cond.t0) / 1000),
+          popup: r && r.extra && r.extra.popup ? TR.redigir(r.extra.popup) : null, texto: r && r.texto ? TR.redigir(r.texto) : null } } }).catch(() => {});
+    }
+    desenha();
+  }
+  async function pararConducao() {
+    try { await mandar({ tipo: 'conduzir_parar' }); } catch (e) { /* ok */ }
+    await redeDesligar();
+    if (S.cond && S.cond.pergunta) { S.cond.pergunta.responde({ seguir: false }); S.cond.pergunta = null; }
+    condLog('Parado por você — a tela do portal é sua.');
+    desenha();
+  }
+  chrome.runtime.onMessage.addListener((msg, sender, responde) => {
+    if (!msg || !String(msg.tipo || '').startsWith('conduzir_') || !sender.tab || (S.tabId != null && sender.tab.id !== S.tabId)) return false;
+    if (!S.cond || !S.cond.rodando) { if (msg.tipo === 'conduzir_pergunta') responde({ seguir: false }); return false; }
+    if (msg.tipo === 'conduzir_progresso') {
+      condLog(msg.texto);
+      if (msg.pausa !== undefined) S.cond.pausa = msg.pausa ? { motivo: msg.pausa, texto: msg.texto } : null;
+      if (msg.etapa >= 3 && !S.cond.posEtapa2) { S.cond.posEtapa2 = true; redeLigar(true).catch(() => {}); condLog('Etapa 3: trava de "interesse" ligada.'); }
+      desenha(); return false;
+    }
+    if (msg.tipo === 'conduzir_pergunta') {
+      if (msg.etapa >= 3 && !S.cond.posEtapa2) { S.cond.posEtapa2 = true; redeLigar(true).catch(() => {}); }
+      S.cond.pergunta = { texto: msg.texto, responde };
+      desenha(); return true;   // responde depois (Seguir / Parar)
+    }
+    if (msg.tipo === 'conduzir_registro') {
+      condLog(msg.qual === 'viabilidade' ? 'Viável — registrando no NIOGEN.' : `Crédito ${msg.resultado === 'so_cartao' ? 'só cartão' : 'aprovado'} — registrando no NIOGEN.`);
+      registra(msg.qual, msg.resultado);
+      responde({ ok: true }); return false;
+    }
+    return false;
+  });
+  function responderPergunta(seguir) {
+    const p = S.cond && S.cond.pergunta; if (!p) return;
+    S.cond.pergunta = null;
+    condLog(seguir ? `✓ ${p.texto}` : 'Parado por você.');
+    p.responde({ seguir });
+    if (!seguir) redeDesligar();
+    desenha();
+  }
+  async function seguirPausa() { try { await mandar({ tipo: 'conduzir_seguir' }); } catch (e) { aviso(e.message, 'bad'); } }
+  async function testarTravaConducao() {
+    const res = [];
+    for (const t of ['Seguir fora da área', 'Salvar interesse', 'Finalizar pedido', 'Abrir OS']) {
+      try { const r = await mandar({ tipo: 'conduzir_teste_trava', texto: t }); res.push(`${r.ok ? '✓' : '✗'} ${r.msg}`); } catch (e) { res.push(e.message); }
+    }
+    aviso(res.join(' · '), res.every((x) => x.startsWith('✓')) ? 'ok' : 'bad'); desenha();
+  }
+  const ROT_MOTIVO = { resumo: 'Chegou ao Resumo', recompra: 'Recompra (pedido já existe)', credito: 'Crédito', oferta: 'Oferta', dacc: 'Pagamento é com você',
+    timeout: 'O portal demorou', humano: 'Você mexeu no portal', parou: 'Parado', painel: 'Parado por você', trava: 'Trava de segurança', popup: 'Aviso do portal' };
+  function blocoConduzir() {
+    if (!podeConduzir()) return null;
+    const c = S.cond;
+    const B = (rot, fn, forte, dis) => h('button', { class: `btn btn-sm ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: !!dis, onclick: fn }, rot);
+    if (c && c.rodando) {
+      return h('section', { class: 'conduzir rodando' },
+        h('div', { class: 'cond-tit' }, h('b', {}, 'Conduzindo até o Resumo'), h('span', { class: 'chip acc' }, c.modo === 'passo' ? 'Passo a passo' : 'Direto'),
+          h('span', { class: 'grow' }), B('■ Parar', pararConducao, false)),
+        h('ul', { class: 'cond-log' }, c.log.map((x) => h('li', {}, x))),
+        c.pergunta ? h('div', { class: 'cond-pergunta' }, h('span', {}, c.pergunta.texto), h('div', { class: 'acoes' }, B('Seguir', () => responderPergunta(true), true), B('Parar', () => responderPergunta(false)))) : null,
+        c.pausa ? h('div', { class: 'aviso bad' }, h('b', {}, 'Sua vez: '), c.pausa.texto,
+          c.pausa.motivo === 'oferta' ? h('div', { class: 'acoes' }, B('Seguir', seguirPausa, true)) : null) : null);
+    }
+    const falta = faltasConduzir();
+    const fim = c && c.fim;
+    const resumo = fim && fim.motivo === 'resumo' ? fim.resumo : null;
+    const finais = resumo ? resumo.botoes.filter((b) => !['voltar', 'avancar', 'cancelar'].includes(TR.textoBotao(b))) : [];
+    const o = S.dados.oferta, v = S.dados.viabilidade;
+    return h('section', { class: 'conduzir' },
+      h('div', { class: 'cond-tit' }, h('b', {}, 'Conduzir até o Resumo'), h('span', { class: 'grow' }),
+        h('div', { class: 'seg' }, ['passo', 'direto'].map((m) => h('button', { type: 'button', class: S.modoConduzir === m ? 'on' : '',
+          onclick: () => { S.modoConduzir = m; chrome.storage.local.set({ [CHAVE_MODO]: m }).catch(() => {}); desenha(); } }, m === 'passo' ? 'Passo a passo' : 'Direto')))),
+      h('span', { class: 'sub' }, 'Eu preencho e avanço as Etapas 1–5 e paro no Resumo, sem salvar. O clique que grava o pedido, a biometria e o pagamento são seus.'
+        + (S.modoConduzir === 'passo' ? ' Passo a passo: antes de cada botão eu pergunto.' : '')),
+      falta.length ? h('div', { class: 'sub bad' }, `Falta: ${falta.join(', ')}.`) : null,
+      h('div', { class: 'acoes' }, B(fim ? 'Conduzir de novo' : '▶ Conduzir até o Resumo', conduzir, true, falta.length || S.ocupado),
+        B('Testar a trava', testarTravaConducao, false, S.ocupado)),
+      fim ? h('div', { class: `aviso ${fim.motivo === 'resumo' ? 'ok' : 'bad'}` },
+        h('b', {}, `${ROT_MOTIVO[fim.motivo] || fim.motivo}${fim.etapa && fim.motivo !== 'resumo' ? ` · Etapa ${fim.etapa}` : ''}${fim.duracao_s ? ` · ${fim.duracao_s} s` : ''}`),
+        fim.motivo === 'resumo'
+          ? h('div', {}, `Confira e clique você${finais.length ? ` em "${finais[finais.length - 1]}"` : ' no botão final'}. Eu não clico em nada no Resumo.`)
+          : h('div', {}, fim.texto || ''),
+        fim.extra && fim.extra.popup ? h('div', { class: 'sub' }, `O portal disse: ${fim.extra.popup}`) : null,
+        fim.extra && fim.extra.lista ? h('div', { class: 'sub' }, `Opções: ${fim.extra.lista.join(' · ')}`) : null,
+        c.regrasAtivas ? h('div', { class: 'sub bad' }, `Atenção: ${c.regrasAtivas} trava(s) de rede ainda ativa(s).`) : h('div', { class: 'sub' }, 'Travas de rede desligadas.')) : null,
+      resumo ? h('div', { class: 'cond-resumo' },
+        h('div', { class: 'etapa-tit' }, 'A venda × o Resumo do portal'),
+        h('div', { class: 'linha' }, h('span', { class: 'rot' }, 'Plano'), h('span', { class: 'val' }, o.plano || '—'), h('span')),
+        h('div', { class: 'linha' }, h('span', { class: 'rot' }, 'Pagamento'), h('span', { class: 'val' }, o.forma_pagamento ? FORMAS[o.forma_pagamento][0] : '—'), h('span')),
+        h('div', { class: 'linha' }, h('span', { class: 'rot' }, 'Endereço'), h('span', { class: 'val' }, [v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ')), h('span')),
+        h('pre', { class: 'cond-pre' }, resumo.texto)) : null);
+  }
+
   async function concluiVenda() {
     S.fila = (S.fila || []).filter((x) => x.venda_id !== (S.venda || {}).venda_id);
     await limpaJornada();   // "Concluir" apaga as luzes guardadas desta venda
@@ -829,7 +1007,7 @@
       cab,
       portal ? jornada(n) : null,
       h('div', { class: 'area' },
-        portal ? [avisosPortal, !S.etapaAuto ? h('div', { class: 'dica' }, 'Abra o Novo Pedido no portal (menu Novo Pedido) para eu identificar a etapa.') : null, blocoFoco(n)] : telaConversa()),
+        portal ? [avisosPortal, !S.etapaAuto ? h('div', { class: 'dica' }, 'Abra o Novo Pedido no portal (menu Novo Pedido) para eu identificar a etapa.') : null, blocoConduzir(), blocoFoco(n)] : telaConversa()),
       S.todos ? camadaTodos() : null,
       rodape());
   }

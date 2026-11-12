@@ -1,6 +1,9 @@
 /* NIOGEN | extensao/content.js | 06/11/2026 — Claude Code (prompt 28)
  * Roda DENTRO da página do portal PAP aberta pelo humano. Só lê o DOM e escreve valores nos campos.
  *
+ * 0.6.0 (12/11/2026, regra 5 rev. 12/11): botão "Conduzir até o Resumo" — a seção "Conduzir até o Resumo" abaixo percorre as
+ * Etapas 1–5 com cliques SÓ pela lista branca de travas.js e PARA no Resumo. As regras 1 e 3 abaixo valem para o "Preencher esta
+ * etapa" (0.1–0.5); a condução tem as suas (travas.js) e nunca clica no Resumo, em Abrir OS, biometria, pagamento ou agendamento.
  * REGRAS (CLAUDE.md regra 5, exceção de 06/11 21h19) — não negociáveis:
  *  1. NUNCA clica em botão do portal (Avançar, Buscar, Continuar, Salvar interesse, Seguir fora da área, biometria, checkout, Abrir OS).
  *     Os únicos "cliques" permitidos estão em cliqueSeguro(): escolher um <li>/[role=option] de lista suspensa e marcar
@@ -454,6 +457,389 @@
     try { cliqueFiltro(alvo, 'teste'); return { ok: false, msg: 'ERRO: o clique passou' }; } catch (e) { return { ok: true, msg: e.message }; }
   }
 
+  // ================================================================== 0.6.0 — Conduzir até o Resumo (12/11/2026)
+  // docs/Prompt_extensao_ate_resumo_121126_0100.md · CLAUDE.md regra 5 rev. 12/11: o robô percorre as Etapas 1–5 na sessão do
+  // humano logado e PARA no Resumo, sem salvar. Todo clique passa por conduzirClique() → NIOGEN_TRAVAS.conferirClique (lista branca
+  // por etapa + lista negra sempre). A rede é travada pelo painel (declarativeNetRequest, só nesta aba, só durante a condução).
+  // Para sempre que: popup inesperado, recompra, celular/e-mail recusado, crédito que não serve, DACC, oferta que não casa, 40 s sem
+  // o portal responder (60 s nas consultas lentas: viabilidade, Receita, duplicidade, crédito), o humano mexeu na página, ou Parar.
+  // O "Continuar" do crédito manda a biometria ao cliente: a extensão PAUSA ali e só retoma depois que o humano clicar.
+  const T = window.NIOGEN_TRAVAS;
+  class Parada extends Error {
+    constructor(motivo, texto, extra) { super(texto || motivo); this.motivo = motivo; this.texto = texto || ''; this.extra = extra || {}; }
+  }
+  const C = { ativo: false, parar: false, pausa: false, etapa: null, modo: 'passo', t0: 0 };
+
+  const avisaPainel = (msg) => new Promise((res) => {
+    try { chrome.runtime.sendMessage(msg, (r) => { void chrome.runtime.lastError; res(r); }); } catch (e) { res(null); }
+  });
+  const progresso = (texto, extra) => avisaPainel({ tipo: 'conduzir_progresso', etapa: C.etapa, texto, ...(extra || {}) });
+  function checa() {
+    if (C.parar) throw new Parada(C.parar === 'humano' ? 'humano' : 'parou', C.parar === 'humano' ? 'Você mexeu no portal durante a condução — parei e a tela é sua.' : 'Parado por você.');
+  }
+  async function esperaAte(cond, ms, oQue) {
+    const fim = Date.now() + ms;
+    while (Date.now() < fim) {
+      checa();
+      const v = cond();
+      if (v) return v;
+      await espera(300);
+    }
+    checa();
+    throw new Parada('timeout', `O portal não respondeu em ${Math.round(ms / 1000)} s (${oQue}).`);
+  }
+  // humano mexendo na página durante a condução (fora das pausas) = para
+  const aoMexer = (ev) => { if (C.ativo && !C.pausa && ev.isTrusted) C.parar = 'humano'; };
+  document.addEventListener('mousedown', aoMexer, true);
+  document.addEventListener('keydown', aoMexer, true);
+
+  const raizPedido = () => document.querySelector('main') || document.body;
+  const visivelBox = (el) => { if (!el) return false; const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
+  const porNome = (n) => Array.from(document.querySelectorAll(`input[name="${n}"]`)).find(visivelBox) || null;
+  // Popup do portal (credito.py › POPUP_JS): camada position:fixed z-index alto do tamanho da tela, com botão. Carregando = sem botão.
+  function popupAtual() {
+    const vis = (el) => { const r = el.getBoundingClientRect(); const s = getComputedStyle(el); return r.width > 60 && r.height > 40 && s.visibility !== 'hidden' && s.display !== 'none' && +s.opacity > 0.05; };
+    const temBotao = (el) => [...el.querySelectorAll('button,[role=button]')].some((b) => vis(b) && (b.innerText || '').trim());
+    const sel = '[role=dialog],[role=alertdialog],[aria-modal=true],.modal-content,.MuiDialog-paper,.swal2-popup,.ReactModal__Content';
+    let cands = [...document.querySelectorAll(sel)].filter((el) => vis(el) && temBotao(el));
+    if (!cands.length) {
+      cands = [...document.querySelectorAll('body *')].filter((el) => {
+        const s = getComputedStyle(el);
+        if (s.position !== 'fixed' || !(+s.zIndex >= 100)) return false;
+        const r = el.getBoundingClientRect();
+        return r.width >= innerWidth * 0.5 && r.height >= innerHeight * 0.5 && vis(el) && temBotao(el);
+      });
+    }
+    if (!cands.length) return null;
+    const el = cands.find((c) => !cands.some((o) => o !== c && c.contains(o))) || cands[0];
+    const h = el.querySelector('h1,h2,h3,h4,h5,h6,[class*=title i]');
+    const texto = (el.innerText || '').trim();
+    const botoes = [...el.querySelectorAll('button,[role=button]')].filter(vis).filter((b) => (b.innerText || '').trim());
+    return { el, titulo: h ? (h.innerText || '').trim() : (texto.split(/\r?\n/)[0] || ''), texto: texto.slice(0, 1200), botoes };
+  }
+  function botaoNaTela(rotulo) {   // botão visível e habilitado da área do pedido (fora de popup) com o texto exato
+    const pp = popupAtual();
+    return [...raizPedido().querySelectorAll('button')].find((b) => visivelBox(b) && !b.disabled && T.textoBotao(b.innerText) === rotulo && !(pp && pp.el.contains(b))) || null;
+  }
+  // ÚNICO caminho de clique da condução. Passo a passo: pergunta ao painel antes de cada BOTÃO.
+  async function conduzirClique(el, tipo, contexto) {
+    checa();
+    const texto = tipo === 'botao' ? (el.innerText || el.value || el.getAttribute('aria-label') || '') : (contexto && contexto.texto) || el.textContent || '';
+    const r = T.conferirClique({ tipo, texto, etapa: C.etapa, popup: contexto && contexto.popup ? { texto: contexto.popup.texto } : null });
+    if (!r.ok) {
+      console.warn(`niogen: clique recusado na condução (etapa ${C.etapa}) — ${r.motivo}`);
+      throw new Parada('trava', `Trava: ${r.motivo}`);
+    }
+    if (tipo === 'botao' && C.modo === 'passo') {
+      const resp = await avisaPainel({ tipo: 'conduzir_pergunta', etapa: C.etapa, texto: `Vou clicar em "${String(texto).trim()}" na Etapa ${C.etapa}.` });
+      checa();
+      if (!resp || !resp.seguir) { C.parar = 'painel'; checa(); }
+    }
+    C.pausa = false;
+    el.click();
+    await espera(400);
+  }
+  async function avancar() {
+    const b = await esperaAte(() => botaoNaTela('avancar'), 40000, `o Avançar da Etapa ${C.etapa} não habilitou`);
+    await conduzirClique(b, 'botao');
+  }
+  async function pausaHumano(motivo, texto, prontoQuando, ms) {
+    C.pausa = true;
+    progresso(texto, { pausa: motivo });
+    const ok = await esperaAte(prontoQuando, ms, 'esperando você');
+    C.pausa = false;
+    progresso('Retomando a condução.', { pausa: null });
+    return ok;
+  }
+  function pararPorPopup(pp) {
+    const cls = T.classificarPopup(pp.titulo, pp.texto, C.etapa);
+    const motivo = T.MOTIVO_POPUP[cls] || 'popup';
+    const msg = cls === 'pedido_em_andamento' ? 'O portal diz que já existe pedido para este cliente/endereço (recompra = multa de R$ 500). Parei — confira o Histórico de Pedidos.'
+      : cls === 'contato_repetido' ? 'O portal recusou o celular (repetido em outros pedidos). Peça outro número ao cliente.'
+      : cls === 'email_invalido' ? 'O portal recusou o e-mail. Confirme o e-mail com o cliente.'
+      : cls === 'negado' ? 'Crédito negado no portal.' : cls === 'pendente' ? 'Crédito pendente no portal.'
+      : cls === 'dados_pessoais' ? 'O portal pede nascimento ou nome da mãe — pergunte ao cliente e preencha você.'
+      : 'O portal mostrou um aviso que eu não esperava. Leia e decida você.';
+    throw new Parada(motivo, msg, { popup: `${pp.titulo} — ${pp.texto}`.slice(0, 600), classe: cls });
+  }
+  async function digitar(el, valor) {
+    if (!el || el.disabled || el.readOnly) throw new Parada('popup', 'Campo bloqueado pelo portal.');
+    setValor(el, String(valor));
+    await espera(150);
+  }
+  // opção de lista suspensa do próprio campo (UF, PDV, matrícula): campoLista do 0.1, com a trava da condução antes do clique
+  async function escolherNaLista(el, busca, exato) {
+    const atual = norm(el.value);
+    if (atual && (atual === norm(busca) || atual.includes(norm(busca)))) return;
+    abrirCampo(el); setValor(el, busca);
+    let r = { estado: 'sem_opcao' };
+    for (let i = 0; i < 40 && r.estado === 'sem_opcao'; i++) { await espera(100); checa(); r = escolher(candidatosLista(el), [busca], !!exato); }
+    if (r.estado !== 'ok') throw new Parada('popup', `Não achei "${busca}" na lista do portal — escolha você.`);
+    await conduzirClique(r.li, 'opcao', { texto: r.li.textContent });
+  }
+  const campoPorNomes = (...nomes) => { for (const n of nomes) { const e = porNome(n) || acharCampo([n]); if (e) return e; } return null; };
+
+  // ---- Etapa 1 · Identificação PDV
+  async function c1(v) {
+    C.etapa = 1; progresso('Etapa 1 · conferindo UF, PDV e matrícula.');
+    const mat = await esperaAte(() => acharCampo(['Informe a matrícula do vendedor']), 40000, 'Etapa 1');
+    // UF e PDV chegam preenchidos alguns segundos depois do campo (credito.py, 11/11): até 12 s
+    const cheio = (ph) => { const e = acharCampo([ph]); return e && e.value.trim(); };
+    try { await esperaAte(() => cheio('Informe a UF') && cheio('Insira o código ou nome do seu PDV'), 12000, 'UF/PDV'); } catch (e) { if (e.motivo !== 'timeout') throw e; }
+    const uf = acharCampo(['Informe a UF']);
+    if (uf && !uf.value.trim()) await escolherNaLista(uf, v.pdv.uf, true);
+    const pdv = acharCampo(['Insira o código ou nome do seu PDV']);
+    if (pdv && !pdv.value.trim()) await escolherNaLista(pdv, v.pdv.codigo);
+    await escolherNaLista(mat, v.matricula);
+    await avancar();
+  }
+  // ---- Etapa 2 · Viabilidade
+  function opcoesEndereco() {
+    const inp = document.querySelector('input[placeholder="Endereço de instalação"]');
+    if (!inp || !inp.parentElement) return { inp, lis: [] };
+    const lis = [...inp.parentElement.querySelectorAll('li')].filter(visivelBox).filter((l) => !l.hasAttribute('disabled') && !/nenhum resultado/i.test(l.innerText || ''));
+    return { inp, lis };
+  }
+  async function complemento(valor) {
+    const sel = [...document.querySelectorAll('select')].find((s) => /omplement/i.test(`${s.name} ${s.id}`) && visivelBox(s));
+    if (sel) {
+      const ops = [...sel.options].map((o) => o.textContent.trim()).filter(Boolean);
+      const r = T.alvoComplemento(ops, valor);
+      if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada — escolha você.`, { lista: ops.slice(0, 40) });
+      sel.value = [...sel.options].find((o) => o.textContent.trim() === r.alvo).value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+    const comp = [...document.querySelectorAll('input[placeholder="Complemento"], input[placeholder*="omplement" i], input[name*="omplement" i]')].find((i) => visivelBox(i) && !i.disabled);
+    if (!comp) return;   // endereço sem unidades (casa)
+    try { comp.scrollIntoView({ block: 'center' }); } catch (e) { /* ok */ }
+    abrirCampo(comp);
+    const lisDe = () => { const ul = comp.parentElement && comp.parentElement.querySelector('ul'); return ul ? [...ul.querySelectorAll('li')].filter(visivelBox) : []; };
+    let lis = [];
+    for (let i = 0; i < 20 && !lis.length; i++) { await espera(300); checa(); lis = lisDe(); }
+    const ops = lis.map((l) => (l.innerText || '').trim()).filter((t) => t && !/nenhum resultado/i.test(t));
+    if (!ops.length) {
+      if (lis.length && valor) throw new Parada('popup', `O portal não tem nenhuma unidade cadastrada neste endereço (complemento "${valor}"). Fale com o Ricardo.`);
+      return;   // campo sem lista: se o portal exigir, o Avançar não habilita e a condução para
+    }
+    const r = T.alvoComplemento(ops, valor);
+    if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada — escolha você.`, { lista: ops.slice(0, 40) });
+    await conduzirClique(lis.find((l) => (l.innerText || '').trim() === r.alvo), 'opcao', { texto: r.alvo });
+    await espera(600);
+  }
+  async function c2(v) {
+    C.etapa = 2; progresso('Etapa 2 · CEP e número.');
+    const e = v.viabilidade;
+    const cep = await esperaAte(() => campoPorNomes('cep', 'Endereço ou CEP'), 40000, 'Etapa 2');
+    await digitar(cep, digitos(e.cep));
+    const semNum = !e.numero || /^(s\/?n|sem numero|sem número)$/i.test(String(e.numero).trim());
+    if (semNum) {
+      const sn = porNome('semNumero') || acharOpcaoPorTexto(['Sem número']);
+      if (sn && sn.tagName === 'INPUT' && !sn.checked) await conduzirClique(sn, 'caixa', { texto: 'Sem número' });
+    } else {
+      const num = campoPorNomes('numero', 'Número');
+      if (num) await digitar(num, e.numero);
+    }
+    const buscar = botaoNaTela('buscar');
+    if (buscar) await conduzirClique(buscar, 'botao');
+    progresso('Etapa 2 · procurando o endereço.');
+    // Referência habilita = endereço resolvido. CEP com vários endereços: lista em "Endereço de instalação" → o do número exato.
+    const ref = await esperaAte(() => {
+      const r = campoPorNomes('referencia', 'Referência');
+      if (r && !r.disabled) return r;
+      const pp = popupAtual();
+      if (pp) return { popup: pp };
+      if (opcoesEndereco().lis.length) return { lista: true };   // CEP com vários endereços: a lista abriu
+      return null;
+    }, 60000, 'endereço do CEP');
+    if (ref && ref.popup) throw new Parada('popup', 'Sem viabilidade ou endereço não encontrado — o portal mostrou um aviso.', { popup: `${ref.popup.titulo} — ${ref.popup.texto}`.slice(0, 600) });
+    const { lis } = opcoesEndereco();
+    if (lis.length) {
+      const r = T.alvoEndereco(lis.map((l) => (l.innerText || '').trim()), e.numero);
+      if (!r.ok) throw new Parada('popup', r.motivo, { lista: lis.map((l) => (l.innerText || '').trim()).slice(0, 30) });
+      await conduzirClique(lis.find((l) => (l.innerText || '').trim() === r.alvo), 'opcao', { texto: r.alvo });
+      await espera(1200);
+      await esperaAte(() => { const x = campoPorNomes('referencia', 'Referência'); return x && !x.disabled ? x : null; }, 40000, 'Referência depois do endereço');
+    }
+    await complemento(String(e.complemento || '').trim());
+    const refEl = campoPorNomes('referencia', 'Referência');
+    if (refEl && !refEl.value.trim()) await digitar(refEl, e.referencia || 'Sem referência');
+    await avancar();
+    progresso('Etapa 2 · consultando a viabilidade (8–20 s).');
+    const pp = await esperaAte(popupAtual, 60000, 'viabilidade');
+    const txt = norm(`${pp.titulo} ${pp.texto}`);
+    const cont = pp.botoes.find((b) => T.textoBotao(b.innerText) === 'continuar');
+    if (cont && /disponi/.test(txt) && !/indisponi/.test(txt)) {
+      avisaPainel({ tipo: 'conduzir_registro', qual: 'viabilidade', resultado: 'viavel' });
+      await conduzirClique(cont, 'botao', { popup: pp });
+      return;
+    }
+    throw new Parada('popup', 'Sem viabilidade neste endereço (ou fora da área). Não use "Seguir fora da área": confira o endereço e fale com o Ricardo.', { popup: `${pp.titulo} — ${pp.texto}`.slice(0, 600) });
+  }
+  // ---- Etapa 3 · Cadastro
+  const nomeNaTela = () => { for (const e of document.querySelectorAll('input')) { const k = `${e.name || ''} ${e.placeholder || ''} ${e.id || ''}`; if (visivelBox(e) && /nome/i.test(k) && !/m[aã]e|social/i.test(k) && (e.value || '').trim()) return e.value.trim(); } return null; };
+  async function c3(v) {
+    C.etapa = 3; progresso('Etapa 3 · CPF e Receita.');
+    const doc = await esperaAte(() => campoPorNomes('documento', 'CPF/CNPJ', 'CPF'), 60000, 'Etapa 3');
+    await digitar(doc, digitos(v.cliente.documento));
+    let tentou = false;
+    for (;;) {
+      const b = botaoNaTela('buscar');
+      if (b) await conduzirClique(b, 'botao');
+      const r = await esperaAte(() => { const pp = popupAtual(); if (pp) return { pp }; const n = nomeNaTela(); return n ? { nome: n } : null; }, 60000, 'Receita');
+      if (r.nome) {
+        const a = norm(r.nome).split(' '), bb = norm(v.cliente.nome || '').split(' ');
+        if (bb[0] && (a[0] !== bb[0] || a[a.length - 1] !== bb[bb.length - 1])) progresso('Aviso: o nome da Receita não bate com o da venda — confira (sigo).', { aviso: true });
+        break;
+      }
+      if (T.classificarPopup(r.pp.titulo, r.pp.texto, 3) === 'receita_retry' && !tentou) {
+        tentou = true;
+        const tn = r.pp.botoes.find((x) => T.textoBotao(x.innerText) === 'tentar novamente');
+        if (tn) await conduzirClique(tn, 'botao', { popup: r.pp });
+        await espera(1500);
+        continue;
+      }
+      pararPorPopup(r.pp);
+    }
+    // portal pedindo nascimento ou nome da mãe vazio = para (não coletamos)
+    const pede = [...document.querySelectorAll('input')].filter(visivelBox).find((i) => /nascimento|m[aã]e/i.test(`${i.name} ${i.placeholder} ${[...nomesDoCampo(i)].join(' ')}`) && !i.value.trim() && !i.disabled);
+    if (pede) throw new Parada('popup', 'O portal pede nascimento ou nome da mãe — pergunte ao cliente e preencha você.');
+    await avancar();
+    progresso('Etapa 3 · verificando duplicidade de pedido (25–30 s).');
+    const r = await esperaAte(() => { const pp = popupAtual(); if (pp) return { pp }; return porNome('contato') ? { ok: true } : null; }, 60000, 'duplicidade');
+    if (r.pp) pararPorPopup(r.pp);
+  }
+  // ---- Etapa 4 · Contato + crédito
+  async function c4(v) {
+    C.etapa = 4; progresso('Etapa 4 · celular e e-mail.');
+    const cel = digitos(v.contato.celular).replace(/^55(?=\d{10,11}$)/, '');
+    for (const [nome, valor] of [['contato', cel], ['confirmacaoContato', cel], ['email', v.contato.email], ['confirma-email', v.contato.email]]) {
+      const el = porNome(nome) || acharCampo({ contato: ['Celular Principal'], confirmacaoContato: ['Confirme o celular principal'], email: ['E-mail'], 'confirma-email': ['Confirme o e-mail'] }[nome]);
+      if (!el) throw new Parada('popup', `Campo "${nome}" não apareceu na Etapa 4.`);
+      if ((nome.includes('ontato') ? digitos(el.value) : norm(el.value)) !== (nome.includes('ontato') ? valor : norm(valor))) await digitar(el, valor);
+    }
+    const aceite = porNome('aceiteComunicacao') || document.querySelector('input[name="aceiteComunicacao"]');
+    if (aceite && !aceite.checked) await conduzirClique(aceite, 'caixa', { texto: 'aceite de comunicação por WhatsApp' });
+    await espera(500);
+    await avancar();
+    progresso('Etapa 4 · análise de crédito.');
+    const r = await esperaAte(() => { const pp = popupAtual(); if (pp) return { pp }; return document.querySelector('input[name="radio-group"]') ? { e5: true } : null; }, 60000, 'crédito');
+    if (r.e5) { avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: 'aprovado' }); return; }
+    const cls = T.classificarPopup(r.pp.titulo, r.pp.texto, 4);
+    if (!/^aprovado/.test(cls)) pararPorPopup(r.pp);
+    const forma = T.formaDaVenda(v.oferta.forma_pagamento);
+    if (cls === 'aprovado_cartao' && forma.valor !== 'CREDITO') throw new Parada('credito', 'Crédito aprovado só para cartão, e a venda é em boleto. Combine com o cliente (troque a forma na ficha) antes de seguir.', { classe: cls });
+    const res = cls === 'aprovado_cartao' ? 'so_cartao' : 'aprovado';
+    // O Continuar deste popup manda a biometria ao cliente: o clique é do humano. Retoma quando a Etapa 5 aparecer.
+    await pausaHumano('biometria', 'Crédito aprovado. O próximo clique (Continuar) manda a biometria ao cliente — clique você. Eu sigo quando a Etapa 5 abrir.',
+      () => !popupAtual() && document.querySelector('input[name="radio-group"]'), 15 * 60000);
+    avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: res });
+  }
+  // ---- Etapa 5 · Pagamento e ofertas
+  function cartoesOferta() {
+    const preco = /R\$\s*\d/;
+    const folhas = [...raizPedido().querySelectorAll('div,li,label,article,section')].filter((el) => {
+      const t = (el.innerText || '').trim();
+      if (!visivelBox(el) || !preco.test(t) || t.length > 400 || /resumo da oferta/i.test(t)) return false;
+      return ![...el.children].some((c) => preco.test(c.innerText || '') && (c.innerText || '').trim().length > 20);
+    });
+    const vistos = new Set();
+    return folhas.filter((el) => { const t = (el.innerText || '').trim(); if (vistos.has(t)) return false; vistos.add(t); return true; })
+      .map((el) => ({ el, ...T.lerOferta(el.innerText) })).filter((o) => o.megas != null && o.preco != null);
+  }
+  async function c5(v) {
+    C.etapa = 5; progresso('Etapa 5 · forma de pagamento e oferta.');
+    await espera(3000); checa();
+    const pp0 = popupAtual(); if (pp0) pararPorPopup(pp0);
+    const forma = T.formaDaVenda(v.oferta.forma_pagamento);
+    if (!forma.ok) throw new Parada(forma.motivo, forma.texto);
+    const radios = await esperaAte(() => { const r = [...document.querySelectorAll('input[name="radio-group"]')]; return r.length ? r : null; }, 40000, 'formas de pagamento');
+    const desab = (e) => !!(e.disabled || e.getAttribute('aria-disabled') === 'true' || e.closest('[aria-disabled=true],.Mui-disabled,.disabled,[disabled]'));
+    const radio = radios.find((r) => String(r.value || '').toUpperCase() === forma.valor);
+    if (!radio || desab(radio)) throw new Parada('credito', `A forma de pagamento da venda (${forma.valor === 'BOLETO' ? 'boleto' : 'cartão'}) não está liberada no portal para este cliente.`);
+    // oferta da venda: casar por nome, velocidade e R$/mês
+    const cartoes = cartoesOferta();
+    const c = T.casarOferta(cartoes, v.planoPortal);
+    if (!c.ok) {
+      await pausaHumano('oferta', `${c.texto}. Escolha você a oferta "${v.oferta.plano}" (com a fidelidade e os adicionais da venda) e clique Seguir no painel.`, () => C.seguirPausa, 15 * 60000);
+      C.seguirPausa = false;
+    } else {
+      const card = cartoes[c.i].el;
+      const caixa = card.querySelector('input[type="radio"], input[type="checkbox"]');
+      const bt = [...card.querySelectorAll('button')].find((b) => visivelBox(b) && ['selecionar', 'escolher', 'selecionar oferta', 'escolher oferta'].includes(T.textoBotao(b.innerText)));
+      if (caixa && !caixa.checked) await conduzirClique(caixa, 'caixa', { texto: cartoes[c.i].nome });
+      else if (bt) await conduzirClique(bt, 'botao');
+      else if (!caixa) {
+        await pausaHumano('oferta', `Achei a oferta "${cartoes[c.i].nome}", mas não sei como a tela a seleciona. Selecione você e clique Seguir no painel.`, () => C.seguirPausa, 15 * 60000);
+        C.seguirPausa = false;
+      }
+      // fidelidade "Com fidelidade" (padrão da venda) e adicionais: se a tela pedir e a venda tiver
+      const fid = acharOpcaoPorTexto(['Com fidelidade']);
+      if (fid && fid.tagName === 'INPUT' && !fid.checked) await conduzirClique(fid, 'caixa', { texto: 'Com fidelidade' });
+      if ((v.oferta.adicionais || []).length) {
+        await pausaHumano('oferta', `A venda tem adicionais (${v.oferta.adicionais.map((a) => `${a.nome} × ${a.qtd}`).join(', ')}). Marque você e clique Seguir no painel.`, () => C.seguirPausa, 15 * 60000);
+        C.seguirPausa = false;
+      }
+    }
+    if (!radio.checked) await conduzirClique(radio, 'caixa', { texto: forma.valor });
+    await espera(600);
+    if (forma.valor === 'CREDITO') {
+      // cartão: os dados do cartão são do humano; se a tela já pede cartão antes do Resumo, para aqui
+      const pedeCartao = [...document.querySelectorAll('input')].filter(visivelBox).some((i) => /cart[aã]o|validade|cvv|titular/i.test(`${i.name} ${i.placeholder} ${[...nomesDoCampo(i)].join(' ')}`));
+      if (pedeCartao) throw new Parada('dacc', 'A tela pede os dados do cartão: quem digita é você. Parei antes do Resumo.');
+    }
+    await avancar();
+    progresso('Indo para o Resumo.');
+    const r = await esperaAte(() => { const pp = popupAtual(); if (pp) return { pp }; return detectarEtapa() === 6 ? { resumo: true } : null; }, 40000, 'Resumo');
+    if (r.pp) pararPorPopup(r.pp);
+  }
+  // ---- Etapa 6 · Resumo: NENHUM clique. Lê o que a tela mostra e o nome do botão final.
+  function lerResumo() {
+    const raiz = raizPedido();
+    const botoes = [...raiz.querySelectorAll('button')].filter(visivelBox).map((b) => (b.innerText || '').trim()).filter(Boolean);
+    const texto = (raiz.innerText || '').split(/\r?\n/).map((x) => x.trim()).filter(Boolean).slice(0, 80).join('\n');
+    return { botoes, texto: texto.slice(0, 3000) };
+  }
+  const etapaDaTela = () => {
+    const e = detectarEtapa();
+    if (e === 6 || e === 7) return e;
+    if (document.querySelector('input[name="radio-group"]')) return 5;
+    if (porNome('contato')) return 4;
+    if (campoPorNomes('documento', 'CPF/CNPJ')) return 3;
+    if (campoPorNomes('cep', 'Endereço ou CEP')) return 2;
+    if (acharCampo(['Informe a matrícula do vendedor'])) return 1;
+    return e;
+  };
+  async function conduzir(v) {
+    if (C.ativo) throw new Error('A condução já está rodando.');
+    Object.assign(C, { ativo: true, parar: false, pausa: false, etapa: null, modo: v.modo === 'direto' ? 'direto' : 'passo', t0: Date.now(), seguirPausa: false });
+    limparDestaques();
+    try {
+      const ini = etapaDaTela();
+      if (!ini) throw new Parada('popup', 'Abra o Novo Pedido no portal (Etapa 1) antes de conduzir.');
+      if (ini >= 6) throw new Parada('resumo', 'O portal já está no Resumo (ou depois) — nada a conduzir.');
+      const passos = [c1, c2, c3, c4, c5];
+      for (let n = ini; n <= 5; n++) {
+        await passos[n - 1](v);
+        checa();
+      }
+      C.etapa = 6;
+      return { ok: true, motivo: 'resumo', etapa: 6, resumo: lerResumo(), duracao_s: Math.round((Date.now() - C.t0) / 1000) };
+    } catch (e) {
+      const p = e instanceof Parada ? e : new Parada('popup', `Erro inesperado: ${e.message}`);
+      return { ok: false, motivo: p.motivo, texto: p.texto, etapa: C.etapa, extra: p.extra, duracao_s: Math.round((Date.now() - C.t0) / 1000) };
+    } finally {
+      C.ativo = false; C.pausa = false;
+    }
+  }
+  // Prova da trava (aceite 3): tenta, pelo caminho da condução, clicar num botão proibido da tela. Não clica em nada.
+  function testarTravaConducao(texto) {
+    const etapa = etapaDaTela() || 2;
+    const r = T.conferirClique({ tipo: 'botao', texto, etapa });
+    if (!r.ok) console.warn(`niogen: clique recusado no teste (etapa ${etapa}) — ${r.motivo}`);
+    return { ok: !r.ok, msg: r.ok ? `ERRO: "${texto}" passaria na etapa ${etapa}` : `"${texto}" recusado — ${r.motivo}` };
+  }
+
   // ------------------------------------------------------------------ conversa com o painel
   let ultimo = '';
   function empurraEstado(forca) {
@@ -477,6 +863,11 @@
       return true;
     }
     if (msg.tipo === 'historico_teste_lista_branca') { responde(testarListaBranca()); return false; }
+    // 0.6.0 — condução até o Resumo
+    if (msg.tipo === 'conduzir') { conduzir(msg.venda || {}).then((r) => responde(r), (e) => responde({ ok: false, motivo: 'popup', texto: e.message })); return true; }
+    if (msg.tipo === 'conduzir_parar') { if (C.ativo) C.parar = 'painel'; responde({ ok: true }); return false; }
+    if (msg.tipo === 'conduzir_seguir') { C.seguirPausa = true; responde({ ok: true }); return false; }
+    if (msg.tipo === 'conduzir_teste_trava') { responde(testarTravaConducao(String(msg.texto || ''))); return false; }
     if (msg.tipo === 'preencher') {
       limparDestaques();
       preencher(Array.isArray(msg.campos) ? msg.campos : []).then((resultados) => responde({ ok: true, resultados, etapa: detectarEtapa() }));

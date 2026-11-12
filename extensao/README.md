@@ -1,7 +1,8 @@
 # NIOGEN no Portal (extensão do Chrome)
 
 Painel lateral do NIOGEN sobre o portal PAP da Nio. Mostra as vendas **Prontas para o portal** e **escreve nos campos** da etapa aberta
-do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06/11 21h19 da regra 5 do `CLAUDE.md`.
+do Novo Pedido. Desde a **0.6.0** (12/11) também **conduz as Etapas 1–5 até o Resumo e para sem salvar** — o clique que grava o pedido,
+a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (rev. 12/11/2026).
 
 ## Instalar (sem Chrome Web Store)
 1. `chrome://extensions` → ligue **Modo do desenvolvedor**.
@@ -9,6 +10,49 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 3. A pasta precisa do `config.js` (cópia do `docs/config.js`; está no `.gitignore`). Sem ele o painel não conecta.
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
+
+## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
+Regra 5 do `CLAUDE.md` (rev. 12/11): na sessão do humano logado no portal, a extensão percorre as Etapas 1–5 do Novo Pedido e **para no
+Resumo sem salvar**. Só o humano clica no que grava o pedido ou manda algo ao cliente (botão final do Resumo, Abrir OS, biometria, link de
+pagamento, agendamento). Uso autorizado pelo Rogério (Nio) — Ricardo, 12/11 00h52.
+
+- **Onde:** painel da venda, quadro **Conduzir até o Resumo** (só admin/backoffice; vendedor não vê). Habilita com CEP, número (ou "sem
+  número"), CPF, celular, e-mail, plano e forma de pagamento — e, se a venda tiver aviso de possível duplicado, a conferência de recompra
+  marcada (etapa 3). O checkbox "o titular autorizou a análise de crédito" do prompt **não foi posto**: a regra 5 revista no mesmo dia
+  (12/11 ~10h) tirou a pergunta de autorização ("nem o WhatsApp oficial da Nio pede") — a linha da LGPD não muda.
+- **Modos** (lembrado em `chrome.storage.local`): **Passo a passo** (padrão: antes de cada BOTÃO do portal o painel mostra "Vou clicar em
+  ‹botão› na Etapa N" + Seguir/Parar; opções de lista e caixas de marcar não perguntam) e **Direto**. **■ Parar** sempre visível.
+- **O que faz:** E1 UF/PDV (espera até 12 s) + matrícula `TT837725` → Avançar · E2 CEP, número ou "Sem número" → Buscar → endereço da lista
+  pelo número exato (52 ≠ 520) ou o único → complemento pela lista fechada (nunca troca de unidade) → referência → Avançar → modal
+  "disponível" → registra **Viável** no NIOGEN → Continuar · E3 CPF → Buscar (1× "Tentar novamente" no erro da Receita) → aviso se o nome
+  diverge (não para) → Avançar → duplicidade · E4 celular e e-mail (2×), aceite de comunicação por WhatsApp (o portal exige) → Avançar →
+  popup do crédito · **o "Continuar" desse popup manda a biometria ao cliente: a extensão PAUSA ("clique você") e retoma quando a Etapa 5
+  abrir**, aí registra o crédito no NIOGEN · E5 forma da venda (boleto/cartão; **DACC para**), oferta casada por nome + velocidade + R$/mês
+  da `config_planos` (nenhuma ou várias → pausa "escolha você" + Seguir), "Com fidelidade", adicionais da venda (pausa: marque você),
+  Avançar · **E6 Resumo: nenhum clique** — o painel mostra o texto do Resumo, a venda ao lado e o nome do botão final.
+- **Para sempre que:** popup inesperado (texto vai ao painel), "Pedido encontrado"/"já existe outro pedido" (recompra), celular ou e-mail
+  recusado, crédito negado/pendente/só cartão com venda em boleto, DACC, tela pedindo cartão, oferta que não casa (pausa), 40 s sem o portal
+  responder (60 s nas consultas lentas: endereço, viabilidade, Receita, duplicidade, crédito), o humano mexeu na página fora de uma pausa
+  (`mousedown`/`keydown` reais), Parar.
+- **Travas** (`travas.js`, funções puras; `node extensao/testar_travas.mjs` tem que dar VERDE):
+  - clique: lista branca por etapa (E1 Avançar · E2 Buscar, Avançar, opção de endereço/complemento, caixa "Sem número" · E3 Buscar, Avançar
+    · E4 Avançar, caixa do aceite · E5 Avançar, Selecionar/Escolher, radios), popup só "Continuar" do modal "disponível" (E2) e "Tentar
+    novamente" (E3), nunca em popup que fala de biometria/link/envio/pagamento; lista negra sempre (salvar interesse, abrir os, enviar,
+    finalizar, confirmar, concluir pedido, checkout, carregar, reenviar, seguir fora da área, consultar outro cpf, fechar/gerar pedido, agendar);
+    E6+ nada.
+  - rede: regras de **sessão** do `declarativeNetRequest` com `tabIds` = só a aba do portal, ligadas pelo painel ao começar e removidas ao
+    parar/chegar ao Resumo (e pelo `background.js` se a aba fechar). Barram `aberturaos`, `checkout`, `carrinho/…enviar`, `biometria`,
+    `/pagamento/`, `reenviolink`, `dadosBancarios`, `SAVE_LEAD`, `prevenda`, `portabilidade` e, da Etapa 3 em diante, `interesse`. Liberadas:
+    `portabilidadenovafibra/consulta…` (a Etapa 5 quebra sem elas) e **só a leitura (GET) de `aberturaos/carrinho/<id>`**, caso o Resumo
+    precise dela para aparecer. Regra disparada → `onRuleMatchedDebug` (extensão sem compactação, permissão `declarativeNetRequestFeedback`)
+    para a condução e mostra o caminho.
+- **Registro:** `eventos_venda` tipo `portal_extensao_conduzido` (`etapa_parada`, `motivo` resumo/popup/recompra/credito/oferta/dacc/timeout/
+  humano/parou/trava, `modo`, `duracao_s`, popup e texto redigidos — sem CPF, telefone ou e-mail). Viável e crédito vão pelo
+  `backoffice_momento`, como os botões de sempre.
+- **Testar a trava** (no quadro): pede ao content.js, pelo caminho da condução, para clicar em "Seguir fora da área", "Salvar interesse",
+  "Finalizar pedido" e "Abrir OS" — todos recusados (log no console da aba).
+- **Ainda não conferido no portal real** (aceite 2 do prompt, com o Ricardo na tela): o DOM da Etapa 5 (como a oferta se seleciona) e da
+  Etapa 6 (o nome do botão final e se o Resumo lê o carrinho). Na primeira condução, anotar aqui o texto de cada popup e do botão final.
 
 ## Painel da venda (0.5.0, 10/11/2026) — jornada fixa, sem rolagem
 1. Entre com o e-mail e a senha **do NIOGEN** (não é o login do portal) e escolha a venda em **Prontas para o portal**.
@@ -59,7 +103,8 @@ do Novo Pedido. **Quem clica em tudo é a pessoa.** Prompt 28 · exceção de 06
 - **Login dura 30 dias** (pedido do Ricardo, 10/11): não precisa entrar de novo ao fechar o Chrome.
 
 ## Regras do código (não negociáveis)
-- **Nunca clica em botão do portal** (`content.js › cliqueSeguro`: só opção de lista e caixa de marcar; botão, link e `[role=button]` são recusados).
+- **Preencher esta etapa** nunca clica em botão do portal (`content.js › cliqueSeguro`: só opção de lista e caixa de marcar). A **condução**
+  (0.6.0) clica só pela lista branca de `travas.js` (`conduzirClique`) e nunca no Resumo nem depois.
 - Não toca em login, token, `localStorage` do portal, rede do portal (`pap-api…`) nem no sufixo cifrado — só o DOM da página aberta por você.
 - Dado de cliente só em memória do painel; sessão do Supabase (só os tokens) em `chrome.storage.local` por até **30 dias** desde o login (0.4.0 — antes era `storage.session`, que o Chrome apaga ao fechar); nenhum dado de cliente em storage, console ou log. **Sair** apaga a sessão na hora.
 - Supabase: anon key + login do usuário (RLS). **Nunca** service role.
