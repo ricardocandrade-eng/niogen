@@ -24,12 +24,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-15">
-<script src="config.js?v=111126-15"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-16">
+<script src="config.js?v=111126-16"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-15"></script>
-<script src="assets/sidebar.js?v=111126-15"></script>
-<script src="assets/novavenda.js?v=111126-15"></script>
+<script src="assets/app.js?v=111126-16"></script>
+<script src="assets/sidebar.js?v=111126-16"></script>
+<script src="assets/novavenda.js?v=111126-16"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -57,13 +57,16 @@
   .cob2-i { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--border-strong); font-size: 9px; font-style: normal; font-weight: 700; cursor: help; color: var(--muted); margin-left: 3px; vertical-align: 1px; }
   .cob2-grp.destaque { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; transition: outline-color .3s; }
 
-  .cob2-grid { display: grid; grid-template-columns: minmax(0, 1.12fr) minmax(0, .88fr); gap: 12px; }
+  .cob2-grid { display: flex; flex-direction: column; }
+  .cob2-grid > .cob2-res { flex: 1; }
   .cob2-card { padding: 0; gap: 0; min-height: 0; overflow: hidden; }
   .cob2-card.destaque { border-color: var(--accent); }
   .cob2-ct { padding: 9px 14px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); flex: none; }
   .cob2-ct > b { color: var(--text); font-size: 13px; font-weight: 600; white-space: nowrap; }
   .cob2-ct > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 10px; align-items: center; }
-  .cob2-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .cob2-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 12px; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+  .cob2-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding-top: 10px; }
+  .cob2-col:first-child { padding-top: 0; }
   .cob2-acts { flex: none; padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
   .cob2-acts .btn { min-height: 34px; padding: 0 11px; font-size: 12.5px; text-decoration: none; white-space: nowrap; }
   .cob2-acts .cob2-nova { margin-left: auto; }
@@ -84,6 +87,8 @@
   .cob2-corpo .cob-res { padding: 10px 12px; font-size: 12.5px; }
   .cob2-corpo .faixa { font-size: 12px; padding: 8px 10px; gap: 4px; }
   .cob2-corpo .dfv-opcoes-lista { max-height: 96px; }
+  .cob2-corpo .dfv-opcoes-lista.curta { max-height: 62px; overflow: hidden; }
+  .cob2-maisfach { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--link); font: inherit; font-size: 11.5px; cursor: pointer; }
   .cob2-corpo .dfv-opcoes-lista button.chip { min-height: 26px; font-size: 11.5px; }
   .cob2-corpo .d-l { font-size: 12px; grid-template-columns: 120px minmax(0, 1fr); }
   .cob2-mais > summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
@@ -92,6 +97,19 @@
   .cred-popup { white-space: pre-wrap; font-size: 12px; padding: 10px; border-radius: 8px; background: var(--surface-dim); border: 1px solid var(--border); max-height: 140px; overflow-y: auto; }
   .cred-ofertas { display: grid; gap: 6px; }
 
+  /* Mapa do DFV: barra fixa no pé; tocar abre em tela cheia (11/11 ~22h, pedido do Ricardo) */
+  .cob2-mapa { flex: none; overflow: visible; }
+  .cob2-mapa:not(.aberto) .cob2-entrar-caixa { top: auto; bottom: calc(100% + 8px); }
+  .cob2-mapa .cob2-ct { border-bottom: 0; padding: 0 8px 0 0; }
+  .cob2-barra-bt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; white-space: nowrap; overflow: hidden; }
+  .cob2-barra-bt:hover { color: var(--accent); }
+  .cob2-barra-bt .seta { color: var(--accent); font-size: 12px; }
+  .cob2-barra-bt small { color: var(--muted); font-weight: 400; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+  .cob2-fechar { min-height: 30px; padding: 0 10px; font-size: 12px; }
+  .cob2-mapa .cob2-mapa-corpo { display: none; }
+  .cob2-mapa.aberto { position: fixed; inset: 0; z-index: 60; border-radius: 0; border: 0; display: flex; flex-direction: column; }
+  .cob2-mapa.aberto .cob2-ct { border-bottom: 1px solid var(--border); }
+  .cob2-mapa.aberto .cob2-mapa-corpo { display: flex; flex-direction: column; flex: 1; min-height: 0; }
   .cob2-mapa .cob2-ct a { color: var(--link); text-decoration: none; white-space: nowrap; }
   .cob2-mapa .cob2-ct a:hover { color: var(--link-hover); }
   .cob2-entrar { position: relative; }
@@ -99,11 +117,10 @@
   .cob2-entrar > summary::-webkit-details-marker { display: none; }
   .cob2-entrar-caixa { position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: min(340px, 80vw); padding: 12px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: 0 10px 28px rgba(0, 0, 0, .5); display: flex; flex-direction: column; gap: 8px; white-space: normal; color: var(--text); }
   .cob2-mapa .cob-falha { margin: 10px 14px 0; }
-  .cob2-mapa .cob-moldura { flex: 1; min-height: 0; border: 0; border-radius: 0 0 12px 12px; }
+  .cob2-mapa .cob-moldura { flex: 1; min-height: 0; border: 0; border-radius: 0; }
   .cob2-mapa .cob-moldura iframe { min-height: 0; height: 100%; }
 
-  .cob2-legenda { font-size: 11px; color: var(--muted); text-align: center; flex: none; }
-  .cob2-legenda b { color: var(--text); font-weight: 600; }
+  .cob2-onde { color: var(--muted); cursor: help; white-space: nowrap; font-size: 12px; }
 
   @media (min-width: 1025px) {
     body.tela-cob2 { height: 100vh; overflow: hidden; }
@@ -113,12 +130,12 @@
     .cob2-grid { flex: 1; min-height: 0; }
   }
   @media (max-width: 1024px) {   /* abaixo de ~1024 px as colunas empilham e a página rola (o alvo é o computador) */
-    .cob2-grid { grid-template-columns: 1fr; }
-    .cob2-res { min-height: 420px; max-height: 80vh; }
-    .cob2-mapa { height: 600px; }
+    .cob2-corpo { grid-template-columns: 1fr; gap: 0; }
+    .cob2-res { min-height: 420px; }
     .cob2-sep { display: none; }
   }
   @media (max-width: 760px) {
+    .cob2-barra-bt small, .cob2-onde { display: none; }
     .cob2-grp { width: 100%; }
     .cob2-grp .campo { flex: 1 1 120px; }
     .cob2-ops { justify-content: flex-start; }
@@ -162,39 +179,45 @@
     </section>
 
     <section class="cob2-grid">
-      <!-- Esquerda: resultado (altura fixa; consultar preenche, não empurra) -->
+      <!-- Resultado em largura total (altura fixa; consultar preenche, não empurra): passos à esquerda, decisão e fachadas à direita -->
       <div class="painel cob2-card cob2-res" id="card-res">
         <div class="cob2-ct"><b>Resultado</b><span id="res-end">digite o CEP e o número</span></div>
         <div class="cob2-corpo" aria-live="polite">
-          <ol class="cob2-steps" id="steps"></ol>
-          <div id="resultado-cred" hidden></div>
-          <div id="decisao" class="uni-bloco" hidden></div>
-          <div id="bloco-dfv" hidden>
-            <div id="resultado-dfv" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div class="cob2-col"><ol class="cob2-steps" id="steps"></ol></div>
+          <div class="cob2-col">
+            <div id="resultado-cred" hidden></div>
+            <div id="decisao" class="uni-bloco" style="margin-top:0" hidden></div>
+            <div id="bloco-dfv" hidden>
+              <div id="resultado-dfv" style="display:flex;flex-direction:column;gap:8px"></div>
+            </div>
           </div>
         </div>
         <div class="cob2-acts" id="acts"></div>
       </div>
 
-      <!-- Direita: painel DFV Sudeste sempre visível (mapa para a regra dos 200 m) -->
-      <div class="painel cob2-card cob2-mapa" id="card-mapa">
-        <div class="cob2-ct"><b>Fachadas viáveis · 200 m</b>
-          <span>
-            <details class="cob2-entrar"><summary>como entrar</summary>
-              <div class="cob2-entrar-caixa">
-                <div class="dfv-acesso-card nota-campo" data-dfv-acesso>Usuário PARCEIRO · senhas com o Ricardo</div>
-                <span class="nota-campo">PARCEIRO → senha 1 → aguarde o “ok” → senha 2 → ENTRAR. Abre na página 3 (viabilidade por fachada). Filtre UF = MG, MUNICIPIO = JUIZ DE FORA e o CEP.</span>
-              </div>
-            </details>
-            <a data-dfv-link target="_blank" rel="noopener noreferrer" href="#">nova aba ↗</a>
-          </span>
-        </div>
+    </section>
+
+    <!-- Mapa do painel DFV Sudeste: barra fixa no pé; tocar abre em tela cheia (o iframe nasce no 1º toque) -->
+    <section class="painel cob2-card cob2-mapa" id="card-mapa">
+      <div class="cob2-ct">
+        <button type="button" class="cob2-barra-bt" id="mapa-bt" aria-expanded="false"><span class="seta" id="mapa-seta">▲</span>Fachadas viáveis · 200 m <small>mapa do painel DFV Sudeste (Power BI da Nio) — toque para abrir em tela cheia</small></button>
+        <span>
+          <span class="cob2-onde" title="Viabilidade = portal PAP da Nio, na hora (é ele que decide) · DFV = painel Sudeste, retrato de ~15 dias (a Nio instala até 200 m da última casa viável) · se um operador cair, a tela avisa e usa o outro; sem o painel DFV → base congelada de JF (DD/MM)">de onde vem <i class="cob2-i">i</i></span>
+          <details class="cob2-entrar"><summary>como entrar</summary>
+            <div class="cob2-entrar-caixa">
+              <div class="dfv-acesso-card nota-campo" data-dfv-acesso>Usuário PARCEIRO · senhas com o Ricardo</div>
+              <span class="nota-campo">PARCEIRO → senha 1 → aguarde o “ok” → senha 2 → ENTRAR. Abre na página 3 (viabilidade por fachada). Filtre UF = MG, MUNICIPIO = JUIZ DE FORA e o CEP.</span>
+            </div>
+          </details>
+          <a data-dfv-link target="_blank" rel="noopener noreferrer" href="#">nova aba ↗</a>
+          <button type="button" class="btn btn-sm cob2-fechar" id="mapa-fechar" hidden>✕ Fechar</button>
+        </span>
+      </div>
+      <div class="cob2-mapa-corpo">
         <div class="cob-falha" id="falha" hidden>O painel não abriu embutido; use <a data-dfv-link target="_blank" rel="noopener noreferrer" href="#">Abrir em nova aba ↗</a>.</div>
         <div class="cob-moldura" id="moldura"><span class="carregando">Carregando o painel DFV Sudeste…</span></div>
       </div>
     </section>
-
-    <div class="cob2-legenda"><b>De onde vem:</b> viabilidade = portal PAP da Nio, na hora (é ele que decide) · DFV = painel Sudeste, retrato de ~15 dias (a Nio instala até 200 m da última casa viável) · se um operador cair, a tela avisa e usa o outro; sem o painel DFV → base congelada de JF (DD/MM)</div>
   </main>
 </div>
 <script>
@@ -278,8 +301,9 @@
     const fach = (r.fachadas_no_cep || []).map((x) => ({ x, d: dist(x) })).sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9));
     const vizinhas = fach.length && r.match !== 'exato'
       ? `<div class="dfv-opcoes"><span class="nota-campo">Viáveis no CEP: ${NG.fmtNum(r.total_fachadas_no_cep)}${fach.length < r.total_fachadas_no_cep ? ` (mostrando ${fach.length})` : ''} — as mais perto na numeração primeiro; toque numa para consultar:</span>
-          <div class="dfv-opcoes-lista">${fach.slice(0, 150).map(({ x, d }) => `<button type="button" class="chip ok" data-num="${esc(x.numero || '')}" data-comp="${esc(x.complemento || '')}"
+          <div class="dfv-opcoes-lista${fach.length > 12 ? ' curta' : ''}">${fach.slice(0, 150).map(({ x, d }) => `<button type="button" class="chip ok" data-num="${esc(x.numero || '')}" data-comp="${esc(x.complemento || '')}"
             title="${esc(`${x.logradouro || ''} · HP livre ${x.hp_livre ?? '—'} · ${x.faixa_credito || ''}`)}"><b>${esc(String(x.numero))}</b>${comp(x) ? ` · ${esc(comp(x))}` : ''}${d != null && d > 0 ? ` · ±${d}` : ''}</button>`).join('')}</div>
+          ${fach.length > 12 ? `<button type="button" class="cob2-maisfach" data-mais-fach>ver todas as ${NG.fmtNum(Math.min(fach.length, 150))} ▾</button>` : ''}
           ${fach.length > 150 ? '<span class="nota-campo">Lista cortada em 150: digite o número e consulte.</span>' : ''}</div>`
       : '';
     const nota200 = regra.status && regra.status !== 'dentro' && regra.nota
@@ -560,12 +584,7 @@
   function piscar(el) { el.classList.add('destaque'); setTimeout(() => el.classList.remove('destaque'), 1600); }
   async function cliqueComum(ev) {
     if (ev.target.closest('[data-criar]')) { (await novaVenda).abrir(ultimo); return true; }
-    if (ev.target.closest('[data-abrir-painel]')) {   // o mapa já está aberto ao lado: só chama a atenção (no estreito, rola até ele)
-      ev.preventDefault();
-      cardMapa.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-      piscar(cardMapa);
-      return true;
-    }
+    if (ev.target.closest('[data-abrir-painel]')) { ev.preventDefault(); abrirMapa(true); return true; }
     if (ev.target.closest('[data-ver-dfv]')) {
       dfvBloco.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       const d = dfvBloco.querySelector('details');
@@ -587,6 +606,8 @@
   });
   dfvEl.addEventListener('click', async (ev) => {
     if (await cliqueComum(ev)) return;
+    const mf = ev.target.closest('[data-mais-fach]');
+    if (mf) { mf.dataset.txt = mf.dataset.txt || mf.textContent; const curta = mf.parentElement.querySelector('.dfv-opcoes-lista').classList.toggle('curta'); mf.textContent = curta ? mf.dataset.txt : 'mostrar menos ▴'; return; }
     const b = ev.target.closest('[data-comp]');
     if (!b) return;
     if (b.dataset.num != null) F.numero.value = b.dataset.num;
@@ -728,10 +749,24 @@
     consultar();
   } else F.cep.focus();
 
-  // ------------------------------------------------------------ painel DFV Sudeste: sempre visível (o iframe nasce quando a tela está pronta)
+  // ------------------------------------------------------------ painel DFV Sudeste: barra no pé, abre em tela cheia (o Power BI só carrega no 1º toque)
   const moldura = document.getElementById('moldura');
   const falha = document.getElementById('falha');
   NG.ligarLinkDfv(document.querySelector('main'));
+  const mapaBt = document.getElementById('mapa-bt');
+  const mapaFechar = document.getElementById('mapa-fechar');
+  let montado = false;
+  function abrirMapa(abrir) {
+    cardMapa.classList.toggle('aberto', abrir);
+    mapaBt.setAttribute('aria-expanded', String(abrir));
+    document.getElementById('mapa-seta').textContent = abrir ? '▼' : '▲';
+    mapaFechar.hidden = !abrir;
+    if (abrir && !montado) { montado = true; montarPainel(); }
+  }
+  mapaBt.addEventListener('click', () => abrirMapa(!cardMapa.classList.contains('aberto')));
+  mapaFechar.addEventListener('click', () => abrirMapa(false));
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && cardMapa.classList.contains('aberto')) abrirMapa(false); });
+  if (qs.get('painel') === '1') abrirMapa(true);
   async function montarPainel() {
     const { url } = await NG.dadosDfv();
     if (!url) { moldura.innerHTML = ''; falha.hidden = false; falha.firstChild.textContent = 'Link do DFV ainda não cadastrado no NIOGEN — peça ao Ricardo. '; return; }
@@ -759,8 +794,6 @@
     moldura.innerHTML = '';
     moldura.appendChild(fr);
   }
-  // Depois que a tela já respondeu: o Power BI é pesado e de outro domínio, não pode atrasar a consulta.
-  (window.requestIdleCallback || ((fn) => setTimeout(fn, 300)))(() => montarPainel(), { timeout: 1500 });
 
 })();
 </script>
