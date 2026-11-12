@@ -122,16 +122,23 @@
   }
   async function carregarExtras() {
     if (veMari) { carregarAlarmes(); carregarOportunidades(); }
-    const [rz, rmari, rp, rres, rfc, rfn] = await Promise.all([
+    // 0147: o funil das conversas desenha assim que chega — não espera a Cobertura (v_dfv_resumo leva ~9 s).
+    if (veMari) {
+      Promise.all([
+        NG.sb.from('mari_conversas').select('created_at, funil_etapa, funil_destino').eq('canal', 'whatsapp').neq('funil_destino', 'teste_duplicada').limit(5000),
+        NG.funilNomes(),
+      ]).then(([rfc, rfn]) => {
+        funilConv = rfc.error ? { erro: NG.msgErro(rfc.error) } : (rfc.data || []);
+        if (rfn) fnome = rfn;
+        render();
+      });
+    }
+    const [rz, rmari, rp, rres] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
       veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
       ehAdmin ? NG.sb.rpc('resumo_diario', { p_dia: NG.somaDias(NG.diaSP(), -1) }) : Promise.resolve(null),
-      veMari ? NG.sb.from('mari_conversas').select('created_at, funil_etapa, funil_destino').eq('canal', 'whatsapp').neq('funil_destino', 'teste_duplicada').limit(5000) : Promise.resolve(null),
-      veMari ? NG.funilNomes() : Promise.resolve(null),
     ]);
-    funilConv = !rfc ? null : rfc.error ? { erro: NG.msgErro(rfc.error) } : (rfc.data || []);
-    if (rfn) fnome = rfn;
     base = rz.error ? { erro: NG.msgErro(rz.error) } : (rz.data || false);
     mari = rmari || { lista: [] };
     portal = rp && !rp.error ? rp.data : null;
