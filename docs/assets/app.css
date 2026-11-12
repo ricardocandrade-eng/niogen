@@ -57,8 +57,23 @@ a.nav-item:hover { color: var(--text); }
 .nav-item.ativo { border-left-color: var(--accent); color: var(--text); background: rgba(50, 224, 0, .07); }
 .nav-item.off { opacity: .45; cursor: not-allowed; }
 .nav-item .badge { margin-left: auto; font-family: var(--dm); font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; background: var(--bad-dot); color: var(--bg); }
-.nav-foot { padding: 8px 0 12px; border-top: 1px solid var(--border); }
-.nav-foot .nav-item { color: var(--accent); }
+/* 12/11: rodapé fixo — só a lista de telas rola; selos Mari/Meta e Sair sempre à vista; Sair na cor dos outros itens. */
+@media (min-width: 761px) {
+  .nav { position: sticky; top: 0; height: 100vh; align-self: flex-start; }
+}
+.nav-items { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.nav-foot { flex: 0 0 auto; padding: 8px 0 12px; border-top: 1px solid var(--border); background: var(--nav); }
+.nav-status { display: flex; gap: 6px; padding: 2px 12px 8px; }
+.st-selo { flex: 1 1 0; min-width: 0; display: flex; align-items: center; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.st-selo span { overflow: hidden; text-overflow: ellipsis; }
+a.st-selo:hover { color: var(--text); border-color: var(--border-strong); }
+.st-selo.st-alerta { border-color: var(--warn-border); background: var(--warn-bg); color: var(--warn-fg); }
+.st-selo.st-falha { border-color: var(--bad-border); background: var(--bad-bg); color: var(--bad-fg); }
+.st-selo.st-falha .mv-dot { animation: st-pisca 1.2s ease-in-out infinite; }
+@keyframes st-pisca { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .st-selo.st-falha .mv-dot { animation: none; } }
+.st-pontos { display: inline-flex; align-items: center; gap: 4px; }
+.st-pontos .mv-dot { margin-right: 0; width: 10px; height: 10px; }
 
 .filtro { display: flex; align-items: center; gap: 8px; padding: 0 12px; min-height: 40px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border); font-size: 13px; color: var(--muted); }
 .filtro select, .filtro input { background: transparent; border: 0; color: var(--text); font-size: 13px; min-width: 0; }

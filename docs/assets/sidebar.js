@@ -101,7 +101,10 @@
       <div class="nav-items">
         ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
-      <div class="nav-foot"><button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button></div>`;
+      <div class="nav-foot">
+        <div class="nav-status" data-status aria-live="polite"></div>
+        <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
+      </div>`;
 
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
@@ -109,6 +112,8 @@
     guiaNovo(nav, pagina);
     balancoBotao();
     setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta
+    statusOperacao(nav);
+    setInterval(() => { if (document.visibilityState === 'visible') statusOperacao(nav); }, 120000);   // 2 min, só com a aba visível
 
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
@@ -119,6 +124,39 @@
     }
     await avisos(nav);
     setInterval(() => { if (document.visibilityState === 'visible') avisos(nav); }, 60000);   // 11/11: aba oculta não consulta
+  }
+
+  // ---------- Selos de operação no rodapé do menu (0129, Ricardo 12/11 ~01h) ----------
+  // "Mari ok" e "Meta N no ar", lado a lado, acima do Sair. Uma chamada (status_operacao) a cada 2 min com a aba visível.
+  // Verde = ok · âmbar = alerta · vermelho = falha (API do Claude sem crédito ou falhando, cliente esperando a Mari, pagamento
+  // do Meta, conta bloqueada, nada no ar). O motivo vai no title; no celular, as duas bolinhas aparecem também na barra do ☰.
+  const ST_COR = { ok: 'var(--accent)', alerta: 'var(--warn-dot)', falha: 'var(--bad-dot)' };
+  async function statusOperacao(nav) {
+    const caixa = nav.querySelector('[data-status]');
+    if (!caixa) return;
+    try {
+      const { data, error } = await NG.sb.rpc('status_operacao');
+      if (error || !data) { caixa.hidden = true; return; }
+      caixa.hidden = false;
+      const perfil = (NG.usuario || {}).perfil;
+      const selo = (k, s) => {
+        const motivo = (s.motivos || []).join(' · ');
+        const titulo = `${s.texto}${motivo ? ` — ${motivo}` : ''}`;
+        // A tela Mari é só de admin/backoffice: para o vendedor o selo da Mari não é link.
+        const link = s.href && !(k === 'mari' && !['admin', 'backoffice'].includes(perfil));
+        const tag = link ? 'a' : 'span';
+        return `<${tag} class="st-selo st-${s.nivel}"${link ? ` href="${s.href}"` : ''} title="${NG.esc(titulo)}" aria-label="${NG.esc(titulo)}">`
+          + `<i class="mv-dot" style="--c:${ST_COR[s.nivel] || 'var(--muted)'}"></i><span>${NG.esc(s.texto)}</span></${tag}>`;
+      };
+      caixa.innerHTML = selo('mari', data.mari) + selo('meta', data.meta);
+      const topo = document.querySelector('.topo-movel');
+      if (topo) {
+        let p = topo.querySelector('.st-pontos');
+        if (!p) { p = document.createElement('span'); p.className = 'st-pontos'; topo.appendChild(p); }
+        p.innerHTML = ['mari', 'meta'].map((k) => `<i class="mv-dot" style="--c:${ST_COR[data[k].nivel] || 'var(--muted)'}" title="${NG.esc(data[k].texto)}"></i>`).join('');
+        p.setAttribute('aria-label', `${data.mari.texto} · ${data.meta.texto}`);
+      }
+    } catch (e) { /* os selos nunca derrubam o menu */ }
   }
 
   // ---------- Guia do Backoffice (08/11): "• atualizado" se foi publicado depois da última vez que você abriu ----------

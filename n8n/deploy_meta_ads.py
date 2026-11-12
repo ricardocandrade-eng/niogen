@@ -47,7 +47,9 @@ CAMPOS_INSIGHTS = ','.join(['date_start', 'ad_id', 'ad_name', 'adset_id', 'adset
 CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}'
 CAMPOS_POSIC = ','.join(['date_start', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                          'spend', 'impressions', 'clicks', 'inline_link_clicks', 'actions'])
-CAMPOS_SALDO = 'balance,amount_spent,spend_cap,currency,is_prepay_account'   # 0078: card "Saldo em aberto" (sem dados do cartão)
+# 0078: card "Saldo em aberto" (sem dados do cartão). 0129 (12/11): + account_status/disable_reason → selo "Meta" do menu acusa
+# campanha parada por falha no pagamento (3/8), conta desativada (2/100/101) ou carência (9).
+CAMPOS_SALDO = 'balance,amount_spent,spend_cap,currency,is_prepay_account,account_status,disable_reason'
 CAMPOS_CONJ = ('id,name,effective_status,campaign_id,campaign{name},targeting{publisher_platforms,facebook_positions,'
                'instagram_positions,whatsapp_positions,audience_network_positions,messenger_positions}')
 

@@ -332,7 +332,7 @@
           "parameters": [
             {
               "name": "fields",
-              "value": "balance,amount_spent,spend_cap,currency,is_prepay_account"
+              "value": "balance,amount_spent,spend_cap,currency,is_prepay_account,account_status,disable_reason"
             }
           ]
         },
