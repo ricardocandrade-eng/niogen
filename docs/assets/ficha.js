@@ -435,7 +435,7 @@
     // 0111: etapa 2 → 3 pelo CRÉDITO (sem número). Aprovado = a Nio manda o link da biometria; negado = outro CPF + pendência.
     credito: (v) => formWrap('credito', 'Gravar o crédito',
       'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode a análise de crédito e grave aqui o resultado — <b>não precisa de número</b>: o nº do pedido só existe na OS. Aprovado: a Nio manda o link da biometria e <b>o NIOGEN avisa o cliente sozinho</b>. Negado: o NIOGEN pede outro CPF ao cliente e abre a pendência.',
-      `${botoesPortal}<label class="campo">Análise de crédito<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, ['aprovado', 'so_cartao', 'pendente', 'negado'].includes(v.credito_resultado) ? v.credito_resultado : '', 'Escolher o resultado…')}</select></label>
+      `${botoesPortal}<label class="campo">Análise de crédito<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, credPreset || (['aprovado', 'so_cartao', 'pendente', 'negado'].includes(v.credito_resultado) ? v.credito_resultado : ''), 'Escolher o resultado…')}</select>${credPreset ? '<span class="nota-campo">Resultado trazido do operador de crédito — confira e grave.</span>' : ''}</label>
        <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>${checkRecompra()}`, 'Gravar o crédito'),
     // 0096 / 0111: etapa 3 → 4 (VENDA). O nº do pedido = a OS (o único ID da Nio); agendar é o passo seguinte.
     os: (v) => formWrap('os', 'Abrir a OS = VENDA',
@@ -514,7 +514,9 @@
   }
   const quandoDe = (fd) => `${fd.get('dia')}T${fd.get('periodo')}:00-03:00`;
   // 0082: o botão do momento — o banco grava a venda e enfileira o Chatwoot; a ficha guarda a linha do que foi feito.
-  function avisarOuvintes(r) { ouvintes.forEach((f) => { try { f(d && d.v, r || null); } catch (e) { /* tela que ouve */ } }); }
+  function avisarOuvintes(r) {
+    if (modo === 'cheia' && d && fc.passo && !formAtivo) { fc.passo = false; render(); }   // 12/11: a ação terminou → o painel de ações fecha
+    ouvintes.forEach((f) => { try { f(d && d.v, r || null); } catch (e) { /* tela que ouve */ } }); }
   async function rodarMomento(qual, dados) {
     const r = await NG.momento(d.v.id, qual, dados);
     if (!r) return null;
@@ -1271,6 +1273,7 @@
     montarConversaInterna();
   }
   function abrirConversa() {
+    if (modo === 'cheia') { if (cvCheia) cvCheia.focar(); return; }
     if (hostConversa) { hostConversa({ conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : (d.conv && d.conv.nome), aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) }); return; }
     convAberta = true;
     render();
@@ -1316,7 +1319,12 @@
     responder: 'a resposta sai como pessoa (a Mari não responde).',
   };
 
+  // 12/11: as partes do próximo passo (a ficha da gaveta junta em faixas; a tela cheia do Live põe no card Agora e no painel de ações).
   function faixaProximo(v, pr) {
+    const p = passoPartes(v, pr);
+    return `${p.faixaConv}${quadroPasso('venda', NIVEL_CLS[p.nivel] || 'dim', NIVEL_ROT[p.nivel] || 'PRÓXIMO PASSO', p.texto, p.corpo, p.forcar)}${p.feito}`;
+  }
+  function passoPartes(v, pr) {
     const jReal = d.jor;
     // Alerta da CONVERSA (mensagem que não saiu, cliente esperando): faixa própria em cima; o passo da VENDA segue com os botões dele.
     const alertaConv = jReal && ['manual', 'responder'].includes(jReal.botao) && jReal.nivel === 'agora';
@@ -1389,12 +1397,13 @@
     formAtivoPadrao = null;
     const feito = feitoUltimo ? `<div class="f-feito${feitoUltimo.aviso ? ' warn' : ''}" role="status">${esc(feitoUltimo.resumo)}${feitoUltimo.aviso ? `<span>${esc(feitoUltimo.aviso)}</span>` : ''}</div>` : '';
     let faixaConv = '';
+    let corpoConv = '';
     if (alertaConv && bo) {
       const bc = jReal.botao === 'manual' && d.bloqueada
         ? [B('data-f="manual-copiar"', 'Copiar o texto', false), d.chatwoot ? `<a class="btn" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : '', B('data-f="manual-mandei"', 'Já mandei', true)]
         : [B('data-f="conversa"', 'Abrir a conversa e responder', true)];
-      faixaConv = quadroPasso('conv', 'bad f-alerta-conv', 'CONVERSA · AGORA', jReal.o_que_fazer,
-        `<div class="f-prox-bts">${bc.filter(Boolean).join('')}</div><span class="f-sozinho">O NIOGEN faz sozinho: ${esc(jReal.botao === 'manual' ? SOZINHO.manual : SOZINHO.responder)}</span>`);
+      corpoConv = `<div class="f-prox-bts">${bc.filter(Boolean).join('')}</div><span class="f-sozinho">O NIOGEN faz sozinho: ${esc(jReal.botao === 'manual' ? SOZINHO.manual : SOZINHO.responder)}</span>`;
+      faixaConv = quadroPasso('conv', 'bad f-alerta-conv', 'CONVERSA · AGORA', jReal.o_que_fazer, corpoConv);
     }
     // 0103: cliente só confirmou → atalho da pendência já à mão, com a última fala do time como descrição.
     const conf = bo && soConfirmou(jReal) && !d.pend && v.status !== 'saida';
@@ -1406,7 +1415,9 @@
         ${corpoForm ? `<div class="f-prox-form">${corpoForm}</div>` : ''}
         ${sozinho && !form ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
         ${atalhos(v)}`;
-    return `${faixaConv}${quadroPasso('venda', NIVEL_CLS[nivel] || 'dim', NIVEL_ROT[nivel] || 'PRÓXIMO PASSO', texto, corpo, !!form || conf)}${feito}`;
+    const temAcao = bts.filter(Boolean).length > 0 || !!corpoForm;
+    return { faixaConv, corpoConv, alertaConv: !!(alertaConv && bo), jReal, nivel, texto, corpo, forcar: !!form || conf, feito, nota, sozinho, temAcao,
+      rotuloAcao: (bts.filter(Boolean)[0] || '').replace(/<[^>]+>/g, '').trim() };
   }
   let formAtivoPadrao = null;
 
@@ -1778,6 +1789,7 @@
 
   function render() {
     if (!raiz || !d) return;
+    if (modo === 'cheia') { renderCheia(); return; }
     if (d.soConversa) { renderConversa(); return; }
     const v = d.v;
     const pr = NG.proximoPasso(v, (d.contatos[0] || {}).em);
@@ -1872,9 +1884,8 @@
       ${L.length ? `<dl class="f-dl">${L.map(([k, val]) => `<dt>${esc(k)}</dt><dd><span>${esc(String(val))}</span><button type="button" class="f-copia" data-copiar="${esc(String(val))}" title="Copiar ${esc(k)}">⧉</button></dd>`).join('')}</dl>`
         : '<span class="apagado">A Mari ainda não coletou dados deste cliente.</span>'}</div>`;
   }
-  function renderConversa() {
-    const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;
-    const focoAntes = document.activeElement;
+  // 12/11: as partes da ficha de conversa (a gaveta desenha em faixas; a tela cheia do Live, no card Agora e nos cards).
+  function conversaPartes() {
     const c = d.conv;
     const j = d.jor || {};
     const q = d.q || {};
@@ -1940,6 +1951,12 @@
           ${formEspera}
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
           <div class="f-atalhos">${at.join('')}</div>`;
+    return { c, j, q, dono, nivel, silenciada, emEspera, corpoPasso, itens, ESTADO, feito, k, passosConv, travasC };
+  }
+  function renderConversa() {
+    const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;
+    const focoAntes = document.activeElement;
+    const { c, j, q, dono, nivel, silenciada, corpoPasso, itens, ESTADO, feito, k, passosConv, travasC } = conversaPartes();
     raiz.innerHTML = `<div class="ficha f-${modo}${largo ? ' f-largo' : ''}${convAberta && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
       <header class="f-cab"><div class="f-linha1"><div class="f-nome"><h2>${esc(c.nome)}</h2>${linhaPlano(q.plano_nome || c.plano_escolhido, null, null)}</div><div class="f-ctl">${botaoVoltar()}${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
@@ -2078,7 +2095,7 @@
       if (!b) { if (!ev.target.closest('.f-menu')) fecharMenus(); return; }
       const acao = b.dataset.f;
       if (acao !== 'menu') fecharMenus();
-      if (acao === 'fechar') { if (modo === 'lado') fecharLado(); else NG.gaveta.fechar(); return; }
+      if (acao === 'fechar') { if (modo === 'cheia') fecharCheia(); else if (modo === 'lado') fecharLado(); else NG.gaveta.fechar(); return; }
       if (acao === 'passo') {   // 10/11: próximo passo recolhido ▸ / expandido ▾
         const k = b.dataset.k;
         if (passoAberto.has(k)) { passoAberto.delete(k); if (formAtivo && !formAtivo.startsWith('conf_') && !FORMS_NO_CARTAO.includes(formAtivo) && formAtivo !== 'saida' && formAtivo !== 'pend_abrir') formAtivo = null; } else passoAberto.add(k);
@@ -2278,6 +2295,13 @@
     }
   }
   async function mostrar(id) {
+    if (modo === 'cheia') {
+      if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null; credPreset = null; fc = novoFc();
+        if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
+        raiz.innerHTML = '<div class="fc"><div class="fc-carregando">Carregando…</div></div>'; }
+      await recarregar({ abrindo: true });
+      return;
+    }
     if (modo === 'lado') {
       if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; detalhes = largo; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null;
         raiz.innerHTML = '<div class="ficha f-lado"><div class="f-corpo"><div class="carregando">Carregando…</div></div></div>'; }
@@ -2320,7 +2344,7 @@
     if (modo === 'pagina') return;
     const id = idDoHash();
     if (id) { if (id !== idAtual) { empurrou = false; mostrar(id); } }
-    else if (idAtual) { empurrou = false; if (modo === 'lado') fecharLado(); else NG.gaveta.fechar(); }
+    else if (idAtual) { empurrou = false; if (modo === 'cheia') fecharCheia(); else if (modo === 'lado') fecharLado(); else NG.gaveta.fechar(); }
   }
   window.addEventListener('popstate', sincronizar);
   window.addEventListener('hashchange', sincronizar);
@@ -2344,8 +2368,8 @@
   }
   // Troca o modo (Live: Lista = ao lado · Quadro = gaveta) sem recarregar a página.
   function usarGaveta() {
-    if (modo !== 'lado') return;
-    if (idAtual) fecharLado();
+    if (modo !== 'lado' && modo !== 'cheia') return;
+    if (idAtual) { if (modo === 'cheia') fecharCheia(); else fecharLado(); }
     modo = 'gaveta';
     raiz = gav ? gav.querySelector('.ficha-raiz') : null;
   }
@@ -2356,10 +2380,618 @@
     raiz = ladoEl;
   }
 
+  // =====================================================================================================================
+  // 12/11 — TELA CHEIA DO CLIENTE (Live redesenhada · docs/Prompt_live_redesenho_111126_2120.md · protótipo UXtiACpUJj9Fq7wdEUuqug)
+  // A tela não rola: cabeçalho fixo · trilha das 5 etapas (o detalhe abre por baixo, na largura da etapa, com os operadores de
+  // viabilidade e crédito) · duas metades: Conversa (NGConversa, com a faixa da Mari acima da caixa) | Ficha (card Agora com a
+  // pendência na última linha · cards Cliente e Venda · "Ver tudo" por cima dos dois · conferências dentro do card Venda ·
+  // Histórico por cima da metade). Tudo que abre ocupa o card mais próximo; nada empurra nada. Os dados são os mesmos da ficha
+  // (carregar/carregarConversa), as ações são as mesmas (data-f / data-momento / data-resolver / SALVAR): só mudou o lugar.
+  // Operadores = CONSULTA-SÓ: o resultado aparece na etapa e entra no Histórico como leitura; gravar só por "Registrar na venda".
+  // =====================================================================================================================
+  let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
+  let cvCheia = null;      // NGConversa montado na metade esquerda
+  let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
+  const novoFc = () => ({ etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, passo: false, op: {}, leituras: [] });
+  let fc = novoFc();
+  const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+  const IC = {
+    voltar: SVG('<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>'), cima: SVG('<path d="m18 15-6-6-6 6"/>'), baixo: SVG('<path d="m6 9 6 6 6-6"/>'),
+    ok: SVG('<path d="M20 6 9 17l-5-5"/>'), mais: SVG('<path d="M5 12h.01"/><path d="M12 12h.01"/><path d="M19 12h.01"/>'),
+    copiar: SVG('<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/>'), x: SVG('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>'),
+    expandir: SVG('<path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/>'), pausa: SVG('<path d="M9 5v14"/><path d="M15 5v14"/>'),
+    hist: SVG('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/>'), play: SVG('<path d="m6 4 14 8-14 8Z"/>'),
+    gira: SVG('<path d="M21 12a9 9 0 1 1-6.2-8.6"/>', 'fc-gira'), seta: SVG('<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>'),
+  };
+  const btCopiar = (val, rot) => (val ? `<button type="button" class="fc-cp" data-copiar="${esc(String(val))}" aria-label="Copiar ${esc(rot)}" title="Copiar ${esc(rot)}">${IC.copiar}</button>` : '<span></span>');
+  const TOM = { agora: 'now', hoje: 'today', espera: 'wait', ok: 'ok', fora: 'mute' };
+  const NIVEL_K = { agora: 'Agora', hoje: 'Hoje', espera: 'Aguardando', ok: 'Nada a fazer agora', fora: 'Fora da jornada' };
+
+  // ---------- trilha das etapas ----------
+  const ETAPAS_K = ['viab', 'cred', 'bio', 'os', 'inst'];
+  function trilhaPassos(passos) {
+    const iAtual = passos.findIndex((p) => p.s !== 'ok');
+    return passos.map((p, i) => {
+      const st = p.s === 'ok' ? 'done' : p.s === 'wa' ? 'wait' : i === iAtual ? (d.pend ? 'wait' : 'now') : 'todo';
+      return { ...p, k: ETAPAS_K[i], st, segDone: p.s === 'ok' && passos[i + 1] && passos[i + 1].s === 'ok' };
+    });
+  }
+  const linhaDet = (k, v) => `<div class="fc-dr"><span>${esc(k)}</span><b>${v}</b></div>`;
+  const VIAB_ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', complemento_fora_lista: 'Unidade fora da lista do portal' };
+  const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado',
+    pedido_em_andamento: 'Já tem pedido em andamento', pendente: 'Pendente', nao_classificado: 'Não classificado', sem_viabilidade: 'Endereço sem viabilidade',
+    complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
+  const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
+  // O que o operador precisa (venda: da ficha; conversa: o que a Mari coletou). Falta = selo no lugar do botão.
+  function entradaOp(tipo) {
+    const v = d.soConversa ? null : d.v;
+    const x = d.soConversa ? ((d.conv && d.conv.dados) || {}) : {};
+    const cep = NG.soDigitos(v ? v.cep : (x.cep_origem || (d.conv || {}).cep || ''));
+    const numero = String(v ? v.numero || '' : x.numero || '').trim();
+    const complemento = String(v ? v.complemento || '' : '').trim();
+    const end = { cep, numero, complemento, opcao: '' };
+    if (cep.length !== 8) return { falta: 'falta CEP' };
+    if (!numero) return { falta: 'falta o número' };
+    if (tipo === 'viab') return { end };
+    const cpf = NG.soDigitos(v ? v.cliente_cpf_cnpj : x.cpf);
+    if (cpf.length !== 11) return { falta: cpf.length === 14 ? 'CNPJ: consulte no portal' : 'falta CPF' };
+    const cel = NG.soDigitos(v ? v.cliente_whatsapp : (d.conv || {}).telefone).replace(/^55(?=\d{10,11}$)/, '');
+    if (![10, 11].includes(cel.length)) return { falta: 'falta o celular' };
+    const email = String(v ? v.cliente_email || '' : x.email || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { falta: 'falta o e-mail' };
+    return { end, cpf, contato: { celular: cel, email } };
+  }
+  function opResultado(tipo, s) {
+    if (tipo === 'viab') {
+      const rot = VIAB_ROT[s.resultado] || 'Não decidiu';
+      const det = s.resultado === 'viavel' && s.velocidade ? `até ${s.velocidade}` : s.resultado in VIAB_ROT ? 'viabilidade oficial do portal' : (s.motivo || s.resultado || '—');
+      return { rot, det, cls: s.resultado === 'viavel' ? 'ok' : s.resultado === 'sem_viabilidade' ? 'bad' : 'warn',
+        registrar: ['viavel', 'sem_viabilidade'].includes(s.resultado) ? s.resultado : null };
+    }
+    const formas = s.formas_liberadas || [];
+    let rot = CRED_ROT[s.resultado] || s.resultado || '—';
+    if (s.resultado === 'aprovado_parcial' && formas.length) rot = `Aprovado — ${formas.map((f) => FORMA_OP[f] || f).join(', ')}`;
+    const so = s.resultado === 'aprovado_cartao' || (s.resultado === 'aprovado_parcial' && formas.length === 1 && formas[0] === 'CREDITO');
+    const reg = so ? 'so_cartao' : /^aprovado/.test(s.resultado || '') ? 'aprovado' : s.resultado === 'negado' ? 'negado' : s.resultado === 'pendente' ? 'pendente' : null;
+    return { rot, det: s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP'),
+      cls: /^aprovado/.test(s.resultado || '') ? 'ok' : s.resultado === 'negado' || s.resultado === 'pedido_em_andamento' ? 'bad' : 'warn', registrar: reg };
+  }
+  function opPainel(tipo) {
+    const bo = ehBO();
+    if (!bo) return '';
+    const e = entradaOp(tipo);
+    const o = fc.op[tipo];
+    const nome = tipo === 'viab' ? 'Operador de viabilidade' : 'Operador de crédito';
+    let corpo = '';
+    if (o && o.estado === 'rodando') {
+      const s = o.s || {};
+      const seg = Math.round((Date.now() - o.t0) / 1000);
+      const txt = s.estado === 'fila' ? `na fila (posição ${s.posicao_fila || 1})` : s.etapa ? `etapa ${s.etapa} no portal` : 'abrindo o portal';
+      corpo = `<div class="fc-op-run">${IC.gira}<span>${esc(txt)} · ${seg} s <small>(${tipo === 'viab' ? '~20–40 s' : '~30–40 s'})</small></span></div>`;
+    } else if (o && o.estado === 'pronto') {
+      const r = opResultado(tipo, o.s);
+      const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida';
+      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>
+        <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}
+        <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
+    } else if (o && o.estado === 'erro') {
+      corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(o.erro)}</span></div><div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Tentar de novo</button>${tipo === 'viab' ? '' : ''}</div>`;
+    } else if (e.falta) {
+      corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(e.falta)}</span><small>complete a ficha para rodar o operador</small></div>`;
+    } else {
+      corpo = `${tipo === 'cred' ? '<label class="fc-chk"><input type="checkbox" data-fc-autoriza> O titular autorizou a consulta do CPF</label>' : ''}
+        <div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">${IC.play}Rodar operador</button></div>`;
+    }
+    return `<div class="fc-op" data-fc-op="${tipo}"><span class="fc-src op">${esc(nome)}</span>${corpo}</div>`;
+  }
+  function atualizarOp(tipo) {
+    const el = raiz && raiz.querySelector(`[data-fc-op="${tipo}"]`);
+    if (el) el.outerHTML = opPainel(tipo);
+  }
+  async function rodarOp(tipo) {
+    const e = entradaOp(tipo);
+    if (e.falta) { NG.toast(e.falta, 'bad'); return; }
+    if (tipo === 'cred') {
+      const ck = raiz.querySelector('[data-fc-autoriza]');
+      if (ck && !ck.checked) { NG.toast('Marque que o titular autorizou a consulta.', 'bad'); return; }
+    }
+    const alvo = idAtual;
+    const t0 = Date.now();
+    fc.op[tipo] = { estado: 'rodando', s: { estado: 'fila', posicao_fila: 0 }, t0 };
+    atualizarOp(tipo);
+    const tick = setInterval(() => { if (idAtual === alvo && fc.op[tipo] && fc.op[tipo].estado === 'rodando') atualizarOp(tipo); else clearInterval(tick); }, 1000);
+    try {
+      let s = tipo === 'viab' ? await NG.viabIniciar(e.end) : await NG.creditoIniciar({ cpf: e.cpf, autorizado: true, contato: e.contato, endereco: e.end });
+      const fim = Date.now() + 4 * 60 * 1000;
+      while (s && !['pronto', 'erro'].includes(s.estado)) {
+        if (idAtual !== alvo) return;
+        if (Date.now() > fim) throw new Error('o portal demorou demais — tente de novo em alguns minutos');
+        fc.op[tipo] = { estado: 'rodando', s, t0 };
+        await pausa(tipo === 'viab' ? 2000 : 3000);
+        s = await NG.creditoStatus(s.job_id);
+      }
+      if (idAtual !== alvo) return;
+      const em = new Date().toISOString();
+      fc.op[tipo] = { estado: 'pronto', s: s || {}, em };
+      const r = opResultado(tipo, s || {});
+      fc.leituras.unshift({ em, tipo, rot: r.rot, det: r.det });
+    } catch (err) {
+      if (idAtual !== alvo) return;
+      fc.op[tipo] = { estado: 'erro', erro: err.naoInstalado ? 'operador fora do ar — consulte direto no portal' : NG.msgErro(err) };
+    } finally { clearInterval(tick); }
+    atualizarOp(tipo);
+  }
+
+  // Detalhe de cada etapa (abre por baixo dela, na mesma largura).
+  function etapaDetalhe(p) {
+    const conv = !!d.soConversa;
+    const v = conv ? {} : d.v;
+    const a = d.andamento || {};
+    const fonte = (t, op) => `<span class="fc-src${op ? ' op' : ''}">fonte: ${esc(t)}</span>`;
+    const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}">Visto</button>`;
+    let corpo = '';
+    if (p.k === 'viab') {
+      const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
+      corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
+        ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
+        ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
+        ${!conv ? linhaDet('Pista do DFV', esc(pistaDfv(v).txt)) : ''}
+        ${fonte(conv ? 'Mari / portal' : v.nio_viab_origem === 'manual' ? 'registrada à mão (portal PAP)' : v.nio_viab_origem ? `portal PAP · ${v.nio_viab_origem}` : 'portal PAP')}
+        ${opPainel('viab')}
+        ${!conv && v.status !== 'saida' && ehBO() ? `<div class="fc-op-bts"><a class="btn btn-sm" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal">Abrir o portal ↗</a><button type="button" class="btn btn-sm" data-f="viab-form">Registrar resultado à mão</button></div>` : ''}`;
+    } else if (p.k === 'cred') {
+      corpo = conv ? `${linhaDet('Resultado', 'ainda sem venda')}${opPainel('cred')}`
+        : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
+        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
+    } else if (p.k === 'bio') {
+      corpo = conv ? linhaDet('Biometria', 'depois do crédito aprovado')
+        : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
+        ${v.biometria_link_enviado_em ? linhaDet('Link da Nio', esc(NG.fmtDataHora(v.biometria_link_enviado_em))) : ''}
+        ${v.biometria_validada_em ? linhaDet('Validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
+        ${a.bio_resultado ? linhaDet('GED360', `${esc(a.bio_rotulo || a.bio_resultado)} · protocolo ${esc(a.bio_protocolo)} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}`) : ''}
+        ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
+        ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}`;
+    } else if (p.k === 'os') {
+      corpo = conv ? linhaDet('Pedido (OS)', 'depois da biometria') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
+        ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
+        ${a.portal_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.portal_alerta)}</span>${visto('portal', a.portal_pedido)}</div>` : ''}
+        ${fonte('portal PAP')}`;
+    } else {
+      corpo = conv ? linhaDet('Instalação', 'depois do pedido') : `${linhaDet('Agendada', esc(v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '—'))}
+        ${linhaDet('Instalada', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}
+        ${linhaDet('OSAB', esc(v.nio_situacao || '—'))}
+        ${v.nio_pendencia_cod || v.nio_pendencia_desc ? linhaDet('Pendência Nio', `<span class="warn-txt">${esc([v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · '))}</span>`) : ''}
+        ${linhaDet('Documentos', esc(v.docs_entregues_em ? `entregues ${NG.fmtData(v.docs_entregues_em)}` : v.docs_prazo_em ? `até ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}
+        ${fonte('portal PAP · OSAB da Nio')}`;
+    }
+    return `<div class="fc-pop" role="dialog" aria-label="${esc(p.nome)}"><div class="fc-pop-h"><b>${esc(p.nome)}</b><small>${esc(p.d || '')}</small>
+      <button type="button" class="fc-x" data-f="fc-etapa" data-k="${p.k}" aria-label="Fechar">${IC.x}</button></div>${corpo}</div>`;
+  }
+  function trilhaHtml(passos) {
+    const L = trilhaPassos(passos);
+    return `<nav class="fc-rail" aria-label="Etapas da venda">${L.map((p) => {
+      const o = fc.op[p.k] && fc.op[p.k].estado === 'rodando';
+      const st = o ? 'run' : p.st;
+      const ic = st === 'done' ? IC.ok : st === 'now' ? '<span class="fc-rdot"></span>' : st === 'wait' ? IC.pausa : st === 'run' ? IC.gira : '';
+      return `<div class="fc-rs r-${st}${p.segDone ? ' seg-ok' : ''}">
+        <button type="button" class="fc-rb${fc.etapa === p.k ? ' on' : ''}" data-f="fc-etapa" data-k="${p.k}" aria-expanded="${fc.etapa === p.k}">
+          <span class="fc-ri">${ic}</span><span class="fc-rt"><b>${esc(p.nome)}</b><small title="${esc(p.d || '')}">${esc(o ? 'rodando operador…' : p.d || (st === 'now' ? 'agora' : '—'))}</small></span></button>
+        ${fc.etapa === p.k ? etapaDetalhe(p) : ''}</div>`;
+    }).join('')}</nav>`;
+  }
+
+  // ---------- cabeçalho ----------
+  function cabCheia(nome, chips, meta, menu) {
+    const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
+    return `<header class="fc-top">
+      <button type="button" class="btn" data-f="fc-voltar" title="Volta para a fila (Esc)">${IC.voltar}Fila</button>
+      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div></div>
+      <div class="fc-nav">
+        ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
+        <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1" aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
+        <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1" aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
+        <button type="button" class="btn btn-acc" data-f="fc-concluir" title="Terminou com este cliente? Fecha e abre o próximo da fila">${IC.ok}Concluir</button>
+        <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Mais ações">${IC.mais}</button>
+          ${fc.menu ? `<div class="fc-menu" role="menu">${menu}</div>` : ''}</div>
+      </div></header>`;
+  }
+  const chipCopia = (rot, val, cls = '') => (val ? `<span class="fc-chip ${cls}"><span>${esc(rot)} ${esc(val)}</span>${btCopiar(NG.soDigitos(val) || val, rot)}</span>` : '');
+
+  // ---------- Agora + pendência ----------
+  function agoraHtml(tom, k, t, s, botao, pendHtml) {
+    return `<div class="fc-agora ag-${tom}">
+      <div class="fc-ag-main"><div class="fc-ag-txt"><div class="fc-ag-k">${esc(k)}</div><div class="fc-ag-t" title="${esc(t)}">${esc(t || '—')}</div><div class="fc-ag-s" title="${esc(s || '')}">${esc(s || '')}</div></div>${botao}</div>
+      ${pendHtml}</div>`;
+  }
+  function pendLinha(v) {
+    const pe = d.pend;
+    if (!pe) {
+      const pode = ehBO() && v && ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado'].includes(v.status);
+      return `<div class="fc-ag-pend none"><span>Sem pendência</span>${pode ? '<button type="button" class="fc-link" data-f="pend-abrir">⏸ Abrir pendência</button>' : ''}</div>`;
+    }
+    return `<div class="fc-ag-pend"><button type="button" class="fc-pendbt" data-f="fc-pend" aria-expanded="${fc.pend}"><span class="fc-pill pend">${IC.pausa}pendência</span>
+      <span class="fc-pt">${esc([pe.nome, pe.descricao, `revisar ${pe.diaTxt}`].filter(Boolean).join(' · '))}</span><span class="fc-pmore">Detalhes</span></button></div>`;
+  }
+  function pendOver() {
+    const pe = d.pend;
+    if (!pe || !fc.pend) return '';
+    const pode = ehBO();
+    const dias = pe.desde ? Math.max(0, Math.round((new Date(`${NG.diaSP()}T12:00:00-03:00`) - new Date(`${NG.diaSP(pe.desde)}T12:00:00-03:00`)) / 86400000)) : null;
+    const nomeMot = (c) => ((d.motivos || []).find((m) => m.codigo === c) || {}).nome || c;
+    const h = (d.pendHist || [])[0];
+    const antes = h ? ` · antes: ${nomeMot(h.motivo)}, ${NG.fmtData(h.aberta_em)} → ${NG.fmtData(h.encerrada_em)}, ${(NG.RESULTADO_PENDENCIA[h.resultado] || h.resultado).toLowerCase()}${h.autor ? ` (${h.autor})` : ''}` : '';
+    return `<div class="fc-pend-over" role="dialog" aria-label="Pendência">
+      <div class="fc-po-h"><b>Pendência</b><span class="fc-pill pend">${pe.vencida ? 'revisar hoje' : 'em espera'}</span><span class="fc-pill mute">Mari pausada</span>${pe.revisoes >= 2 ? `<span class="fc-pill warn">adiada ${pe.revisoes}×</span>` : ''}<span class="fc-sp"></span>
+        ${pode ? `<button type="button" class="btn btn-sm${pe.vencida ? ' btn-acc' : ''}" data-f="pend-encerrar">Encerrar</button><button type="button" class="btn btn-sm" data-f="pend-adiar">Adiar</button>${pe.saida_sugerida ? `<button type="button" class="btn btn-sm" data-f="pend-saida" title="Confirmado? Encerrar como ${esc(pe.saida_sugerida)}">Saída: ${esc(pe.saida_sugerida)}</button>` : ''}` : ''}
+        <button type="button" class="fc-x" data-f="fc-pend" aria-label="Fechar">${IC.x}</button></div>
+      <div class="fc-pend-grid">
+        <div><span>Motivo</span><b title="${esc(pe.nome)}">${esc(pe.nome)}</b></div>
+        <div><span>Descrição</span><b title="${esc(pe.descricao || '')}">${esc(pe.descricao || '—')}</b></div>
+        <div><span>Quem destrava</span><b>${esc(pe.quemTxt || '—')}</b></div>
+        <div><span>Desde</span><b>${esc(`${NG.fmtDataHora(pe.desde)}${dias != null ? ` · ${dias} d parada` : ''}`)}</b></div>
+        <div><span>Revisar</span><b class="${pe.vencida ? 'bad-txt' : ''}">${esc(pe.diaTxt)}</b></div></div>
+      <div class="fc-po-f"><span title="${esc(`Avise o cliente uma vez, à mão (texto pronto no guia)${antes}`)}">Avise o cliente uma vez, à mão (texto pronto no guia)${esc(antes)}</span><a href="guia.html#pendencias" target="_blank" rel="noopener">Como funciona ↗</a></div>
+    </div>`;
+  }
+
+  // ---------- cards Cliente e Venda ----------
+  const di = (k, v, cp, cls = '') => `<div class="fc-di"><span class="fc-dk">${esc(k)}</span><span class="fc-dv ${v ? cls : 'ph'}" title="${esc(v || '')}">${esc(v || '—')}</span>${cp && v ? btCopiar(v, k) : '<span></span>'}</div>`;
+  function conferencias(v) {
+    return [
+      ['sem_produto', 'Não era cliente Nio', v.trava_sem_produto_ativo, 'viab'],
+      ['cancel30', 'Sem cancelamento nos últimos 30 dias', v.trava_sem_cancelamento_30d, 'viab'],
+      ['area', 'Dentro da área de atuação', v.trava_area, 'cli'],
+      ['cobertura', 'Cobertura Nio no endereço', v.trava_cobertura, 'viab'],
+      ['cpf', 'CPF/CNPJ válido', v.trava_cpf_valido, 'cli'],
+      ['contato', 'Endereço e telefone confirmados', v.trava_contato_confirmado, 'cli'],
+    ];
+  }
+  function textoWa(v) {
+    const L = (rot, val) => (val ? `${rot}: ${val}` : null);
+    const end = [v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ');
+    const cli = [L('Nome', v.cliente_nome), L('CPF/CNPJ', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : ''), L('WhatsApp', v.cliente_whatsapp ? fmtTel(v.cliente_whatsapp) : ''),
+      L('E-mail', v.cliente_email), L('Endereço', end), L('Bairro', v.bairro), L('Cidade', [v.cidade, v.uf].filter(Boolean).join('/')), L('CEP', v.cep ? NG.fmtCep(v.cep) : ''), L('Referência', v.ponto_referencia)].filter(Boolean);
+    const valorAd = d.adics.reduce((s, a) => s + Number((a.config_adicionais || {}).preco || 0) * a.qtd, 0);
+    const ven = [L('Plano', d.nomeCurto || v.plano_nome), L('Mensalidade', v.valor_mensal != null ? NG.fmtMoeda(Number(v.valor_mensal) + valorAd) : ''), L('Pagamento', FORMAS[v.forma_pagamento]),
+      L('Pedido PAP', v.nio_os || v.nio_pedido), L('Biometria', v.biometria_status ? (NG.BIOMETRIA[v.biometria_status] || '').split(' (')[0] : ''),
+      L('Instalação', v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}` : v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '')].filter(Boolean);
+    return `*Cliente*\n${cli.join('\n')}${ven.length ? `\n\n*Venda*\n${ven.join('\n')}` : ''}`;
+  }
+  function cardsVenda(v) {
+    const m = NG.fmtMoeda;
+    const valorAd = d.adics.reduce((s, a) => s + Number((a.config_adicionais || {}).preco || 0) * a.qtd, 0);
+    const end = [v.logradouro, v.numero, v.complemento].filter(Boolean).join(', ');
+    const cf = conferencias(v);
+    const nOk = cf.filter((x) => x[2] === true).length;
+    const confBt = `<button type="button" class="fc-confb ${nOk === 6 ? 'ok' : 'warn'}${fc.conf ? ' on' : ''}" data-f="fc-conf" title="Conferências do contrato">${nOk}/6 conferências</button>`;
+    const selos = [v.trava_contato_confirmado === true ? ['ok', 'contato confirmado ✓'] : ['warn', 'contato a confirmar'], v.trava_area === true ? ['ok', 'área ✓'] : v.trava_area === false ? ['bad', 'fora da área'] : null,
+      v.segmento ? ['mute', SEGMENTOS[v.segmento] || v.segmento] : null].filter(Boolean);
+    const cli = `<div class="fc-card"><div class="fc-card-h"><h3>Cliente</h3><span class="fc-sp"></span>
+        <button type="button" class="fc-wa" data-f="fc-wa" title="Copia Cliente e Venda prontos para colar no WhatsApp (sem comissão)">${IC.copiar}WhatsApp</button>
+        <button type="button" class="fc-icb" data-f="fc-ver" data-q="cli" aria-label="Ver todos os dados do cliente" title="Ver tudo">${IC.expandir}</button></div>
+      <div class="fc-dl">${di('Nome', v.cliente_nome, true)}${di('CPF/CNPJ', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '', true, 'mono')}${di('WhatsApp', v.cliente_whatsapp ? fmtTel(v.cliente_whatsapp) : '', true, 'mono')}
+        ${di('E-mail', v.cliente_email, true)}${di('Endereço', end, true)}${di('Bairro · cidade', [v.bairro, v.cidade].filter(Boolean).join(' · '), true)}${di('CEP', v.cep ? NG.fmtCep(v.cep) : '', true, 'mono')}${di('Referência', v.ponto_referencia, true)}
+        <div class="fc-cstat">${selos.map(([c, t]) => `<span class="fc-pill ${c}">${esc(t)}</span>`).join('')}</div></div></div>`;
+    const travas = [v.trava_sem_produto_ativo === false && 'já é cliente Nio', v.trava_sem_cancelamento_30d === false && 'cancelou < 30 d', v.trava_area === false && 'fora da área', v.trava_cobertura === false && 'sem cobertura'].filter(Boolean);
+    const comissao = !ehBO() || v.status === 'saida' ? '' : v.comissao_paga != null ? `paga ${m(v.comissao_paga)}${v.ciclo_pago ? ` · ciclo ${v.ciclo_pago}` : ''}`
+      : v.comissao_prevista != null ? `${m(v.comissao_prevista)} prevista${cicloPrevisto(v.instalado_em || v.instalacao_agendada_para) ? ` · ciclo ${cicloPrevisto(v.instalado_em || v.instalacao_agendada_para)}` : ''}` : '';
+    const estorno = Number(v.estorno_previsto || 0) ? `${m(v.estorno_previsto)} previsto` : travas.length ? `risco: ${travas.join(', ')}` : 'sem risco';
+    const inst = v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}` : v.instalacao_agendada_para ? `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}` : '';
+    const resumo = `<div class="fc-dl">${di('Plano', d.nomeCurto || v.plano_nome, false)}${di('Mensalidade', v.valor_mensal != null ? m(Number(v.valor_mensal) + valorAd) : '', false)}${di('Pagamento', FORMAS[v.forma_pagamento] || '', false)}
+        ${di('Pedido PAP', v.nio_os || v.nio_pedido || '', true, 'mono')}${di('Biometria', v.biometria_status ? (NG.BIOMETRIA[v.biometria_status] || v.biometria_status).split(' (')[0] : '', false)}${di('Instalação', inst, false)}
+        ${comissao || ehBO() ? `<div class="fc-sep"></div>${comissao ? di('Comissão', comissao, false) : ''}<div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill ${travas.length || Number(v.estorno_previsto || 0) ? 'bad' : 'ok'}">${esc(estorno)}</span></span><span></span></div>` : ''}</div>`;
+    const confHtml = `<div class="fc-full"><div class="fc-conf-intro">Conferências do contrato — é o que evita estorno e multa.</div>${cf.map(([k, rot, val, onde]) => `<div class="fc-cf">
+        <span class="fc-cf-ic ${val === true ? 'ok' : val === false ? 'bad' : ''}">${val === true ? IC.ok : val === false ? IC.x : ''}</span>
+        <span>${esc(rot)}<small>${val === true ? 'conferido' : val === false ? 'não passou — ver antes de seguir' : 'não verificado'}</small></span>
+        ${val === true ? '<span></span>' : `<button type="button" class="btn btn-sm" data-f="fc-conferir" data-onde="${onde}" data-c="${k}">Conferir</button>`}</div>`).join('')}</div>`;
+    const ven = `<div class="fc-card"><div class="fc-card-h"><h3>Venda</h3>${fc.conf ? '<button type="button" class="fc-link" data-f="fc-conf">← Resumo</button>' : ''}<span class="fc-sp"></span>${confBt}
+        <button type="button" class="fc-icb" data-f="fc-ver" data-q="venda" aria-label="Ver todos os dados da venda" title="Ver tudo">${IC.expandir}</button></div>
+      ${fc.conf ? confHtml : resumo}</div>`;
+    return cli + ven;
+  }
+  // "Ver tudo": as seções do antigo acordeão, em duas colunas, por cima dos dois cards. Editar abre no mesmo espaço.
+  function verTudo(v) {
+    if (!fc.ver) return '';
+    const ids = fc.ver === 'cli' ? ['cliente', 'endereco'] : ['plano', 'pedido', 'instalacao', 'comissao'];
+    const bl = blocos(v).filter((b) => ids.includes(b.id));
+    const sec = bl.map((b) => {
+      const editando = edicao === b.id && b.editar;
+      let corpo = editando ? b.editar() : b.corpo();
+      if (!editando && b.id === 'pedido') corpo = corpo.split('<div class="f-sub">Conferências do contrato</div>')[0];
+      if (!editando && b.id === 'comissao') corpo += linhaFaturas(v);
+      return `<section class="fc-sec f-bloco${editando ? ' editando' : ''}" data-bloco="${b.id}"><div class="fc-sec-h"><h4>${esc(b.titulo)}</h4>
+        ${!editando && b.editar ? `<button type="button" class="fc-link" data-f="editar">${esc(b.rotuloEditar || 'Editar')}</button>` : ''}</div>${corpo}</section>`;
+    }).join('');
+    const cf = conferencias(v);
+    const nOk = cf.filter((x) => x[2] === true).length;
+    return `<div class="fc-cards-over" role="dialog" aria-label="Dados completos">
+      <div class="fc-card-h"><h3>${fc.ver === 'cli' ? 'Cliente · dados completos' : 'Venda · dados completos'}</h3><span class="fc-sp"></span>
+        ${fc.ver === 'cli' ? `<button type="button" class="fc-wa" data-f="fc-wa">${IC.copiar}WhatsApp</button>` : `<button type="button" class="fc-confb ${nOk === 6 ? 'ok' : 'warn'}" data-f="fc-conf">${nOk}/6 conferências</button>`}
+        <button type="button" class="fc-x" data-f="fc-ver-x" aria-label="Voltar ao resumo">${IC.x}</button></div>
+      <div class="fc-full2">${sec}</div></div>`;
+  }
+  // Painel de ações do próximo passo (por cima dos cards): o corpo de sempre — botões, formulário, "faz sozinho", atalhos.
+  function passoOver(v, p) {
+    const formCartao = formAtivo && FORMS_NO_CARTAO.includes(formAtivo);
+    const aberto = fc.passo || p.forcar || (!!formAtivo && formAtivo !== 'contato');
+    if (!aberto) return '';
+    const pend = formAtivo && formAtivo.startsWith('pend_');
+    const extra = pend ? cartaoPendencia(v) : formCartao ? `<div class="f-form-solto">${FORMS[formAtivo](v)}</div>` : '';
+    return `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Próximo passo">
+      <div class="fc-card-h"><h3>${esc(p.alertaConv ? 'Conversa · agora' : NIVEL_ROT[p.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
+      <div class="fc-passo-corpo">
+        ${v.status === 'saida' ? '' : NG.selosFicha(d.avisos, { ignorar: v.id })}
+        ${extra || `${p.alertaConv ? `<div class="fc-passo-b"><b>${esc(p.jReal.o_que_fazer)}</b>${p.corpoConv}</div>` : ''}
+        <div class="fc-passo-b"><b>${esc(p.texto || '—')}</b>${p.corpo}</div>${p.feito}
+        ${cartaoConferencia(v)}${mostraCartoesPortal(v) ? cartaoPortal(v) : ''}`}
+      </div></div>`;
+  }
+
+  // ---------- histórico ----------
+  const KIND = { venda: 'Venda', conversa: 'Conversa', operador: 'Operadores', mari: 'Mari' };
+  const KIND_EV = (t) => (t === 'contato' ? 'conversa' : ['dfv_consulta', 'portal_status', 'biometria_ged360', 'pedido_aberto_portal', 'portal_pedido_casado', 'biometria_validada', 'instalada_portal', 'osab', 'osab_venda_invalida', 'portal_dados_copiados'].includes(t) ? 'operador' : 'venda');
+  function histItens() {
+    const v = d.soConversa ? {} : d.v;
+    const its = [];
+    (d.eventos || []).forEach((e) => its.push({ em: e.criado_em, k: KIND_EV(e.tipo), html: eventoHtml(e, v) }));
+    const env = (d.cad && d.cad.enviados) || {};
+    Object.entries(env).forEach(([cod, x]) => its.push({ em: x.em, k: 'mari', html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong>Mari · lembrete ${esc(cod)}${x.simulado ? ' (simulado)' : ''}</strong><span>${esc(NG.fmtDataHora(x.em))}${x.texto ? ` · ${esc(String(x.texto).slice(0, 120))}` : ''}</span></div></div>` }));
+    fc.leituras.forEach((l) => its.push({ em: l.em, k: 'operador', novo: true, html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong>Leitura · ${l.tipo === 'viab' ? 'viabilidade' : 'crédito'}: ${esc(l.rot)}</strong><span>${esc(NG.fmtDataHora(l.em))} · ${esc(l.det)} · operador · não gravado na venda</span></div></div>` }));
+    return its.sort((a, b) => new Date(b.em) - new Date(a.em));
+  }
+  function histOver() {
+    const its = histItens().filter((x) => fc.histF === 'tudo' || x.k === fc.histF);
+    return `<div class="fc-hist${fc.hist ? ' open' : ''}" aria-hidden="${!fc.hist}">
+      <div class="fc-colh"><h2>Histórico</h2><div class="fc-jchips">${[['tudo', 'Tudo'], ...Object.entries(KIND)].map(([k, t]) => `<button type="button" class="fc-jchip${fc.histF === k ? ' on' : ''}" data-f="fc-hf" data-h="${k}" aria-pressed="${fc.histF === k}">${esc(t)}</button>`).join('')}</div>
+        <span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-hist" aria-label="Fechar o histórico">${IC.x}</button></div>
+      <div class="fc-jlist">${fc.hist ? (its.map((x) => `<div class="fc-ji k-${x.k}${x.novo ? ' novo' : ''}"><span class="fc-jl">${esc(KIND[x.k])}</span>${x.html}</div>`).join('') || '<div class="apagado">Nada neste filtro.</div>') : ''}
+        ${fc.hist && !d.soConversa ? proximosMarcos(d.v) : ''}</div></div>`;
+  }
+
+  // ---------- faixa da Mari (acima da caixa da conversa) ----------
+  const PASSO_ROT_C = { P1: '1º contato', F1: '+1 h', F2: '+4 h', D3: 'D3', D7: 'D7', D15: 'D15', L15: '15 min', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'INSTALACAO', VESPERA: 'VESPERA' };
+  function mariFaixa() {
+    const conv = !!d.soConversa;
+    const v = conv ? null : d.v;
+    const k = d.cad && d.cad.k;
+    const env = Object.keys((d.cad && d.cad.enviados) || {});
+    const dn = donoConversa(d.convInfo || d.conv);
+    let txt;
+    if (v && v.status === 'saida') txt = 'Lembretes: nenhum (fora da jornada)';
+    else if (d.pend) txt = `Lembretes pausados pela pendência até ${d.pend.diaTxt}`;
+    else if (dn.tipo === 'pessoa' || dn.tipo === 'time') txt = `${env.length ? `Lembretes ${env.map((c) => `${PASSO_ROT_C[c] || c} ✓`).join(' · ')} · ` : ''}cadência parada: a conversa está com uma pessoa`;
+    else if (k && k.proximo_passo && k.proximo_em) txt = `${env.length ? `${env.map((c) => `${PASSO_ROT_C[c] || c} ✓`).join(' · ')} · ` : ''}próximo ${PASSO_ROT_C[k.proximo_passo] || k.proximo_passo} ${NG.fmtDiaSemana(k.proximo_em)} ${NG.fmtHora(k.proximo_em)}`;
+    else txt = env.length ? `Lembretes ${env.map((c) => `${PASSO_ROT_C[c] || c} ✓`).join(' · ')}` : 'Nenhum lembrete automático marcado';
+    if (!conv) txt += ` · contatos ${NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto)}`;
+    if (fc.reg && !conv) {
+      return `<div class="fc-reg"><div class="fc-reg-h">Registrar contato com ${esc(NG.primeiroNome(v.cliente_nome))}
+          <select data-fc-dir aria-label="Quem chamou"><option value="saida">nós chamamos</option><option value="entrada">o cliente chamou</option></select></div>
+        <input type="text" data-fc-resumo maxlength="500" placeholder="Resumo (opcional)" aria-label="Resumo do contato">
+        <div class="fc-reg-bts"><button type="button" class="btn btn-sm" data-f="fc-contato" data-canal="ligacao">Ligação</button><button type="button" class="btn btn-sm" data-f="fc-contato" data-canal="whatsapp">WhatsApp</button>
+          <button type="button" class="btn btn-sm" data-f="fc-contato" data-canal="presencial">Presencial</button><span class="fc-sp"></span><button type="button" class="fc-link" data-f="fc-reg">Cancelar</button></div>
+        <small class="apagado">Fica no histórico e conta nos contatos do mês.</small></div>`;
+    }
+    if (fc.cad) {
+      return `<div class="fc-reg fc-cad">${conv ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">CADÊNCIA DO LEAD</span></div><span>${esc(txt)}</span></div>` : lembretes(v)}
+        <div class="fc-reg-bts">${conv ? '' : '<button type="button" class="fc-link" data-f="fc-reg">Registrar contato</button>'}<span class="fc-sp"></span><button type="button" class="fc-link" data-f="fc-cad">Fechar</button></div></div>`;
+    }
+    return `<div class="fc-mstrip"><span class="fc-mdot" aria-hidden="true"></span><button type="button" class="fc-mtbtn" data-f="fc-cad" title="Ver cadência e lembretes">${esc(txt)}</button>
+      ${conv || (v && v.status === 'saida') ? '' : '<button type="button" class="fc-link" data-f="fc-reg">Registrar contato</button>'}</div>`;
+  }
+
+  // ---------- desenho ----------
+  function renderCheia() {
+    const vivo = raiz.querySelector('.fc-conv-host > .cvp-raiz');
+    const focoAntes = document.activeElement;
+    const conv = !!d.soConversa;
+    const cv = conv ? d.conv : d.convInfo;
+    const dn = donoConversa(cv);
+    const ehAdmin = (NG.usuario || {}).perfil === 'admin';
+    let cab, trilha, agora, cards, over = '';
+    if (!conv) {
+      const v = d.v;
+      const pr = NG.proximoPasso(v, (d.contatos[0] || {}).em);
+      if (!abertos) abertos = new Set();
+      const p = passoPartes(v, pr);
+      const etapa = d.jor ? d.jor.etapa : (NG.etapaDe(v).n || 0);
+      document.title = `${v.cliente_nome} · Live · NIOGEN`;
+      const atual = NG.etapaDe(v).id;
+      const menu = `${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${[['0_qualificado', 'Lead qualificado'], ['3_instalado', 'Instalada'], ['saida', 'Saída']].filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div><div class="fc-msep"></div>` : ''}
+        ${v.cliente_whatsapp ? '<button type="button" class="fc-mitem" data-f="copiar-tel">Copiar telefone</button>' : ''}
+        ${d.conversaId ? `<a class="fc-mitem" href="mari.html?conversa=${esc(d.conversaId)}">Ver na tela Mari</a>` : ''}
+        <a class="fc-mitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Ver no Funil (Quadro)</a>
+        <a class="fc-mitem" href="venda.html?id=${esc(v.id)}" target="_blank" rel="noopener">Abrir em página cheia ↗</a>
+        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
+      const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
+      const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
+        v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ');
+      cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
+        `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
+      trilha = trilhaHtml(passosVenda(v));
+      const tom = p.alertaConv ? 'now' : TOM[p.nivel] || 'mute';
+      const k = p.alertaConv ? 'Agora · conversa' : `${NIVEL_K[p.nivel] || 'Próximo passo'}${etapa ? ` · ${d.jor ? d.jor.etapa_nome : NG.etapaDe(v).nome}` : ''}`;
+      const t = etapa === 0 ? `Saída · ${v.motivo_saida || 'sem motivo'}` : p.alertaConv ? p.jReal.o_que_fazer : p.texto;
+      const s = etapa === 0 ? (v.interesse_futuro_em ? `Volta em ${NG.fmtDiaISO(v.interesse_futuro_em)}` : '') : p.alertaConv ? `Depois: ${p.texto || '—'}`
+        : feitoUltimo ? feitoUltimo.resumo : p.nota || (p.sozinho ? `O NIOGEN faz sozinho: ${p.sozinho}` : '');
+      const responder = p.alertaConv && p.jReal.botao === 'responder' && d.conversaId;
+      const rot = responder ? 'Responder' : p.temAcao && p.rotuloAcao ? p.rotuloAcao : p.temAcao ? 'Fazer' : 'Ações';
+      const botao = `<button type="button" class="btn${responder || (p.temAcao && ['now', 'today'].includes(tom)) ? ' btn-acc' : ''} fc-ag-bt" data-f="${responder ? 'conversa' : 'fc-passo'}">${esc(rot.length > 26 ? 'Fazer' : rot)}${IC.seta}</button>`;
+      agora = `<div class="fc-agora-w">${agoraHtml(tom, k, t, s, botao, pendLinha(v))}${pendOver()}</div>`;
+      cards = `<div class="fc-cards">${cardsVenda(v)}${verTudo(v)}${passoOver(v, p)}</div>`;
+    } else {
+      const P = conversaPartes();
+      const c = P.c;
+      const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
+      document.title = `${c.nome} · Live · NIOGEN`;
+      const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>
+        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
+      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu);
+      trilha = trilhaHtml(P.passosConv);
+      const tom = P.silenciada ? 'mute' : TOM[P.nivel] || 'wait';
+      const botao = `<button type="button" class="btn${tom === 'now' ? ' btn-acc' : ''} fc-ag-bt" data-f="fc-passo">${dn.tipo === 'mari' && !c.nao_contatar && ehBO() && !P.silenciada ? 'Assumir' : 'Ações'}${IC.seta}</button>`;
+      const pendH = P.emEspera ? `<div class="fc-ag-pend"><span class="fc-pill pend">${IC.pausa}em espera</span><span class="fc-pt">até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}</span></div>` : '<div class="fc-ag-pend none"><span>Sem pendência</span></div>';
+      agora = `<div class="fc-agora-w">${agoraHtml(tom, `${P.silenciada ? 'Silenciada' : NIVEL_K[P.nivel] || 'Conversa'} · conversa sem venda`, P.silenciada ? 'Cliente Nio · suporte — fora do Live' : (P.j.o_que_fazer || 'Mari atendendo'),
+        feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`, botao, pendH)}</div>`;
+      const L = dadosConversaLista(c);
+      const travas = P.travasC;
+      const abertoP = fc.passo || formAtivo === 'conv_espera';
+      cards = `<div class="fc-cards"><div class="fc-card"><div class="fc-card-h"><h3>Cliente</h3><span class="fc-sp"></span><span class="apagado">coletado pela Mari</span></div>
+          <div class="fc-dl">${L.length ? L.map(([kk, val]) => di(kk, String(val), true)).join('') : '<div class="apagado fc-pad">A Mari ainda não coletou dados deste cliente.</div>'}</div></div>
+        <div class="fc-card"><div class="fc-card-h"><h3>Venda</h3><span class="fc-sp"></span><span class="fc-pill mute">ainda sem venda</span></div>
+          <div class="fc-dl fc-pad">${P.itens.length ? `<div class="f-itens">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : ''}
+            <div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill ${travas.length ? 'bad' : 'ok'}">${esc(travas.length ? `risco: ${travas.join(', ')}` : 'sem risco')}</span></span><span></span></div></div></div>
+        ${abertoP ? `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Ações"><div class="fc-card-h"><h3>${esc(NIVEL_ROT[P.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
+          <div class="fc-passo-corpo"><div class="fc-passo-b"><b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>${P.corpoPasso}</div>${P.feito}</div></div>` : ''}</div>`;
+    }
+    const etapaNome = d.jor ? d.jor.etapa_nome : '';
+    const temConv = !!d.conversaId;
+    raiz.innerHTML = `<div class="fc">
+      ${cab}${trilha}
+      <div class="fc-grid">
+        <section class="fc-col fc-col-conv" aria-label="Conversa">${temConv ? '<div class="fc-conv-host"></div>'
+          : `<div class="fc-colh"><h2>Conversa</h2></div><div class="fc-semconv"><p>Sem conversa no WhatsApp (venda de rua ou parceiro).</p>
+              <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
+              ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
+        <section class="fc-col fc-col-ficha" aria-label="Ficha do cliente">
+          <div class="fc-colh"><h2>Ficha</h2><span class="apagado">${esc(etapaNome)}</span><span class="fc-sp"></span><button type="button" class="btn btn-sm" data-f="fc-hist" aria-expanded="${fc.hist}">${IC.hist}Histórico</button></div>
+          <div class="fc-ficha">${agora}${cards}</div>
+          ${histOver()}
+        </section>
+      </div>${over}</div>`;
+    // A conversa não perde o rascunho nem o cursor: o mesmo nó volta para o lugar.
+    const host = raiz.querySelector('.fc-conv-host');
+    if (host) {
+      if (vivo && cvCheia && cvCheia.id === d.conversaId) {
+        host.appendChild(vivo);
+        if (focoAntes && vivo.contains(focoAntes)) focoAntes.focus({ preventScroll: true });
+      } else {
+        if (cvCheia) cvCheia.destruir();
+        cvCheia = NGConversa.montar(host, { conversaId: d.conversaId, nome: conv ? d.conv.nome : d.v.cliente_nome, cheia: true,
+          oportunidade: cheiaOpts.oportunidade || null, aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
+        cheiaOpts.oportunidade = null;
+      }
+      cvCheia.mari(mariFaixa(), fc.reg || fc.cad);
+    } else if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
+    ligarDfvSeEditando();
+    const f = raiz.querySelector('[data-form] [autofocus]');
+    if (f && (formAtivo || edicao)) f.focus({ preventScroll: true });
+  }
+  function dadosConversaLista(c) {
+    const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
+    return [
+      ['Nome', x.nome || c.nome_contato], ['WhatsApp', c.telefone ? fmtTel(c.telefone) : x.telefone], ['CPF', x.cpf ? fmtDoc(x.cpf) : null], ['E-mail', x.email],
+      ['CEP', x.cep_origem], ['Endereço', x.rua_confirmada || x.rua_informada], ['Complemento', x.complemento_ok === true ? 'sem complemento' : typeof x.complemento_ok === 'string' ? x.complemento_ok : null],
+      ['Referência', x.referencia], ['Cidade', c.cidade], ['Operadora atual', x.operadora_atual], ['Plano escolhido', c.plano_escolhido],
+    ].filter(([, val]) => val != null && String(val).trim() !== '');
+  }
+
+  // ---------- cliques da tela cheia (as ações de sempre seguem no ligar(); aqui só o que é da tela) ----------
+  function cliqueCheia(ev) {
+    if (modo !== 'cheia' || !d) return;
+    let mudou = false;
+    if ((fc.etapa || fc.menu) && !ev.target.closest('.fc-rs, .fc-menuw')) { fc.etapa = null; fc.menu = false; mudou = true; }
+    const rp = ev.target.closest('[data-resolver]');
+    if (rp) {
+      const q = rp.dataset.resolver;
+      if (q === 'pendencia') { fc.pend = true; fc.passo = false; formAtivo = null; render(); return; }
+      if (q === 'dfv') { fc.ver = 'cli'; fc.passo = false; render(); return; }
+      if (q === 'contato' && d.conversaId) { formAtivo = null; fc.reg = true; fc.passo = false; render(); return; }
+    }
+    const b = ev.target.closest('[data-f]');
+    const a = b ? b.dataset.f : '';
+    if (!a.startsWith('fc-')) {
+      if (['pend-abrir', 'pend-adiar', 'pend-encerrar', 'pend-saida', 'viab-form', 'ref-form', 'saida-form', 'ir-conferencia', 'pend-viab', 'pend-conf'].includes(a)) { fc.pend = false; fc.etapa = null; fc.passo = true; render(); return; }
+      if (a === 'trocar-plano') { fc.ver = 'venda'; fc.passo = false; render(); return; }
+      if (a === 'cancelar' && !(b && b.closest('.f-bloco'))) { fc.passo = false; render(); return; }
+      if (a === 'mover') { fc.menu = false; fc.passo = true; }
+      if (mudou) render();
+      return;
+    }
+    ev.stopPropagation();
+    if (a === 'fc-voltar') { fecharCheia(); return; }
+    if (a === 'fc-concluir') { if (cheiaOpts.aoConcluir) cheiaOpts.aoConcluir(); return; }
+    if (a === 'fc-nav') { if (cheiaOpts.aoNavegar) cheiaOpts.aoNavegar(Number(b.dataset.dir)); return; }
+    if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
+    if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; render(); return; }
+    if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
+    if (a === 'fc-op-reg') {
+      const r = b.dataset.r;
+      if (b.dataset.t === 'viab') {
+        if (r !== 'viavel' && !window.confirm('Registrar na venda: o portal respondeu sem viabilidade?\n\nAntes de encerrar, tente variações de CEP, rua e número.')) return;
+        b.disabled = true;
+        rodarMomento('viabilidade', { resultado: r }).then((x) => { if (!x && b.isConnected) b.disabled = false; });
+        return;
+      }
+      credPreset = r; formAtivo = 'credito'; fc.etapa = null; fc.passo = true; render(); return;
+    }
+    if (a === 'fc-pend') { fc.pend = !fc.pend; render(); return; }
+    if (a === 'fc-passo') { fc.passo = true; fc.ver = null; fc.pend = false; render(); return; }
+    if (a === 'fc-passo-x') { fc.passo = false; formAtivo = null; passoAberto = new Set(); render(); return; }
+    if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; render(); return; }
+    if (a === 'fc-ver-x') { fc.ver = null; edicao = null; render(); return; }
+    if (a === 'fc-conf') { fc.conf = !fc.conf; if (fc.ver) fc.ver = null; render(); return; }
+    if (a === 'fc-conferir') {
+      const onde = b.dataset.onde;
+      fc.conf = false;
+      if (onde === 'cli') { fc.ver = 'cli'; edicao = b.dataset.c === 'contato' ? 'cliente' : null; } else fc.etapa = 'viab';
+      render(); return;
+    }
+    if (a === 'fc-wa') { copiar(textoWa(d.v), 'Cliente e venda copiados — cole no WhatsApp'); return; }
+    if (a === 'fc-hist') { fc.hist = !fc.hist; render(); return; }
+    if (a === 'fc-hf') { fc.histF = b.dataset.h; render(); return; }
+    if (a === 'fc-reg') { fc.reg = !fc.reg; fc.cad = false; render(); if (fc.reg) { const i = raiz.querySelector('[data-fc-resumo]'); if (i) i.focus(); } return; }
+    if (a === 'fc-cad') { fc.cad = !fc.cad; fc.reg = false; render(); return; }
+    if (a === 'fc-contato') {
+      const fd = new FormData();
+      fd.set('canal', b.dataset.canal);
+      fd.set('direcao', (raiz.querySelector('[data-fc-dir]') || {}).value || 'saida');
+      fd.set('resumo', (raiz.querySelector('[data-fc-resumo]') || {}).value || '');
+      b.disabled = true;
+      SALVAR.contato(fd).then((ok) => { if (ok) { fc.reg = false; render(); } else if (b.isConnected) b.disabled = false; });
+    }
+  }
+  // Esc: fecha a camada de cima (detalhe, menu, pendência, ver tudo, ações, histórico, registro); sem camada, volta para a fila.
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || modo !== 'cheia' || !d || ev.defaultPrevented || document.querySelector('dialog[open], .dica-pop')) return;
+    const camadas = ['etapa', 'menu', 'pend', 'passo', 'ver', 'conf', 'hist', 'reg', 'cad'];
+    const c = camadas.find((k) => fc[k]);
+    if (c) { fc[c] = c === 'etapa' || c === 'ver' ? null : false; if (c === 'passo') formAtivo = null; if (c === 'ver') edicao = null; render(); ev.preventDefault(); return; }
+    if (ev.target && ev.target.matches && ev.target.matches('textarea, input, select')) return;
+    fecharCheia();
+  });
+  function fecharCheia() {
+    idAtual = null; d = null;
+    if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
+    fc = novoFc();
+    if (raiz) raiz.innerHTML = '';
+    if (idDoHash()) { if (empurrou) { empurrou = false; history.back(); } else history.replaceState(history.state, '', semHash()); }
+    ouvintesFechar.forEach((f) => { try { f(); } catch (e) { /* */ } });
+  }
+  let cheiaEl = null;
+  function usarCheia() {
+    if (!cheiaEl || modo === 'cheia') return;
+    if (idAtual && gav && gav.classList.contains('aberta')) NG.gaveta.fechar();
+    modo = 'cheia';
+    raiz = cheiaEl;
+  }
+  function cheia(el, opts) {
+    modo = 'cheia';
+    cheiaEl = el;
+    raiz = el;
+    ligar(raiz);
+    raiz.addEventListener('click', cliqueCheia);
+    cheiaOpts = opts || {};
+  }
+
   window.NGFicha = {
     abrir,
     abrirConversa: abrirConversaFicha,
     lado, usarGaveta, usarLado,
+    // 12/11: tela cheia do Live (fila.html). opts = { posicao(), aoNavegar(dir), aoConcluir() }; NGFicha.fecharCheia() fecha.
+    cheia, usarCheia, get modo() { return modo; }, fecharCheia: () => { if (modo === 'cheia' && idAtual) fecharCheia(); },
+    set oportunidadeCheia(op) { cheiaOpts.oportunidade = op; },
+    redesenhar() { if (d) render(); },
     // A tela abre a conversa no lugar dela (Live: no espaço da lista). fn({conversaId, nome, aoMudar}); null desliga.
     aoConversa(fn) { hostConversa = fn; },
     aoFechar(fn) { ouvintesFechar.push(fn); },

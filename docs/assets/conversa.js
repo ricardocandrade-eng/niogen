@@ -12,6 +12,10 @@
  *   · Sem limite de horário nem de quantidade (0095). Fica só a janela de 24 h do WhatsApp: fechada, só template aprovado.
  * Tudo vai pela outbox chatwoot_acoes (RPC backoffice_responder / backoffice_conversa) — o front não tem token.
  * Uso: const c = NGConversa.montar(el, { conversaId, nome, aoFechar, rotuloFechar, aoMudar }); c.recarregar(); c.destruir().
+ * 12/11 (Live redesenhada · docs/Prompt_live_redesenho_111126_2120.md): opção cheia = a conversa da tela do cliente em tela cheia —
+ *   sem o aviso âmbar da venda (a ficha ao lado já diz o próximo passo), caixa de altura fixa e uma faixa da Mari acima dela
+ *   (c.mari(html, registro): lembretes, contatos e "Registrar contato", que abre DENTRO da própria caixa). Os cliques da faixa
+ *   são tratados por quem montou (a ficha).
  */
 (function () {
   'use strict';
@@ -73,6 +77,7 @@
         <button type="button" class="cvp-novas" data-cv="descer" hidden>↓ novas mensagens</button></div>
       <div class="cvp-pe">
         <div class="cvp-venda" data-venda hidden></div>
+        <div class="cvp-mari" data-mari hidden></div>
         <div class="cvp-ctl">
           <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button></div>
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
@@ -85,6 +90,8 @@
     const $ = (s) => el.querySelector(s);
     const cab = $('[data-cab]'), etqEl = $('[data-etq]'), msgs = $('[data-msgs]'), novas = $('[data-cv="descer"]');
     const vendaEl = $('[data-venda]');
+    const mariEl = $('[data-mari]');
+    if (o.cheia) el.classList.add('cheia');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
     const secao = $('.cvp');
 
@@ -186,7 +193,7 @@
       const vj = st.venda;
       const passo = vj ? (vj.botao && vj.botao !== 'abrir' && NG.BOTAO_PASSO[vj.botao] ? NG.BOTAO_PASSO[vj.botao] : vj.o_que_fazer) : '';
       const htmlVenda = vj ? `Este cliente tem venda em <b>${esc(vj.etapa_nome || '—')}</b> — o próximo passo é <b>${esc(passo || 'abrir a ficha')}</b>. Faça pelo botão da ficha para a venda andar. <a href="#venda=${esc(vj.venda_id)}">Abrir ficha →</a>` : '';
-      vendaEl.hidden = !vj;
+      vendaEl.hidden = !vj || !!o.cheia;
       troca('venda', vendaEl, htmlVenda);
       if (dn.v === 'outro') optsDono.push(['outro', dn.txt]);
       // 10/11 (Ricardo: "organiza melhor esse cabeçalho, seguindo esses padrões" — os da ficha): linha 1 = ← Lista · nome ·
@@ -325,7 +332,7 @@
       setTimeout(() => carregar(), 3000);
     }
 
-    const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`; };
+    const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, o.cheia ? 66 : 150)}px`; };
     ta.addEventListener('input', ajusta);
     // Enter envia; Shift+Enter pula linha. No meio de um acento (IME) não envia. Esc cancela o template.
     ta.addEventListener('keydown', (ev) => {
@@ -388,6 +395,12 @@
       recarregar: () => carregar(),
       destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); el.remove(); },
       focar() { ta.focus(); },
+      // 12/11: faixa da Mari (tela cheia). registro = a faixa ocupa a caixa (Registrar contato / cadência), sem mudar a altura.
+      mari(html, registro) {
+        if (st.sig.mari !== html) { st.sig.mari = html; mariEl.innerHTML = html; }
+        mariEl.hidden = !html;
+        el.querySelector('.cvp-pe').classList.toggle('com-reg', !!registro);
+      },
       get id() { return o.conversaId; },
     };
   }
