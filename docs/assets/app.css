@@ -1857,8 +1857,23 @@ tr.mav-tr-op td:first-child { box-shadow: inset 3px 0 0 var(--fogo); }
 .mv-op-dock .opc-selo, .mv-op-dock .opc-oque, .mv-op-dock .opc-bt { grid-column: 1 / -1; }
 .mv-op-dock .opc-bt { justify-content: flex-start; }
 .mv-op-dock .opc-oque small { white-space: normal; }
-/* 0127 · balanço das conversas paradas (Painel) */
-.balanco .bal-item { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--border); }
-.balanco .bal-item .q-linha { align-items: flex-start; gap: 8px; }
-.balanco .bal-item .mv-dot { margin-right: 6px; }
-.balanco .bal-resp { flex: 1 1 auto; margin: 0; }
+/* 0127/0128 · balanço das conversas paradas: botão flutuante (todas as telas) + modal */
+.bal-fab { position: fixed; right: 18px; bottom: 18px; z-index: 26; display: inline-flex; align-items: center; gap: 8px; height: 44px; min-width: 44px; padding: 0 12px; justify-content: center; border-radius: 22px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 600 13px var(--sans); cursor: pointer; box-shadow: 0 8px 24px rgba(0, 0, 0, .45); }
+.bal-fab span { font-size: 18px; line-height: 1; }
+.bal-fab.novo { background: var(--accent); color: var(--bg); border-color: transparent; animation: bal-pulso 2s ease-in-out infinite; }
+.bal-fab i { font-style: normal; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--bg); color: var(--text); font: 700 11px/20px var(--dm); }
+@keyframes bal-pulso { 0%, 100% { box-shadow: 0 8px 24px rgba(0, 0, 0, .45); } 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent), 0 8px 24px rgba(0, 0, 0, .45); } }
+@media (prefers-reduced-motion: reduce) { .bal-fab.novo { animation: none; } }
+@media (max-width: 760px) { .bal-fab { bottom: 86px; right: 16px; } }
+dialog.bal-modal { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+dialog.bal-modal:not([open]) { display: none; }
+.bal-modal .bal-cab { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.bal-modal .bal-cab h3 { margin: 0; font-size: 16px; flex: 1 1 auto; }
+.bal-modal .bal-corpo { padding: 12px 18px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+.bal-modal .bal-item { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.bal-modal .bal-item p { margin: 0; font-size: 13px; color: var(--text); }
+.bal-modal .bal-item .bal-fazer { color: var(--muted); font-size: 12px; }
+.bal-modal .bal-l1 { display: flex; align-items: center; gap: 8px; }
+.bal-modal .bal-l1 b { flex: 1 1 auto; }
+.bal-modal .bal-resp { display: flex; align-items: flex-start; gap: 8px; }
+.bal-modal .bal-resp pre { flex: 1 1 auto; margin: 0; }

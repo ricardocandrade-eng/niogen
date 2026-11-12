@@ -106,6 +106,8 @@
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
     menuMovel(nav, pagina);
     guiaNovo(nav, pagina);
+    balancoBotao();
+    setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta
 
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
@@ -132,6 +134,74 @@
       const a = nav.querySelector('[data-guia]');
       if (a && data.rev) a.title = `Guia do Backoffice · rev. ${data.rev}${novo ? ' · atualizado desde a sua última leitura' : ''}`;
     } catch (e) { /* o link do guia nunca derruba o menu */ }
+  }
+
+  // ---------- Balanço das conversas paradas (0127/0128, Ricardo 11/11 ~22h45) ----------
+  // Botão flutuante em todas as telas, para todos os usuários, quando há balanço das últimas 24 h (n8n balanco_diario, Claude,
+  // 7h45 seg–sáb). Balanço ainda não lido = botão grande "Balanço novo" pulsando; já lido = só o ícone. Abre num modal.
+  // "Lido" fica no navegador (localStorage niogen.balanco.visto = id, em try/catch): sem storage, o botão fica sempre no modo novo.
+  const BAL_KEY = 'niogen.balanco.visto';
+  let balUltimo = null;
+  function balVisto() { try { return localStorage.getItem(BAL_KEY); } catch (e) { return null; } }
+  async function balancoBotao() {
+    try {
+      const desde = new Date(Date.now() - 24 * 3600e3).toISOString();
+      const { data, error } = await NG.sb.from('balanco_diario').select('id, criado_em, itens, erro')
+        .gte('criado_em', desde).order('criado_em', { ascending: false }).limit(1).maybeSingle();
+      let bt = document.getElementById('bal-fab');
+      if (error || !data || data.erro) { if (bt) bt.remove(); return; }
+      balUltimo = data;
+      const novo = balVisto() !== String(data.id);
+      const n = (data.itens || []).length;
+      if (!bt) {
+        bt = document.createElement('button');
+        bt.type = 'button';
+        bt.id = 'bal-fab';
+        bt.addEventListener('click', balancoAbrir);
+        document.body.appendChild(bt);
+      }
+      bt.className = `bal-fab${novo ? ' novo' : ''}`;
+      bt.innerHTML = `<span aria-hidden="true">📋</span>${novo ? `<b>Balanço novo</b>${n ? `<i>${n}</i>` : ''}` : ''}`;
+      bt.title = `Balanço das conversas paradas (${NG.fmtHora(new Date(data.criado_em))}) · ${n ? `${n} com resposta sugerida` : 'nenhuma conversa parada'}`;
+      bt.setAttribute('aria-label', bt.title);
+    } catch (e) { /* o botão nunca derruba a tela */ }
+  }
+  async function balancoAbrir() {
+    if (!balUltimo) return;
+    const { data, error } = await NG.sb.from('balanco_diario').select('id, criado_em, resumo, itens').eq('id', balUltimo.id).maybeSingle();
+    if (error || !data) { NG.toast(error ? NG.msgErro(error) : 'Balanço não encontrado', 'bad'); return; }
+    const esc = NG.esc;
+    const bo = ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
+    const COR = { alta: 'var(--bad-dot)', media: 'var(--warn-dot)', baixa: 'var(--muted)' };
+    const itens = data.itens || [];
+    const quando = `${NG.diaSP(new Date(data.criado_em)) === NG.diaSP() ? 'hoje' : NG.fmtData(data.criado_em).slice(0, 5)} às ${NG.fmtHora(new Date(data.criado_em))}`;
+    const d = document.createElement('dialog');
+    d.className = 'modal bal-modal';
+    d.innerHTML = `<div class="bal-cab"><h3>Balanço das conversas paradas</h3><span class="muted">${esc(quando)}</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-fechar aria-label="Fechar">✕</button></div>
+      <div class="bal-corpo">
+        ${data.resumo ? `<p class="resumo-txt">${esc(data.resumo)}</p>` : ''}
+        ${itens.map((i, k) => `<div class="bal-item">
+          <div class="bal-l1"><i class="mv-dot" style="--c:${COR[i.urgencia] || 'var(--muted)'}" title="urgência ${esc(i.urgencia)}"></i><b>${esc(i.nome)}</b>
+            ${bo ? `<a class="btn btn-sm" href="conversas.html#c=${esc(i.conversa_id)}">Abrir</a>` : ''}</div>
+          <p>${esc(i.situacao)}</p>
+          <p class="bal-fazer"><b>Fazer:</b> ${esc(i.acao)}</p>
+          <div class="bal-resp"><pre class="resumo-txt">${esc(i.resposta_sugerida)}</pre><button type="button" class="btn btn-sm" data-copiar="${k}">Copiar</button></div>
+        </div>`).join('')}
+        <p class="nota-campo">Escrito pelo Claude às 7h45 (seg–sáb) com as conversas em que o cliente espera o time há mais de 2 h. É sugestão: ouça o áudio e confira valor e data antes de mandar.</p>
+      </div>`;
+    document.body.appendChild(d);
+    const fechar = () => { d.close(); d.remove(); };
+    d.querySelector('[data-fechar]').addEventListener('click', fechar);
+    d.addEventListener('cancel', (ev) => { ev.preventDefault(); fechar(); });
+    d.addEventListener('click', (ev) => { if (ev.target === d) fechar(); });
+    d.querySelectorAll('[data-copiar]').forEach((b) => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(itens[Number(b.dataset.copiar)].resposta_sugerida); NG.toast('Resposta copiada ✓', 'ok'); }
+      catch (e) { NG.toast('Não deu para copiar — selecione o texto e copie à mão', 'bad'); }
+    }));
+    d.showModal();
+    try { localStorage.setItem(BAL_KEY, String(data.id)); } catch (e) { /* sem storage: segue "novo" */ }
+    balancoBotao();
   }
 
   // ---------- contadores do menu (prompt 27) ----------
