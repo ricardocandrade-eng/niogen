@@ -43,7 +43,8 @@ if (Array.isArray(resp.content)) {
   bruto = resp.content.filter((b) => b && b.type === 'text').map((b) => b.text || '').join('\n').trim();
   if (!bruto) erroApi = `resposta sem bloco de texto (stop_reason=${resp.stop_reason || '?'})`;
 } else {
-  erroApi = String(resp.error?.message || resp.message || JSON.stringify(resp).slice(0, 300));
+  // 12/11: o n8n põe o motivo real (ex.: "credit balance is too low") na descrição; o message é só "Bad request".
+  erroApi = String([resp.error?.message, resp.error?.description].filter(Boolean).join(' — ') || resp.message || JSON.stringify(resp).slice(0, 300));
 }
 const usage = resp.usage || {};
 const tokensIn = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) + (usage.cache_creation_input_tokens || 0) || null;
@@ -97,7 +98,7 @@ bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
   // A marca DE VERDADE ([BOTOES:pagamento|resumo|sim_nao]) também casa com este padrão (o /i) e era apagada aqui — o
   // pagamento nunca saía pela marca, só pelas travas. Conversa #5 (07/11 18h53): a Mari respondeu só "[BOTOES:pagamento]",
   // a marca sumiu, o texto ficou vazio e o cliente ficou sem resposta. A marca certa fica para o tag('BOTOES').
-  if (/^\s*(pagamento|resumo|sim_nao)\s*$/.test(t)) return m;
+  if (/^\s*(pagamento|resumo|sim_nao|data|turno)\s*$/.test(t)) return m;
   // Só pagamento e resumo: "Sim / Não" copiado caía em pergunta aberta (complemento + referência) — teste real 06/11.
   imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : null;
   return '';
@@ -338,7 +339,7 @@ function violacoesDe(t) {
     : 'mandou um link (link de biometria ou pagamento é do nosso time, nunca da Mari)');
   if (V6 && mandaLinkNosso(n)) v.push('disse que a Mari ou o nosso time manda o link da biometria (guard-rail 24: ele chega pela própria Nio, por WhatsApp e e-mail, assim que o pedido é aberto)');
   // Adendo 05/11 10h05: a viabilidade nunca nega venda — nenhuma fala que negue ou insinue falta de cobertura.
-  if (V4 && /nao atende (o seu|seu|esse|aí|ai)|ainda nao chegou|nao chegou (a )?fibra|sem viabilidade|sem cobertura|nao tem (cobertura|fibra)|fibra .{0,20}chegar na sua rua/.test(n)) {
+  if (V4 && !(V7 && ((ctx.conversa || {}).cobertura_decisao === 'sem_cobertura')) && /nao atende (o seu|seu|esse|aí|ai)|ainda nao chegou|nao chegou (a )?fibra|sem viabilidade|sem cobertura|nao tem (cobertura|fibra)|fibra .{0,20}chegar na sua rua/.test(n)) {
     v.push('negou ou insinuou falta de cobertura (proibido: a viabilidade nunca nega venda; fale da cidade e siga o fluxo)');
   }
   // Guard-rail 23 (afrouxado 05/11): a sugestão de upgrade vem DEPOIS da confirmação da escolha com o valor do plano
@@ -419,7 +420,20 @@ if (!erroApi) {
   if (v.length && tentativa === 1) {
     return [{ json: { corrigir: true, textoRuim: bruto, violacoes: v, conversaId: ctx.conversaId } }];
   }
+  // 12/11 (portão, cenário a): 2ª tentativa ainda com violação só num parágrafo (ex.: upsell sem as velocidades) → manda o
+  // resto, sem o parágrafo, e a Mari segue; o texto de emergência (com handoff) fica para quando nada se salva.
+  let resgatado = null;
   if (v.length) {
+    const ps = String(texto || '').split('\n\n');
+    const bons = ps.filter((p) => !violacoesDe(p).length);
+    const cand = bons.join('\n\n').trim();
+    if (bons.length < ps.length && cand && !violacoesDe(cand).length) resgatado = cand;
+  }
+  if (v.length && resgatado) {
+    // Sem "erro" (ele desliga as travas de botões deste turno): o rastro fica na tag do turno (a auditoria lê).
+    tags.filtro_resgate = `parágrafo retirado: ${v.join('; ')}`.slice(0, 300);
+    texto = resgatado;
+  } else if (v.length) {
     erro = { no: '7r · Extrair (correção)', mensagem: `filtro de saída: ${v.join('; ')}`, payload: { texto_bloqueado: texto, prompt: ctx.promptVersao } };
     texto = 'Só um instante, vou confirmar essa informação com nosso time e já te respondo 😊';
     // 12/11 (achado 4 da auditoria — Cristiano, 10/11 22h45): esta frase promete o time, mas sem [HANDOFF] ninguém era
@@ -532,6 +546,18 @@ const c = ctx.conversa || {};
 const upd = {};
 const dados = {};
 const d = kv(tags.dados_coletados);
+// 12/11 (Ricardo; portão P27): o operador decidiu SEM COBERTURA (portal sem viabilidade + DFV sem fachada no CEP) → a Mari
+// avisa, registra o interesse e encerra (handoff sem_cobertura) — determinístico: o modelo tendia a seguir para os planos.
+if (V7 && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'sem_cobertura'
+  && !(handoffYaml && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'sem_cobertura')) {
+  const pn = String(((ctx.conversa || {}).dados || {}).nome || (ctx.conversa || {}).nome_contato || '').trim().split(/\s+/)[0];
+  texto = `Poxa${pn && (ctx.conversa || {}).nome_confiavel !== false ? `, ${pn}` : ''}, infelizmente a fibra da Nio ainda não chega no seu endereço 😕\n\n`
+    + 'Deixei seu interesse registrado e te aviso por aqui assim que a rede chegar aí. Se o número ou o CEP estiver diferente do que você me passou, me manda que eu confiro de novo.';
+  handoffYaml = { motivo_handoff: 'sem_cobertura',
+    briefing_humano: 'Sem cobertura pelo operador (portal sem viabilidade e DFV sem fachada viável no CEP). A Mari avisou e registrou o interesse. Se o cliente mandar outro número/CEP, consultar na Cobertura.' };
+  tags.handoff = handoffYaml;
+  delete tags.carrossel; delete tags.botoes;
+}
 const hy = handoffYaml || {};
 const nome = d.nome || hy.nome;
 const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');
@@ -556,6 +582,15 @@ const cnpj = String(d.cnpj || hy.cnpj || '').replace(/\D/g, '');
 if (V7 && cnpj.length === 14) dados.cnpj = cnpj;
 const nasc = String(d.nascimento || hy.nascimento || '').trim();
 if (V7 && nasc && nasc !== '—' && !/^null$/i.test(nasc)) dados.nascimento = nasc;
+const pedAb = String(d.pedido_aberto || '').trim();   // 12/11 (0133): o que o cliente disse sobre o pedido Nio em andamento
+if (V7 && pedAb && pedAb !== '—' && !/^null$/i.test(pedAb)) dados.pedido_aberto_resposta = pedAb.slice(0, 200);
+// Portão P28: a Mari perguntou do pedido em andamento e o modelo não anotou a resposta → a mensagem do cliente é a resposta.
+if (V7 && !dados.pedido_aberto_resposta && (ctx.conversa || {}).nio_pedido_aberto === 'sim' && !(((ctx.conversa || {}).dados || {}).pedido_aberto_resposta)) {
+  const hist = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultMari = [...hist].reverse().find((h) => h.papel === 'mari');
+  const msgCli = String((prep.consolidado || {}).mensagem || '').trim();
+  if (ultMari && /pedido[^.?!]{0,60}(andamento|aberto)/.test(norm(ultMari.texto)) && msgCli) dados.pedido_aberto_resposta = msgCli.slice(0, 200);
+}
 if (V7) {
   // Marcas de alerta da conversa (o termômetro e a gaveta mostram): desconto, reclamação/já cliente, "não pedi contato".
   const mAl = norm((prep.consolidado || {}).mensagem || '');
@@ -599,7 +634,11 @@ if (pag) {
 const visita = d.visita || hy.visita_preferencia;
 if (visita && visita !== '—' && !/^null$/i.test(visita)) upd.visita_preferencia = visita;   // v1–v3
 const inst = d.instalacao || hy.instalacao_preferencia;
-if (inst && inst !== '—' && !/^null$/i.test(inst)) upd.instalacao_preferencia = inst;           // v4+
+if (inst && inst !== '—' && !/^null$/i.test(inst)) {
+  // 12/11 (Ricardo): a data vem dos botões D+1/D+2/D+3 (dados.instalacao_data); o modelo emite só o período → junta os dois.
+  const dtEsc = (c.dados || {}).instalacao_data;
+  upd.instalacao_preferencia = V7 && dtEsc && !/\d{1,2}\/\d{1,2}/.test(inst) ? `${dtEsc}, ${inst}` : inst;           // v4+
+}
 
 // v7 (prompt 27): ponto de referência (o portal exige), operadora atual (A10) e a rua confirmada (A2).
 if (V7) {
@@ -738,10 +777,22 @@ if (motivo) {
       dd.pista_nio ? `PISTA: cliente citou Nio/Oi (${dd.pista_nio}) — conferir posse e recompra no portal (etapa 2)` : null,
     ].filter(Boolean);
     // 12/11 (achado 1 da auditoria, 0131): o n8n mari_viabilidade já consultou o portal quando o endereço chegou.
-    const viabAuto = { viavel: `✅ viável${c.nio_viab_velocidade ? ` (até ${c.nio_viab_velocidade})` : ''}`,
-      sem_viabilidade: '❌ SEM viabilidade neste número — antes de tudo: conferir o endereço e a regra dos 200 m (Cobertura) com o cliente',
-      nao_encontrado: '⚠️ unidade (complemento) fora da lista do portal — escolher a unidade ou pedir o cadastro (Cobertura)' }[c.nio_viab_resultado];
-    if (viabAuto) topo.splice(1, 0, `PORTAL (consulta automática): ${viabAuto}`);
+    // 0133: a decisão do operador (portal decide, DFV resgata — igual à tela Cobertura).
+    const viabAuto = {
+      viavel: `✅ VIÁVEL${c.nio_viab_velocidade ? ` (até ${c.nio_viab_velocidade})` : ''}`,
+      elegivel_200m: '⚠️ ELEGÍVEL PELOS 200 m — portal sem viabilidade, DFV com fachadas viáveis no CEP: conferir a distância no mapa e pedir a liberação (Cobertura) ANTES da biometria',
+      unidade_fora_lista: '⚠️ UNIDADE FORA DA LISTA do portal — escolher a unidade certa ou pedir o cadastro pelo formulário (Cobertura)',
+      sem_cobertura: '❌ SEM COBERTURA — portal sem viabilidade e DFV sem fachada viável no CEP: a Mari avisou o cliente e registrou o interesse',
+      indefinida: '❔ o portal não decidiu — consultar na Cobertura antes da biometria',
+    }[c.cobertura_decisao] || {
+      viavel: '✅ viável', sem_viabilidade: '❌ SEM viabilidade neste número — conferir o endereço e os 200 m (Cobertura)',
+      nao_encontrado: '⚠️ unidade fora da lista do portal (Cobertura)' }[c.nio_viab_resultado];
+    if (viabAuto) topo.splice(1, 0, `COBERTURA (consulta automática): ${viabAuto}`);
+    // 0133: pedido Nio em andamento no CPF (Etapa 3 do portal) — recompra = multa R$ 500.
+    if (c.nio_pedido_aberto === 'sim') {
+      const resp = dados.pedido_aberto_resposta || (c.dados || {}).pedido_aberto_resposta;
+      topo.push(`⚠️ JÁ EXISTE PEDIDO NIO EM ANDAMENTO NO CPF${resp ? ` — o cliente disse: «${resp}»` : ''}. Conferir no portal antes de abrir outro (recompra = multa R$ 500).`);
+    }
     // 12/11 (achado 2 da auditoria — Edvaldo, Andriene): cliente sem cartão descobria só no fim que o crédito saiu "só no
     // cartão". Se ele disse que não tem/não usa cartão, o time consulta o crédito ANTES da biometria e já oferece a saída.
     const falasCliente = norm([(prep.consolidado || {}).mensagem, ...(Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [])
@@ -1019,6 +1070,64 @@ if (V7 && !erro && !handoff && !m.forma_pagamento && !m.dados.email && cpfOk(m.d
   baloesFinais.push('Antes da forma de pagamento, me passa seu melhor e-mail?');
   texto = baloesFinais.join('\n\n');
 }
+// 12/11 (portão P28, determinístico): há pedido Nio em andamento no CPF e a Mari ainda não perguntou → a pergunta fixa sai
+// nesta resposta (as outras perguntas do modelo ficam para depois: uma pergunta por vez). O atendimento segue.
+{
+  const cc = ctx.conversa || {};
+  const histP = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const jaPerguntou = histP.some((h) => h.papel === 'mari' && /pedido[^.?!]{0,60}(andamento|aberto)/.test(norm(h.texto)));
+  if (V7 && !posHandoff && !erro && !handoff && cc.nio_pedido_aberto === 'sim' && !jaPerguntou
+    && !dados.pedido_aberto_resposta && !((cc.dados || {}).pedido_aberto_resposta)) {
+    const pn = String((cc.dados || {}).nome || '').trim().split(/\s+/)[0];
+    const semPerg = baloesFinais.join('\n\n').split('\n\n').filter((p) => p.trim() && !p.includes('?'));
+    baloesFinais = [...semPerg, `Uma coisa${pn ? `, ${pn}` : ''}: já existe um pedido de internet da Nio em andamento no seu CPF. Foi você que fez? Ele ainda está valendo?`];
+    texto = baloesFinais.join('\n\n');
+    delete tags.botoes; delete tags.carrossel;
+  }
+}
+// 12/11 (Ricardo): depois da forma de pagamento, a preferência de DATA em botões (D+1, D+2, D+3 — sem domingo) e depois o
+// PERÍODO (Manhã · Tarde). Sempre preferência: quem confirma a data é o nosso time, pela agenda da Nio (contrato: nunca prometer).
+const DIAS_SEM = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const datasInstalacao = () => {
+  const hoje = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const out = [];
+  for (let i = 1; out.length < 3 && i < 8; i++) {
+    const x = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() + i);
+    if (x.getDay() === 0) continue;   // domingo não
+    const dd = String(x.getDate()).padStart(2, '0'); const mm = String(x.getMonth() + 1).padStart(2, '0');
+    const iso = `${x.getFullYear()}-${mm}-${dd}`;
+    if ((inter.feriados || []).some((f) => String(f.data).slice(0, 10) === iso && (!f.cidade || norm(f.cidade) === norm(c.cidade)))) continue;   // feriado não (0134)
+    out.push({ id: `dt:${x.getFullYear()}-${mm}-${dd}`, title: `${DIAS_SEM[x.getDay()]}, ${dd}/${mm}` });
+  }
+  return out;
+};
+const msgDt = String((prep.consolidado || {}).mensagem || '').trim();
+const ehRespostaData = /^(dom|seg|ter|qua|qui|sex|s[aá]b)[a-zçá-]*,?\s*\d{1,2}\/\d{1,2}$/i.test(msgDt);
+// "tanto faz"/"qualquer dia" logo depois da pergunta da data (portão, cenário o) = qualquer data → segue para o período.
+const histDt = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+const ultMariDt = [...histDt].reverse().find((h) => h.papel === 'mari');
+const ehQualquerData = !ehRespostaData && !(c.dados || {}).instalacao_data && ultMariDt && /qual destas datas|botoes: (dom|seg|ter|qua|qui|sex|sab)/.test(norm(ultMariDt.texto))
+  && /^(tanto faz|qualquer|qualquer (um|uma|dia|data)|pode ser qualquer( um| uma| dia| data)?|tanto faz o dia|o (dia|que) (for )?(melhor|mais rapido)[a-z ]*|o mais rapido( possivel)?)!?\.?$/.test(norm(msgDt));
+if (V7 && !posHandoff && (ehRespostaData || ehQualquerData) && !c.instalacao_preferencia && !upd.instalacao_preferencia) {
+  const dtv = ehQualquerData ? 'qualquer data' : msgDt;
+  dados.instalacao_data = dtv; m.dados.instalacao_data = dtv;
+  upd.dados = { ...(upd.dados || {}), instalacao_data: dtv };
+}
+// Pergunta de data/período que o modelo escreveu (às vezes copia o corpo dos botões, com as datas em texto): ela e o que vem
+// depois saem — o sistema manda os botões (portão 12/11, cenário a).
+const PERG_TURNO = /manha ou (a |de |pela |a de )?tarde|manha\b[^?\n]{0,25}\btarde\b[^\n]{0,40}\?|qual (turno|periodo)|instalacao, voce prefere|(qual|quais) (destas |dessas |das )?datas?\b|qual (data|dia)\b[^?]{0,40}instala|data[^?]{0,30}instala|periodo voce prefere/;
+if (V7 && !posHandoff && !erro && !handoff && m.forma_pagamento && !m.instalacao_preferencia && !upd.instalacao_preferencia
+  && tags.botoes !== 'pagamento' && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))) {
+  const paras = baloesFinais.join('\n\n').split('\n\n');
+  const iPerg = paras.findIndex((p) => PERG_TURNO.test(norm(p)));
+  const semTurno = (iPerg >= 0 ? paras.slice(0, iPerg) : paras).filter((p) => p.trim());
+  const ult = norm(semTurno[semTurno.length - 1] || '');
+  if (!ult.includes('?')) {            // outra pergunta pendente (ex.: um dado que faltou) vem antes
+    baloesFinais = semTurno;
+    texto = baloesFinais.join('\n\n');
+    tags.botoes = m.dados.instalacao_data ? 'turno' : 'data';
+  }
+}
 // Resumo de conferência sempre com os botões, mesmo se o modelo esquecer a marca (bateria 06/11).
 if (V7 && !erro && !tags.botoes && baloesFinais.length && RESUMO_RE.test(norm(baloesFinais[baloesFinais.length - 1]))
   && /cpf:/.test(norm(baloesFinais[baloesFinais.length - 1]))) tags.botoes = 'resumo';
@@ -1033,6 +1142,8 @@ if (V7 && !erro && tags.botoes) {
   const BOT = {
     sim_nao: [{ id: 'sim', title: 'Sim' }, { id: 'nao', title: 'Não' }],
     resumo: [{ id: 'resumo:ok', title: 'Sim, está certo' }, { id: 'resumo:corrigir', title: 'Corrigir' }],
+    data: datasInstalacao(),
+    turno: [{ id: 'turno:manha', title: 'Manhã' }, { id: 'turno:tarde', title: 'Tarde' }, { id: 'turno:qualquer', title: 'Tanto faz' }],
     pagamento: [{ id: 'pg:cartao', title: 'Cartão de crédito' }, { id: 'pg:boleto', title: 'Boleto bancário' }, { id: 'pg:debito', title: 'Débito automático' }],
   }[chave];
   if (BOT) {
@@ -1043,12 +1154,19 @@ if (V7 && !erro && tags.botoes) {
       corpo = pl && !ctx.btu && pl.preco_cartao != null && txts.pagamento_corpo
         ? txts.pagamento_corpo.replace('{de}', moeda(pl.preco)).replace('{por}', moeda(pl.preco_cartao))
         : (txts.pagamento_corpo_sem_desconto || 'Como você quer pagar?');
+    } else if (chave === 'data') {
+      corpo = txts.instalacao_data_corpo || 'Qual destas datas você prefere para a instalação? É só a sua preferência: o nosso time confirma a data pela agenda da Nio 😊';
+    } else if (chave === 'turno') {
+      corpo = txts.instalacao_turno_corpo || 'E qual período você prefere nesse dia?';
     } else if (baloesFinais.length) {
       corpo = baloesFinais[baloesFinais.length - 1];     // a pergunta vira o corpo da mensagem com botões
       baloesFinais = baloesFinais.slice(0, -1);
     }
     if (corpo) interativo = { tipo: 'botoes', chave, corpo: corpo.slice(0, 1024), botoes: BOT,
-      resumo: `botões: ${BOT.map((x) => x.title).join(' / ')}`, fallbackTexto: corpo };
+      resumo: `botões: ${BOT.map((x) => x.title).join(' / ')}`,
+      fallbackTexto: ['data', 'turno'].includes(chave) ? `${corpo}
+
+${BOT.map((x) => x.title).join(' · ')}` : corpo };
   }
 }
 // O histórico (mari_turnos) guarda o que o cliente viu: texto + corpo interativo + resumo legível.

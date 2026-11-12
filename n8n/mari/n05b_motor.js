@@ -235,6 +235,17 @@ if (V4) {
   const nv = conv.nio_viab_resultado || 'indisponivel';
   L.push(`nio_viab_resultado (viabilidade oficial do endereço, uso interno, nunca citar): ${nv}${conv.nio_viab_velocidade ? ` | velocidade_maxima: ${conv.nio_viab_velocidade}` : ''}`
     + (['viavel', 'posse'].includes(nv) ? '' : ' (fluxo normal: planos e cobertura pela cidade — nunca diga nem insinue que o endereço não é atendido)'));
+  // 12/11 (0133, Ricardo): a decisão do operador, igual à tela Cobertura (portal decide, DFV resgata) — Bloco 9 do prompt.
+  if (V7) {
+    const cd = conv.cobertura_decisao || (conv.cep && conv.numero ? 'consultando' : 'sem_endereco');
+    const det = conv.cobertura_detalhe || {};
+    const unid = cd === 'unidade_fora_lista' && Array.isArray(det.unidades) ? det.unidades.slice(0, 12).map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean) : [];
+    L.push(`cobertura_decisao (uso interno, nunca citar portal/sistema/consulta): ${cd}`
+      + (unid.length ? ` | unidades_cadastradas: ${unid.join('; ')}` : '')
+      + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
+    L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)' : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
+      + (dados.pedido_aberto_resposta ? ` | o cliente já respondeu: ${dados.pedido_aberto_resposta}` : ''));
+  }
 }
 if (!V7 && (!conv.elegibilidade || conv.elegibilidade === 'cancelou_30d')) {   // v7: "já tem Nio" é pista, sem tabela de retorno
   // Trava do contrato (reativação ≤ 30 d = estorno 100 %): a data de retorno é calculada aqui, nunca pelo modelo.
@@ -257,7 +268,7 @@ if (planoSel && conv.forma_pagamento) {
   L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
 }
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
-L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || '—'}` : `visita=${conv.visita_preferencia || '—'}`}`
+L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || (dados.instalacao_data ? `data ${dados.instalacao_data} escolhida — falta o período (o sistema manda Manhã/Tarde)` : '—')}` : `visita=${conv.visita_preferencia || '—'}`}`
   + (V7 ? `; referencia=${dados.referencia || '—'}; operadora_atual=${dados.operadora_atual || '—'}` : ''));
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
 // 10/11 (rodada única): e-mail repetido para o cliente confirmar (Valdo, 09/11: e-mail errado travou o portal).
@@ -471,7 +482,10 @@ return [{ json: {
       visita_preferencia: conv.visita_preferencia, instalacao_preferencia: conv.instalacao_preferencia,
       nio_viab_resultado: conv.nio_viab_resultado, nio_viab_velocidade: conv.nio_viab_velocidade, nio_viab_interesse_id: conv.nio_viab_interesse_id,
       dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
-      nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei },
+      nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei,
+      // 12/11 (0133): decisão do operador e pedido Nio em andamento — o 7 · Extrair decide/anota com eles (portão P27/P28)
+      cobertura_decisao: conv.cobertura_decisao, cobertura_detalhe: conv.cobertura_detalhe, nio_pedido_aberto: conv.nio_pedido_aberto,
+      nome_confiavel: conv.nome_confiavel },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?
     // 10/11: frase nova do bloco ("As condições do seu plano:"); a antiga vale para as conversas de antes.

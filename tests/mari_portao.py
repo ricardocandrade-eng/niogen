@@ -346,6 +346,44 @@ def cen_aa(c):   # P26: endereço com "Casa B" → complemento gravado
     c.exige(rows and 'casa b' in norm(rows[0].get('complemento') or ''), f'[P26] complemento "Casa B" não gravado: {rows}')
 
 
+def cen_ab(c):   # P27 (12/11, Ricardo): operador decidiu sem_cobertura (portal + DFV) → a Mari avisa, registra interesse, handoff sem_cobertura
+    c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        c.diz('Sim')
+    c.diz('Não tem complemento, perto da padaria')
+    B.sql(f"update mari_conversas set cobertura_decisao = 'sem_cobertura', nio_viab_em = now(), nio_viab_resultado = 'sem_viabilidade', "
+          f"cobertura_em = now() where telefone = '{c.tel}'", escrita=True)
+    r = c.diz('Uso a Vivo')
+    t = fala(r)
+    c.exige((r.get('handoff') or {}).get('motivo') == 'sem_cobertura', f'[P27] sem handoff sem_cobertura: {r.get("handoff")} «{t[:200]}»')
+    c.exige(re.search(r'nao chega|ainda nao chegou|nao atende', t), f'[P27] não avisou que a fibra não chega: «{t[:200]}»')
+    c.exige(not re.search(r'portal|sistema|consulta|viabilidade|dfv', t), f'[P27] citou portal/sistema/viabilidade: «{t[:200]}»')
+    c.exige(not (r.get('interativo') or {}).get('tipo') == 'carrossel', '[P27] mandou os planos para quem não tem cobertura')
+
+
+def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
+    c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        c.diz('Sim')
+    c.diz('Não tem complemento, perto da padaria')
+    c.diz('Uso a Claro')
+    c.diz('Quero o Fibra')
+    B.sql(f"update mari_conversas set nio_pedido_aberto = 'sim', nio_pedido_aberto_em = now(), dup_consultas = 1 where telefone = '{c.tel}'", escrita=True)
+    r = c.diz('Ana Teste da Silva, CPF 529.982.247-25')
+    t = fala(r)
+    c.exige(re.search(r'pedido[^.?!]{0,60}(andamento|aberto)', t), f'[P28] não perguntou do pedido em andamento: «{t[:220]}»')
+    c.exige(not r.get('handoff'), f'[P28] encerrou/handoff ao perguntar do pedido: {r.get("handoff")}')
+    c.exige(not re.search(r'portal|sistema|consta|vi aqui', t), f'[P28] citou portal/sistema/"consta": «{t[:200]}»')
+    r = c.diz('Fui eu sim, mas desisti daquele, quero esse agora')
+    rows = B.sql(f"select dados->>'pedido_aberto_resposta' p from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and rows[0].get('p'), f'[P28] resposta do cliente sobre o pedido não foi anotada: {rows}')
+    c.exige(not r.get('handoff'), f'[P28] não seguiu o atendimento depois da resposta: {r.get("handoff")}')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -358,6 +396,8 @@ PORTAO = {
     # 10/11 — rodada única (u usa 19 e 20): objeções, fora de área, golpe, complemento
     'v': (21, cen_v, 'P20 P21'), 'w': (22, cen_w, 'P22'), 'x': (23, cen_x, 'P23'), 'y': (24, cen_y, 'P24'), 'z': (25, cen_z, 'P25'),
     'aa': (26, cen_aa, 'P26'),
+    # 12/11 — operador na Mari (cobertura pela decisão da tela; pedido Nio em andamento no CPF)
+    'ab': (27, cen_ab, 'P27'), 'ac': (28, cen_ac, 'P28'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

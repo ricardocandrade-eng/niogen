@@ -79,7 +79,8 @@ def custo(u, modelo):
 
 
 GLOBAL = [
-    (r'\b(atende|chega|tem cobertura|tem fibra)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa)', 'prometeu cobertura no endereço'),
+    # 12/11: "ainda não chega no seu endereço" (aviso do sem_cobertura, P27) é negação, não promessa
+    (r'(?<!nao )\b(atende|chega|tem cobertura|tem fibra)\s+(a[ií]\b|na sua rua|no seu endereco|na sua casa)', 'prometeu cobertura no endereço'),
     (r'\btem cobertura\b|boa noticia', 'falou "tem cobertura"/"boa notícia"'),
     (r'em ate \d+\s*(h\b|hora|min)|hoje ainda|ainda hoje', 'prometeu prazo'),
 ]
@@ -167,8 +168,16 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     if (r.get('interativo') or {}).get('chave') != 'pagamento':
         c.falha('(a) forma de pagamento sem os botões')
     r = c.diz('Cartão de crédito')
-    r = c.diz('De manhã')
+    # 12/11 (Ricardo): depois do pagamento, botões de DATA (D+1/D+2/D+3, sem domingo/feriado) e depois de PERÍODO
+    it = r.get('interativo') or {}
+    c.exige(it.get('chave') == 'data' and len(it.get('botoes') or []) == 3, f'(a) depois do pagamento, sem os 3 botões de data: {it.get("chave")}')
+    c.exige(not any(str(b.get('title', '')).startswith('Dom') for b in (it.get('botoes') or [])), '(a) ofereceu domingo')
+    data_esc = ((it.get('botoes') or [{}])[0]).get('title') or 'Seg, 16/11'
+    r = c.diz(data_esc)
+    c.exige((r.get('interativo') or {}).get('chave') == 'turno', '(a) depois da data, sem os botões Manhã/Tarde')
+    r = c.diz('Manhã')
     txt = (r.get('resposta') or '') + '\n' + ((r.get('interativo') or {}).get('corpo') or '')
+    c.exige(data_esc.split(',')[-1].strip() in txt, f'(a) resumo sem a data escolhida ({data_esc})')
     c.exige('529.***.***-25' in txt, f'(a) CPF não mascarado no resumo: «{txt[:200]}»')
     c.exige('referencia' in norm(txt), '(a) resumo sem a referência')
     c.exige((r.get('interativo') or {}).get('chave') == 'resumo', '(a) resumo sem os botões')
@@ -326,7 +335,12 @@ def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua
     c.exige((r.get('interativo') or {}).get('chave') == 'pagamento', '(o) pagamento sem os botões')
     r = c.diz('Cartão de crédito')
     sem_anotado(r, 'pagamento')
+    # 12/11: "tanto faz" na data → qualquer data e segue para o período; "tanto faz" no período → qualquer período
+    c.exige((r.get('interativo') or {}).get('chave') == 'data', '(o) depois do pagamento, sem os botões de data')
     r = c.diz('Tanto faz')
+    if (r.get('interativo') or {}).get('chave') == 'turno':   # "tanto faz" valeu só para a data → pergunta o período
+        r = c.diz('Tanto faz')
+    c.exige((r.get('interativo') or {}).get('chave') != 'data', '(o) "tanto faz" na data repetiu a pergunta da data')
     txt = (r.get('resposta') or '') + '\n' + ((r.get('interativo') or {}).get('corpo') or '')
     c.exige('529.***.***-25' in txt, f'(o) CPF errado no resumo: «{txt[:240]}»')
     c.exige('deixo como' not in norm(txt) and 'qualquer' in norm(txt), f'(o) "tanto faz" virou escolha da Mari: «{txt[:160]}»')

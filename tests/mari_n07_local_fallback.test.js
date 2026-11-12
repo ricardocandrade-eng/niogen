@@ -23,3 +23,6 @@ const b = rodar(ruim, {}, false);
 console.log('1a tentativa → corrigir:', b.corrigir, b.violacoes);
 const ok = rodar('Entendo, Cristiano! Os valores são tabelados pela Nio 😊 Quer que eu te mostre o Fibra?', {}, true);
 console.log('2a sem violação → handoff:', ok.handoff, 'texto:', ok.texto.slice(0, 60));
+// 12/11 (portão, cenário a): só um parágrafo ruim (upsell sem velocidades) → o resto sai, sem texto de emergência e sem handoff
+const resg = rodar('Fechado, Cristiano.\n\nSó pra você saber: por mais R$30 tem o Essencial, bem melhor.\n\nMe manda seu nome completo e CPF?', {}, true);
+console.log('resgate → handoff:', resg.handoff, '| emergência:', /só um instante/i.test(resg.texto), '| tag:', (resg.tags || {}).filtro_resgate ? 'sim' : 'não', '| texto:', resg.texto.replace(/\n/g, ' ').slice(0, 90));
