@@ -935,6 +935,18 @@ function listaTexto() {
     + (!ctx.btu && p.preco_cartao != null ? ` (R$${moeda(p.preco_cartao).replace(',00', '')} no cartão)` : '')).join('\n\n')
     + '\n\nQual te agrada mais?';
 }
+// 12/11 (portão, cenário k — 3 vezes em 4 rodadas): em cidade com carrossel o modelo escreveu a lista "1) Nio Fibra… R$" em
+// texto, sem a marca. A lista sai e vira o carrossel (mesmos números do banco, com as imagens e os botões).
+if (V7 && !erro && !posHandoff && !tags.carrossel && ctx.carrossel && !(upd.plano_escolhido || (ctx.conversa || {}).plano_escolhido)) {
+  const paras = baloesFinais.join('\n\n').split('\n\n');
+  const ehItem = (p) => /^\s*\d\)\s[^\n]*R\$\s*\d/.test(p);
+  if (paras.filter(ehItem).length >= 2) {
+    const iPrim = paras.findIndex(ehItem);
+    baloesFinais = paras.slice(0, iPrim).filter((p) => p.trim());   // fica a abertura ("A Nio atende… Olha as opções:")
+    texto = baloesFinais.join('\n\n');
+    tags.carrossel = true;
+  }
+}
 if (V7 && !erro && tags.carrossel) {
   const cards = Array.isArray(inter.cartoes) ? inter.cartoes : [];
   // Trava de preço (spec §3): os dois valores do texto do cartão têm de bater com config_planos.

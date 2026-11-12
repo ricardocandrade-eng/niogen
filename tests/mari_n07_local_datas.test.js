@@ -66,3 +66,21 @@ process.exitCode = falhas ? 1 : 0;
   console.log((ok3 ? 'ok   ' : 'FALHOU ') + 'P28 · pergunta fixa do pedido em andamento, sem outras perguntas | ' + r3.texto.replace(/\n/g, ' ').slice(0, 120));
   if (!ok3) process.exitCode = 1;
 }
+// cenário k (12/11): lista escrita em cidade com carrossel → vira o carrossel
+{
+  const fs2 = require('fs'); const code2 = fs2.readFileSync(process.argv[2], 'utf8');
+  const card = (c, n, p, pc) => ({ plano_codigo: c, nome: n, nome_curto: n, preco: p, preco_cartao: pc, imagem_url: 'x', titulo_quero: 'Quero', titulo_detalhes: 'Detalhes',
+    texto_card: `${n} R$ ${p.toFixed(2).replace('.', ',')} R$ ${pc.toFixed(2).replace('.', ',')}` });
+  const nodes = { '5b · Motor': { ctx: { conversaId: 'c1', t0: Date.now(), turnoIds: [1], promptVersao: 'mari_v7', carrossel: true, segmento: 'varejo', cluster: 'regular',
+      planos: [{ codigo: 'F', nome: 'Nio Fibra', portfolio: 'varejo', variante: '', preco: 110, preco_cartao: 95, velocidade_mb: 600 }, { codigo: 'E', nome: 'Nio Essencial', portfolio: 'varejo', variante: '', preco: 140, preco_cartao: 125, velocidade_mb: 800 }],
+      inter: { textos: {}, cartoes: [card('F', 'Nio Fibra', 110, 95), card('E', 'Nio Essencial', 140, 125)] },
+      conversa: { id: 'c1', etapa: 'planos', cidade: 'Juiz de Fora', cep: '36035130', numero: '123', complemento: 'Apto 403', elegibilidade: 'ok', dados: { referencia: 'x' } } } },
+    '4 · Preparar': { consolidado: { mensagem: 'Nenhuma', historico: [] } } };
+  const $ = (n) => ({ first: () => ({ json: nodes[n] || {} }), isExecuted: !!nodes[n], all: () => [{ json: nodes[n] || {} }] });
+  const bruto = 'A Nio atende Juiz de Fora 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido.\n\n1) Nio Fibra, 600 Mega — R$110 por mês (R$95 no cartão)\n\n2) Nio Essencial, 800 Mega — R$140 por mês (R$125 no cartão)\n\nQual te agrada mais?';
+  const $input = { first: () => ({ json: { content: [{ type: 'text', text: bruto }], usage: {}, stop_reason: 'end_turn' } }) };
+  const r = new Function('$', '$input', '$json', '$runIndex', code2)($, $input, {}, 0)[0].json;
+  const ok = r.interativo && r.interativo.tipo === 'carrossel' && !/1\) Nio Fibra/.test(r.texto);
+  console.log((ok ? 'ok   ' : 'FALHOU ') + 'k · lista escrita vira carrossel | ' + (r.interativo && r.interativo.tipo) + ' | ' + r.texto.replace(/\n/g, ' ').slice(0, 90));
+  if (!ok) process.exitCode = 1;
+}
