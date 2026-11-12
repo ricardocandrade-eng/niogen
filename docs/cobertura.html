@@ -24,12 +24,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-14">
-<script src="config.js?v=111126-14"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-15">
+<script src="config.js?v=111126-15"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-14"></script>
-<script src="assets/sidebar.js?v=111126-14"></script>
-<script src="assets/novavenda.js?v=111126-14"></script>
+<script src="assets/app.js?v=111126-15"></script>
+<script src="assets/sidebar.js?v=111126-15"></script>
+<script src="assets/novavenda.js?v=111126-15"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -65,7 +65,7 @@
   .cob2-ct > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 10px; align-items: center; }
   .cob2-corpo { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 12px; display: flex; flex-direction: column; gap: 10px; }
   .cob2-acts { flex: none; padding: 10px 14px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .cob2-acts .btn { min-height: 36px; text-decoration: none; }
+  .cob2-acts .btn { min-height: 34px; padding: 0 11px; font-size: 12.5px; text-decoration: none; white-space: nowrap; }
   .cob2-acts .cob2-nova { margin-left: auto; }
 
   .cob2-steps { list-style: none; margin: 0; padding: 0; }
@@ -411,7 +411,7 @@
   // Barra do pé do cartão: a resposta do crédito manda quando tem ação; senão, a da viabilidade. Uma ação principal só.
   function desenharAcoes() {
     const lista = (acoesCred.length ? acoesCred : acoesDec).filter(Boolean);
-    actsEl.innerHTML = lista.join('') + (portal || dfv ? '<button type="button" class="btn btn-ghost cob2-nova" data-nova>Nova consulta</button>' : '');
+    actsEl.innerHTML = lista.join('') + (portal || dfv ? '<button type="button" class="btn btn-ghost cob2-nova" data-nova title="Limpar e começar outra consulta">↺ Nova</button>' : '');
     const btns = [...actsEl.querySelectorAll('.btn:not(.cob2-nova)')];
     btns.forEach((b, i) => b.classList.toggle('btn-acc', i === 0));
   }
