@@ -1,0 +1,671 @@
+{
+  "name": "mari_midia_envio",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mari-midia-envio",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "5af95c44-bc22-5540-a6cc-a7fc196a43e0",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "cff149d7-72f2-5d28-aaec-b8bee8ea7334"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Valida o pedido e monta o caminho no bucket. Telefone de teste (5500000000xxx) = simulado: não vai ao WhatsApp.\nconst b = $input.first().json.body || {};\nconst tel = String(b.telefone || '').replace(/\\D/g, '');\nconst tipo = b.tipo === 'imagem' ? 'imagem' : 'voz';\nconst texto = String(b.texto || '').trim().slice(0, 1000);\nconst erro = !/^\\d{12,13}$/.test(tel) ? 'telefone inválido' : !texto && tipo === 'voz' ? 'texto vazio' :\n  tipo === 'imagem' && !/^https:\\/\\//.test(String(b.imagem_url || '')) ? 'imagem_url inválida' : null;\nconst pasta = String(b.chatwoot_conversa || b.conversa_id || 'sem-conversa').replace(/[^0-9A-Za-z_-]/g, '');\nreturn [{ json: {\n  tipo, telefone: tel, texto, erro,\n  simular: tel.startsWith('5500000000') || b.simular === true,\n  conversa_id: b.conversa_id || null, chatwoot_conversa: b.chatwoot_conversa ? String(b.chatwoot_conversa) : null,\n  origem: ['resposta', 'cadencia', 'teste'].includes(b.origem) ? b.origem : 'resposta', passo: b.passo || null, ab: b.ab || null,\n  imagem_url: b.imagem_url || null, plano: b.plano || null,\n  voz: b.voz || 'marin', modelo: b.modelo || 'gpt-4o-mini-tts', instrucoes: b.instrucoes || '',\n  caminho: `mari/${pasta}/mari_${Date.now()}.ogg`,\n} }];"
+      },
+      "name": "Pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "id": "7ab4d403-06a7-506a-beaa-43e34d735070"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "70230b39-dd80-563a-acc7-257223f0eade",
+              "leftValue": "={{ $json.tipo === 'voz' && !$json.erro }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Voz?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ],
+      "id": "dc0452af-5f5c-5b88-8ce5-b25bd9e21845"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        },
+        "method": "POST",
+        "url": "https://api.openai.com/v1/audio/speech",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: $json.modelo, voice: $json.voz, input: $json.texto, instructions: $json.instrucoes || undefined, response_format: \"opus\" }) }}"
+      },
+      "name": "TTS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        100
+      ],
+      "id": "8282f79b-fd99-5844-87fd-63d3dd640bd6",
+      "credentials": {
+        "openAiApi": {
+          "id": "BXg4w8W7R1jsIh0P",
+          "name": "Transcrição Nio"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// O TTS devolve o arquivo sem nome: vira mari_<voz>.ogg / audio/ogg (o WhatsApp precisa do OGG/Opus para a mensagem de voz).\nconst it = $input.first();\nconst p = $('Pedido').first().json;\nif (it.binary && it.binary.data) {\n  it.binary.data.fileName = `mari_${p.voz}.ogg`; it.binary.data.mimeType = 'audio/ogg'; it.binary.data.fileExtension = 'ogg';\n  return [{ json: { ...p, tts_ok: true }, binary: it.binary }];\n}\nreturn [{ json: { ...p, tts_ok: false, tts_erro: JSON.stringify(it.json && it.json.error || it.json || {}).slice(0, 200) } }];"
+      },
+      "name": "Nome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        100
+      ],
+      "id": "126db785-b494-56b8-b091-bd87d8137f1f"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "=https://zlrfwbkblytnokuexjti.supabase.co/storage/v1/object/midia_conversas/{{ $json.caminho }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-upsert",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "audio/ogg"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "data"
+      },
+      "name": "Subir bucket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        100
+      ],
+      "id": "5645c0d3-4cdc-5cc3-b697-cacb2ea0c355",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Depois de subir no bucket o item perde o arquivo: devolve o binário do TTS para o upload na Graph API.\nconst up = $input.first().json || {};\nconst n = $('Nome').first();\nreturn [{ json: { ...n.json, bucket_ok: !!(up.Key || up.Id || up.key), bucket_erro: up.error ? String(up.error.message || up.error).slice(0, 200) : null },\n          binary: n.binary }];"
+      },
+      "name": "Rebinar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ],
+      "id": "1b2c9315-f34f-5648-bb60-9ba263c0d158"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "08ced81a-ba0b-5bd3-ad5e-38468a4ff08d",
+              "leftValue": "={{ !$json.simular && $json.tts_ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Real voz?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ],
+      "id": "f309ca21-3fc7-53f3-aac4-3ee1a66895af"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/media",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "messaging_product",
+              "value": "whatsapp"
+            },
+            {
+              "name": "type",
+              "value": "audio/ogg"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "data"
+            }
+          ]
+        }
+      },
+      "name": "Upload WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "6073e99a-ecd3-52f6-9dc0-4d174c225c48",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $('Pedido').first().json.telefone, type: 'audio', audio: { id: $json.id, voice: true } }) }}"
+      },
+      "name": "Enviar voz WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        0
+      ],
+      "id": "fdbfb004-b295-5cc9-a7f5-47df1cf9fe44",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "18cdf239-26dc-560a-bd72-0dcfb4d1352d",
+              "leftValue": "={{ !$json.erro && !$json.simular }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Real imagem?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "id": "fc84df89-2163-555e-9161-7e1655575457"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.telefone, type: 'image', image: { link: $json.imagem_url, caption: $json.texto } }) }}"
+      },
+      "name": "Enviar imagem WA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "id": "4375ba44-b1ce-5856-963f-5ec5574c77d2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta o que aconteceu (só um dos caminhos rodou) e decide ok / erro / wamid.\nconst p = $('Pedido').first().json;\nconst run = (n) => { try { return $(n).isExecuted ? ($(n).first().json || {}) : null; } catch (e) { return null; } };\nconst errDe = (j) => j && j.error ? String(j.error.message || j.error.description || JSON.stringify(j.error)).slice(0, 300) : null;\nlet ok = false, wamid = null, erro = p.erro, caminho = null;\nif (!erro && p.tipo === 'voz') {\n  const nome = run('Nome') || {}, reb = run('Rebinar') || {}, up = run('Upload WA'), env = run('Enviar voz WA');\n  if (!nome.tts_ok) erro = `voz não gerada: ${nome.tts_erro || 'sem resposta'}`;\n  else {\n    caminho = reb.bucket_ok ? p.caminho : null;\n    if (p.simular) { ok = !!reb.bucket_ok; erro = ok ? null : `não subiu no bucket: ${reb.bucket_erro || '?'}`; }\n    else if (!up || !up.id) erro = `upload no WhatsApp falhou: ${errDe(up) || 'sem id'}`;\n    else if (!env || !env.messages || !env.messages[0]) erro = `envio da voz falhou: ${errDe(env) || 'sem id'}`;\n    else { ok = true; wamid = env.messages[0].id; }\n  }\n} else if (!erro) {\n  const env = run('Enviar imagem WA');\n  if (p.simular) ok = true;\n  else if (!env || !env.messages || !env.messages[0]) erro = `envio da imagem falhou: ${errDe(env) || 'sem id'}`;\n  else { ok = true; wamid = env.messages[0].id; }\n}\nconst curto = p.texto.length > 300 ? p.texto.slice(0, 300) + '…' : p.texto;\nconst nota = p.tipo === 'voz'\n  ? `🔊 Mari mandou áudio${p.passo ? ` (${p.passo})` : ''}: «${curto}»`\n  : `🖼️ Mari mandou a imagem${p.plano ? ` do ${p.plano}` : ''}${p.passo ? ` (${p.passo})` : ''}: «${curto}»`;\nreturn [{ json: { ok, wamid, caminho, erro: ok ? null : erro, simulado: !!p.simular, tipo: p.tipo,\n  registro: { conversa_id: p.conversa_id, origem: p.origem, passo: p.passo, tipo: p.tipo, texto: p.texto, caminho,\n              imagem_url: p.tipo === 'imagem' ? p.imagem_url : null, ab: p.ab, ok, erro: ok ? null : erro, wamid },\n  nota: ok && !p.simular && p.chatwoot_conversa ? nota : null, chatwoot_conversa: p.chatwoot_conversa } }];"
+      },
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        200
+      ],
+      "id": "93394e9b-a4e5-5a59-b32b-03f21e21f4f5"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: $json.ok, wamid: $json.wamid, caminho: $json.caminho, erro: $json.erro, simulado: $json.simulado }) }}",
+        "options": {}
+      },
+      "name": "Responder",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        200
+      ],
+      "id": "8c8b885e-8f30-5e5b-9481-97632a5763fd"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_midia_registrar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p: $('Resultado').first().json.registro }) }}"
+      },
+      "name": "Registrar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        200
+      ],
+      "id": "e83a761f-6e13-5436-be73-09e7d5e08826",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "db05feda-778d-58bc-bd05-ffc2d400cb18",
+              "leftValue": "={{ !!$('Resultado').first().json.nota }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Nota?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        200
+      ],
+      "id": "ec6128e2-138a-5a2e-b8eb-72d95602fb69"
+    },
+    {
+      "parameters": {
+        "options": {
+          "timeout": 60000
+        },
+        "method": "POST",
+        "url": "=https://app.chatwoot.com/api/v1/accounts/195428/conversations/{{ $('Resultado').first().json.chatwoot_conversa }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ content: $('Resultado').first().json.nota, message_type: 'outgoing', private: true }) }}"
+      },
+      "name": "Nota Chatwoot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        100
+      ],
+      "id": "1560f10f-c1cd-5aa7-88b4-c4aefd7bb8e1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedido": {
+      "main": [
+        [
+          {
+            "node": "Voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voz?": {
+      "main": [
+        [
+          {
+            "node": "TTS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Real imagem?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TTS": {
+      "main": [
+        [
+          {
+            "node": "Nome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nome": {
+      "main": [
+        [
+          {
+            "node": "Subir bucket",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Subir bucket": {
+      "main": [
+        [
+          {
+            "node": "Rebinar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rebinar": {
+      "main": [
+        [
+          {
+            "node": "Real voz?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Real voz?": {
+      "main": [
+        [
+          {
+            "node": "Upload WA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload WA": {
+      "main": [
+        [
+          {
+            "node": "Enviar voz WA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar voz WA": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Real imagem?": {
+      "main": [
+        [
+          {
+            "node": "Enviar imagem WA",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar imagem WA": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado": {
+      "main": [
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder": {
+      "main": [
+        [
+          {
+            "node": "Registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar": {
+      "main": [
+        [
+          {
+            "node": "Nota?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nota?": {
+      "main": [
+        [
+          {
+            "node": "Nota Chatwoot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "timezone": "America/Sao_Paulo"
+  }
+}

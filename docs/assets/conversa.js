@@ -139,12 +139,16 @@
         st.venda = vj || null;
         if (st.d) desenhar();
       }, () => {});
-      const [rc, rt, ra, rr, rtpl] = await Promise.all([
+      // 12/11 (0146): voz e imagem que a Mari mandou (mari_midia_envios) — na mesma rodada paralela (regra 19)
+      const qEnvios = NG.sb.from('mari_midia_envios').select('id, tipo, texto, caminho, imagem_url, passo, origem, created_at')
+        .eq('conversa_id', id).eq('ok', true).order('created_at', { ascending: false }).limit(60).then((r) => r, () => ({ data: [] }));
+      const [rc, rt, ra, rr, rtpl, rme] = await Promise.all([
         NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
         qTurnos,
         qAcoes(id),
         rapidas(),
         templates(),
+        qEnvios,
       ]);
       if (!st.vivo || meu !== st.seq) return;
       if (rc.error || !rc.data) {
@@ -158,7 +162,8 @@
         const tem = new Set(st.d.turnos.map((t) => t.id));
         turnos = st.d.turnos.concat(turnos.filter((t) => !tem.has(t.id)));
       }
-      st.d = { c: rc.data, turnos, acoes: ra.error && st.d ? st.d.acoes : (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [] };
+      st.d = { c: rc.data, turnos, acoes: ra.error && st.d ? st.d.acoes : (ra.data || []).reverse(), rapidas: rr || [], tpls: rtpl || [],
+        envios: rme && !rme.error ? (rme.data || []).reverse() : (st.d ? st.d.envios || [] : []) };
       // A mensagem local some quando a ação dela aparece na fila do banco.
       st.locais = st.locais.filter((l) => !(l.acao_id && st.d.acoes.some((a) => a.id === l.acao_id)));
       // 10/11: a ficha/lista de quem abriu a conversa recarrega quando a fala aparece (turno novo, do cliente ou do time) ou a
@@ -249,6 +254,12 @@
         its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: t.papel === 'lead' && Array.isArray(t.midia) ? t.midia : null,
           quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
       });
+      (d.envios || []).forEach((e) => {
+        const passo = e.passo ? ` · ${e.passo}` : '';
+        its.push({ em: e.created_at, tipo: 'mari', txt: e.tipo === 'imagem' ? (e.texto || '') : '', tick: '✓',
+          quem: e.tipo === 'voz' ? `Mari · 🔊 áudio${passo}` : `Mari · 🖼️ imagem${passo}`,
+          midia: e.tipo === 'voz' ? [{ tipo: 'audio', caminho: e.caminho, transcricao: e.texto }] : [{ tipo: 'imagem', url: e.imagem_url }] });
+      });
       d.acoes.forEach((a) => {
         const txt = (a.payload || {}).content || '';
         if (a.tipo === 'nota') {
@@ -274,7 +285,8 @@
     async function pedirUrls() {
       if (pedindoUrls || !st.d) return;
       const falta = new Set();
-      st.d.turnos.forEach((t) => (Array.isArray(t.midia) ? t.midia : []).forEach((m) => {
+      [...st.d.turnos, ...(st.d.envios || []).filter((e) => e.tipo === 'voz').map((e) => ({ midia: [{ tipo: 'audio', caminho: e.caminho }] }))]
+        .forEach((t) => (Array.isArray(t.midia) ? t.midia : []).forEach((m) => {
         if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
         const u = urlsMidia.get(m.caminho);
         if (!u || u.ate < Date.now() + 5 * 60000) falta.add(m.caminho);
@@ -294,6 +306,10 @@
       let resto = String(txt || '');
       const partes = [];
       midia.forEach((m) => {
+        if (m && m.tipo === 'imagem' && m.url && !m.caminho) {   // cartão do plano (público) que a Mari mandou
+          partes.push(`<button type="button" class="cvp-foto" data-cv="foto" data-url="${esc(m.url)}" aria-label="Abrir a imagem em tamanho grande"><img src="${esc(m.url)}" alt="Imagem enviada pela Mari" loading="lazy"></button>`);
+          return;
+        }
         if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
         const u = urlsMidia.get(m.caminho);
         const url = u && u.url ? u.url : null;

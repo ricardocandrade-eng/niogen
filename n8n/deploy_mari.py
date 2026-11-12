@@ -234,6 +234,8 @@ CODE = {
     '2c · Mídia': 'n02c_midia.js',
     '2b · Anexos': 'n02b_anexos.js',                         # 12/11 (0145): áudio e foto no bucket + transcrição
     '2b8 · Juntar mídia': 'n02b8_juntar.js',
+    '11f · Separar fala': 'n11f_fala.js',                     # 12/11 (0146): resposta em voz (Marin) a quem mandou áudio
+    '11i · Depois da voz': 'n11i_depois_voz.js',
     '5a · Conteúdo Mari': 'n05a_conteudo.js',
     '5b · Motor': 'n05b_motor.js',
     '5c · Pedido de correção': 'n05c_correcao.js',
@@ -549,6 +551,17 @@ def build(ids):
     iff('11m · Modo teste?', "={{ $json.modo !== 'chatwoot' }}", 6820, 300)
     add('12t · Responder (teste)', 'n8n-nodes-base.respondToWebhook', 1.1, {
         'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json.saida) }}', 'options': {}}, 7040, 200)
+    # ── 12/11 (0146): resposta em VOZ a quem mandou áudio (config audio_resposta_*; desligada por padrão). A voz sai pelo
+    # workflow mari_midia_envio (TTS → mensagem de voz do WhatsApp → nota privada); falhou → tudo em texto, como sempre.
+    code('11f · Separar fala', 6930, 520)
+    iff('11g · Falar?', '={{ $json.falar === true }}', 6930, 700)
+    add('11h · Enviar voz', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{N8N}/webhook/mari-midia-envio',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.pedidoVoz) }}',
+        'options': {'timeout': 90000}}, 7040, 800, credentials=te_cred, onError='continueRegularOutput',
+        notes='0146 — workflow mari_midia_envio (header X-Mari-Secret). Devolve ok/erro; o 11i decide o texto que segue.')
+    code('11i · Depois da voz', 7150, 700)
     iff('11c · Tem resposta?', "={{ ($json.resposta || '').length > 0 }}", 7040, 400)
     # Balões (prompt v3, "||"): um envio por balão, com atraso de digitação antes de cada um. Resposta sem "||" = 1 balão.
     code('12a · Balões', 7260, 400)
@@ -701,7 +714,12 @@ def build(ids):
         ('11 · Saída', 0, '11m · Modo teste?'),
         ('11m · Modo teste?', 0, '12t · Responder (teste)'),
         ('11m · Modo teste?', 0, '12x · Interativo?'),
-        ('11m · Modo teste?', 1, '11c · Tem resposta?'),
+        ('11m · Modo teste?', 1, '11f · Separar fala'),
+        ('11f · Separar fala', 0, '11g · Falar?'),
+        ('11g · Falar?', 0, '11h · Enviar voz'),
+        ('11g · Falar?', 1, '11c · Tem resposta?'),
+        ('11h · Enviar voz', 0, '11i · Depois da voz'),
+        ('11i · Depois da voz', 0, '11c · Tem resposta?'),
         ('11c · Tem resposta?', 0, '12a · Balões'),
         ('11c · Tem resposta?', 1, '12x · Interativo?'),
         ('12b · Um balão', 0, '12x · Interativo?'),

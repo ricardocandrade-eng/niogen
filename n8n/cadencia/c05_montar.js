@@ -46,6 +46,7 @@ return [{ json: {
   semEnvio: semEnvio && !erro,
   erro,
   chatwootConversationId: c.chatwoot_conversation_id || null,
+  telefone: tel,   // 12/11 (0146): a cutucada com voz/imagem sai pela Graph API
   corpo,
   config: CONFIG,
 } }];

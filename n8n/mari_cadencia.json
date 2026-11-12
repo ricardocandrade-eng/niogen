@@ -226,7 +226,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\n// 0142: pedido ao Claude para a Mari escrever a cutucada (só texto; o filtro fica no 4e).\nconst c = $('4 · Um por vez').first().json;\nconst ctx = $input.first().json || {};\nconst sistema = `Você é a Mari, vendedora da Nio Internet (fibra) no WhatsApp. O cliente parou de responder e você vai mandar uma\nCUTUCADA para trazê-lo de volta — curta, simpática e persuasiva, como uma boa vendedora que quer muito fechar com ele.\nRegras (todas obrigatórias):\n- No máximo 2 frases e 180 caracteres. Português do Brasil, natural, sem formalidade. No máximo 1 emoji.\n- Termine com UMA pergunta fácil de responder, que puxe o próximo passo do que FALTA (CEP, número, operadora, escolher o plano, nome/CPF, e-mail, forma de pagamento, conferir os dados).\n- Use o primeiro nome do cliente se vier no contexto. Pode citar a cidade e o plano escolhido.\n- Um argumento por vez, só do que é verdade: preço fixo até 2030; roteador Wi-Fi incluído; atendimento rápido por aqui; é rapidinho (1–2 minutos).\n- NUNCA: desconto, brinde, promoção, \"última chance\", \"só hoje\", prazo ou data de instalação, valor em R$, \"cobertura confirmada\", asterisco, nome de empresa que não seja Nio.\n- Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.\n- Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).\nResponda SÓ com o texto da mensagem, sem aspas.`;\nconst pedido = {\n  model: 'claude-sonnet-5-5', max_tokens: 400,\n  output_config: { effort: 'low' },\n  system: sistema,\n  messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\\n' + JSON.stringify(ctx) }],\n};\nreturn [{ json: { pedido } }];\n"
+        "jsCode": "\n\n// 0142: pedido ao Claude para a Mari escrever a cutucada (só texto; o filtro fica no 4e).\n\nconst c = $('4 · Um por vez').first().json;\n\nconst ctx = $input.first().json || {};\n\nconst sistema = `Você é a Mari, vendedora da Nio Internet (fibra) no WhatsApp. O cliente parou de responder e você vai mandar uma\n\nCUTUCADA para trazê-lo de volta — curta, simpática e persuasiva, como uma boa vendedora que quer muito fechar com ele.\n\nRegras (todas obrigatórias):\n\n- No máximo 2 frases e 180 caracteres. Português do Brasil, natural, sem formalidade. No máximo 1 emoji.\n\n- Termine com UMA pergunta fácil de responder, que puxe o próximo passo do que FALTA (CEP, número, operadora, escolher o plano, nome/CPF, e-mail, forma de pagamento, conferir os dados).\n\n- Use o primeiro nome do cliente se vier no contexto. Pode citar a cidade e o plano escolhido.\n\n- Um argumento por vez, só do que é verdade: preço fixo até 2030; roteador Wi-Fi incluído; atendimento rápido por aqui; é rapidinho (1–2 minutos).\n\n- NUNCA: desconto, brinde, promoção, \"última chance\", \"só hoje\", prazo ou data de instalação, valor em R$, \"cobertura confirmada\", asterisco, nome de empresa que não seja Nio.\n\n- Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.\n\n- Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).\n\nResponda SÓ com o texto da mensagem, sem aspas.`;\n\nconst pedido = {\n\n  model: 'claude-sonnet-5-5', max_tokens: 400,\n\n  output_config: { effort: 'low' },\n\n  system: sistema,\n\n  messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\\n' + JSON.stringify(ctx) }],\n\n};\n\nreturn [{ json: { pedido } }];\n\n"
       },
       "name": "4c · Montar pedido",
       "type": "n8n-nodes-base.code",
@@ -283,7 +283,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\n// 0142: filtro da cutucada escrita pela Mari. Reprovou (ou a API falhou) → texto de reserva do banco. Sai o candidato do\n// \"4 · Um por vez\" com o texto final — o 5 · Montar envio segue igual.\nconst c = { ...$('4 · Um por vez').first().json };\nconst r = $input.first().json || {};\nlet ctx = {};\ntry { ctx = $('4b · Supabase contexto').first().json || {}; } catch (e) { ctx = {}; }\nconst blocos = Array.isArray(r.content) ? r.content.filter((x) => x && x.type === 'text') : [];\nlet t = blocos.map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim().replace(/^[\"“']|[\"”']$/g, '');\nconst norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\nconst n = norm(t);\nconst ja = (Array.isArray(ctx.cutucadas_ja_enviadas) ? ctx.cutucadas_ja_enviadas : []).map(norm);\nconst ruim = !t || t.length < 12 || t.length > 260 || !t.includes('?') || t.includes('*') || /r\\$\\s*\\d/.test(n)\n  || /descont|gratis|gratuit|promo|brinde|ultima chance|so hoje|somente hoje|amanha|instala(cao|r)? (hoje|amanha|em )|prazo|cobertura confirmada|garanto|garantimos|combo|pacote|dh\\x61rma|2028/.test(n)\n  || ja.some((x) => x && (x === n || x.slice(0, 25) === n.slice(0, 25)))\n  || r.stop_reason === 'refusal' || !!r.error;\nif (!ruim) c.texto = t;\nc.cutucada_ia = !ruim;\nreturn [{ json: c }];\n"
+        "jsCode": "\n\n// 0142: filtro da cutucada escrita pela Mari. Reprovou (ou a API falhou) → texto de reserva do banco. Sai o candidato do\n\n// \"4 · Um por vez\" com o texto final — o 5 · Montar envio segue igual.\n\nconst c = { ...$('4 · Um por vez').first().json };\n\nconst r = $input.first().json || {};\n\nlet ctx = {};\n\ntry { ctx = $('4b · Supabase contexto').first().json || {}; } catch (e) { ctx = {}; }\n\nconst blocos = Array.isArray(r.content) ? r.content.filter((x) => x && x.type === 'text') : [];\n\nlet t = blocos.map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim().replace(/^[\"“']|[\"”']$/g, '');\n\nconst norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\nconst n = norm(t);\n\nconst ja = (Array.isArray(ctx.cutucadas_ja_enviadas) ? ctx.cutucadas_ja_enviadas : []).map(norm);\n\nconst ruim = !t || t.length < 12 || t.length > 260 || !t.includes('?') || t.includes('*') || /r\\$\\s*\\d/.test(n)\n\n  || /descont|gratis|gratuit|promo|brinde|ultima chance|so hoje|somente hoje|amanha|instala(cao|r)? (hoje|amanha|em )|prazo|cobertura confirmada|garanto|garantimos|combo|pacote|dh\\x61rma|2028/.test(n)\n\n  || ja.some((x) => x && (x === n || x.slice(0, 25) === n.slice(0, 25)))\n\n  || r.stop_reason === 'refusal' || !!r.error;\n\nif (!ruim) c.texto = t;\n\nc.cutucada_ia = !ruim;\n\nreturn [{ json: c }];\n\n"
       },
       "name": "4e · Ler cutucada",
       "type": "n8n-nodes-base.code",
@@ -296,7 +296,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/cadencia/c05_montar.js — nó \"5 · Montar envio\" do mari_cadencia (04/11/2026)\n// Recebe UM candidato (loop de 1) e monta o corpo da mensagem para a API do Chatwoot:\n//   texto livre (dentro da janela de 24 h) → { content, message_type, private:false }\n//   template (fora da janela)              → { content: corpo renderizado, template_params: { name, category,\n//                                              language, processed_params: { body: { \"1\": …, \"2\": … } } } }\n// (formato do noF4b da Renata, capturado do payload da própria UI do Chatwoot).\n// semEnvio = true quando NÃO há envio real: modo teste, canal 'teste', telefone de teste 5500000000xxx ou\n// passo ENCERRAR (só muda o status). Nunca o nome da revendedora no texto (o banco já filtra; aqui de novo).\n\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '195428',   // conta própria da Nio no Chatwoot (nunca a da Vero) — prompt 28, 07/11\n};\n\nconst c = $input.first().json;\nconst modo = $('2 · Interruptor').first().json.modo;\nconst tel = String(c.telefone || '');\nconst texto = String(c.texto || '');\n\nconst PROIBIDO = new RegExp(['dh' + 'arma', 'gr[aá]tis', 'gratuit', 'combo', 'pacote', 'nio 5g', '2028', 'sem fidelidade'].join('|'), 'i');\nlet erro = null;\nif (c.acao !== 'encerrar' && (!texto || PROIBIDO.test(texto) || texto.includes('*'))) erro = 'texto vazio ou reprovado no filtro de saída';\n\nconst semEnvio = c.acao === 'encerrar' || modo !== 'chatwoot' || c.canal === 'teste' || tel.startsWith('5500000000');\n\nlet corpo = null;\nif (c.acao === 'texto') {\n  corpo = { content: texto, message_type: 'outgoing', private: false };\n} else if (c.acao === 'template') {\n  const body = {};\n  (c.params || []).forEach((v, i) => { body[String(i + 1)] = String(v); });\n  corpo = {\n    content: texto, message_type: 'outgoing', content_type: 'text',\n    template_params: { name: c.template, category: c.categoria || 'MARKETING', language: 'pt_BR', processed_params: { body } },\n  };\n}\n\nif (!semEnvio && !c.chatwoot_conversation_id) erro = erro || 'conversa sem chatwoot_conversation_id';\nif (!semEnvio && !CONFIG.CHATWOOT_NIO_ACCOUNT) erro = erro || 'CHATWOOT_NIO_ACCOUNT vazio';\n\nreturn [{ json: {\n  conversaId: c.conversa_id,\n  passo: c.proximo_passo,\n  acao: c.acao,\n  texto,\n  excecao: c.excecao || null,\n  semEnvio: semEnvio && !erro,\n  erro,\n  chatwootConversationId: c.chatwoot_conversation_id || null,\n  corpo,\n  config: CONFIG,\n} }];\n"
+        "jsCode": "// NIOGEN | n8n/cadencia/c05_montar.js — nó \"5 · Montar envio\" do mari_cadencia (04/11/2026)\n// Recebe UM candidato (loop de 1) e monta o corpo da mensagem para a API do Chatwoot:\n//   texto livre (dentro da janela de 24 h) → { content, message_type, private:false }\n//   template (fora da janela)              → { content: corpo renderizado, template_params: { name, category,\n//                                              language, processed_params: { body: { \"1\": …, \"2\": … } } } }\n// (formato do noF4b da Renata, capturado do payload da própria UI do Chatwoot).\n// semEnvio = true quando NÃO há envio real: modo teste, canal 'teste', telefone de teste 5500000000xxx ou\n// passo ENCERRAR (só muda o status). Nunca o nome da revendedora no texto (o banco já filtra; aqui de novo).\n\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '195428',   // conta própria da Nio no Chatwoot (nunca a da Vero) — prompt 28, 07/11\n};\n\nconst c = $input.first().json;\nconst modo = $('2 · Interruptor').first().json.modo;\nconst tel = String(c.telefone || '');\nconst texto = String(c.texto || '');\n\nconst PROIBIDO = new RegExp(['dh' + 'arma', 'gr[aá]tis', 'gratuit', 'combo', 'pacote', 'nio 5g', '2028', 'sem fidelidade'].join('|'), 'i');\nlet erro = null;\nif (c.acao !== 'encerrar' && (!texto || PROIBIDO.test(texto) || texto.includes('*'))) erro = 'texto vazio ou reprovado no filtro de saída';\n\nconst semEnvio = c.acao === 'encerrar' || modo !== 'chatwoot' || c.canal === 'teste' || tel.startsWith('5500000000');\n\nlet corpo = null;\nif (c.acao === 'texto') {\n  corpo = { content: texto, message_type: 'outgoing', private: false };\n} else if (c.acao === 'template') {\n  const body = {};\n  (c.params || []).forEach((v, i) => { body[String(i + 1)] = String(v); });\n  corpo = {\n    content: texto, message_type: 'outgoing', content_type: 'text',\n    template_params: { name: c.template, category: c.categoria || 'MARKETING', language: 'pt_BR', processed_params: { body } },\n  };\n}\n\nif (!semEnvio && !c.chatwoot_conversation_id) erro = erro || 'conversa sem chatwoot_conversation_id';\nif (!semEnvio && !CONFIG.CHATWOOT_NIO_ACCOUNT) erro = erro || 'CHATWOOT_NIO_ACCOUNT vazio';\n\nreturn [{ json: {\n  conversaId: c.conversa_id,\n  passo: c.proximo_passo,\n  acao: c.acao,\n  texto,\n  excecao: c.excecao || null,\n  semEnvio: semEnvio && !erro,\n  erro,\n  chatwootConversationId: c.chatwoot_conversation_id || null,\n  telefone: tel,   // 12/11 (0146): a cutucada com voz/imagem sai pela Graph API\n  corpo,\n  config: CONFIG,\n} }];\n"
       },
       "name": "5 · Montar envio",
       "type": "n8n-nodes-base.code",
@@ -473,6 +473,158 @@
         600
       ],
       "id": "5307db60-b27d-52db-b3e9-2beda6ee0bd8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_config_interativo",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \"{}\" }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "6k · Supabase config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        800
+      ],
+      "id": "aa2f53dd-e0b0-51ad-9106-2768e911f805",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// NIOGEN | n8n/cadencia/c06m_midia.js — nó \"6m · Mídia?\" do mari_cadencia (12/11/2026, 0146)\n// docs/Prompt_mari_resposta_audio_121126_1800.md, itens 6 e 6b: a cutucada escolhida vai como IMAGEM do plano (F2, padrão) ou\n// como VOZ (F3, padrão), com A/B — metade das conversas recebe a mídia, metade só o texto (bit do id da conversa: voz = bit 0,\n// imagem = bit 1; a medição recalcula o grupo pelo mesmo id). Só cutucadas que a Mari escreveu (F1–F5, texto livre na janela de 24 h).\n// Config (config_mari_textos): midia_cadencia_ligado ('sim'), midia_cadencia_telefones ('teste' = telefones_teste, '' = todos),\n// audio_cadencia_passo, imagem_cadencia_passo, midia_cadencia_ab ('sim'), audio_resposta_voz/modelo/instrucoes.\n// Qualquer dúvida → sem mídia (a cutucada segue em texto pelo Chatwoot, como sempre).\nconst m = $('6h · Guard Chatwoot').first().json;\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst sem = (motivo) => [{ json: { ...m, midia: null, midiaMotivo: motivo } }];\nif (m.acao !== 'texto' || !/^F[1-5]$/.test(String(m.passo || ''))) return sem('não é cutucada escrita');\nconst cfg = ((ex('6k · Supabase config') ? $('6k · Supabase config').first().json : null) || {}).textos || {};\nif (String(cfg.midia_cadencia_ligado || '').toLowerCase() !== 'sim') return sem('desligado');\nconst tel = String(m.telefone || '').replace(/\\D/g, '');\nconst lista = String(cfg.midia_cadencia_telefones == null ? 'teste' : cfg.midia_cadencia_telefones).trim();\nconst liberados = (lista === 'teste' ? String(cfg.telefones_teste || '') : lista).split(/[^0-9]+/).filter(Boolean);\nif (lista !== '' && !liberados.includes(tel)) return sem('telefone fora da lista');\nconst tipo = m.passo === String(cfg.audio_cadencia_passo || '') ? 'voz' : m.passo === String(cfg.imagem_cadencia_passo || '') ? 'imagem' : null;\nif (!tipo) return sem('passo sem mídia');\n// A/B pelo id da conversa (estável): bit 0 → voz, bit 1 → imagem. 0 = grupo da mídia.\nconst byte = parseInt(String(m.conversaId || '').replace(/-/g, '').slice(-2), 16) || 0;\nconst ab = String(cfg.midia_cadencia_ab || 'sim').toLowerCase() === 'sim';\nconst grupoMidia = !ab || (tipo === 'voz' ? (byte & 1) === 0 : ((byte >> 1) & 1) === 0);\nif (!grupoMidia) return sem(`A/B: grupo texto (${tipo})`);\nconst texto = String(m.texto || '').trim();\nconst base = { tipo, telefone: tel, texto, origem: 'cadencia', passo: m.passo, ab: tipo === 'voz' ? 'voz' : 'imagem',\n  conversa_id: m.conversaId, chatwoot_conversa: m.chatwootConversationId || null };\nif (tipo === 'voz') {\n  // voz: curta e sem nada que precise ser lido (preço, número, link)\n  if (texto.length > 250 || /R\\$|\\d{4,}|https?:\\/\\//.test(texto)) return sem('texto não cabe em voz');\n  return [{ json: { ...m, midia: 'voz', pedidoMidia: { ...base, texto: texto.replace(/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{FE0F}\\u{200D}]/gu, '').replace(/\\s+/g, ' ').trim(),\n    voz: cfg.audio_resposta_voz || 'marin', modelo: cfg.audio_resposta_modelo || 'gpt-4o-mini-tts', instrucoes: cfg.audio_resposta_instrucoes || '' } } }];\n}\n// imagem: o cartão do plano que o 4b trouxe para ESTA conversa e ESTE passo\nconst ctx = ex('4b · Supabase contexto') ? ($('4b · Supabase contexto').first().json || {}) : {};\nconst md = ctx.midia || {};\nif (ctx.conversa_id !== m.conversaId || ctx.passo !== m.passo || !/^https:\\/\\//.test(String(md.imagem_url || ''))) return sem('sem imagem do plano');\nreturn [{ json: { ...m, midia: 'imagem', pedidoMidia: { ...base, imagem_url: md.imagem_url, plano: md.plano_da_imagem || null } } }];\n"
+      },
+      "name": "6m · Mídia?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2530,
+        900
+      ],
+      "id": "2c6d3804-0901-5965-a4dd-d3cd94cb905e"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ea540398-a2bb-52ef-8de6-c44602dd9579",
+              "leftValue": "={{ !!$json.midia }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "6n · Com mídia?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        900
+      ],
+      "id": "156abd64-e4f2-5f76-b92b-848bd42eb4f3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.ofertasverointernet.com.br/webhook/mari-midia-envio",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedidoMidia) }}",
+        "options": {
+          "timeout": 90000
+        }
+      },
+      "name": "6o · Enviar mídia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2750,
+        1000
+      ],
+      "id": "ab87e40e-5a08-5558-a626-04705964069d",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "0146 — workflow mari_midia_envio (voz: TTS → mensagem de voz; imagem: cartão do plano com legenda) + nota privada."
+    },
+    {
+      "parameters": {
+        "jsCode": "// NIOGEN | n8n/cadencia/c06q_resultado_midia.js — nó \"6q · Resultado mídia\" do mari_cadencia (12/11/2026, 0146)\n// A mídia saiu → item no formato que o 7r espera (id + status), a cutucada conta como enviada. Não saiu → volta o item da cutucada\n// para o \"7 · Chatwoot enviar\" (texto, como sempre). O erro já foi gravado pelo mari_midia_envio.\nconst m = $('6m · Mídia?').first().json;\nconst r = $input.first().json || {};\nif (r.ok) return [{ json: { id: r.wamid || 'whatsapp', status: 'sent', midiaOk: true } }];\nconst { pedidoMidia, ...resto } = m;\nreturn [{ json: { ...resto, midiaOk: false } }];\n"
+      },
+      "name": "6q · Resultado mídia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        1000
+      ],
+      "id": "20a9bb07-b42f-511a-8a72-648239deade0"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "07d6a2ae-d897-53d5-9b45-c684fe8a7f61",
+              "leftValue": "={{ $json.midiaOk === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "6r · Mídia saiu?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2970,
+        1000
+      ],
+      "id": "026f23c9-f0cb-5a2a-9633-a4833faa23da"
     },
     {
       "parameters": {
@@ -1064,7 +1216,7 @@
       "main": [
         [
           {
-            "node": "7 · Chatwoot enviar",
+            "node": "6k · Supabase config",
             "type": "main",
             "index": 0
           }
@@ -1072,6 +1224,86 @@
         [
           {
             "node": "8 · Supabase registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6k · Supabase config": {
+      "main": [
+        [
+          {
+            "node": "6m · Mídia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6m · Mídia?": {
+      "main": [
+        [
+          {
+            "node": "6n · Com mídia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6n · Com mídia?": {
+      "main": [
+        [
+          {
+            "node": "6o · Enviar mídia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "7 · Chatwoot enviar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6o · Enviar mídia": {
+      "main": [
+        [
+          {
+            "node": "6q · Resultado mídia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6q · Resultado mídia": {
+      "main": [
+        [
+          {
+            "node": "6r · Mídia saiu?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6r · Mídia saiu?": {
+      "main": [
+        [
+          {
+            "node": "7r · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "7 · Chatwoot enviar",
             "type": "main",
             "index": 0
           }
