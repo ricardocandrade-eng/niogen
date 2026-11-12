@@ -2816,7 +2816,8 @@
         : feitoUltimo ? feitoUltimo.resumo : p.nota || (p.sozinho ? `O NIOGEN faz sozinho: ${p.sozinho}` : '');
       const responder = p.alertaConv && p.jReal.botao === 'responder' && d.conversaId;
       const rot = responder ? 'Responder' : p.temAcao && p.rotuloAcao ? p.rotuloAcao : p.temAcao ? 'Fazer' : 'Ações';
-      const botao = `<button type="button" class="btn${responder || (p.temAcao && ['now', 'today'].includes(tom)) ? ' btn-acc' : ''} fc-ag-bt" data-f="${responder ? 'conversa' : 'fc-passo'}">${esc(rot.length > 26 ? 'Fazer' : rot)}${IC.seta}</button>`;
+      const botao = `<div class="fc-ag-bts"><button type="button" class="btn${responder || (p.temAcao && ['now', 'today'].includes(tom)) ? ' btn-acc' : ''} fc-ag-bt" data-f="${responder ? 'conversa' : 'fc-passo'}">${esc(rot.length > 26 ? 'Fazer' : rot)}${IC.seta}</button>
+        ${responder ? '<button type="button" class="fc-link" data-f="fc-passo" title="Próximo passo da venda e atalhos (pendência, devolver para a Mari, saída…)">Ações da venda</button>' : ''}</div>`;
       agora = `<div class="fc-agora-w">${agoraHtml(tom, k, t, s, botao, pendLinha(v))}${pendOver()}</div>`;
       cards = `<div class="fc-cards">${cardsVenda(v)}${verTudo(v)}${passoOver(v, p)}</div>`;
     } else {
@@ -2981,6 +2982,10 @@
     raiz = el;
     ligar(raiz);
     raiz.addEventListener('click', cliqueCheia);
+    // Menu ⋯ e detalhe da etapa fecham com clique fora (inclusive fora da tela do cliente).
+    document.addEventListener('click', (ev) => {
+      if (modo === 'cheia' && d && (fc.menu || fc.etapa) && !raiz.contains(ev.target)) { fc.menu = false; fc.etapa = null; render(); }
+    });
     cheiaOpts = opts || {};
   }
 

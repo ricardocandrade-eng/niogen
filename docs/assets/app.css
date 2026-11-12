@@ -2129,3 +2129,5 @@ body.lv-com-cliente .mv-feito { display: none; }
   .fc-pos { display: none; }
   .fc-pend-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.cvp-raiz.cheia .cvp-nome { display: none; }
+.fc-ag-bts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex: none; }
