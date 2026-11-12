@@ -24,9 +24,11 @@ Deno.serve(async (req) => {
   try {
     const url = Deno.env.get('SUPABASE_URL')!;
     const anon = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const quem = createClient(url, anon, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
-    const { data: perfil, error: ePerfil } = await quem.rpc('meu_perfil');
-    if (ePerfil || !perfil) return json({ error: 'Entre no NIOGEN para consultar.' }, 403);
+    // 12/11 (0131): o n8n mari_viabilidade chama com a service role (a chave do pedido segue adiante) — consulta-só, igual à tela.
+    const chave = req.headers.get('apikey') || anon;
+    const quem = createClient(url, chave, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
+    const [{ data: perfil, error: ePerfil }, { data: servico }] = await Promise.all([quem.rpc('meu_perfil'), quem.rpc('sou_service_role')]);
+    if (servico !== true && (ePerfil || !perfil)) return json({ error: 'Entre no NIOGEN para consultar.' }, 403);
 
     const b = await req.json().catch(() => ({}));
     const cep = so(b.cep);

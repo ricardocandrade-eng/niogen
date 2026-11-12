@@ -24,11 +24,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=121126-20">
+<link rel="stylesheet" href="assets/app.css?v=121126-21">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=111126-20"></script>
-<script src="assets/sidebar.js?v=121126-20"></script>
+<script src="assets/sidebar.js?v=121126-21"></script>
 <script src="assets/novavenda.js?v=111126-20"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
@@ -694,6 +694,18 @@
     desenharAcoes();
   }
 
+  // 12/11 (0133, Ricardo: "o Operador ainda não grava nada no NIOGEN"): cada consulta da tela vira linha em operador_consultas
+  // (tipo, resultado, decisão, endereço; crédito só com o CPF mascarado). Não espera nem trava a tela.
+  const DECIDIR = (p, d) => p === 'viavel' ? 'viavel' : p === 'complemento_fora_lista' ? 'unidade_fora_lista'
+    : p === 'sem_viabilidade' ? (d === 'viavel' || d === 'elegivel' ? 'elegivel_200m' : d === 'sem' ? 'sem_cobertura' : 'indefinida')
+      : d === 'viavel' ? 'viavel' : d === 'elegivel' ? 'elegivel_200m' : 'indefinida';
+  function registrarConsulta(tipo, e, resultado, detalhe, ms, extra) {
+    try {
+      NG.sb.rpc('operador_consulta_registrar', { p_tipo: tipo, p_dados: { cep: (e || {}).cep, numero: (e || {}).numero, complemento: (e || {}).complemento,
+        resultado, ms: ms ? Math.round(ms) : null, detalhe, ...(extra || {}) } }).then(() => {}, () => {});
+    } catch (_) { /* nunca derruba a tela */ }
+  }
+
   // ------------------------------------------------------------ DFV: na hora, em paralelo com o portal
   async function rodarDfv(e, minha) {
     const t0 = performance.now();
@@ -715,6 +727,7 @@
       const onde = r.fonte === 'base_congelada' ? (r.rpc || {}).bairro : [r.logradouro, r.bairro].filter(Boolean).join(', ');
       if (onde) resEnd.textContent = `${resEnd.dataset.base} · ${onde}`;
       dfvBloco.hidden = !dfvEl.innerHTML.trim();
+      registrarConsulta('dfv', e, dfvVeredito(), { fonte: r.fonte || 'ao_vivo', match: r.match, fachadas_cep: r.total_fachadas_no_cep }, dfv.ms);
     } catch (err) {
       if (minha !== rodada) return;
       dfv = { estado: 'erro', erro: NG.msgErro(err) };
@@ -741,6 +754,8 @@
       }
       if (minha !== rodada) return;
       portal = { estado: 'pronto', s, ms: performance.now() - t0 };
+      registrarConsulta('viabilidade', e, s.resultado, { velocidade: s.velocidade, cache: !!s.cache, motivo: s.motivo, dfv: dfvVeredito() },
+        portal.ms, { decisao: DECIDIR(s.resultado, dfvVeredito()) });
     } catch (err) {
       if (minha !== rodada) return;
       portal = { estado: 'erro', erro: err.naoInstalado ? 'operador do portal não instalado' : NG.msgErro(err), naoInstalado: !!err.naoInstalado };
@@ -957,6 +972,8 @@
       }
       cred = { estado: 'pronto', r: s };
       renderCred(s);
+      registrarConsulta('credito', padrao ? null : d.endereco, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, cache: !!s.cache },
+        s.ms, { cpf_mascara: s.cpf_mascara || null });
     } catch (err) {
       cred = err.naoInstalado ? { estado: 'fora' } : { estado: 'erro', erro: `consulta de crédito indisponível: ${NG.msgErro(err)}` };
       acoesCred = [];

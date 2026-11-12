@@ -11,6 +11,8 @@
 #   POST /chamar   {metodo, caminho, corpo?} → chamada à API do portal pela página; 401 = renova UMA vez e repete
 #   POST /credito  {cpf, endereco?, contato?, origem?} → 202 {job_id, posicao_fila, estado} (cache 24 h → 200 pronto)
 #   GET  /credito/{job_id}              → {estado: fila|rodando|pronto|erro, etapa_atual, posicao_fila, ...resultado}
+#   POST /credito/duplicidade {cpf}       → 202 {job_id, ...} — Etapas 0–3 com o endereço padrão; para na duplicidade de pedido
+#                                         (12/11, Mari): pedido_em_andamento | sem_pedido_em_andamento. Sem contato, sem crédito.
 #   POST /credito/viabilidade {endereco} → 202 {job_id, ...} — SÓ Etapas 0–2, sem CPF/contato (11/11 ~21h, consulta
 #                                         unificada). Resultado viavel | sem_viabilidade | complemento_fora_lista | ...
 #                                         Cache 6 h por endereço; limite VIAB_LIMITE_HORA (60). Mesma fila do navegador.
@@ -65,6 +67,7 @@ CACHE_TTL = 24 * 3600
 VIAB_TTL = 6 * 3600       # viabilidade do portal vale "hoje": 6 h por endereço
 VIAB_CACHEAVEIS = {'viavel', 'sem_viabilidade', 'complemento_fora_lista'}
 CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento'}
+DUP_CACHEAVEIS = {'pedido_em_andamento', 'sem_pedido_em_andamento'}   # 12/11: modo duplicidade (Mari), 24 h por CPF
 
 
 def chave_viab(endereco, sal):
@@ -96,6 +99,7 @@ def cfg_credito():
         'sal': e('CREDITO_SAL') or SEGREDO,
         'amostras': e('CREDITO_AMOSTRAS_DIR') or '/amostras',
         'viab_limite_hora': int(e('VIAB_LIMITE_HORA') or 60),
+        'dup_limite_hora': int(e('DUP_LIMITE_HORA') or 20),
     }
 
 
@@ -241,6 +245,7 @@ JOBS = {}
 TRAVA_JOBS = threading.Lock()
 INICIOS = deque()          # horários de consultas que abriram o portal (freio hora/dia)
 VIAB_INICIOS = deque()     # idem, só viabilidade (não passa pela Receita/Serasa)
+DUP_INICIOS = deque()      # idem, só duplicidade de pedido (Etapas 0–3, Receita sim, Serasa não)
 CACHE = {}                 # chave sha256(sal+cpf) → (time, resultado). Só memória: nada vai a disco.
 
 
@@ -329,11 +334,13 @@ def _rodar_job(job_id, params, cfg):
             out['print_job'] = job_id      # o cache leva junto: quem pegar o resultado do cache vê o mesmo print
         j['resultado'] = out
         j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
-        viab = params.get('modo') == 'viabilidade'
-        if out['resultado'] in (VIAB_CACHEAVEIS if viab else CACHEAVEIS):
+        modo = params.get('modo') or 'credito'
+        viab = modo == 'viabilidade'
+        cacheaveis = VIAB_CACHEAVEIS if viab else DUP_CACHEAVEIS if modo == 'duplicidade' else CACHEAVEIS
+        if out['resultado'] in cacheaveis:
             CACHE[params['chave']] = (time.time(), out)
         cr.gravar_amostra(cfg['amostras'], job_id, out, corpos)
-        log_credito(job_id, 'viabilidade' if viab else params['origem_endereco'], out['resultado'], out.get('ms'), out.get('etapa_parada'),
+        log_credito(job_id, modo if modo != 'credito' else params['origem_endereco'], out['resultado'], out.get('ms'), out.get('etapa_parada'),
                     extra=(out.get('motivo') or '')[:120] if out['resultado'] in ('erro', 'nao_classificado') else '')
         return None
     FILA.put(Tarefa(tarefa))
@@ -393,6 +400,45 @@ def novo_job_credito(b):
         INICIOS.append(t)
         JOBS[job_id] = {**base, 'estado': 'fila', 'etapa_atual': 0}
         params = {'cpf': cpf, 'endereco': endereco, 'contato': contato, 'origem_endereco': origem_end, 'chave': chave}
+        _rodar_job(job_id, params, cfg)
+        return 202, _publico(JOBS[job_id])
+
+
+def novo_job_duplicidade(b):
+    """12/11 (Mari): só a duplicidade de pedido — Etapas 0–3 com o ENDEREÇO PADRÃO e o CPF; para antes do contato e do crédito
+    (sem Serasa). Resultado pedido_em_andamento | sem_pedido_em_andamento | erro_receita | nao_classificado | erro.
+    Cache 24 h por CPF (hash com sal); teto próprio DUP_LIMITE_HORA (padrão 20) e a mesma fila do navegador."""
+    cfg = cfg_credito()
+    cpf = cr.so_digitos(b.get('cpf'))
+    if not cr.cpf_valido(cpf):
+        raise pl.Falha(400, 'CPF inválido')
+    if len(cfg['end_cep']) != 8:
+        raise pl.Falha(503, 'endereço padrão não configurado (CREDITO_END_CEP)')
+    endereco = {'cep': cfg['end_cep'], 'numero': cfg['end_numero'], 'complemento': '',
+                'referencia': cfg['end_referencia'] or 'Centro'}
+    chave = 'd:' + cr.cpf_chave(cpf, cfg['sal'])
+    with TRAVA_JOBS:
+        _limpar_jobs()
+        job_id = uuid.uuid4().hex
+        base = {'id': job_id, 'criado': time.time(), 'cpf_mascara': cr.cpf_mascara(cpf), 'modo': 'duplicidade',
+                'origem': str(b.get('origem') or '')[:40] or None}
+        hit = CACHE.get(chave)
+        if hit and time.time() - hit[0] < CACHE_TTL:
+            res = dict(hit[1], cache=True)
+            JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
+            log_credito(job_id, 'duplicidade', res['resultado'], 0, res.get('etapa_parada'), cache=True)
+            return 200, _publico(JOBS[job_id])
+        if sum(1 for j in JOBS.values() if j['estado'] == 'fila') >= FILA_MAX:
+            raise pl.Falha(429, f'fila cheia ({FILA_MAX}) — tente em alguns minutos')
+        t = time.time()
+        while DUP_INICIOS and t - DUP_INICIOS[0] > 3600:
+            DUP_INICIOS.popleft()
+        if len(DUP_INICIOS) >= cfg['dup_limite_hora']:
+            raise pl.Falha(429, f'limite de {cfg["dup_limite_hora"]} consultas de duplicidade por hora')
+        DUP_INICIOS.append(t)
+        JOBS[job_id] = {**base, 'estado': 'fila', 'etapa_atual': 0}
+        params = {'cpf': cpf, 'endereco': endereco, 'contato': None, 'origem_endereco': 'padrao',
+                  'modo': 'duplicidade', 'chave': chave}
         _rodar_job(job_id, params, cfg)
         return 202, _publico(JOBS[job_id])
 
@@ -494,6 +540,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._resp(200, {'ok': True, **r})
                 pl.log(f'chamar {str(b.get("metodo", "GET")).upper()} {str(b.get("caminho") or "").split("?")[0][:60]}'
                        f' → {r.get("status")} ({time.time() - t0:.1f} s{", renovou" if r.get("renovou") else ""})')
+                return
+            elif metodo == 'POST' and rota == '/credito/duplicidade':
+                code, r = novo_job_duplicidade(self._json())
+                self._resp(code, r)
                 return
             elif metodo == 'POST' and rota == '/credito/viabilidade':
                 code, r = novo_job_viabilidade(self._json())

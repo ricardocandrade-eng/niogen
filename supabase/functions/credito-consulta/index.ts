@@ -46,15 +46,15 @@ Deno.serve(async (req) => {
     const quem = createClient(url, chave, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } });
     const [{ data: perfilUsuario, error: ePerfil }, { data: u }, { data: servico }] =
       await Promise.all([quem.rpc('meu_perfil'), quem.auth.getUser(), quem.rpc('sou_service_role')]);
-    // O n8n mari_viabilidade só pode viabilidade e status (nunca crédito nem print).
+    // O n8n (mari_viabilidade) só pode viabilidade, duplicidade e status (nunca crédito nem print).
     const perfil = servico === true ? 'n8n' : perfilUsuario;
     usuario = servico === true ? 'n8n' : (u?.user?.id?.slice(0, 8) ?? '?');
     if (servico !== true && (ePerfil || !perfil)) { log('403 sem login'); return json({ error: 'Entre no NIOGEN para consultar.' }, 403); }
     const b = await req.json().catch(() => ({}));
     acao = String(b.acao ?? '');
-    if (servico === true && !['viabilidade', 'status'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
+    if (servico === true && !['viabilidade', 'status', 'duplicidade'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
-    if (['iniciar', 'print'].includes(acao) && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
+    if (['iniciar', 'print', 'duplicidade'].includes(acao) && servico !== true && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');
     const segredo = Deno.env.get('NIO_PORTAL_SERVICO_SECRET') ?? '';
     if (!opUrl || !segredo) { log('503 nao_instalado'); return json({ error: 'Operador de crédito ainda não instalado.', nao_instalado: true }, 503); }
@@ -92,6 +92,11 @@ Deno.serve(async (req) => {
         },
       };
       r = await fetch(`${opUrl}/credito/viabilidade`, { method: 'POST', headers: hdr, body: JSON.stringify(corpo), signal: AbortSignal.timeout(15000) });
+    } else if (acao === 'duplicidade') {
+      // 12/11 (Ricardo): pedido Nio em aberto para o CPF — Etapas 0–3 com o endereço padrão, sem contato e sem crédito.
+      const cpf = so(b.cpf);
+      if (!cpfValido(cpf)) { log('400 cpf invalido'); return json({ error: 'CPF inválido (confira os dígitos).' }, 400); }
+      r = await fetch(`${opUrl}/credito/duplicidade`, { method: 'POST', headers: hdr, body: JSON.stringify({ cpf, origem: `niogen:${perfil}` }), signal: AbortSignal.timeout(15000) });
     } else if (acao === 'status') {
       const id = String(b.job_id ?? '');
       if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
@@ -105,7 +110,7 @@ Deno.serve(async (req) => {
       log('print ok');
       return json({ tipo: d.tipo, base64: d.base64, em: d.em });
     } else {
-      return json({ error: 'acao deve ser iniciar, viabilidade, status ou print.' }, 400);
+      return json({ error: 'acao deve ser iniciar, viabilidade, duplicidade, status ou print.' }, 400);
     }
     const d = await r.json().catch(() => null);
     if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON (rota do proxy?).` }, 502); }

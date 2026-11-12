@@ -95,14 +95,14 @@
           }
         }
       },
-      "name": "3 · Pedir viabilidade",
+      "name": "3 · Pedir ao portal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         480,
         100
       ],
-      "id": "a7d1d67f-5c73-5d13-9909-4e44da7e0aaf",
+      "id": "142d4910-25e1-5be6-b37a-c4f678cbaa34",
       "credentials": {
         "supabaseApi": {
           "id": "p59RBqdhm80tQqJq",
@@ -113,7 +113,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Cabeça do laço: chega do \"3 · Pedir\" (1ª vez) ou do \"7 · Status\" (voltas). Decide: fim (gravar) ou esperar mais.\nconst r = $input.first().json || {};\nconst alvo = $('2 · Supabase pendentes').first().json;\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst volta = $runIndex;\nlet fim = false, saida = null, erro = null;\nif (sc && sc !== 200 && sc !== 202) {\n  // 429 (fila/teto), 5xx, 503 (operador fora): volta para a fila. Outros 4xx: grava indisponível com o motivo.\n  fim = true;\n  if (sc === 429 || sc >= 500) saida = { retry: true };\n  else { saida = { resultado: 'erro', motivo: 'HTTP ' + sc + ' ' + String(b.error || '').slice(0, 150) }; erro = saida.motivo; }\n} else if (b.estado === 'pronto' || b.estado === 'erro') {\n  fim = true; saida = b;\n} else if (volta >= 10) {\n  fim = true; saida = { retry: true };    // o operador segue e guarda em cache 6 h: a próxima rodada pega pronto\n}\nreturn [{ json: { fim, conversa_id: alvo.conversa_id, job_id: b.job_id || $json.job_id || null, saida, erro, volta } }];"
+        "jsCode": "// Cabeça do laço: chega do \"3 · Pedir\" (1ª vez) ou do \"7 · Status\" (voltas). Decide: fim (gravar) ou esperar mais.\nconst r = $input.first().json || {};\nconst alvo = $('2 · Supabase pendentes').first().json;\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst volta = $runIndex;\nlet fim = false, saida = null, erro = null, ocupado = false;\nif (sc && sc !== 200 && sc !== 202) {\n  fim = true;\n  if (sc === 429 || sc >= 500) { saida = { retry: true }; ocupado = true; }   // operador ocupado/fora: volta para a fila\n  else { saida = { resultado: 'erro', motivo: 'HTTP ' + sc + ' ' + String(b.error || '').slice(0, 150) }; erro = saida.motivo; }\n} else if (b.estado === 'pronto' || b.estado === 'erro') {\n  fim = true; saida = b;\n} else if (volta >= 10) {\n  fim = true; saida = { resultado: 'nao_classificado', motivo: 'o portal demorou mais que o n8n espera' };\n}\nreturn [{ json: { fim, ocupado, conversa_id: alvo.conversa_id, job_id: b.job_id || $json.job_id || null, saida, erro, volta } }];"
       },
       "name": "4 · Estado",
       "type": "n8n-nodes-base.code",
@@ -134,7 +134,7 @@
           },
           "conditions": [
             {
-              "id": "9bfa95f6-dfa2-5408-9b22-210f069d88ce",
+              "id": "87575fc0-f918-5094-9eb8-09c487ea0b0f",
               "leftValue": "={{ $json.fim }}",
               "rightValue": "",
               "operator": {
@@ -209,13 +209,81 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7ac5afe3-3df6-5360-a881-b34043aab32b",
+              "leftValue": "={{ !$json.ocupado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "5b · Consultar o DFV?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1160,
+        0
+      ],
+      "id": "3863ea60-551c-5354-bc94-8fb5461aa1e0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/functions/v1/dfv-consulta",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ cep: $('2 · Supabase pendentes').first().json.cep, numero: $('2 · Supabase pendentes').first().json.numero, complemento: $('2 · Supabase pendentes').first().json.complemento, uf: $('2 · Supabase pendentes').first().json.uf, municipio: $('2 · Supabase pendentes').first().json.municipio }) }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "5c · DFV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1380,
+        -100
+      ],
+      "id": "50dd767c-6c3c-53c5-88fb-59c4004d2e11",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_viab_gravar",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversa_id, p_saida: $json.saida, p_erro: $json.erro }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_conversa: $('4 · Estado').last().json.conversa_id, p_saida: $('4 · Estado').last().json.saida, p_dfv: ($json.statusCode === 200 && $json.body && typeof $json.body === 'object') ? $json.body : null, p_erro: $('4 · Estado').last().json.erro }) }}",
         "options": {
           "timeout": 30000
         }
@@ -224,7 +292,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1160,
+        1600,
         0
       ],
       "id": "3f00e362-64c9-5457-a623-2909c49a0129",
@@ -266,14 +334,14 @@
       "main": [
         [
           {
-            "node": "3 · Pedir viabilidade",
+            "node": "3 · Pedir ao portal",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "3 · Pedir viabilidade": {
+    "3 · Pedir ao portal": {
       "main": [
         [
           {
@@ -317,7 +385,7 @@
         ]
       ]
     },
-    "5 · Terminou?": {
+    "5c · DFV": {
       "main": [
         [
           {
@@ -325,10 +393,39 @@
             "type": "main",
             "index": 0
           }
+        ]
+      ]
+    },
+    "5 · Terminou?": {
+      "main": [
+        [
+          {
+            "node": "5b · Consultar o DFV?",
+            "type": "main",
+            "index": 0
+          }
         ],
         [
           {
             "node": "6 · Espera 12 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b · Consultar o DFV?": {
+      "main": [
+        [
+          {
+            "node": "5c · DFV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8 · Supabase gravar",
             "type": "main",
             "index": 0
           }

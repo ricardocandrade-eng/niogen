@@ -146,6 +146,19 @@ ok(cr.classificar_formas(['BOLETO', 'CREDITO']) == 'aprovado_parcial', 'subconju
 o = cr.ler_oferta('Nio Essencial\n800 Mega\nR$ 140,00/mês\nCom fidelidade')
 ok(o == {'nome': 'Nio Essencial', 'velocidade': '800 Mega', 'preco': 'R$ 140,00', 'fidelidade': True}, 'lê cartão de oferta')
 
+print('4b. Modo duplicidade (12/11, Mari): para na Etapa 3, nunca chega ao contato nem ao crédito')
+for modo in ('duplicidade', 'viabilidade'):
+    c = cr.Consulta(None, {'modo': modo, 'origem_endereco': 'padrao', 'cpf': None}, {})
+    try:
+        c.etapa4()
+        ok(False, f'modo {modo}: etapa4() recusa')
+    except cr.Parar as p:
+        ok(p.resultado == 'erro' and 'bloqueado' in str(p.extra.get('motivo', '')), f'modo {modo}: etapa4() recusa (Parar erro)')
+    except Exception as e:  # noqa: BLE001
+        ok(False, f'modo {modo}: etapa4() recusa — levantou {type(e).__name__}')
+ok('sem_pedido_em_andamento' in cr.RESULTADOS, 'sem_pedido_em_andamento é resultado conhecido')
+ok(cr.Consulta(None, {'origem_endereco': 'padrao', 'cpf': None}, {}).modo == 'credito', 'sem modo = crédito (consulta da tela)')
+
 print('5. JS injetado na página (sintaxe, se houver node)')
 import shutil, subprocess, tempfile
 if shutil.which('node'):

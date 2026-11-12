@@ -16,6 +16,11 @@
 # Etapas 0–2 SEM CPF e SEM contato, lê o modal de viabilidade e PARA (resultado 'viavel' ou 'sem_viabilidade'): nunca clica
 # "Continuar" no modal, nunca chega à Etapa 3. Serve à tela Consulta de cobertura (Portal decide, DFV resgata).
 #
+# 12/11/2026 — MODO DUPLICIDADE (Ricardo, 12/11: a Mari pergunta ao cliente quando já há pedido Nio em aberto): params['modo'] =
+# 'duplicidade' roda as Etapas 0–3 com o ENDEREÇO PADRÃO e o CPF, lê "Verificando duplicidade de pedido" e PARA: popup
+# "Pedido encontrado" → 'pedido_em_andamento'; Etapa 4 aberta → 'sem_pedido_em_andamento'. Nunca digita contato, nunca
+# chega à Etapa 4 nem à análise de crédito (sem Serasa). Travas: etapa4() recusa fora do modo crédito; rodar() para depois da 3.
+#
 # Este módulo NÃO importa o Playwright no topo: o teste das travas roda sem navegador.
 
 import datetime
@@ -151,6 +156,7 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
+              'sem_pedido_em_andamento',
               'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'email_invalido', 'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
@@ -962,8 +968,12 @@ class Consulta:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='sem Etapa 4 em 60 s')
         if r[0] == 'popup':
             self.parar_por_popup(r[1])
+        if self.modo == 'duplicidade':      # passou da duplicidade sem popup: não há pedido em aberto. PARA aqui.
+            raise Parar('sem_pedido_em_andamento')
 
     def etapa4(self):
+        if self.modo != 'credito':          # trava: contato e crédito só no modo crédito
+            raise Parar('erro', motivo=f'modo {self.modo} tentou a Etapa 4 (bloqueado)')
         self._ir_etapa(4)
         c = self.p['contato']
         cel = so_digitos(c['celular'])
@@ -1041,6 +1051,8 @@ class Consulta:
             if self.modo == 'viabilidade':     # etapa2 sempre para no modo viabilidade; isto é cinto de segurança
                 raise Parar('erro', motivo='modo viabilidade passou da Etapa 2 (bloqueado)')
             self.etapa3()
+            if self.modo == 'duplicidade':     # cinto de segurança: a etapa3 já para no modo duplicidade
+                raise Parar('erro', motivo='modo duplicidade passou da Etapa 3 (bloqueado)')
             self.etapa4()
             self.etapa5()
         except Parar as p:
