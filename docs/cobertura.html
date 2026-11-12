@@ -24,12 +24,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-17">
-<script src="config.js?v=111126-17"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-18">
+<script src="config.js?v=111126-18"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-17"></script>
-<script src="assets/sidebar.js?v=111126-17"></script>
-<script src="assets/novavenda.js?v=111126-17"></script>
+<script src="assets/app.js?v=111126-18"></script>
+<script src="assets/sidebar.js?v=111126-18"></script>
+<script src="assets/novavenda.js?v=111126-18"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -120,8 +120,6 @@
   .cob2-mapa .cob-moldura { flex: 1; min-height: 0; border: 0; border-radius: 0; }
   .cob2-mapa .cob-moldura iframe { min-height: 0; height: 100%; }
 
-  .cob2-verprint { border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); border-radius: 6px; font: inherit; font-size: 11.5px; padding: 2px 8px; cursor: pointer; white-space: nowrap; margin-left: 6px; }
-  .cob2-verprint:hover { border-color: var(--accent); }
   .cob2-print { position: fixed; inset: 0; z-index: 70; background: rgba(5, 7, 10, .92); display: flex; flex-direction: column; }
   .cob2-print[hidden] { display: none; }
   .cob2-print-topo { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--surface); font-size: 13px; }
@@ -371,8 +369,7 @@
       const car = `${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
       const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'], complemento_fora_lista: ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
       const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
-      const verPrint = podeCredito && s.print_job ? `<button type="button" class="cob2-verprint" data-print="${esc(s.print_job)}" title="Print da tela do portal no fim da consulta (Etapas 0–2, sem CPF)">📷 ver a tela do portal</button>` : '';
-      p1 = passo(1, R[1], 'Portal', `endereço real${verPrint}`, det, R[0], R[1]);
+      p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1]);
     }
     // 2 · DFV
     let p2;
@@ -452,8 +449,11 @@
   // Barra do pé do cartão: a resposta do crédito manda quando tem ação; senão, a da viabilidade. Uma ação principal só.
   function desenharAcoes() {
     const lista = (acoesCred.length ? acoesCred : acoesDec).filter(Boolean);
-    actsEl.innerHTML = lista.join('') + (portal || dfv ? '<button type="button" class="btn btn-ghost cob2-nova" data-nova title="Limpar e começar outra consulta">↺ Nova</button>' : '');
-    const btns = [...actsEl.querySelectorAll('.btn:not(.cob2-nova)')];
+    const pj = podeCredito && portal && portal.s && portal.s.print_job;   // print da tela do portal (viabilidade que não saiu)
+    actsEl.innerHTML = lista.join('')
+      + (pj ? `<button type="button" class="btn btn-ghost cob2-nova" data-print="${esc(pj)}" title="Print do que o portal mostrou no fim da consulta (Etapas 0–2, sem CPF; fica 7 dias)">📷 Tela do portal</button>` : '')
+      + (portal || dfv ? `<button type="button" class="btn btn-ghost${pj ? '' : ' cob2-nova'}" data-nova title="Limpar e começar outra consulta">↺ Nova</button>` : '');
+    const btns = [...actsEl.querySelectorAll('.btn:not([data-nova]):not([data-print])')];
     btns.forEach((b, i) => b.classList.toggle('btn-acc', i === 0));
   }
 
@@ -494,7 +494,8 @@
         acoesDec = [BT.mapa, BT.padrao];
       }
     } else if (p.estado === 'pronto' && r === 'complemento_fora_lista') {
-      html = caixa('Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal para este endereço. Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal);
+      const semNenhuma = s.opcoes && Array.isArray(s.opcoes.lista) && !s.opcoes.lista.length;
+      html = caixa('Unidade fora da lista do portal', 'warn', (semNenhuma ? '<b>O portal não tem nenhuma unidade cadastrada neste endereço.</b> ' : '') + 'A unidade do cliente não está na lista do portal para este endereço. Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal);
       acoesDec = [BT.cadastro(), BT.padrao, BT.conferirDfv];
     } else {   // portal fora / não classificado / erro → o DFV decide, marcado
       const motivo = p.estado === 'erro' ? (p.erro || 'sem resposta') : (s.motivo || r || '—');
@@ -609,6 +610,8 @@
       return true;
     }
     if (ev.target.closest('[data-nova]')) { novaConsulta(); return true; }
+    const pr = ev.target.closest('[data-print]');
+    if (pr) { verPrint(pr.dataset.print); return true; }
     const ir = ev.target.closest('[data-ir-credito]');
     if (ir) { abrirCredito(ir.dataset.irCredito === 'padrao'); return true; }
     return false;
@@ -651,7 +654,6 @@
   }
   document.getElementById('print-fechar').addEventListener('click', fecharPrint);
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !printEl.hidden) fecharPrint(); });
-  stepsEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-print]'); if (b) verPrint(b.dataset.print); });
 
   actsEl.addEventListener('click', async (ev) => {
     if (await cliqueComum(ev)) return;

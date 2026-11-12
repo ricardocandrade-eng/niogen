@@ -527,7 +527,10 @@ class Consulta:
     def avancar(self):
         b = self.esperar(lambda: self.botao(r'^\s*avan[cç]ar'), 20)
         if not b:
-            raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo=f'Avançar não habilitou na etapa {self.etapa}')
+            motivo = f'Avançar não habilitou na etapa {self.etapa}'
+            if self.etapa == 2 and getattr(self, 'comp_sem_lista', False):
+                motivo = 'o portal pede o complemento, mas a lista de unidades não abriu — confira no portal'
+            raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo=motivo)
         self.clicar(b)
 
     def popup(self):
@@ -727,18 +730,33 @@ class Consulta:
             self.page.wait_for_timeout(700)
         return ref_ok()
 
-    def lista_complementos(self, comp):
-        """Abre a lista do campo Complemento (só aparece com o clique — visto em 11/11) e devolve os textos das opções."""
+    def lista_complementos(self, comp, digitar=''):
+        """Abre a lista do campo Complemento (só aparece com o clique — visto em 11/11) e devolve os textos das opções.
+        Espera até 6 s a lista carregar (11/11 ~23h: Rua Almirante Barroso 170 voltou vazia em 1,5 s). Com `digitar`,
+        escreve o complemento no campo (filtro da lista) antes de ler. self.comp_vazio = o portal disse "nenhum resultado"."""
+        self.comp_vazio = False
         try:
             comp.click(timeout=8000)
+            if digitar:
+                comp.fill('')
+                comp.type(digitar, delay=60)
         except Exception:  # noqa: BLE001
             return []
-        self.page.wait_for_timeout(1500)
-        try:
-            return [t.strip() for t in comp.locator('xpath=following-sibling::ul//li').all_inner_texts()
-                    if t.strip() and not re.search(r'nenhum resultado', t, re.I)][:60]
-        except Exception:  # noqa: BLE001
-            return []
+        fim = time.time() + 6
+        brutos = []
+        while time.time() < fim:
+            self.page.wait_for_timeout(500)
+            try:
+                brutos = [t.strip() for t in comp.locator('xpath=following-sibling::ul//li').all_inner_texts() if t.strip()]
+            except Exception:  # noqa: BLE001
+                brutos = []
+            ops = [t for t in brutos if not re.search(r'nenhum resultado', t, re.I)]
+            if ops:
+                return ops[:60]
+            if brutos:                       # só "Nenhum resultado": a lista carregou e está vazia
+                self.comp_vazio = True
+                return []
+        return []
 
     def complemento(self, valor):
         """Complemento do portal = lista FECHADA das unidades cadastradas no endereço ("Apartamento 101", "CASA A"…), que só
@@ -764,8 +782,15 @@ class Consulta:
         if comp is None:
             return                          # endereço sem campo de complemento (casa): segue
         ops = self.lista_complementos(comp)
+        if not ops and valor and not self.comp_vazio:      # lista não abriu no clique: tenta pelo filtro (digitando)
+            ops = self.lista_complementos(comp, digitar=valor)
         if not ops:
-            return                          # campo sem lista: segue (se o portal exigir, o Avançar dirá)
+            if self.comp_vazio and valor:   # o portal pede a unidade e não tem NENHUMA cadastrada neste endereço
+                pg.keyboard.press('Escape')
+                raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': []},
+                            motivo=f'o portal não tem nenhuma unidade cadastrada neste endereço (complemento "{valor}")')
+            self.comp_sem_lista = True      # campo sem lista: segue (se o portal exigir, o Avançar dirá)
+            return
         alvo = escolher_opcao(ops, valor) if valor else None
         if alvo is None:
             pg.keyboard.press('Escape')
