@@ -1,0 +1,71 @@
+{
+  "ig_feed": {
+    "NIO_C2_REG_H3_caro_1x1_071126_1725.jpg": {
+      "container_id": "18203397388382998",
+      "container_em": "2026-11-12T09:05:59-03:00",
+      "media_id": "18079992341729360",
+      "publicado_em": "2026-11-12T09:06:02-03:00",
+      "permalink": "https://www.instagram.com/p/DfpBC5kDFJ6/"
+    },
+    "NIO_C2_REG_H2_porDia_1x1_071126_1725.jpg": {
+      "container_id": "18203397451382998",
+      "container_em": "2026-11-12T09:07:06-03:00",
+      "media_id": "18110506328260097",
+      "publicado_em": "2026-11-12T09:07:15-03:00",
+      "permalink": "https://www.instagram.com/p/DfpBLUGFU6M/"
+    },
+    "NIO_C2_REG_H1_sobe_1x1_071126_1725.jpg": {
+      "container_id": "18203397511382998",
+      "container_em": "2026-11-12T09:08:23-03:00",
+      "media_id": "18030711320872507",
+      "publicado_em": "2026-11-12T09:08:35-03:00",
+      "permalink": "https://www.instagram.com/p/DfpBUo2nDqI/"
+    }
+  },
+  "ig_stories": {
+    "NIO_C2_REG_H1_sobe_9x16_071126_1725.jpg": {
+      "container_id": "18203397556382998",
+      "container_em": "2026-11-12T09:08:43-03:00",
+      "media_id": "18107794418347290",
+      "publicado_em": "2026-11-12T09:09:24-03:00",
+      "permalink": "https://www.instagram.com/stories/mari.nio.internet/4028757331958059905"
+    },
+    "NIO_C2_REG_H2_porDia_9x16_071126_1725.jpg": {
+      "container_id": "18203397760382998",
+      "container_em": "2026-11-12T09:09:50-03:00",
+      "media_id": "18089987861295463",
+      "publicado_em": "2026-11-12T09:10:20-03:00",
+      "permalink": "https://www.instagram.com/stories/mari.nio.internet/4028757884590233431"
+    },
+    "NIO_C2_REG_H3_caro_9x16_071126_1725.jpg": {
+      "container_id": "18203397880382998",
+      "container_em": "2026-11-12T09:10:23-03:00",
+      "media_id": "18115727189164912",
+      "publicado_em": "2026-11-12T09:10:26-03:00",
+      "permalink": "https://www.instagram.com/stories/mari.nio.internet/4028758176455532506"
+    }
+  },
+  "fb_feed": {
+    "NIO_C2_REG_H3_caro_1x1_071126_1725.jpg": {
+      "photo_id": "122107273377539653",
+      "post_id": "1421228191072269_122107273419539653",
+      "publicado_em": "2026-11-12T09:10:31-03:00",
+      "permalink": "https://www.facebook.com/122100746019539653/posts/122107273419539653"
+    },
+    "NIO_C2_REG_H2_porDia_1x1_071126_1725.jpg": {
+      "photo_id": "122107273509539653",
+      "post_id": "1421228191072269_122107273551539653",
+      "publicado_em": "2026-11-12T09:10:36-03:00",
+      "permalink": "https://www.facebook.com/122100746019539653/posts/122107273551539653"
+    },
+    "NIO_C2_REG_H1_sobe_1x1_071126_1725.jpg": {
+      "photo_id": "122107273605539653",
+      "post_id": "1421228191072269_122107273665539653",
+      "publicado_em": "2026-11-12T09:10:40-03:00",
+      "permalink": "https://www.facebook.com/122100746019539653/posts/122107273665539653"
+    }
+  },
+  "fb_stories": {},
+  "versao_graph": "v24.0",
+  "atualizado_em": "2026-11-12T09:10:42-03:00"
+}
