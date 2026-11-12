@@ -2134,3 +2134,71 @@ body.lv-com-cliente .mv-feito { display: none; }
 .fc-ficha { grid-template-columns: minmax(0, 1fr); }
 .fc-agora-w, .fc-cards, .fc-card { min-width: 0; }
 .fc-ag-bt { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------- 12/11 (Ricardo: "deixar tudo mais neutro e minimalista") — tela do cliente sem cor nos botões e cards ----------
+   Cor só onde decide algo, em tamanho pequeno: um ponto no rótulo do card Agora e o texto da pendência. */
+.fc .btn-acc, .fc .btn-acc:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); font-weight: 600; filter: none; }
+.fc .btn-acc:hover:not(:disabled) { background: #262D38; }
+.fc .btn { background: transparent; }
+.fc .btn:hover:not(:disabled) { background: var(--surface-2); }
+/* card Agora: superfície neutra; o nível vira um ponto no rótulo */
+.fc .fc-agora, .fc .fc-agora.ag-now, .fc .fc-agora.ag-today, .fc .fc-agora.ag-wait, .fc .fc-agora.ag-ok, .fc .fc-agora.ag-mute { background: #12161C; border-color: #222831; }
+.fc .fc-ag-k { color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.fc .fc-ag-k::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #5B6573; flex: none; }
+.fc .ag-now .fc-ag-k::before { background: #F47067; } .fc .ag-today .fc-ag-k::before { background: #E3B341; }
+.fc .ag-wait .fc-ag-k::before { background: #6CB6FF; } .fc .ag-ok .fc-ag-k::before { background: #57D38C; }
+.fc .fc-ag-t { font-size: 17px; }
+.fc .fc-ag-s { color: #9AA4B0; }
+.fc .fc-ag-pend { border-top-color: #1E242C; }
+.fc .fc-pill.pend { background: none; color: #E59A92; padding: 0; font-weight: 500; }
+.fc .fc-pmore { color: var(--muted); }
+.fc .fc-pendbt:hover { background: #171C23; }
+.fc .fc-pend-over { background: #14181E; border-color: #3A434E; }
+/* trilha: concluído em cinza claro, sem verde; etapa de agora com anel claro */
+.fc .r-done .fc-ri { background: #2A313B; border-color: #2A313B; color: #C9D1DA; }
+.fc .fc-rs.seg-ok::before { background: #3A434E; }
+.fc .r-now .fc-ri { border-color: #C9D1DA; }
+.fc .fc-rdot { background: #C9D1DA; }
+.fc .r-wait .fc-ri, .fc .r-run .fc-ri { border-color: #5B6573; color: #9AA4B0; }
+.fc .r-now .fc-rt small, .fc .r-wait .fc-rt small, .fc .r-run .fc-rt small { color: var(--muted); }
+/* chips do topo: OS igual ao CPF */
+.fc .fc-chip.os { color: var(--muted); border-color: #232A33; background: none; }
+/* cards: WhatsApp e conferências discretos; selos sem fundo */
+.fc .fc-wa { border: 0; background: none; color: var(--muted); font-weight: 400; padding: 0 6px; }
+.fc .fc-wa:hover { color: var(--text); background: var(--surface-2); }
+.fc .fc-confb, .fc .fc-confb.warn, .fc .fc-confb.ok { border: 0; background: none; color: var(--muted); font-weight: 400; padding: 0 6px; box-shadow: none; }
+.fc .fc-confb.warn::before { content: '● '; color: #E3B341; font-size: 9px; vertical-align: 2px; }
+.fc .fc-confb:hover { color: var(--text); background: var(--surface-2); }
+.fc .fc-icb { border: 0; }
+.fc .fc-card .fc-pill, .fc .fc-cstat .fc-pill { background: none; padding: 0; font-weight: 500; color: var(--muted); }
+.fc .fc-card .fc-pill.bad { color: #E59A92; }
+.fc .fc-cstat { gap: 12px; }
+.fc .fc-card, .fc .fc-cards-over { background: #12161C; border-color: #1E242C; }
+/* conversa: cabeçalho numa linha, pequeno; etiquetas finas; rodapé enxuto */
+.cvp-raiz.cheia .cvp-l1 { flex-direction: row; align-items: center; gap: 8px; padding: 0 16px; height: 46px; flex-wrap: nowrap; }
+.cvp-raiz.cheia .cvp-topo { display: contents; }
+.cvp-raiz.cheia .cvp-chips { display: flex; gap: 4px; align-items: center; flex: 1; min-width: 0; }
+.cvp-raiz.cheia .cvp-pill, .cvp-raiz.cheia .cvp-l2 select { height: 28px; border: 0; background: none; color: var(--muted); font-size: 12.5px; padding: 0 6px; border-radius: 6px; }
+.cvp-raiz.cheia select.cvp-pill:hover, .cvp-raiz.cheia .cvp-l2 select:hover { background: var(--surface-2); color: var(--text); }
+.cvp-raiz.cheia .cvp-pill.fixo { padding: 0 6px; }
+.cvp-raiz.cheia .cvp-cw { order: 9; margin-left: auto; color: var(--muted); font-size: 12px; text-decoration: none; white-space: nowrap; }
+.cvp-raiz.cheia .cvp-cw:hover { color: var(--text); }
+.cvp-raiz.cheia .cvp-l2 { padding: 0 16px; height: 38px; flex-wrap: nowrap; overflow: hidden; gap: 6px; }
+.cvp-raiz.cheia .cvp-rot { display: none; }
+.cvp-raiz.cheia .cvp-tg { background: none; border-color: #252B34; color: #9AA4B0; font-family: var(--sans); font-size: 11.5px; padding: 1px 3px 1px 8px; }
+.cvp-raiz.cheia .cvp-pe { background: transparent; border-top-color: #1E242C; padding: 8px 16px 12px; gap: 8px; }
+.cvp-raiz.cheia .cvp-ctl { gap: 6px; }
+.cvp-raiz.cheia .cvp-seg { border: 0; gap: 2px; }
+.cvp-raiz.cheia .cvp-seg button { min-height: 28px; border: 0; background: none; color: var(--muted); font-size: 12.5px; padding: 0 10px; border-radius: 6px; }
+.cvp-raiz.cheia .cvp-seg button.on { background: var(--surface-2); color: var(--text); }
+.cvp-raiz.cheia .cvp-ctl select { height: 28px; border: 0; background: none; color: var(--muted); font-size: 12.5px; }
+.cvp-raiz.cheia .cvp-ctl select:hover { background: var(--surface-2); color: var(--text); }
+.cvp-raiz.cheia .cvp-ajuda { font-size: 11px; color: #6E7884; margin-left: auto; }
+.cvp-raiz.cheia .cvp-caixa textarea { background: #12161C; border-color: #252B34; }
+.cvp-raiz.cheia .cvp-caixa textarea:focus { border-color: #3A434E; outline: none; }
+.cvp-raiz.cheia .cvp-enviar, .cvp-raiz.cheia .cvp-enviar:hover:not(:disabled) { background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); font-weight: 600; filter: none; }
+.fc .fc-mstrip, .fc .fc-mtbtn { color: #7F8A96; }
+.fc .fc-mdot { background: #5B6573; }
+.fc .fc-link { color: #9AA4B0; }
+.fc .fc-link:hover { color: var(--text); background: var(--surface-2); }
+.cvp-raiz.cheia .cvp-pill.warn { color: #E3B341; }
