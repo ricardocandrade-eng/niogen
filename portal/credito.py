@@ -187,6 +187,34 @@ def _sem_acento(t):
     return ''.join(c for c in unicodedata.normalize('NFD', str(t or '')) if unicodedata.category(c) != 'Mn')
 
 
+RE_BLOCO = re.compile(r'^\s*(?:bl(?:oco)?|torre|tr|ed(?:if[ií]cio)?)\.?\s*([a-z0-9]+)', re.I)
+RE_SO_BLOCO = re.compile(r'^\s*(?:bl(?:oco)?|torre|tr|ed(?:if[ií]cio)?)\.?\s*[a-z0-9]+\s*$', re.I)
+
+
+def bloco_de(t):
+    """'Bloco 1 - Apartamento 205' → '1' · 'BL 3' → '3' · 'Apartamento 101' → None (11/11, prédio de vários blocos)."""
+    m = RE_BLOCO.match(_sem_acento(t))
+    return m.group(1).lower() if m else None
+
+
+def opcoes_que_batem(opcoes, valor):
+    """Todas as opções que podem ser a unidade digitada (para dizer 'escolha o bloco' em vez de 'fora da lista'):
+    só bloco ('BL 1') → as unidades do bloco · bloco + número ('Bloco 2 apto 105') → essa · só número ('205') → todas com 205."""
+    v = str(valor or '').strip()
+    if not v:
+        return []
+    if RE_SO_BLOCO.match(_sem_acento(v)):
+        b = bloco_de(v)
+        return [o for o in opcoes if bloco_de(o) == b]
+    b, nums = bloco_de(v), re.findall(r'\d+', v)
+    if b and len(nums) >= 2:
+        return [o for o in opcoes if bloco_de(o) == b and tem_numero(o, nums[-1])]
+    if not b and len(nums) == 1:              # '205', 'Apto 205' → todas as unidades com 205 (uma por bloco)
+        return [o for o in opcoes if tem_numero(o, nums[0])]
+    n = lambda t: re.sub(r'\W+', '', _sem_acento(t).lower())   # noqa: E731
+    return [o for o in opcoes if n(v) and n(v) in n(o)]
+
+
 def escolher_opcao(opcoes, valor):
     """Opção da lista do portal que corresponde ao valor digitado: igual (sem caixa/acento/espaços) ou, se só uma, que contém."""
     n = lambda t: re.sub(r'\W+', '', _sem_acento(t).lower())   # noqa: E731
@@ -781,7 +809,7 @@ class Consulta:
                 brutos = []
             ops = [t for t in brutos if not re.search(r'nenhum resultado', t, re.I)]
             if ops:
-                return ops[:60]
+                return ops[:400]
             if brutos:                       # só "Nenhum resultado": a lista carregou e está vazia
                 self.comp_vazio = True
                 return []
@@ -801,6 +829,28 @@ class Consulta:
         except Exception as e:  # noqa: BLE001
             return f'sonda falhou: {type(e).__name__}'
 
+    def alvo_complemento(self, ops, valor):
+        """A opção da lista que É a unidade digitada — ou para, dizendo por quê (11/11, prédio de vários blocos):
+        'escolher' (nada digitado) · 'ambiguo' (bate com várias, ex. 205 em 3 blocos, ou só 'BL 1') · 'nao_encontrado'."""
+        alvo = escolher_opcao(ops, valor) if valor else None
+        n = lambda t: re.sub(r'\W+', '', _sem_acento(t).lower())   # noqa: E731
+        if alvo and n(alvo) != n(valor) and not bloco_de(valor) and any(bloco_de(o) for o in ops):
+            alvo = None                     # prédio com blocos e o bloco não foi dito: não adivinha
+        batem = opcoes_que_batem(ops, valor) if valor and alvo is None else []
+        # só aceita a única que bate se o bloco foi dito (ou o prédio não tem blocos): '205' com só 'Bloco 1 - 205' na
+        # lista pode ser o 205 de um bloco não cadastrado — aí pergunta, nunca escolhe outra unidade
+        com_bloco = bool(bloco_de(valor)) or not any(bloco_de(o) for o in ops)
+        if alvo is None and len(batem) == 1 and com_bloco and not RE_SO_BLOCO.match(_sem_acento(valor)):
+            alvo = batem[0]                 # 'Bloco 2 apto 105' → 'Bloco 2 - Apartamento 105' (a mesma unidade, escrita diferente)
+        if alvo is not None:
+            return alvo
+        situacao = 'escolher' if not valor else 'ambiguo' if batem else 'nao_encontrado'
+        motivo = {'escolher': 'o endereço tem unidades e o portal pede o complemento',
+                  'ambiguo': f'"{valor}" bate com {len(batem)} unidades da lista — escolha a do cliente',
+                  'nao_encontrado': f'complemento "{valor}" não está na lista do portal'}[situacao]
+        raise Parar('complemento_fora_lista', motivo=motivo,
+                    opcoes={'tipo': 'complemento', 'lista': ops[:400], 'situacao': situacao, 'batem': batem[:100]})
+
     def complemento(self, valor):
         """Complemento do portal = lista FECHADA das unidades cadastradas no endereço ("Apartamento 101", "CASA A"…), que só
         abre com o clique; texto solto não vale e o Avançar não habilita (11/11). Escolhe a opção que bate com o informado
@@ -810,10 +860,7 @@ class Consulta:
         sel = pg.locator('select[name*="omplement" i]')
         if self.visivel(sel):
             ops = [o.strip() for o in sel.first.locator('option').all_inner_texts() if o.strip()]
-            alvo = escolher_opcao(ops, valor) if valor else None
-            if alvo is None:
-                raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': ops[:40]},
-                            motivo=f'complemento "{valor}" não está na lista do portal' if valor else 'o portal pede o complemento')
+            alvo = self.alvo_complemento(ops, valor)
             sel.first.select_option(label=alvo)
             return
         # 11/11 ~23h (36016-130/170): o portal recria o campo — um input com name="complemento" aparece e some, e o que
@@ -828,16 +875,15 @@ class Consulta:
         if not ops:
             if self.comp_vazio and valor:   # o portal pede a unidade e não tem NENHUMA cadastrada neste endereço
                 pg.keyboard.press('Escape')
-                raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': []},
+                raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': [], 'situacao': 'nenhuma'},
                             motivo=f'o portal não tem nenhuma unidade cadastrada neste endereço (complemento "{valor}")')
             self.comp_sem_lista = True      # campo sem lista: segue (se o portal exigir, o Avançar dirá)
             return
-        alvo = escolher_opcao(ops, valor) if valor else None
-        if alvo is None:
+        try:
+            alvo = self.alvo_complemento(ops, valor)
+        except Parar:
             pg.keyboard.press('Escape')
-            raise Parar('complemento_fora_lista', opcoes={'tipo': 'complemento', 'lista': ops[:40]},
-                        motivo=(f'complemento "{valor}" não está na lista do portal' if valor
-                                else 'o endereço tem unidades e o portal pede o complemento'))
+            raise
         li = comp.locator('xpath=following-sibling::ul//li', has_text=alvo).first
         self.clicar(li)
         pg.wait_for_timeout(800)

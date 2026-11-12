@@ -25,11 +25,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=121126-5">
-<script src="config.js?v=111126-19"></script>
+<script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-19"></script>
+<script src="assets/app.js?v=111126-20"></script>
 <script src="assets/sidebar.js?v=121126-5"></script>
-<script src="assets/novavenda.js?v=111126-19"></script>
+<script src="assets/novavenda.js?v=111126-20"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -129,6 +129,16 @@
   .cob2-print-img { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 16px; }
   .cob2-print-img img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, .6); }
   .uni-bloco { display: flex; flex-direction: column; gap: 10px; }
+  .cob2-corpo .cob-res.cob-info { background: var(--info-bg); border-color: var(--info-fg); color: var(--info-fg); }
+  .cob2-blocos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
+  .cob2-blocos button { border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); border-radius: 999px; font: inherit; font-size: 11.5px; padding: 3px 10px; cursor: pointer; }
+  .cob2-blocos button.ativo { border-color: var(--accent); color: var(--accent); }
+  .cob2-vertodas { align-self: flex-start; border: 0; background: none; padding: 0; color: var(--link); font: inherit; font-size: 11.5px; cursor: pointer; }
+  .cob2-diag { flex: none; display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface-dim); font-size: 12.5px; }
+  .cob2-diag[hidden] { display: none; }
+  .cob2-diag b { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+  .cob2-diag span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cob2-diag .btn { min-height: 30px; font-size: 12px; padding: 0 10px; white-space: nowrap; }
   .cob2-onde { color: var(--muted); cursor: help; white-space: nowrap; font-size: 12px; }
 
   @media (min-width: 1025px) {
@@ -201,6 +211,9 @@
             </div>
           </div>
         </div>
+        <div class="cob2-diag" id="diag" hidden><b>Diagnóstico</b><span id="diag-txt"></span>
+          <button type="button" class="btn btn-sm" id="diag-copiar" title="Copia o resumo pronto para colar no WhatsApp">📋 Copiar</button>
+          <a class="btn btn-sm" id="diag-zap" target="_blank" rel="noopener noreferrer" href="#" hidden title="Abre o WhatsApp com o diagnóstico (número de config_regras.resumo_destino_whatsapp)">📲 Enviar no meu WhatsApp</a></div>
         <div class="cob2-acts" id="acts"></div>
       </div>
 
@@ -368,7 +381,9 @@
     } else if (p.estado === 'erro') p1 = passo(1, 'warn', 'Portal', 'endereço real', esc(p.erro || 'sem resposta'), p.naoInstalado ? 'Operador fora' : 'Não decidiu', 'warn');
     else {
       const car = `${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
-      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'], complemento_fora_lista: ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
+      const sit = s.resultado === 'complemento_fora_lista' ? situacaoUnidade(s) : '';
+      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'],
+        complemento_fora_lista: ['escolher', 'ambiguo'].includes(sit) ? ['Escolha a unidade', 'info'] : ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
       const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
       p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1]);
     }
@@ -429,7 +444,14 @@
   }
 
   // ------------------------------------------------------------ a decisão (portal decide, DFV resgata) — 1 ação por estado
-  const pillDe = (cor) => ({ ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '');
+  const pillDe = (cor) => ({ ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn', info: 'qualificado' }[cor] || '');
+  // Prédio com blocos (11/11 ~23h40, caso 36030-713/500): unidade → bloco ('Bloco 1 - Apartamento 205' → '1'; 'BL 3' → '3')
+  const RE_BLOCO = /^\s*(?:bl(?:oco)?|torre|tr|ed(?:if[ií]cio)?)\.?\s*([a-z0-9]+)/i;
+  const RE_SO_BLOCO = /^\s*(?:bl(?:oco)?|torre|tr|ed(?:if[ií]cio)?)\.?\s*[a-z0-9]+\s*$/i;
+  const blocoDe = (t) => { const m = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').match(RE_BLOCO); return m ? m[1].toLowerCase() : ''; };
+  // Situação da unidade: escolher (nada digitado) · ambiguo (bate com várias) · nao_encontrado · nenhuma (portal sem unidades)
+  const situacaoUnidade = (s) => (s.opcoes && s.opcoes.situacao) || ((ultimo && ultimo.complemento) ? 'nao_encontrado' : 'escolher');
+  let verTodasUnid = false;
   const caixa = (rot, cor, txt, carimbo) => `
     <div class="cob-res cob-${cor}">
       <div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">${esc(rot)}</span><span class="muted">${carimbo}</span></div>
@@ -496,8 +518,82 @@
     conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
   };
 
+  // Diagnóstico em poucas linhas, pronto para o WhatsApp (11/11 ~23h50, pedido do Ricardo). Sem CPF, nome ou contato.
+  const diagEl = document.getElementById('diag');
+  const diagTxt = document.getElementById('diag-txt');
+  let diagCompleto = '';
+  function diagnostico() {
+    if (!portal && !dfv) return '';
+    const e = ultimo || endereco();
+    const s = (portal && portal.s) || {};
+    const r = dfv && dfv.estado === 'pronto' ? dfv.r : null;
+    const m = String((s.endereco && s.endereco.resolvido) || '').match(/^(.+?),\s*[^,]*?-\s*(.+?),\s*(.+?)\s*-\s*([A-Z]{2})\s*$/);
+    const rua = m ? m[1] : (r && r.fonte !== 'base_congelada' ? titulo(r.logradouro) : '');
+    const bairro = m ? m[2] : (r && r.fonte !== 'base_congelada' ? titulo(r.bairro) : '');
+    const cep = e.cep ? `${e.cep.slice(0, 5)}-${e.cep.slice(5)}` : '';
+    const end = `${rua || 'CEP ' + cep}${e.numero ? `, ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}${bairro ? ` · ${bairro}` : ''}${rua ? ` (CEP ${cep})` : ''}`;
+    let lp = 'Portal: consultando…';
+    if (portal && portal.estado === 'erro') lp = `Portal: não respondeu (${portal.erro || 'sem resposta'})`;
+    else if (portal && portal.estado === 'pronto') {
+      if (s.resultado === 'viavel') lp = `Portal: ✅ viável${s.velocidade ? ` (até ${s.velocidade})` : ''}`;
+      else if (s.resultado === 'sem_viabilidade') lp = 'Portal: ❌ sem viabilidade';
+      else if (s.resultado === 'complemento_fora_lista') {
+        const sit = situacaoUnidade(s);
+        lp = sit === 'escolher' ? `Portal: pede a unidade — ${predioTxt(s)} no endereço`
+          : sit === 'ambiguo' ? `Portal: "${e.complemento}" bate com ${((s.opcoes || {}).batem || []).length} unidades (${predioTxt(s)}) — falta escolher`
+            : sit === 'nenhuma' ? 'Portal: ⚠️ nenhuma unidade cadastrada neste endereço'
+              : `Portal: ⚠️ unidade "${e.complemento}" não está na lista (${predioTxt(s)})`;
+      } else lp = `Portal: não decidiu (${s.motivo || s.resultado || '—'})`;
+    } else if (!portal) lp = '';
+    let ld = 'DFV: consultando…';
+    if (dfv && dfv.estado === 'erro') ld = 'DFV: indisponível';
+    else if (r && r.fonte === 'base_congelada') ld = `DFV: painel fora — base congelada de JF (${base(r.particao)})`;
+    else if (r) {
+      const alvo = parseInt(String(e.numero || '').replace(/\D/g, ''), 10);
+      const viz = (r.fachadas_no_cep || []).map((x) => ({ n: String(x.numero || ''), d: Math.abs((parseInt(String(x.numero).replace(/\D/g, ''), 10) || 1e9) - (alvo || 0)) }))
+        .filter((x) => x.n && x.n !== String(e.numero)).sort((a, b) => a.d - b.d);
+      const nums = [...new Set(viz.map((x) => x.n))].slice(0, 5);
+      const k = chaveVivo(r);
+      ld = k === 'exato' ? `DFV: ✅ fachada viável${(r.unidades || []).length > 1 ? ` (${(r.unidades || []).map(comp).filter(Boolean).join(', ')})` : ''}`
+        : k === 'vazio' ? 'DFV: ❌ nenhuma fachada viável no CEP'
+          : `DFV: número fora da lista; viáveis mais perto: ${nums.join(', ')}${r.total_fachadas_no_cep > nums.length ? ` (+${r.total_fachadas_no_cep - nums.length} no CEP)` : ''}`;
+    } else if (!dfv) ld = '';
+    let lc = '';
+    if (cred && cred.estado === 'pronto') {
+      const rr = cred.r;
+      let [rot] = ROT[rr.resultado] || [rr.resultado];
+      if (rr.resultado === 'aprovado_parcial') rot = `Aprovado — ${(rr.formas_liberadas || []).map((f) => FORMA[f] || f).join(', ')}`;
+      lc = `Crédito: ${rot}${(rr.endereco || {}).origem === 'padrao' ? ' (endereço padrão)' : ''}`;
+    }
+    const conc = decEl.hidden ? '' : ((decEl.querySelector('.cob-pill') || {}).textContent || '').trim();
+    const linhas = [`📍 *${end}*`, lp, ld, lc, conc ? `➡️ *${conc}*` : ''].filter(Boolean);
+    return linhas.join('\n');
+  }
+  function desenharDiag() {
+    diagCompleto = diagnostico();
+    diagEl.hidden = !diagCompleto;
+    const curto = diagCompleto.split('\n').slice(1).join(' · ').replace(/\*/g, '');
+    diagTxt.textContent = curto;
+    diagTxt.title = diagCompleto.replace(/\*/g, '');
+    diagZap.hidden = !zapDestino || !diagCompleto;
+    if (zapDestino && diagCompleto) diagZap.href = `https://wa.me/${zapDestino}?text=${encodeURIComponent(diagParaEnviar())}`;
+  }
+  const diagZap = document.getElementById('diag-zap');
+  let zapDestino = null;   // config_regras.resumo_destino_whatsapp — o número não fica no código desta página (que é pública)
+  NG.sb.from('config_regras').select('valor').eq('chave', 'resumo_destino_whatsapp').maybeSingle()
+    .then(({ data }) => { const n = String((data && data.valor) || '').replace(/\D/g, ''); if (n.length >= 12) { zapDestino = n; if (portal || dfv) desenharDiag(); } })
+    .catch(() => {});
+  const diagParaEnviar = () => `${diagCompleto}\n_Consulta NIOGEN · ${new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}_`;
+  document.getElementById('diag-copiar').addEventListener('click', async () => {
+    const txt = diagParaEnviar();
+    try { await navigator.clipboard.writeText(txt); }
+    catch (_) { const t = document.createElement('textarea'); t.value = txt; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+    NG.toast('Diagnóstico copiado — é só colar no WhatsApp.', 'ok');
+  });
+
   // Barra do pé do cartão: a resposta do crédito manda quando tem ação; senão, a da viabilidade. Uma ação principal só.
   function desenharAcoes() {
+    desenharDiag();
     const lista = (acoesCred.length ? acoesCred : acoesDec).filter(Boolean);
     const pj = podeCredito && portal && portal.s && portal.s.print_job;   // print da tela do portal (viabilidade que não saiu)
     actsEl.innerHTML = lista.join('')
@@ -507,6 +603,11 @@
     btns.forEach((b, i) => b.classList.toggle('btn-acc', i === 0));
   }
 
+  function predioTxt(s) {
+    const lista = (s.opcoes && s.opcoes.lista) || [];
+    const nB = new Set(lista.map(blocoDe).filter(Boolean)).size;
+    return `${NG.fmtNum(lista.length)} unidades${nB > 1 ? ` em ${nB} blocos` : ''}`;
+  }
   function desenharDecisao() {
     desenharPassos();
     const p = portal || {};
@@ -544,9 +645,20 @@
         acoesDec = [BT.mapa, BT.padrao];
       }
     } else if (p.estado === 'pronto' && r === 'complemento_fora_lista') {
-      const semNenhuma = s.opcoes && Array.isArray(s.opcoes.lista) && !s.opcoes.lista.length;
-      html = caixa('Unidade fora da lista do portal', 'warn', (semNenhuma ? '<b>O portal não tem nenhuma unidade cadastrada neste endereço.</b> ' : '') + 'A unidade do cliente não está na lista do portal para este endereço. Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal);
-      acoesDec = [BT.cadastro(), BT.padrao, BT.conferirDfv];
+      const sit = situacaoUnidade(s);
+      const predio = predioTxt(s);
+      if (sit === 'escolher') {
+        html = caixa('Escolha a unidade do cliente', 'info', `Este endereço tem <b>${predio}</b> no portal e ele pede a unidade. Toque na do cliente — a consulta refaz com ela.`, carPortal);
+        acoesDec = [];
+      } else if (sit === 'ambiguo') {
+        const nb = ((s.opcoes && s.opcoes.batem) || []).length;
+        html = caixa('Escolha a unidade do cliente', 'info', `"${esc((ultimo && ultimo.complemento) || '')}" bate com <b>${NG.fmtNum(nb)} unidades</b> deste endereço (${predio}). Toque na do cliente — nunca em outra para a consulta passar.`, carPortal);
+        acoesDec = [];
+      } else {
+        const semNenhuma = sit === 'nenhuma' || (s.opcoes && Array.isArray(s.opcoes.lista) && !s.opcoes.lista.length);
+        html = caixa('Unidade fora da lista do portal', 'warn', (semNenhuma ? '<b>O portal não tem nenhuma unidade cadastrada neste endereço.</b> ' : `A unidade "${esc((ultimo && ultimo.complemento) || '')}" não está entre as ${predio} do portal. `) + 'Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal);
+        acoesDec = [BT.cadastro(), BT.padrao, BT.conferirDfv];
+      }
     } else {   // portal fora / não classificado / erro → o DFV decide, marcado
       const motivo = p.estado === 'erro' ? (p.erro || 'sem resposta') : (s.motivo || r || '—');
       const faixa = `<div class="faixa amarelo"><strong>Portal da Nio não decidiu</strong><span>${esc(motivo)} — abaixo, só o DFV (retrato de ~15 dias). Confirme no portal antes de falar em instalação.</span></div>`;
@@ -559,10 +671,21 @@
       html = faixa + dec;
     }
     if (s.opcoes && (s.opcoes.lista || []).length) {   // opções do portal → botões que reconsultam
-      html += `<div class="dfv-opcoes"><span class="nota-campo">${s.opcoes.tipo === 'complemento'
-        ? '<b>Unidades que o portal aceita neste endereço.</b> Toque só se uma delas for a do cliente (escrita de outro jeito) — nunca escolha outra unidade para a consulta passar:'
+      const ehComp = s.opcoes.tipo === 'complemento';
+      const batem = s.opcoes.batem || [];
+      const soBatem = ehComp && situacaoUnidade(s) === 'ambiguo' && batem.length && !verTodasUnid;
+      const lista = soBatem ? batem : s.opcoes.lista;
+      const blocos = ehComp ? [...new Set(lista.map(blocoDe).filter(Boolean))] : [];
+      const filtro = blocos.length > 1
+        ? `<div class="cob2-blocos" data-blocos>Blocos: <button type="button" class="ativo" data-filtro-bloco="">todos (${NG.fmtNum(lista.length)})</button>${blocos.map((b) =>
+          `<button type="button" data-filtro-bloco="${esc(b)}">Bloco ${esc(b.toUpperCase())} (${lista.filter((o) => blocoDe(o) === b).length})</button>`).join('')}</div>`
+        : '';
+      html += `<div class="dfv-opcoes"><span class="nota-campo">${ehComp
+        ? (soBatem ? `<b>Unidades que batem com "${esc((ultimo && ultimo.complemento) || '')}".</b> Toque na do cliente:` : '<b>Unidades que o portal aceita neste endereço.</b> Toque só na do cliente — nunca escolha outra unidade para a consulta passar:')
         : 'Este CEP tem mais de um endereço no portal. Toque no do cliente e a consulta recomeça com ele:'}</span>
-        <div class="dfv-opcoes-lista">${s.opcoes.lista.map((o) => `<button type="button" class="chip ok" data-opcao-tipo="${esc(s.opcoes.tipo)}" data-opcao="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+        ${filtro}
+        <div class="dfv-opcoes-lista">${lista.map((o) => `<button type="button" class="chip ok" data-bloco-chip="${esc(blocoDe(o))}" data-opcao-tipo="${esc(s.opcoes.tipo)}" data-opcao="${esc(o)}">${esc(o)}</button>`).join('')}</div>
+        ${soBatem && s.opcoes.lista.length > batem.length ? `<button type="button" class="cob2-vertodas" data-ver-todas>ver todas as ${NG.fmtNum(s.opcoes.lista.length)} unidades ▾</button>` : ''}</div>`;
     }
     decEl.innerHTML = html;
     desenharAcoes();
@@ -629,6 +752,7 @@
     F.cep.value = `${e.cep.slice(0, 5)}-${e.cep.slice(5)}`;
     const minha = ++rodada;
     ultimo = e;
+    verTodasUnid = false;
     if (!rodandoCred) { cred = null; acoesCred = []; credEl.hidden = true; }
     resEnd.dataset.base = `CEP ${F.cep.value}${e.numero ? ` · nº ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}`;
     resEnd.textContent = resEnd.dataset.base;
@@ -666,8 +790,19 @@
     if (ir) { abrirCredito(ir.dataset.irCredito === 'padrao'); return true; }
     return false;
   }
+  function filtrarBloco(bloco) {
+    const barra = decEl.querySelector('[data-blocos]');
+    if (!barra) return false;
+    if (bloco && !barra.querySelector(`[data-filtro-bloco="${CSS.escape(bloco)}"]`)) return false;
+    barra.querySelectorAll('[data-filtro-bloco]').forEach((x) => x.classList.toggle('ativo', x.dataset.filtroBloco === bloco));
+    decEl.querySelectorAll('[data-bloco-chip]').forEach((x) => { x.hidden = !!bloco && x.dataset.blocoChip !== bloco; });
+    return true;
+  }
   decEl.addEventListener('click', async (ev) => {
     if (await cliqueComum(ev)) return;
+    const fb = ev.target.closest('[data-filtro-bloco]');
+    if (fb) { filtrarBloco(fb.dataset.filtroBloco); return; }
+    if (ev.target.closest('[data-ver-todas]')) { verTodasUnid = true; desenharDecisao(); return; }
     const b = ev.target.closest('[data-opcao]');
     if (!b) return;
     if (b.dataset.opcaoTipo === 'complemento') F.complemento.value = b.dataset.opcao;
@@ -680,6 +815,11 @@
     if (mf) { mf.dataset.txt = mf.dataset.txt || mf.textContent; const curta = mf.parentElement.querySelector('.dfv-opcoes-lista').classList.toggle('curta'); mf.textContent = curta ? mf.dataset.txt : 'mostrar menos ▴'; return; }
     const b = ev.target.closest('[data-comp]');
     if (!b) return;
+    // 'BL 1' do DFV é um bloco, não uma unidade: com a lista do portal na tela, só filtra por ele
+    if (RE_SO_BLOCO.test(b.dataset.comp || '') && (b.dataset.num == null || b.dataset.num === F.numero.value.trim())) {
+      if (!filtrarBloco(blocoDe(b.dataset.comp)) && decEl.querySelector('[data-ver-todas]')) { verTodasUnid = true; desenharDecisao(); filtrarBloco(blocoDe(b.dataset.comp)); }
+      if (decEl.querySelector('[data-blocos]')) { decEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); return; }
+    }
     if (b.dataset.num != null) F.numero.value = b.dataset.num;
     F.complemento.value = b.dataset.comp;
     consultar();
