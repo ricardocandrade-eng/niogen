@@ -24,6 +24,7 @@
 import base64
 import datetime
 import hmac
+import hashlib
 import json
 import os
 import queue
@@ -64,6 +65,13 @@ CACHE_TTL = 24 * 3600
 VIAB_TTL = 6 * 3600       # viabilidade do portal vale "hoje": 6 h por endereço
 VIAB_CACHEAVEIS = {'viavel', 'sem_viabilidade', 'complemento_fora_lista'}
 CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento'}
+
+
+def chave_viab(endereco, sal):
+    """Chave do cache de viabilidade: CEP · número · complemento · opção, sem caixa e espaços repetidos (com letras)."""
+    norm = lambda t: ' '.join(str(t or '').lower().split())   # noqa: E731
+    base = '|'.join(norm(endereco.get(k)) for k in ('cep', 'numero', 'complemento', 'opcao'))
+    return hashlib.sha256((str(sal or '') + '|' + base).encode()).hexdigest()
 
 
 def agora():
@@ -400,7 +408,9 @@ def novo_job_viabilidade(b):
                 'complemento': str(e.get('complemento') or '').strip()[:60],
                 'referencia': str(e.get('referencia') or '').strip()[:80] or 'Sem referência',
                 'opcao': str(e.get('opcao') or '').strip()[:200]}
-    chave = 'v:' + cr.cpf_chave('|'.join(endereco[k].lower() for k in ('cep', 'numero', 'complemento', 'opcao')), cfg['sal'])
+    # 12/11 00h10: a chave guarda o TEXTO do complemento. Antes passava por cpf_chave (só dígitos) e "Casa A" virava "" —
+    # caía no cache da consulta sem complemento e voltava "escolha a unidade" mesmo depois de tocar na unidade.
+    chave = 'v:' + chave_viab(endereco, cfg['sal'])
     with TRAVA_JOBS:
         _limpar_jobs()
         job_id = uuid.uuid4().hex
