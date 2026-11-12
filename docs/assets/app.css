@@ -2328,3 +2328,19 @@ body.lv-com-cliente .mv-feito { display: none; }
   .pl-linhas { display: none; }
   .pl-princ { font-size: 15px; }
 }
+/* 12/11 — emojis na caixa da conversa (botão 😊 + painel acima da caixa; lista fixa em conversa.js) */
+.cvp-caixa { position: relative; }
+.cvp-emo-bt { flex: none; width: 38px; min-height: 42px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface-2); font-size: 19px; line-height: 1; cursor: pointer; padding: 0; }
+.cvp-emo-bt:hover:not(:disabled), .cvp-emo-bt[aria-expanded="true"] { border-color: var(--muted); }
+.cvp-emo-bt:disabled { opacity: .4; cursor: default; }
+.cvp-emo { position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 30; width: 320px; max-width: calc(100vw - 32px); padding: 8px; border-radius: 12px; border: 1px solid var(--border-strong); background: var(--surface, #161a20); box-shadow: 0 10px 28px rgba(0,0,0,.45); }
+.cvp-emo[hidden] { display: none; }
+.cvp-emo-abas { display: flex; gap: 2px; border-bottom: 1px solid var(--border-strong); padding-bottom: 6px; }
+.cvp-emo-abas button { flex: 1; height: 32px; border: 0; border-radius: 8px; background: none; font-size: 17px; cursor: pointer; opacity: .55; }
+.cvp-emo-abas button.on { background: var(--surface-2); opacity: 1; }
+.cvp-emo-rot { font-size: 11px; color: var(--muted); margin: 6px 2px 4px; }
+.cvp-emo-grade { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; max-height: 176px; overflow-y: auto; }
+.cvp-emo-grade button { height: 36px; border: 0; border-radius: 8px; background: none; font-size: 21px; line-height: 1; cursor: pointer; padding: 0; }
+.cvp-emo-grade button:hover, .cvp-emo-grade button:focus-visible { background: var(--surface-2); outline: none; }
+.cvp-raiz.cheia .cvp-emo-bt { background: #12161C; border-color: #252B34; }
+@media (max-width: 900px) { .cvp-emo { width: auto; right: 0; } .cvp-emo-grade { grid-template-columns: repeat(7, 1fr); } }

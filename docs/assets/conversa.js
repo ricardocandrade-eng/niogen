@@ -54,6 +54,18 @@
     tplCache = (data || []).filter((t) => (String(t.corpo || '').match(/\{\{\d+\}\}/g) || []).length <= 1);
     return tplCache;
   }
+  // 12/11 (Ricardo: "O Niogen está sem opção de enviar emojis"): lista fixa, sem biblioteca (regra 19). Recentes por usuário
+  // no localStorage (conveniência, não dado de operação).
+  const EMO_ABAS = [
+    ['⭐', 'Mais usados', '👍 🙏 😊 😉 😄 ✅ 👏 🙌 ❤️ 🤝 👋 😅 🥰 😍 🤗 👌'],
+    ['😀', 'Rostos', '😀 😃 😁 😂 🤣 🙂 😇 😌 😎 🤩 🤔 🤨 😐 😬 🙄 😮 😯 😢 😭 😔 😕 🙁 😴 🥳 😱 🤭 🫡 🫶'],
+    ['👋', 'Gestos', '👍 👎 👌 ✌️ 🤞 🤙 👈 👉 👆 👇 ☝️ ✋ 🖐️ 👏 🙌 🙏 💪 🤝 👊 🫵'],
+    ['📶', 'Atendimento', '📶 🏠 📍 📅 ⏰ 📞 📱 💻 📺 🎮 💬 📄 📝 💳 💰 🎉 🚀 ⚡ 🔧 🛠️ 📦 🔒'],
+    ['✔️', 'Símbolos', '✔️ ✅ ❌ ⚠️ ℹ️ ❗ ❓ ⬇️ ⬆️ ➡️ 🔥 ⭐ ✨ 💙 💜 💚 🧡 💛 🔴 🟢 🟡 🔵'],
+  ].map(([ico, rot, s]) => ({ ico, rot, lista: s.split(' ') }));
+  const EMO_CHAVE = 'ng_emoji_rec';
+  const emoRecentes = () => { try { const v = JSON.parse(localStorage.getItem(EMO_CHAVE) || '[]'); return Array.isArray(v) ? v.slice(0, 12) : []; } catch (e) { return []; } };
+  const emoGuardar = (e) => { try { localStorage.setItem(EMO_CHAVE, JSON.stringify([e, ...emoRecentes().filter((x) => x !== e)].slice(0, 12))); } catch (x) { /* sem storage: segue */ } };
   const diaRot = (iso) => {
     const d = NG.diaSP(iso);
     const h = NG.diaSP();
@@ -83,7 +95,7 @@
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
           <span class="cvp-ajuda" data-ajuda></span>
         </div>
-        <div class="cvp-caixa"><span class="cvp-quem-ico" data-quem hidden></span><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+        <div class="cvp-caixa"><span class="cvp-quem-ico" data-quem hidden></span><button type="button" class="cvp-emo-bt" data-cv="emoji" aria-label="Emojis" aria-expanded="false" title="Emojis">😊</button><div class="cvp-emo" data-emo hidden></div><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
           <button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
       </div>
     </section>`;
@@ -95,6 +107,8 @@
     const quemEl = $('[data-quem]');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
     const secao = $('.cvp');
+    const emoBt = $('[data-cv="emoji"]'), emoEl = $('[data-emo]');
+    st.emoAba = 0;
 
     // ---------- dados ----------
     const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
@@ -271,6 +285,8 @@
       const usaTpl = !st.nota && !jn.aberta;
       ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
       ta.readOnly = !!st.tpl || (usaTpl && !st.tpl);
+      emoBt.disabled = ta.readOnly;
+      if (ta.readOnly && !emoEl.hidden) emoFechar();
       btEnviar.textContent = st.nota ? 'Salvar nota' : 'Enviar';
       btEnviar.disabled = !!st.d.c.nao_contatar && !st.nota;
       const opRap = `<option value="">Respostas rápidas…</option>${usaTpl ? '' : st.d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
@@ -344,6 +360,40 @@
       setTimeout(() => carregar(), 3000);
     }
 
+    // ---------- emojis (painel montado no 1º clique; insere onde está o cursor) ----------
+    function emoDesenhar() {
+      const rec = emoRecentes();
+      const abas = rec.length ? [{ ico: '🕘', rot: 'Recentes', lista: rec }, ...EMO_ABAS] : EMO_ABAS;
+      if (st.emoAba >= abas.length) st.emoAba = 0;
+      const aba = abas[st.emoAba];
+      emoEl.innerHTML = `<div class="cvp-emo-abas" role="tablist">${abas.map((a, i) => `<button type="button" role="tab" data-cv="emo-aba" data-i="${i}" class="${i === st.emoAba ? 'on' : ''}" aria-selected="${i === st.emoAba}" title="${esc(a.rot)}">${a.ico}</button>`).join('')}</div>
+        <div class="cvp-emo-rot">${esc(aba.rot)}</div>
+        <div class="cvp-emo-grade">${aba.lista.map((e) => `<button type="button" data-cv="emo-x" data-e="${esc(e)}" aria-label="${esc(e)}">${e}</button>`).join('')}</div>`;
+    }
+    function emoAbrir() {
+      if (ta.readOnly) return;
+      st.emoAba = 0;
+      emoDesenhar();
+      emoEl.hidden = false;
+      emoBt.setAttribute('aria-expanded', 'true');
+    }
+    function emoFechar() { emoEl.hidden = true; emoBt.setAttribute('aria-expanded', 'false'); }
+    function emoInserir(e) {
+      if (ta.readOnly) return;
+      const ini = ta.selectionStart ?? ta.value.length, fim = ta.selectionEnd ?? ini;
+      ta.value = ta.value.slice(0, ini) + e + ta.value.slice(fim);
+      const pos = ini + e.length;
+      ta.focus({ preventScroll: true });
+      ta.setSelectionRange(pos, pos);
+      ajusta();
+      emoGuardar(e);
+    }
+    emoEl.addEventListener('mousedown', (ev) => ev.preventDefault());   // não tira o foco/cursor da caixa
+    const emoFora = (ev) => { if (!emoEl.hidden && !emoEl.contains(ev.target) && ev.target !== emoBt) emoFechar(); };
+    const emoEsc = (ev) => { if (ev.key === 'Escape' && !emoEl.hidden) { ev.stopPropagation(); emoFechar(); ta.focus(); } };
+    document.addEventListener('mousedown', emoFora);
+    el.addEventListener('keydown', emoEsc, true);
+
     const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, o.cheia ? 66 : 150)}px`; };
     ta.addEventListener('input', ajusta);
     // Enter envia; Shift+Enter pula linha. No meio de um acento (IME) não envia. Esc cancela o template.
@@ -359,6 +409,9 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'emoji') { if (emoEl.hidden) emoAbrir(); else emoFechar(); return; }
+      if (a === 'emo-aba') { st.emoAba = Number(b.dataset.i) || 0; emoDesenhar(); return; }
+      if (a === 'emo-x') { emoInserir(b.dataset.e); return; }
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
       if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
       if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
@@ -405,7 +458,7 @@
     carregar();
     return {
       recarregar: () => carregar(),
-      destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); el.remove(); },
+      destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); document.removeEventListener('mousedown', emoFora); el.remove(); },
       focar() { ta.focus(); },
       // 12/11: faixa da Mari (tela cheia). registro = a faixa ocupa a caixa (Registrar contato / cadência), sem mudar a altura.
       mari(html, registro) {
