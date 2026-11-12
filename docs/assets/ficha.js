@@ -1262,10 +1262,21 @@
     cvComp = NGConversa.montar(host, { conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : null, rotuloFechar: '× Fechar',
       aoFechar: () => { convAberta = false; render(); }, aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
   }
-  function reporConversa(vivo, foco) {
+  // 12/11 (Ricardo: "na Live a conversa volta para o topo o tempo todo"): o redesenho tira o nó da conversa do DOM e
+  // o devolve — e o navegador zera a rolagem de quem sai do DOM. Lê a rolagem ANTES do innerHTML e devolve depois:
+  // quem estava no fim continua no fim (inclusive com mensagem nova); quem subiu para ler fica onde estava.
+  function guardarRolagemConv(vivo) {
+    const m = vivo && vivo.querySelector('[data-msgs]');
+    if (!m) return () => {};
+    const noFim = m.scrollHeight - m.scrollTop - m.clientHeight < 60;
+    const topo = m.scrollTop;
+    return () => { m.scrollTop = noFim ? m.scrollHeight : topo; };
+  }
+  function reporConversa(vivo, foco, devolverRolagem) {
     const host = raiz.querySelector('.f-conv-host');
     if (vivo && host && cvComp && cvComp.id === d.conversaId) {
       host.appendChild(vivo);
+      if (devolverRolagem) devolverRolagem();
       if (foco && vivo.contains(foco)) foco.focus({ preventScroll: true });   // mover o nó tira o cursor da caixa: devolve
       return;
     }
@@ -1804,6 +1815,7 @@
     const datas = { 2: v.criado_em, 3: v.nio_pedido_em || v.biometria_link_enviado_em, 4: v.vendido_em, 5: v.instalado_em, fim: !!v.docs_entregues_em };
     const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;   // a conversa aberta não perde o rascunho
     const focoAntes = document.activeElement;
+    const devolverRolagem = guardarRolagemConv(vivo);
 
     raiz.innerHTML = `<div class="ficha f-${modo}${largo ? ' f-largo' : ''}${convAberta && d.conversaId && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
@@ -1839,7 +1851,7 @@
     </div>`;
     const corpo = raiz.querySelector('.f-corpo');
     if (corpo && modo !== 'pagina') corpo.scrollTop = rolagem;
-    reporConversa(vivo, focoAntes);
+    reporConversa(vivo, focoAntes, devolverRolagem);
     ligarDfvSeEditando();
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f && formAtivo) f.focus({ preventScroll: true });
@@ -1956,6 +1968,7 @@
   function renderConversa() {
     const vivo = cvComp && convAberta ? raiz.querySelector('.f-conv-host > .cvp-raiz') : null;
     const focoAntes = document.activeElement;
+    const devolverRolagem = guardarRolagemConv(vivo);
     const { c, j, q, dono, nivel, silenciada, corpoPasso, itens, ESTADO, feito, k, passosConv, travasC } = conversaPartes();
     raiz.innerHTML = `<div class="ficha f-${modo}${largo ? ' f-largo' : ''}${convAberta && !hostConversa ? ' conv-on' : ''}">
       ${painelConversa()}
@@ -1980,7 +1993,7 @@
         </div>
       </div></div>
     </div>`;
-    reporConversa(vivo, focoAntes);
+    reporConversa(vivo, focoAntes, devolverRolagem);
   }
 
   function ligarDfvSeEditando() {
@@ -2785,6 +2798,7 @@
   function renderCheia() {
     const vivo = raiz.querySelector('.fc-conv-host > .cvp-raiz');
     const focoAntes = document.activeElement;
+    const devolverRolagem = guardarRolagemConv(vivo);
     const conv = !!d.soConversa;
     const cv = conv ? d.conv : d.convInfo;
     const dn = donoConversa(cv);
@@ -2866,6 +2880,7 @@
     if (host) {
       if (vivo && cvCheia && cvCheia.id === d.conversaId) {
         host.appendChild(vivo);
+        devolverRolagem();
         if (focoAntes && vivo.contains(focoAntes)) focoAntes.focus({ preventScroll: true });
       } else {
         if (cvCheia) cvCheia.destruir();
