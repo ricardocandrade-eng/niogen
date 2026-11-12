@@ -529,7 +529,8 @@ class Consulta:
         if not b:
             motivo = f'Avançar não habilitou na etapa {self.etapa}'
             if self.etapa == 2 and getattr(self, 'comp_sem_lista', False):
-                motivo = 'o portal pede o complemento, mas a lista de unidades não abriu — confira no portal'
+                motivo = ('o portal pede o complemento, mas a lista de unidades não abriu — confira no portal'
+                          + (f' ({self.comp_erro})' if getattr(self, 'comp_erro', '') else ''))
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo=motivo)
         self.clicar(b)
 
@@ -735,13 +736,34 @@ class Consulta:
         Espera até 6 s a lista carregar (11/11 ~23h: Rua Almirante Barroso 170 voltou vazia em 1,5 s). Com `digitar`,
         escreve o complemento no campo (filtro da lista) antes de ler. self.comp_vazio = o portal disse "nenhum resultado"."""
         self.comp_vazio = False
+        # 11/11 ~22h40 (36016-130/170): o clique no campo esgotava o tempo — campo no pé da tela, depois da lista de
+        # endereços do CEP. Rola até ele e tenta 3 jeitos de abrir; guarda o erro para o motivo.
         try:
-            comp.click(timeout=8000)
-            if digitar:
-                comp.fill('')
-                comp.type(digitar, delay=60)
+            comp.scroll_into_view_if_needed(timeout=3000)
         except Exception:  # noqa: BLE001
+            pass
+        aberto = False
+        for jeito in ('clique', 'forcado', 'teclado'):
+            try:
+                if jeito == 'clique':
+                    comp.click(timeout=4000)
+                elif jeito == 'forcado':
+                    comp.click(timeout=3000, force=True)
+                else:
+                    comp.focus(timeout=3000)
+                    self.page.keyboard.press('ArrowDown')
+                aberto = True
+                break
+            except Exception as e:  # noqa: BLE001
+                self.comp_erro = f'{jeito}: {type(e).__name__} {sem_pii(str(e).splitlines()[0] if str(e) else "")}'[:160]
+        if not aberto:
             return []
+        try:
+            if digitar:
+                comp.fill('', force=True)
+                comp.type(digitar, delay=60)
+        except Exception as e:  # noqa: BLE001
+            self.comp_erro = f'digitar: {type(e).__name__}'[:160]
         fim = time.time() + 6
         brutos = []
         while time.time() < fim:
