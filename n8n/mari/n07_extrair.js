@@ -562,11 +562,20 @@ if (V7 && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'se
 {
   const cc = ctx.conversa || {};
   if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado' && !((cc.dados || {}).credito_negado_avisado)) {
-    texto = 'Uma informação importante: a análise de crédito da Nio não aprovou o pedido neste CPF 😕\n\n'
-      + 'Vou te passar pro nosso time, que vê com você as opções — por exemplo, outra pessoa da casa ser a titular do pedido.';
-    handoffYaml = { motivo_handoff: 'pedido_humano',
-      briefing_humano: 'Crédito NEGADO pela análise da Nio (consulta automática, autorizada pelo cliente). A Mari avisou. Ver com o cliente outra pessoa da casa como titular (com autorização dela).' };
-    tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+    const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
+    if (Number(cc.credito_consultas || 0) < 2) {
+      // 12/11 ~10h (Ricardo): avisa com gentileza e oferece o CPF de um parente/familiar (vira o titular; o crédito roda de
+      // novo — gatilho 0141 zera o resultado quando o CPF muda). Sem handoff: a Mari segue.
+      texto = `Poxa${pn ? `, ${pn}` : ''}, a análise de crédito da Nio não aprovou o pedido neste CPF 😕\n\n`
+        + 'Mas dá pra tentar com o CPF de um parente ou familiar — ele fica como titular do pedido. Se quiser, me manda o nome completo e o CPF dele.';
+      delete tags.carrossel; delete tags.botoes;
+    } else {
+      texto = `Poxa${pn ? `, ${pn}` : ''}, a análise da Nio também não aprovou neste CPF 😕\n\n`
+        + 'Vou te passar pro nosso time, que vê com você as outras opções.';
+      handoffYaml = { motivo_handoff: 'pedido_humano',
+        briefing_humano: 'Crédito NEGADO nas 2 consultas automáticas (titular e parente). A Mari avisou. Ver outras opções com o cliente.' };
+      tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+    }
     dados.credito_negado_avisado = true;
   }
 }
@@ -823,8 +832,8 @@ if (motivo) {
         aprovado_cartao: 'APROVADO SÓ NO CARTÃO (a Mari avisou; sem cartão, outra pessoa da casa como titular)', pendente: 'PENDENTE (a Nio responde em até 24 h)',
         negado: 'NEGADO neste CPF', pedido_em_andamento: 'pedido Nio em andamento no CPF', nao_decidiu: 'o portal não decidiu — consultar na Cobertura' };
       const autQuando = c.credito_autorizado_em || (dados.credito_autorizado_em);
-      if (c.credito_resultado) topo.push(`💳 CRÉDITO (consulta automática autorizada pelo cliente): ${CR[c.credito_resultado] || c.credito_resultado} — grave na ficha`);
-      else if (autQuando) topo.push(`💳 CRÉDITO: o cliente autorizou («${(c.credito_autorizacao_frase || dados.credito_autorizacao_frase || '').slice(0, 60)}») — consulta automática em andamento; o resultado chega como nota`);
+      if (c.credito_resultado) topo.push(`💳 CRÉDITO (consulta automática${Number(c.credito_consultas || 0) >= 2 ? ', 2ª consulta — CPF do parente' : ''}): ${CR[c.credito_resultado] || c.credito_resultado} — grave na ficha`);
+      else if (autQuando) topo.push('💳 CRÉDITO: consulta automática em andamento — o resultado chega como nota');
       else if (c.credito_recusado_em || dados.credito_recusado_em) topo.push('💳 CRÉDITO: o cliente NÃO autorizou a consulta pela Mari — pedir a autorização antes de consultar');
     }
     // 0133: pedido Nio em andamento no CPF (Etapa 3 do portal) — recompra = multa R$ 500.
@@ -1127,7 +1136,9 @@ if (V7 && !erro && !handoff && !m.forma_pagamento && !m.dados.email && cpfOk(m.d
   const autorizou = cc.credito_autorizado_em || dados.credito_autorizado_em;
   const recusou = cc.credito_recusado_em || dados.credito_recusado_em;
   const perguntaPag = tags.botoes === 'pagamento' || baloesFinais.some((b) => frases(b).some(ehPerguntaPag));
-  if (V7 && !posHandoff && !erro && !handoff && !m.forma_pagamento && !autorizou && !recusou && perguntaPag
+  // 12/11 ~10h (Ricardo): "nem o WhatsApp oficial da Nio pede autorização" — o crédito roda sozinho (0141); a pergunta saiu.
+  const PEDIR_AUTORIZACAO = false;
+  if (PEDIR_AUTORIZACAO && V7 && !posHandoff && !erro && !handoff && !m.forma_pagamento && !autorizou && !recusou && perguntaPag
     && cpfOk(m.dados.cpf) && m.dados.email && m.dados.email_confirmado !== false) {
     baloesFinais = baloesFinais.map((b) => b.split('\n\n').map((p) => p.split(/(?<=[.!?])\s+/).filter((f) => !ehPerguntaPag(f)).join(' ').trim())
       .filter((p) => p && !/desconto|^de: r\$|^por: r\$/.test(norm(p)) && !/💳/.test(p)).join('\n\n')).filter((b) => b.trim());

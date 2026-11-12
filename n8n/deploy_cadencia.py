@@ -53,6 +53,52 @@ def js(arq):
         return f.read()
 
 
+JS_CUTUCADA_PEDIDO = r"""
+// 0142: pedido ao Claude para a Mari escrever a cutucada (só texto; o filtro fica no 4e).
+const c = $('4 · Um por vez').first().json;
+const ctx = $input.first().json || {};
+const sistema = `Você é a Mari, vendedora da Nio Internet (fibra) no WhatsApp. O cliente parou de responder e você vai mandar uma
+CUTUCADA para trazê-lo de volta — curta, simpática e persuasiva, como uma boa vendedora que quer muito fechar com ele.
+Regras (todas obrigatórias):
+- No máximo 2 frases e 180 caracteres. Português do Brasil, natural, sem formalidade. No máximo 1 emoji.
+- Termine com UMA pergunta fácil de responder, que puxe o próximo passo do que FALTA (CEP, número, operadora, escolher o plano, nome/CPF, e-mail, forma de pagamento, conferir os dados).
+- Use o primeiro nome do cliente se vier no contexto. Pode citar a cidade e o plano escolhido.
+- Um argumento por vez, só do que é verdade: preço fixo até 2030; roteador Wi-Fi incluído; atendimento rápido por aqui; é rapidinho (1–2 minutos).
+- NUNCA: desconto, brinde, promoção, "última chance", "só hoje", prazo ou data de instalação, valor em R$, "cobertura confirmada", asterisco, nome de empresa que não seja Nio.
+- Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.
+- Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).
+Responda SÓ com o texto da mensagem, sem aspas.`;
+const pedido = {
+  model: 'claude-sonnet-5-5', max_tokens: 400,
+  output_config: { effort: 'low' },
+  system: sistema,
+  messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\n' + JSON.stringify(ctx) }],
+};
+return [{ json: { pedido } }];
+"""
+
+JS_CUTUCADA_LER = r"""
+// 0142: filtro da cutucada escrita pela Mari. Reprovou (ou a API falhou) → texto de reserva do banco. Sai o candidato do
+// "4 · Um por vez" com o texto final — o 5 · Montar envio segue igual.
+const c = { ...$('4 · Um por vez').first().json };
+const r = $input.first().json || {};
+let ctx = {};
+try { ctx = $('4b · Supabase contexto').first().json || {}; } catch (e) { ctx = {}; }
+const blocos = Array.isArray(r.content) ? r.content.filter((x) => x && x.type === 'text') : [];
+let t = blocos.map((x) => x.text || '').join(' ').replace(/\s+/g, ' ').trim().replace(/^["“']|["”']$/g, '');
+const norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const n = norm(t);
+const ja = (Array.isArray(ctx.cutucadas_ja_enviadas) ? ctx.cutucadas_ja_enviadas : []).map(norm);
+const ruim = !t || t.length < 12 || t.length > 260 || !t.includes('?') || t.includes('*') || /r\$\s*\d/.test(n)
+  || /descont|gratis|gratuit|promo|brinde|ultima chance|so hoje|somente hoje|amanha|instala(cao|r)? (hoje|amanha|em )|prazo|cobertura confirmada|garanto|garantimos|combo|pacote|dh\x61rma|2028/.test(n)
+  || ja.some((x) => x && (x === n || x.slice(0, 25) === n.slice(0, 25)))
+  || r.stop_reason === 'refusal' || !!r.error;
+if (!ruim) c.texto = t;
+c.cutucada_ia = !ruim;
+return [{ json: c }];
+"""
+
+
 def build(ids):
     cred = ids.get('credenciais', {})
     sb_cred = {'supabaseApi': {'id': cred.get('supabase', ''), 'name': dm.CRED_SUPABASE}}
@@ -100,6 +146,25 @@ def build(ids):
         '={{ JSON.stringify({ p_agora: $json.agora, p_canal: $json.canal, p_limite: $json.limite }) }}', 660, 200)
     code('3b · Itens', 880, 200)
     add('4 · Um por vez', 'n8n-nodes-base.splitInBatches', 3, {'batchSize': 1, 'options': {}}, 1100, 200)
+    # ── 0141/0142 (Ricardo, 12/11): a Mari ESCREVE cada cutucada da janela (F1–F5): curta, persuasiva, com o contexto da
+    # conversa. Filtro de saída aqui; reprovou ou a API falhou → vai o texto de reserva do banco (mari_cadencia_texto).
+    cl_cred = {'anthropicApi': {'id': cred.get('claude', ''), 'name': dm.CRED_CLAUDE}}
+    iff('4a · Escrever cutucada?',
+        "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) "
+        "&& $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
+        1210, 120)
+    rpc('4b · Supabase contexto', 'mari_cutucada_contexto',
+        '={{ JSON.stringify({ p_conversa: $json.conversa_id, p_passo: $json.proximo_passo }) }}', 1430, 40,
+        onError='continueRegularOutput', alwaysOutputData=True)
+    add('4c · Montar pedido', 'n8n-nodes-base.code', 2, {'jsCode': JS_CUTUCADA_PEDIDO}, 1650, 40)
+    add('4d · Claude', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': 'https://api.anthropic.com/v1/messages',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+        'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.pedido) }}',
+        'options': {'timeout': 45000, 'response': {'response': {'neverError': True}}}}, 1870, 40, credentials=cl_cred,
+        onError='continueRegularOutput', alwaysOutputData=True)
+    add('4e · Ler cutucada', 'n8n-nodes-base.code', 2, {'jsCode': JS_CUTUCADA_LER}, 2090, 40)
     code('5 · Montar envio', 1320, 300)
     iff('5s · Sem envio real?', '={{ $json.semEnvio === true || !!$json.erro }}', 1540, 300)
     add('6g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
@@ -167,7 +232,13 @@ def build(ids):
         ('2a · Admin?', 1, '3 · Supabase candidatos'),
         ('3 · Supabase candidatos', 0, '3b · Itens'),
         ('3b · Itens', 0, '4 · Um por vez'),
-        ('4 · Um por vez', 1, '5 · Montar envio'),
+        ('4 · Um por vez', 1, '4a · Escrever cutucada?'),
+        ('4a · Escrever cutucada?', 0, '4b · Supabase contexto'),
+        ('4a · Escrever cutucada?', 1, '5 · Montar envio'),
+        ('4b · Supabase contexto', 0, '4c · Montar pedido'),
+        ('4c · Montar pedido', 0, '4d · Claude'),
+        ('4d · Claude', 0, '4e · Ler cutucada'),
+        ('4e · Ler cutucada', 0, '5 · Montar envio'),
         ('5 · Montar envio', 0, '5s · Sem envio real?'),
         ('5s · Sem envio real?', 0, '8 · Supabase registrar'),
         ('5s · Sem envio real?', 1, '6g · Chatwoot conversa'),

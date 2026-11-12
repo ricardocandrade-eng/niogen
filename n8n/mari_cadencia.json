@@ -163,6 +163,139 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "1c8f04b4-f44f-595b-b055-7dcba187fb8d",
+              "leftValue": "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) && $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "4a · Escrever cutucada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1210,
+        120
+      ],
+      "id": "2730fcec-23d0-5235-bdec-f19bfbdfb3bb"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_cutucada_contexto",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversa_id, p_passo: $json.proximo_passo }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "4b · Supabase contexto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1430,
+        40
+      ],
+      "id": "de007cee-8f0b-5aec-90fa-063e537f1d25",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// 0142: pedido ao Claude para a Mari escrever a cutucada (só texto; o filtro fica no 4e).\nconst c = $('4 · Um por vez').first().json;\nconst ctx = $input.first().json || {};\nconst sistema = `Você é a Mari, vendedora da Nio Internet (fibra) no WhatsApp. O cliente parou de responder e você vai mandar uma\nCUTUCADA para trazê-lo de volta — curta, simpática e persuasiva, como uma boa vendedora que quer muito fechar com ele.\nRegras (todas obrigatórias):\n- No máximo 2 frases e 180 caracteres. Português do Brasil, natural, sem formalidade. No máximo 1 emoji.\n- Termine com UMA pergunta fácil de responder, que puxe o próximo passo do que FALTA (CEP, número, operadora, escolher o plano, nome/CPF, e-mail, forma de pagamento, conferir os dados).\n- Use o primeiro nome do cliente se vier no contexto. Pode citar a cidade e o plano escolhido.\n- Um argumento por vez, só do que é verdade: preço fixo até 2030; roteador Wi-Fi incluído; atendimento rápido por aqui; é rapidinho (1–2 minutos).\n- NUNCA: desconto, brinde, promoção, \"última chance\", \"só hoje\", prazo ou data de instalação, valor em R$, \"cobertura confirmada\", asterisco, nome de empresa que não seja Nio.\n- Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.\n- Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).\nResponda SÓ com o texto da mensagem, sem aspas.`;\nconst pedido = {\n  model: 'claude-sonnet-5-5', max_tokens: 400,\n  output_config: { effort: 'low' },\n  system: sistema,\n  messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\\n' + JSON.stringify(ctx) }],\n};\nreturn [{ json: { pedido } }];\n"
+      },
+      "name": "4c · Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1650,
+        40
+      ],
+      "id": "716224a3-dde2-54f0-a1a6-ad282f594b35"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.pedido) }}",
+        "options": {
+          "timeout": 45000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "4d · Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1870,
+        40
+      ],
+      "id": "b13e16f5-b05e-545a-a4a2-68c0f09bc1d8",
+      "credentials": {
+        "anthropicApi": {
+          "id": "7TR9FOfOVcCzLYi0",
+          "name": "Claude API Nio"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// 0142: filtro da cutucada escrita pela Mari. Reprovou (ou a API falhou) → texto de reserva do banco. Sai o candidato do\n// \"4 · Um por vez\" com o texto final — o 5 · Montar envio segue igual.\nconst c = { ...$('4 · Um por vez').first().json };\nconst r = $input.first().json || {};\nlet ctx = {};\ntry { ctx = $('4b · Supabase contexto').first().json || {}; } catch (e) { ctx = {}; }\nconst blocos = Array.isArray(r.content) ? r.content.filter((x) => x && x.type === 'text') : [];\nlet t = blocos.map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim().replace(/^[\"“']|[\"”']$/g, '');\nconst norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\nconst n = norm(t);\nconst ja = (Array.isArray(ctx.cutucadas_ja_enviadas) ? ctx.cutucadas_ja_enviadas : []).map(norm);\nconst ruim = !t || t.length < 12 || t.length > 260 || !t.includes('?') || t.includes('*') || /r\\$\\s*\\d/.test(n)\n  || /descont|gratis|gratuit|promo|brinde|ultima chance|so hoje|somente hoje|amanha|instala(cao|r)? (hoje|amanha|em )|prazo|cobertura confirmada|garanto|garantimos|combo|pacote|dh\\x61rma|2028/.test(n)\n  || ja.some((x) => x && (x === n || x.slice(0, 25) === n.slice(0, 25)))\n  || r.stop_reason === 'refusal' || !!r.error;\nif (!ruim) c.texto = t;\nc.cutucada_ia = !ruim;\nreturn [{ json: c }];\n"
+      },
+      "name": "4e · Ler cutucada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2090,
+        40
+      ],
+      "id": "05bb7bed-24d0-519d-86ca-183f87bb7969"
+    },
+    {
+      "parameters": {
         "jsCode": "// NIOGEN | n8n/cadencia/c05_montar.js — nó \"5 · Montar envio\" do mari_cadencia (04/11/2026)\n// Recebe UM candidato (loop de 1) e monta o corpo da mensagem para a API do Chatwoot:\n//   texto livre (dentro da janela de 24 h) → { content, message_type, private:false }\n//   template (fora da janela)              → { content: corpo renderizado, template_params: { name, category,\n//                                              language, processed_params: { body: { \"1\": …, \"2\": … } } } }\n// (formato do noF4b da Renata, capturado do payload da própria UI do Chatwoot).\n// semEnvio = true quando NÃO há envio real: modo teste, canal 'teste', telefone de teste 5500000000xxx ou\n// passo ENCERRAR (só muda o status). Nunca o nome da revendedora no texto (o banco já filtra; aqui de novo).\n\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '195428',   // conta própria da Nio no Chatwoot (nunca a da Vero) — prompt 28, 07/11\n};\n\nconst c = $input.first().json;\nconst modo = $('2 · Interruptor').first().json.modo;\nconst tel = String(c.telefone || '');\nconst texto = String(c.texto || '');\n\nconst PROIBIDO = new RegExp(['dh' + 'arma', 'gr[aá]tis', 'gratuit', 'combo', 'pacote', 'nio 5g', '2028', 'sem fidelidade'].join('|'), 'i');\nlet erro = null;\nif (c.acao !== 'encerrar' && (!texto || PROIBIDO.test(texto) || texto.includes('*'))) erro = 'texto vazio ou reprovado no filtro de saída';\n\nconst semEnvio = c.acao === 'encerrar' || modo !== 'chatwoot' || c.canal === 'teste' || tel.startsWith('5500000000');\n\nlet corpo = null;\nif (c.acao === 'texto') {\n  corpo = { content: texto, message_type: 'outgoing', private: false };\n} else if (c.acao === 'template') {\n  const body = {};\n  (c.params || []).forEach((v, i) => { body[String(i + 1)] = String(v); });\n  corpo = {\n    content: texto, message_type: 'outgoing', content_type: 'text',\n    template_params: { name: c.template, category: c.categoria || 'MARKETING', language: 'pt_BR', processed_params: { body } },\n  };\n}\n\nif (!semEnvio && !c.chatwoot_conversation_id) erro = erro || 'conversa sem chatwoot_conversation_id';\nif (!semEnvio && !CONFIG.CHATWOOT_NIO_ACCOUNT) erro = erro || 'CHATWOOT_NIO_ACCOUNT vazio';\n\nreturn [{ json: {\n  conversaId: c.conversa_id,\n  passo: c.proximo_passo,\n  acao: c.acao,\n  texto,\n  excecao: c.excecao || null,\n  semEnvio: semEnvio && !erro,\n  erro,\n  chatwootConversationId: c.chatwoot_conversation_id || null,\n  corpo,\n  config: CONFIG,\n} }];\n"
       },
       "name": "5 · Montar envio",
@@ -776,6 +909,68 @@
     "4 · Um por vez": {
       "main": [
         [],
+        [
+          {
+            "node": "4a · Escrever cutucada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4a · Escrever cutucada?": {
+      "main": [
+        [
+          {
+            "node": "4b · Supabase contexto",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5 · Montar envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4b · Supabase contexto": {
+      "main": [
+        [
+          {
+            "node": "4c · Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4c · Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "4d · Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4d · Claude": {
+      "main": [
+        [
+          {
+            "node": "4e · Ler cutucada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4e · Ler cutucada": {
+      "main": [
         [
           {
             "node": "5 · Montar envio",

@@ -245,7 +245,7 @@ if (V4) {
       + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
     // 0138: crédito pela Mari — o sistema pede a autorização com botões e consulta sozinho; a Mari só usa o resultado (Bloco 9).
     L.push(`credito (uso interno): ${conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
-      : conv.credito_autorizado_em ? 'autorizado — consultando' : conv.credito_recusado_em ? 'o cliente NÃO autorizou a consulta' : 'ainda não pedido'}`);
+      : conv.credito_em ? 'consultando' : 'ainda não consultado (sai sozinho com CPF e e-mail)'}${conv.credito_consultas >= 2 ? ' | já é a 2ª consulta (CPF do parente)' : ''}`);
     L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)' : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
       + (dados.pedido_aberto_resposta ? ` | o cliente já respondeu: ${dados.pedido_aberto_resposta}` : ''));
   }
@@ -491,7 +491,7 @@ return [{ json: {
       nome_confiavel: conv.nome_confiavel,
       // 0138: crédito pela Mari (autorização do titular gravada → n8n mari_credito)
       credito_autorizado_em: conv.credito_autorizado_em, credito_autorizacao_frase: conv.credito_autorizacao_frase,
-      credito_recusado_em: conv.credito_recusado_em, credito_resultado: conv.credito_resultado, credito_formas: conv.credito_formas,
+      credito_recusado_em: conv.credito_recusado_em, credito_resultado: conv.credito_resultado, credito_formas: conv.credito_formas, credito_consultas: conv.credito_consultas,
       status: conv.status },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?

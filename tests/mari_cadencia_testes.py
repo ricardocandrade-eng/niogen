@@ -84,43 +84,47 @@ def checa(nome, ok, detalhe):
 # ─────────────────────────────── testes ───────────────────────────────
 
 def t1():
-    # a) silêncio de 61 min às 15h de uma quarta → F1 sai
+    # a) 0141: 16 min depois da Mari, numa quarta → F1 (cutucada de 15 min) sai
     sql(conv(1, ultima_msg_lead_at="'2026-11-11 14:00-03'") + turno(1, 'mari', '2026-11-11 14:00-03', 'Me passa o CEP?'))
-    a = um(sql(avaliar(1, '2026-11-11 15:01-03')))
+    a = um(sql(avaliar(1, '2026-11-11 14:16-03')))
     ok_a = a and a['proximo_passo'] == 'F1' and a['pode_enviar'] and a['acao'] == 'texto'
     # b) Mari falou às 20h29 → F1 cairia 21h29 (fora) → não sai; F2 agendado
     sql(conv(2, ultima_msg_lead_at="'2026-11-11 20:29-03'") + turno(2, 'mari', '2026-11-11 20:29-03', 'Me passa o CEP?'))
     b = um(sql(avaliar(2, '2026-11-11 21:30-03')))
     ok_b = b and b['proximo_passo'] == 'F2' and not b['pode_enviar']
-    checa('1 · F1 às 15h01 sai; às 21h30 não sai e F2 fica agendado', bool(ok_a and ok_b),
-          f"15h01: {a and a['proximo_passo']} pode={a and a['pode_enviar']} «{a and a['texto']}» · "
+    checa('1 · F1 às 14h16 sai; às 21h30 não sai e o F2 fica para a manhã', bool(ok_a and ok_b),
+          f"14h16: {a and a['proximo_passo']} pode={a and a['pode_enviar']} «{a and a['texto']}» · "
           f"21h30: {b and b['proximo_passo']} pode={b and b['pode_enviar']} em {sp(b and b['proximo_em'])} ({b and b['bloqueio']})")
 
 
 def t2():
-    # a) lead sáb 15h → F2 cairia domingo (feriado 15/11) → antecipado para sáb até 16h
-    sql(conv(3, ultima_msg_lead_at="'2026-11-14 15:00-03'") + turno(3, 'mari', '2026-11-14 15:00-03', 'Me passa o CEP?'))
-    a0 = um(sql(avaliar(3, '2026-11-14 15:20-03')))
-    a = um(sql(avaliar(3, '2026-11-14 15:50-03')))
-    ok_a = a and a['proximo_passo'] == 'F2' and a['pode_enviar']
-    # b) lead sáb 15h40 → antecipar não cabe (menos de 30 min depois da Mari) → pula para o D3
-    sql(conv(4, ultima_msg_lead_at="'2026-11-14 15:40-03'") + turno(4, 'mari', '2026-11-14 15:40-03', 'Me passa o CEP?'))
-    b = um(sql(avaliar(4, '2026-11-15 12:00-03')))
-    ok_b = b and b['proximo_passo'] == 'D3' and not b['pode_enviar']
-    checa('2 · F2 de domingo antecipado para sábado; sem espaço → D3', bool(ok_a and ok_b),
-          f"lead sáb 15h: F2 previsto {sp(a0 and a0['proximo_em'])}, às 15h50 pode={a and a['pode_enviar']} · "
-          f"lead sáb 15h40: próximo {b and b['proximo_passo']} em {sp(b and b['proximo_em'])} (3 dias depois da última msg)")
+    # 0141 (Ricardo, 12/11): lead sáb 15h → F1 15h15 sai; F2 (16h) cai no fim do sábado e domingo é feriado/domingo →
+    # segunda 9h já passa da janela (L + 23 h) → as cutucadas restantes são puladas e o próximo é o D3.
+    sql(conv(3, ultima_msg_lead_at="'2026-11-14 15:00-03'") + turno(3, 'mari', '2026-11-14 15:00-03', 'Me passa o CEP?')
+        + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-14 15:00-03' where id = '" + uid(3) + "';")
+    a0 = um(sql(avaliar(3, '2026-11-14 15:10-03')))
+    a = um(sql(avaliar(3, '2026-11-14 15:16-03')))
+    if a and a['pode_enviar']:
+        sql(f"select public.mari_cadencia_registrar('{uid(3)}', 'F1', true, null, '2026-11-14 15:16-03', $${a['texto']}$$, null)")
+    b = um(sql(avaliar(3, '2026-11-15 12:00-03')))
+    ok = (a0 and not a0['pode_enviar'] and a and a['proximo_passo'] == 'F1' and a['pode_enviar']
+          and b and b['proximo_passo'] == 'D3' and not b['pode_enviar'])
+    checa('2 · sábado 15h: F1 em 15 min; o resto não cabe na janela (domingo) → D3', bool(ok),
+          f"15h10: {a0 and a0['proximo_passo']} pode={a0 and a0['pode_enviar']} · 15h16: {a and a['proximo_passo']} pode={a and a['pode_enviar']} · "
+          f"dom 12h: {b and b['proximo_passo']} em {sp(b and b['proximo_em'])}")
 
 
 def t3():
+    # Teto de 2 toques/dia ENCERRADO pelo Ricardo em 10/11 (regra 1): com 2 toques no dia, a cutucada sai do mesmo jeito.
     sql(conv(5, ultima_msg_lead_at="'2026-11-11 14:00-03'") + turno(5, 'mari', '2026-11-11 14:00-03', 'Me passa o CEP?')
+        + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 14:00-03' where id = '" + uid(5) + "';"
         + f"insert into public.contatos_cliente (conversa_id, telefone, canal, direcao, por, em, toque, tipo) values "
           f"('{uid(5)}', '{PREFIXO}905', 'whatsapp', 'saida', 'vendedor', '2026-11-11 10:00-03', 'ligacao', 'ativo'),"
           f"('{uid(5)}', '{PREFIXO}905', 'whatsapp', 'saida', 'mari', '2026-11-11 11:00-03', 'D3', 'ativo');")
-    a = um(sql(avaliar(5, '2026-11-11 15:01-03')))
-    ok = a and not a['pode_enviar'] and 'limite do dia' in (a['bloqueio'] or '')
-    checa('3 · lead com 2 toques hoje → nada sai hoje', bool(ok),
-          f"{a and a['proximo_passo']} pode={a and a['pode_enviar']} ({a and a['bloqueio']}), tenta {sp(a and a['proximo_em'])}")
+    a = um(sql(avaliar(5, '2026-11-11 14:16-03')))
+    ok = a and a['pode_enviar'] and a['proximo_passo'] == 'F1'
+    checa('3 · sem teto por dia (encerrado em 10/11): com 2 toques hoje a cutucada sai', bool(ok),
+          f"{a and a['proximo_passo']} pode={a and a['pode_enviar']} ({a and a['bloqueio']})")
 
 
 def t4():
@@ -356,25 +360,52 @@ def t15():
 
 # ───────────── prompt 28 (0050 + 0052): F2 no mesmo dia, venda, interesse futuro, eco ─────────────
 
+def _resumo(x):
+    return f"{x and x['proximo_passo']} pode={x and x['pode_enviar']} em {sp(x and x['proximo_em'])}"
+
+
 def t16():
-    # Mari falou qua 14h → F1 15h (registrado) → F2 ~4 h depois da última fala da Mari (18h), no MESMO dia;
-    # depois do F2 o teto do dia (2 toques) segura qualquer outra coisa até amanhã.
+    # 0141 (Ricardo, 12/11): 5 cutucadas na janela — Mari falou qua 14h → F1 14h15 · F2 15h · F3 17h · F4 20h · F5 qui 10h
+    # (L + 20 h). Cada uma só sai na sua hora; registrada, a seguinte entra.
     sql(conv(19, ultima_msg_lead_at="'2026-11-11 14:00-03'", etapa="'elegibilidade'") + turno(19, 'mari', '2026-11-11 14:00-03', 'Qual operadora?')
         + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 14:00-03' where id = '" + uid(19) + "';")
-    a1 = um(sql(avaliar(19, '2026-11-11 15:01-03')))
-    sql(f"select public.mari_cadencia_registrar('{uid(19)}', 'F1', true, null, '2026-11-11 15:01-03', $${a1 and a1['texto']}$$, null)")
-    a2a = um(sql(avaliar(19, '2026-11-11 17:50-03')))
-    a2 = um(sql(avaliar(19, '2026-11-11 18:00-03')))
-    ok_f2 = (a1 and a1['proximo_passo'] == 'F1' and a1['pode_enviar'] and 'operadora' in norm(a1['texto'])
-             and a2a and not a2a['pode_enviar'] and a2 and a2['proximo_passo'] == 'F2' and a2['pode_enviar'])
-    if ok_f2:
-        sql(f"select public.mari_cadencia_registrar('{uid(19)}', 'F2', true, null, '2026-11-11 18:00-03', $${a2['texto']}$$, null)")
-    a3 = um(sql(avaliar(19, '2026-11-11 20:30-03')))
-    ok = bool(ok_f2) and a3 and not a3['pode_enviar'] and a3['proximo_passo'] == 'D3' and int(a3['toques_hoje']) == 2
-    checa('16 · F1 em 1 h e F2 ~4 h depois da Mari, no mesmo dia; 2 toques/dia seguram o resto', bool(ok),
-          f"15h01: {a1 and a1['proximo_passo']} «{a1 and a1['texto']}» · 17h50: pode={a2a and a2a['pode_enviar']} · "
-          f"18h: {a2 and a2['proximo_passo']} pode={a2 and a2['pode_enviar']} «{a2 and a2['texto']}» · "
-          f"20h30: {a3 and a3['proximo_passo']} em {sp(a3 and a3['proximo_em'])}, toques hoje={a3 and a3['toques_hoje']}")
+    plano = [('F1', '2026-11-11 14:10-03', '2026-11-11 14:16-03'), ('F2', '2026-11-11 14:50-03', '2026-11-11 15:01-03'),
+             ('F3', '2026-11-11 16:50-03', '2026-11-11 17:01-03'), ('F4', '2026-11-11 19:50-03', '2026-11-11 20:01-03'),
+             ('F5', '2026-11-12 09:50-03', '2026-11-12 10:01-03')]
+    log, ok = [], True
+    for passo, antes, hora in plano:
+        x0 = um(sql(avaliar(19, antes)))
+        x = um(sql(avaliar(19, hora)))
+        bom = bool(x0 and not x0['pode_enviar'] and x and x['proximo_passo'] == passo and x['pode_enviar'] and x['texto'])
+        ok = ok and bom
+        log.append(f"{passo}: ok" if bom else f"{passo}: antes={_resumo(x0)} · na hora={_resumo(x)}")
+        if not bom:
+            break
+        sql(f"select public.mari_cadencia_registrar('{uid(19)}', '{passo}', true, null, '{hora}', $${x['texto']}$$, null)")
+    fim = um(sql(avaliar(19, '2026-11-12 13:30-03')))
+    ok = ok and bool(fim and fim['proximo_passo'] == 'D3' and not fim['pode_enviar'])
+    checa('16 · 5 cutucadas na janela: 15 min · 1 h · 3 h · 6 h · L+20 h; depois só o D3', bool(ok),
+          ' · '.join(log) + f" · qui 13h30: {_resumo(fim)}")
+
+
+def t20():
+    # 0141: Mari falou às 20h30 (qua) → F1 20h45; F2 (21h30) cai na madrugada → qui 9h; F3 9h45; F4 10h30 (45 min entre elas);
+    # F5 (L + 20 h = 16h30) — nada sai entre 21h e 9h.
+    sql(conv(31, ultima_msg_lead_at="'2026-11-11 20:30-03'") + turno(31, 'mari', '2026-11-11 20:30-03', 'Me passa o CEP?')
+        + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 20:30-03' where id = '" + uid(31) + "';")
+    seqs = []
+    madrugada = None
+    for passo, hora in [('F1', '2026-11-11 20:46-03'), ('F2', '2026-11-12 09:01-03'), ('F3', '2026-11-12 10:01-03'),
+                        ('F4', '2026-11-12 11:01-03'), ('F5', '2026-11-12 16:31-03')]:
+        if passo == 'F2':
+            madrugada = um(sql(avaliar(31, '2026-11-12 03:00-03')))
+        x = um(sql(avaliar(31, hora)))
+        seqs.append((passo, x and x['proximo_passo'], x and x['pode_enviar']))
+        if x and x['pode_enviar']:
+            sql(f"select public.mari_cadencia_registrar('{uid(31)}', '{x['proximo_passo']}', true, null, '{hora}', $${x['texto']}$$, null)")
+    ok = all(a == b and p for a, b, p in seqs) and bool(madrugada and not madrugada['pode_enviar'])
+    checa('20 · fora do horário: F2–F4 vão para 9h, 9h45, 10h30 do dia seguinte e o F5 às 16h30; nada de madrugada', bool(ok),
+          ' · '.join(f"{a}→{b}:{p}" for a, b, p in seqs) + f" · 3h: pode={madrugada and madrugada['pode_enviar']}")
 
 
 def t17():
@@ -386,12 +417,12 @@ def t17():
         + turno(21, 'mari', '2026-11-11 14:00-03', 'x')
         + "update public.mari_conversas set ultima_msg_mari_at = '2026-11-11 14:00-03' where id in ('" + uid(20) + "','" + uid(21) + "');")
     s = um(sql(avaliar(20, '2026-11-11 15:01-03')))
-    f1 = um(sql(avaliar(21, '2026-11-11 15:01-03')))
+    f1 = um(sql(avaliar(21, '2026-11-11 14:16-03')))
     d3 = um(sql(avaliar(21, '2026-11-14 10:30-03')))
     ok = s is None and f1 and f1['proximo_passo'] == 'F1' and f1['pode_enviar'] and d3 and not d3['pode_enviar'] \
         and 'venda criada' in (d3['bloqueio'] or '')
     checa('17 · venda em Saída → nada; venda criada → só F1/F2 (D3/D7/D15 e encerrar nunca)', bool(ok),
-          f"Saída: {'fora da cadência' if s is None else s['proximo_passo']} · venda criada 15h01: {f1 and f1['proximo_passo']} "
+          f"Saída: {'fora da cadência' if s is None else s['proximo_passo']} · venda criada 14h16: {f1 and f1['proximo_passo']} "
           f"pode={f1 and f1['pode_enviar']} · D3: {d3 and d3['proximo_passo']} ({d3 and d3['bloqueio']})")
 
 
@@ -432,7 +463,7 @@ def limpar_wa():
 if __name__ == '__main__':
     print('teardown inicial:', sql(f"select public.mari_limpar_teste('{PREFIXO}9') as r")[0]['r'], limpar_wa())
     try:
-        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14, t15, t16, t17, t18, t19):
+        for t in (t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t12, t13, t14, t15, t16, t17, t18, t19, t20):
             try:
                 t()
             except Exception as e:

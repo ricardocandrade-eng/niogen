@@ -384,7 +384,7 @@ def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Ma
     c.exige(not r.get('handoff'), f'[P28] não seguiu o atendimento depois da resposta: {r.get("handoff")}')
 
 
-def cen_ad(c):   # P29 (12/11, regra 5 revista): "Não autorizo" o crédito → grava a recusa e segue para o pagamento, sem insistir
+def cen_ad(c):   # P29 (12/11 ~10h, Ricardo): crédito negado → aviso gentil + CPF de parente (sem handoff); o CPF novo vira titular
     c.diz('Oi')
     c.diz('36035130')
     r = c.diz('123')
@@ -397,14 +397,18 @@ def cen_ad(c):   # P29 (12/11, regra 5 revista): "Não autorizo" o crédito → 
     r = c.diz('bia.teste@exemplo.com')
     if 'bia.teste@exemplo.com' in norm((r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or '')):
         r = c.diz('Sim, está certinho')
-    it = r.get('interativo') or {}
-    c.exige(it.get('chave') == 'credito', f'[P29] não pediu a autorização do crédito: {it.get("chave")}')
+    c.exige((r.get('interativo') or {}).get('chave') == 'pagamento', f'[P29] não foi direto ao pagamento (sem pergunta de autorização): {(r.get("interativo") or {}).get("chave")}')
+    c.exige(not re.search(r'autoriza', fala(r)), f'[P29] falou de autorização: «{fala(r)[:160]}»')
+    B.sql(f"update mari_conversas set credito_resultado = 'negado', credito_em = now(), credito_consultas = 1 where telefone = '{c.tel}'", escrita=True)
+    r = c.diz('Boleto bancário')
     t = fala(r)
-    c.exige(not re.search(r'serasa|score|spc', t), f'[P29] falou de Serasa/score/SPC: «{t[:200]}»')
-    r = c.diz('Não autorizo')
-    c.exige((r.get('interativo') or {}).get('chave') == 'pagamento', f'[P29] depois do "não", não seguiu para o pagamento: {(r.get("interativo") or {}).get("chave")}')
-    rows = B.sql(f"select credito_recusado_em, credito_autorizado_em from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
-    c.exige(rows and rows[0].get('credito_recusado_em') and not rows[0].get('credito_autorizado_em'), f'[P29] recusa não gravada: {rows}')
+    c.exige(re.search(r'parente|familiar', t) and re.search(r'nao aprovou', t), f'[P29] não ofereceu o CPF de parente: «{t[:220]}»')
+    c.exige(not r.get('handoff'), f'[P29] passou para humano no 1º negado: {r.get("handoff")}')
+    c.exige(not re.search(r'serasa|score|spc|nome sujo', t), f'[P29] falou de Serasa/score: «{t[:200]}»')
+    r = c.diz('Pode ser minha mãe: Maria Teste da Silva, CPF 111.444.777-35')
+    rows = B.sql(f"select dados->>'cpf' cpf, credito_resultado, credito_em from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and (rows[0].get('cpf') or '').replace('.', '').replace('-', '') == '11144477735' and rows[0].get('credito_resultado') is None,
+            f'[P29] CPF do parente não virou titular / crédito não voltou à fila: {rows}')
 
 
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.

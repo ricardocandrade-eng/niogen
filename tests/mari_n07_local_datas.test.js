@@ -84,24 +84,20 @@ process.exitCode = falhas ? 1 : 0;
   console.log((ok ? 'ok   ' : 'FALHOU ') + 'k · lista escrita vira carrossel | ' + (r.interativo && r.interativo.tipo) + ' | ' + r.texto.replace(/\n/g, ' ').slice(0, 90));
   if (!ok) process.exitCode = 1;
 }
-// 0138 — crédito pela Mari (12/11)
+// 0141 — crédito automático (12/11 ~10h): sem pergunta; negado → CPF do parente; 2º negado → time
 {
   const base = { forma_pagamento: null, etapa: 'coleta', dados: { nome: 'Eli Teste', cpf: '52998224725', telefone: '31999999999', email: 'a@b.com', referencia: 'x' } };
   const c1 = rodar('Show!\n[BOTOES:pagamento]', base, 'Sim, está certinho');
-  const ok1 = c1.interativo && c1.interativo.chave === 'credito' && c1.interativo.botoes.length === 2;
-  console.log((ok1 ? 'ok   ' : 'FALHOU ') + 'C1 · e-mail confirmado → pede a autorização do crédito (no lugar do pagamento) | ' + (c1.interativo && c1.interativo.chave));
-  const pergunta = [{ papel: 'mari', texto: 'Antes da forma de pagamento: você autoriza a gente a consultar o seu CPF na análise de crédito da Nio?' }];
-  const c2 = rodar('Obrigada!\n[BOTOES:pagamento]', base, 'Sim, autorizo', pergunta);
-  const ok2 = c2.upd && c2.upd.dados && c2.upd.dados.credito_autorizado_em && c2.upd.dados.credito_autorizacao_frase === 'Sim, autorizo' && c2.interativo && c2.interativo.chave === 'pagamento';
-  console.log((ok2 ? 'ok   ' : 'FALHOU ') + 'C2 · "Sim, autorizo" grava quando + frase e segue para o pagamento | ' + (c2.interativo && c2.interativo.chave));
-  const c2b = rodar('Tudo bem!\n[BOTOES:pagamento]', base, 'Não autorizo', pergunta);
-  const ok2b = c2b.upd && c2b.upd.dados && c2b.upd.dados.credito_recusado_em && !c2b.upd.dados.credito_autorizado_em && c2b.interativo && c2b.interativo.chave === 'pagamento';
-  console.log((ok2b ? 'ok   ' : 'FALHOU ') + 'C2b · "Não autorizo" grava a recusa e segue para o pagamento');
-  const c3 = rodar('Perfeito!', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'aprovado_cartao', credito_autorizado_em: '2026-11-12T12:00:00Z' }), 'Sex, 13/11');
+  const ok1 = c1.interativo && c1.interativo.chave === 'pagamento';
+  console.log((ok1 ? 'ok   ' : 'FALHOU ') + 'C1 · e-mail confirmado → direto para o pagamento (sem pedir autorização) | ' + (c1.interativo && c1.interativo.chave));
+  const c3 = rodar('Perfeito!', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'aprovado_cartao', credito_consultas: 1 }), 'Sex, 13/11');
   const ok3 = /liberou o seu pedido só no cartão/.test(c3.texto) && c3.upd.dados && c3.upd.dados.credito_cartao_avisado === true;
   console.log((ok3 ? 'ok   ' : 'FALHOU ') + 'C3 · aprovado só no cartão + boleto → avisa (cartão ou outro titular)');
-  const c4 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_autorizado_em: '2026-11-12T12:00:00Z' }), 'Manhã');
-  const ok4 = c4.handoff && c4.handoff.motivo === 'pedido_humano' && /não aprovou o pedido neste CPF/.test(c4.texto);
-  console.log((ok4 ? 'ok   ' : 'FALHOU ') + 'C4 · negado → avisa e chama o time');
-  if (!(ok1 && ok2 && ok2b && ok3 && ok4)) process.exitCode = 1;
+  const c4 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 1 }), 'Manhã');
+  const ok4 = !c4.handoff && /parente ou familiar/.test(c4.texto) && /Poxa, Eli/.test(c4.texto) && c4.upd.dados && c4.upd.dados.credito_negado_avisado === true;
+  console.log((ok4 ? 'ok   ' : 'FALHOU ') + 'C4 · 1º negado → aviso gentil + CPF de parente, sem handoff');
+  const c5 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 2 }), 'Manhã');
+  const ok5 = c5.handoff && c5.handoff.motivo === 'pedido_humano' && /também não aprovou/.test(c5.texto);
+  console.log((ok5 ? 'ok   ' : 'FALHOU ') + 'C5 · 2º negado (CPF do parente) → passa para o time');
+  if (!(ok1 && ok3 && ok4 && ok5)) process.exitCode = 1;
 }

@@ -387,16 +387,7 @@ def confirma_email(c, r, email, rot):
         c.falha(f'({rot}) foi para o pagamento sem repetir o e-mail para confirmar')
         return r
     c.exige(email.lower() in t, f'({rot}) não repetiu o e-mail para confirmar: «{t[:160]}»')
-    r = c.diz('Sim, está certinho')
-    # 12/11 (0138): depois do e-mail, a Mari pede a autorização do crédito (botões) antes do pagamento
-    it = r.get('interativo') or {}
-    c.exige(it.get('chave') == 'credito', f'({rot}) não pediu a autorização do crédito antes do pagamento: {it.get("chave")}')
-    if it.get('chave') == 'credito':
-        r = c.diz('Sim, autorizo')
-        rows = sql(f"select credito_autorizado_em, credito_autorizacao_frase from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
-        c.exige(rows and rows[0].get('credito_autorizado_em') and rows[0].get('credito_autorizacao_frase') == 'Sim, autorizo',
-                f'({rot}) autorização do crédito não gravada (quando + frase): {rows}')
-    return r
+    return c.diz('Sim, está certinho')   # 12/11 ~10h: o crédito roda sozinho (sem pergunta) — direto para o pagamento
 
 
 # ── abertura B2 (08/11, docs/Prompt_mari_abertura_b2_081126_1310.md): saudação fixa + 3 botões, sem o Claude ──
