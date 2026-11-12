@@ -24,12 +24,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-13">
-<script src="config.js?v=111126-13"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-14">
+<script src="config.js?v=111126-14"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-13"></script>
-<script src="assets/sidebar.js?v=111126-13"></script>
-<script src="assets/novavenda.js?v=111126-13"></script>
+<script src="assets/app.js?v=111126-14"></script>
+<script src="assets/sidebar.js?v=111126-14"></script>
+<script src="assets/novavenda.js?v=111126-14"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -399,12 +399,12 @@
   const BT = {
     pedido: '<button type="button" class="btn btn-acc" data-criar>＋ Abrir pedido com este endereço</button>',
     credito: podeCredito ? '<button type="button" class="btn" data-ir-credito>Consultar crédito</button>' : '',
-    padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Medir o crédito com o endereço padrão</button>' : '',
-    mapa: '<button type="button" class="btn" data-abrir-painel>Abrir no mapa (200 m)</button>',
+    padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ endereço padrão</button>' : '',
+    mapa: '<button type="button" class="btn" data-abrir-painel>Ver no mapa (200 m)</button>',
     liberacao: () => (linkLiberacao
       ? `<a class="btn btn-acc" href="${esc(linkLiberacao)}" target="_blank" rel="noopener noreferrer">Pedir liberação (formulário) ↗</a>`
       : '<span class="chip warn" title="config_links.nio_pedido_liberacao">Pedir liberação: formulário ainda não cadastrado no NIOGEN — pedir ao Rogério</span>'),
-    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(linkCadastro)}" target="_blank" rel="noopener noreferrer">Pedir o cadastro da unidade à Nio (formulário) ↗</a>` : ''),
+    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(linkCadastro)}" target="_blank" rel="noopener noreferrer">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
     conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
   };
 
