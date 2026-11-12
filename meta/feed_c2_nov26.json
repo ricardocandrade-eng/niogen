@@ -1,0 +1,29 @@
+{
+  "_cabecalho": "NIOGEN | meta/feed_c2_nov26.json | 12/11/2026 09:05 — Claude Code. Artes Regular da campanha 2 (H1 sobe, H2 por dia, H3 caro) reaproveitadas no feed do @mari.nio.internet e da página. BTU (R$ 55) fora: o preço só vale em 15 cidades e o feed é visto por todas. Imagens em docs/midia/feed_c2_nov26/ (JPEG). Feed na ordem 3 → 1 (o 1 fica no topo).",
+  "base_url": "https://niogen.dharmatelecom.com.br/midia/feed_c2_nov26/",
+  "posts": [
+    {
+      "ordem": 1,
+      "titulo": "Preço não sobe até 2030",
+      "arquivo": "NIO_C2_REG_H1_sobe_1x1_071126_1725.jpg",
+      "legenda": "Sua internet subiu de novo? 😤\nNa Nio, o preço fica igual até 31/01/2030.\n\nNio Fibra 600 Mega: R$ 95/mês no cartão ou R$ 110 no boleto ou débito automático.\n\nQuer saber se a fibra chega na sua rua? Manda o CEP pra Mari no link da bio 💚\n\nInstalação grátis com 12 meses de permanência. Sujeito à disponibilidade técnica.\n#NioFibra #InternetFibra #PrecoFixo #MinasGerais"
+    },
+    {
+      "ordem": 2,
+      "titulo": "R$ 3,17 por dia",
+      "arquivo": "NIO_C2_REG_H2_porDia_1x1_071126_1725.jpg",
+      "legenda": "Fibra óptica de 600 Mega por R$ 3,17 por dia ☕\nMenos que um café, com o preço travado até 31/01/2030.\n\nR$ 95/mês no cartão ou R$ 110 no boleto ou débito automático.\n\nManda o CEP pra Mari no link da bio e veja se chega na sua rua 💚\n\nInstalação grátis com 12 meses de permanência. Sujeito à disponibilidade técnica.\n#NioFibra #InternetFibra #MinasGerais"
+    },
+    {
+      "ordem": 3,
+      "titulo": "Você está pagando caro",
+      "arquivo": "NIO_C2_REG_H3_caro_1x1_071126_1725.jpg",
+      "legenda": "Paga mais de R$ 95 de internet? Você está pagando caro. 💸\n\nNio Fibra 600 Mega: R$ 95/mês no cartão ou R$ 110 no boleto ou débito automático, com preço fixo até 31/01/2030.\n\nA troca é simples: a Mari confere seu endereço pelo WhatsApp e nosso time cuida do resto. Dica: só cancele a internet atual depois que a Nio estiver instalada.\n\nComece pelo link da bio 💚\nInstalação grátis com 12 meses de permanência. Sujeito à disponibilidade técnica.\n#NioFibra #TrocarDeInternet #MinasGerais"
+    }
+  ],
+  "stories": [
+    {"ordem": 1, "arquivo": "NIO_C2_REG_H1_sobe_9x16_071126_1725.jpg"},
+    {"ordem": 2, "arquivo": "NIO_C2_REG_H2_porDia_9x16_071126_1725.jpg"},
+    {"ordem": 3, "arquivo": "NIO_C2_REG_H3_caro_9x16_071126_1725.jpg"}
+  ]
+}

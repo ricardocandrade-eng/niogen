@@ -6,6 +6,9 @@ Resumo: publica pela Graph API os 9 posts de credibilidade de JF no Instagram @m
         "Mari Nio Internet", e os 4 stories no Instagram (stories da página só com --fb-stories).
         Idempotente: o que já tem id em meta/credibilidade_ids.json (ou legenda idêntica já publicada) é pulado.
 
+Lotes: --lote feed_c2_nov26 usa meta/feed_c2_nov26.json, meta/feed_c2_nov26_ids.json e docs/midia/feed_c2_nov26/
+       (12/11/2026: artes da campanha 2 reaproveitadas no feed). Sem --lote: o lote de credibilidade de 06/11.
+
 Modos:
   python meta/publicar_credibilidade.py                  = --dry-run: lista o que faria (arquivo, URL, legenda, destino)
   python meta/publicar_credibilidade.py --conferir       só leitura: posts do Instagram e da página × JSON
@@ -37,6 +40,14 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRADA = os.path.join(REPO, 'meta', 'credibilidade_nov26.json')
 SAIDA = os.path.join(REPO, 'meta', 'credibilidade_ids.json')
 MIDIA = os.path.join(REPO, 'docs', 'midia', 'credibilidade_nov26')
+
+
+def usar_lote(lote):
+    """--lote X: meta/X.json · meta/X_ids.json · docs/midia/X/ (o padrão é o lote de credibilidade de 06/11)."""
+    global ENTRADA, SAIDA, MIDIA
+    ENTRADA = os.path.join(REPO, 'meta', f'{lote}.json')
+    SAIDA = os.path.join(REPO, 'meta', f'{lote}_ids.json')
+    MIDIA = os.path.join(REPO, 'docs', 'midia', lote)
 
 PAGINA = '1421228191072269'            # Mari Nio Internet (antes "Mari Nio Internet", renomeada em 06/11)
 IG_ID = '17841411489935097'            # @mari.nio.internet
@@ -133,10 +144,10 @@ def checar_conteudo(d):
         if 'grátis' in t.replace(GRATIS_OK.lower(), ''):
             erros.append(f"{p['arquivo']}: \"grátis\" fora da frase do rodapé")
         if not os.path.exists(os.path.join(MIDIA, p['arquivo'])):
-            erros.append(f"{p['arquivo']}: não está em docs/midia/credibilidade_nov26/")
+            erros.append(f"{p['arquivo']}: não está em {MIDIA}")
     for s in d['stories']:
         if not os.path.exists(os.path.join(MIDIA, s['arquivo'])):
-            erros.append(f"{s['arquivo']}: não está em docs/midia/credibilidade_nov26/")
+            erros.append(f"{s['arquivo']}: não está em {MIDIA}")
     if erros:
         raise SystemExit('Conteúdo recusado:\n  ' + '\n  '.join(erros))
 
@@ -348,8 +359,11 @@ def main():
     ap.add_argument('--conferir', action='store_true', help='só leitura: feed do IG e da página × JSON')
     ap.add_argument('--fb-stories', action='store_true', help='também os stories da página')
     ap.add_argument('--so', help='destinos separados por vírgula: ' + ','.join(DESTINOS))
+    ap.add_argument('--lote', help='nome do lote (meta/<lote>.json); padrão: credibilidade_nov26')
     ap.add_argument('--intervalo', type=int, default=60, help='segundos entre posts do feed do IG (padrão 60)')
     a = ap.parse_args()
+    if a.lote:
+        usar_lote(a.lote)
 
     d, ids = carregar()
     checar_conteudo(d)
@@ -359,7 +373,8 @@ def main():
     itens = plano(d, ids, destinos)
 
     ruins = checar_urls(d)
-    print('URLs públicas: ' + ('13/13 200 image/jpeg' if not ruins else 'PROBLEMA\n  ' + '\n  '.join(ruins)))
+    n = len(d['posts']) + len(d['stories'])
+    print('URLs públicas: ' + (f'{n}/{n} 200 image/jpeg' if not ruins else 'PROBLEMA\n  ' + '\n  '.join(ruins)))
 
     TOKEN = ler_token()
     if not TOKEN:
