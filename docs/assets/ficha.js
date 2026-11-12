@@ -2421,7 +2421,7 @@
   const VIAB_ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', complemento_fora_lista: 'Unidade fora da lista do portal' };
   const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado',
     pedido_em_andamento: 'Já tem pedido em andamento', pendente: 'Pendente', nao_classificado: 'Não classificado', sem_viabilidade: 'Endereço sem viabilidade',
-    complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
+    complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', email_invalido: 'E-mail recusado pelo portal — confira o e-mail do cliente (ex.: @uol.com.br)', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
   const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
   // O que o operador precisa (venda: da ficha; conversa: o que a Mari coletou). Falta = selo no lugar do botão.
   function entradaOp(tipo) {

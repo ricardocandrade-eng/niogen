@@ -151,7 +151,7 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
-              'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'nao_classificado', 'erro')
+              'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'email_invalido', 'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
@@ -159,6 +159,9 @@ RE_RECEITA = re.compile(r'ops,?\s*ocorreu um erro', re.I)
 # Etapa 4 (11/11 18h50): "Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições
 # de mesmo número permitidas." — a Nio limita o mesmo celular em vários pedidos; a consulta precisa do celular do cliente.
 RE_CONTATO = re.compile(r'repeti[cç][õo]es de mesmo n[úu]mero|telefone de contato informado', re.I)
+# Etapa 4 (12/11 00h): "Atenção! E-mail inválido. Por favor preencha um e-mail válido para prosseguir." — a Nio recusa o
+# e-mail (ex.: domínio incompleto, "@uol.com" no lugar de "@uol.com.br"); a consulta precisa de outro e-mail do cliente.
+RE_EMAIL = re.compile(r'e-?mail inv[aá]lido|preencha um e-?mail v[aá]lido', re.I)
 
 
 def classificar_popup(titulo, texto, etapa=None):
@@ -166,6 +169,8 @@ def classificar_popup(titulo, texto, etapa=None):
     t = f'{titulo or ""} {texto or ""}'
     if RE_CONTATO.search(t):
         return 'contato_repetido'
+    if RE_EMAIL.search(t):
+        return 'email_invalido'
     if RE_ANDAMENTO.search(t):
         return 'pedido_em_andamento'
     if RE_RECEITA.search(t) and etapa == 3:

@@ -851,6 +851,7 @@
     else if (ev.target.closest('[data-padrao]')) consultarCredito(true);
     else if (ev.target.closest('[data-denovo]')) consultarCredito(credPadrao);
     else if (ev.target.closest('[data-contato]')) { FC.celular.focus(); FC.celular.select(); piscar(formCred); }
+    else if (ev.target.closest('[data-email-trocar]')) { FC.email.focus(); FC.email.select(); piscar(formCred); }
   });
 
   // ------------------------------------------------------------ 2. CRÉDITO (só sob pedido; só admin/backoffice)
@@ -883,6 +884,7 @@
     nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia o texto abaixo e confira no portal.'],
     sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado — use o endereço padrão para medir o crédito do CPF.'],
     complemento_fora_lista: ['Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal. Para saber já o crédito do CPF, consulte com o endereço padrão.'],
+    email_invalido: ['E-mail recusado pelo portal', 'warn', 'A Nio não aceitou este e-mail. Confira com o cliente — o mais comum é o domínio incompleto (ex.: "@uol.com" em vez de "@uol.com.br", "@bol.com" em vez de "@bol.com.br") — corrija e consulte de novo.'],
     contato_repetido: ['Celular recusado pelo portal', 'warn', 'A Nio não aceitou este celular: ele já aparece em pedidos demais. Use o celular do próprio cliente (outro número dele, se tiver) e consulte de novo.'],
     erro_receita: ['Erro da Receita', 'warn', 'A consulta à Receita Federal falhou duas vezes. Tente de novo em alguns minutos.'],
     erro: ['Erro na consulta', 'warn', 'A consulta não terminou. Tente de novo em alguns minutos.'],
@@ -898,6 +900,7 @@
     const lista = [];
     if (/^aprovado/.test(r.resultado) && !padrao) lista.push(BT.pedido);
     if (['sem_viabilidade', 'complemento_fora_lista'].includes(r.resultado)) lista.push('<button type="button" class="btn btn-acc" data-padrao>Consultar com o endereço padrão</button>');
+    if (r.resultado === 'email_invalido') lista.push('<button type="button" class="btn btn-acc" data-email-trocar>Corrigir o e-mail</button>');
     if (r.resultado === 'contato_repetido') lista.push('<button type="button" class="btn btn-acc" data-contato>Trocar celular</button>');
     if (r.resultado === 'erro_receita' || r.resultado === 'erro') lista.push('<button type="button" class="btn" data-denovo>Tentar de novo</button>');
     acoesCred = lista;
