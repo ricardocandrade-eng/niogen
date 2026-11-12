@@ -330,7 +330,7 @@ def build(ids):
     # login — conferido em 12/11), sobe no bucket PRIVADO midia_conversas e ganha um link de 15 min (só para o Claude ver a
     # foto). Áudio sem a transcrição do próprio Chatwoot → baixa de novo e transcreve (2b7). O 2b8 junta tudo numa entrada só
     # e devolve ao fluxo normal (2z). Toda chamada com onError = segue: a mídia nunca derruba a mensagem.
-    iff('2a · Tem mídia?', "={{ $json.modo === 'chatwoot' && $json.baixarMidia === true && !$json.registrar }}", 220, -400)
+    iff('2a · Tem mídia?', "={{ ($json.modo === 'chatwoot' || $json.canal === 'teste') && $json.baixarMidia === true && !$json.registrar }}", 220, -400)
     code('2b · Anexos', 330, -560)
     add('2b1 · Baixar mídia', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET', 'url': '={{ $json.url }}',

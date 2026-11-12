@@ -103,6 +103,15 @@ if (ex('1 · Webhook Mari teste')) {
     // Envio real (Graph API) só para o número liberado pelo admin "tel real" — nunca para outro.
     enviarReal: body.enviar_real === true && !!sd._telReal && tel === sd._telReal,
   };
+  // 12/11 (0145): a bateria prova a cadeia de mídia (2a–2b8) mandando midia + midia_url (https) — como um anexo do Chatwoot.
+  const urlT = String(body.midia_url || '');
+  const tipoT = midia === 'image' || midia === 'imagem' ? 'imagem' : midia === 'audio' || midia === 'voice' ? 'audio' : null;
+  if (tipoT && /^https:\/\//.test(urlT)) {
+    entrada.anexos = [{ n: 0, tipo: tipoT, mime: null, ext: String(body.midia_ext || '').toLowerCase() || null, tamanho: null, url: urlT,
+      cw_transcricao: null, baixar: true }];
+    entrada.baixarMidia = true;
+    entrada.msgId = `teste${Date.now()}`;
+  }
 } else if (ex('1c · Webhook Chatwoot')) {
   if (modo !== 'chatwoot') return [];
   const wb = $('1c · Webhook Chatwoot').first().json;
