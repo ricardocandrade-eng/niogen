@@ -142,3 +142,38 @@ main.venda .toast { bottom: 104px; z-index: 6; }
 .sub.bad { color: var(--bad); }
 .cond-resumo { display: flex; flex-direction: column; gap: 4px; }
 .cond-pre { white-space: pre-wrap; max-height: 180px; overflow: auto; font-size: 11.5px; background: var(--bg3); border-radius: 8px; padding: 6px 8px; margin: 0; }
+/* 0.6.2 — topo enxuto: cabeçalho numa linha, jornada como régua de 7 passos, ações e recado no rodapé fixo */
+.topo { padding: 6px 10px; gap: 6px; }
+.topo img { width: 20px; height: 20px; }
+.cab { flex-direction: row; align-items: center; gap: 6px; padding: 6px 10px; }
+.cab-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.cab-nome .chip { margin-left: 4px; }
+.seg { display: inline-flex; flex: none; border: 1px solid var(--linha); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: none; color: var(--tx2); font: inherit; font-size: 11.5px; padding: 3px 8px; cursor: pointer; }
+.seg button.on { background: var(--acc); color: var(--acc-tx); font-weight: 700; }
+.jornada { display: flex; gap: 3px; padding: 5px 8px; }
+.pas { flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 3px 0 2px;
+  background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--tx2); font: inherit; cursor: pointer; }
+.pas:hover { background: var(--bg3); }
+.pas.foco { border-color: var(--tx2); background: var(--bg3); }
+.pas-n { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--linha); display: grid; place-items: center; font-size: 11px; font-weight: 700; line-height: 1; }
+.pas-nome { font-size: 9.5px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pas.feita { color: var(--tx); }
+.pas.feita .pas-n { border-color: var(--ok); color: var(--ok); }
+.pas.atual { color: var(--acc); font-weight: 700; }
+.pas.atual .pas-n { background: var(--acc); border-color: var(--acc); color: var(--acc-tx); }
+.pas.res-ok .pas-n { background: rgba(61, 220, 132, .18); border-color: var(--ok); color: var(--ok); }
+.pas.res-warn .pas-n { background: rgba(245, 184, 75, .18); border-color: var(--warn); color: var(--warn); }
+.pas.res-bad .pas-n { background: rgba(255, 107, 107, .18); border-color: var(--bad); color: var(--bad); }
+.pas-falta { position: absolute; top: 0; right: 2px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--bad); color: #fff; font-size: 9px; font-weight: 700; line-height: 13px; }
+.pas-seguir { flex: 0 0 40px; }
+.area { scrollbar-width: thin; }
+.conduzir { padding: 6px 8px; gap: 4px; margin-bottom: 0; }
+.cond-pre { max-height: 110px; }
+.rodape-linha { font-size: 11.5px; }
+.rodape .toast, main.venda .rodape .toast { position: static; box-shadow: none; padding: 6px 8px; }
+.registro .acoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(70px, 1fr)); gap: 4px; }
+.registro { gap: 4px; margin-top: 4px; padding-top: 6px; }
+.cond-det summary { cursor: pointer; }
+.cond-det div { margin-top: 2px; }
+.conduzir .aviso { padding: 6px 8px; }

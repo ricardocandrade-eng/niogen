@@ -648,14 +648,13 @@
     if (!podeConduzir()) return null;
     const c = S.cond;
     const B = (rot, fn, forte, dis) => h('button', { class: `btn btn-sm ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: !!dis, onclick: fn }, rot);
+    // 0.6.2: só status no meio (curto); Seguir/Parar/Conduzir ficam no rodapé fixo (acoesRodape)
     if (c && c.rodando) {
       return h('section', { class: 'conduzir rodando' },
-        h('div', { class: 'cond-tit' }, h('b', {}, 'Conduzindo até o Resumo'), h('span', { class: 'chip acc' }, c.modo === 'passo' ? 'Passo a passo' : 'Direto'),
-          h('span', { class: 'grow' }), B('■ Parar', pararConducao, false)),
-        h('ul', { class: 'cond-log' }, c.log.map((x) => h('li', {}, x))),
-        c.pergunta ? h('div', { class: 'cond-pergunta' }, h('span', {}, c.pergunta.texto), h('div', { class: 'acoes' }, B('Seguir', () => responderPergunta(true), true), B('Parar', () => responderPergunta(false)))) : null,
-        c.pausa ? h('div', { class: 'aviso bad' }, h('b', {}, 'Sua vez: '), c.pausa.texto,
-          c.pausa.motivo === 'oferta' ? h('div', { class: 'acoes' }, B('Seguir', seguirPausa, true)) : null) : null);
+        h('div', { class: 'cond-tit' }, h('b', {}, 'Conduzindo até o Resumo'), h('span', { class: 'chip acc' }, c.modo === 'passo' ? 'Passo a passo' : 'Direto')),
+        h('ul', { class: 'cond-log' }, c.log.slice(-3).map((x) => h('li', {}, x))),
+        c.pergunta ? h('div', { class: 'cond-pergunta' }, h('span', {}, c.pergunta.texto)) : null,
+        c.pausa ? h('div', { class: 'aviso bad' }, h('b', {}, 'Sua vez: '), c.pausa.texto) : null);
     }
     const falta = faltasConduzir();
     const fim = c && c.fim;
@@ -663,22 +662,24 @@
     const finais = resumo ? resumo.botoes.filter((b) => !['voltar', 'avancar', 'cancelar'].includes(TR.textoBotao(b))) : [];
     const o = S.dados.oferta, v = S.dados.viabilidade;
     return h('section', { class: 'conduzir' },
-      h('div', { class: 'cond-tit' }, h('b', {}, 'Conduzir até o Resumo'), h('span', { class: 'grow' }),
+      h('div', { class: 'cond-tit', title: 'Eu preencho e avanço as Etapas 1–5 e paro no Resumo, sem salvar. O clique que grava o pedido, a biometria e o pagamento são seus.'
+          + ' Passo a passo: antes de cada botão eu pergunto.' },
+        h('b', {}, 'Conduzir'), h('span', { class: 'grow' }),
         h('div', { class: 'seg' }, ['passo', 'direto'].map((m) => h('button', { type: 'button', class: S.modoConduzir === m ? 'on' : '',
-          onclick: () => { S.modoConduzir = m; chrome.storage.local.set({ [CHAVE_MODO]: m }).catch(() => {}); desenha(); } }, m === 'passo' ? 'Passo a passo' : 'Direto')))),
-      h('span', { class: 'sub' }, 'Eu preencho e avanço as Etapas 1–5 e paro no Resumo, sem salvar. O clique que grava o pedido, a biometria e o pagamento são seus.'
-        + (S.modoConduzir === 'passo' ? ' Passo a passo: antes de cada botão eu pergunto.' : '')),
+          onclick: () => { S.modoConduzir = m; chrome.storage.local.set({ [CHAVE_MODO]: m }).catch(() => {}); desenha(); } }, m === 'passo' ? 'Passo a passo' : 'Direto'))),
+        h('button', { class: 'btn btn-sm', type: 'button', title: 'Testar a trava (Seguir fora da área, Salvar interesse, Finalizar, Abrir OS)', 'aria-label': 'Testar a trava',
+          disabled: S.ocupado, onclick: testarTravaConducao }, '🔒')),
       falta.length ? h('div', { class: 'sub bad' }, `Falta: ${falta.join(', ')}.`) : null,
-      h('div', { class: 'acoes' }, B(fim ? 'Conduzir de novo' : '▶ Conduzir até o Resumo', conduzir, true, falta.length || S.ocupado),
-        B('Testar a trava', testarTravaConducao, false, S.ocupado)),
       fim ? h('div', { class: `aviso ${fim.motivo === 'resumo' ? 'ok' : 'bad'}` },
         h('b', {}, `${ROT_MOTIVO[fim.motivo] || fim.motivo}${fim.etapa && fim.motivo !== 'resumo' ? ` · Etapa ${fim.etapa}` : ''}${fim.duracao_s ? ` · ${fim.duracao_s} s` : ''}`),
         fim.motivo === 'resumo'
           ? h('div', {}, `Confira e clique você${finais.length ? ` em "${finais[finais.length - 1]}"` : ' no botão final'}. Eu não clico em nada no Resumo.`)
           : h('div', {}, fim.texto || ''),
-        fim.extra && fim.extra.popup ? h('div', { class: 'sub' }, `O portal disse: ${fim.extra.popup}`) : null,
-        fim.extra && fim.extra.lista ? h('div', { class: 'sub' }, `Opções: ${fim.extra.lista.join(' · ')}`) : null,
-        c.regrasAtivas ? h('div', { class: 'sub bad' }, `Atenção: ${c.regrasAtivas} trava(s) de rede ainda ativa(s).`) : h('div', { class: 'sub' }, 'Travas de rede desligadas.')) : null,
+        // 0.6.2: o texto do portal fica recolhido; "travas desligadas" só aparece se NÃO estiverem (é o normal)
+        fim.extra && (fim.extra.popup || fim.extra.lista) ? h('details', { class: 'sub cond-det' }, h('summary', {}, 'O que o portal disse'),
+          fim.extra.popup ? h('div', {}, fim.extra.popup) : null,
+          fim.extra.lista ? h('div', {}, `Opções: ${fim.extra.lista.join(' · ')}`) : null) : null,
+        c.regrasAtivas ? h('div', { class: 'sub bad' }, `Atenção: ${c.regrasAtivas} trava(s) de rede ainda ativa(s).`) : null) : null,
       resumo ? h('div', { class: 'cond-resumo' },
         h('div', { class: 'etapa-tit' }, 'A venda × o Resumo do portal'),
         h('div', { class: 'linha' }, h('span', { class: 'rot' }, 'Plano'), h('span', { class: 'val' }, o.plano || '—'), h('span')),
@@ -881,14 +882,12 @@
       const [t, cls] = TXT_ESTADO[r.estado] || [r.estado, 'warn'];
       return h('div', { class: `resultado ${cls}` }, `${rotuloCampo(r.id)}: ${t}`);
     });
-    const podePreencher = PREENCHE.includes(n), podeDestacar = n === 5;
-    const acao = podePreencher || podeDestacar
-      ? h('button', { class: `btn ${atual ? 'btn-acc' : ''} btn-bloco`, type: 'button', disabled: S.ocupado, onclick: () => preencherEtapa(n) },
-        podeDestacar ? 'Destacar no portal' : 'Preencher esta etapa') : null;
-    const extraTxt = n === 2 ? 'Depois de preencher, clique você em Buscar e escolha "Endereço de instalação". Aí volte e preencha de novo para a referência e o complemento.'
-      : n === 3 ? 'Depois de preencher, clique você em Buscar (o nome vem da Receita).'
-      : n === 5 ? 'Crédito, oferta, forma de pagamento e dados bancários são com você: eu só destaco o que a venda tem. Banco, agência e conta, nunca.'
-      : n === 6 || n === 7 ? 'Nada é preenchido aqui. Antes da biometria, o cliente precisa ter ouvido:' : '';
+    const acao = null;   // 0.6.2: "Preencher esta etapa" / "Destacar" foram para o rodapé fixo (acoesRodape)
+    // 0.6.2: dicas curtas (a condução faz esses cliques; a dica serve para quem preenche à mão)
+    const extraTxt = n === 2 ? 'À mão: Buscar → "Endereço de instalação" → preencher de novo.'
+      : n === 3 ? 'À mão: Buscar (nome da Receita).'
+      : n === 5 ? 'Banco, agência e conta: só você digita.'
+      : n === 6 || n === 7 ? 'O cliente precisa ter ouvido:' : '';
     const idVenda = S.dados && S.dados.venda_id;
     return h('section', { class: 'foco' },
       h('div', { class: `etapa-tit${atual ? ' atual' : ''}` }, `Etapa ${n} · ${ETAPAS[n - 1]}${atual ? ' — aberta no portal' : ''}`),
@@ -903,18 +902,17 @@
   function registroNiogen(n) {
     if (!S.venda || !S.dados || !S.dados.venda_id || (n !== 2 && n !== 3)) return null;
     const feito = (S.registro || {})[n === 2 ? 'viabilidade' : 'credito'];
-    const B = (qual, res, rot, forte) => h('button', { class: `btn ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, onclick: () => registra(qual, res) }, rot);
+    const B = (qual, res, rot, forte) => h('button', { class: `btn btn-sm ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, onclick: () => registra(qual, res) }, rot);
     return h('div', { class: 'registro' },
-      h('span', { class: 'sub' }, n === 2 ? 'O portal respondeu a viabilidade? Registre no NIOGEN:' : 'O portal respondeu o crédito? Registre no NIOGEN:'),
+      h('span', { class: 'sub' }, n === 2 ? 'Viabilidade no NIOGEN:' : 'Crédito no NIOGEN:'),
       n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
         : h('div', { class: 'acoes' }, B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')),
       n === 3 ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
-        ' Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)') : null,
+        ' Já avisei o cliente do link da biometria') : null,
       n === 3 && (S.selos || []).length ? h('div', { class: 'aviso bad' },
         h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
           ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
-      n === 3 ? h('span', { class: 'sub' }, 'Aprovado: a venda vai para Biometria e o NIOGEN avisa o cliente do link sozinho. Não há nº de pedido aqui — ele só existe na OS.') : null,
       feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT_REG[feito] || feito}`) : null);
   }
 
@@ -925,16 +923,18 @@
       const n = i + 1, atual = S.etapaAuto === n, feita = !!S.feitas[n], falt = faltasDaEtapa(n);
       const estado = atual ? 'atual' : feita ? 'feita' : 'pendente';
       const resultado = n === 2 ? reg.viabilidade : n === 3 ? reg.credito : null;
-      return h('button', { class: `jor ${estado}${n >= 4 ? ' meia' : ''}${foco === n ? ' foco' : ''}`, type: 'button', 'aria-current': foco === n ? 'step' : 'false',
-        title: 'Ver esta etapa', onclick: () => { S.etapaManual = n; salvaJornada(); desenha(); } },
-        h('span', { class: 'jor-ico' }, atual ? '●' : feita ? '✓' : '○'),
-        h('span', { class: 'jor-nome' }, `${n} ${nome}`),
-        atual ? h('span', { class: 'jor-nota' }, 'aberta no portal') : null,
-        resultado ? h('span', { class: 'chip ok' }, ROT_REG[resultado] || resultado) : null,
-        falt && n <= 5 ? h('span', { class: 'chip bad' }, `${falt} ${falt === 1 ? 'falta' : 'faltam'}`) : null);
+      // 0.6.2: régua de 7 passos numa linha só (número/✓ + nome curto); resultado da 2/3 vira a cor do passo, falta vira bolinha vermelha
+      const res = !resultado ? '' : ['viavel', 'aprovado', 'so_cartao'].includes(resultado) ? ' res-ok' : resultado === 'pendente' ? ' res-warn' : ' res-bad';
+      return h('button', { class: `pas ${estado}${res}${foco === n ? ' foco' : ''}`, type: 'button', 'aria-current': foco === n ? 'step' : 'false',
+        title: `${n} ${nome}${atual ? ' — aberta no portal' : ''}${resultado ? ` · ${ROT_REG[resultado] || resultado}` : ''}${falt && n <= 5 ? ` · ${falt} ${falt === 1 ? 'falta' : 'faltam'}` : ''}`,
+        onclick: () => { S.etapaManual = n; salvaJornada(); desenha(); } },
+        h('span', { class: 'pas-n' }, feita && !atual ? '✓' : String(n)),
+        h('span', { class: 'pas-nome' }, ETAPA_CURTA[i]),
+        falt && n <= 5 ? h('span', { class: 'pas-falta' }, String(falt)) : null);
     });
     return h('div', { class: 'jornada' }, linhas,
-      S.etapaManual ? h('button', { class: 'btn btn-sm jor-seguir', type: 'button', onclick: () => { S.etapaManual = null; salvaJornada(); desenha(); } }, '↺ seguir o portal') : null);
+      S.etapaManual ? h('button', { class: 'pas pas-seguir', type: 'button', title: 'Voltar a seguir a etapa aberta no portal', onclick: () => { S.etapaManual = null; salvaJornada(); desenha(); } },
+        h('span', { class: 'pas-n' }, '↺'), h('span', { class: 'pas-nome' }, 'portal')) : null);
   }
 
   // ---- botão "📋 Todos os dados": camada com os valores de todas as etapas, cada um copiável (formato que o portal aceita).
@@ -980,32 +980,61 @@
       h('div', { class: 'camada-corpo' }, grupos));
   }
 
-  // Rodapé fixo: linha curta + [📋 Todos os dados] [Concluir]
+  // 0.6.2 — todos os botões de ação da tela da venda ficam no rodapé fixo (nada de ação perdida na área que rola).
+  const ETAPA_CURTA = ['PDV', 'Viab.', 'Cadastro', 'Contato', 'Pgto', 'Resumo', 'OS'];
+  function acoesRodape() {
+    if (S.orelha === 'conversa') return [];
+    const c = S.cond, n = etapaFoco();
+    const Bt = (rot, fn, cls, dis) => h('button', { class: `btn ${cls || ''}`, type: 'button', disabled: !!dis, onclick: fn }, rot);
+    if (c && c.rodando) {
+      if (c.pergunta) return [Bt('Seguir', () => responderPergunta(true), 'btn-acc grow'), Bt('■ Parar', () => responderPergunta(false))];
+      if (c.pausa && c.pausa.motivo === 'oferta') return [Bt('Seguir', seguirPausa, 'btn-acc grow'), Bt('■ Parar', pararConducao)];
+      return [Bt('■ Parar a condução', pararConducao, 'grow')];
+    }
+    const out = [];
+    const conduz = podeConduzir();
+    if (conduz) out.push(Bt(c && c.fim ? '▶ Conduzir de novo' : '▶ Conduzir até o Resumo', conduzir, 'btn-acc grow', faltasConduzir().length || S.ocupado));
+    if (PREENCHE.includes(n) || n === 5) {
+      out.push(Bt(n === 5 ? 'Destacar' : `Preencher ${n}`, () => preencherEtapa(n), conduz ? '' : `btn-acc grow`, S.ocupado));
+    }
+    return out;
+  }
+
+  // Rodapé fixo: recado (toast) · linha curta · [ações da etapa/condução] · [📋 Todos os dados] [Concluir]
   function rodape() {
     const c = S.conversa;
     let linha, fim;
     if (S.venda) {
       const ok = ['aprovado', 'so_cartao'].includes((S.registro || {}).credito);
-      linha = ok ? 'Crédito aprovado → biometria. OS e agendamento: na ficha do NIOGEN.' : 'Falta o crédito: registre na etapa 3 — é ele que leva a venda para Biometria.';
+      linha = ok ? 'Crédito ok → biometria. OS e agenda: na ficha.' : 'Falta registrar o crédito (etapa 3).';
       fim = h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir');
     } else {
-      linha = c && c.venda_id ? 'Esta conversa já virou venda. Para registrar viabilidade e crédito, abra a venda.' : 'Ainda não é venda — daqui só dá para consultar a viabilidade.';
+      linha = c && c.venda_id ? 'Já é venda: abra a venda para registrar.' : 'Ainda não é venda: só viabilidade.';
       fim = c && c.venda_id ? h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda') : null;
     }
-    return h('footer', { class: 'rodape' }, h('span', { class: 'sub' }, linha),
+    const acoes = acoesRodape();
+    return h('footer', { class: 'rodape' }, toast(), h('span', { class: 'sub rodape-linha' }, linha),
+      acoes.length ? h('div', { class: 'rodape-bt' }, acoes) : null,
       h('div', { class: 'rodape-bt' }, h('button', { class: 'btn grow', type: 'button', onclick: () => { S.todos = !S.todos; desenha(); } }, '📋 Todos os dados'), fim));
+  }
+  function toast() {
+    if (!S.msg) return null;
+    return h('div', { class: `toast ${S.msg.tipo === 'bad' ? 'bad' : 'ok'}`, role: 'status' },
+      h('span', { class: 'grow' }, S.msg.texto), h('button', { class: 'btn btn-sm', type: 'button', 'aria-label': 'Fechar', onclick: () => { aviso(''); desenha(); } }, '×'));
   }
 
   function telaVenda() {
     const d = S.dados, n = etapaFoco();
     const titulo = S.venda ? (S.venda.cliente_nome || '—') : nomeConversa(S.conversa || {});
+    // 0.6.2: cabeçalho numa linha só — [←] nome · bairro/cidade (+ selo se for só conversa) · [Portal|💬]
+    const local = [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · ');
     const cab = h('div', { class: 'cab' },
-      h('div', { style: 'display:flex;align-items:center;gap:8px' },
-        h('div', { style: 'flex:1;min-width:0' }, h('h2', {}, titulo),
-          h('span', { class: 'sub' }, [d.viabilidade.bairro, d.viabilidade.cidade].filter(Boolean).join(' · ')),
-          !S.venda ? h('div', {}, h('span', { class: 'chip acc' }, 'Conversa da Mari · sem venda qualificada')) : null),
-        h('button', { class: 'btn btn-sm', type: 'button', onclick: voltar }, S.aba === 'conversas' ? '← Conversas' : '← Vendas')),
-      orelhas([['portal', 'Preencher no portal'], ['conversa', '💬 Conversa']], S.orelha, trocaOrelha, 'orelhas-sub'));
+      h('button', { class: 'btn btn-sm', type: 'button', title: S.aba === 'conversas' ? 'Voltar às Conversas' : 'Voltar às Vendas', 'aria-label': 'Voltar', onclick: voltar }, '←'),
+      h('div', { class: 'cab-nome', title: `${titulo}${local ? ` — ${local}` : ''}` }, h('b', {}, titulo),
+        local ? h('span', { class: 'sub' }, ` · ${local}`) : null,
+        !S.venda ? h('span', { class: 'chip acc' }, 'só conversa') : null),
+      h('div', { class: 'seg cab-seg' }, [['portal', 'Portal'], ['conversa', '💬']].map(([o, rot]) => h('button', { type: 'button', class: S.orelha === o ? 'on' : '',
+        title: o === 'portal' ? 'Preencher no portal' : 'Conversa', onclick: () => trocaOrelha(o) }, rot))));
     const avisosPortal = S.avisos.map((a) => h('div', { class: 'aviso' }, h('b', {}, 'O portal avisou: '), a.msg));
     const portal = S.orelha !== 'conversa';
     return h('div', { class: 'venda-wrap' },
@@ -1037,8 +1066,8 @@
       partes.push(telaInicio());
     }
     // rev. 08/11: o recado vai num aviso fixo no rodapé — o painel rola até a próxima etapa e o recado continua à vista
-    if (S.msg) partes.push(h('div', { class: `toast ${S.msg.tipo === 'bad' ? 'bad' : 'ok'}`, role: 'status' },
-      h('span', { class: 'grow' }, S.msg.texto), h('button', { class: 'btn btn-sm', type: 'button', 'aria-label': 'Fechar', onclick: () => { aviso(''); desenha(); } }, '×')));
+    // 0.6.2: na venda o recado mora dentro do rodapé fixo (não cobre botão nenhum); nas listas continua flutuando
+    if (S.msg && !(S.sess && S.dados)) partes.push(toast());
     raiz.className = S.sess && S.dados ? 'venda' : '';   // 0.5.0: na venda o corpo não rola; só a etapa em foco
     const area = raiz.querySelector('.area'), posArea = area ? area.scrollTop : 0;   // a etapa em foco guarda a rolagem entre redesenhos
     raiz.replaceChildren(...partes.flat(Infinity).filter(Boolean));

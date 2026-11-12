@@ -13,6 +13,8 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 
 ## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
 
+> **0.6.2 (12/11):** painel da venda sem rolagem — cabeçalho numa linha (← · nome · bairro · Portal|💬), jornada como régua de 7 passos numa linha (cor = estado/resultado, bolinha vermelha = faltas), **todas as ações no rodapé fixo** (Conduzir/Seguir/Parar, Preencher N/Destacar, Todos os dados, Concluir) e o recado (toast) dentro do rodapé; texto do portal na parada fica recolhido em "O que o portal disse". Conferido em 360×900 e 360×700 sem rolagem.
+>
 > **0.6.1 (12/11):** as regras de liberação (portabilidade, leitura do carrinho) usavam `{1,40}` e o Chrome recusava a 7401 por passar de 2 KB compilada ("Travas de rede desligadas"). Agora sem repetição contada; o painel confere cada regex com `isRegexSupported` antes de ligar e o teste barra `{n,m}`.
 Regra 5 do `CLAUDE.md` (rev. 12/11): na sessão do humano logado no portal, a extensão percorre as Etapas 1–5 do Novo Pedido e **para no
 Resumo sem salvar**. Só o humano clica no que grava o pedido ou manda algo ao cliente (botão final do Resumo, Abrir OS, biometria, link de

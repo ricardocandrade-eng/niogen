@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NIOGEN no Portal",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Painel lateral do NIOGEN sobre o portal PAP da Nio: mostra as vendas prontas, preenche a etapa aberta do Novo Pedido e conduz as Etapas 1–5 até o Resumo, sem salvar — o clique que grava o pedido, a biometria e o pagamento são da pessoa. No Histórico de Pedidos, lê o status dos pedidos (só filtros) e atualiza o NIOGEN.",
   "minimum_chrome_version": "116",
   "permissions": [
