@@ -711,6 +711,7 @@ button.cartao { font: inherit; color: var(--text); text-align: left; width: 100%
 .f-rot { display: block; font-family: var(--dm); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
 .f-prox b { display: block; font-size: 14px; font-weight: 600; margin-top: 3px; }
 .f-nota { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.f-nota.warn { color: var(--warn-fg); font-weight: 600; }
 .f-prox.warn { background: var(--warn-bg); border-color: var(--warn-border); }
 .f-prox.warn b, .f-prox.warn .f-nota { color: var(--warn-fg); }
 .f-prox.bad { background: var(--bad-bg); border-color: var(--bad-border); }
@@ -1446,6 +1447,8 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 .cv-item.esperando .cv-l2 { color: var(--text); }
 .cv-l3 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 11.5px; color: var(--muted); }
 .cv-esp { color: var(--warn-fg); font-weight: 600; margin-left: auto; }
+.cv-dest { font-weight: 600; }
+.cv-etp { color: var(--muted, #6E747C); }
 .cv-furo { display: inline-block; font-size: 11px; font-weight: 600; color: var(--bad-fg, #b42318); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
 .mv-semdono { margin: 0 0 8px; }
 .cv-direita { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }

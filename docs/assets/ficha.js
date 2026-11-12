@@ -542,7 +542,12 @@
   // conversa SEM venda → Saída (perdida / fora de área / já cliente) ou Silenciar (cliente Nio · suporte) · Reativar desfaz.
   const SAIDA_CONV = {
     suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai do Live e NÃO volta quando ele escrever (continua em Conversas › Todas, com o selo 📵). No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
-    perdida: 'Mandar para Saída · Perdida (sem interesse)?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
+    perdida: 'Mandar para Saída · Recusou?\n\nPara a cadência, põe a etiqueta saida-recusou e resolve no Chatwoot. Se ele escrever de novo, reabre na mesma etapa.',
+    recusou: 'Mandar para Saída · Recusou?\n\nPara a cadência, põe a etiqueta saida-recusou e resolve no Chatwoot. Se ele escrever de novo, reabre na mesma etapa.',
+    sem_cobertura: 'Mandar para Saída · Sem cobertura?\n\nUse só depois de conferir no portal. Para a cadência, etiqueta saida-sem-cobertura e resolve no Chatwoot.',
+    credito_negado: 'Mandar para Saída · Crédito negado?\n\nUse só depois da 2ª consulta negada (titular e parente). Etiqueta saida-credito e resolve no Chatwoot.',
+    sem_resposta: 'Mandar para Saída · Sem resposta?\n\nO cliente não respondeu à cadência. Etiqueta saida-sem-resposta e resolve no Chatwoot. Se ele escrever, reabre.',
+    teste_duplicada: 'Marcar como Teste ou duplicada?\n\nSai das contas do funil e do Agente de Tráfego. Resolve no Chatwoot.',
     fora_area: 'Mandar para Saída · Fora de área?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
     ja_cliente: 'Mandar para Saída · Já é cliente Nio?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta — para não voltar mais, use "Silenciar".',
     reativar: 'Reativar a conversa?\n\nEla volta para o Live com o time (a Mari segue calada; para ela voltar, "Devolver para a Mari").',
@@ -1861,8 +1866,8 @@
   // 11/11: uma rodada só (antes eram 3 em fila) e a linha da jornada vem da carga compartilhada.
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
-    const [rc, jo, rq, rk, rn, rt, rb, ultFala] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em').eq('id', cid).maybeSingle(),
+    const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome] = await Promise.all([
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
@@ -1870,13 +1875,14 @@
       NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari').not('tags->>cadencia', 'is', null).order('created_at'),
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
       ultimaFalaTime(cid),   // 0103 (só usada se o cliente apenas confirmou)
+      NG.funilNomes(),       // 0147: nomes de etapa e destino (cache da página)
     ]);
     if (rc.error || !rc.data) return { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' };
     if (rc.data.venda_id) return { venda: rc.data.venda_id };
     const c = rc.data;
     const ultTime = jo && jo.confirmou_em ? ultFala : null;   // 0103
     return {
-      soConversa: true, ultTime, conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
+      soConversa: true, ultTime, fnome, conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
       jor: jo || null, q: rq.error ? {} : (rq.data || {}),
       cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data) },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
@@ -1943,7 +1949,7 @@
     else if (bo && !c.nao_contatar) {
       at.unshift('<button type="button" class="btn btn-sm" data-csaida="suporte_nio" title="Cliente Nio pedindo suporte ou reclamando: não é venda. A Mari cala e ele não volta para o Live.">📵 Cliente Nio · suporte — silenciar</button>');
       at.push(`<span class="f-menu"><button type="button" class="btn btn-ghost btn-sm" data-f="menu" aria-expanded="false">Saída ▾</button>
-        <span class="f-menu-lista" hidden><button type="button" data-csaida="perdida">Perdida (sem interesse)</button><button type="button" data-csaida="fora_area">Fora de área</button><button type="button" data-csaida="ja_cliente">Já é cliente Nio</button></span></span>`);
+        <span class="f-menu-lista" hidden><button type="button" data-csaida="recusou">Recusou</button><button type="button" data-csaida="fora_area">Fora da área</button><button type="button" data-csaida="sem_cobertura">Sem cobertura</button><button type="button" data-csaida="ja_cliente">Já é cliente Nio</button><button type="button" data-csaida="credito_negado">Crédito negado</button><button type="button" data-csaida="sem_resposta">Sem resposta</button><button type="button" data-csaida="teste_duplicada">Teste ou duplicada</button></span></span>`);
     }
     at.push(`<a class="btn btn-ghost btn-sm" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>`);
     const itens = Array.isArray(q.itens) ? q.itens.filter((x) => x.obrigatorio !== false) : [];
@@ -1956,7 +1962,11 @@
       { nome: 'Crédito', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
-    const corpoPasso = `${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para o Live, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
+    // 0147: destino único + etapa; alerta quando alguém agiu direto no Chatwoot.
+    const fn = d.fnome || { etapa: {}, destino: {} };
+    const linhaFunil = `<span class="f-nota">${c.funil_destino && c.funil_destino !== 'em_andamento' ? `${c.funil_destino === 'instalada' ? '✅' : '⛔'} Destino: <b>${esc(fn.destino[c.funil_destino] || c.funil_destino)}</b>${c.funil_detalhe ? ` (${esc(c.funil_detalhe)})` : ''} · ` : ''}Etapa: <b>${esc(fn.etapa[c.funil_etapa] || c.funil_etapa || '—')}</b></span>`
+      + (c.funil_alerta ? `<span class="f-nota warn">⚠ ${esc(NG.FUNIL_ALERTA[c.funil_alerta] || c.funil_alerta)}. ${c.funil_alerta === 'resolvida_fora_niogen' ? 'Use Saída ▾ abaixo.' : 'O atendimento é só pelo NIOGEN.'}</span>` : '');
+    const corpoPasso = `${linhaFunil}${silenciada ? '<span class="f-nota">📵 Silenciada (cliente Nio · suporte): a Mari não responde e ela não volta para o Live, mesmo se ele escrever. "Reativar" desfaz.</span>' : ''}
           ${dono.tipo === 'mari' && nivel !== 'agora' && !silenciada ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
           ${emEspera && !silenciada ? `<span class="f-nota">⏸ Em espera até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}. Volta para o Live no dia, ou antes se o cliente escrever.</span>` : ''}
           ${bts.length ? `<div class="f-prox-bts">${bts.join('')}</div>` : ''}

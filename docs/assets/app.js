@@ -256,6 +256,23 @@
     'Desistiu', 'Reprovado na biometria', 'Crédito negado', 'Fora da área', 'Interesse futuro (com data)',
   ];
 
+  // 0147: etapa e destino únicos de cada conversa (nomes em config_funil, lidos uma vez por página).
+  let funilCache = null;
+  async function funilNomes() {
+    if (funilCache) return funilCache;
+    const { data } = await sb.from('config_funil').select('tipo, codigo, nome, ordem, saida');
+    funilCache = { etapa: {}, destino: {}, saidas: [] };
+    (data || []).sort((x, y) => x.ordem - y.ordem).forEach((r) => {
+      funilCache[r.tipo][r.codigo] = r.nome;
+      if (r.tipo === 'destino' && r.saida && r.codigo !== 'instalada') funilCache.saidas.push([r.codigo, r.nome]);
+    });
+    return funilCache;
+  }
+  const FUNIL_ALERTA = {
+    resolvida_fora_niogen: 'Resolvida no Chatwoot sem destino: registre o destino aqui no NIOGEN',
+    mensagem_fora_niogen: 'Respondida direto no Chatwoot: responda pelo NIOGEN',
+  };
+
   // ---------- formatação ----------
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const dt = (v) => (v ? new Date(v) : null);
@@ -1349,7 +1366,7 @@
 
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,

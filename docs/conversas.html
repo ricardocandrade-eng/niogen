@@ -16,13 +16,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=121126-27">
+<link rel="stylesheet" href="assets/app.css?v=121126-28">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-12"></script>
+<script src="assets/app.js?v=121126-28"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=121126-14"></script>
+<script src="assets/ficha.js?v=121126-28"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -60,10 +60,12 @@
 
   let lista = [];
   let furos = new Set();   // 0102: esperando há 3 min ou mais e fora do Live = "deveria estar no Live"
+  let fnome = { etapa: {}, destino: {} };   // 0147: nomes de etapa e destino (config_funil)
   // 0144: ?filtro=esperando (botão do alerta da faixa de pulso) vale por cima do último filtro usado.
   const FILTRO_URL = new URLSearchParams(location.search).get('filtro');
-  let filtro = ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(FILTRO_URL) ? FILTRO_URL
-    : ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
+  const IDS_FILTRO = ['esperando', 'minhas', 'abertas', 'fora', 'todas', 'encerradas'];
+  let filtro = IDS_FILTRO.includes(FILTRO_URL) ? FILTRO_URL
+    : IDS_FILTRO.includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
   let atual = null;     // id da conversa aberta
   let comp = null;      // NGConversa
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
@@ -76,6 +78,7 @@
     ['esperando', 'Esperando resposta', (c) => c.cliente_esperando && !c.encerrada],
     ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada],
     ['abertas', 'Abertas', aberta],
+    ['fora', '⚠ Fora do NIOGEN', (c) => !!c.funil_alerta],   // 0147: resolvida ou respondida direto no Chatwoot
     ['todas', 'Todas', () => true],   // 12/11 (Ricardo: "toda conversa precisa aparecer no sistema"): inclui encerradas e silenciadas
     ['encerradas', 'Encerradas', (c) => c.encerrada],
   ];
@@ -97,8 +100,9 @@
     const { data, error } = await NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
     if (error) { itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
     lista = data || [];
-    const fu = await NG.furosJornada();
+    const [fu, fn] = await Promise.all([NG.furosJornada(), NG.funilNomes()]);
     furos = fu.ids || new Set();
+    fnome = fn;
     render();
   }
 
@@ -121,6 +125,8 @@
         <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(c.dono_nome === eu.nome ? 'você' : c.dono_nome)}` : 'sem dono'}
           ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${silenciada(c) ? '<span class="cv-sil" title="Silenciada: cliente Nio com suporte/reclamação. A Mari não responde e a conversa não volta para o Live. Para desfazer: Abrir a ficha › 🔔 Reativar.">· 📵 silenciada</span>' : c.encerrada ? '<span>· encerrada</span>' : c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
           ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
+          ${c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino) ? `<span class="cv-dest" title="Destino da conversa${c.funil_detalhe ? ': ' + esc(c.funil_detalhe) : ''}">· ${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>` : c.funil_etapa ? `<span class="cv-etp" title="Etapa mais alta alcançada">· ${esc(fnome.etapa[c.funil_etapa] || c.funil_etapa)}</span>` : ''}
+          ${c.funil_alerta ? `<span class="cv-furo" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">${c.funil_alerta === 'resolvida_fora_niogen' ? 'resolvida fora do NIOGEN' : 'respondida pelo Chatwoot'}</span>` : ''}
           ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>' : ''}</span>
       </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
   }
