@@ -94,6 +94,9 @@
   .cob2-mais > summary { cursor: pointer; font-size: 11.5px; color: var(--muted); }
   .cob2-mais[open] > summary { margin-bottom: 6px; }
   .cob2-vazio { font-size: 12px; color: var(--muted); padding: 4px 0; }
+  .cred-disse { margin-top: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.25); display: flex; flex-direction: column; gap: 2px; }
+  .cred-disse small { font-size: 11.5px; opacity: .8; }
+  .cred-disse q { font-size: 14px; font-weight: 600; quotes: '“' '”'; }
   .cred-popup { white-space: pre-wrap; font-size: 12px; padding: 10px; border-radius: 8px; background: var(--surface-dim); border: 1px solid var(--border); max-height: 140px; overflow-y: auto; }
   .cred-ofertas { display: grid; gap: 6px; }
 
@@ -563,7 +566,7 @@
       const rr = cred.r;
       let [rot] = ROT[rr.resultado] || [rr.resultado];
       if (rr.resultado === 'aprovado_parcial') rot = `Aprovado — ${(rr.formas_liberadas || []).map((f) => FORMA[f] || f).join(', ')}`;
-      lc = `Crédito: ${rot}${(rr.endereco || {}).origem === 'padrao' ? ' (endereço padrão)' : ''}`;
+      lc = `Crédito: ${rot}${(rr.endereco || {}).origem === 'padrao' ? ' (endereço padrão)' : ''}${rr.popup && rr.popup.texto ? ` — portal: "${String(rr.popup.texto).trim()}"` : ''}`;
     }
     const conc = decEl.hidden ? '' : ((decEl.querySelector('.cob-pill') || {}).textContent || '').trim();
     const linhas = [`📍 *${end}*`, lp, ld, lc, conc ? `➡️ *${conc}*` : ''].filter(Boolean);
@@ -906,7 +909,8 @@
     acoesCred = lista;
     const ofertas = padrao ? [] : (r.ofertas || []).filter((o) => o.nome || o.preco);
     credEl.innerHTML = `
-      <div class="cob-res cob-${cor}"><div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">Crédito · ${esc(rot)}</span></div><span>${esc(txt)}</span></div>
+      <div class="cob-res cob-${cor}"><div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">Crédito · ${esc(rot)}</span></div><span>${esc(txt)}</span>
+        ${r.popup && (r.popup.texto || r.popup.titulo) ? `<div class="cred-disse"><small>O portal respondeu${r.popup.etapa ? ` na etapa ${esc(r.popup.etapa)}` : ''}:</small><q>${esc([r.popup.titulo, r.popup.texto].filter(Boolean).join(' — ').replace(/\s*Ok\s*$/i, ''))}</q></div>` : ''}</div>
       ${r.motivo && ['erro', 'nao_classificado'].includes(r.resultado) ? `<span class="muted">${esc(r.motivo)}</span>` : ''}
       <details class="cob2-mais"${/^aprovado/.test(r.resultado) ? ' open' : ''}><summary>Dados do crédito</summary><div class="cob-dados">
         ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
@@ -919,7 +923,6 @@
       </div></details>
       ${ofertas.length ? `<details class="cob2-mais"><summary>Ofertas para este endereço (${ofertas.length})</summary><div class="cred-ofertas">${ofertas.map((o) =>
         `<div class="d-l"><span>${esc(o.nome)}</span><b>${esc([o.velocidade, o.preco, o.fidelidade === true ? 'com fidelidade' : o.fidelidade === false ? 'sem fidelidade' : ''].filter(Boolean).join(' · '))}</b></div>`).join('')}</div></details>` : ''}
-      ${r.popup ? `<details class="cob2-mais"><summary>Texto do portal${r.popup.titulo ? ` — ${esc(r.popup.titulo)}` : ''}</summary><div class="cred-popup">${esc(r.popup.texto || '')}</div></details>` : ''}
       ${!r.popup && r.texto_tela && r.resultado === 'nao_classificado' ? `<details class="cob2-mais" open><summary>Texto da tela</summary><div class="cred-popup">${esc(r.texto_tela)}</div></details>` : ''}`;
     credEl.hidden = false;
     credEl.style.cssText = 'display:flex;flex-direction:column;gap:8px';

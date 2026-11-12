@@ -2454,7 +2454,8 @@
     if (s.resultado === 'aprovado_parcial' && formas.length) rot = `Aprovado — ${formas.map((f) => FORMA_OP[f] || f).join(', ')}`;
     const so = s.resultado === 'aprovado_cartao' || (s.resultado === 'aprovado_parcial' && formas.length === 1 && formas[0] === 'CREDITO');
     const reg = so ? 'so_cartao' : /^aprovado/.test(s.resultado || '') ? 'aprovado' : s.resultado === 'negado' ? 'negado' : s.resultado === 'pendente' ? 'pendente' : null;
-    return { rot, det: s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP'),
+    const disse = s.popup && s.popup.texto ? `o portal respondeu: "${String(s.popup.texto).trim()}"` : '';
+    return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
       cls: /^aprovado/.test(s.resultado || '') ? 'ok' : s.resultado === 'negado' || s.resultado === 'pedido_em_andamento' ? 'bad' : 'warn', registrar: reg };
   }
   function opPainel(tipo) {
