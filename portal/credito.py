@@ -757,8 +757,13 @@ class Consulta:
                 break
             except Exception as e:  # noqa: BLE001
                 erros.append(f'{jeito}: {type(e).__name__}')
+                linhas = [x.strip() for x in str(e).splitlines() if x.strip()]
+                self.log(f'complemento {jeito}: ' + sem_pii(' | '.join(linhas[:2] + linhas[-4:]))[:300])
         if not aberto:
-            self.comp_erro = ' · '.join(erros) + ' · ' + self.sonda_complemento()
+            sonda = self.sonda_complemento()
+            self.log('complemento sonda: ' + sem_pii(sonda[:290]))
+            self.log('complemento sonda+: ' + sem_pii(sonda[290:580]))
+            self.comp_erro = ' · '.join(erros)
             return []
         try:
             if digitar:
