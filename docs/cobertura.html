@@ -910,7 +910,7 @@
     const ofertas = padrao ? [] : (r.ofertas || []).filter((o) => o.nome || o.preco);
     credEl.innerHTML = `
       <div class="cob-res cob-${cor}"><div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">Crédito · ${esc(rot)}</span></div><span>${esc(txt)}</span>
-        ${r.popup && (r.popup.texto || r.popup.titulo) ? `<div class="cred-disse"><small>O portal respondeu${r.popup.etapa ? ` na etapa ${esc(r.popup.etapa)}` : ''}:</small><q>${esc([r.popup.titulo, r.popup.texto].filter(Boolean).join(' — ').replace(/\s*Ok\s*$/i, ''))}</q></div>` : ''}</div>
+        ${r.popup && (r.popup.texto || r.popup.titulo) ? `<div class="cred-disse"><small>O portal respondeu${r.popup.etapa ? ` na etapa ${esc(r.popup.etapa)}` : ''}:</small><q>${esc([r.popup.titulo, r.popup.texto].filter(Boolean).join(' — ').replace(/\s+Ok\s*$/i, ''))}</q></div>` : ''}</div>
       ${r.motivo && ['erro', 'nao_classificado'].includes(r.resultado) ? `<span class="muted">${esc(r.motivo)}</span>` : ''}
       <details class="cob2-mais"${/^aprovado/.test(r.resultado) ? ' open' : ''}><summary>Dados do crédito</summary><div class="cob-dados">
         ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
