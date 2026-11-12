@@ -13,6 +13,8 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 
 ## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
 
+> **0.6.3 (12/11):** a orelha "Conversas da Mari" traz **todas** as conversas (qualquer status, resolvidas no Chatwoot, com pedido ou em saída; só o canal `teste` fica fora; até 1000, mais recentes primeiro), com selo do estado: pedido aberto · saída · encerrada · resolvida no Chatwoot · adiada. Antes: só ativo/handoff, não resolvida, sem pedido, até 80.
+>
 > **0.6.2 (12/11):** painel da venda sem rolagem — cabeçalho numa linha (← · nome · bairro · Portal|💬), jornada como régua de 7 passos numa linha (cor = estado/resultado, bolinha vermelha = faltas), **todas as ações no rodapé fixo** (Conduzir/Seguir/Parar, Preencher N/Destacar, Todos os dados, Concluir) e o recado (toast) dentro do rodapé; texto do portal na parada fica recolhido em "O que o portal disse". Conferido em 360×900 e 360×700 sem rolagem.
 >
 > **0.6.1 (12/11):** as regras de liberação (portabilidade, leitura do carrinho) usavam `{1,40}` e o Chrome recusava a 7401 por passar de 2 KB compilada ("Travas de rede desligadas"). Agora sem repetição contada; o painel confere cada regex com `isRegexSupported` antes de ligar e o teste barra `{n,m}`.

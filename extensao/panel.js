@@ -312,10 +312,11 @@
     if (!podeVerConversas()) { S.convs = []; desenha(); return; }
     S.convsCarregando = true; S.convsErro = ''; desenha();
     try {
-      const q = `/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&status=in.(ativo,handoff_realizado)&canal=neq.teste`
-        + '&or=(chatwoot_status.is.null,chatwoot_status.neq.resolved)&order=updated_at.desc&limit=80';
-      const r = (await api(q)) || [];
-      S.convs = r.filter((c) => !(c.venda && (c.venda.nio_pedido || c.venda.status === 'saida')));
+      // 0.6.3 (Ricardo, 12/11): TODAS as conversas da Mari — qualquer status, resolvida no Chatwoot ou não, com pedido ou não.
+      // Só o canal de teste fica fora. O estado de cada uma aparece num selo (statusConversa).
+      const q = `/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&or=(canal.is.null,canal.neq.teste)`
+        + '&order=updated_at.desc&limit=1000';
+      S.convs = (await api(q)) || [];
     } catch (e) { S.convsErro = e.message; S.convs = S.convs || []; }
     S.convsCarregando = false; desenha();
   }
@@ -797,6 +798,16 @@
       S.aba === 'conversas' ? telaConversas() : telaFila()];
   }
 
+  // Selo do estado da conversa (a lista agora traz todas): pedido aberto, saída, encerrada, resolvida no Chatwoot.
+  function statusConversa(c) {
+    const v = c.venda || {};
+    if (v.nio_pedido) return h('span', { class: 'chip ok' }, 'pedido aberto');
+    if (v.status === 'saida') return h('span', { class: 'chip bad' }, 'saída');
+    if (c.status && !['ativo', 'handoff_realizado'].includes(c.status)) return h('span', { class: 'chip' }, 'encerrada');
+    if (c.chatwoot_status === 'resolved') return h('span', { class: 'chip' }, 'resolvida no Chatwoot');
+    if (c.chatwoot_status === 'snoozed') return h('span', { class: 'chip' }, 'adiada');
+    return null;
+  }
   function telaConversas() {
     if (!podeVerConversas()) return h('p', { class: 'sub' }, 'As conversas da Mari aparecem só para admin e backoffice.');
     const b = semAcento(S.busca).trim(), bDig = so(S.busca);
@@ -813,18 +824,19 @@
         h('span', {},
           h('span', { class: `chip ${temEnd ? 'ok' : 'bad'}` }, temEnd ? 'CEP e número' : 'sem CEP/número'), ' ',
           h('span', { class: `chip ${temDoc ? 'ok' : ''}` }, temDoc ? 'CPF' : 'sem CPF'), ' ',
-          c.venda_id ? h('span', { class: 'chip acc' }, 'já é venda') : null)),
+          c.venda_id ? h('span', { class: 'chip acc' }, 'já é venda') : null, ' ',
+          statusConversa(c))),
         h('button', { class: 'btn btn-sm item-ler', type: 'button', title: 'Ler a conversa do Chatwoot', onclick: () => abreConversa(c, 'conversa') }, '💬 Ler conversa'));
     });
     return [
       h('div', { class: 'card' },
-        h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('h2', { style: 'flex:1' }, 'Conversas em andamento'),
+        h('div', { style: 'display:flex;align-items:center;gap:8px' }, h('h2', { style: 'flex:1' }, 'Todas as conversas da Mari'),
           h('button', { class: 'btn btn-sm', type: 'button', onclick: carregaConversas, disabled: S.convsCarregando }, S.convsCarregando ? 'Atualizando…' : 'Atualizar')),
         h('span', { class: 'sub' }, 'Para consultar o portal antes de a venda ser qualificada. A extensão usa o que a Mari já coletou; o que faltar, pergunte na conversa.'),
         h('input', { type: 'text', id: 'in-busca', placeholder: 'Buscar por nome, telefone, bairro ou cidade', autocomplete: 'off', value: S.busca,
           oninput: (ev) => { S.busca = ev.target.value; desenha(); } }),
         S.convsErro ? h('div', { class: 'erro' }, S.convsErro) : null),
-      S.convs && !lista.length && !S.convsErro && !S.convsCarregando ? h('p', { class: 'sub' }, S.busca ? 'Nenhuma conversa com essa busca.' : 'Nenhuma conversa em andamento agora.') : null,
+      S.convs && !lista.length && !S.convsErro && !S.convsCarregando ? h('p', { class: 'sub' }, S.busca ? 'Nenhuma conversa com essa busca.' : 'Nenhuma conversa da Mari ainda.') : null,
       h('div', { class: 'fila' }, itens),
     ];
   }
