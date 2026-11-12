@@ -25,11 +25,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=121126-5">
-<script src="config.js?v=111126-18"></script>
+<script src="config.js?v=111126-19"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-18"></script>
+<script src="assets/app.js?v=111126-19"></script>
 <script src="assets/sidebar.js?v=121126-5"></script>
-<script src="assets/novavenda.js?v=111126-18"></script>
+<script src="assets/novavenda.js?v=111126-19"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
   .main.cob2 { gap: 12px; padding: 16px 22px 12px; }
@@ -128,6 +128,7 @@
   .cob2-print-topo .btn { margin-left: auto; min-height: 30px; font-size: 12px; }
   .cob2-print-img { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 16px; }
   .cob2-print-img img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, .6); }
+  .uni-bloco { display: flex; flex-direction: column; gap: 10px; }
   .cob2-onde { color: var(--muted); cursor: help; white-space: nowrap; font-size: 12px; }
 
   @media (min-width: 1025px) {
@@ -434,15 +435,64 @@
       <div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">${esc(rot)}</span><span class="muted">${carimbo}</span></div>
       <span>${txt}</span>
     </div>`;
+  // ------------------------------------------------------------ Forms "Tratamento nacional de endereço - NIO" já preenchido
+  // (11/11 ~23h20, pedido do Ricardo). Mesmo formulário para "Pedir liberação" (200 m) e "Pedir cadastro da unidade".
+  // Ficam para a pessoa: coordenada (Maps) e a foto. Valores das listas = texto exato do Forms.
+  const FORMS_NIO = {   // TODO regra 15: mover para config no Supabase (parceiro_id) quando houver 2º parceiro
+    executivo: 'ROGERIO PEREIRA PACHECO', canal: 'PAP', empresa: 'DHARMA', sap: '1069521',   // SAP = código do PDV (rascunho do Ricardo, 11/11)
+    e: { sap: 98401140, executivo: 1446139771, canal: 1657894342, email: 1046842637, empresa: 1496414418, uf: 81810683, cep: 1307779506,
+      cidade: 1889792069, tipoLog: 559365206, logradouro: 1115141868, bairro: 2063972096, numero: 1765507466, complemento: 1597331614,
+      vizinhos: 386386775, obs: 1647236246 },
+  };
+  const UF_NOME = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santos',
+    GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+    PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima',
+    SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
+  const TIPO_LOG = [[/^(r|rua)\.?$/i, 'Rua'], [/^(av|avenida)\.?$/i, 'Avenida'], [/^(al|alameda)\.?$/i, 'Alameda'], [/^beco$/i, 'Beco'],
+    [/^(tv|trav|travessa)\.?$/i, 'Travessa'], [/^(rod|rodovia)\.?$/i, 'Rodovia'], [/^servid[aã]o$/i, 'Servidão']];
+  const titulo = (t) => String(t || '').toLowerCase().replace(/(^|[\s(-])([a-zà-ú])/g, (m, a, b) => a + b.toUpperCase()).replace(/ (De|Da|Do|Das|Dos|E)(?= )/g, (m) => m.toLowerCase());
+  function formsUrl(base, motivo) {
+    if (!base) return null;
+    const e = ultimo || endereco();
+    const s = (portal && portal.s) || {};
+    const r = (dfv && dfv.estado === 'pronto' && dfv.r && dfv.r.fonte !== 'base_congelada') ? dfv.r : {};
+    // "Rua Almirante Barroso, 170 - Paineiras, Juiz De Fora - MG" (portal) → rua, bairro, cidade, UF; senão, o DFV
+    const m = String((s.endereco && s.endereco.resolvido) || '').match(/^(.+?),\s*[^,]*?-\s*(.+?),\s*(.+?)\s*-\s*([A-Z]{2})\s*$/);
+    let rua = m ? m[1] : titulo(r.logradouro);
+    const bairro = m ? m[2] : titulo(r.bairro);
+    const cidade = m ? titulo(m[3]) : titulo((r.entrada || {}).municipio);
+    const uf = m ? m[4] : String((r.entrada || {}).uf || '').toUpperCase();
+    let tipo = '';
+    const pal = rua.split(/\s+/);
+    const achado = TIPO_LOG.find(([re]) => re.test(pal[0] || ''));
+    if (achado) { tipo = achado[1]; rua = pal.slice(1).join(' '); } else if (rua) tipo = 'Outros';
+    const alvo = parseInt(String(e.numero || '').replace(/\D/g, ''), 10);
+    const viz = (r.fachadas_no_cep || []).map((x) => ({ n: String(x.numero || ''), c: comp(x), d: Math.abs((parseInt(String(x.numero).replace(/\D/g, ''), 10) || 1e9) - (alvo || 0)) }))
+      .filter((x) => x.n && x.n !== String(e.numero)).sort((a, b) => a.d - b.d).slice(0, 6);
+    const quando = s.consultado_em ? NG.fmtHora(s.consultado_em) : '';
+    const obs = motivo === 'cadastro'
+      ? `Pedido de cadastro da unidade "${e.complemento || '—'}". Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): a unidade não está na lista do endereço${s.opcoes && s.opcoes.lista ? ` (${s.opcoes.lista.length} unidades cadastradas)` : ''}. Enviado pelo NIOGEN (Dharma Telecom).`
+      : `Pedido de liberação pela regra dos 200 m. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): ${viz.length ? `fachada viável mais próxima no CEP: nº ${viz[0].n}` : 'fachadas viáveis no CEP'}. Enviado pelo NIOGEN (Dharma Telecom).`;
+    const v = {
+      sap: FORMS_NIO.sap, executivo: FORMS_NIO.executivo, canal: FORMS_NIO.canal, email: eu.email || '', empresa: FORMS_NIO.empresa,
+      uf: UF_NOME[uf] || '', cep: e.cep || '', cidade, tipoLog: tipo, logradouro: rua, bairro, numero: e.numero || '0', complemento: e.complemento || '',
+      vizinhos: viz.length ? `Viáveis no DFV (mesmo CEP): ${viz.map((x) => `nº ${x.n}${x.c ? ` ${x.c}` : ''}`).join(', ')}` : '',
+      obs,
+    };
+    const u = new URL(base);
+    u.searchParams.set('usp', 'pp_url');
+    Object.entries(v).forEach(([k, val]) => { if (val) u.searchParams.set(`entry.${FORMS_NIO.e[k]}`, val); });
+    return u.toString();
+  }
   const BT = {
     pedido: '<button type="button" class="btn btn-acc" data-criar>＋ Abrir pedido com este endereço</button>',
     credito: podeCredito ? '<button type="button" class="btn" data-ir-credito>Consultar crédito</button>' : '',
     padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ endereço padrão</button>' : '',
     mapa: '<button type="button" class="btn" data-abrir-painel>Ver no mapa (200 m)</button>',
     liberacao: () => (linkLiberacao
-      ? `<a class="btn btn-acc" href="${esc(linkLiberacao)}" target="_blank" rel="noopener noreferrer">Pedir liberação (formulário) ↗</a>`
+      ? `<a class="btn btn-acc" href="${esc(formsUrl(linkLiberacao, 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
       : '<span class="chip warn" title="config_links.nio_pedido_liberacao">Pedir liberação: formulário ainda não cadastrado no NIOGEN — pedir ao Rogério</span>'),
-    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(linkCadastro)}" target="_blank" rel="noopener noreferrer">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
+    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(formsUrl(linkCadastro, 'cadastro'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
     conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
   };
 
