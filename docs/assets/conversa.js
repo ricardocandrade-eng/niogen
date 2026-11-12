@@ -23,6 +23,8 @@
   const ETIQUETAS = ['interesse-futuro', 'nao-contatar', 'handoff-humano', 'handoff-venda', 'biometria-pendente', 'instalacao-agendada'];
   let rapidasCache = null;
   let tplCache = null;
+  let semColunaMidia = false;
+  const urlsMidia = new Map();   // caminho no bucket → { url, ate } (URL assinada de 1 h, pedida em lote)
 
   // Texto do turno: mídia vira "📎 … · ouvir/ver no Chatwoot"; marcações internas da Mari somem.
   function textoTurno(t) {
@@ -112,7 +114,12 @@
 
     // ---------- dados ----------
     const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
-    const SEL_TURNO = 'id, papel, texto, tags, created_at';
+    // 12/11 (0145): midia = áudio/foto do cliente no bucket privado. Banco sem a coluna ainda → cai para a lista antiga.
+    const SEL_TURNO_BASE = 'id, papel, texto, tags, created_at';
+    const selTurno = () => (semColunaMidia ? SEL_TURNO_BASE : `${SEL_TURNO_BASE}, midia`);
+    const qTurnosDe = (id, ult) => (ult
+      ? NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
+      : NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400));
     const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200);
     // 11/11 (Live lenta): leve = a atualização de 4 s. Antes cada rodada baixava de novo as 400 mensagens, as 200 ações e a
     // v_jornada; agora traz só as mensagens novas (depois da última), o cabeçalho e as ações. A carga completa fica para a
@@ -121,9 +128,10 @@
       const id = o.conversaId;
       const meu = ++st.seq;
       const ult = leve === true && st.d && st.d.turnos.length ? st.d.turnos[st.d.turnos.length - 1].created_at : null;
-      const qTurnos = ult
-        ? NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
-        : NG.sb.from('mari_turnos').select(SEL_TURNO).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400);
+      const qTurnos = qTurnosDe(id, ult).then((r) => {
+        if (r.error && !semColunaMidia && /midia/i.test(String(r.error.message || ''))) { semColunaMidia = true; return qTurnosDe(id, ult); }
+        return r;
+      });
       // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
       // 11/11: não segura as mensagens — entra quando a jornada chegar.
       NG.jornadaLinha({ conversaComVenda: id }).then((vj) => {
@@ -167,6 +175,7 @@
         st.foco = true;
       }
       desenhar();
+      pedirUrls();
       if (o.oportunidade && st.opPosta) ajusta();
       if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); st.foco = false; }
     }
@@ -216,7 +225,7 @@
       // etiquetas em chips finos com o "+ etiqueta" do mesmo tamanho.
       troca('cab', cab, `<div class="cvp-topo">${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
         <b class="cvp-nome" title="${esc(nome)}">${esc(nome)}</b>
-        ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Só para ouvir áudio ou ver foto: responda por aqui">Chatwoot (áudio/foto) ↗</a>` : ''}
+        ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Áudio e foto aparecem aqui na conversa. O Chatwoot fica para vídeo e documento — responda por aqui">Chatwoot ↗</a>` : ''}
         ${o.aoConcluir ? '<button type="button" class="btn btn-acc btn-sm" data-cv="concluir" title="Terminou com este cliente? Fecha o caso e abre o próximo da fila. Até apertar aqui, a conversa fica aberta.">✓ Concluir</button>' : ''}</div>
         <div class="cvp-chips">
         <select class="cvp-pill" data-cv="status" aria-label="Status da conversa" title="Status da conversa"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select>
@@ -237,7 +246,7 @@
         const txt = textoTurno(t.texto);
         if (!txt) return;
         if (t.papel === 'sistema') { its.push({ em: t.created_at, tipo: 'sis', txt: txt.replace(/^\[|\]$/g, '') }); return; }
-        its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt,
+        its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: t.papel === 'lead' && Array.isArray(t.midia) ? t.midia : null,
           quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
       });
       d.acoes.forEach((a) => {
@@ -259,17 +268,82 @@
       its.sort((a, b) => new Date(a.em) - new Date(b.em));
       return its;
     }
+    // ---------- mídia do cliente (0145): player + transcrição, miniatura da foto ----------
+    // URLs assinadas de 1 h, num lote só por rodada; só pede o que falta (ou vence em < 5 min). Falhou → não repete por 10 min.
+    let pedindoUrls = false;
+    async function pedirUrls() {
+      if (pedindoUrls || !st.d) return;
+      const falta = new Set();
+      st.d.turnos.forEach((t) => (Array.isArray(t.midia) ? t.midia : []).forEach((m) => {
+        if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
+        const u = urlsMidia.get(m.caminho);
+        if (!u || u.ate < Date.now() + 5 * 60000) falta.add(m.caminho);
+      }));
+      if (!falta.size) return;
+      pedindoUrls = true;
+      try {
+        const lista = [...falta];
+        const { data, error } = await NG.sb.storage.from('midia_conversas').createSignedUrls(lista, 3600);
+        const ok = new Set();
+        if (!error) (data || []).forEach((r) => { if (r && r.signedUrl && r.path) { urlsMidia.set(r.path, { url: r.signedUrl, ate: Date.now() + 55 * 60000 }); ok.add(r.path); } });
+        lista.filter((c) => !ok.has(c)).forEach((c) => urlsMidia.set(c, { url: null, ate: Date.now() + 10 * 60000 }));
+      } finally { pedindoUrls = false; }
+      if (st.vivo) desenharMsgs();
+    }
+    function htmlMidia(midia, txt) {
+      let resto = String(txt || '');
+      const partes = [];
+      midia.forEach((m) => {
+        if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
+        const u = urlsMidia.get(m.caminho);
+        const url = u && u.url ? u.url : null;
+        const falhou = u && !u.url;
+        if (m.tipo === 'audio') {
+          if (m.transcricao) resto = resto.replace(`🎤 (áudio) ${m.transcricao}`, '');
+          resto = resto.replace('📎 áudio do cliente · ouvir no Chatwoot', '');
+          const player = url ? `<audio controls preload="metadata" src="${esc(url)}"></audio>`
+            : `<span class="cvp-carrega">${falhou ? '🎤 áudio indisponível · ouvir no Chatwoot' : '🎤 carregando o áudio…'}</span>`;
+          const tr = m.transcricao ? `<details class="cvp-transc" open><summary>Transcrição</summary><span>${esc(m.transcricao)}</span></details>`
+            : '<small class="cvp-transc-sem">sem transcrição</small>';
+          partes.push(`<div class="cvp-audio">${player}${tr}</div>`);
+        } else {
+          resto = resto.replace('📎 foto do cliente · ver no Chatwoot', '');
+          partes.push(url ? `<button type="button" class="cvp-foto" data-cv="foto" data-url="${esc(url)}" aria-label="Abrir a foto em tamanho grande"><img src="${esc(url)}" alt="Foto do cliente" loading="lazy"></button>`
+            : `<span class="cvp-carrega">${falhou ? '📷 foto indisponível · ver no Chatwoot' : '📷 carregando a foto…'}</span>`);
+        }
+      });
+      if (!partes.length) return null;
+      return { html: partes.join(''), txt: resto.replace(/\n{2,}/g, '\n').trim() };
+    }
+    function abrirFoto(url) {
+      const ov = document.createElement('div');
+      ov.className = 'cvp-foto-grande';
+      ov.setAttribute('role', 'dialog');
+      ov.setAttribute('aria-label', 'Foto do cliente');
+      ov.innerHTML = `<img src="${esc(url)}" alt="Foto do cliente"><button type="button" class="btn btn-sm" aria-label="Fechar">Fechar ✕</button>`;
+      const fechar = () => { ov.remove(); document.removeEventListener('keydown', esc1, true); };
+      const esc1 = (ev) => { if (ev.key === 'Escape') { ev.stopPropagation(); fechar(); } };
+      ov.addEventListener('click', fechar);
+      document.addEventListener('keydown', esc1, true);
+      document.body.appendChild(ov);
+    }
+
     function desenharMsgs() {
       const its = itensMsgs();
       let dia = '';
       const html = its.map((x) => {
         const sep = diaRot(x.em) !== dia ? `<div class="cvp-dia"><span>${esc((dia = diaRot(x.em)))}</span></div>` : '';
         if (x.tipo === 'sis') return `${sep}<div class="cvp-b sis">${esc(x.txt)} · ${esc(NG.fmtHora(x.em))}</div>`;
-        return `${sep}<div class="cvp-b ${x.tipo}${x.erro ? ' falhou' : ''}${x.tick === '🕓' ? ' pend' : ''}">${x.quem ? `<small class="cvp-quem">${esc(x.quem)}</small>` : ''}<span class="cvp-t">${fmtWa(x.txt)}</span>
+        const md = x.midia ? htmlMidia(x.midia, x.txt) : null;
+        const corpo = md ? `${md.html}${md.txt ? `<span class="cvp-t">${fmtWa(md.txt)}</span>` : ''}` : `<span class="cvp-t">${fmtWa(x.txt)}</span>`;
+        return `${sep}<div class="cvp-b ${x.tipo}${md ? ' com-midia' : ''}${x.erro ? ' falhou' : ''}${x.tick === '🕓' ? ' pend' : ''}">${x.quem ? `<small class="cvp-quem">${esc(x.quem)}</small>` : ''}${corpo}
           <span class="cvp-h">${esc(NG.fmtHora(x.em))}${x.tick ? ` <i class="cvp-tick" title="${x.tick === '✓' ? 'entregue ao Chatwoot' : x.tick === '🕓' ? 'enviando' : 'não saiu'}">${x.tick}</i>` : ''}</span>
           ${x.erro ? `<span class="cvp-erro">${esc(x.erro)}${x.reenviar ? ` · <button type="button" class="link" data-cv="reenviar" data-txt="${esc(x.reenviar)}"${x.local ? ` data-local="${esc(x.local)}"` : ''}>Reenviar</button>` : ''}</span>` : ''}</div>`;
       }).join('') || '<div class="cvp-b sis">Sem mensagens ainda</div>';
       if (st.sig.msgs === html) return;
+      // Áudio tocando: não redesenha (cortaria o áudio). Redesenha quando ele pausar ou acabar.
+      if ([...msgs.querySelectorAll('audio')].some((a) => !a.paused && !a.ended)) { st.adiar = true; return; }
+      st.adiar = false;
       const noFim = msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60 || !st.sig.msgs;
       const antes = st.nMsgs;
       st.sig.msgs = html;
@@ -401,6 +475,9 @@
       if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); ev.stopPropagation(); enviar(); return; }
       if (ev.key === 'Escape' && st.tpl) { ev.stopPropagation(); st.tpl = null; ta.value = ''; ajusta(); desenhar(); }
     });
+    const aoParar = () => { if (st.adiar) desenharMsgs(); };
+    msgs.addEventListener('pause', aoParar, true);
+    msgs.addEventListener('ended', aoParar, true);
     msgs.addEventListener('scroll', () => { if (msgs.scrollHeight - msgs.scrollTop - msgs.clientHeight < 60) novas.hidden = true; });
     el.addEventListener('click', (ev) => {
       const b = ev.target.closest('[data-cv]');
@@ -409,6 +486,7 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'foto') { abrirFoto(b.dataset.url); return; }
       if (a === 'emoji') { if (emoEl.hidden) emoAbrir(); else emoFechar(); return; }
       if (a === 'emo-aba') { st.emoAba = Number(b.dataset.i) || 0; emoDesenhar(); return; }
       if (a === 'emo-x') { emoInserir(b.dataset.e); return; }

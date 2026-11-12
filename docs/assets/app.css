@@ -2344,3 +2344,15 @@ body.lv-com-cliente .mv-feito { display: none; }
 .cvp-emo-grade button:hover, .cvp-emo-grade button:focus-visible { background: var(--surface-2); outline: none; }
 .cvp-raiz.cheia .cvp-emo-bt { background: #12161C; border-color: #252B34; }
 @media (max-width: 900px) { .cvp-emo { width: auto; right: 0; } .cvp-emo-grade { grid-template-columns: repeat(7, 1fr); } }
+/* 12/11 (0145) — áudio e foto do cliente na conversa */
+.cvp-b.com-midia { max-width: min(360px, 82%); }
+.cvp-audio { display: flex; flex-direction: column; gap: 4px; margin: 2px 0 4px; }
+.cvp-audio audio { width: 260px; max-width: 100%; height: 36px; }
+.cvp-transc { font-size: 12.5px; line-height: 1.4; color: var(--text); }
+.cvp-transc summary { cursor: pointer; font-size: 11px; color: var(--muted); list-style: revert; }
+.cvp-transc span { display: block; margin-top: 2px; white-space: pre-wrap; }
+.cvp-transc-sem, .cvp-carrega { font-size: 11.5px; color: var(--muted); }
+.cvp-foto { display: block; padding: 0; margin: 2px 0 4px; border: 0; border-radius: 8px; background: none; cursor: zoom-in; overflow: hidden; }
+.cvp-foto img { display: block; max-width: 220px; max-height: 220px; width: auto; height: auto; border-radius: 8px; object-fit: cover; }
+.cvp-foto-grande { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 16px; background: rgba(0,0,0,.86); cursor: zoom-out; }
+.cvp-foto-grande img { max-width: 100%; max-height: calc(100vh - 80px); border-radius: 8px; }

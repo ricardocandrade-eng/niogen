@@ -4,7 +4,8 @@
 // Modo 'teste': não há Chatwoot → sempre "sem humano".
 // Modo 'chatwoot': lê a resposta do nó "2g · Chatwoot conversa" (GET da conversa). Fail-open.
 
-const e = $('2 · Entrada').first().json;
+// 12/11 (0145): com mídia, a entrada que vale é a do 2b8 · Juntar mídia (texto com a transcrição + lista de mídia).
+const e = (() => { try { if ($('2b8 · Juntar mídia').isExecuted) return $('2b8 · Juntar mídia').first().json; } catch (x) { /* sem mídia */ } return $('2 · Entrada').first().json; })();
 if (e.modo !== 'chatwoot') return [{ json: { ...e, humano: false, guard: 'sem humano (modo teste)' } }];
 
 const c = $input.first().json || {};

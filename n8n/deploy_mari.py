@@ -125,6 +125,10 @@ CRED_CHATWOOT = 'Chatwoot Nio'                         # header api_access_token
 # 09/11 (pendência 33): a Mari fala no Chatwoot como Agent Bot "Mari" (id em config_links 'chatwoot_mari_bot'; não ocupa
 # assento; fala aparece com nome e foto dela e sender.type = agent_bot). O bot não pode editar contato (401 "not authorized
 # for bots") → só o 9k · Chatwoot nome segue com o token do Ricardo. O bot NÃO está ligado à caixa 153431 (não precisa).
+# 12/11 (0145): transcrição do áudio (OpenAI gpt-4o-mini-transcribe). Credencial do tipo openAiApi criada à mão no n8n pelo
+# Ricardo; o id entra em mari_ids.json → credenciais.transcricao. Sem o id, o nó 2b7 sobe DESLIGADO (áudio → frase fixa + mari_erros).
+CRED_TRANSCRICAO = 'Transcrição Nio'
+MODELO_TRANSCRICAO = 'gpt-4o-mini-transcribe'
 CRED_CHATWOOT_BOT = 'Chatwoot Nio — Mari bot'          # header api_access_token = access_token do Agent Bot (só no n8n)
 HEADER_TESTE = 'X-Mari-Secret'
 
@@ -228,6 +232,8 @@ CODE = {
     '3e · Espera lock': 'n03e_espera_lock.js',
     '4 · Preparar': 'n04_preparar.js',
     '2c · Mídia': 'n02c_midia.js',
+    '2b · Anexos': 'n02b_anexos.js',                         # 12/11 (0145): áudio e foto no bucket + transcrição
+    '2b8 · Juntar mídia': 'n02b8_juntar.js',
     '5a · Conteúdo Mari': 'n05a_conteudo.js',
     '5b · Motor': 'n05b_motor.js',
     '5c · Pedido de correção': 'n05c_correcao.js',
@@ -319,6 +325,64 @@ def build(ids):
       add('1r · OK Chatwoot', 'n8n-nodes-base.respondToWebhook', 1.1, {
         'respondWith': 'noData', 'options': {}}, 110, 300)
     code('2 · Entrada', 220, 100)
+    # ── 12/11 (0145, docs/Prompt_midia_transcricao_121126_0230.md): áudio e foto do cliente ──
+    # Só mensagem do cliente pelo Chatwoot com áudio/imagem ≤ 16 MB. Cada anexo: baixa pelo data_url do Chatwoot (abre sem
+    # login — conferido em 12/11), sobe no bucket PRIVADO midia_conversas e ganha um link de 15 min (só para o Claude ver a
+    # foto). Áudio sem a transcrição do próprio Chatwoot → baixa de novo e transcreve (2b7). O 2b8 junta tudo numa entrada só
+    # e devolve ao fluxo normal (2z). Toda chamada com onError = segue: a mídia nunca derruba a mensagem.
+    iff('2a · Tem mídia?', "={{ $json.modo === 'chatwoot' && $json.baixarMidia === true && !$json.registrar }}", 220, -400)
+    code('2b · Anexos', 330, -560)
+    add('2b1 · Baixar mídia', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': '={{ $json.url }}',
+        'options': {'timeout': 30000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'data'}}}},
+        440, -560, onError='continueRegularOutput',
+        notes='0145 — data_url do anexo no Chatwoot (redireciona para o S3 do Chatwoot; sem token).')
+    add('2b2 · Subir mídia', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': f"={SB}/storage/v1/object/midia_conversas/{{{{ $('2b · Anexos').item.json.caminho }}}}",
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendHeaders': True, 'headerParameters': {'parameters': [
+            {'name': 'x-upsert', 'value': 'true'},
+            {'name': 'Content-Type', 'value': "={{ $('2b · Anexos').item.json.mime }}"}]},
+        'sendBody': True, 'contentType': 'binaryData', 'inputDataFieldName': 'data',
+        'options': {'timeout': 30000}}, 550, -560, credentials=sb_cred, onError='continueRegularOutput',
+        notes='0145 — bucket PRIVADO midia_conversas (service role). Leitura só admin/backoffice logado (URL assinada no front).')
+    add('2b3 · Link IA', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST',
+        'url': f"={SB}/storage/v1/object/sign/midia_conversas/{{{{ $('2b · Anexos').item.json.caminho }}}}",
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ expiresIn: 900 }) }}',
+        'options': {'timeout': 15000}}, 660, -560, credentials=sb_cred, onError='continueRegularOutput',
+        notes='0145 — link de 15 min para o Claude ver a foto da mensagem atual (5b · Motor). Vence sozinho.')
+    iff('2b4 · Transcrever?', "={{ $('2b · Anexos').all().some((i) => i.json.transcrever === true) }}", 770, -560)
+    add('2b5 · Só áudios', 'n8n-nodes-base.filter', 2, {
+        'conditions': {
+            'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'strict'},
+            'conditions': [{'id': str(uuid.uuid5(uuid.NAMESPACE_URL, '2b5 · Só áudios')),
+                            'leftValue': "={{ $('2b · Anexos').item.json.transcrever === true }}", 'rightValue': '',
+                            'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
+            'combinator': 'and'},
+        'options': {}}, 880, -700)
+    add('2b6 · Baixar áudio', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': "={{ $('2b · Anexos').item.json.url }}",
+        'options': {'timeout': 30000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'data'}}}},
+        990, -700, onError='continueRegularOutput')
+    tr_id = cred.get('transcricao', '')
+    tr_extra = {'credentials': {'openAiApi': {'id': tr_id, 'name': CRED_TRANSCRICAO}}} if tr_id else {'disabled': True}
+    add('2b7 · Transcrever', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': 'https://api.openai.com/v1/audio/transcriptions',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'openAiApi',
+        'sendBody': True, 'contentType': 'multipart-form-data',
+        'bodyParameters': {'parameters': [
+            {'parameterType': 'formBinaryData', 'name': 'file', 'inputDataFieldName': 'data'},
+            {'name': 'model', 'value': MODELO_TRANSCRICAO},
+            {'name': 'language', 'value': 'pt'},
+            {'name': 'response_format', 'value': 'json'}]},
+        'options': {'timeout': 60000}}, 1100, -700, onError='continueRegularOutput',
+        notes=f'0145 — transcrição em português ({MODELO_TRANSCRICAO}), credencial "{CRED_TRANSCRICAO}" (só no n8n). '
+              'Sem a credencial o nó fica DESLIGADO: o áudio cai na frase fixa do 2c e o motivo vai para mari_erros.',
+        **tr_extra)
+    code('2b8 · Juntar mídia', 1210, -560)
     # v7 (prompt 27 B2): status do Chatwoot (status, agente, time, etiquetas) em TODO evento já validado no 2 · Entrada,
     # antes dos guards e sem mudar o fluxo da Mari. Evento só de conversa = só o status.
     iff('2z · Só status?', '={{ $json.soStatus === true }}', 330, -100)
@@ -381,11 +445,11 @@ def build(ids):
     # Mari calada (humano/time/resolvida): a fala do cliente entra no histórico mesmo assim, sem resposta.
     rpc('2r · Supabase registrar calado', 'mari_registrar_turno',
         "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_papel: 'lead', "
-        "p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 1540, 100)
+        "p_canal: $json.canal, p_chatwoot_conversation_id: $json.chatwootConversationId, p_midia: $json.midia || null }) }}", 1540, 100)
 
     rpc('3a · Supabase entrada', 'mari_entrada',
         "={{ JSON.stringify({ p_telefone: $json.telefone, p_nome: $json.nome, p_texto: $json.texto, p_canal: $json.canal, "
-        "p_origem: $json.origem, p_chatwoot_conversation_id: $json.chatwootConversationId }) }}", 1540, 300)
+        "p_origem: $json.origem, p_chatwoot_conversation_id: $json.chatwootConversationId, p_midia: $json.midia || null }) }}", 1540, 300)
     iff('3b · Silêncio?', '={{ $json.silencio === true }}', 1760, 300)
     add('3w · Debounce 2s', 'n8n-nodes-base.wait', 1.1, {'amount': 2, 'unit': 'seconds'}, 1980, 400,
         webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/3w'))))
@@ -543,7 +607,19 @@ def build(ids):
         ('1 · Webhook Mari teste', 0, '2 · Entrada'),
         ('1c · Webhook Chatwoot', 0, '1r · OK Chatwoot'),
         ('1r · OK Chatwoot', 0, '2 · Entrada'),
-        ('2 · Entrada', 0, '2z · Só status?'),
+        ('2 · Entrada', 0, '2a · Tem mídia?'),
+        ('2a · Tem mídia?', 0, '2b · Anexos'),
+        ('2a · Tem mídia?', 1, '2z · Só status?'),
+        ('2b · Anexos', 0, '2b1 · Baixar mídia'),
+        ('2b1 · Baixar mídia', 0, '2b2 · Subir mídia'),
+        ('2b2 · Subir mídia', 0, '2b3 · Link IA'),
+        ('2b3 · Link IA', 0, '2b4 · Transcrever?'),
+        ('2b4 · Transcrever?', 0, '2b5 · Só áudios'),
+        ('2b4 · Transcrever?', 1, '2b8 · Juntar mídia'),
+        ('2b5 · Só áudios', 0, '2b6 · Baixar áudio'),
+        ('2b6 · Baixar áudio', 0, '2b7 · Transcrever'),
+        ('2b7 · Transcrever', 0, '2b8 · Juntar mídia'),
+        ('2b8 · Juntar mídia', 0, '2z · Só status?'),
         ('2z · Só status?', 0, '2t · Supabase status'),
         ('2z · Só status?', 1, '2e · Encerrar?'),
         ('2z · Só status?', 1, '2s · Tem status?'),

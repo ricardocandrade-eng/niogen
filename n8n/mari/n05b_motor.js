@@ -388,6 +388,22 @@ const corteHist = (() => {
 })();
 // @ensaio-fim
 
+// 12/11 (0145, docs/Prompt_midia_transcricao_121126_0230.md): a FOTO da mensagem de agora vai ao Claude como imagem (link
+// assinado de 15 min do bucket privado, gerado no 2b3). Só a da mensagem atual (custo); o histórico segue em texto.
+// Áudio já chega transcrito no texto ("🎤 (áudio) …"). Até 3 fotos por turno.
+const fotosAgora = (Array.isArray(cons.midia) ? cons.midia : [])
+  .filter((m) => m && m.tipo === 'imagem' && m.url_ia && (!m.url_ia_ate || new Date(m.url_ia_ate) > new Date()))
+  .slice(0, 3);
+if (fotosAgora.length && msgs.length && msgs[msgs.length - 1].role === 'user') {
+  const ult = msgs[msgs.length - 1];
+  ult.content = [
+    ...fotosAgora.map((f) => ({ type: 'image', source: { type: 'url', url: f.url_ia } })),
+    { type: 'text', text: `${ult.content}\n\n[Sistema: ${fotosAgora.length > 1 ? 'as fotos acima foram enviadas' : 'a foto acima foi enviada'} pelo cliente agora. `
+      + 'Use o que estiver nela (CEP ou endereço de conta de luz/água, print de anúncio, documento) para seguir o atendimento. '
+      + 'Nunca repita CPF, RG, número de documento ou outro dado sensível da foto na resposta. Se não der para ler, peça para ele escrever.]' },
+  ];
+}
+
 // v7 (prompt 26, spec §4): botão "Detalhes <plano>" → texto fixo do cartão, SEM chamar o Claude (o 5f leva direto ao 7).
 let textoFixo = null;
 if (V7) {

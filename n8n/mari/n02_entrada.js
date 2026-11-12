@@ -158,8 +158,23 @@ if (ex('1 · Webhook Mari teste')) {
       nome: String(contato.name || '').trim(), texto: textoH, chatwootConversationId: convId, cwStatus } }];
   }
   if (!entrante) return soStatus;
-  const att = (msg.attachments || p.attachments || [])[0] || {};
+  const atts = (msg.attachments || p.attachments || []).filter((a) => a && typeof a === 'object');
+  const att = atts[0] || {};
   const ft = String(att.file_type || '').toLowerCase();
+  // 12/11 (Prompt_midia_transcricao): TODOS os anexos. Áudio e imagem até 16 MB são baixados para o bucket privado
+  // (cadeia 2b); vídeo, documento e o resto ficam só registrados (o time abre no Chatwoot). A transcrição que o próprio
+  // Chatwoot às vezes manda (transcribed_text) é aproveitada sem custo.
+  const LIM = 16 * 1024 * 1024;
+  const anexos = atts.map((a, i) => {
+    const f = String(a.file_type || '').toLowerCase();
+    const tipo = f === 'image' ? 'imagem' : (f === 'audio' || f === 'voice') ? 'audio' : f === 'video' ? 'video' : f === 'location' ? 'local' : f === 'sticker' ? 'figurinha' : 'arquivo';
+    const tam = Number(a.file_size) || null;
+    const url = String(a.data_url || '');
+    return { n: i, tipo, mime: String(a.content_type || '') || null, ext: String(a.extension || '').replace(/[^a-z0-9]/gi, '').toLowerCase() || null,
+      tamanho: tam, url: /^https:\/\//.test(url) ? url : null, cw_transcricao: String(a.transcribed_text || '').trim() || null,
+      baixar: ['audio', 'imagem'].includes(tipo) && /^https:\/\//.test(url) && (!tam || tam <= LIM) };
+  }).filter((a) => a.tipo !== 'local');
+  const msgId = String(msg.id ?? p.id ?? Date.now());
   const ca = msg.content_attributes || p.content_attributes || {};
   let texto = textoDoBotao(msg.content || p.content || '', ca.button_reply_id || ca.id || (ca.interactive && ca.interactive.id));
   if (ft === 'image') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\n');
@@ -172,6 +187,9 @@ if (ex('1 · Webhook Mari teste')) {
     origem: origemDoTexto(texto), chatwootConversationId: convId,
     contatoId: sender.id ?? conv.meta?.sender?.id ?? null,   // v7 (A9): nome do contato no handoff
     cwStatus,
+    anexos: anexos.length ? anexos : null,
+    baixarMidia: anexos.some((a) => a.baixar),
+    msgId,
   };
   if (!/^\d{10,15}$/.test(entrada.telefone)) return soStatus;
   // 08/11 (0062): "#zerar" = comando de teste — encerra a conversa da Mari e a próxima mensagem começa do zero. Quem pode
