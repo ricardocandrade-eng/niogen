@@ -3,6 +3,8 @@
 //   {acao: 'iniciar', cpf, endereco?, contato?, autorizado} → exige autorizado === true e CPF com dígito válido →
 //        POST {CREDITO_OP_URL}/credito (X-Portal-Secret) → {job_id, posicao_fila, estado} (cache 24 h → já vem pronto)
 //   {acao: 'status', job_id}                               → GET {CREDITO_OP_URL}/credito/{job_id}
+//   {acao: 'viabilidade', endereco}                       → POST {CREDITO_OP_URL}/credito/viabilidade — SÓ Etapas 0–2 do
+//        portal, sem CPF/contato (11/11 ~21h, docs/Prompt_consulta_unificada_111126_2045.md). Qualquer usuário logado.
 // A consulta leva ~2 min no portal: a tela faz polling; esta função nunca segura a conexão aberta.
 // Segredos (Supabase › Edge Functions › Secrets): CREDITO_OP_URL, NIO_PORTAL_SERVICO_SECRET. Nada no front nem no repo.
 // Nada é gravado no Supabase nesta rodada. Log: usuário, ação, resultado, ms — nunca o CPF.
@@ -41,10 +43,10 @@ Deno.serve(async (req) => {
     const [{ data: perfil, error: ePerfil }, { data: u }] = await Promise.all([quem.rpc('meu_perfil'), quem.auth.getUser()]);
     usuario = u?.user?.id?.slice(0, 8) ?? '?';
     if (ePerfil || !perfil) { log('403 sem login'); return json({ error: 'Entre no NIOGEN para consultar.' }, 403); }
-    if (!['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
-
     const b = await req.json().catch(() => ({}));
     acao = String(b.acao ?? '');
+    // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
+    if (acao === 'iniciar' && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');
     const segredo = Deno.env.get('NIO_PORTAL_SERVICO_SECRET') ?? '';
     if (!opUrl || !segredo) { log('503 nao_instalado'); return json({ error: 'Operador de crédito ainda não instalado.', nao_instalado: true }, 503); }
@@ -70,12 +72,24 @@ Deno.serve(async (req) => {
         corpo.contato = { celular: so(c.celular), email: String(c.email ?? '').trim().slice(0, 120) };
       }
       r = await fetch(`${opUrl}/credito`, { method: 'POST', headers: hdr, body: JSON.stringify(corpo), signal: AbortSignal.timeout(15000) });
+    } else if (acao === 'viabilidade') {
+      const e = b.endereco ?? {};
+      if (so(e.cep).length !== 8) return json({ error: 'CEP com 8 dígitos.' }, 400);
+      const corpo = {
+        origem: `niogen:${perfil}`,
+        endereco: {
+          cep: so(e.cep), numero: String(e.numero ?? '').trim().slice(0, 20),
+          complemento: String(e.complemento ?? '').trim().slice(0, 60), referencia: String(e.referencia ?? '').trim().slice(0, 80),
+          opcao: String(e.opcao ?? '').trim().slice(0, 200),
+        },
+      };
+      r = await fetch(`${opUrl}/credito/viabilidade`, { method: 'POST', headers: hdr, body: JSON.stringify(corpo), signal: AbortSignal.timeout(15000) });
     } else if (acao === 'status') {
       const id = String(b.job_id ?? '');
       if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
       r = await fetch(`${opUrl}/credito/${id}`, { headers: hdr, signal: AbortSignal.timeout(10000) });
     } else {
-      return json({ error: 'acao deve ser iniciar ou status.' }, 400);
+      return json({ error: 'acao deve ser iniciar, viabilidade ou status.' }, 400);
     }
     const d = await r.json().catch(() => null);
     if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON (rota do proxy?).` }, 502); }

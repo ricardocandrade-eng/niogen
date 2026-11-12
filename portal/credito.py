@@ -12,6 +12,10 @@
 #   3. FREIO  — limites por hora/dia e cache de 24 h por CPF (hash com sal) ficam no servico.py, só em memória.
 #   4. SEM CPF em log e resposta (cpf_mascara). Nada vai a disco além das amostras REDIGIDAS (7 dias).
 #
+# 11/11/2026 ~21h — MODO VIABILIDADE (docs/Prompt_consulta_unificada_111126_2045.md): params['modo'] = 'viabilidade' roda só as
+# Etapas 0–2 SEM CPF e SEM contato, lê o modal de viabilidade e PARA (resultado 'viavel' ou 'sem_viabilidade'): nunca clica
+# "Continuar" no modal, nunca chega à Etapa 3. Serve à tela Consulta de cobertura (Portal decide, DFV resgata).
+#
 # Este módulo NÃO importa o Playwright no topo: o teste das travas roda sem navegador.
 
 import datetime
@@ -146,7 +150,7 @@ def sem_pii(msg):
 
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
-RESULTADOS = ('aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
+RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
               'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
@@ -362,6 +366,17 @@ def ler_oferta(texto):
             'preco': preco.group(0) if preco else None, 'fidelidade': fid}
 
 
+RE_VELOCIDADE = re.compile(r'\b\d{2,4}\s*(?:mega|mbps|mb\b)|\b\d(?:[.,]\d)?\s*(?:giga|gbps|gb\b)', re.I)
+
+
+def velocidade_de(popup):
+    """Velocidade máxima que o modal de viabilidade cita (ex.: "1 Giga", "700 Mega"), se citar."""
+    if not popup:
+        return None
+    m = RE_VELOCIDADE.findall(f'{popup.get("titulo") or ""} {popup.get("texto") or ""}')
+    return m[-1].strip() if m else None
+
+
 def resumo_viabilidade(popup):
     if not popup:
         return None
@@ -390,7 +405,8 @@ class Consulta:
 
     def __init__(self, ctx, params, cfg, progresso=None, log=print):
         self.ctx = ctx
-        self.p = params          # {cpf, endereco?, contato?}
+        self.p = params          # {cpf, endereco?, contato?, modo?}
+        self.modo = params.get('modo') or 'credito'   # 'viabilidade' = só Etapas 0–2, sem CPF
         self.cfg = cfg           # CREDITO_* do .env
         self.progresso = progresso or (lambda **k: None)
         self.log = log
@@ -637,6 +653,9 @@ class Consulta:
         continuar = next((x for x in pp.get('botoes') or [] if re.match(r'^\s*continuar\s*$', x, re.I)), None)
         if continuar and re.search(r'dispon', txt, re.I) and not re.search(r'indispon', txt, re.I):
             self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
+            if self.modo == 'viabilidade':     # só viabilidade: lê e PARA — nunca clica Continuar, nunca vai à Etapa 3
+                self.out['velocidade'] = velocidade_de(pp)
+                raise Parar('viavel')
             b = self.botao(r'^\s*continuar\s*$')
             if not b:
                 raise Parar('erro', motivo='botão Continuar sumiu do modal de viabilidade')
@@ -880,6 +899,8 @@ class Consulta:
             self.etapa0()
             self.etapa1()
             self.etapa2()
+            if self.modo == 'viabilidade':     # etapa2 sempre para no modo viabilidade; isto é cinto de segurança
+                raise Parar('erro', motivo='modo viabilidade passou da Etapa 2 (bloqueado)')
             self.etapa3()
             self.etapa4()
             self.etapa5()

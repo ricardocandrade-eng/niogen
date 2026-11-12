@@ -11,6 +11,9 @@
 #   POST /chamar   {metodo, caminho, corpo?} → chamada à API do portal pela página; 401 = renova UMA vez e repete
 #   POST /credito  {cpf, endereco?, contato?, origem?} → 202 {job_id, posicao_fila, estado} (cache 24 h → 200 pronto)
 #   GET  /credito/{job_id}              → {estado: fila|rodando|pronto|erro, etapa_atual, posicao_fila, ...resultado}
+#   POST /credito/viabilidade {endereco} → 202 {job_id, ...} — SÓ Etapas 0–2, sem CPF/contato (11/11 ~21h, consulta
+#                                         unificada). Resultado viavel | sem_viabilidade | complemento_fora_lista | ...
+#                                         Cache 6 h por endereço; limite VIAB_LIMITE_HORA (60). Mesma fila do navegador.
 #
 # Limites: até 40 chamadas/min no /chamar; crédito: fila máx. 3, CREDITO_LIMITE_HORA / CREDITO_LIMITE_DIA (429), mesmo
 # CPF < 24 h = resultado da memória (sem abrir o portal, sem Serasa repetido). Log sem corpo e sem CPF.
@@ -56,6 +59,8 @@ JOB_TTL = 30 * 60
 CACHE_TTL = 24 * 3600
 # Só veredito de crédito entra no cache de 24 h. Erro, erro da Receita, sem viabilidade e não classificado podem
 # ser refeitos (ex.: "Consultar com o endereço padrão" depois de um endereço do cliente sem viabilidade).
+VIAB_TTL = 6 * 3600       # viabilidade do portal vale "hoje": 6 h por endereço
+VIAB_CACHEAVEIS = {'viavel', 'sem_viabilidade', 'complemento_fora_lista'}
 CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento'}
 
 
@@ -80,6 +85,7 @@ def cfg_credito():
         'limite_dia': int(e('CREDITO_LIMITE_DIA') or 60),
         'sal': e('CREDITO_SAL') or SEGREDO,
         'amostras': e('CREDITO_AMOSTRAS_DIR') or '/amostras',
+        'viab_limite_hora': int(e('VIAB_LIMITE_HORA') or 60),
     }
 
 
@@ -224,6 +230,7 @@ def thread_navegador():
 JOBS = {}
 TRAVA_JOBS = threading.Lock()
 INICIOS = deque()          # horários de consultas que abriram o portal (freio hora/dia)
+VIAB_INICIOS = deque()     # idem, só viabilidade (não passa pela Receita/Serasa)
 CACHE = {}                 # chave sha256(sal+cpf) → (time, resultado). Só memória: nada vai a disco.
 
 
@@ -231,8 +238,10 @@ def _limpar_jobs():
     t = time.time()
     for k in [k for k, j in JOBS.items() if t - j['criado'] > JOB_TTL and j['estado'] in ('pronto', 'erro')]:
         JOBS.pop(k, None)
-    for k in [k for k, (ts, _) in CACHE.items() if t - ts > CACHE_TTL]:
+    for k in [k for k, (ts, _) in CACHE.items() if t - ts > (VIAB_TTL if k.startswith('v:') else CACHE_TTL)]:
         CACHE.pop(k, None)
+    while VIAB_INICIOS and t - VIAB_INICIOS[0] > 3600:
+        VIAB_INICIOS.popleft()
     while INICIOS and t - INICIOS[0] > 86400:
         INICIOS.popleft()
 
@@ -248,7 +257,7 @@ def _posicao(job_id):
 def _publico(j):
     base = {'ok': True, 'job_id': j['id'], 'estado': j['estado'], 'etapa_atual': j.get('etapa_atual'),
             'etapa_nome': j.get('etapa_nome'), 'posicao_fila': _posicao(j['id']) if j['estado'] == 'fila' else 0,
-            'cpf_mascara': j['cpf_mascara'], 'origem': j.get('origem')}
+            'cpf_mascara': j['cpf_mascara'], 'origem': j.get('origem'), 'modo': j.get('modo') or 'credito'}
     if j.get('resultado'):
         base.update(j['resultado'])
     return base
@@ -287,10 +296,11 @@ def _rodar_job(job_id, params, cfg):
         out.update(consultado_em=agora_br(), cache=False)
         j['resultado'] = out
         j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
-        if out['resultado'] in CACHEAVEIS:
+        viab = params.get('modo') == 'viabilidade'
+        if out['resultado'] in (VIAB_CACHEAVEIS if viab else CACHEAVEIS):
             CACHE[params['chave']] = (time.time(), out)
         cr.gravar_amostra(cfg['amostras'], job_id, out, corpos)
-        log_credito(job_id, params['origem_endereco'], out['resultado'], out.get('ms'), out.get('etapa_parada'),
+        log_credito(job_id, 'viabilidade' if viab else params['origem_endereco'], out['resultado'], out.get('ms'), out.get('etapa_parada'),
                     extra=(out.get('motivo') or '')[:120] if out['resultado'] in ('erro', 'nao_classificado') else '')
         return None
     FILA.put(Tarefa(tarefa))
@@ -350,6 +360,41 @@ def novo_job_credito(b):
         INICIOS.append(t)
         JOBS[job_id] = {**base, 'estado': 'fila', 'etapa_atual': 0}
         params = {'cpf': cpf, 'endereco': endereco, 'contato': contato, 'origem_endereco': origem_end, 'chave': chave}
+        _rodar_job(job_id, params, cfg)
+        return 202, _publico(JOBS[job_id])
+
+
+def novo_job_viabilidade(b):
+    """Só viabilidade (Etapas 0–2): sem CPF, sem contato, sem Receita. Endereço do cliente obrigatório."""
+    cfg = cfg_credito()
+    e = b.get('endereco') or {}
+    cep = cr.so_digitos(e.get('cep'))
+    if len(cep) != 8:
+        raise pl.Falha(400, 'CEP com 8 dígitos')
+    endereco = {'cep': cep, 'numero': str(e.get('numero') or '').strip()[:20],
+                'complemento': str(e.get('complemento') or '').strip()[:60],
+                'referencia': str(e.get('referencia') or '').strip()[:80] or 'Sem referência',
+                'opcao': str(e.get('opcao') or '').strip()[:200]}
+    chave = 'v:' + cr.cpf_chave('|'.join(endereco[k].lower() for k in ('cep', 'numero', 'complemento', 'opcao')), cfg['sal'])
+    with TRAVA_JOBS:
+        _limpar_jobs()
+        job_id = uuid.uuid4().hex
+        base = {'id': job_id, 'criado': time.time(), 'cpf_mascara': None, 'modo': 'viabilidade',
+                'origem': str(b.get('origem') or '')[:40] or None}
+        hit = CACHE.get(chave)
+        if hit and time.time() - hit[0] < VIAB_TTL:
+            res = dict(hit[1], cache=True)
+            JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
+            log_credito(job_id, 'viabilidade', res['resultado'], 0, res.get('etapa_parada'), cache=True)
+            return 200, _publico(JOBS[job_id])
+        if sum(1 for j in JOBS.values() if j['estado'] == 'fila') >= FILA_MAX:
+            raise pl.Falha(429, f'fila cheia ({FILA_MAX}) — tente em alguns minutos')
+        if len(VIAB_INICIOS) >= cfg['viab_limite_hora']:
+            raise pl.Falha(429, f'limite de {cfg["viab_limite_hora"]} viabilidades por hora')
+        VIAB_INICIOS.append(time.time())
+        JOBS[job_id] = {**base, 'estado': 'fila', 'etapa_atual': 0}
+        params = {'cpf': None, 'endereco': endereco, 'contato': None, 'origem_endereco': 'cliente',
+                  'modo': 'viabilidade', 'chave': chave}
         _rodar_job(job_id, params, cfg)
         return 202, _publico(JOBS[job_id])
 
@@ -414,6 +459,10 @@ class Handler(BaseHTTPRequestHandler):
                 self._resp(200, {'ok': True, **r})
                 pl.log(f'chamar {str(b.get("metodo", "GET")).upper()} {str(b.get("caminho") or "").split("?")[0][:60]}'
                        f' → {r.get("status")} ({time.time() - t0:.1f} s{", renovou" if r.get("renovou") else ""})')
+                return
+            elif metodo == 'POST' and rota == '/credito/viabilidade':
+                code, r = novo_job_viabilidade(self._json())
+                self._resp(code, r)
                 return
             elif metodo == 'POST' and rota == '/credito':
                 code, r = novo_job_credito(self._json())

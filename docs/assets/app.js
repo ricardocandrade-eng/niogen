@@ -547,6 +547,8 @@
   }
   const creditoIniciar = (dados) => creditoFn({ acao: 'iniciar', ...dados });
   const creditoStatus = (jobId) => creditoFn({ acao: 'status', job_id: jobId });
+  // 11/11 ~21h (consulta unificada): viabilidade oficial do portal SÓ até a Etapa 2 (sem CPF). Mesmo job/polling do crédito.
+  const viabIniciar = (endereco) => creditoFn({ acao: 'viabilidade', endereco });
 
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
@@ -1355,7 +1357,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

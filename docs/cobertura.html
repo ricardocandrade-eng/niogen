@@ -1,28 +1,41 @@
 <!doctype html>
 <!-- NIOGEN | docs/cobertura.html | 03/11/2026 · 05/11 rodada noturna — Cobertura (DFV) no padrão de telas.
-     Consulta rápida em cartão no topo (dfv_consultar; nada é gravado) com o resultado em pílula de cor; "Criar venda com este
-     endereço" abre a gaveta Nova venda AQUI (assets/novavenda.js), sem trocar de tela. Abaixo: o painel DFV Sudeste da Nio, recolhido.
-     11/11 (pedido do Ricardo): saíram os KPIs e a tabela de bairros de JF (base congelada nio_hp) — bairros seguem em Meta Ads.
-     11/11/2026: a consulta rápida passa a ser AO VIVO no painel DFV Sudeste da Nio (edge function dfv-consulta → operador DFV
-     na VPS; todas as cidades, com faixa de crédito do bairro, fachadas viáveis da rua e nota dos 200 m). Se o operador não
-     responder, a função cai na dfv_consultar e a tela marca "base congelada de JF (DD/MM)". Consulta-só: nada é gravado. -->
+     11/11/2026: consulta AO VIVO no painel DFV Sudeste (edge function dfv-consulta → operador DFV; base congelada de JF de reserva).
+     11/11/2026 ~21h — CONSULTA DE COBERTURA UNIFICADA (docs/Prompt_consulta_unificada_111126_2045.md). Ordem do Rogério:
+       1. Viabilidade: o PORTAL decide (operador niogen-portal, POST /credito/viabilidade — só Etapas 0–2, sem CPF, para no
+          modal). O DFV roda junto (≤ 1 s) e aparece na hora como prévia; se o portal disser "sem viabilidade", o DFV
+          RESGATA pelos 200 m (fachadas viáveis no CEP → "Pedir liberação"; nenhuma → "Sem cobertura").
+       2. Crédito (ação deliberada, só admin/backoffice): CPF + contato do cliente → operador de crédito (~30–40 s) com o
+          progresso ao vivo; sem viabilidade → endereço padrão (a tela esconde rua e viabilidade, não são do cliente).
+     CONSULTA-SÓ: não grava credito_consultas, não liga a Mari. A antiga credito.html redireciona para cá. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0E1116">
-<title>Cobertura (DFV) · NIOGEN</title>
+<title>Consulta de cobertura · NIOGEN</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=111126-11">
-<script src="config.js?v=111126-11"></script>
+<link rel="stylesheet" href="assets/app.css?v=111126-12">
+<script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=111126-11"></script>
-<script src="assets/sidebar.js?v=111126-11"></script>
-<script src="assets/novavenda.js?v=111126-11"></script>
+<script src="assets/app.js?v=111126-12"></script>
+<script src="assets/sidebar.js?v=111126-12"></script>
+<script src="assets/novavenda.js?v=111126-12"></script>
+<style>
+  .uni-bloco { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+  .uni-tit { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 0; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; opacity: .8; }
+  .uni-tit .muted { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .cred-grid { display: grid; grid-template-columns: 200px repeat(3, minmax(0, 1fr)); gap: 10px; align-items: end; }
+  .cred-aut { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; }
+  .cred-aut input { margin-top: 2px; }
+  .cred-popup { white-space: pre-wrap; font-size: 12px; padding: 10px; border-radius: 8px; background: var(--surface-dim); border: 1px solid var(--border); }
+  .cred-ofertas { display: grid; gap: 6px; }
+  @media (max-width: 760px) { .cred-grid { grid-template-columns: 1fr 1fr; } }
+</style>
 </head>
 <body>
 <div class="app">
@@ -30,22 +43,49 @@
   <main class="main">
     <header class="cab">
       <div>
-        <h1>Cobertura (DFV)</h1>
-        <div class="sub" id="sub">Consultar um endereço sem abrir uma venda</div>
+        <h1>Consulta de cobertura</h1>
+        <div class="sub" id="sub">Viabilidade oficial do portal, resgate do DFV nos 200 m e crédito do CPF — sem abrir pedido</div>
       </div>
     </header>
 
-    <!-- Consulta rápida: o cartão do topo -->
+    <!-- 1. Endereço → viabilidade (portal decide, DFV resgata) -->
     <section class="painel cob-consulta" aria-labelledby="t-consulta">
-      <h2 id="t-consulta">Consulta rápida</h2>
+      <h2 id="t-consulta">Endereço do cliente</h2>
       <form class="cob-form" id="form-cob" novalidate>
         <label class="campo">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
         <label class="campo">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
         <label class="campo">Complemento <span class="muted">(opcional)</span><input type="text" name="complemento" placeholder="apto, bloco, casa" autocomplete="off"></label>
         <button type="submit" class="btn btn-acc">Consultar</button>
       </form>
-      <div id="resultado" aria-live="polite" hidden></div>
-      <span class="nota-campo">Consulta ao vivo no painel DFV Sudeste da Nio (todas as cidades, atualizado todo dia; o painel só traz endereços viáveis). Número fora da lista não nega a venda: a Nio instala até 200 m da última casa viável — confira no mapa do painel abaixo. Se o painel não responder, a tela usa a base congelada de Juiz de Fora e avisa. A palavra final é sempre a do portal no pedido.</span>
+      <div id="decisao" class="uni-bloco" aria-live="polite" hidden></div>
+      <div id="bloco-dfv" class="uni-bloco" hidden>
+        <h3 class="uni-tit">DFV <span class="muted" id="dfv-sub"></span></h3>
+        <div id="resultado-dfv" class="uni-bloco" style="margin-top:0"></div>
+      </div>
+    </section>
+
+    <!-- 2. Crédito do CPF (ação deliberada; só admin/backoffice) -->
+    <section class="painel" id="cartao-cred" aria-labelledby="t-cred" hidden>
+      <h2 id="t-cred">Crédito do CPF</h2>
+      <div class="faixa amarelo" id="nao-instalado" hidden><strong>Operador de crédito fora do ar</strong><span>Consulte direto no portal PAP.</span></div>
+      <form id="form-cred" class="uni-bloco" style="margin-top:0" novalidate>
+        <span class="nota-campo">Usa o endereço do cartão de cima. Leva ~30–40 s no portal e aparece lá no nome da Joysse (TT837725), com análise no Serasa — só com autorização do titular. Celular e e-mail são <b>do cliente</b>: a Nio grava no pedido e recusa um mesmo celular repetido em vários pedidos.</span>
+        <div class="cred-grid">
+          <label class="campo">CPF<input type="text" name="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" autocomplete="off" required></label>
+          <label class="campo">Celular (com DDD)<input type="tel" name="celular" inputmode="numeric" placeholder="(32) 90000-0000" autocomplete="off" required></label>
+          <label class="campo" style="grid-column: span 2">E-mail<input type="email" name="email" placeholder="cliente@email.com" autocomplete="off" required></label>
+        </div>
+        <label class="cred-aut"><input type="checkbox" name="autorizado"> <span>O titular autorizou a consulta de crédito e o contato da Nio (WhatsApp e e-mail)</span></label>
+        <div class="f-form-acoes" style="justify-content:flex-start">
+          <button type="submit" class="btn btn-acc" id="btn-cred" disabled>Consultar crédito</button>
+          <button type="button" class="btn" id="btn-cred-padrao" disabled title="Usa um endereço viável fixo só para ler o crédito do CPF">Consultar com o endereço padrão</button>
+        </div>
+      </form>
+      <div id="resultado-cred" class="uni-bloco" aria-live="polite" hidden></div>
+    </section>
+
+    <section class="painel">
+      <span class="nota-campo"><b>De onde vem cada resposta.</b> Viabilidade: <b>portal PAP da Nio, na hora</b> (o mesmo do pedido — é ele que decide). DFV: painel DFV Sudeste da Nio, com retrato de <b>~15 dias</b> (só traz fachadas viáveis; a Nio instala até 200 m da última casa viável). Se um dos dois cair, a tela avisa e usa o outro; se o painel DFV cair, aparece a <b>base congelada de JF (DD/MM)</b>.</span>
     </section>
 
     <!-- Painel DFV Sudeste embutido (mapa para a regra dos 200 m) -->
@@ -78,19 +118,34 @@
   const { esc } = NG;
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
+  const podeCredito = ['admin', 'backoffice'].includes(eu.perfil);
 
   const form = document.getElementById('form-cob');
   const F = form.elements;
-  const resEl = document.getElementById('resultado');
+  const decEl = document.getElementById('decisao');
+  const dfvBloco = document.getElementById('bloco-dfv');
+  const dfvEl = document.getElementById('resultado-dfv');
+  const dfvSub = document.getElementById('dfv-sub');
+  const det = document.getElementById('cob-det');
   const base = (p) => (p ? NG.fmtDiaISO(p).slice(0, 5) : '—');
-  // Gaveta "Nova venda" (a mesma de Vendas): salvar aqui não recarrega nada — a venda aparece em Vendas.
-  const novaVenda = NGNovaVenda.montar({ eu, aoSalvar: (v) => NG.toast('Venda criada — está em Vendas.', 'ok') });
+  const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
+  const seg = (ms) => `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0).replace('.', ',')} s`;
+  const novaVenda = NGNovaVenda.montar({ eu, aoSalvar: () => NG.toast('Venda criada — está em Vendas.', 'ok') });
+  let linkCadastro = null, linkLiberacao = null;
+  NG.linkConfig('nio_cadastro_unidade').then((u) => { linkCadastro = u; }).catch(() => {});
+  NG.linkConfig('nio_pedido_liberacao').then((u) => { linkLiberacao = u; }).catch(() => {});
 
-  // ------------------------------------------------------------ consulta rápida (nada é gravado)
+  // ------------------------------------------------------------ estado da consulta atual
+  let rodada = 0;          // cada Consultar abre uma rodada; respostas de rodadas velhas são ignoradas
+  let ultimo = null;       // endereço consultado (para "Abrir pedido")
+  let opcaoEndereco = '';  // endereço tocado na lista do portal (vai como endereco.opcao)
+  let dfv = null;          // {estado: 'rodando'|'pronto'|'erro', r, ms}
+  let portal = null;       // {estado: 'rodando'|'pronto'|'erro', s, ms, erro}
+  ['cep', 'numero'].forEach((n) => F[n].addEventListener('input', () => { opcaoEndereco = ''; }));
   const endereco = () => ({ cep: NG.soDigitos(F.cep.value), numero: F.numero.value.trim(), complemento: F.complemento.value.trim() });
-  let ultimo = null;
+
+  // ------------------------------------------------------------ DFV (renderização herdada da tela Cobertura)
   function render(r, e) {
-    ultimo = e;
     const [rot, cor] = NG.DFV_ROTULO[r.resultado] || [r.resultado, ''];
     const dado = (k, v) => `<div class="d-l"><span>${esc(k)}</span><b>${v == null || v === '' ? '—' : v}</b></div>`;
     const unidades = r.resultado === 'viavel_predio' && Array.isArray(r.opcoes) && r.opcoes.length
@@ -100,7 +155,7 @@
           ${r.opcoes.length > 120 ? '<span class="nota-campo">Lista cortada em 120: digite o complemento e consulte.</span>' : ''}</div>`
       : '';
     const pill = { ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '';
-    resEl.innerHTML = `
+    dfvEl.innerHTML = `
       <div class="cob-res cob-${cor}">
         <div class="cob-res-topo"><span class="pill ${pill} cob-pill">${esc(rot)}</span><span class="muted">base de ${esc(base(r.particao))}</span></div>
         <span>${esc(NG.DFV_RESULTADO[r.resultado] || '')}</span>
@@ -115,10 +170,9 @@
         ${dado('Faixa de crédito', esc(r.faixa_credito || ''))}
         ${dado('Classificação', esc(r.classificacao ? r.classificacao.toLowerCase() : ''))}
       </div>`}
-      <div class="f-form-acoes" style="justify-content:flex-start"><button type="button" class="btn btn-acc" data-criar>＋ Criar venda com este endereço</button></div>`;
-    resEl.hidden = false;
+`;
+    dfvEl.hidden = false;
   }
-  // ------------------------------------------------------------ resultado AO VIVO (operador DFV, painel da Nio)
   const MATCH = {
     exato: ['Viável', 'ok', 'A fachada está na base de viáveis do painel da Nio.'],
     sem_numero: ['Rua com fachadas viáveis', 'ok', 'Informe o número para conferir a fachada; abaixo, as viáveis deste CEP.'],
@@ -127,7 +181,6 @@
   };
   const comp = (f) => [f.complemento, f.complemento2, f.complemento3].filter(Boolean).join(' · ');
   function renderVivo(r, e) {
-    ultimo = e;
     const chave = r.match === 'nao_encontrado' && !r.total_fachadas_no_cep ? 'vazio' : r.match;
     const [rot, cor, txt] = MATCH[chave] || [r.match, '', ''];
     const pill = { ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '';
@@ -148,7 +201,7 @@
     const nota200 = regra.status && regra.status !== 'dentro'
       ? `<div class="faixa amarelo"><strong>Regra dos 200 m</strong><span>${esc(regra.nota || '')} <a href="#" data-abrir-painel>Abrir o mapa do painel ↓</a></span></div>`
       : '';
-    resEl.innerHTML = `
+    dfvEl.innerHTML = `
       <div class="cob-res cob-${cor}">
         <div class="cob-res-topo"><span class="pill ${pill} cob-pill">${esc(rot)}</span><span class="muted">ao vivo · painel atualizado ${esc((r.atualizado_painel || '—').slice(0, 5))}</span></div>
         <span>${esc(txt)}</span>
@@ -165,38 +218,186 @@
         ${dado('Classificação', esc(r.classificacao ? r.classificacao.toLowerCase() : ''))}
       </div>` : ''}
       ${vizinhas}
-      <div class="f-form-acoes" style="justify-content:flex-start"><button type="button" class="btn btn-acc" data-criar>＋ Criar venda com este endereço</button></div>`;
-    resEl.hidden = false;
+`;
+    dfvEl.hidden = false;
   }
-  async function consultar() {
-    const e = endereco();
-    if (e.cep.length !== 8) { NG.toast('Informe o CEP com 8 dígitos.', 'bad'); F.cep.focus(); return; }
-    F.cep.value = `${e.cep.slice(0, 5)}-${e.cep.slice(5)}`;
-    resEl.hidden = false;
-    resEl.innerHTML = '<span class="carregando">Consultando o painel DFV da Nio…</span>';
+
+  // O que o DFV diz para o resgate dos 200 m: 'viavel' (fachada na base) · 'elegivel' (há viáveis no CEP) · 'sem' · null
+  function dfvVeredito() {
+    if (!dfv || dfv.estado !== 'pronto' || !dfv.r) return null;
+    const r = dfv.r;
+    if (r.fonte === 'base_congelada') {
+      const x = r.rpc || {};
+      return ['viavel', 'viavel_predio'].includes(x.resultado) ? 'viavel' : x.resultado === 'nao_encontrado' ? 'sem' : 'elegivel';
+    }
+    if (r.match === 'exato') return 'viavel';
+    return r.total_fachadas_no_cep ? 'elegivel' : 'sem';
+  }
+
+  // ------------------------------------------------------------ a decisão (portal decide, DFV resgata) — 1 ação por estado
+  const pillDe = (cor) => ({ ok: 'ativo', bad: 'cob-bad', warn: 'cob-warn' }[cor] || '');
+  const caixa = (rot, cor, txt, carimbo) => `
+    <div class="cob-res cob-${cor}">
+      <div class="cob-res-topo"><span class="pill ${pillDe(cor)} cob-pill">${esc(rot)}</span><span class="muted">${carimbo}</span></div>
+      <span>${txt}</span>
+    </div>`;
+  const acoes = (lista) => (lista.filter(Boolean).length ? `<div class="f-form-acoes" style="justify-content:flex-start;flex-wrap:wrap">${lista.join('')}</div>` : '');
+  const BT = {
+    pedido: '<button type="button" class="btn btn-acc" data-criar>＋ Abrir pedido com este endereço</button>',
+    credito: podeCredito ? '<button type="button" class="btn" data-ir-credito>Consultar crédito</button>' : '',
+    padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Medir o crédito com o endereço padrão</button>' : '',
+    mapa: '<button type="button" class="btn" data-abrir-painel>Abrir o mapa do DFV (200 m)</button>',
+    liberacao: () => (linkLiberacao
+      ? `<a class="btn btn-acc" href="${esc(linkLiberacao)}" target="_blank" rel="noopener noreferrer">Pedir liberação (formulário) ↗</a>`
+      : '<span class="chip warn" title="config_links.nio_pedido_liberacao">Pedir liberação: formulário ainda não cadastrado no NIOGEN — pedir ao Rogério</span>'),
+    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(linkCadastro)}" target="_blank" rel="noopener noreferrer">Pedir o cadastro da unidade à Nio (formulário) ↗</a>` : ''),
+    conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
+  };
+
+  function desenharDecisao() {
+    decEl.hidden = false;
+    const p = portal || {};
+    const s = p.s || {};
+    const v = dfvVeredito();
+    const carPortal = `portal · hoje${s.consultado_em ? ` ${esc(NG.fmtHora(s.consultado_em))}` : ''}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
+    const carDfv = 'DFV · retrato de ~15 dias';
+
+    if (p.estado === 'rodando') {   // portal rodando: prévia do DFV + progresso
+      const n = s.etapa_atual || 0;
+      const passo = s.estado === 'fila' ? `na fila (posição ${s.posicao_fila || 1})` : n ? `etapa ${n} de 2 · ${n === 1 ? 'identificação PDV' : 'viabilidade do endereço'}` : 'abrindo o portal';
+      const previa = v === 'viavel' ? 'Prévia do DFV: a fachada está entre as viáveis — o portal confirma.'
+        : v === 'elegivel' ? 'Prévia do DFV: este número não está na lista, mas há fachadas viáveis no CEP — o portal decide.'
+          : v === 'sem' ? 'Prévia do DFV: nenhuma fachada viável neste CEP — o portal decide.' : 'Consultando o DFV…';
+      decEl.innerHTML = `<span class="carregando">Portal da Nio: ${esc(passo)}…</span><span class="nota-campo">${esc(previa)} O portal leva ~15–25 s.</span>`;
+      return;
+    }
+
+    const r = s.resultado;
+    let html = '';
+    if (p.estado === 'pronto' && r === 'viavel') {
+      html = caixa('Viável no portal', 'ok', `Endereço com viabilidade oficial da Nio${s.velocidade ? ` · até <b>${esc(s.velocidade)}</b>` : ''}.${s.endereco && s.endereco.viabilidade ? ` <span class="muted">${esc(s.endereco.viabilidade)}</span>` : ''}`, carPortal)
+        + acoes([BT.pedido, BT.credito]);
+    } else if (p.estado === 'pronto' && r === 'sem_viabilidade') {
+      if (v === 'viavel' || v === 'elegivel') {
+        html = caixa('Elegível pelos 200 m', 'warn', `O portal diz <b>sem viabilidade</b>, mas o DFV tem ${v === 'viavel' ? 'esta fachada como viável' : 'fachadas viáveis neste CEP'}: a Nio instala até 200 m da última casa viável. Confira a distância no mapa e peça a liberação.`, `${carPortal} · ${carDfv}`)
+          + acoes([BT.liberacao(), BT.mapa, BT.padrao]);
+      } else if (v === 'sem') {
+        html = caixa('Sem cobertura', 'bad', 'O portal diz sem viabilidade e o DFV não tem nenhuma fachada viável neste CEP. Não há venda neste endereço hoje.', `${carPortal} · ${carDfv}`)
+          + acoes([BT.padrao]);
+      } else {
+        html = caixa('Sem viabilidade no portal', 'bad', 'O DFV não respondeu para checar os 200 m — confira no mapa.', carPortal) + acoes([BT.mapa, BT.padrao]);
+      }
+    } else if (p.estado === 'pronto' && r === 'complemento_fora_lista') {
+      html = caixa('Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal para este endereço. Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal)
+        + acoes([BT.cadastro(), BT.padrao, BT.conferirDfv]);
+    } else {   // portal fora / não classificado / erro → o DFV decide, marcado
+      const motivo = p.estado === 'erro' ? (p.erro || 'sem resposta') : (s.motivo || r || '—');
+      const faixa = `<div class="faixa amarelo"><strong>Portal da Nio não decidiu</strong><span>${esc(motivo)} — abaixo, só o DFV (retrato de ~15 dias). Confirme no portal antes de falar em instalação.</span></div>`;
+      const dec = v === 'viavel' ? caixa('Viável pelo DFV', 'ok', 'A fachada está na base de viáveis do DFV.', carDfv) + acoes([BT.pedido, BT.credito])
+        : v === 'elegivel' ? caixa('Elegível pelos 200 m (DFV)', 'warn', 'O DFV não tem este número, mas tem fachadas viáveis neste CEP.', carDfv) + acoes([BT.mapa, BT.liberacao()])
+          : v === 'sem' ? caixa('Sem cobertura pelo DFV', 'bad', 'O DFV não tem nenhuma fachada viável neste CEP.', carDfv) + acoes([BT.padrao])
+            : '';
+      html = faixa + dec + acoes(['<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>']);
+    }
+    if (s.opcoes && (s.opcoes.lista || []).length) {   // opções do portal → botões que reconsultam
+      html += `<div class="dfv-opcoes"><span class="nota-campo">${s.opcoes.tipo === 'complemento'
+        ? '<b>Unidades que o portal aceita neste endereço.</b> Toque só se uma delas for a do cliente (escrita de outro jeito) — nunca escolha outra unidade para a consulta passar:'
+        : 'Este CEP tem mais de um endereço no portal. Toque no do cliente e a consulta recomeça com ele:'}</span>
+        <div class="dfv-opcoes-lista">${s.opcoes.lista.map((o) => `<button type="button" class="chip ok" data-opcao-tipo="${esc(s.opcoes.tipo)}" data-opcao="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
+    }
+    decEl.innerHTML = html;
+  }
+
+  // ------------------------------------------------------------ DFV: na hora, em paralelo com o portal
+  async function rodarDfv(e, minha) {
+    const t0 = performance.now();
+    dfv = { estado: 'rodando' };
+    dfvBloco.hidden = false;
+    dfvSub.textContent = '';
+    dfvEl.innerHTML = '<span class="carregando">Consultando o painel DFV da Nio…</span>';
     try {
       const r = await NG.dfvAoVivo(e);
+      if (minha !== rodada) return;
       if (!r) throw new Error('resposta vazia');
+      dfv = { estado: 'pronto', r, ms: performance.now() - t0 };
       if (r.fonte === 'base_congelada') {
         if (!r.rpc) throw new Error(`painel ao vivo indisponível (${r.motivo || 'sem motivo'}) e a base congelada não respondeu`);
         render(r.rpc, e);
-        resEl.insertAdjacentHTML('afterbegin', `<div class="faixa amarelo"><strong>Base congelada de JF (${esc(base(r.particao))})</strong><span>O painel ao vivo não respondeu (${esc(r.motivo || '—')}). Este resultado é a foto antiga de Juiz de Fora — confira no painel abaixo.</span></div>`);
-        return;
+        dfvEl.insertAdjacentHTML('afterbegin', `<div class="faixa amarelo"><strong>Base congelada de JF (${esc(base(r.particao))})</strong><span>O painel ao vivo não respondeu (${esc(r.motivo || '—')}). Este resultado é a foto antiga de Juiz de Fora — confira no mapa abaixo.</span></div>`);
+      } else {
+        renderVivo(r, e);
       }
-      renderVivo(r, e);
+      dfvSub.textContent = `· ${seg(dfv.ms)}`;
     } catch (err) {
-      resEl.innerHTML = `<div class="faixa amarelo"><strong>Consulta DFV indisponível</strong><span>${esc(NG.msgErro(err))} — use o painel DFV Sudeste abaixo.</span></div>`;
+      if (minha !== rodada) return;
+      dfv = { estado: 'erro', erro: NG.msgErro(err) };
+      dfvEl.innerHTML = `<div class="faixa amarelo"><strong>DFV indisponível</strong><span>${esc(dfv.erro)} — use o mapa do painel abaixo.</span></div>`;
     }
+    desenharDecisao();
+  }
+
+  // ------------------------------------------------------------ portal: viabilidade oficial (Etapas 0–2, sem CPF)
+  async function rodarPortal(e, minha) {
+    const t0 = performance.now();
+    portal = { estado: 'rodando', s: { estado: 'fila', posicao_fila: 0 } };
+    desenharDecisao();
+    try {
+      let s = await NG.viabIniciar({ ...e, opcao: opcaoEndereco });
+      const fim = Date.now() + 3 * 60 * 1000;
+      while (s && !['pronto', 'erro'].includes(s.estado)) {
+        if (minha !== rodada) return;
+        if (Date.now() > fim) throw new Error('o portal demorou mais de 3 min');
+        portal = { estado: 'rodando', s };
+        desenharDecisao();
+        await pausa(2000);
+        s = await NG.creditoStatus(s.job_id);
+      }
+      if (minha !== rodada) return;
+      portal = { estado: 'pronto', s, ms: performance.now() - t0 };
+    } catch (err) {
+      if (minha !== rodada) return;
+      portal = { estado: 'erro', erro: err.naoInstalado ? 'operador do portal não instalado' : NG.msgErro(err) };
+    }
+    desenharDecisao();
+    console.info(`[cobertura] portal ${portal.estado} ${portal.s ? portal.s.resultado : ''} ${portal.ms ? Math.round(portal.ms) + ' ms' : ''} · dfv ${dfv && dfv.ms ? Math.round(dfv.ms) + ' ms' : dfv && dfv.estado}`);
+  }
+
+  function consultar() {
+    const e = endereco();
+    if (e.cep.length !== 8) { NG.toast('Informe o CEP com 8 dígitos.', 'bad'); F.cep.focus(); return; }
+    F.cep.value = `${e.cep.slice(0, 5)}-${e.cep.slice(5)}`;
+    const minha = ++rodada;
+    ultimo = e;
+    credEl.hidden = true;
+    rodarDfv(e, minha);       // ≤ 1 s (prévia)
+    rodarPortal(e, minha);    // ~15–25 s (decide)
   }
   form.addEventListener('submit', (ev) => { ev.preventDefault(); consultar(); });
-  resEl.addEventListener('click', async (ev) => {
-    if (ev.target.closest('[data-criar]')) { (await novaVenda).abrir(ultimo); return; }
+
+  async function cliqueComum(ev) {
+    if (ev.target.closest('[data-criar]')) { (await novaVenda).abrir(ultimo); return true; }
     if (ev.target.closest('[data-abrir-painel]')) {
       ev.preventDefault();
       det.open = true;
       det.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      return;
+      return true;
     }
+    if (ev.target.closest('[data-ver-dfv]')) { dfvBloco.scrollIntoView({ behavior: 'smooth', block: 'start' }); return true; }
+    const ir = ev.target.closest('[data-ir-credito]');
+    if (ir) { abrirCredito(ir.dataset.irCredito === 'padrao'); return true; }
+    return false;
+  }
+  decEl.addEventListener('click', async (ev) => {
+    if (await cliqueComum(ev)) return;
+    if (ev.target.closest('[data-repetir]')) { consultar(); return; }
+    const b = ev.target.closest('[data-opcao]');
+    if (!b) return;
+    if (b.dataset.opcaoTipo === 'complemento') F.complemento.value = b.dataset.opcao;
+    else opcaoEndereco = b.dataset.opcao;
+    consultar();
+  });
+  dfvEl.addEventListener('click', async (ev) => {
+    if (await cliqueComum(ev)) return;
     const b = ev.target.closest('[data-comp]');
     if (!b) return;
     if (b.dataset.num != null) F.numero.value = b.dataset.num;
@@ -204,8 +405,137 @@
     consultar();
   });
 
-  // Vindo da venda (Consultar na tela de cobertura): ?cep=&numero=&complemento= já consulta.
+  // ------------------------------------------------------------ 2. CRÉDITO (só sob pedido; só admin/backoffice)
+  const cartao = document.getElementById('cartao-cred');
+  const FC = document.getElementById('form-cred').elements;
+  const btnCred = document.getElementById('btn-cred');
+  const btnPadrao = document.getElementById('btn-cred-padrao');
+  const credEl = document.getElementById('resultado-cred');
+  const naoInst = document.getElementById('nao-instalado');
+  let rodandoCred = false;
+  const fmtCpf = (d) => d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
+  FC.cpf.addEventListener('input', () => { FC.cpf.value = fmtCpf(NG.soDigitos(FC.cpf.value).slice(0, 11)); });
+  const travar = () => { btnCred.disabled = btnPadrao.disabled = rodandoCred || !FC.autorizado.checked; };
+  FC.autorizado.addEventListener('change', travar);
+  if (podeCredito) cartao.hidden = false;
+  function abrirCredito(padrao) {
+    if (!podeCredito) return;
+    cartao.hidden = false;
+    cartao.dataset.padrao = padrao ? '1' : '';
+    cartao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    (NG.soDigitos(FC.cpf.value).length !== 11 ? FC.cpf : !FC.celular.value ? FC.celular : FC.autorizado).focus();
+    if (padrao) NG.toast('Preencha CPF e contato e toque em "Consultar com o endereço padrão".', 'ok');
+  }
+
+  const ROT = {
+    aprovado_todas: ['Aprovado — todas as formas', 'ok', 'Crédito liberado em boleto, cartão e débito automático. Pode seguir com a venda.'],
+    aprovado_cartao: ['Aprovado — só cartão', 'ok', 'Crédito liberado só no cartão de crédito. Ofereça o pagamento no cartão.'],
+    aprovado_parcial: ['Aprovado', 'ok', 'Crédito liberado nas formas abaixo.'],
+    negado: ['Negado', 'bad', 'A Nio não aprovou o crédito deste CPF. Não abra pedido.'],
+    pedido_em_andamento: ['Já tem pedido em andamento', 'bad', 'Não dá para abrir pedido: o cliente já tem pedido Nova Fibra em andamento. Confira na Consulta OS do portal antes de falar com ele.'],
+    pendente: ['Pendente', 'warn', 'A Nio deixou a análise pendente. Consulte de novo mais tarde (o portal costuma pedir 24 h).'],
+    nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia o texto abaixo e confira no portal.'],
+    sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado — use o endereço padrão para medir o crédito do CPF.'],
+    complemento_fora_lista: ['Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal. Para saber já o crédito do CPF, consulte com o endereço padrão.'],
+    contato_repetido: ['Celular recusado pelo portal', 'warn', 'A Nio não aceitou este celular: ele já aparece em pedidos demais. Use o celular do próprio cliente (outro número dele, se tiver) e consulte de novo.'],
+    erro_receita: ['Erro da Receita', 'warn', 'A consulta à Receita Federal falhou duas vezes. Tente de novo em alguns minutos.'],
+    erro: ['Erro na consulta', 'warn', 'A consulta não terminou. Tente de novo em alguns minutos.'],
+  };
+  const FORMA = { BOLETO: 'Boleto', CREDITO: 'Cartão de crédito', DACC: 'Débito automático' };
+  const dado = (k, v) => `<div class="d-l"><span>${esc(k)}</span><b>${v == null || v === '' ? '—' : v}</b></div>`;
+
+  function renderCred(r) {
+    const formas = r.formas_liberadas || [];
+    let [rot, cor, txt] = ROT[r.resultado] || [r.resultado, 'warn', ''];
+    if (r.resultado === 'aprovado_parcial') rot = `Aprovado — ${formas.map((f) => FORMA[f] || f).join(', ')}`;
+    const quando = r.consultado_em ? NG.fmtHora(r.consultado_em) : '';
+    const e = r.endereco || {};
+    const padrao = e.origem === 'padrao';
+    const lista = [];
+    if (/^aprovado/.test(r.resultado) && !padrao) lista.push(BT.pedido);
+    if (['sem_viabilidade', 'complemento_fora_lista'].includes(r.resultado)) lista.push('<button type="button" class="btn btn-acc" data-padrao>Consultar com o endereço padrão</button>');
+    if (r.resultado === 'contato_repetido') lista.push('<button type="button" class="btn btn-acc" data-contato>Trocar celular</button>');
+    if (r.resultado === 'erro_receita' || r.resultado === 'erro') lista.push('<button type="button" class="btn" data-denovo>Tentar de novo</button>');
+    const ofertas = padrao ? [] : (r.ofertas || []).filter((o) => o.nome || o.preco);
+    credEl.innerHTML = `
+      ${caixa(rot, cor, esc(txt), `${esc(r.cpf_mascara || '')}${quando ? ` · resultado de ${esc(quando)}${r.cache ? ' (cache)' : ''}` : ''}${r.ms && !r.cache ? ` · ${Math.round(r.ms / 1000)} s` : ''}`)}
+      ${r.motivo && ['erro', 'nao_classificado'].includes(r.resultado) ? `<span class="muted">${esc(r.motivo)}</span>` : ''}
+      <div class="cob-dados">
+        ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
+        ${dado('Formas liberadas', formas.length ? `<span class="chips">${formas.map((f) => `<span class="chip ok">${esc(FORMA[f] || f)}</span>`).join('')}</span>` : '')}
+        ${dado('Pedido em rascunho no portal', r.pedido_portal ? `<span class="mono">${esc(r.pedido_portal)}</span>` : '')}
+        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : padrao ? 'padrão (só para ler o crédito)' : ''))}
+        ${padrao   // 11/11 (Ricardo): o endereço padrão não é do cliente — não mostra a rua nem a viabilidade dele
+          ? dado('Endereço no portal', '<span class="muted">oculto — endereço padrão, não é o do cliente</span>') + dado('Viabilidade', '<span class="muted">não consultada para o cliente</span>')
+          : dado('Endereço no portal', esc(e.resolvido || '')) + dado('Viabilidade', esc(e.viabilidade || ''))}
+      </div>
+      ${ofertas.length ? `<div><h3 class="secao-tit">Ofertas para este endereço</h3><div class="cred-ofertas">${ofertas.map((o) =>
+        `<div class="d-l"><span>${esc(o.nome)}</span><b>${esc([o.velocidade, o.preco, o.fidelidade === true ? 'com fidelidade' : o.fidelidade === false ? 'sem fidelidade' : ''].filter(Boolean).join(' · '))}</b></div>`).join('')}</div></div>` : ''}
+      ${r.popup ? `<div><h3 class="secao-tit">Texto do portal${r.popup.titulo ? ` — ${esc(r.popup.titulo)}` : ''}</h3><div class="cred-popup">${esc(r.popup.texto || '')}</div></div>` : ''}
+      ${!r.popup && r.texto_tela && r.resultado === 'nao_classificado' ? `<div><h3 class="secao-tit">Texto da tela</h3><div class="cred-popup">${esc(r.texto_tela)}</div></div>` : ''}
+      ${acoes(lista)}`;
+    credEl.hidden = false;
+  }
+  function andamentoCred(s) {
+    const n = s.etapa_atual || 0;
+    const txt = s.estado === 'fila'
+      ? `Na fila (posição ${s.posicao_fila || 1})…`
+      : n ? `Etapa ${n} de 5 · ${esc({ 1: 'Identificação PDV', 2: 'Viabilidade do endereço', 3: 'Receita Federal e duplicidade de pedido', 4: 'Contato', 5: 'Lendo o crédito' }[n] || s.etapa_nome || '')}…`
+        : 'Abrindo o portal da Nio…';
+    credEl.hidden = false;
+    credEl.innerHTML = `<span class="carregando">${txt}</span><span class="nota-campo">Leva ~30–40 s. Pode seguir trabalhando nesta aba.</span>`;
+  }
+  async function consultarCredito(padrao) {
+    if (rodandoCred) return;
+    const d = { cpf: NG.soDigitos(FC.cpf.value), autorizado: FC.autorizado.checked, contato: { celular: NG.soDigitos(FC.celular.value), email: FC.email.value.trim() } };
+    if (!d.autorizado) { NG.toast('Marque que o titular autorizou a consulta.', 'bad'); return; }
+    if (!NG.documentoValido(d.cpf) || d.cpf.length !== 11) { NG.toast('CPF inválido — confira os dígitos.', 'bad'); FC.cpf.focus(); return; }
+    if (![10, 11].includes(d.contato.celular.length)) { NG.toast('Informe o celular do cliente com DDD.', 'bad'); FC.celular.focus(); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.contato.email)) { NG.toast('Informe o e-mail do cliente.', 'bad'); FC.email.focus(); return; }
+    if (!padrao) {
+      const e = endereco();
+      if (e.cep.length !== 8) { NG.toast('Informe o endereço do cliente acima (ou use o endereço padrão).', 'bad'); F.cep.focus(); return; }
+      d.endereco = { ...e, opcao: opcaoEndereco };
+    }
+    rodandoCred = true; travar();
+    andamentoCred({ estado: 'fila', posicao_fila: 0 });
+    try {
+      let s = await NG.creditoIniciar(d);
+      naoInst.hidden = true;
+      const fim = Date.now() + 4 * 60 * 1000;
+      while (s && !['pronto', 'erro'].includes(s.estado)) {
+        if (Date.now() > fim) { credEl.innerHTML = '<div class="faixa amarelo"><strong>Demorou demais</strong><span>Tente de novo em alguns minutos.</span></div>'; return; }
+        andamentoCred(s);
+        await pausa(3000);
+        s = await NG.creditoStatus(s.job_id);
+      }
+      renderCred(s);
+    } catch (err) {
+      if (err.naoInstalado) { naoInst.hidden = false; credEl.hidden = true; return; }
+      credEl.hidden = false;
+      credEl.innerHTML = `<div class="faixa amarelo"><strong>Consulta de crédito indisponível</strong><span>${esc(NG.msgErro(err))}</span></div>`;
+    } finally {
+      rodandoCred = false; travar();
+    }
+  }
+  document.getElementById('form-cred').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    // Endereço do cliente sem viabilidade (ou "endereço padrão" pedido no cartão de cima): o crédito vai pelo endereço padrão
+    const semViab = portal && portal.s && ['sem_viabilidade', 'complemento_fora_lista'].includes(portal.s.resultado);
+    consultarCredito(cartao.dataset.padrao === '1' || !!semViab);
+  });
+  btnPadrao.addEventListener('click', () => consultarCredito(true));
+  credEl.addEventListener('click', async (ev) => {
+    if (await cliqueComum(ev)) return;
+    if (ev.target.closest('[data-padrao]')) consultarCredito(true);
+    else if (ev.target.closest('[data-denovo]')) consultarCredito(cartao.dataset.padrao === '1');
+    else if (ev.target.closest('[data-contato]')) { FC.celular.focus(); FC.celular.select(); }
+  });
+  travar();
+
+  // Vindo da venda: ?cep=&numero=&complemento= já consulta. ?cpf= (antiga credito.html) preenche, mas NÃO dispara o crédito.
   const qs = new URLSearchParams(location.search);
+  if (qs.get('cpf') && podeCredito) FC.cpf.value = fmtCpf(NG.soDigitos(qs.get('cpf')).slice(0, 11));
   if (qs.get('cep')) {
     F.cep.value = qs.get('cep');
     F.numero.value = qs.get('numero') || '';
@@ -216,7 +546,6 @@
   // ------------------------------------------------------------ painel DFV Sudeste (recolhido; o iframe nasce ao abrir)
   const moldura = document.getElementById('moldura');
   const falha = document.getElementById('falha');
-  const det = document.getElementById('cob-det');
   NG.ligarLinkDfv(document.querySelector('main'));
   let montado = false;
   async function montarPainel() {
