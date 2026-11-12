@@ -24,6 +24,8 @@
       // 10/11 17h30 (Ricardo): sem o ☰ — a bolinha vermelha ocupa o lugar do ícone, alinhada com os demais.
       { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
+      // 12/11 (Ricardo): Consulta de cobertura veio de Vendas para cá, com nome curto (cabe numa linha). Todos os perfis veem.
+      { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
     ]],
     ['Gestão', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
@@ -34,7 +36,6 @@
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
-      { id: 'cobertura', ico: '⌖', nome: 'Consulta de cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
       { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
     ]],
     ['Mari', [
