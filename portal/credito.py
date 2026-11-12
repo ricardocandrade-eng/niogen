@@ -816,13 +816,11 @@ class Consulta:
                             motivo=f'complemento "{valor}" não está na lista do portal' if valor else 'o portal pede o complemento')
             sel.first.select_option(label=alvo)
             return
-        comp = None
-        for loc in (pg.locator('input[placeholder="Complemento"]'), pg.locator('input[name*="omplement" i]'),
-                    pg.locator('input[placeholder*="omplement" i]')):
-            if self.visivel(loc) and loc.first.is_enabled():
-                comp = loc.first
-                break
-        if comp is None:
+        # 11/11 ~23h (36016-130/170): o portal recria o campo — um input com name="complemento" aparece e some, e o que
+        # fica tem name="" e placeholder "Complemento". Um seletor ÚNICO, só com o que está visível, resolvido a cada ação.
+        comp = pg.locator('input[placeholder="Complemento"]:visible, input[placeholder*="omplement" i]:visible, '
+                          'input[name*="omplement" i]:visible').first
+        if not self.visivel(comp) or not comp.is_enabled():
             return                          # endereço sem campo de complemento (casa): segue
         ops = self.lista_complementos(comp)
         if not ops and valor and not self.comp_vazio:      # lista não abriu no clique: tenta pelo filtro (digitando)
