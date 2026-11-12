@@ -22,7 +22,7 @@
 <script src="assets/app.js?v=111126-12"></script>
 <script src="assets/sidebar.js?v=111126-12"></script>
 <script src="assets/conversa.js?v=111126-12"></script>
-<script src="assets/ficha.js?v=111126-12"></script>
+<script src="assets/ficha.js?v=121126-1"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -73,7 +73,7 @@
     ['esperando', 'Esperando resposta', (c) => c.cliente_esperando && !c.encerrada],
     ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada],
     ['abertas', 'Abertas', aberta],
-    ['todas', 'Todas', (c) => !c.encerrada],
+    ['todas', 'Todas', () => true],   // 12/11 (Ricardo: "toda conversa precisa aparecer no sistema"): inclui encerradas e silenciadas
     ['encerradas', 'Encerradas', (c) => c.encerrada],
   ];
   const quando = (iso) => {
@@ -104,7 +104,9 @@
     const qd = NG.soDigitos(q);
     const casa = (c) => !q || [c.nome, c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) || (qd.length >= 3 && NG.soDigitos(c.telefone).includes(qd));
     const base = lista.filter(casa);
-    const fn = (FILTROS.find((f) => f[0] === filtro) || FILTROS[2])[2];
+    // 12/11: com busca, acha a conversa em qualquer filtro (encerrada ou silenciada inclusive).
+    const fn = q ? () => true : (FILTROS.find((f) => f[0] === filtro) || FILTROS[2])[2];
+    const silenciada = (c) => (c.etiquetas || []).includes('suporte-nio');
     document.getElementById('filtros').innerHTML = FILTROS.map(([id, nome, f]) => {
       const n = base.filter(f).length;
       return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${filtro === id}" class="${filtro === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
@@ -114,7 +116,7 @@
         <span class="cv-l1"><i class="mv-dot" style="--c:${COR[c.etapa] || '#6E747C'}" title="${esc(NOME_ET[c.etapa] || '')}"></i><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
         <span class="cv-l2">${esc(previa(c))}</span>
         <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(c.dono_nome === eu.nome ? 'você' : c.dono_nome)}` : 'sem dono'}
-          ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
+          ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${silenciada(c) ? '<span class="cv-sil" title="Silenciada: cliente Nio com suporte/reclamação. A Mari não responde e a conversa não volta para o Live. Para desfazer: Abrir a ficha › 🔔 Reativar.">· 📵 silenciada</span>' : c.encerrada ? '<span>· encerrada</span>' : c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
           ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
           ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>' : ''}</span>
       </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';

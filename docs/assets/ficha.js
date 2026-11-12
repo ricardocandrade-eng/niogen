@@ -539,14 +539,30 @@
   // 0100 (Ricardo, 10/11: "não consigo jogar o cliente para Saída … botão para silenciar … somos revenda, não suporte da Nio"):
   // conversa SEM venda → Saída (perdida / fora de área / já cliente) ou Silenciar (cliente Nio · suporte) · Reativar desfaz.
   const SAIDA_CONV = {
-    suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai do Live e NÃO volta quando ele escrever. No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
+    suporte_nio: 'Silenciar este cliente?\n\nCliente Nio com suporte/reclamação — não é venda. A Mari não responde mais, a conversa sai do Live e NÃO volta quando ele escrever (continua em Conversas › Todas, com o selo 📵). No Chatwoot: etiqueta suporte-nio, time backoffice, nota e adiada.\n\nDesfaz pelo botão "Reativar".',
     perdida: 'Mandar para Saída · Perdida (sem interesse)?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
     fora_area: 'Mandar para Saída · Fora de área?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta para o Live.',
     ja_cliente: 'Mandar para Saída · Já é cliente Nio?\n\nPara a cadência e resolve no Chatwoot. Se ele escrever de novo, volta — para não voltar mais, use "Silenciar".',
     reativar: 'Reativar a conversa?\n\nEla volta para o Live com o time (a Mari segue calada; para ela voltar, "Devolver para a Mari").',
   };
+  // Sinais de que a conversa é venda (pedido de suporte/reclamação não tem nenhum deles).
+  function sinaisVenda(c) {
+    if (!c) return [];
+    const s = [];
+    if ((c.chatwoot_etiquetas || []).includes('handoff-venda')) s.push('a Mari passou como venda (etiqueta handoff-venda)');
+    if (c.plano_escolhido) s.push('tem plano escolhido');
+    if (c.cep) s.push('tem CEP coletado');
+    if (c.nio_viab_resultado) s.push('já teve viabilidade consultada');
+    if (c.handoff_motivo && !['pedido_humano', 'ja_cliente_nio', 'ja_cliente', 'recusa_compra', 'fora_de_area', 'fora_area', 'sem_cobertura', 'urgencia_alta'].includes(c.handoff_motivo)) s.push(`a Mari passou por "${c.handoff_motivo.replace(/_/g, ' ')}"`);
+    return s;
+  }
   async function rodarSaidaConversa(motivo) {
     if (!SAIDA_CONV[motivo] || !window.confirm(SAIDA_CONV[motivo])) return null;
+    // 12/11 (Ricardo; caso Joana, lead de venda silenciada por engano): com sinal de venda, o silenciar pede uma 2ª confirmação.
+    if (motivo === 'suporte_nio') {
+      const sv = sinaisVenda(d.conv);
+      if (sv.length && !window.confirm(`Esta conversa parece VENDA, não suporte:\n· ${sv.join('\n· ')}\n\nSilenciar mesmo? Ela some do Live e a Mari não responde mais.`)) return null;
+    }
     const { data, error } = await NG.sb.rpc('backoffice_conversa_saida', { p_conversa: d.conversaId, p_motivo: motivo });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return null; }
     NG.toast(data.resumo || 'Feito', 'ok');
@@ -1822,7 +1838,7 @@
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     const [rc, jo, rq, rk, rn, rt, rb, ultFala] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, status, handoff_motivo, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
