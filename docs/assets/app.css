@@ -2202,3 +2202,7 @@ body.lv-com-cliente .mv-feito { display: none; }
 .fc .fc-link { color: #9AA4B0; }
 .fc .fc-link:hover { color: var(--text); background: var(--surface-2); }
 .cvp-raiz.cheia .cvp-pill.warn { color: #E3B341; }
+/* 12/11 (Ricardo: "a trilha pode manter verde, num tom mais escuro") */
+.fc .r-done .fc-ri { background: #1D5C3B; border-color: #1D5C3B; color: #CDEFD9; }
+.fc .fc-rs.seg-ok::before { background: #1D5C3B; }
+.cvp-raiz.cheia .cvp-ctl select { flex: 0 1 auto; max-width: 220px; }
