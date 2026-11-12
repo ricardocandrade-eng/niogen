@@ -2206,3 +2206,13 @@ body.lv-com-cliente .mv-feito { display: none; }
 .fc .r-done .fc-ri { background: #1D5C3B; border-color: #1D5C3B; color: #CDEFD9; }
 .fc .fc-rs.seg-ok::before { background: #1D5C3B; }
 .cvp-raiz.cheia .cvp-ctl select { flex: 0 1 auto; max-width: 220px; }
+/* 12/11 (Ricardo): balões do time e da Mari mais escuros · dica da caixa à esquerda · ícone robô (Mari) / pessoa (time) */
+.cvp-raiz.cheia .cvp-b.hum { background: #14281A; border-color: #1F3D27; }
+.cvp-raiz.cheia .cvp-b.mari { background: #141F2E; border-color: #1F3248; }
+.cvp-raiz.cheia .cvp-b.nota { background: #211C10; border-color: #3A3118; }
+.cvp-raiz.cheia .cvp-ajuda { margin-left: 0; flex-basis: 100%; order: 9; text-align: left; }
+.cvp-quem-ico { flex: none; width: 36px; height: 42px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; }
+.cvp-quem-ico svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cvp-quem-ico.mari { color: #A990FF; background: rgba(169,144,255,.08); }
+.cvp-quem-ico.time { color: #57D38C; background: rgba(87,211,140,.08); }
+.cvp-raiz.cheia .cvp-caixa { align-items: flex-end; }

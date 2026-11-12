@@ -83,7 +83,7 @@
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
           <span class="cvp-ajuda" data-ajuda></span>
         </div>
-        <div class="cvp-caixa"><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+        <div class="cvp-caixa"><span class="cvp-quem-ico" data-quem hidden></span><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
           <button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
       </div>
     </section>`;
@@ -92,6 +92,7 @@
     const vendaEl = $('[data-venda]');
     const mariEl = $('[data-mari]');
     if (o.cheia) el.classList.add('cheia');
+    const quemEl = $('[data-quem]');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
     const secao = $('.cvp');
 
@@ -283,6 +284,17 @@
         : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
         : dn.v === 'eu' ? 'Você é o dono · a Mari está calada.' : 'Enviar assume a conversa (a Mari cala).';
       ajudaEl.textContent = `${aj} · Enter envia · Shift+Enter pula linha`;
+      // 12/11 (Ricardo): na tela cheia, ícone ao lado da caixa — robô = a Mari atende · pessoa = nós (o time).
+      if (o.cheia) {
+        const mari = dn.v === 'mari';
+        const html = mari
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4v4M9.5 13h.01M14.5 13h.01M9.5 16.5h5"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>';
+        const tit = mari ? 'A Mari atende esta conversa (sem dono). Enviar assume a conversa: a Mari cala.' : `Conversa com o time (${dn.txt}) — a Mari está calada.`;
+        if (st.sig.quem !== html + tit) { st.sig.quem = html + tit; quemEl.innerHTML = html; quemEl.title = tit; quemEl.setAttribute('aria-label', tit); }
+        quemEl.className = `cvp-quem-ico ${mari ? 'mari' : 'time'}`;
+        quemEl.hidden = false;
+      }
     }
 
     // ---------- enviar (aparece na hora; a caixa esvazia e o cursor fica) ----------
