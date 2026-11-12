@@ -161,6 +161,12 @@ RE_RECEITA = re.compile(r'ops,?\s*ocorreu um erro', re.I)
 RE_CONTATO = re.compile(r'repeti[cç][õo]es de mesmo n[úu]mero|telefone de contato informado', re.I)
 # Etapa 4 (12/11 00h): "Atenção! E-mail inválido. Por favor preencha um e-mail válido para prosseguir." — a Nio recusa o
 # e-mail (ex.: domínio incompleto, "@uol.com" no lugar de "@uol.com.br"); a consulta precisa de outro e-mail do cliente.
+# Popup "Resultado da análise de crédito" (12/11 00h07): "Crédito aprovado · Elegível para todas as formas de pagamento ·
+# Clique em Continuar para enviar ao cliente o link para Biometria…". O veredito vem no popup — NUNCA clicar em Continuar
+# (dispara a biometria): só ler e parar.
+RE_APROVADO = re.compile(r'cr[eé]dito aprovado', re.I)
+RE_TODAS = re.compile(r'todas as formas', re.I)
+RE_SO_CARTAO = re.compile(r'eleg[ií]vel (somente |apenas |só |so )?(para|no|ao) cart[aã]o|somente cart[aã]o|apenas cart[aã]o', re.I)
 RE_EMAIL = re.compile(r'e-?mail inv[aá]lido|preencha um e-?mail v[aá]lido', re.I)
 
 
@@ -177,6 +183,8 @@ def classificar_popup(titulo, texto, etapa=None):
         return 'receita_retry'
     if RE_NEGADO.search(t):
         return 'negado'
+    if RE_APROVADO.search(t):
+        return 'aprovado_todas' if RE_TODAS.search(t) else 'aprovado_cartao' if RE_SO_CARTAO.search(t) else 'aprovado_parcial'
     if RE_PENDENTE.search(t):
         return 'pendente'
     return 'nao_classificado'
@@ -599,6 +607,10 @@ class Consulta:
     def parar_por_popup(self, pp):
         cls = classificar_popup(pp.get('titulo'), pp.get('texto'), self.etapa)
         self.out['popup'] = pp
+        if cls == 'aprovado_todas' and not self.out.get('formas_liberadas'):
+            self.out['formas_liberadas'] = ['BOLETO', 'CREDITO', 'DACC']
+        elif cls == 'aprovado_cartao' and not self.out.get('formas_liberadas'):
+            self.out['formas_liberadas'] = ['CREDITO']
         raise Parar(cls)
 
     def opcao(self, texto):
