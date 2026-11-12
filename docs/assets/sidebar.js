@@ -131,13 +131,23 @@
   // Verde = ok · âmbar = alerta · vermelho = falha (API do Claude sem crédito ou falhando, cliente esperando a Mari, pagamento
   // do Meta, conta bloqueada, nada no ar). O motivo vai no title; no celular, as duas bolinhas aparecem também na barra do ☰.
   const ST_COR = { ok: 'var(--accent)', alerta: 'var(--warn-dot)', falha: 'var(--bad-dot)' };
+  // 0144: status_operacao() agora sai do pulso_operacao() (uma regra só). Na Live (body[data-pulso]) o menu não chama nada:
+  // a faixa de pulso já lê tudo a cada 60 s e entrega os selos por NGSidebar.pintarStatus(selos).
   async function statusOperacao(nav) {
-    const caixa = nav.querySelector('[data-status]');
-    if (!caixa) return;
+    if (document.body && document.body.dataset.pulso) return;
     try {
       const { data, error } = await NG.sb.rpc('status_operacao');
-      if (error || !data) { caixa.hidden = true; return; }
+      pintarStatus(error ? null : data, nav);
+    } catch (e) { /* os selos nunca derrubam o menu */ }
+  }
+  function pintarStatus(data, navEl) {
+    const nav = navEl || document.getElementById('sidebar');
+    const caixa = nav && nav.querySelector('[data-status]');
+    if (!caixa) return;
+    try {
+      if (!data || (!data.mari && !data.meta)) { caixa.hidden = true; return; }
       caixa.hidden = false;
+      const ks = ['mari', 'meta'].filter((k) => data[k]);   // módulo desligado = selo some (0144)
       const perfil = (NG.usuario || {}).perfil;
       const selo = (k, s) => {
         const motivo = (s.motivos || []).join(' · ');
@@ -148,13 +158,13 @@
         return `<${tag} class="st-selo st-${s.nivel}"${link ? ` href="${s.href}"` : ''} title="${NG.esc(titulo)}" aria-label="${NG.esc(titulo)}">`
           + `<i class="mv-dot" style="--c:${ST_COR[s.nivel] || 'var(--muted)'}"></i><span>${NG.esc(s.texto)}</span></${tag}>`;
       };
-      caixa.innerHTML = selo('mari', data.mari) + selo('meta', data.meta);
+      caixa.innerHTML = ks.map((k) => selo(k, data[k])).join('');
       const topo = document.querySelector('.topo-movel');
       if (topo) {
         let p = topo.querySelector('.st-pontos');
         if (!p) { p = document.createElement('span'); p.className = 'st-pontos'; topo.appendChild(p); }
-        p.innerHTML = ['mari', 'meta'].map((k) => `<i class="mv-dot" style="--c:${ST_COR[data[k].nivel] || 'var(--muted)'}" title="${NG.esc(data[k].texto)}"></i>`).join('');
-        p.setAttribute('aria-label', `${data.mari.texto} · ${data.meta.texto}`);
+        p.innerHTML = ks.map((k) => `<i class="mv-dot" style="--c:${ST_COR[data[k].nivel] || 'var(--muted)'}" title="${NG.esc(data[k].texto)}"></i>`).join('');
+        p.setAttribute('aria-label', ks.map((k) => data[k].texto).join(' · '));
       }
     } catch (e) { /* os selos nunca derrubam o menu */ }
   }
@@ -445,5 +455,5 @@
   }
 
   // 09/11: o botão "Atualizar" das telas (NG.botaoAtualizar) refaz os contadores do menu junto com os dados.
-  window.NGSidebar = { montar, avisos: () => { const nav = document.getElementById('sidebar'); return nav ? avisos(nav) : null; } };
+  window.NGSidebar = { montar, pintarStatus, avisos: () => { const nav = document.getElementById('sidebar'); return nav ? avisos(nav) : null; } };
 })();

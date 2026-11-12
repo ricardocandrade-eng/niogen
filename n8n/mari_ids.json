@@ -9,7 +9,8 @@
     "claude_testes": "2EFA7NmCwLSH0WFb",
     "google_drive": "aPnrkEhc9IzKXm7g",
     "chatwoot_bot": "rMBPTco4UoFYPu0b",
-    "ged360": "7EpIvTuFhlZq66a1"
+    "ged360": "7EpIvTuFhlZq66a1",
+    "n8n_api": "nz36XiITYXYdzO2l"
   },
   "workflow_id": "Nsb1dcL3HWQpKSav",
   "cadencia_workflow_id": "efPnlQ1P4UoiNcFG",
@@ -27,5 +28,6 @@
   "auditoria_mari_workflow_id": "e8og9i9fRjXZKDiG",
   "mari_viabilidade_workflow_id": "lWflylWRGEeT01ys",
   "mari_duplicidade_workflow_id": "PW1VsIGHdnJq58Uu",
-  "mari_credito_workflow_id": "JeIRcsCPwhRwT4To"
+  "mari_credito_workflow_id": "JeIRcsCPwhRwT4To",
+  "pulso_coleta_workflow_id": "JrbzrXoJNalcs55G"
 }

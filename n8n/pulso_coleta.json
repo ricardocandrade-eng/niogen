@@ -1,0 +1,347 @@
+{
+  "name": "pulso_coleta",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "1 · a cada 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d5b86821-549f-5d0a-a66f-0c3ce39e4dc6"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-pulso-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "b960c742-20df-551e-ac26-e1acfb5ee961",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "9eb67505-77ca-52bc-a50b-9098eb214415"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/pulso_fluxos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase fluxos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "4fb489b0-c57c-5bc7-8823-5f5b3369c39e",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://n8n.ofertasverointernet.com.br/api/v1/workflows/{{ $('2 · Supabase fluxos').item.json.workflow_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "3 · n8n workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "f87508a4-89c0-549a-a913-4c4ceb877b95",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nz36XiITYXYdzO2l",
+          "name": "n8n API Nio (pulso)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://n8n.ofertasverointernet.com.br/api/v1/executions?workflowId={{ $('2 · Supabase fluxos').item.json.workflow_id }}&status=success&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "4 · n8n último ok",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "9356962c-ce9b-57c8-8c6a-59bd57d4cbde",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nz36XiITYXYdzO2l",
+          "name": "n8n API Nio (pulso)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://n8n.ofertasverointernet.com.br/api/v1/executions?workflowId={{ $('2 · Supabase fluxos').item.json.workflow_id }}&status=error&limit=1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "5 · n8n último erro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "727d8ae1-0ac0-5dac-918b-c03524919b21",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "nz36XiITYXYdzO2l",
+          "name": "n8n API Nio (pulso)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Um item por fluxo, na mesma ordem do \"2 · Supabase fluxos\" (os nós 3–5 rodam item a item).\nconst fl = $('2 · Supabase fluxos').all();\nconst wf = $('3 · n8n workflow').all();\nconst ok = $('4 · n8n último ok').all();\nconst er = $('5 · n8n último erro').all();\nconst itens = fl.map((f, i) => {\n  const w = (wf[i] || {}).json || {};\n  const o = (((ok[i] || {}).json || {}).data || [])[0];\n  const e = (((er[i] || {}).json || {}).data || [])[0];\n  const lido = typeof w.active === 'boolean';\n  return {\n    fluxo: f.json.fluxo,\n    ativo: lido ? w.active : null,\n    salva_ok: lido ? ((w.settings || {}).saveDataSuccessExecution || 'all') !== 'none' : null,\n    ok_em: o ? (o.stoppedAt || o.startedAt) : null,\n    erro_em: e ? (e.stoppedAt || e.startedAt) : null,\n    erro_id: e ? String(e.id) : null,\n    erro: e ? 'execução ' + e.id + ' com erro' : (lido ? null : 'API do n8n não respondeu para este fluxo'),\n  };\n});\nreturn [{ json: { itens } }];"
+      },
+      "name": "6 · Montar batimentos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        100
+      ],
+      "id": "aae3d106-b152-5969-b3f7-c32a30b00f01"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/pulso_bater_lote",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_itens: $json.itens }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "7 · Supabase bater",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "8e874b3c-f354-5791-9637-fb6b1eb9c6c7",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/pulso_registrar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "8 · Supabase registrar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "05ed33d9-e9d1-5e51-82a3-8908a2c24277",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "1 · a cada 5 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase fluxos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase fluxos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase fluxos": {
+      "main": [
+        [
+          {
+            "node": "3 · n8n workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · n8n workflow": {
+      "main": [
+        [
+          {
+            "node": "4 · n8n último ok",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · n8n último ok": {
+      "main": [
+        [
+          {
+            "node": "5 · n8n último erro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · n8n último erro": {
+      "main": [
+        [
+          {
+            "node": "6 · Montar batimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Montar batimentos": {
+      "main": [
+        [
+          {
+            "node": "7 · Supabase bater",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Supabase bater": {
+      "main": [
+        [
+          {
+            "node": "8 · Supabase registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

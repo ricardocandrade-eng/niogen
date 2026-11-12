@@ -16,11 +16,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=121126-21">
+<link rel="stylesheet" href="assets/app.css?v=121126-24">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=111126-12"></script>
-<script src="assets/sidebar.js?v=121126-21"></script>
+<script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-17"></script>
 <script src="assets/ficha.js?v=121126-14"></script>
 </head>
@@ -60,7 +60,10 @@
 
   let lista = [];
   let furos = new Set();   // 0102: esperando há 3 min ou mais e fora do Live = "deveria estar no Live"
-  let filtro = ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
+  // 0144: ?filtro=esperando (botão do alerta da faixa de pulso) vale por cima do último filtro usado.
+  const FILTRO_URL = new URLSearchParams(location.search).get('filtro');
+  let filtro = ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(FILTRO_URL) ? FILTRO_URL
+    : ['esperando', 'minhas', 'abertas', 'todas', 'encerradas'].includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
   let atual = null;     // id da conversa aberta
   let comp = null;      // NGConversa
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));

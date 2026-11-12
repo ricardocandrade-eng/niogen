@@ -1,5 +1,7 @@
 <!doctype html>
 <!-- NIOGEN | docs/fila.html | 09/11/2026 — Claude Code
+     12/11 (0144 · docs/Prompt_pulso_live_121126_1035.md): faixa de pulso no topo (assets/pulso.js) — Meta → Entrada → Mari → Fluxos
+     + funil de hoje; alerta leva a Conversas › Esperando resposta.
      12/11 (docs/Prompt_live_redesenho_111126_2120.md · protótipo claude.ai/artifact/UXtiACpUJj9Fq7wdEUuqug): Fila em LARGURA TOTAL —
      faixa fina das etapas · abas · tabela de colunas fixas (Cliente · Situação · Próximo passo · Dono · Prazo · botão) · Para fazer,
      Acompanhando sempre aberto, 🔥 Oportunidades (Vale · Enviar · Ligar · Dispensar) e Andamento na Nio. O botão abre o CLIENTE EM
@@ -28,13 +30,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=121126-21">
+<link rel="stylesheet" href="assets/app.css?v=121126-24">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=121126-8"></script>
-<script src="assets/sidebar.js?v=121126-21"></script>
+<script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-17"></script>
 <script src="assets/ficha.js?v=121126-14"></script>
+<script src="assets/pulso.js?v=121126-24"></script>
 </head>
 <body class="tela-fila lv-tela">
 <div class="app">
@@ -50,6 +53,7 @@
           <div class="seg mv-vista" role="group" aria-label="Vista"><button type="button" data-vista="lista">Lista</button><button type="button" data-vista="quadro">Quadro</button></div>
         </div>
       </header>
+      <div id="pulso" class="pl" hidden></div>
       <div id="intro"></div>
       <nav id="funil" class="lv-stages" aria-label="Filtrar por etapa"></nav>
       <section class="lv-lista" id="lista" aria-label="Fila do backoffice"></section>
@@ -63,6 +67,9 @@
 (async function () {
   const { esc } = NG;
   const eu = await NG.exigirLogin();
+  // 12/11 (0144 · docs/Prompt_pulso_live_121126_1035.md): faixa de pulso no topo — 1 chamada (pulso_operacao), disparada antes
+  // da lista para correr na mesma rodada; ela também entrega os selos do menu (o menu não chama status_operacao aqui).
+  if (['admin', 'backoffice'].includes(eu.perfil)) { document.body.dataset.pulso = '1'; NGPulso.montar(document.getElementById('pulso')); }
   NGSidebar.montar();
   const listaEl = document.getElementById('lista');
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
