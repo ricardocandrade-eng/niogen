@@ -530,7 +530,7 @@ class Consulta:
             motivo = f'Avançar não habilitou na etapa {self.etapa}'
             if self.etapa == 2 and getattr(self, 'comp_sem_lista', False):
                 motivo = ('o portal pede o complemento, mas a lista de unidades não abriu — confira no portal'
-                          + (f' ({self.comp_erro})' if getattr(self, 'comp_erro', '') else ''))
+                          + (f' ({self.comp_erro})' if getattr(self, 'comp_erro', '') else ''))[:900]
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo=motivo)
         self.clicar(b)
 
@@ -743,6 +743,7 @@ class Consulta:
         except Exception:  # noqa: BLE001
             pass
         aberto = False
+        erros = []
         for jeito in ('clique', 'forcado', 'teclado'):
             try:
                 if jeito == 'clique':
@@ -755,8 +756,9 @@ class Consulta:
                 aberto = True
                 break
             except Exception as e:  # noqa: BLE001
-                self.comp_erro = f'{jeito}: {type(e).__name__} {sem_pii(str(e).splitlines()[0] if str(e) else "")}'[:160]
+                erros.append(f'{jeito}: {type(e).__name__}')
         if not aberto:
+            self.comp_erro = ' · '.join(erros) + ' · ' + self.sonda_complemento()
             return []
         try:
             if digitar:
@@ -779,6 +781,20 @@ class Consulta:
                 self.comp_vazio = True
                 return []
         return []
+
+    def sonda_complemento(self):
+        """Diagnóstico sem dado de cliente: quantos campos 'Complemento' há, se aparecem, onde, e o que está por cima."""
+        try:
+            return self.page.evaluate(r"""() => {
+              const els = [...document.querySelectorAll('input')].filter(i => /omplement/i.test((i.placeholder||'') + ' ' + (i.name||'') + ' ' + (i.id||'') + ' ' + (i.getAttribute('aria-label')||'')));
+              const lab = [...document.querySelectorAll('label,span,div,p')].filter(e => e.children.length === 0 && /^\s*complemento\s*$/i.test(e.textContent||''));
+              const d = (el) => { const r = el.getBoundingClientRect(); const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+                const top = document.elementFromPoint(Math.max(0, cx), Math.max(0, Math.min(cy, innerHeight - 1)));
+                return `${el.tagName.toLowerCase()}[ph=${el.placeholder||''} name=${el.name||''} type=${el.type||''} ro=${el.readOnly} dis=${el.disabled}] box=${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}x${Math.round(r.height)} vis=${getComputedStyle(el).visibility}/${getComputedStyle(el).display}/op${getComputedStyle(el).opacity} topo=${top ? top.tagName.toLowerCase() + '.' + String(top.className||'').slice(0,40) : '-'}`; };
+              return `inputs=${els.length} [${els.slice(0,3).map(d).join(' | ')}] rotulos=${lab.length} [${lab.slice(0,2).map(d).join(' | ')}] vp=${innerWidth}x${innerHeight} scroll=${Math.round(scrollY)}/${document.documentElement.scrollHeight}`;
+            }""")[:700]
+        except Exception as e:  # noqa: BLE001
+            return f'sonda falhou: {type(e).__name__}'
 
     def complemento(self, valor):
         """Complemento do portal = lista FECHADA das unidades cadastradas no endereço ("Apartamento 101", "CASA A"…), que só
