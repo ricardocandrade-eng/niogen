@@ -3,7 +3,7 @@
      12/11 (docs/Prompt_live_redesenho_111126_2120.md · protótipo claude.ai/artifact/UXtiACpUJj9Fq7wdEUuqug): Fila em LARGURA TOTAL —
      faixa fina das etapas · abas · tabela de colunas fixas (Cliente · Situação · Próximo passo · Dono · Prazo · botão) · Para fazer,
      Acompanhando sempre aberto, 🔥 Oportunidades (Vale · Enviar · Ligar · Dispensar) e Andamento na Nio. O botão abre o CLIENTE EM
-     TELA CHEIA (NGFicha.cheia: desliza da direita; ↑ ↓ andam na fila; ✓ Concluir abre o próximo). Quadro e celular seguem na gaveta.
+     TELA CHEIA (NGFicha.cheia: desliza da direita; ↑ ↓ andam na fila; ✓ Nada a responder dispensa o aviso e abre o próximo). Quadro e celular seguem na gaveta.
      "Live" (antiga "Minha vez", renomeada em 10/11 14h14): a tela de rotina do backoffice (1ª do menu).
      10/11 (0117): a faixa 🔥 traz também as oportunidades do canal parceiro (selo "Canal parceiro", wa.me do parceiro).
      10/11 (0107 · docs/Prompt_mari_ao_vivo_oportunidades_101126_1400.md): grupo "🔥 Oportunidades" entre Para fazer e Acompanhando —
@@ -34,7 +34,7 @@
 <script src="assets/app.js?v=121126-8"></script>
 <script src="assets/sidebar.js?v=121126-21"></script>
 <script src="assets/conversa.js?v=121126-17"></script>
-<script src="assets/ficha.js?v=121126-13"></script>
+<script src="assets/ficha.js?v=121126-14"></script>
 </head>
 <body class="tela-fila lv-tela">
 <div class="app">
@@ -167,7 +167,7 @@
     el.innerHTML = `<div class="mv-intro"><div><b>Como usar, em 3 passos</b><ol>
       <li><b>Pegue a primeira linha.</b> "Para fazer" já vem na ordem: vermelho é agora, amarelo é hoje.</li>
       <li><b>Aperte o botão da linha.</b> O cliente abre em tela cheia: conversa à esquerda, ficha à direita; o card Agora diz o próximo passo.</li>
-      <li><b>Responda pela conversa e aperte ✓ Concluir.</b> O próximo da fila abre sozinho. Etiqueta, atribuição e nota o NIOGEN faz.</li></ol></div>
+      <li><b>Responda pela conversa. Nada a responder (só despedida)? Aperte ✓ Nada a responder.</b> O próximo da fila abre sozinho. Etiqueta, atribuição e nota o NIOGEN faz.</li></ol></div>
       <button type="button" class="btn btn-sm" id="intro-ok">Entendi</button></div>`;
     document.getElementById('intro-ok').onclick = () => { ls.gravar('niogen.fila.intro2', 'ok'); renderIntro(); };
   }
@@ -363,11 +363,11 @@
       const alvo = dir < 0 ? p.prev : p.next;
       if (alvo) abrirChave(chaveFicha(alvo));
     },
-    // ✓ Concluir: o BKO terminou com este cliente → abre o próximo de "Para fazer" (ou volta para a fila).
+    // ✓ Nada a responder (0143): a ficha já dispensou o aviso no banco → abre o próximo de "Para fazer" (ou volta para a fila).
     aoConcluir() {
       const k = NGFicha.atual;
       const prox = filtradas(true).find((j) => chaveFicha(j) !== k);
-      if (prox) { abrirChave(chaveFicha(prox)); NG.toast(`Concluído · próximo: ${NG.primeiroNome(prox.nome || 'Contato')}`, 'ok'); } else { NGFicha.fecharCheia(); NG.toast('Concluído · fila zerada ✅', 'ok'); }
+      if (prox) { abrirChave(chaveFicha(prox)); NG.toast(`Aviso dispensado · próximo: ${NG.primeiroNome(prox.nome || 'Contato')}`, 'ok'); } else { NGFicha.fecharCheia(); NG.toast('Aviso dispensado · fila zerada ✅', 'ok'); }
     },
   });
   function modoFicha() {

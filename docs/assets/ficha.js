@@ -2596,7 +2596,9 @@
   }
 
   // ---------- cabeçalho ----------
-  function cabCheia(nome, chips, meta, menu) {
+  // 12/11 (Ricardo): o "Concluir" virou "✓ Nada a responder" — dispensa o aviso "Cliente escreveu · responder" quando foi só
+  // despedida (0143: volta sozinho se o cliente escrever de novo) e abre o próximo. Ao lado, "📵 Silenciar" (conversa sem venda).
+  function cabCheia(nome, chips, meta, menu, extra = '') {
     const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="Volta para a fila (Esc)">${IC.voltar}Fila</button>
@@ -2605,7 +2607,7 @@
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1" aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1" aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
-        <button type="button" class="btn btn-acc" data-f="fc-concluir" title="Terminou com este cliente? Fecha e abre o próximo da fila">${IC.ok}Concluir</button>
+        ${extra}<button type="button" class="btn btn-acc" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
         <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Mais ações">${IC.mais}</button>
           ${fc.menu ? `<div class="fc-menu" role="menu">${menu}</div>` : ''}</div>
       </div></header>`;
@@ -2842,7 +2844,8 @@
       document.title = `${c.nome} · Live · NIOGEN`;
       const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
-      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu);
+      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu,
+        ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
       trilha = trilhaHtml(P.passosConv);
       const tom = P.silenciada ? 'mute' : TOM[P.nivel] || 'wait';
       const botao = `<button type="button" class="btn${tom === 'now' ? ' btn-acc' : ''} fc-ag-bt" data-f="fc-passo">${dn.tipo === 'mari' && !c.nao_contatar && ehBO() && !P.silenciada ? 'Assumir' : 'Ações'}${IC.seta}</button>`;
@@ -2903,6 +2906,16 @@
     ].filter(([, val]) => val != null && String(val).trim() !== '');
   }
 
+  // 0143: "Nada a responder" grava a dispensa (conta como resposta nossa: o aviso sai do Live) e abre o próximo da fila.
+  async function dispensarAviso(bt) {
+    if (d && d.conversaId) {
+      if (bt) bt.disabled = true;
+      const { data, error } = await NG.sb.rpc('backoffice_conversa_dispensar', { p_conversa: d.conversaId });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); if (bt && bt.isConnected) bt.disabled = false; return; }
+      avisarOuvintes(data);
+    }
+    if (cheiaOpts.aoConcluir) cheiaOpts.aoConcluir();
+  }
   // ---------- cliques da tela cheia (as ações de sempre seguem no ligar(); aqui só o que é da tela) ----------
   function cliqueCheia(ev) {
     if (modo !== 'cheia' || !d) return;
@@ -2927,7 +2940,7 @@
     }
     ev.stopPropagation();
     if (a === 'fc-voltar') { fecharCheia(); return; }
-    if (a === 'fc-concluir') { if (cheiaOpts.aoConcluir) cheiaOpts.aoConcluir(); return; }
+    if (a === 'fc-concluir') { dispensarAviso(b); return; }
     if (a === 'fc-nav') { if (cheiaOpts.aoNavegar) cheiaOpts.aoNavegar(Number(b.dataset.dir)); return; }
     if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; render(); return; }
