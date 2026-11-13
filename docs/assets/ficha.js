@@ -362,7 +362,7 @@
       eventos: (re.data || []).map((e) => ({ ...e, autor: nomeDe[e.criado_por] })),
       lim: rl.data || { hoje: 0, mes: 0 },
       teto,
-      ultTime: rut || null,
+      ultTime: (rut && rut.txt) || null, ultTimeEm: (rut && rut.em) || null,
       adics: ra.data || [],
       conversaId: ((rc.data || [])[0] || {}).id || null,
       convInfo: (rc.data || [])[0] || null,   // 0082: dono no Chatwoot (Assumir só aparece sem dono)
@@ -715,8 +715,10 @@
     ]);
     const t = ((rt && rt.data) || [])[0];
     const a = ((ra && ra.data) || []).filter((x) => x.payload && x.payload.como === 'humano')[0];
-    const ult = !a || (t && new Date(t.created_at) >= new Date(a.criada_em)) ? (t && t.texto) : a.payload.content;
-    return ult ? String(ult).replace(/\s+/g, ' ').trim().slice(0, 80) : null;
+    const doTurno = !a || (t && new Date(t.created_at) >= new Date(a.criada_em));
+    const ult = doTurno ? (t && t.texto) : a.payload.content;
+    // 13/11: devolve também QUANDO o time falou — a faixa "Lembretes da Mari" não acusa "a Mari não respondeu" se o time respondeu.
+    return ult ? { txt: String(ult).replace(/\s+/g, ' ').trim().slice(0, 80), em: doTurno ? t.created_at : a.criada_em } : null;
   }
   // 0103: o cliente só confirmou ("ok", 👍) depois da nossa última fala — v_jornada.confirmou_em (na Sua vez de novo após 4 h úteis).
   const soConfirmou = (j) => !!(j && j.confirmou_em);
@@ -1988,9 +1990,9 @@
     if (rc.error || !rc.data) return { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' };
     if (rc.data.venda_id) return { venda: rc.data.venda_id };
     const c = rc.data;
-    const ultTime = jo && jo.confirmou_em ? ultFala : null;   // 0103
+    const ultTime = jo && jo.confirmou_em && ultFala ? ultFala.txt : null;   // 0103
     return {
-      soConversa: true, ultTime, fnome, lead, leadCfg: lcfg || [], conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
+      soConversa: true, ultTime, ultTimeEm: (ultFala && ultFala.em) || null, fnome, lead, leadCfg: lcfg || [], conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
       jor: jo || null, q: rq.error ? {} : (rq.data || {}),
       cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data), lista: rt.data || [] },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
@@ -3218,7 +3220,9 @@
     else if (/Mari respondendo/.test(b)) set('ok', 'respondendo', 'A Mari está respondendo agora.');
     else if (/aguardando a Mari/.test(b)) {
       const min = L ? Math.round((agora - L) / 60000) : 0;
-      if (min > 10) set('bad', 'sem resposta', `A Mari não respondeu a última mensagem do cliente (há ${esc(NG.haQuanto(c.ultima_msg_lead_at))}). Os lembretes só voltam depois da resposta. Responda você pela conversa.`, '<button type="button" class="btn btn-sm btn-acc" data-f="conversa">Responder</button>');
+      const timeFalou = d.ultTimeEm && L && ms(d.ultTimeEm) > L;   // o time respondeu depois do cliente: ninguém está sem resposta
+      if (timeFalou) set('mute', 'com o time', `O time respondeu o cliente (${esc(cadQuando(ms(d.ultTimeEm)))}). Os lembretes voltam quando o cliente falar de novo.`);
+      else if (min > 10) set('bad', 'sem resposta', `A Mari não respondeu a última mensagem do cliente (há ${esc(NG.haQuanto(c.ultima_msg_lead_at))}). Os lembretes só voltam depois da resposta. Responda você pela conversa.`, '<button type="button" class="btn btn-sm btn-acc" data-f="conversa">Responder</button>');
       else set('ok', 'respondendo', 'O cliente acabou de escrever: a Mari está respondendo.');
     }
     else if (/janela de 24 h fechada/.test(b)) set('mute', 'esperando', `A janela de 24 h fechou: as cutucadas não saem mais.${seq.some((p) => p.cod === 'D3') ? ' Segue no D3.' : ''}`);
