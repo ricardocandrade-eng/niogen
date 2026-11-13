@@ -264,7 +264,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -3164,6 +3164,11 @@
       if (t) { p.st = 'ok'; p.em = ms(t.created_at); p.texto = t.texto; p.simulado = !!t.tags.simulado; iUlt = i; }
     });
     // Instalação e biometria: o banco marca o aviso na própria conversa (instalacao_avisada_para · bio_lembrete_em) — o turno pode ter vindo antes.
+    seq.forEach((p) => {
+      if (p.st === 'ok') return;
+      if (p.cod === 'INSTALACAO' && v && c.instalacao_avisada_para && ms(c.instalacao_avisada_para) === ms(v.instalacao_agendada_para)) { p.st = 'ok'; p.em = ms(c.instalacao_avisada_em) || null; }
+      if (p.cod === 'BIO1' && v && c.bio_lembrete_em && ms(c.bio_lembrete_em) >= ms(v.biometria_link_enviado_em)) { p.st = 'ok'; p.em = ms(c.bio_lembrete_em); }
+    });
     seq.forEach((p, i) => {
       if (p.st === 'ok' || p.cod === 'LIG') return;
       if (i === iProx) {
@@ -3171,7 +3176,8 @@
         const quando = k.bloqueio === 'fora do horário' ? ms(k.proximo_em) : cadHorario(ms(k.proximo_em));
         p.em = p.cod === 'BIO3' || p.cod === 'FIM' ? ms(k.proximo_em) : quando;
         p.texto = k.texto || null;
-      } else if (i < Math.max(iProx, iUlt) || (p.cod.startsWith('F') && L && agora >= L + 23 * HMS)) p.st = 'pul';
+        if (/véspera passou|próxima demais/.test(k.bloqueio || '')) p.st = 'pul';
+      } else if (i < Math.max(iProx, iUlt) || (['F1', 'F2', 'F3', 'F4', 'F5'].includes(p.cod) && L && agora >= L + 23 * HMS)) p.st = 'pul';
     });
     const lig = seq.find((p) => p.cod === 'LIG');
     if (lig) {
@@ -3180,8 +3186,8 @@
       else if (agora > lig.prev + 2 * 24 * HMS) lig.st = 'pul';
     }
     seq.forEach((p) => {
-      p.sub = p.st === 'ok' ? cadCurto(p.em) : p.st === 'pul' ? 'não saiu' : p.st === 'agora' ? 'ligar agora' : p.st === 'prox' ? cadQuando(p.em) : p.prev ? `~${cadDia(p.prev)}` : '';
-      p.tit = `${p.rot} · ${CAD_O_QUE[p.cod] || ''}${p.st === 'ok' ? ` · saiu ${NG.fmtDataHora(new Date(p.em).toISOString())}` : p.st === 'pul' ? ' · não saiu (passou a hora ou a janela fechou)' : p.st === 'prox' ? ` · próximo, ${cadQuando(p.em)}` : ''}`;
+      p.sub = p.st === 'ok' ? (p.em ? cadCurto(p.em) : 'saiu') : p.st === 'pul' ? 'não saiu' : p.st === 'agora' ? 'ligar agora' : p.st === 'prox' ? cadQuando(p.em) : p.prev ? `~${cadDia(cadHorario(p.prev))}` : '';
+      p.tit = `${p.rot} · ${CAD_O_QUE[p.cod] || ''}${p.st === 'ok' ? (p.em ? ` · saiu ${NG.fmtDataHora(new Date(p.em).toISOString())}` : ' · saiu') : p.st === 'pul' ? ' · não saiu (passou a hora ou a janela fechou)' : p.st === 'prox' ? ` · próximo, ${cadQuando(p.em)}` : ''}`;
     });
     P.passos = seq;
 
@@ -3209,7 +3215,12 @@
     else if (/D\+3 sem biometria/.test(b)) set('warn', 'ligar', 'D+3 sem biometria: ligue para o cliente — a Mari não liga.', v && d.conversaId ? '<button type="button" class="btn btn-sm" data-f="fc-reg">Registrar a ligação</button>' : '');
     else if (/venda criada/.test(b)) set('mute', 'com o time', 'A venda segue pelo time: D3, D7 e D15 não saem depois que a venda nasce.');
     else if (/time falou com o cliente hoje/.test(b)) set('ok', 'adiada', `Adiada: o time falou com o cliente hoje (🔥). ${proxTxt || 'O próximo sai no dia útil seguinte.'}`, verTexto);
-    else if (/Mari respondendo|aguardando a Mari/.test(b)) set('ok', 'respondendo', 'A Mari está respondendo agora.');
+    else if (/Mari respondendo/.test(b)) set('ok', 'respondendo', 'A Mari está respondendo agora.');
+    else if (/aguardando a Mari/.test(b)) {
+      const min = L ? Math.round((agora - L) / 60000) : 0;
+      if (min > 10) set('bad', 'sem resposta', `A Mari não respondeu a última mensagem do cliente (há ${esc(NG.haQuanto(c.ultima_msg_lead_at))}). Os lembretes só voltam depois da resposta. Responda você pela conversa.`, '<button type="button" class="btn btn-sm btn-acc" data-f="conversa">Responder</button>');
+      else set('ok', 'respondendo', 'O cliente acabou de escrever: a Mari está respondendo.');
+    }
     else if (/janela de 24 h fechada/.test(b)) set('mute', 'esperando', `A janela de 24 h fechou: as cutucadas não saem mais.${seq.some((p) => p.cod === 'D3') ? ' Segue no D3.' : ''}`);
     else if (/véspera passou|próxima demais/.test(b)) set('mute', 'sem lembrete', b.includes('véspera') ? 'A véspera passou: o lembrete diz "amanhã", então não sai mais.' : 'A instalação está perto demais para o lembrete da véspera.');
     else if (/C2\) saiu há menos/.test(b)) set('ok', 'andando', `O aviso do agendamento saiu há pouco: a véspera espera 12 h. ${proxTxt}`, verTexto);
@@ -3223,6 +3234,7 @@
     } else if (!seq.length) set('mute', 'sem cadência', 'Sem cadência: o cliente ainda não escreveu e o lead não veio de formulário.');
     else if (seq.every((p) => p.st === 'ok' || p.st === 'pul')) set('mute', 'terminou', 'Todos os lembretes desta rodada já saíram ou passaram.');
     else set('ok', 'andando', 'Nada marcado agora: o próximo lembrete aparece aqui quando o banco agendar.');
+    if (P.tom !== 'ok') seq.forEach((p) => { if (p.st === 'fut') p.sub = ''; });
     // Resumo de uma linha (faixa acima da caixa da conversa).
     const nOk = seq.filter((p) => p.st === 'ok').length;
     P.resumo = P.tom === 'ok' && prox ? `Lembretes${nOk ? ` · ${nOk} enviado${nOk > 1 ? 's' : ''}` : ''} · próximo ${prox.rot} ${cadQuando(prox.em)}`
