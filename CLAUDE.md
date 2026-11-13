@@ -82,7 +82,7 @@ Se não for nenhum dos quatro, não se constrói — vira doc de ideia e espera.
 - Relatórios da Nio ficam em `referencia-nio/` (exemplos) e, quando reais, **só no Supabase** — nunca copiados para outra pasta ou projeto.
 - Convenção de nome: `nome_do_arquivo_DDMMAA_HHMM.ext`; todo arquivo gerado abre com o bloco de cabeçalho (projeto, data/hora, resumo).
 
-### 5. Segurança e robôs nos sistemas da Nio (rev. 12/11/2026)
+### 5. Segurança e robôs nos sistemas da Nio (rev. 13/11/2026)
 **Segredos.** Nenhum segredo em arquivo versionado, HTML, Drive, cartão do Trello, chat ou log. Token da WABA Nio (system user `Nio_API`), service role do Supabase Nio,
 token do Meta Ads Nio, chave Claude e logins da Nio (portal PAP, GED360): `.env` da VPS, credencial do n8n, gerenciador de senhas. Chave exposta = rotacionar na hora.
 Única exceção: usuário e as 2 senhas do painel DFV (filtro do relatório, não uma conta) ficam em `config_links.acesso` no Supabase Nio, gravados pelo CLI e visíveis só
@@ -112,6 +112,13 @@ Uso do robô autorizado pelo Rogério (Nio) — Ricardo, 12/11/2026 00h52. Pedid
 **Leitura de acompanhamento.** No **Histórico de Pedidos** a extensão clica só nos filtros (campos, opções, datas, "Filtrar", paginação) para ler tipo/status —
 nunca Detalhar, Carregar, Salvar, Atualizar Pedido, Funil ou Tramitações. No **GED360/BrPronto** o robô do n8n só lê o Relatório Detalhado (CSV) da biometria.
 No **painel DFV** o operador só consulta.
+Na **Consulta OS** (login TT837725) o operador `niogen-portal` lê o andamento da OS de venda registrada no NIOGEN: preenche só o filtro
+(CPF/CNPJ, Número OS, período) e clica só em "Filtros" e "Filtrar". Nunca: Enviar/Reenviar link de pagamento, Agendar instalação, reagendar,
+cancelar OS, "Atualizar o status da OS" nem "Detalhar" (a pesquisa já traz tudo). Rede: passa só a leitura `consultastatusos`; o resto que
+grava fica bloqueado. E-mail e telefone do cliente que vêm na resposta não são guardados. Não roda com a Joysse no meio de um pedido.
+No **Dashboard › Performance em Foco** (painel Power BI, login TT836757 — autorizado pelo Ricardo em 13/11/2026: "Pode, só o painel") o operador
+só abre o Dashboard, troca de aba e de filtro do painel e exporta as tabelas "Exportação - OSAB" e "Faturas Em Aberto". Nunca: Cadastro Usuários,
+Gestão de Fila, Histórico, Áreas ou qualquer menu fora do Dashboard. (Levantamento de 13/11/2026: `docs/LEVANTAMENTO_consulta_os_131126_0955.md`.)
 
 ### 6. Deploy
 Front: Claude Code publica no clone → push → hospedagem (Cloudflare Pages ou GitHub Pages — decidir, INFRA). **Sempre bumpar o `CACHE` do `sw.js`** se houver.
