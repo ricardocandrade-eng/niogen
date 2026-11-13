@@ -2817,7 +2817,7 @@
     if (!x) {
       const fora = v && v.status === 'saida';
       return `<div class="fc-din-w"><div class="fc-din-l"><span>Dinheiro</span><span class="fc-din-t">${fora ? 'fora da jornada — sem comissão'
-        : `${bo && v && v.comissao_prevista != null ? `<b>${esc(m(v.comissao_prevista))}</b> previstos · ` : ''}nasce na instalação`}</span></div>${fora ? '' : NG.dicaTxt(`${A.tr_dinheiro} ${A.din_antes}`)}</div>`;
+        : `${bo && v && v.comissao_prevista != null ? `<b>${esc(m(v.comissao_prevista))}</b> na instalação` : 'nasce na instalação'}`}</span></div>${fora ? '' : NG.dicaTxt(`${A.tr_dinheiro} ${A.din_antes}`)}</div>`;
     }
     const estado = x.estado;
     const prox = estado === 'em_risco' ? (x.cancelada_apos_instalar_em ? 'cancelada depois de instalar' : `estorno até ${NG.fmtData(x.risco_ate)}`)
