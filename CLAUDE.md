@@ -64,7 +64,7 @@ o mockup `claude.ai/artifact/SUJ1dg3yrDzd3UKtReDTBo` (as 12 telas).
 ### 1. O contrato vem antes da venda
 Toda tela, automação, prompt e anúncio obedece `docs/CONTRATO_DHARMA_regras.md`, priorizando o que protege a Dharma:
 comissão só com instalação + biometria + área de atuação; estorno 100 % em cancelamento e reativação ≤ 30 d, cliente/endereço já na base Nio, cancelamento por não qualidade; parcial em downgrade ≤ 180 d (só a diferença); fraude = multa R$ 500 por ocorrência; multa de R$ 500 por recompra; **churn e inadimplência não estornam** (só pesam nos indicadores de qualidade);
-agendar instalação em **4 h**; documentos em **15 dias**; contestação em **120 dias**; contato seg–sex 9–21, sáb 10–16, nunca dom/feriado,
+agendar instalação em **4 h**; documentos em **15 dias** (desligado na venda remota desde 13/11/2026 — `docs_exigidos`, falta o Rogério confirmar); contestação em **120 dias**; contato seg–sex 9–21, sáb 10–16, nunca dom/feriado,
 **2/dia e 15/mês**; sem desconto, prazo ou benefício fora da tabela; marca Nio em anúncio só com aprovação prévia; dados de cliente são da Nio
 (incidente → 24 h). Na dúvida entre vender e proteger a Dharma, **proteger e avisar o Ricardo**.
 
