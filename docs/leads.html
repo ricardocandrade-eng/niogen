@@ -20,10 +20,10 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-33">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-3"></script>
 <script src="assets/sidebar.js?v=131126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=121126-29"></script>
+<script src="assets/ficha.js?v=131126-3"></script>
 <style>
   .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
   .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
@@ -79,7 +79,8 @@
 <script>
 (async function () {
   const { esc } = NG;
-  await NG.exigirLogin();
+  const eu = await NG.exigirLogin();
+  const BO = ['admin', 'backoffice'].includes(eu.perfil);
   NGSidebar.montar();
   const tbody = document.getElementById('tbody');
   const Q = new URLSearchParams(location.search);
@@ -143,7 +144,7 @@
       const saida = l.destino === 'saida';
       const chave = l.venda_id ? `venda=${l.venda_id}` : `conversa=${l.conversa_id}`;
       return `<tr class="clicavel${saida ? ' ld-saida' : ''}" data-abrir="${esc(chave)}" tabindex="0">
-        <td><b>${esc(l.nome)}</b><small>${l.telefone ? `final ${esc(String(l.telefone).slice(-4))}` : ''}${l.venda_id ? ' · com venda' : ''}</small></td>
+        <td><b>${esc(l.nome)}</b><small>${l.telefone ? `final ${esc(String(l.telefone).slice(-4))}` : ''}${l.venda_id ? ' · com venda' : ''}</small>${BO && l.destino === 'em_andamento' && l.etapa_ordem < 5 ? NG.botaoOperador({ vendaId: l.venda_id, conversaId: l.conversa_id }) : ''}</td>
         <td>${esc(l.etapa_nome || l.etapa)}${saida ? '<small>onde parou</small>' : ''}</td>
         <td>${saida ? `<span class="chip bad">⛔ ${esc(l.saida_nome || 'Saída')}</span> ${NG.dicaTxt(l.saida_ajuda || '')}<small>${esc(l.saida_sub || '')}${l.volta_em ? ` · volta ${esc(NG.fmtData(l.volta_em))}` : ''}</small>`
           : l.destino === 'instalada' ? `<span class="chip ok">✅ Instalada</span>${l.cancelada_apos_instalar_em ? '<small>cancelada depois de instalar</small>' : ''}`
@@ -200,7 +201,7 @@
   document.getElementById('limpar').addEventListener('click', () => { Object.assign(f, { etapa: '', status: '', vez: '', saida: '', q: '' }); render(); });
   document.getElementById('csv').addEventListener('click', csv);
   const abrir = (tr) => { location.hash = `#${tr.dataset.abrir}`; };
-  tbody.addEventListener('click', (ev) => { if (ev.target.closest('.dica')) return; const tr = ev.target.closest('tr[data-abrir]'); if (tr) abrir(tr); });
+  tbody.addEventListener('click', (ev) => { if (ev.target.closest('.dica, [data-operador]')) return; const tr = ev.target.closest('tr[data-abrir]'); if (tr) abrir(tr); });
   tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-abrir]'); if (tr && ev.key === 'Enter') abrir(tr); });
   NGFicha.aoMudar(() => carregar());
   NG.botaoAtualizar(() => carregar());

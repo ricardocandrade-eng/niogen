@@ -1006,6 +1006,7 @@
       ${r && r !== 'viavel' && !fechada ? '<span class="nota-campo">Sem viabilidade ou endereço não encontrado: tente variações de CEP, rua e número no portal antes de encerrar.</span>' : ''}
       ${!fechada && !form ? `<div class="conf-botoes">
         <a class="btn ${r === 'viavel' ? '' : 'btn-acc'}" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>
+        ${ehBO() ? NG.botaoOperador({ vendaId: v.id }, '⌖ Consultar pelo operador') : ''}
         <button type="button" class="btn" data-f="viab-form" title="${esc(NG.ajuda.viab_registrar)}">Registrar resultado</button></div>` : ''}
       ${form}
       <div class="pista-dfv" title="${esc(NG.ajuda.dfv_pista)}"><span>Pista do DFV (foto da Nio de ${esc(pd.foto)})</span> ${esc(pd.txt)}</div>
@@ -1956,6 +1957,7 @@
         <span class="f-nota">Sai do Live e da contagem até o dia, às 9h (aparece em "Acompanhando"). Se o cliente escrever antes, volta na hora. No Chatwoot: nota e conversa adiada até o dia. A Mari continua calada.</span>
         <div class="f-prox-bts"><button type="submit" class="btn btn-acc btn-sm">Aguardar</button><button type="button" class="btn btn-ghost btn-sm" data-f="cancelar">Cancelar</button></div></form>` : '';
     const at = [];
+    if (bo && !silenciada) at.push(NG.botaoOperador({ conversaId: c.id }, '⌖ Consultar viabilidade e crédito'));   // 13/11: atalho do operador
     if (bo && !silenciada && (dono.tipo === 'pessoa' || dono.tipo === 'time')) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>');
     if (bo && !c.nao_contatar && c.chatwoot_conversation_id) at.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar">Cliente pediu para parar</button>');
     // 0100: Saída e Silenciar (conversa sem venda) · Reativar quando silenciada.

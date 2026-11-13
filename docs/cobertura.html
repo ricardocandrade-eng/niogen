@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-33">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-3"></script>
 <script src="assets/sidebar.js?v=131126-2"></script>
 <script src="assets/novavenda.js?v=111126-20"></script>
 <style>
@@ -1001,6 +1001,17 @@
     F.numero.value = qs.get('numero') || '';
     F.complemento.value = qs.get('complemento') || '';
     consultar();
+  } else if (location.hash === '#lead') {
+    // 13/11: veio do atalho do operador (Leads, Live, ficha). Dado do lead vem por chave de uso único, nunca pela URL.
+    let L = null;
+    try { L = JSON.parse(localStorage.getItem('niogen.cobertura.lead') || 'null'); localStorage.removeItem('niogen.cobertura.lead'); } catch (e) { /* */ }
+    history.replaceState(null, '', location.pathname);
+    if (L && Date.now() - (L.em || 0) < 120000) {
+      if (L.cpf && podeCredito) FC.cpf.value = fmtCpf(NG.soDigitos(L.cpf).slice(0, 11));
+      if (L.nome) NG.toast(`Consulta para ${String(L.nome).split(' ')[0]}${L.cpf && podeCredito ? ' — o CPF já está no campo do crédito' : ''}`, 'ok');
+      if (NG.soDigitos(L.cep)) { F.cep.value = L.cep; F.numero.value = L.numero || ''; F.complemento.value = L.complemento || ''; consultar(); }
+      else F.cep.focus();
+    } else F.cep.focus();
   } else F.cep.focus();
 
   // ------------------------------------------------------------ painel DFV Sudeste: barra no pé, abre em tela cheia (o Power BI só carrega no 1º toque)

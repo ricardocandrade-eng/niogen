@@ -33,10 +33,10 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-33">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-3"></script>
 <script src="assets/sidebar.js?v=131126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=121126-29"></script>
+<script src="assets/ficha.js?v=131126-3"></script>
 <script src="assets/pulso.js?v=121126-24"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -238,7 +238,7 @@
       <div class="lv-prox">${esc(j.o_que_fazer || '—')}</div>
       <div>${donoHtml(j)}</div>
       <div><span class="lv-pill">${esc(PRAZO[j.nivel] || '—')}</span></div>
-      <div class="lv-act"><button type="button" class="btn btn-sm${paraFazer ? ' lv-go' : ''}" data-bt="${paraFazer ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(paraFazer ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}${SETA}</button></div>
+      <div class="lv-act">${j.etapa >= 1 && j.etapa <= 3 ? NG.botaoOperador({ vendaId: j.venda_id, conversaId: j.conversa_id }, '⌖') : ''}<button type="button" class="btn btn-sm${paraFazer ? ' lv-go' : ''}" data-bt="${paraFazer ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(paraFazer ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}${SETA}</button></div>
     </div>`;
   const cabTab = '<div class="lv-thead"><span>Cliente</span><span>Situação</span><span>Próximo passo</span><span>Dono</span><span>Prazo</span><span></span></div>';
   const secao = (tit, dica, corpo, cls = '') => `<section class="lv-sec${cls ? ` ${cls}` : ''}"><div class="lv-sec-h"><h2>${tit}</h2><span class="apagado">${dica}</span></div><div class="lv-table">${corpo}</div></section>`;

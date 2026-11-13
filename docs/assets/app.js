@@ -208,6 +208,7 @@
   // ---------- ajuda ao passar o mouse (prompt 27) ----------
   // Um único dicionário: o que é e o que fazer. Tela Mari, ficha e menu usam daqui (title= + ⓘ via NG.dicaTxt).
   const ajuda = {
+    op_consultar: 'Consulta pelo operador: abre a Consulta de cobertura já com o CEP, o número e o CPF deste lead. A viabilidade roda sozinha no portal e no DFV; o crédito você dispara com um clique. O resultado aparece na hora — grave na ficha o que o operador respondeu.',
     // Live › ⚠ Conferir (0153)
     conf_secao: 'Conferir: o que ficou parado ou saiu do trilho. Não é a fila do dia — é o que ninguém estava vendo. Resolva cada linha ou dispense; a seção some quando estiver vazia.',
     conf_acao_falhou: 'Um botão seu (resolver, etiqueta, atribuir, nota ou mensagem) falhou 3 vezes no Chatwoot, então o NIOGEN e o Chatwoot estão diferentes. O que fazer: Tentar de novo. Se já foi resolvido de outro jeito, Dispensar.',
@@ -1196,6 +1197,34 @@
     }).join('')}<span class="selo-ficha-nota">Só aviso — nada foi bloqueado. Confira antes do pedido (recompra = multa R$ 500; cliente/endereço já Nio = estorno 100 %).</span></div>`;
   }
   // "há 3h05" / "há 2 dias" (para "a mais antiga está parada há …").
+  // 13/11 (Ricardo): atalho do operador nas telas. Leva CEP, número e CPF do lead para a Consulta de cobertura SEM pôr dado
+  // pessoal na URL: vai por uma chave de uso único no navegador (lida e apagada pela tela Cobertura, vale 2 min).
+  async function consultarOperador({ vendaId, conversaId }) {
+    const aba = window.open('about:blank', '_blank');   // abre já, dentro do clique (senão o navegador bloqueia)
+    let lead = null;
+    try {
+      if (vendaId) {
+        const { data } = await sb.from('vendas').select('cliente_nome, cep, numero, complemento, cliente_cpf_cnpj').eq('id', vendaId).maybeSingle();
+        if (data) lead = { nome: data.cliente_nome, cep: data.cep, numero: data.numero, complemento: data.complemento, cpf: data.cliente_cpf_cnpj, vendaId };
+      }
+      if (!lead && conversaId) {
+        const { data } = await sb.from('mari_conversas').select('nome_contato, cep, numero, complemento, dados').eq('id', conversaId).maybeSingle();
+        if (data) lead = { nome: (data.dados && data.dados.nome) || data.nome_contato, cep: data.cep, numero: data.numero, complemento: data.complemento, cpf: data.dados && data.dados.cpf, conversaId };
+      }
+    } catch (e) { /* abre a tela vazia */ }
+    try { localStorage.setItem('niogen.cobertura.lead', JSON.stringify({ ...(lead || {}), em: Date.now() })); } catch (e) { /* */ }
+    if (aba) aba.location.href = 'cobertura.html#lead'; else location.href = 'cobertura.html#lead';
+    if (!lead || !soDigitos(lead.cep)) toast('Este lead ainda não tem CEP: a consulta abriu vazia.', 'bad');
+  }
+  document.addEventListener('click', (ev) => {
+    const b = ev.target.closest && ev.target.closest('[data-operador]');
+    if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    consultarOperador({ vendaId: b.dataset.venda || null, conversaId: b.dataset.conversa || null });
+  }, true);
+  const botaoOperador = ({ vendaId, conversaId }, rotulo = '⌖ Consultar') => ((vendaId || conversaId)
+    ? `<button type="button" class="btn btn-sm btn-ghost" data-operador ${vendaId ? `data-venda="${esc(vendaId)}"` : `data-conversa="${esc(conversaId)}"`} title="${esc(ajuda.op_consultar)}">${rotulo}</button>` : '');
+
   const haQuanto = (desde) => {
     if (!desde) return '—';
     const h = Math.max(0, (Date.now() - new Date(desde)) / 3600000);
@@ -1393,7 +1422,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
