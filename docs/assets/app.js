@@ -356,7 +356,7 @@
     ficha_fora: 'Alguém agiu direto no Chatwoot e o NIOGEN ficou diferente. O que fazer: acerte por aqui (Saída ou Reabrir) — o atendimento é só pelo NIOGEN.',
     hist_briefing: 'Briefing do handoff: o resumo que a Mari escreveu quando passou a conversa para o time — o que o cliente quer e o que falta.',
     hist_erros: 'Erros da Mari: falhas técnicas do robô nesta conversa (uma mensagem que não saiu, um nó que quebrou). Se o cliente ficou sem resposta por causa disso, responda à mão.',
-    ficha_chave: 'Ficha única: a ficha do cliente em tela cheia, igual em todas as telas, com as três trilhas no topo. Desligue só se algo faltar — e avise o Ricardo, para a ação voltar.',
+    ficha_chave: 'A ficha única (tela cheia, igual em todas as telas, com as três trilhas) é o padrão para todos. Esta chave traz a gaveta antiga de volta só neste navegador. Use só se algo faltar na ficha única — e avise o Ricardo, para a ação voltar.',
     // pendência com terceiro (0064)
     pendencia:'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
   };

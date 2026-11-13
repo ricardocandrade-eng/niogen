@@ -2547,3 +2547,9 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
 .lv-stage-lk { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px; font-size: 12.5px; white-space: nowrap; }
 .lv-stage-lk a { color: var(--link); text-decoration: none; }
 .lv-stage-lk a:hover { text-decoration: underline; }
+/* 13/11 (4a, celular): o cabeçalho da conversa na ficha única quebra em linhas em vez de sobrepor as etiquetas */
+@media (max-width: 900px) {
+  .cvp-raiz.cheia .cvp-l1 { height: auto; min-height: 46px; flex-wrap: wrap; padding: 6px 16px; row-gap: 2px; }
+  .cvp-raiz.cheia .cvp-chips { flex-wrap: wrap; }
+  .cvp-raiz.cheia .cvp-l2 { overflow-x: auto; }
+}

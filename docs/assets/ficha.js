@@ -64,7 +64,7 @@
   let paginaVolta = null;  // venda.html: para onde o "Voltar" leva
   // A chave: a ficha única vale para todas as telas; a gaveta antiga volta por Configurações ou ?ficha=antiga (por navegador).
   try { const q = new URLSearchParams(location.search).get('ficha'); if (q === 'antiga' || q === 'nova') localStorage.setItem('niogen.ficha', q); } catch (e) { /* sem armazenamento */ }
-  const fichaAntiga = () => { try { return localStorage.getItem('niogen.ficha') !== 'nova'; } catch (e) { return true; } };   // 1ª publicação: nova só por ?ficha=nova, até validar
+  const fichaAntiga = () => { try { return localStorage.getItem('niogen.ficha') === 'antiga'; } catch (e) { return false; } };   // 13/11: a ficha única é o padrão; a gaveta antiga só com niogen.ficha = 'antiga'
   const leadCfg = () => (leadCfgCache ? Promise.resolve(leadCfgCache)
     : Promise.resolve(NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda, volta').order('ordem')).then((r) => { if (!r.error) leadCfgCache = r.data || []; return leadCfgCache || []; }, () => []));
   const opcL = (q) => Promise.resolve(q).then((x) => (x.error ? null : (x.data || [])[0] || null), () => null);
@@ -416,6 +416,7 @@
   const turnoDe = (fd, campo = 'periodo') => (fd.get(campo) === '13:00' ? 'tarde' : 'manha');
   const TURNO = { manha: 'manhã', tarde: 'tarde' };
   const acoesForm = (rotulo) => `<div class="f-form-acoes"><button type="button" class="btn btn-ghost" data-f="cancelar">Cancelar</button><button type="submit" class="btn btn-acc">${esc(rotulo)}</button></div>`;
+  const TIT_SAIDA = 'SAÍDA · ENCERRAR COM MOTIVO';   // 13/11: o painel da ficha única diz que é a Saída (antes ficava o título do próximo passo)
   const formWrap = (id, titulo, texto, corpo, rotulo) => `<form class="f-formulario" data-form="${id}" novalidate>
       <h3>${esc(titulo)}</h3>${texto ? `<p>${texto}</p>` : ''}${corpo}${acoesForm(rotulo || 'Salvar')}</form>`;
 
@@ -2436,6 +2437,8 @@
   const hashDe = (id) => (String(id).startsWith('c:') ? `#conversa=${id.slice(2)}` : `#venda=${id}`);
   const semHash = () => `${location.pathname}${location.search}`;
   let tituloOriginal = document.title;
+  // 13/11: o título da aba leva o nome da tela de onde a ficha abriu (antes dizia "Live" em qualquer tela).
+  const tituloCom = (nome) => `${nome || 'Contato'} · ${String(tituloOriginal || 'NIOGEN').replace(/^\(\d+\)\s*/, '')}`;
 
   const ouvintesFechar = [];
   function aoFecharGaveta() {
@@ -3019,11 +3022,11 @@
     const pend = formAtivo && formAtivo.startsWith('pend_');
     const extra = pend ? cartaoPendencia(v) : formCartao ? `<div class="f-form-solto">${FORMS[formAtivo](v)}</div>` : '';
     return `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Próximo passo">
-      <div class="fc-card-h"><h3>${esc(p.alertaConv ? 'Conversa · agora' : NIVEL_ROT[p.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
+      <div class="fc-card-h"><h3>${esc(formAtivo === 'saida' ? TIT_SAIDA : p.alertaConv ? 'Conversa · agora' : NIVEL_ROT[p.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
       <div class="fc-passo-corpo">
         ${v.status === 'saida' ? '' : NG.selosFicha(d.avisos, { ignorar: v.id })}
         ${extra || `${p.alertaConv ? `<div class="fc-passo-b"><b>${esc(p.jReal.o_que_fazer)}</b>${p.corpoConv}</div>` : ''}
-        <div class="fc-passo-b"><b>${esc(p.texto || '—')}</b>${p.corpo}</div>${p.feito}
+        <div class="fc-passo-b">${formAtivo === 'saida' ? '' : `<b>${esc(p.texto || '—')}</b>`}${p.corpo}</div>${p.feito}
         ${cartaoConferencia(v)}${mostraCartoesPortal(v) ? cartaoPortal(v) : ''}`}
       </div></div>`;
   }
@@ -3317,7 +3320,7 @@
       if (!abertos) abertos = new Set();
       const p = passoPartes(v, pr);
       const etapa = d.jor ? d.jor.etapa : (NG.etapaDe(v).n || 0);
-      document.title = `${v.cliente_nome} · Live · NIOGEN`;
+      document.title = tituloCom(v.cliente_nome);
       const atual = NG.etapaDe(v).id;
       const menu = `${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div><div class="fc-msep"></div>` : ''}
         ${v.cliente_whatsapp ? '<button type="button" class="fc-mitem" data-f="copiar-tel">Copiar telefone</button>' : ''}
@@ -3347,7 +3350,7 @@
       const P = conversaPartes();
       const c = P.c;
       const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
-      document.title = `${c.nome} · Live · NIOGEN`;
+      document.title = tituloCom(c.nome);
       const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>${auditarItem()}
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
       cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu,
@@ -3368,8 +3371,8 @@
           <div class="fc-dl fc-venda-v">${osLista(P.passosConv)}${dinLinha()}
             ${P.itens.length ? `<div class="f-itens fc-itens-v">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : ''}
             ${travas.length ? `<div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill bad">${esc(`risco: ${travas.join(', ')}`)}</span></span><span></span></div>` : ''}</div></div>
-        ${abertoP ? `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Ações"><div class="fc-card-h"><h3>${esc(NIVEL_ROT[P.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
-          <div class="fc-passo-corpo"><div class="fc-passo-b"><b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>${P.corpoPasso}</div>${P.feito}</div></div>` : ''}${etapaOver(P.passosConv)}</div>`;
+        ${abertoP ? `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Ações"><div class="fc-card-h"><h3>${esc(formAtivo === 'saida' ? TIT_SAIDA : NIVEL_ROT[P.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
+          <div class="fc-passo-corpo"><div class="fc-passo-b">${formAtivo === 'saida' ? '' : `<b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>`}${P.corpoPasso}</div>${P.feito}</div></div>` : ''}${etapaOver(P.passosConv)}</div>`;
     }
     const etapaNome = (d.lead && d.lead.etapa_nome) || (d.jor ? d.jor.etapa_nome : '');
     const temConv = !!d.conversaId;
@@ -3442,10 +3445,10 @@
     const b = ev.target.closest('[data-f]');
     const a = b ? b.dataset.f : '';
     if (!a.startsWith('fc-')) {
-      if (['pend-abrir', 'pend-adiar', 'pend-encerrar', 'pend-saida', 'viab-form', 'ref-form', 'saida-form', 'ir-conferencia', 'pend-viab', 'pend-conf'].includes(a)) { fc.pend = false; fc.etapa = null; fc.passo = true; render(); return; }
+      if (['pend-abrir', 'pend-adiar', 'pend-encerrar', 'pend-saida', 'viab-form', 'ref-form', 'saida-form', 'ir-conferencia', 'pend-viab', 'pend-conf'].includes(a)) { fc.pend = false; fc.etapa = null; fc.passo = true; fc.aba = 'ficha'; render(); return; }   // celular: o formulário abre na aba Ficha
       if (a === 'trocar-plano') { fc.ver = 'venda'; fc.passo = false; render(); return; }
       if (a === 'cancelar' && !(b && b.closest('.f-bloco'))) { fc.passo = false; render(); return; }
-      if (a === 'mover') { fc.menu = false; fc.passo = true; }
+      if (a === 'mover') { fc.menu = false; fc.passo = true; fc.aba = 'ficha'; mudou = true; }   // celular: o formulário (Saída, OS, data) abre na aba Ficha
       if (a === 'auditar') { fc.menu = false; mudou = true; }
       if (a === 'conversa' && fc.aba !== 'conv') { fc.aba = 'conv'; mudou = true; }   // celular: Responder leva para a aba Conversa
       if (mudou) render();
