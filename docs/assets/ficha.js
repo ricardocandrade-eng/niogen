@@ -2405,7 +2405,22 @@
     if (destino === '2_aguardando_instalacao') { formAtivo = 'mover_aguardando'; render(); return; }
     if (destino === 'saida') { formAtivo = 'saida'; render(); return; }
     formAtivo = null;
-    await gravar({ status: destino }, `${NG.primeiroNome(v.cliente_nome)} → ${STATUS_MAP[destino].curto}`);
+    // 0179 (etapa 6e): o caminho natural grava como sempre; voltar ou pular degrau é pela função do admin, com o motivo.
+    const NATURAL = { '0_qualificado': ['1_vendido', '2_aguardando_instalacao'], '1_vendido': ['2_aguardando_instalacao', '3_instalado'],
+      '2_aguardando_instalacao': ['3_instalado'], '3_instalado': ['4_ativo_provisorio'], '4_ativo_provisorio': ['5_comissao_firme'] };
+    if ((NATURAL[v.status] || []).includes(destino)) {
+      await gravar({ status: destino }, `${NG.primeiroNome(v.cliente_nome)} → ${STATUS_MAP[destino].curto}`);
+      return;
+    }
+    const fd = await NG.modal(`<h3>Mover ${esc(NG.primeiroNome(v.cliente_nome))} para ${esc(STATUS_MAP[destino].curto)}</h3>
+      <p>Você está voltando ou pulando um degrau (hoje: ${esc(STATUS_MAP[v.status].curto)}). Isso fica registrado no histórico da venda, com o seu nome.</p>
+      <label class="campo">Por quê?<textarea name="motivo" rows="3" required minlength="5" placeholder="ex.: marcada como instalada por engano"></textarea></label>`);
+    if (!fd) return;
+    const { error } = await NG.sb.rpc('venda_mover_admin', { p_venda: v.id, p_destino: destino, p_motivo: String(fd.get('motivo') || '').trim() });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`${NG.primeiroNome(v.cliente_nome)} → ${STATUS_MAP[destino].curto}`, 'ok');
+    NG.limparCache();
+    await recarregar();
   }
 
   document.addEventListener('click', (ev) => {
