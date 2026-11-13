@@ -109,10 +109,11 @@
       texto = `${NG.fmtDataHora(e.criado_em)}${quem} · de ${esc(STATUS_MAP[dt.de]?.curto || dt.de)}`;
       if (dt.para === '1_vendido' && v.nio_pedido) texto += ` · pedido #${esc(v.nio_pedido)}`;
       if (dt.para === '2_aguardando_instalacao' && v.vendido_em && v.agendamento_registrado_em) {
-        const h = (new Date(v.agendamento_registrado_em) - new Date(v.vendido_em)) / 3600000;
+        const lim = Number(v.prazo_agendar_horas ?? 4);   // 0180: o limite e o início do relógio vêm da v_vendas
+        const h = (new Date(v.agendamento_registrado_em) - new Date(v.agendar_desde || v.vendido_em)) / 3600000;
         titulo = `Instalação agendada em ${NG.fmtHoras(h)}`;
-        texto += h <= 4 ? ' · dentro do limite de 4 h' : ' · fora do limite de 4 h';
-        if (h > 4) cor = 'warn';
+        texto += h <= lim ? ` · dentro do limite de ${lim} h` : ` · fora do limite de ${lim} h`;
+        if (h > lim) cor = 'warn';
       }
       if (dt.motivo) texto += ` · ${esc(dt.motivo)}`;
     } else if (e.tipo === 'agendamento') {
@@ -223,7 +224,7 @@
 
   function proximosMarcos(v) {
     const m = [];
-    if (v.status === '1_vendido' && v.vendido_em) m.push(`agendar até ${NG.fmtDataHora(new Date(new Date(v.vendido_em).getTime() + 4 * 3600000))}`);
+    if (v.status === '1_vendido' && (v.agendar_ate || v.vendido_em)) m.push(`agendar até ${NG.fmtDataHora(v.agendar_ate || new Date(new Date(v.agendar_desde || v.vendido_em).getTime() + Number(v.prazo_agendar_horas ?? 4) * 3600000))}`);
     if (v.instalacao_agendada_para && !v.instalado_em) m.push(`instalação ${diaSemanaData(v.instalacao_agendada_para)} ${NG.janela(v.instalacao_agendada_para)}`);
     if (v.docs_prazo_em && !v.docs_entregues_em) m.push(`docs à Nio até ${NG.fmtData(v.docs_prazo_em)}`);
     if (NG.avisoDowngrade(v)) m.push(NG.avisoDowngrade(v));

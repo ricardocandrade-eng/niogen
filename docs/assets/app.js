@@ -706,6 +706,10 @@
   const viabIniciar = (endereco) => creditoFn({ acao: 'viabilidade', endereco });
   // 11/11 ~22h30: print da tela do portal quando a viabilidade não saiu ({tipo, base64, em}). Só admin/backoffice.
   const portalPrint = (jobId) => creditoFn({ acao: 'print', job_id: jobId });
+  // 0181 (etapa 6c): "meu" pelo vínculo do usuário com o agente do Chatwoot (usuarios.chatwoot_agente_nome, editado em
+  // Configurações › Equipe); sem vínculo, vale o nome do usuário no NIOGEN, como antes.
+  const ehMeu = (donoNome) => { const u = usuarioAtual || {}; const n = String(donoNome || '').trim().toLowerCase();
+    return !!n && [u.chatwoot_agente_nome, u.nome].some((x) => String(x || '').trim().toLowerCase() === n); };
   // 13/11 (etapa 3): "Consultar OS agora" — o Operador de OS lê o andamento da OS de UMA venda na Consulta OS do portal (~15 s).
   // O CPF e o nº da OS saem do banco, na edge function; daqui vai só o id da venda. A leitura que mudou já volta gravada.
   async function osConsultar(vendaId, aoAndar) {
@@ -1328,7 +1332,7 @@
         const hBio = desdeLink ? (Date.now() - new Date(desdeLink)) / 3600000 : null;
         if (v.biometria_status === 'validada') {
           const h = v.biometria_validada_em ? (Date.now() - new Date(v.biometria_validada_em)) / 3600000 : null;
-          return { txt: `Biometria validada · abrir a OS no portal (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'os' };
+          return { txt: `Biometria validada · abrir a OS no portal (prazo ${Number(v.prazo_agendar_horas ?? 4)} h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'os' };
         }
         if (v.credito_resultado === 'negado') return { txt: 'Crédito negado · pedir outro CPF (pendência) ou encerrar', nivel: 'bad', acao: true, resolver: 'bio_status' };
         if (v.biometria_status === 'com_risco') return { txt: 'Biometria com risco · conferir no portal', nivel: 'warn', acao: true, resolver: 'bio_status' };
@@ -1343,7 +1347,7 @@
         if (!q) {
           const b = v.biometria_validada_em || v.vendido_em;
           const h = b ? (Date.now() - new Date(b)) / 3600000 : null;
-          return { txt: `OS aberta · agendar a instalação (prazo 4 h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'agendar' };
+          return { txt: `OS aberta · agendar a instalação (prazo ${Number(v.prazo_agendar_horas ?? 4)} h)${h != null ? ` · há ${fmtHoras(h)}` : ''}`, nivel: 'bad', acao: true, resolver: 'agendar' };
         }
         const d = diaSP(q), j = janela(q);
         if (d < hoje) return { txt: `Instalação era ${dd(q)} e a Nio não deu baixa · conferir no portal`, nivel: 'warn', acao: true, resolver: 'reagendar' };
@@ -1656,7 +1660,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,

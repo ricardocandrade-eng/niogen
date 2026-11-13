@@ -19,10 +19,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-26">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-27"></script>
+<script src="assets/app.js?v=131126-29"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-28"></script>
+<script src="assets/ficha.js?v=131126-29"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -77,7 +77,7 @@
   const NOME_ET = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.nome]));
   const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';
   const ICO_PESSOA = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>';
-  const minha = (c) => c.dono_tipo === 'pessoa' && c.dono_nome === eu.nome;
+  const minha = (c) => c.dono_tipo === 'pessoa' && NG.ehMeu(c.dono_nome);   // 0181: pelo vínculo do Chatwoot (Configurações › Equipe)
   const aberta = (c) => !c.encerrada && c.chatwoot_status !== 'resolved';
   const FILTROS = [
     ['esperando', 'Esperando resposta', (c) => c.cliente_esperando && !c.encerrada],
@@ -141,7 +141,7 @@
     itensEl.innerHTML = l.length ? l.map((c) => `<button type="button" class="cv-item${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
         <span class="cv-l1"><i class="mv-dot" style="--c:${COR[c.etapa] || '#6E747C'}" title="${esc(NOME_ET[c.etapa] || '')}"></i><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
         <span class="cv-l2">${esc(previa(c))}</span>
-        <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(c.dono_nome === eu.nome ? 'você' : c.dono_nome)}` : 'sem dono'}
+        <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(NG.ehMeu(c.dono_nome) ? 'você' : c.dono_nome)}` : 'sem dono'}
           ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${silenciada(c) ? '<span class="cv-sil" title="Silenciada: cliente Nio com suporte/reclamação. A Mari não responde e a conversa não volta para o Live. Para desfazer: Abrir a ficha › 🔔 Reativar.">· 📵 silenciada</span>' : c.encerrada ? '<span>· encerrada</span>' : c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
           ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
           ${c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino) ? `<span class="cv-dest" title="Destino da conversa${c.funil_detalhe ? ': ' + esc(c.funil_detalhe) : ''}">· ${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>` : c.funil_etapa ? `<span class="cv-etp" title="Etapa mais alta alcançada">· ${esc(fnome.etapa[c.funil_etapa] || c.funil_etapa)}</span>` : ''}

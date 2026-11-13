@@ -2,7 +2,7 @@
  * Cache só dos arquivos estáticos do próprio site. Supabase, ViaCEP e CDN passam direto pela rede.
  * BUMPAR o CACHE a cada publicação (niogen-DDMMAA-N).
  */
-const CACHE = 'niogen-131126-28';
+const CACHE = 'niogen-131126-29';
 const ARQUIVOS = [
   './', 'index.html', 'painel.html', 'funil.html', 'instalacoes.html', 'operacoes.html', 'vendas.html', 'venda.html', 'configuracoes.html', 'tabela.html', 'metaads.html', 'cobertura.html', 'credito.html', 'mari.html', 'embreve.html', 'adimplencia.html', 'conciliacao.html', 'parceiros.html', 'pagamentos.html', 'guia.html', 'fila.html', 'conversas.html', 'leads.html',
   'assets/app.css', 'assets/app.js', 'assets/ficha.js', 'assets/conversa.js', 'assets/novavenda.js', 'assets/sidebar.js', 'assets/pulso.js', 'assets/osab.js', 'assets/dfv.js', 'assets/markdown.js', 'assets/icon.svg', 'manifest.webmanifest',

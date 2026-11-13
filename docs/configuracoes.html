@@ -22,7 +22,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=131126-27"></script>
+<script src="assets/app.js?v=131126-29"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
@@ -86,7 +86,7 @@
       <div class="faixa cinza">Para incluir alguém: <a href="https://supabase.com/dashboard/project/zlrfwbkblytnokuexjti/auth/users" target="_blank" rel="noopener">Supabase › Authentication › Users</a> › <b>Add user › Send invitation</b> com o e-mail da pessoa. Ela recebe o link, cria a própria senha no NIOGEN e aparece aqui <b>sem acesso</b>: escolha o perfil e clique em <b>Liberar</b>.</div>
       <section class="lista padrao" aria-label="Equipe">
         <div class="rolagem"><table class="tab">
-          <thead><tr><th>Nome</th><th class="col-media">E-mail</th><th>Perfil</th><th class="col-media">Último login</th><th>Acesso</th><th></th></tr></thead>
+          <thead><tr><th>Nome</th><th class="col-media">E-mail</th><th>Perfil</th><th class="col-media" title="Nome e id do agente desta pessoa no Chatwoot. É por ele que o NIOGEN sabe quais conversas são dela (“você” na Live) e a quem atribuir quando ela clica em Assumir.">Agente no Chatwoot</th><th class="col-media">Último login</th><th>Acesso</th><th></th></tr></thead>
           <tbody id="equipe-lista"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
         </table></div>
         <div class="rodape-lista"><span>Vendedor: vendas e Mari · Backoffice: + portal, configurações e importação · Admin: tudo</span><span>Só o admin vê esta aba</span></div>
@@ -861,8 +861,12 @@ Guardar?`)) return;
   async function carregarEquipe() {
     const { data, error } = await NG.sb.rpc('admin_equipe');
     const tb = document.getElementById('equipe-lista');
-    if (error) { tb.innerHTML = `<tr><td colspan="6" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+    if (error) { tb.innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
     EQ = data || [];
+    // 0181: vínculo com o agente do Chatwoot (nome como o Chatwoot escreve + id). admin_equipe() não traz; vem da usuarios.
+    const { data: cw } = await NG.sb.from('usuarios').select('id, chatwoot_agente_nome, chatwoot_agente_id');
+    const porId = Object.fromEntries((cw || []).map((x) => [x.id, x]));
+    EQ.forEach((u) => Object.assign(u, porId[u.id] || {}));
     renderEquipe();
     renderAbas();
   }
@@ -876,12 +880,14 @@ Guardar?`)) return;
         <td><input class="inp" data-campo="nome" value="${esc(u.nome || '')}" aria-label="Nome" ${souEu ? '' : ''}></td>
         <td class="col-media mono">${esc(u.email || '—')}</td>
         <td><select class="sel" data-campo="perfil" aria-label="Perfil" ${souEu ? 'disabled' : ''}>${Object.entries(PERFIS).map(([k, v]) => `<option value="${k}" ${u.perfil === k ? 'selected' : ''}>${v}</option>`).join('')}</select></td>
+        <td class="col-media"><input class="inp" data-campo="cw_nome" value="${esc(u.chatwoot_agente_nome || '')}" placeholder="nome no Chatwoot" aria-label="Nome do agente no Chatwoot" style="width:150px">
+          <input class="inp mono" data-campo="cw_id" value="${esc(u.chatwoot_agente_id ?? '')}" placeholder="id" inputmode="numeric" aria-label="Id do agente no Chatwoot" style="width:84px"></td>
         <td class="col-media">${u.ultimo_login ? NG.fmtDataHora(u.ultimo_login) : '—'}</td>
         <td>${status}</td>
         <td class="num">${souEu ? '<small>você</small>' : `<button type="button" class="btn ${u.ativo ? 'btn-ghost' : 'btn-acc'}" data-acao="${u.ativo ? 'bloquear' : 'liberar'}">${u.ativo ? 'Tirar acesso' : 'Liberar'}</button>`}
           <button type="button" class="btn btn-ghost" data-acao="salvar">Salvar</button></td>
       </tr>`;
-    }).join('') || '<tr><td colspan="6" class="vazio">Ninguém além de você ainda.</td></tr>';
+    }).join('') || '<tr><td colspan="7" class="vazio">Ninguém além de você ainda.</td></tr>';
   }
   document.getElementById('equipe-lista').addEventListener('click', async (ev) => {
     const b = ev.target.closest('button[data-acao]');
@@ -892,6 +898,13 @@ Guardar?`)) return;
     const perfil = tr.querySelector('[data-campo=perfil]').value;
     if (!nome) { NG.toast('O nome não pode ficar vazio.', 'bad'); return; }
     const mud = { nome, perfil };
+    const cwNome = tr.querySelector('[data-campo=cw_nome]'), cwId = tr.querySelector('[data-campo=cw_id]');
+    if (cwNome && cwId) {   // 0181
+      const idTxt = cwId.value.trim();
+      if (idTxt && !/^\d{1,9}$/.test(idTxt)) { NG.toast('O id do agente no Chatwoot é só número.', 'bad'); return; }
+      mud.chatwoot_agente_nome = cwNome.value.trim() || null;
+      mud.chatwoot_agente_id = idTxt ? Number(idTxt) : null;
+    }
     if (b.dataset.acao === 'liberar') mud.ativo = true;
     if (b.dataset.acao === 'bloquear') {
       if (!confirm(`Tirar o acesso de ${u.nome}? A pessoa deixa de entrar no NIOGEN (nada é apagado).`)) return;

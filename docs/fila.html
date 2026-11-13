@@ -33,10 +33,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-26">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-27"></script>
+<script src="assets/app.js?v=131126-29"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-28"></script>
+<script src="assets/ficha.js?v=131126-29"></script>
 <script src="assets/pulso.js?v=121126-24"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -139,7 +139,7 @@
   const SETA = '<svg class="lv-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>';
   const donoHtml = (j) => {
     if (!j.dono_tipo) return '<span class="mv-dono apagado">sem dono</span>';
-    const nome = j.dono_tipo === 'mari' ? 'Mari' : (j.dono_nome === eu.nome ? 'você' : j.dono_nome || 'time');
+    const nome = j.dono_tipo === 'mari' ? 'Mari' : (NG.ehMeu(j.dono_nome) ? 'você' : j.dono_nome || 'time');
     return `<span class="mv-dono ${j.dono_tipo}">${j.dono_tipo === 'mari' ? ICO_ROBO : ICO_PESSOA}${esc(nome)}</span>`;
   };
   const haTempo = (iso) => {

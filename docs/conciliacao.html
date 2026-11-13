@@ -24,10 +24,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-26">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-27"></script>
+<script src="assets/app.js?v=131126-29"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-28"></script>
+<script src="assets/ficha.js?v=131126-29"></script>
 </head>
 <body>
 <div class="app">
@@ -131,7 +131,9 @@
   // Contrato (docs/CONTRATO_DHARMA_regras.md): apuração quinzenal; pedido da Nio → Dharma emite a NF → processamento em até
   // 10 dias úteis; contestação em até 120 dias corridos do fato gerador (aqui: a ativação). Recompra = multa de R$ 500 (não é
   // estorno); fraude = estorno de 100 %. Churn e inadimplência não estornam.
-  const PRAZO_CONTESTACAO = 120;
+  let PRAZO_CONTESTACAO = 120;   // 0180: vem de config_regras.prazo_contestacao_dias (lido na carga); 120 é só o padrão
+  NG.sb.from('config_regras').select('valor').eq('chave', 'prazo_contestacao_dias').maybeSingle()
+    .then(({ data }) => { const n = Number(data && data.valor); if (n > 0) PRAZO_CONTESTACAO = n; });
   const ALERTA_PRAZO = 15;
   const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
