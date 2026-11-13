@@ -2262,7 +2262,7 @@ body.lv-com-cliente .mv-feito { display: none; }
 .pl-faixa.pl-n-parado { border-color: var(--bad-border); }
 .pl-faixa.pl-n-atencao { border-color: var(--warn-border); }
 .pl-geral, .pl-elo, .pl-funil { flex: 1 1 170px; min-width: 0; box-sizing: border-box; padding: 11px 16px; display: flex; flex-direction: column; gap: 4px; }
-.pl-geral { background: var(--surface-dim); justify-content: center; }
+.pl-geral { background: var(--surface-dim); justify-content: center; align-items: center; text-align: center; }
 .pl-geral.pl-n-parado { background: var(--bad-bg); }
 .pl-geral.pl-n-atencao { background: var(--warn-bg); }
 .pl-ecg { width: 120px; height: 26px; }
@@ -2331,7 +2331,7 @@ body.lv-com-cliente .mv-feito { display: none; }
 .pl-velho { color: var(--muted) !important; }
 /* celular e telas estreitas: cada elo numa linha, 2 por fileira */
 @media (max-width: 900px) {
-  .pl-geral { flex-basis: 100%; flex-direction: row; align-items: center; gap: 10px; }
+  .pl-geral { flex-basis: 100%; flex-direction: row; align-items: center; justify-content: center; gap: 10px; }
   .pl-ecg { width: 80px; height: 20px; }
   .pl-elo, .pl-funil { flex: 1 1 45%; border-left: 0; border-top: 1px solid var(--border); padding: 10px 14px; }
   .pl-linhas { display: none; }
