@@ -2658,7 +2658,7 @@
     const el = raiz && raiz.querySelector(`[data-fc-op="${tipo}"]`);
     if (el) el.outerHTML = opPainel(tipo);
   }
-  // 13/11 (etapa 3): o degrau "Instalação" da Escada consulta a OS na Nio (Operador de OS) e responde num modal.
+  // 13/11 (etapa 3): o degrau "OS aberta" (código instalacao) da Escada consulta a OS na Nio (Operador de OS) e responde num modal.
   // Mudou alguma coisa → recarrega a ficha (status, data, Live).
   const temOsNio = () => !!(d && !d.soConversa && d.v && ehBO() && /\d{8}/.test(String(d.v.nio_os || d.v.nio_pedido || '')));
   async function abrirOsModal() {
@@ -2770,6 +2770,21 @@
   // 13/11 (Ricardo: "o olho cansa", "foco no que a tela está pedindo"): no topo fica SÓ a escada, em uma linha. O status, a vez
   // e o prazo vão para o cartão Agora (o único lugar que diz o que fazer); a OS vira a lista vertical do cartão Venda e o
   // dinheiro, uma linha discreta no pé dele. Nada se repete.
+  // 13/11 (Ricardo): no fim da Escada, o PAGAMENTO da comissão pela Nio. Não é um 7º degrau do funil (não entra na conta do
+  // Funil nem do Painel): só mostra o estado da trilha do dinheiro. Cinza = antes de instalar · amarelo = aguardando ·
+  // verde = paga · vermelho = estornada. O clique abre o detalhe do Dinheiro (valores e datas), que já existia.
+  const PG_TXT = { em_risco: 'aguardando — ainda dentro do prazo em que a Nio pode estornar', firme: 'aguardando — firme, esperando o extrato da Nio',
+    no_extrato: 'aguardando — já está no extrato da Nio, falta o pagamento', contestada: 'aguardando — contestada com a Nio', paga: 'paga pela Nio', estornada: 'estornada pela Nio' };
+  function pagamentoItem() {
+    const x = d && !d.soConversa ? d.din : null;
+    const e = x ? x.estado : null;
+    const cor = e === 'paga' ? 'ok' : e === 'estornada' ? 'bad' : e ? 'warn' : 'off';
+    const dica = `Pagamento da comissão pela Nio: ${e ? (PG_TXT[e] || e) : 'a comissão nasce quando a Nio instala'}.${e ? ' Clique para ver os valores e as datas.' : ''}`;
+    const ic = cor === 'ok' ? IC.ok : cor === 'bad' ? IC.x : '';
+    return e
+      ? `<button type="button" class="fc-es fc-es-pg pg-${cor}" data-f="fc-etapa" data-k="din" title="${esc(dica)}"><i>${ic}</i>Pagamento</button>`
+      : `<span class="fc-es fc-es-pg pg-off" title="${esc(dica)}"><i></i>Pagamento</span>`;
+  }
   function escadaPartes(semNome) {
     const l = d.lead;
     const A = NG.ajuda;
@@ -2783,7 +2798,7 @@
         return `<button type="button" class="fc-es fc-es-os s-${st}" data-f="fc-os-ler" title="${esc(`${e.ajuda || ''} Clique para consultar esta OS agora na Nio (uns 15 segundos).`.trim())}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}<span class="fc-es-g" aria-hidden="true">⟳</span></button>`;
       }
       return `<span class="fc-es s-${st}" title="${esc(e.ajuda || '')}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}</span>`;
-    }).join('');
+    }).join('') + pagamentoItem();
     const cv = d.soConversa ? d.conv : d.convInfo;
     const alerta = cv && cv.funil_alerta ? `<span class="fc-pill warn">⚠ ${esc(NG.FUNIL_ALERTA[cv.funil_alerta] || cv.funil_alerta)}</span>${NG.dicaTxt(A.ficha_fora)}` : '';
     let info;

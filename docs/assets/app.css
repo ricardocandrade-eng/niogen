@@ -2472,6 +2472,14 @@ body.fc-global-on { overflow: hidden; }
 .fc-venda-v { overflow-y: auto; padding: 4px 0 6px; }
 .fc-os-v { display: flex; flex-direction: column; }
 .fc-os-h { display: flex; align-items: center; gap: 4px; padding: 6px 16px 2px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+button.fc-es-pg { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 6px 2px 0; margin: -2px 0; border-radius: 8px; cursor: pointer; }
+button.fc-es-pg:hover, button.fc-es-pg:focus-visible { background: rgba(255, 255, 255, .07); outline: none; }
+.fc-es-pg.pg-warn { color: #F2D98A; }
+.fc-es-pg.pg-warn i { border-color: #E3B341; background: #E3B341; }
+.fc-es-pg.pg-ok { color: #C9D1DA; }
+.fc-es-pg.pg-ok i { background: #1D5C3B; border-color: #1D5C3B; color: #CDEFD9; }
+.fc-es-pg.pg-bad { color: #FFA39B; font-weight: 600; }
+.fc-es-pg.pg-bad i { border-color: #C94A42; background: #C94A42; color: #fff; }
 button.fc-es-os { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 6px 2px 0; margin: -2px 0; border-radius: 8px; cursor: pointer; }
 button.fc-es-os:hover, button.fc-es-os:focus-visible { background: rgba(255, 255, 255, .07); outline: none; }
 .fc-es-g { font-size: 13px; opacity: .75; margin-left: -2px; }
