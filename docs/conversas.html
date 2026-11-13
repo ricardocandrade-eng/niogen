@@ -19,10 +19,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/app.js?v=131126-12"></script>
 <script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-11"></script>
+<script src="assets/ficha.js?v=131126-12"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -195,7 +195,7 @@
   if (m) abrir(m[1]);
   NGFicha.iniciar();
   setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 30000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+  NG.aoVoltarAba(() => carregar(), 30000);   // 13/11: trocar de aba só recarrega depois de 30 s (o timer de 30 s segue)
 })();
 </script>
 </body>

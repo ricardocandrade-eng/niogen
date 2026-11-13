@@ -76,10 +76,46 @@
     p.then((r) => { if (r && (r.error || r.erro) && _memo.get(chave) === reg) _memo.delete(chave); }, () => { if (_memo.get(chave) === reg) _memo.delete(chave); });
     return p;
   }
+  // 13/11 (Supabase sem orçamento de disco — Ricardo: "Aliviar a carga"): as três leituras mais pesadas que TODA aba repete
+  // (jornada_live ~1,3 s de banco, oportunidades_abertas ~0,9 s, parceiro_oportunidades_abertas ~0,8 s e grava) passam a ser
+  // divididas entre as abas abertas e entre uma tela e a próxima: a resposta fica no localStorage por COMP_MS e quem chegar
+  // depois usa a mesma. Depois de uma ação (limparCache), esta aba busca na hora e a resposta nova vale para todas.
+  const COMP_MS = 45000;
+  let compPularAte = 0;
+  function compartilhado(chave, fn) {
+    const k = `niogen.comp.${chave}`;
+    const uid = (usuarioAtual || {}).id || '';
+    if (Date.now() > compPularAte) {
+      try {
+        const x = JSON.parse(localStorage.getItem(k) || 'null');
+        if (x && x.uid === uid && Date.now() - x.t < COMP_MS) return Promise.resolve({ data: x.data, error: null, compartilhado: true });
+      } catch (e) { /* sem armazenamento: busca normal */ }
+    }
+    return Promise.resolve().then(fn).then((r) => {
+      if (r && !r.error) { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), uid, data: r.data })); } catch (e) { /* cheio ou bloqueado */ } }
+      return r;
+    });
+  }
   let jornadaUlt = null;   // { t, v }: a última jornada que chegou (a que a tela está mostrando) — zera junto com o cache
-  const limparCache = () => { _memo.clear(); jornadaUlt = null; };
+  const limparCache = () => { _memo.clear(); jornadaUlt = null; compPularAte = Date.now() + 5000; };
   const jornada = () => memo('jornada', jornadaBusca);
-  const rpcOportunidades = () => memo('op_abertas', () => sb.rpc('oportunidades_abertas'));
+  const rpcOportunidades = () => memo('op_abertas', () => compartilhado('op_abertas', () => sb.rpc('oportunidades_abertas')));
+  // Volta à aba: só recarrega se a última carga tem mais de `ms` (trocar de aba não dispara leitura pesada à toa).
+  function aoVoltarAba(fn, ms = 60000) {
+    let ult = Date.now();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && Date.now() - ult > ms) { ult = Date.now(); fn(); }
+    });
+    return () => { ult = Date.now(); };
+  }
+  // Leitura que muda pouco (ex.: resumo da base DFV, que só muda quando a Nio manda base nova): guardada no navegador por `ms`.
+  async function guardado(chave, ms, fn) {
+    const k = `niogen.guardado.${chave}`;
+    try { const x = JSON.parse(localStorage.getItem(k) || 'null'); if (x && Date.now() - x.t < ms) return { data: x.data, error: null }; } catch (e) { /* busca */ }
+    const r = await fn();
+    if (r && !r.error) { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), data: r.data })); } catch (e) { /* ok */ } }
+    return r;
+  }
   const jornadaMonta = (data) => ({
     lista: (data || []).filter((j) => j.etapa > 0), todas: data || [],
     porVenda: Object.fromEntries((data || []).filter((j) => j.venda_id).map((j) => [j.venda_id, j])),
@@ -92,10 +128,10 @@
   async function jornadaBusca() {
     let r = null;
     if (rpcJornada && usuarioAtual && ['admin', 'backoffice'].includes(usuarioAtual.perfil)) {
-      r = await sb.rpc('jornada_live');
+      r = await compartilhado('jornada', () => sb.rpc('jornada_live'));
       if (r.error) { if (['PGRST202', '42883'].includes(String(r.error.code))) rpcJornada = false; r = null; }
     }
-    if (!r) r = await sb.from('v_jornada').select('*');
+    if (!r) r = await compartilhado('jornada_view', () => sb.from('v_jornada').select('*'));
     if (r.error) return { erro: msgErro(r.error), lista: [], porVenda: {}, porConversa: {} };
     try { sessionStorage.setItem(SNAP_JORNADA, JSON.stringify({ t: Date.now(), uid: (usuarioAtual || {}).id || null, data: r.data || [] })); } catch (e) { /* sem armazenamento: só não pinta na hora */ }
     jornadaUlt = { t: Date.now(), v: jornadaMonta(r.data) };
@@ -1474,7 +1510,7 @@
   // (fora do contador): "Mandar mensagem" abre o wa.me do parceiro com o texto sugerido e registra "enviada"; "Agora não"
   // some por config_regras.parceiro_oportunidades.dispensa_horas. Nada é enviado sozinho.
   async function oportunidadesCanal() {
-    const { data, error } = await memo('op_canal', () => sb.rpc('parceiro_oportunidades_abertas'));
+    const { data, error } = await memo('op_canal', () => compartilhado('op_canal', () => sb.rpc('parceiro_oportunidades_abertas')));
     return error ? { erro: msgErro(error), lista: [] } : { lista: data || [] };
   }
   function opCanalLinha(o, base = '') {
@@ -1525,6 +1561,7 @@
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    aoVoltarAba, guardado,   // 13/11: aliviar a carga do Supabase
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

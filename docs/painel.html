@@ -25,10 +25,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/app.js?v=131126-12"></script>
 <script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-11"></script>
+<script src="assets/ficha.js?v=131126-12"></script>
 </head>
 <body>
 <div class="app">
@@ -125,7 +125,7 @@
   async function carregarExtras() {
     if (veMari) { carregarAlarmes(); carregarOportunidades(); }
     const [rz, rmari, rp, rres] = await Promise.all([
-      NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
+      NG.guardado('dfv_resumo_jf', 6 * 3600000, () => NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle()),   // 13/11: a base muda 1×/semana
       veMari ? carregarMari() : Promise.resolve(null),
       veMari ? NG.sb.rpc('nio_portal_sessao_status') : Promise.resolve({ data: null }),
       ehAdmin ? NG.sb.rpc('resumo_diario', { p_dia: NG.somaDias(NG.diaSP(), -1) }) : Promise.resolve(null),
