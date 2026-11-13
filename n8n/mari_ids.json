@@ -11,7 +11,8 @@
     "chatwoot_bot": "rMBPTco4UoFYPu0b",
     "ged360": "7EpIvTuFhlZq66a1",
     "n8n_api": "nz36XiITYXYdzO2l",
-    "transcricao": "BXg4w8W7R1jsIh0P"
+    "transcricao": "BXg4w8W7R1jsIh0P",
+    "portal_operador": "2nT15k5COwvywbns"
   },
   "workflow_id": "Nsb1dcL3HWQpKSav",
   "cadencia_workflow_id": "efPnlQ1P4UoiNcFG",
@@ -31,5 +32,6 @@
   "mari_duplicidade_workflow_id": "PW1VsIGHdnJq58Uu",
   "mari_credito_workflow_id": "JeIRcsCPwhRwT4To",
   "pulso_coleta_workflow_id": "JrbzrXoJNalcs55G",
-  "midia_envio_workflow_id": "Pb8KXDTMvlVbuFqt"
+  "midia_envio_workflow_id": "Pb8KXDTMvlVbuFqt",
+  "os_leitura_workflow_id": "YLPf7oLAbIM6YVeq"
 }

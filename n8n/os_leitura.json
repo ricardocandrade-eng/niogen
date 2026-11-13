@@ -1,0 +1,500 @@
+{
+  "name": "os_leitura",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0,30 7-20 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · a cada 30 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "82b53c2e-8ca3-5880-92d8-02b5cfdd517d"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-os-leitura-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "4a1ceaea-432e-5d2e-8a32-90da4a49f527",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "834d0f5f-36fb-592f-a389-774fa84ed729"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Rota de teste: { \"tipo\": \"hoje\" | \"abertas\" | \"instaladas\" }. Agendado: decide pela hora de Brasília.\nconst b = ($json.body && typeof $json.body === 'object') ? $json.body : {};\nlet tipo = ['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null;\nif (!tipo) {\n  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());\n  const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);\n  tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';\n}\nreturn [{ json: { tipo } }];"
+      },
+      "name": "2 · Qual volta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        100
+      ],
+      "id": "f259909a-775b-5c68-b432-efcf55552c7a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/os_fila",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_tipo: $json.tipo }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "3 · Supabase fila",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        100
+      ],
+      "id": "649dc3eb-aefe-54d4-afca-baa6a0a3c3b0",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só linha com pedido e CPF; no máximo 12 por volta (o resto fica para a próxima).\nreturn $input.all().filter((i) => i.json && i.json.pedido && i.json.cpf).slice(0, 12);"
+      },
+      "name": "4 · Limite",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "id": "b5d40326-d5c8-54c2-af51-ab3b949dd7fe",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "5 · Uma por vez",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        880,
+        100
+      ],
+      "id": "d9382d4a-a846-5584-8037-1c95422167e1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://niogen-portal-tunel:8090/os",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ cpf: $json.cpf, os: $json.pedido, criada_em: $json.criada_em, origem: 'rotina' }) }}"
+      },
+      "name": "6 · Pedir leitura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        200
+      ],
+      "id": "c586d821-d372-5d79-a002-19a1a7cc157f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cabeça do laço de espera: chega do \"6 · Pedir leitura\" (1ª vez) ou do \"9 · Status\" (voltas). Decide: fim ou esperar mais.\nconst r = $input.first().json || {};\nconst alvo = $('5 · Uma por vez').first().json;\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst job = b.job_id || null;\nlet volta = 0;\ntry { const e = $('8b · Espera 6 s').last().json; if (e && job && e.job_id === job) volta = (e.volta || 0) + 1; } catch (e) { volta = 0; }\nlet fim = false, resultado = null, motivo = null;\nif (sc && sc !== 200 && sc !== 202) {\n  fim = true; resultado = sc === 429 ? 'ocupado' : 'erro'; motivo = 'HTTP ' + sc + ' ' + String(b.erro || '').slice(0, 120);\n} else if (b.estado === 'pronto' || b.estado === 'erro') {\n  fim = true; resultado = b.resultado || 'erro'; motivo = b.motivo ? String(b.motivo).slice(0, 200) : null;\n} else if (volta >= 12) {\n  fim = true; resultado = 'erro'; motivo = 'o portal demorou mais que o n8n espera';\n}\nif (b.trava) throw new Error('TRAVA do operador de OS acionada — a rotina parou: ' + String(b.motivo || '').slice(0, 200));\nreturn [{ json: { fim, lida: resultado === 'lida' && !!b.leitura, resultado, motivo, pedido: alvo.pedido, job_id: job,\n                  leitura: b.leitura || null, consultado_em: b.consultado_em || null, volta } }];"
+      },
+      "name": "7 · Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        200
+      ],
+      "id": "8a97884a-de4e-576e-a48c-54d40e8fb8a2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "30528e55-317b-590b-b728-65ab6bd66094",
+              "leftValue": "={{ $json.fim }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "8 · Terminou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        200
+      ],
+      "id": "9055f686-6e49-51eb-917b-6b9832c52eb0"
+    },
+    {
+      "parameters": {
+        "amount": 6,
+        "unit": "seconds"
+      },
+      "name": "8b · Espera 6 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        400
+      ],
+      "id": "06701323-ebaf-53ad-aa95-54834bb5ae02",
+      "webhookId": "6c381023-1ab9-5ad0-b35a-3314147a47b0"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://niogen-portal-tunel:8090/os/' + $json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "9 · Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        400
+      ],
+      "id": "dc289595-0dc3-5677-834a-4f69f443c249",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "ae7165b4-ab96-5258-8c88-64e5ccc8d962",
+              "leftValue": "={{ $json.lida }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "10 · Lida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        200
+      ],
+      "id": "89f8afc4-7fa1-5ec6-91ee-cb30c4343448"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/os_registrar_leitura",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_pedido: $json.pedido, p_origem: 'operador', p_dados: $json.leitura, p_referencia_em: $json.consultado_em }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "11 · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        100
+      ],
+      "id": "b76028b3-89f8-52ef-9df5-bb0b11a6897f",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Fim da volta: conta o que aconteceu (sem CPF). Nenhuma leitura boa e alguma falha de verdade → a execução falha (pulso).\nconst fins = [];\nfor (let i = 0; i < 400; i++) {\n  let it = null;\n  try { it = $('7 · Estado').all(0, i); } catch (e) { break; }\n  if (!it || !it.length) break;\n  for (const x of it) if (x.json && x.json.fim) fins.push(x.json);\n}\nconst conta = (res) => fins.filter((f) => f.resultado === res).length;\nconst resumo = { ok: true, tipo: $('2 · Qual volta').first().json.tipo, na_fila: $('4 · Limite').all().length, lidas: conta('lida'),\n                 nao_encontradas: conta('nao_encontrada'), ocupado: conta('ocupado'), erros: conta('erro'),\n                 motivos: [...new Set(fins.filter((f) => f.resultado === 'erro' && f.motivo).map((f) => f.motivo.slice(0, 120)))].slice(0, 3) };\nif (resumo.na_fila > 0 && resumo.lidas === 0 && resumo.erros > 0) {\n  throw new Error('Operador de OS: nenhuma OS lida nesta volta (' + resumo.erros + ' com erro) — ' + (resumo.motivos[0] || 'sem motivo'));\n}\nreturn [{ json: resumo }];"
+      },
+      "name": "12 · Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -60
+      ],
+      "id": "27e8f4dd-c0cd-5fc5-87cf-3f15b7ce247d"
+    }
+  ],
+  "connections": {
+    "1 · a cada 30 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Qual volta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Qual volta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Qual volta": {
+      "main": [
+        [
+          {
+            "node": "3 · Supabase fila",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Supabase fila": {
+      "main": [
+        [
+          {
+            "node": "4 · Limite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Limite": {
+      "main": [
+        [
+          {
+            "node": "5 · Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Uma por vez": {
+      "main": [
+        [
+          {
+            "node": "12 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6 · Pedir leitura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Pedir leitura": {
+      "main": [
+        [
+          {
+            "node": "7 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Estado": {
+      "main": [
+        [
+          {
+            "node": "8 · Terminou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Terminou?": {
+      "main": [
+        [
+          {
+            "node": "10 · Lida?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8b · Espera 6 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8b · Espera 6 s": {
+      "main": [
+        [
+          {
+            "node": "9 · Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9 · Status": {
+      "main": [
+        [
+          {
+            "node": "7 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 · Lida?": {
+      "main": [
+        [
+          {
+            "node": "11 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5 · Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 · Supabase gravar": {
+      "main": [
+        [
+          {
+            "node": "5 · Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}
