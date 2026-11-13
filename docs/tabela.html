@@ -18,7 +18,7 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-15">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-16"></script>
+<script src="assets/app.js?v=131126-17"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 </head>
 <body>
@@ -225,7 +225,7 @@
         <td class="num">${b.btu != null ? m(b.btu) : '—'}</td><td class="obs">${esc(b.regra)}</td></tr>`,
       cartao: (b) => `<div class="cartao"><div class="cli"><b>${esc(b.nome)}</b><small>${esc(b.sub || '')}</small></div><div class="valor">${b.reg != null ? m(b.reg) : '—'}</div>
         <div class="l2"><span>BTU ${b.btu != null ? m(b.btu) : '—'}</span></div><div class="l2"><span>${esc(b.regra)}</span></div></div>`,
-      pe: () => `<span class="nota-campo">Comissão por plano: abas Varejo e Empresas. "Na instalação" soma a transição vigente${traReg ? ` (${m(traReg.valor)} até ${NG.fmtDiaISO(traReg.valido_ate)})` : ''}. O M-10 entra só no 11º mês e nunca na comissão prevista.</span>` },
+      pe: () => `<span class="nota-campo">Comissão por plano: abas Varejo e Empresas. "Na instalação" soma a transição vigente${traReg ? ` (${m(traReg.valor)} até ${NG.fmtDiaISO(traReg.valido_ate)})` : ''}. O M-10 entra só no 10º mês e nunca na comissão prevista.</span>` },
     comunicacao: { nome: 'Regras de comunicação', ord: { chave: 'tema', dir: 1 }, un: ['regra', 'regras'],
       cols: '<th>Assunto</th><th>✅ Pode</th><th>❌ Nunca</th>',
       chaves: {},
@@ -301,7 +301,7 @@
         ${linha('Por venda', `<span class="mono">${m(p.comissao)}</span>`)}
         ${linha('Na instalação', `<span class="mono">${m(Number(p.comissao) + tr)}</span>${tr ? ` <small class="apagado">com ${m(tr)} de transição</small>` : ''}`)}
         ${nmei != null ? linha('Bônus NMEI', `<span class="mono">+ ${m(nmei)}</span> <small class="apagado">PJ não-MEI</small>`) : ''}
-        ${linha('M-10', m10 != null ? `+ ${m(m10)} no 11º mês ${NG.dica('m10')}` : '—')}
+        ${linha('M-10', m10 != null ? `+ ${m(m10)} no 10º mês ${NG.dica('m10')}` : '—')}
         <span class="nota-campo">Prevista = nominal + adicionais + transição + NMEI. O M-10 nunca entra na prevista.</span></section>
       <section class="d-sec"><h3>Condições</h3>${lista((p.portfolio === 'empresas' ? CONDICOES.empresas : CONDICOES.varejo).map(esc))}</section>`;
     NG.gaveta.abrir(gav, { foco: false });

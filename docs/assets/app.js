@@ -548,8 +548,8 @@
   // Desde 04/11 (decisão do Ricardo no padrão de telas) a comissão aparece só como "prevista" (antes do pagamento) ou
   // "paga" (no extrato). As regras de estorno (Rogério + contrato, 04/11) seguem no banco e na Tabela e política.
   const TEXTOS_COMISSAO = {
-    // Contrato, Anexo I 1.2.2.2 (texto do Ricardo, 04/11).
-    m10: 'Apurado no 11º mês após a ativação, se o cliente seguir ativo até o fim do 10º mês, com todas as faturas emitidas até lá pagas '
+    // Contrato, Anexo I 1.2.2.2 (texto do Ricardo, 04/11) · apuração no próprio 10º mês (decisão A3 do Ricardo, 12/11/2026).
+    m10: 'Apurado no 10º mês após a ativação, se o cliente chegar a ele ativo, com todas as faturas emitidas até lá pagas '
       + '(nenhuma com mais de 15 dias de atraso) e sem downgrade. Não entra na comissão prevista.',
     m10Nao: (motivo) => `Não elegível ao bônus M-10: ${motivo}.`,
     downgrade: (ate) => `Downgrade até ${ate} desconta só a diferença de comissão.`,

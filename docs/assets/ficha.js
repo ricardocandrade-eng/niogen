@@ -1731,17 +1731,17 @@
       return `<div class="d-l"><span>Avisos da Mari ${NG.dicaTxt(NG.ajuda.cad_avisos_venda)}</span><b>${html}</b></div>`;
     };
 
-    // M-10: apurado no 11º mês após a ativação (texto do contrato em NG.TEXTOS_COMISSAO.m10).
+    // M-10: apurado no 10º mês após a ativação (decisão A3, 12/11; texto do contrato em NG.TEXTOS_COMISSAO.m10).
     let m10 = '—';
     if (vendida) {
       if (v.nio_venda_valida === false) m10 = esc(NG.textoComissao('m10Nao', 'a Nio marcou a venda como inválida'));
       else if (!Number(v.bonus_m10_potencial)) m10 = esc(NG.textoComissao('m10Nao', 'o plano não tem bônus M-10 na política vigente'));
       else {
-        let quando = 'no 11º mês após a ativação';
+        let quando = 'no 10º mês após a ativação';
         if (v.ativado_em || v.instalado_em) {
           const x = new Date(v.ativado_em || v.instalado_em);
-          x.setMonth(x.getMonth() + 11);
-          quando = `em ${new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: '2-digit', year: 'numeric' }).format(x)} (11º mês)`;
+          x.setMonth(x.getMonth() + 10);
+          quando = `em ${new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: '2-digit', year: 'numeric' }).format(x)} (10º mês)`;
         }
         m10 = `${esc(m(v.bonus_m10_potencial))} · apurado ${esc(quando)} ${NG.dica('m10')}`;
       }

@@ -21,10 +21,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-15">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-16"></script>
+<script src="assets/app.js?v=131126-17"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-15"></script>
+<script src="assets/ficha.js?v=131126-17"></script>
 </head>
 <body>
 <div class="app">
@@ -98,7 +98,7 @@
 
   // Régua de pagamento (CLAUDE.md, regras da Mari): D−2 · D0 · D+5, só fatura em aberto; depois do D+5 o vendedor liga
   // (com 15 dias em aberto a fatura desclassifica o M-10). Contrato: M-10 = 10º mês ativo, adimplente e sem downgrade,
-  // apurado pela Nio no 11º mês.
+  // apurado pela Nio no próprio 10º mês (decisão A3 do Ricardo, 12/11/2026).
   const { LIMITE_M10, N_FATURAS } = NG;
   const SIT = { emdia: 'Em dia', ate15: 'Atraso ≤ 15 d', mais15: 'Atraso > 15 d' };
 
@@ -204,7 +204,7 @@
       return { txt: `D−2 em ${NG.fmtDiaISO(NG.somaDias(venc, -2)).slice(0, 5)}`, nivel: 'dim' };
     }
     if (!v.bolas[0].f) return { txt: '1ª fatura ainda não emitida', nivel: 'dim' };
-    if (v.elegivel) return { txt: v.mes >= 11 ? 'M-10 em apuração pela Nio neste mês' : 'No 10º mês · M-10 apurado no 11º', nivel: 'ok' };
+    if (v.elegivel) return { txt: v.mes >= 11 ? 'M-10 apurado pela Nio no 10º mês · conferir no extrato' : 'No 10º mês · M-10 em apuração pela Nio neste mês', nivel: 'ok' };
     return { txt: '', nivel: 'dim' };
   }
   const precisaAcao = (v) => v.maxAtraso >= 1;
@@ -249,7 +249,7 @@
     const perdido = mais15.reduce((s, v) => s + Number(v.bonus_m10_potencial || 0), 0);
     document.getElementById('kpis').innerHTML = [
       NG.kpi({ rot: 'Carteira ativa', val: NG.fmtNum(n), nota: `M-10 possível ${NG.fmtMoeda(possivel)}`,
-        dica: 'Vendas ativas com faturas da Nio. M-10 possível = bônus de quem ainda está dentro do 10º/11º mês e sem fatura em aberto há mais de 15 dias (só potencial: não entra na comissão prevista).' }),
+        dica: 'Vendas ativas com faturas da Nio. M-10 possível = bônus de quem ainda não passou do 10º mês (a Nio apura no próprio 10º mês) e está sem fatura em aberto há mais de 15 dias (só potencial: não entra na comissão prevista).' }),
       NG.kpi({ rot: 'Em dia', val: NG.fmtNum(emdia), cls: '', nota: n ? `${Math.round((emdia / n) * 100)} % da carteira` : '—' }),
       NG.kpi({ rot: 'Atraso ≤ 15 d', val: NG.fmtNum(ate15.length), cls: ate15.length ? 'warn' : '',
         nota: ate15.length ? `${NG.fmtNum(d5)} no D+5 hoje · ${NG.fmtNum(ligar)} para ligar` : 'nenhum',

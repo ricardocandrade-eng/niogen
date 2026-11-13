@@ -321,7 +321,7 @@
         ${hab}
         <div class="rv-linha"><span>Comissão prevista</span><strong>${m(c.total)}</strong></div>
         <span class="rv-nota">${m(c.nominal)} nominal · ${m(c.adic)} adicionais · ${m(c.transicao)} transição · ${m(c.nmei)} NMEI</span>
-        ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 11º mês`, 'm10')} (fora da comissão prevista)</span>` : ''}
+        ${c.m10 ? `<span class="rv-nota">${NG.rotulo(`Bônus M-10 potencial: ${m(c.m10)} no 10º mês`, 'm10')} (fora da comissão prevista)</span>` : ''}
         ${c.p.observacao ? `<span class="rv-nota">${esc(c.p.observacao)}</span>` : ''}`;
     }
 
