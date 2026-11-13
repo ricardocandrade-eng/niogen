@@ -139,16 +139,16 @@
   const REL = [
     { id: 'osab', nome: 'OSAB · pedidos e instalação', chave: 'PEDIDO', desc: 'Atualiza situação, pendência, data de instalação e venda válida. Diário (e-mail ou portal do empresário).' },
     { id: 'dfv_hp', nome: 'DFV · base HP/HC (viabilidade)', chave: 'COD_SURVEY + número + complemento', desc: 'Só endereços viáveis; substitui a partição inteira do município. CSV de ~45 MB, também reconhecido no botão principal. Aplicar pela tela: em breve (carga pelo CLI).' },
-    { id: 'extrato', nome: 'Extrato quinzenal · Pedidos × Linha a Linha', chave: 'CONTRATO + NUM_OS_PEDIDO_SIEBEL', desc: 'Comissão, estorno e bônus por linha. Alimenta a Conciliação e a NF.', breve: true },
-    { id: 'fpd', nome: 'FPD · 1ª, 2ª e 3ª fatura', chave: 'ID_CONTRATO', desc: '1 linha por fatura. Pinta as bolinhas 1–3 da Adimplência. Mensal.', breve: true },
-    { id: 'churn', nome: 'CHURN · retiradas', chave: 'NR_ORDEM', desc: 'Tipo (vol/invol), motivo, safra. Só indicador de qualidade (churn não estorna). Pedir em .xlsx.', breve: true },
+    { id: 'extrato', nome: 'Extrato quinzenal · Pedidos × Linha a Linha', chave: 'CONTRATO + NUM_OS_PEDIDO_SIEBEL', desc: 'Comissão, estorno e bônus por linha. Chega por e-mail. O NIOGEN guarda o arquivo como veio; a Conciliação liga quando as chaves forem conferidas com o 1º arquivo real.', bruto: true },
+    { id: 'fpd', nome: 'FPD · 1ª, 2ª e 3ª fatura', chave: 'ID_CONTRATO', desc: '1 linha por fatura. Mensal (e-mail ou sistema da Nio). O NIOGEN guarda o arquivo como veio; a Adimplência liga depois da conferência das chaves.', bruto: true },
+    { id: 'churn', nome: 'CHURN · retiradas', chave: 'NR_ORDEM', desc: 'Tipo (vol/invol), motivo, safra. Só indicador de qualidade (churn não estorna). Em .xlsx ou .xlsb. O NIOGEN guarda o arquivo como veio.', bruto: true },
     { id: 'faturas', nome: 'Extrato mensal de faturas (4ª à 10ª)', chave: '—', desc: 'Sem ele as bolinhas 4–10 da Adimplência e o bônus M-10 ficam cegos depois do 3º mês.', pedir: true },
   ];
   function situacaoRel(r) {
     if (r.breve) return { txt: 'em breve', cls: 'saida' };
     if (r.pedir) return { txt: 'pedir ao Rogério', cls: 'cob-warn' };
     const u = historico.find((i) => i.tipo === r.id && i.aplicado_em);
-    return u ? { txt: 'importado', cls: 'ativo', u } : { txt: 'nenhuma importação', cls: 'cob-warn' };
+    return u ? { txt: r.bruto ? 'guardado' : 'importado', cls: 'ativo', u } : { txt: r.bruto ? 'nenhum arquivo ainda' : 'nenhuma importação', cls: 'cob-warn' };
   }
   function renderRelatorios() {
     const linhas = REL.map((r) => {
@@ -259,6 +259,50 @@
     if (ev.target.closest('[data-resumo-ultima]') && ultima) mostrarResumo(ultima.resumo || {}, ultima.arquivo_nome);
   });
 
+  // ---------------------------------------------------------------- 0158: relatórios guardados como vieram
+  const NOME_REL = { extrato: 'Extrato quinzenal', fpd: 'FPD', churn: 'CHURN' };
+  function detectarRelatorio(buf) {
+    let wb;
+    try { wb = XLSX.read(buf, { type: 'array', sheetRows: 4 }); } catch (e) { return null; }
+    const abas = wb.SheetNames.map((n) => n.toUpperCase());
+    if (abas.includes('LINHA_A_LINHA')) return 'extrato';
+    const cab = new Set();
+    wb.SheetNames.forEach((n) => (XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null })[0] || []).forEach((c) => c != null && cab.add(String(c).trim().toUpperCase())));
+    if (cab.has('ID_CONTRATO') && cab.has('NR_FATURA')) return 'fpd';
+    if (cab.has('NR_ORDEM') && (cab.has('DT_RETIRADA') || cab.has('TP_RETIRADA'))) return 'churn';
+    return null;
+  }
+  async function guardarRelatorio(tipo, f) {
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false });
+    const abas = {}, colunas = {}, linhas = [];
+    wb.SheetNames.forEach((n) => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: null, raw: true, blankrows: false });
+      if (!rows.length) return;
+      abas[n] = rows.length; colunas[n] = Object.keys(rows[0]);
+      rows.forEach((dados, i) => linhas.push({ tipo, aba: n, linha: i + 1, dados }));
+    });
+    if (!linhas.length) { NG.toast('O arquivo não tem linhas.', 'bad'); return; }
+    if (linhas.length > 30000) { NG.toast(`O arquivo tem ${NG.fmtNum(linhas.length)} linhas — parece a base do canal inteiro. Peça à Nio só as linhas da Dharma.`, 'bad'); return; }
+    const resumoAbas = Object.entries(abas).map(([n, q]) => `${n}: ${NG.fmtNum(q)}`).join(' · ');
+    if (!confirm(`${NOME_REL[tipo]} reconhecido em "${f.name}" (${resumoAbas} linhas).
+
+O NIOGEN vai GUARDAR o arquivo como veio. Nada muda nas vendas: a conciliação liga depois que as chaves forem conferidas.
+
+Guardar?`)) return;
+    const { data: imp, error: e1 } = await NG.sb.from('importacoes').insert({
+      tipo, arquivo_nome: f.name, linhas: linhas.length, aplicadas: 0, ignoradas: 0,
+      resumo: { guardado_bruto: true, abas, colunas }, aplicado_em: new Date().toISOString(),
+    }).select('id').single();
+    if (e1) { NG.toast(NG.msgErro(e1), 'bad'); return; }
+    for (let i = 0; i < linhas.length; i += 500) {
+      NG.toast(`Guardando ${NG.fmtNum(Math.min(i + 500, linhas.length))} de ${NG.fmtNum(linhas.length)}…`, 'ok');
+      const { error } = await NG.sb.from('nio_relatorio_linhas').insert(linhas.slice(i, i + 500).map((l) => ({ ...l, importacao_id: imp.id })));
+      if (error) { NG.toast(`Falhou ao guardar (linha ${i + 1}): ${NG.msgErro(error)}. Envie o arquivo de novo.`, 'bad'); carregarHistorico(); return; }
+    }
+    NG.toast(`${NOME_REL[tipo]} guardado: ${NG.fmtNum(linhas.length)} linhas. Avise o Ricardo para conferir as chaves.`, 'ok');
+    carregarHistorico();
+  }
+
   // ---------------------------------------------------------------- prévia
   inputArq.addEventListener('change', async () => {
     const f = inputArq.files[0];
@@ -266,6 +310,9 @@
     if (!f) return;
     // CSV do DFV também entra por aqui: reconhece pelas colunas.
     if (/\.csv$/i.test(f.name) && NGDfv.ehDfv(await NGDfv.primeiraLinha(f))) { previaDfv(f); return; }
+    // 0158: Extrato, FPD e CHURN são reconhecidos pelas abas e colunas e guardados como vieram (sem aplicar nada às vendas).
+    const bruto = detectarRelatorio(await f.arrayBuffer());
+    if (bruto) { guardarRelatorio(bruto, f); return; }
     abrirPrevia('Prévia da importação', f.name);
     previa.innerHTML = `<span class="carregando">Lendo o arquivo…</span>`;
     let leitura;
