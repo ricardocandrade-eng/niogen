@@ -103,7 +103,9 @@
         return `<tr><td class="pl-mono">${esc(f.fluxo)}${f.critico ? ' <span class="pl-crit">crítico</span>' : ''}</td><td>${esc(f.descricao)}</td><td>${esc(f.roda)}</td>
           <td class="pl-mono">${esc(ult)}</td><td class="pl-sinal pl-n-${est}">${marca(est === 'a_ligar' ? 'sem_leitura' : est)}${esc(f.sinal)}${erro}</td></tr>`;
       }).join('');
-      corpo = `<div class="pl-tab"><table><thead><tr><th>Fluxo</th><th>O que faz</th><th>Roda</th><th>Última vez</th><th>Sinal</th></tr></thead><tbody>${linhas}</tbody></table></div>
+      // 0183: erro de outro fluxo e aviso de governança (ex.: fala do time pelo Chatwoot) não são falha da Mari — aparecem aqui.
+      const avisos = (e.motivos || []).map((m) => `<li>${esc(m)}</li>`).join('');
+      corpo = (avisos ? `<ul class="pl-lista">${avisos}</ul>` : '') + `<div class="pl-tab"><table><thead><tr><th>Fluxo</th><th>O que faz</th><th>Roda</th><th>Última vez</th><th>Sinal</th></tr></thead><tbody>${linhas}</tbody></table></div>
         <p class="pl-nota">Só mari_principal, mari_cadencia e balanco_diario guardam a execução que deu certo; nos outros o sinal é "ligado e sem erro recente".</p>`;
     } else {
       const itens = [...(e.linhas || []), ...((e.motivos || []).filter((m) => !(e.linhas || []).includes(m)))];
