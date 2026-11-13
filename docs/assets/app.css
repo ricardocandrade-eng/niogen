@@ -2539,3 +2539,11 @@ button.fc-din-l:hover, button.fc-din-l.on { background: #171C23; }
   .fc-cb-g + .fc-cb-g { border-left: 0; padding-left: 0; }
   .fc-cb-p { min-width: 46px; }
 }
+
+/* 13/11 (etapa 4b): Live aponta para a Leads — o degrau da linha é link; atalhos no fim da faixa de etapas */
+a.cv-etp, a.cv-dest { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+a.cv-etp { color: var(--muted, #6E747C); }
+a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
+.lv-stage-lk { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px; font-size: 12.5px; white-space: nowrap; }
+.lv-stage-lk a { color: var(--link); text-decoration: none; }
+.lv-stage-lk a:hover { text-decoration: underline; }

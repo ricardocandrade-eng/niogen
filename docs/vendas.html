@@ -23,14 +23,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-9">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-9"></script>
-<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-9"></script>
-<script src="assets/novavenda.js?v=111126-12"></script>
+<script src="assets/ficha.js?v=131126-10"></script>
+<script src="assets/novavenda.js?v=131126-10"></script>
 </head>
 <body>
 <div class="app">
@@ -179,10 +179,11 @@
   // 0112: ritmo (painel_meta_ritmo), limiares e prazos (config_regras), motivos da Saída (config_oportunidades O6) e o funil do dia
   // da Mari (mari_ao_vivo — a mesma fonte da tela Mari; só admin/backoffice).
   let ritmo = null, regras = {}, saidaCfg = null, aoVivo = null;
+  let saidaDe = {};   // 13/11 (4a): motivo da lista única por venda em Saída (v_leads — a mesma fonte da tela Leads e do Funil)
   const ehBko = ['admin', 'backoffice'].includes(eu.perfil);
   async function carregarLista() {
-    const [rv, rc, rp, rm, rj, rr, rg, ro, ra] = await Promise.all([
-      NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
+    const [rv, rc, rp, rm, rj, rr, rg, ro, ra, rls] = await Promise.all([
+      NG.sb.from('v_vendas').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('contatos_cliente').select('venda_id, em').order('em', { ascending: false }).limit(5000),
       NG.sb.from('config_planos').select('*'),
       NG.sb.from('config_metas').select('*'),
@@ -191,7 +192,9 @@
       NG.sb.from('config_regras').select('chave, valor'),
       NG.sb.from('config_oportunidades').select('codigo, ativo, parametros').eq('codigo', 'O6').maybeSingle(),
       ehBko ? NG.sb.rpc('mari_ao_vivo') : Promise.resolve({ data: null }),
+      NG.sb.from('v_leads').select('venda_id, saida_motivo, saida_nome, saida_sub').eq('destino', 'saida').not('venda_id', 'is', null).limit(2000),
     ]);
+    saidaDe = Object.fromEntries(((rls && !rls.error && rls.data) || []).map((l) => [l.venda_id, l]));
     jor = rj;
     ritmo = rr && !rr.error ? rr.data : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
@@ -513,10 +516,12 @@
     // Recuperável / não recuperável / fora de área: config_oportunidades.O6 (a mesma lista que traz a venda de volta ao Live, Parte 2).
     const p6 = (saidaCfg && saidaCfg.parametros) || {};
     const dias6 = p6.dias || {}, nunca6 = p6.nunca || [], fora6 = p6.fora_area || [];
-    const chaveMot = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : v.motivo_saida || 'Sem motivo');
-    const classe = (v) => { const m = chaveMot(v); return nunca6.includes(v.motivo_saida) || ['ja_cliente_nio', 'suspeita_fraude', 'ja_tem_pedido_nio'].includes(v.conferencia_motivo) ? 'nunca' : m in dias6 ? 'recup' : fora6.includes(v.motivo_saida) ? 'fora' : 'outro'; };
+    // 13/11 (4a): o nome do motivo vem da lista única (config_lead, via v_leads); a classe (recuperável…) segue a regra O6 de sempre.
+    const chaveMot = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : (saidaDe[v.id] && saidaDe[v.id].saida_nome) || v.motivo_saida || 'Sem motivo');
+    const chaveO6 = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : v.motivo_saida || 'Sem motivo');
+    const classe = (v) => { const m = chaveO6(v); return nunca6.includes(v.motivo_saida) || ['ja_cliente_nio', 'suspeita_fraude', 'ja_tem_pedido_nio'].includes(v.conferencia_motivo) ? 'nunca' : m in dias6 ? 'recup' : fora6.includes(v.motivo_saida) ? 'fora' : 'outro'; };
     const porMot = {};
-    fora.forEach((v) => { const m = chaveMot(v); (porMot[m] = porMot[m] || { m, cls: classe(v), n: 0, com: 0 }); porMot[m].n++; porMot[m].com += comPrev(v) || 0; });
+    fora.forEach((v) => { const m = chaveMot(v); (porMot[m] = porMot[m] || { m, k6: chaveO6(v), cls: classe(v), n: 0, com: 0 }); porMot[m].n++; porMot[m].com += comPrev(v) || 0; });
     const recup = fora.filter((v) => classe(v) === 'recup');
     const motivos = Object.values(porMot).sort((a, b) => ({ recup: 0, fora: 1, outro: 2, nunca: 3 })[a.cls] - ({ recup: 0, fora: 1, outro: 2, nunca: 3 })[b.cls] || b.n - a.n);
     const ROT = { recup: (m) => `🔥 volta ao Live em ${dias6[m]} d${m.startsWith('Interesse') ? ' (ou no dia combinado)' : ''}`, nunca: () => 'não recupera (contrato)',
@@ -527,7 +532,7 @@
     faixaFora.setAttribute('aria-expanded', String(foraAberto));
     let motEl = document.getElementById('qv-motivos');
     if (!motEl) { motEl = document.createElement('div'); motEl.id = 'qv-motivos'; motEl.className = 'qv-motivos'; faixaFora.after(motEl); }
-    motEl.innerHTML = motivos.map((x) => `<div class="qm ${x.cls}"><b>${NG.fmtNum(x.n)}</b><span>${esc(x.m)}</span><small>${esc(ROT[x.cls](x.m))}</small></div>`).join('');
+    motEl.innerHTML = motivos.map((x) => `<div class="qm ${x.cls}"><b>${NG.fmtNum(x.n)}</b><span>${esc(x.m)}</span><small>${esc(ROT[x.cls](x.k6))}</small></div>`).join('');
     motEl.hidden = !motivos.length;
     foraCorpo.hidden = !foraAberto;
     const grupo = (tit, itens) => `<div class="qv-grupo"><h3>${esc(tit)} <span>${NG.fmtNum(itens.length)}</span></h3>

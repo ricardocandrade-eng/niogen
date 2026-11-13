@@ -19,13 +19,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-9">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-9"></script>
-<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-9"></script>
+<script src="assets/ficha.js?v=131126-10"></script>
 </head>
 <body>
 <div class="app">
@@ -115,7 +115,7 @@
   async function carregar() {
     jor = await NG.jornada();
     const [rv, rp, rc, rk, ri, rg, ra] = await Promise.all([
-      NG.sb.from('v_funil').select('*').in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
+      NG.sb.from('v_vendas').select('*').in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('config_planos').select('id, nome_curto'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
       NG.sb.from('v_instalacao_confirmacao').select('*'),

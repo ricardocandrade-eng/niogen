@@ -3,6 +3,7 @@
  * Barra lateral igual ao mockup. Telas que ainda não existem ficam visíveis e desabilitadas ("em breve").
  * 06/11 (prompt 25): Parceiros PAP (Vendas) e Pagamentos a parceiros (Financeiro) — só admin/backoffice, somem para o vendedor.
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
+ * 13/11 (etapa 4b): funil.html volta como o relatório "Funil de vendas" (v_leads); vendas.html vira "Quadro de vendas".
  * 06/11 (prompt 27): contadores em "Mari · IA" (conversas aguardando humano — v_mari_aguardando_humano; vermelho se alguma
  * passou de 15 min em horário de contato) e em "Vendas" (novas em Qualificado desde a última visita — usuario_vistos — mais as
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
@@ -33,7 +34,8 @@
     ]],
     ['Vendas', [
       { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html' },   // 0156: todos os leads, com ou sem venda (escada única)
-      { id: 'vendas', ico: '≡', nome: 'Funil de vendas', href: 'vendas.html', badge: 'vendas' },
+      { id: 'funil', ico: '▽', nome: 'Funil de vendas', href: 'funil.html' },   // 13/11 (4b): relatório inteiro na tela (escada única)
+      { id: 'vendas', ico: '≡', nome: 'Quadro de vendas', href: 'vendas.html', badge: 'vendas' },   // a lista e o quadro das vendas (Nova venda)
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },

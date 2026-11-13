@@ -1,16 +1,208 @@
 <!doctype html>
-<!-- NIOGEN | docs/funil.html | 04/11/2026 — APOSENTADO (prompt 13). O Funil virou a vista Quadro da tela Vendas.
-     Este arquivo só redireciona, para não quebrar links antigos e favoritos: funil.html → vendas.html?vista=quadro. -->
+<!-- NIOGEN | docs/funil.html | 13/11/2026 — Claude Code (Opus 5.5)
+     "Funil de vendas": SÓ RELATÓRIO, inteiro na tela (sem rolagem a partir de 1366×768). Etapa 4b do plano do sistema fechado
+     (docs/PLANO_sistema_fechado_etapas_121126_2135.md, no Drive) · layout docs/LAYOUT_funil_vendas_relatorio_121126_2006.html.
+     Até 13/11 este arquivo só redirecionava para vendas.html?vista=quadro (prompt 13, 04/11): o Quadro continua em vendas.html.
+     Dados: v_leads (a escada única, 0156/0157 — a mesma conta da tela Leads, do Painel, da Live e da ficha) + config_lead (nomes e
+     balões ⓘ) + painel_meta_ritmo (meta do mês). Três leituras, em paralelo. Sem lista e sem ação: todo clique leva à tela Leads
+     já filtrada (?aba= ?etapa= ?saida= ?origem= ?cidade= ?de= ?ate=). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0E1116">
-<title>Vendas · NIOGEN</title>
-<meta http-equiv="refresh" content="0; url=vendas.html?vista=quadro">
-<script>location.replace('vendas.html?vista=quadro');</script>
+<title>Funil de vendas · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
+<script src="config.js?v=111126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
+<style>
+  .main.fn { height: 100dvh; min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 12px; overflow: hidden; }
+  .fn-fil { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .fn-fil select { min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+  .fn-k { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .fn-k .kpi { min-width: 0; }
+  .fn-fun { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 6px 10px; }
+  .fn-row { flex: 1 1 0; min-height: 0; display: grid; grid-template-columns: 190px minmax(0, 1fr) 300px; align-items: center; gap: 14px; padding: 0 6px; border-radius: 8px; }
+  .fn-row:hover { background: var(--surface-2); }
+  .fn-nm { min-width: 0; }
+  .fn-nm a { color: var(--text); text-decoration: none; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+  .fn-nm small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fn-nm small a { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .fn-nm small .bad-txt { color: var(--bad-fg); }
+  .fn-bar { height: 100%; display: flex; align-items: center; min-height: 0; }
+  .fn-fz { height: 74%; max-height: 64px; min-height: 26px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none;
+    color: #D7F5C8; font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; background: #1E3A24; border: 1px solid #2F6B3A;
+    clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
+  .fn-fz.venda { background: #245C2E; border-color: #32E000; color: #fff; }
+  .fn-fz em { font-style: normal; font-family: var(--sans); font-size: 12px; font-weight: 500; color: #A9D79A; }
+  .fn-fz:hover { filter: brightness(1.15); }
+  .fn-cv { flex: none; text-align: center; font-size: 12px; color: var(--muted); line-height: 16px; }
+  .fn-cv b { color: var(--text); font-weight: 600; }
+  .fn-lost { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; max-height: 100%; overflow: hidden; }
+  .fn-lost a { font-size: 11.5px; background: var(--bad-bg); color: var(--bad-fg); border: 1px solid var(--bad-border); border-radius: 6px; padding: 2px 7px; text-decoration: none; white-space: nowrap; }
+  .fn-lost a:hover { border-color: var(--bad-dot); }
+  .fn-lost em { font-style: normal; font-size: 12px; color: var(--muted); }
+  .fn-rod { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); }
+  @media (max-width: 1100px) { .fn-row { grid-template-columns: 150px minmax(0, 1fr) 220px; } }
+  @media (max-width: 900px) {
+    .main.fn { height: auto; min-height: 100dvh; overflow: visible; grid-template-rows: auto auto auto auto; }
+    .fn-k { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .fn-fun { min-height: 70dvh; }
+    .fn-row { grid-template-columns: 110px minmax(0, 1fr); }
+    .fn-lost { display: none; }
+  }
+</style>
 </head>
 <body>
-<p>O Funil agora é a vista Quadro da tela Vendas. <a href="vendas.html?vista=quadro">Abrir Vendas · Quadro</a></p>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="funil"></nav>
+  <main class="main fn">
+    <header class="cab">
+      <div>
+        <h1>Funil de vendas <span id="i-tela"></span></h1>
+        <div class="sub" id="sub">Até onde os leads chegaram, onde saíram e quanto está em jogo agora.</div>
+      </div>
+      <div class="fn-fil cab-acoes" id="cab-acoes">
+        <div id="f-periodo"></div>
+        <select id="f-origem" aria-label="Filtrar por origem"></select>
+        <select id="f-cidade" aria-label="Filtrar por cidade"></select>
+      </div>
+    </header>
+    <section class="fn-k" id="kpis" aria-label="Números do período"><div class="carregando">Carregando…</div></section>
+    <section class="fn-fun" id="funil" aria-label="Funil de 6 degraus"></section>
+    <div class="fn-rod"><span>Largura = chegaram até o degrau · ↓ % = passaram do degrau anterior · chips vermelhos = saíram ali, por motivo</span><span>Todo clique abre a lista na tela Leads</span></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  const A = NG.ajuda;
+  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', parceiro: 'Parceiro PAP', parceiro_pap: 'Parceiro PAP', rua: 'Rua' };
+  const Q = new URLSearchParams(location.search);
+  const fO = document.getElementById('f-origem');
+  const fC = document.getElementById('f-cidade');
+  let leads = [], etapas = [], ritmo = null;
+  document.getElementById('i-tela').innerHTML = NG.dicaTxt(A.funil_tela);
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: Q.get('periodo') || 'mes', aoMudar: render });
+
+  // O que vai na URL da Leads para ela abrir com o mesmo recorte.
+  function recorte(p) {
+    const q = new URLSearchParams();
+    if (fO.value) q.set('origem', fO.value);
+    if (fC.value) q.set('cidade', fC.value);
+    if (p.de) q.set('de', p.de);
+    if (p.ate) q.set('ate', p.ate);
+    return q;
+  }
+  const linkLeads = (p, extra) => {
+    const q = recorte(p);
+    Object.entries(extra).forEach(([k, v]) => { if (v) q.set(k, v); });
+    return `leads.html?${q.toString().replace(/&/g, '&amp;')}`;
+  };
+  const doRecorte = (l, p) => l.destino !== 'teste_duplicada' && NG.noPeriodo(l.criado_em, p)
+    && (!fO.value || l.origem === fO.value) && (!fC.value || l.cidade === fC.value);
+  const chegou = (l, ordem) => Number(l.etapa_ordem || 0) >= ordem;
+  const QUALIF = 4;   // regra da 0147, mantida: qualificados = chegaram em Qualificado ou além, menos Já é cliente Nio e Crédito negado
+  const ehQualif = (l) => chegou(l, QUALIF) && !['ja_cliente_nio', 'credito_negado'].includes(l.saida_motivo);
+
+  function render() {
+    const p = per.valor();
+    const R = leads.filter((l) => doRecorte(l, p));
+    const topo = R.length;
+    // KPI 1 · Leads, contra o período anterior do mesmo tamanho
+    let comp = '';
+    if (p.inicio && p.fim) {
+      const ms = p.fim - p.inicio;
+      const ant = { inicio: new Date(p.inicio.getTime() - ms), fim: p.inicio };
+      const nAnt = leads.filter((l) => l.destino !== 'teste_duplicada' && NG.noPeriodo(l.criado_em, ant) && (!fO.value || l.origem === fO.value) && (!fC.value || l.cidade === fC.value)).length;
+      const dif = topo - nAnt;
+      comp = `${dif > 0 ? '+' : ''}${NG.fmtNum(dif)} vs período anterior (${NG.fmtNum(nAnt)})`;
+    }
+    const qual = R.filter(ehQualif).length;
+    const inst = R.filter((l) => l.destino === 'instalada').length;
+    const jogo = R.filter((l) => l.destino === 'em_andamento' && chegou(l, QUALIF));
+    const emJogo = jogo.reduce((s, l) => s + Number(l.comissao_prevista || 0), 0);
+    const sai = R.filter((l) => l.destino === 'saida');
+    const porMot = {};
+    sai.forEach((l) => { porMot[l.saida_nome || 'Sem motivo'] = (porMot[l.saida_nome || 'Sem motivo'] || 0) + 1; });
+    const maior = Object.entries(porMot).sort((a, b) => b[1] - a[1])[0];
+    const pct = (n) => (topo ? `${String(Math.round((n / topo) * 1000) / 10).replace('.', ',')} %` : '—');
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Leads', val: `<a href="${linkLeads(p, { aba: 'todos' })}" style="color:inherit;text-decoration:none">${NG.fmtNum(topo)}</a>`, nota: esc(comp || per.rotulo.toLowerCase()), dica: A.funil_k_leads }),
+      NG.kpi({ rot: 'Qualificados', val: `<a href="${linkLeads(p, { aba: 'todos', etapa: 'qualificado' })}" style="color:inherit;text-decoration:none">${NG.fmtNum(qual)}</a>`, nota: `${pct(qual)} dos leads`, dica: A.funil_k_qualif }),
+      NG.kpi({ rot: 'Instaladas', val: NG.fmtNum(inst), de: ritmo && ritmo.meta && p.valor === 'mes' ? ritmo.meta : null,
+        pct: ritmo && ritmo.meta && p.valor === 'mes' ? (inst / ritmo.meta) * 100 : null,
+        nota: ritmo && ritmo.meta ? esc(`no mês: ${NG.fmtNum(ritmo.instaladas)} de ${NG.fmtNum(ritmo.meta)}${ritmo.faltam ? ` · ${String(ritmo.por_dia).replace('.', ',')} por dia para bater` : ' · meta batida ✓'}`) : 'sem meta cadastrada',
+        dica: A.funil_k_inst }),
+      NG.kpi({ rot: 'Em jogo agora', val: esc(NG.fmtMoeda(emJogo)), cls: emJogo ? 'warn' : '', nota: `<a href="${linkLeads(p, { aba: 'andamento', etapa: 'qualificado' })}">${NG.fmtNum(jogo.length)} qualificado${jogo.length === 1 ? '' : 's'} em andamento →</a>`, dica: A.funil_k_jogo }),
+      NG.kpi({ rot: 'Saíram', val: `<a href="${linkLeads(p, { aba: 'saidas' })}" style="color:inherit;text-decoration:none">${NG.fmtNum(sai.length)}</a>`, nota: esc(`${pct(sai.length)}${maior ? ` · maior: ${maior[0]} (${maior[1]})` : ''}`), dica: A.funil_k_sai }),
+    ].join('');
+
+    // Funil de 6 degraus
+    const ns = etapas.map((e) => R.filter((l) => chegou(l, e.ordem)).length);
+    const linhas = etapas.map((e, i) => {
+      const n = ns[i];
+      const w = topo ? Math.max(14, (n / topo) * 100) : 14;
+      const and = R.filter((l) => l.etapa === e.codigo && l.destino === 'em_andamento');
+      const atr = and.filter((l) => l.atrasado).length;
+      const perdas = {};
+      R.filter((l) => l.destino === 'saida' && l.etapa === e.codigo).forEach((l) => {
+        const k = l.saida_motivo || '';
+        (perdas[k] = perdas[k] || { k, nome: l.saida_nome || 'Sem motivo', n: 0 }).n++;
+      });
+      const pl = Object.values(perdas).sort((a, b) => b.n - a.n);
+      const venda = ['instalacao', 'instalada'].includes(e.codigo);
+      const passou = i ? `<div class="fn-cv">↓ <b>${ns[i - 1] ? Math.round((n / ns[i - 1]) * 100) : 0} %</b> passaram</div>` : '';
+      return `${passou}<div class="fn-row">
+        <div class="fn-nm"><a href="${linkLeads(p, { aba: 'todos', etapa: e.codigo })}">${esc(e.nome)}</a>${NG.dicaTxt(e.ajuda || '')}
+          <small>${and.length ? `<a href="${linkLeads(p, { aba: 'andamento', etapa: e.codigo })}">${NG.fmtNum(and.length)} em andamento</a>` : 'ninguém parado aqui'}${atr ? ` · <span class="bad-txt">${NG.fmtNum(atr)} atrasado${atr === 1 ? '' : 's'}</span>` : ''}</small></div>
+        <div class="fn-bar"><a class="fn-fz${venda ? ' venda' : ''}" style="width:${w}%" href="${linkLeads(p, { aba: 'todos', etapa: e.codigo })}" title="${esc(`${NG.fmtNum(n)} chegaram até ${e.nome} ou além`)}">${NG.fmtNum(n)}<em>${pct(n)}</em></a></div>
+        <div class="fn-lost">${pl.length ? pl.map((x) => `<a href="${linkLeads(p, { aba: 'saidas', etapa: e.codigo, saida: x.k })}" title="${esc(`Saíram em ${e.nome}: ${x.nome}`)}">${esc(x.nome)} ${NG.fmtNum(x.n)}</a>`).join('') : '<em>sem perdas</em>'}</div>
+      </div>`;
+    }).join('');
+    document.getElementById('funil').innerHTML = topo ? linhas : '<div class="vazio" style="margin:auto">Nenhum lead neste recorte.</div>';
+    // a URL guarda o recorte (para voltar ao mesmo lugar)
+    const u = new URLSearchParams();
+    if (p.valor !== 'mes') u.set('periodo', p.valor);
+    if (fO.value) u.set('origem', fO.value);
+    if (fC.value) u.set('cidade', fC.value);
+    history.replaceState(null, '', `${location.pathname}${u.toString() ? `?${u}` : ''}`);
+  }
+
+  async function carregar() {
+    const [rl, rc, rr] = await Promise.all([
+      NG.sb.from('v_leads').select('etapa, etapa_ordem, destino, status, vez, atrasado, saida_motivo, saida_nome, criado_em, origem, cidade, comissao_prevista').limit(5000),
+      NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').eq('tipo', 'etapa').order('ordem'),
+      NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
+    ]);
+    if (rl.error) { document.getElementById('funil').innerHTML = `<div class="vazio">${esc(NG.msgErro(rl.error))}</div>`; return; }
+    leads = rl.data || [];
+    etapas = rc.error ? [] : (rc.data || []);
+    ritmo = rr && !rr.error ? rr.data : null;
+    const opcs = (vals, rot, todos, sel) => `<option value="">${esc(todos)}</option>${vals.map((v) => `<option value="${esc(v)}"${v === sel ? ' selected' : ''}>${esc(rot(v))}</option>`).join('')}`;
+    const origens = [...new Set(leads.map((l) => l.origem).filter(Boolean))].sort();
+    const cidades = [...new Set(leads.map((l) => l.cidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const oSel = fO.value || Q.get('origem') || '';
+    const cSel = fC.value || Q.get('cidade') || '';
+    fO.innerHTML = opcs(origens, (v) => ORIGEM[v] || v, 'Todas as origens', oSel);
+    fC.innerHTML = opcs(cidades, (v) => v, 'Todas as cidades', cSel);
+    render();
+  }
+  fO.addEventListener('change', render);
+  fC.addEventListener('change', render);
+  NG.botaoAtualizar(() => carregar());
+  await carregar();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+})();
+</script>
 </body>
 </html>

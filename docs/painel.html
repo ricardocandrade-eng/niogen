@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-9">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-9"></script>
-<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-9"></script>
+<script src="assets/ficha.js?v=131126-10"></script>
 </head>
 <body>
 <div class="app">
@@ -77,24 +77,25 @@
   let portal = null;   // sessão do portal PAP (viabilidade oficial): só o estado, nunca o token
   let ritmo = null, regras = {};
   const ehAdmin = eu.perfil === 'admin';
-  let funil = null;   // 0087: funil_mes()
-  let funilConv;      // 13/11 (0147): etapa/destino das conversas — undefined = carregando
-  let fnome = { etapa: {}, destino: {} };
+  // 13/11 (etapa 4b): a escada do Painel vem da v_leads — a mesma conta da tela Leads, do Funil de vendas e da ficha.
+  // Substitui o funil_mes() (0087) e o bloco "Conversas · etapa e destino" (0147), que contavam cada um do seu jeito.
+  let leads = null, leadCfg = [];
   let jor = { lista: [], porVenda: {} };   // 0090: v_jornada (a regra única de "precisa de ação")
   let resumo;   // onda 3.2: resumo_diario(ontem) — undefined = carregando   // onda 2.1: painel_meta_ritmo() e config_regras (prazos do contrato)
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
   async function carregar() {
-    const [rv, rm, rc, ri, rr, rg, rf, rj] = await Promise.all([
-      NG.sb.from('v_funil').select('*').order('criado_em', { ascending: false }).limit(2000),
+    const [rv, rm, rc, ri, rr, rg, rf, rj, rlc] = await Promise.all([
+      NG.sb.from('v_vendas').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('config_metas').select('*'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
       NG.sb.from('importacoes').select('aplicado_em, dt_ref').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
       NG.sb.from('config_regras').select('chave, valor'),
-      NG.sb.rpc('funil_mes', { p_mes: NG.diaSP() }),
+      NG.sb.from('v_leads').select('etapa, etapa_ordem, destino, saida_motivo, saida_nome, criado_em, vez, atrasado, em_espera').limit(5000),
       NG.jornada(),
+      NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
     ]);
     jor = rj && !rj.erro ? rj : jor;
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
@@ -104,7 +105,8 @@
     osab = (ri.data || [])[0] || null;
     ritmo = rr && !rr.error ? rr.data : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
-    funil = rf && !rf.error ? rf.data : null;
+    leads = rf && !rf.error ? (rf.data || []) : null;
+    leadCfg = rlc && !rlc.error ? (rlc.data || []) : [];
     render();
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
@@ -122,17 +124,6 @@
   }
   async function carregarExtras() {
     if (veMari) { carregarAlarmes(); carregarOportunidades(); }
-    // 0147: o funil das conversas desenha assim que chega — não espera a Cobertura (v_dfv_resumo leva ~9 s).
-    if (veMari) {
-      Promise.all([
-        NG.sb.from('mari_conversas').select('created_at, funil_etapa, funil_destino').eq('canal', 'whatsapp').neq('funil_destino', 'teste_duplicada').limit(5000),
-        NG.funilNomes(),
-      ]).then(([rfc, rfn]) => {
-        funilConv = rfc.error ? { erro: NG.msgErro(rfc.error) } : (rfc.data || []);
-        if (rfn) fnome = rfn;
-        render();
-      });
-    }
     const [rz, rmari, rp, rres] = await Promise.all([
       NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle(),
       veMari ? carregarMari() : Promise.resolve(null),
@@ -231,6 +222,7 @@
       + (osab ? `OSAB de ${osab.dt_ref ? NG.fmtDiaISO(osab.dt_ref).slice(0, 5) : '—'} aplicado ${NG.fmtDataHora(osab.aplicado_em)}` : 'OSAB ainda não importado');
 
     renderFaixa();
+    renderEscada(p);
 
     // ---------- KPIs do período (a mesma conta da tela Vendas: vendidas pela data da venda) ----------
     const V = vendas.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
@@ -267,7 +259,7 @@
       </a>`).join('') : '<div class="vazio-curto">Nada pendente agora ✓</div>';
     const va = document.getElementById('ver-acao');
     va.textContent = acao.length > 8 ? `ver todas (${NG.fmtNum(acao.length)}) →` : 'ver no Live →';
-    va.href = ['admin', 'backoffice'].includes(eu.perfil) ? 'fila.html' : 'vendas.html?vista=lista&aba=acao';
+    va.href = ['admin', 'backoffice'].includes(eu.perfil) ? 'fila.html' : 'leads.html?aba=acao';   // 13/11 (4b): a lista é a Leads
 
     // ---------- blocos curtos ----------
     const blocos = [];
@@ -279,49 +271,36 @@
           : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Às 8h (seg–sáb) este resumo chega no seu WhatsApp.</span>`}
       </section>`);
     }
-    // Vendas por etapa (abertas + Ativo; Saída à parte) → Quadro
-    const porEtapa = Object.fromEntries(ETAPAS.map((e) => [e.id, 0]));
-    vendas.filter((v) => NG.noPeriodo(v.criado_em, p) || v.status !== 'saida').forEach((v) => { const e = NG.etapaDe(v).id; if (e in porEtapa) porEtapa[e] += 1; });
-    const maxE = Math.max(1, ...ETAPAS.filter((e) => e.id !== 'saida').map((e) => porEtapa[e.id]));
-    blocos.push(`<section class="painel bloco-curto">
-      <div class="q-linha"><h2>Vendas por etapa</h2><a class="muted" href="vendas.html?vista=quadro">Quadro →</a></div>
-      ${ETAPAS.filter((e) => e.id !== 'saida').map((e) => `<a class="q-item" href="vendas.html?vista=quadro&amp;etapa=${e.id}">
-        <div class="q-linha"><span>${esc(e.nome)}</span><span class="mono">${NG.fmtNum(porEtapa[e.id])}</span></div>
-        <div class="q-trilho"><i class="et-${e.id}" style="width:${(porEtapa[e.id] / maxE) * 100}%"></i></div></a>`).join('')}
-      <span class="nota-campo">Saída: ${NG.fmtNum(porEtapa.saida)} no período · abertas aparecem sempre</span>
-    </section>`);
-    // 13/11 (Ricardo: "destino também no Painel"): funil das conversas do período — até onde chegaram e como terminaram (0147).
-    if (veMari) {
-      if (funilConv === undefined) blocos.push('<section class="painel bloco-curto"><div class="q-linha"><h2>Conversas · etapa e destino</h2></div><span class="nota-campo">Carregando…</span></section>');
-      else if (funilConv && funilConv.erro) blocos.push(`<section class="painel bloco-curto"><div class="q-linha"><h2>Conversas · etapa e destino</h2></div><span class="nota-campo">Indisponível agora (${esc(funilConv.erro)}).</span></section>`);
-      else if (funilConv) {
-        const cs = funilConv.filter((c) => NG.noPeriodo(c.created_at, p));
-        const ordem = Object.keys(fnome.etapa);
-        const idx = (k) => ordem.indexOf(k || 'nova');
-        const chegou = (k) => cs.filter((c) => idx(c.funil_etapa) >= idx(k)).length;
-        const qual = cs.filter((c) => idx(c.funil_etapa) >= idx('qualificada') && !['ja_cliente_nio', 'credito_negado'].includes(c.funil_destino)).length;
-        const passos = ['respondeu', 'cep', 'area_ok', 'viavel', 'viu_planos', 'qualificada', 'pedido', 'instalada'];
-        const dest = Object.entries(fnome.destino).filter(([k]) => k !== 'teste_duplicada')
-          .map(([k, nome]) => [k, nome, cs.filter((c) => (c.funil_destino || 'em_andamento') === k).length]).filter((x) => x[2]);
-        const tot = Math.max(1, cs.length);
-        blocos.push(`<section class="painel bloco-curto">
-          <div class="q-linha"><h2 title="Etapa = até onde a conversa chegou (só sobe). Destino = como terminou (um só). Testes fora. Período pelo dia em que a conversa nasceu.">Conversas · etapa e destino</h2><a class="muted" href="conversas.html?filtro=todas">Conversas →</a></div>
-          <div class="bc-num"><span class="mono">${NG.fmtNum(qual)}</span><span class="muted">qualificada${qual === 1 ? '' : 's'} de ${NG.fmtNum(cs.length)} conversa${cs.length === 1 ? '' : 's'} (${NG.fmtNum(Math.round((qual / tot) * 100))} %)</span></div>
-          ${passos.map((k) => { const n = chegou(k); return `<a class="q-item" href="conversas.html?filtro=todas&amp;etapa=${k}" title="chegaram até ${esc(fnome.etapa[k] || k)} ou além">
-            <div class="q-linha"><span>${esc(fnome.etapa[k] || k)}</span><span class="mono">${NG.fmtNum(n)}</span></div>
-            <div class="q-trilho"><i style="width:${(n / tot) * 100}%;background:var(--accent)"></i></div></a>`; }).join('')}
-          <div class="fu-dest">${dest.map(([k, nome, n]) => `<a class="bc-linha" href="conversas.html?filtro=todas&amp;destino=${k}"><span>${k === 'em_andamento' ? '' : k === 'instalada' ? '✅ ' : '⛔ '}${esc(nome)}</span><span class="mono">${NG.fmtNum(n)}</span></a>`).join('')}</div>
-          <span class="nota-campo">Barras: chegaram até a etapa ou além · lista: destino de cada conversa (soma = ${NG.fmtNum(cs.length)})</span>
-        </section>`);
-      }
+    // 13/11 (etapa 4b): os blocos de etapa leem a escada única (v_leads) e levam à tela Leads já filtrada.
+    if (leads) {
+      const R = leads.filter((l) => l.destino !== 'teste_duplicada');
+      const and = R.filter((l) => l.destino === 'em_andamento');
+      const VEZ = [['time', 'Nosso time'], ['mari', 'Mari'], ['cliente', 'Cliente'], ['nio', 'Nio']];
+      const atr = and.filter((l) => l.atrasado).length;
+      blocos.push(`<section class="painel bloco-curto">
+        <div class="q-linha"><h2>Leads em andamento ${NG.dicaTxt(NG.ajuda.painel_vez)}</h2><a class="muted" href="leads.html">Leads →</a></div>
+        <a class="bc-num" href="leads.html" style="text-decoration:none"><span class="mono">${NG.fmtNum(and.length)}</span><span class="muted">em andamento · <span class="${atr ? 'bad-txt' : ''}">${NG.fmtNum(atr)} com prazo estourado</span></span></a>
+        ${VEZ.map(([k, nome]) => { const n = and.filter((l) => l.vez === k).length; return n ? `<a class="bc-linha" href="leads.html?vez=${k}"><span>vez: ${esc(nome)}</span><span class="mono">${NG.fmtNum(n)}</span></a>` : ''; }).join('')}
+        ${atr ? `<a class="prox bad" href="leads.html?aba=acao">${NG.fmtNum(atr)} atrasado${atr === 1 ? '' : 's'} → Precisam de ação</a>` : ''}
+      </section>`);
+      const S = R.filter((l) => l.destino === 'saida' && NG.noPeriodo(l.criado_em, p));
+      const porMot = {};
+      S.forEach((l) => { const k = l.saida_motivo || ''; (porMot[k] = porMot[k] || { k, nome: l.saida_nome || 'Sem motivo', n: 0 }).n++; });
+      const mot = Object.values(porMot).sort((a, b) => b.n - a.n);
+      blocos.push(`<section class="painel bloco-curto">
+        <div class="q-linha"><h2>Saídas · por motivo ${NG.dicaTxt(NG.ajuda.painel_saidas)}</h2><a class="muted" href="leads.html?aba=saidas">Leads →</a></div>
+        <div class="bc-num"><span class="mono">${NG.fmtNum(S.length)}</span><span class="muted">saíram · ${esc(per.rotulo.toLowerCase())}</span></div>
+        ${mot.slice(0, 5).map((x) => `<a class="bc-linha" href="leads.html?aba=saidas${x.k ? `&amp;saida=${esc(x.k)}` : ''}"><span>⛔ ${esc(x.nome)}</span><span class="mono">${NG.fmtNum(x.n)}</span></a>`).join('')}
+        ${S.length ? '' : '<span class="nota-campo">Ninguém saiu no período.</span>'}
+      </section>`);
     }
     // Em espera (0064): pendências com terceiro, as que vencem primeiro no topo → Vendas ?aba=espera
     const espera = vendas.map((v) => ({ v, pe: NG.pendencia(v) })).filter((x) => x.pe)
       .sort((a, b) => a.pe.revisar_em.localeCompare(b.pe.revisar_em));
     const vencidas = espera.filter((x) => x.pe.vencida).length;
     blocos.push(`<section class="painel bloco-curto">
-      <div class="q-linha"><h2 title="${esc(NG.ajuda.pendencia)}">Em espera</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=espera">Vendas →</a></div>
-      <a class="bc-num" href="vendas.html?vista=lista&amp;aba=espera" style="text-decoration:none"><span class="mono">${NG.fmtNum(espera.length)}</span><span class="muted">em espera · <span class="${vencidas ? 'bad-txt' : ''}">${NG.fmtNum(vencidas)} vencida${vencidas === 1 ? '' : 's'}</span></span></a>
+      <div class="q-linha"><h2 title="${esc(NG.ajuda.pendencia)}">Em espera</h2><a class="muted" href="leads.html?aba=espera">Leads →</a></div>
+      <a class="bc-num" href="leads.html?aba=espera" style="text-decoration:none"><span class="mono">${NG.fmtNum(espera.length)}</span><span class="muted">em espera · <span class="${vencidas ? 'bad-txt' : ''}">${NG.fmtNum(vencidas)} vencida${vencidas === 1 ? '' : 's'}</span></span></a>
       ${espera.slice(0, 4).map(({ v, pe }) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="${pe.vencida ? 'bad-txt' : 'muted'}">${pe.vencida ? '⏰ revisar hoje' : `revisar ${esc(pe.diaTxt)}`} · ${esc(pe.quemTxt)}${pe.revisoes >= 2 ? ` · ⚠️ ${pe.revisoes}×` : ''}</span></a>`).join('')}
       ${espera.length ? '' : '<span class="nota-campo">Nenhuma venda esperando terceiro.</span>'}
     </section>`);
@@ -403,28 +382,29 @@
       </a>`;
     }).join('');
     el.innerHTML = `${meta}<div class="fm-etapas" aria-label="Vendas paradas por etapa">${etapas}</div>`;
-    renderFunil();
   }
 
-  // 0087 (Ricardo, 09/11): o funil inteiro do mês — entradas em cada etapa e a passagem da anterior. A linha grossa separa
-  // lead (ainda não é venda) de venda (OS aberta no portal).
-  function renderFunil() {
+  // 13/11 (etapa 4b): a escada no Painel — quantos chegaram até cada degrau no Período, a mesma conta da Leads e do Funil de vendas.
+  // Clique no degrau abre a Leads filtrada; o título leva ao Funil de vendas (relatório inteiro).
+  function renderEscada(p) {
     const el = document.getElementById('funil-mes');
     if (!el) return;
-    if (!funil || !Array.isArray(funil.etapas)) { el.innerHTML = ''; return; }
-    const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
-    const et = funil.etapas;
+    const et = leadCfg.filter((x) => x.tipo === 'etapa');
+    if (!leads || !et.length) { el.innerHTML = ''; return; }
+    const R = leads.filter((l) => l.destino !== 'teste_duplicada' && NG.noPeriodo(l.criado_em, p));
+    const topo = R.length || 1;
+    const ns = et.map((e) => R.filter((l) => l.etapa_ordem >= e.ordem).length);
     const itens = et.map((e, i) => {
-      const ant = i ? Number(et[i - 1].n) : null;
-      const pct = ant ? Math.round((Number(e.n) / ant) * 100) : null;
-      const venda = e.id === 'vendas';
+      const n = ns[i];
+      const and = R.filter((l) => l.etapa === e.codigo && l.destino === 'em_andamento').length;
+      const venda = e.codigo === 'instalacao';
       return `${i ? `<span class="fu-seta${venda ? ' corte' : ''}" aria-hidden="true">${venda ? '‖' : '→'}</span>` : ''}
-        <div class="fu-etapa${venda ? ' venda' : ''}${Number(e.n) ? '' : ' vazia'}" title="${esc(e.dica || '')}">
-          <span class="fu-nome">${esc(e.nome)}</span><span class="fu-n mono">${NG.fmtNum(Number(e.n))}</span>
-          <span class="fu-pct">${pct == null ? '&nbsp;' : `${pct}% da anterior`}</span></div>`;
+        <a class="fu-etapa${venda ? ' venda' : ''}${n ? '' : ' vazia'}" href="leads.html?aba=todos&amp;etapa=${esc(e.codigo)}" title="${esc(`${e.ajuda || ''} Clique: abre a lista na tela Leads.`)}" style="text-decoration:none;color:inherit">
+          <span class="fu-nome">${esc(e.nome)}</span><span class="fu-n mono">${NG.fmtNum(n)}</span>
+          <span class="fu-pct">${i ? `${ns[i - 1] ? Math.round((n / ns[i - 1]) * 100) : 0}% da anterior` : `${Math.round((n / topo) * 100)}%`}${and ? ` · ${NG.fmtNum(and)} em andamento` : ''}</span></a>`;
     }).join('');
-    el.innerHTML = `<div class="fu-cab"><b>Funil de ${esc(nomeMes)}</b><span>entradas no mês em cada etapa · <b>lead qualificado e pedido não são venda</b>: venda = OS aberta com o dia e o período, depois da biometria</span></div>
-      <div class="fu-etapas"><span class="fu-fase">Lead</span>${itens}</div>`;
+    el.innerHTML = `<div class="fu-cab"><b>Escada · ${esc(per.rotulo.toLowerCase())}</b> ${NG.dicaTxt(NG.ajuda.painel_escada)}<span>chegaram até cada degrau (leads que entraram no período) · <b>venda = OS aberta</b> (a partir de Instalação)</span><a class="muted" href="funil.html">Funil de vendas →</a></div>
+      <div class="fu-etapas">${itens}</div>`;
   }
 
   NGFicha.aoMudar(() => carregar());

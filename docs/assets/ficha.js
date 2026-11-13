@@ -258,7 +258,7 @@
     const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
     const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
     const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg] = await Promise.all([
-      NG.sb.from('v_funil').select('*').eq('id', id).maybeSingle(),
+      NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),

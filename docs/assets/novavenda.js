@@ -576,7 +576,7 @@
       semEl.querySelector('span').textContent = a.ocupado
         ? 'Se o cliente confirmar que já tem Nio: não vender (estorno 100 %). Registrar como saída?'
         : 'O portal confirmou sem cobertura (depois de tentar variações de CEP, rua e número)? Quer registrar como saída e voltar a falar em 90 dias?';
-      btnSem.textContent = a.ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Sem cobertura" · volta em 90 d';
+      btnSem.textContent = a.ocupado ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Fachada não atendida" · volta em 90 d';
 
       // Passo 4: o DFV pré-marca atenção; um "Sim" explica o que acontece e oferece a saída certa.
       $('aviso-ocupado').hidden = !a.ocupado;
@@ -586,7 +586,7 @@
       conf.querySelector('span').textContent = cliente
         ? 'Já é cliente Nio ou o endereço tem produto ativo: a venda seria estornada em 100 % (e multa de recompra). Não vender — saída "Já é cliente Nio".'
         : 'Cancelou há 30 dias ou menos: reativar nesse prazo é estorno de 100 %. Não vender agora — Interesse futuro daqui a 31 dias.';
-      btnConfSaida.textContent = cliente ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Interesse futuro" · volta em 31 d';
+      btnConfSaida.textContent = cliente ? 'Salvar como saída "Já é cliente Nio"' : 'Salvar como saída "Recusou · momento" · volta em 31 d';
       btnConfSaida.dataset.saida = cliente ? 'cliente' : 'futuro';
 
       renderTravas();
@@ -708,12 +708,19 @@
       return data;
     }
 
-    btnSem.addEventListener('click', (ev) => salvar('saida', ev.currentTarget, F.dfv_resultado.value === 'endereco_ocupado'
-      ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
-      : { motivo_saida: 'Sem cobertura', interesse_futuro_em: diaMais(90) }));
-    btnConfSaida.addEventListener('click', (ev) => salvar('saida', ev.currentTarget, ev.currentTarget.dataset.saida === 'cliente'
-      ? { motivo_saida: 'Já é cliente Nio', interesse_futuro_em: null }
-      : { motivo_saida: 'Interesse futuro (com data)', interesse_futuro_em: diaMais(31) }));
+    // 13/11 (etapa 4a): a venda que já nasce em Saída usa a lista única (config_lead) — o mesmo motivo, porquê e data que a
+    // lead_sair grava nas outras saídas. Sem cobertura = Fachada não atendida (revisão em 90 d); cancelou há ≤ 30 d = Recusou · momento.
+    const saidaUnica = async (bt, cod, sub, volta, obs) => {
+      let campos;
+      try { campos = await NG.saidaCampos(cod, sub, volta, obs); } catch (e) { NG.toast(e.message, 'bad'); return; }
+      return salvar('saida', bt, campos);
+    };
+    btnSem.addEventListener('click', (ev) => (F.dfv_resultado.value === 'endereco_ocupado'
+      ? saidaUnica(ev.currentTarget, 'ja_cliente_nio', 'cliente ativo', null)
+      : saidaUnica(ev.currentTarget, 'fachada_nao_atendida', null, diaMais(90))));
+    btnConfSaida.addEventListener('click', (ev) => (ev.currentTarget.dataset.saida === 'cliente'
+      ? saidaUnica(ev.currentTarget, 'ja_cliente_nio', 'cliente ativo', null)
+      : saidaUnica(ev.currentTarget, 'recusou', 'momento', diaMais(31), 'reativar até 30 dias do cancelamento é estorno')));
     btnQualif.addEventListener('click', () => salvar('0_qualificado', btnQualif));
     btnVenda.addEventListener('click', () => salvar('1_vendido', btnVenda));
 

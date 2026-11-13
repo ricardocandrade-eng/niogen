@@ -263,6 +263,19 @@
     cad_janela: 'Janela de 24 h: depois que o cliente fala, o WhatsApp deixa a Mari mandar mensagem livre por 24 h. Ela cutuca até 5 vezes: 15 min, 1 h, 3 h e 6 h depois da última fala dela e ~20 h depois da mensagem do cliente — só no horário do contrato. O cliente respondeu: a rodada recomeça.',
     cad_retomada: 'Retomada: se o cliente não volta, a Mari manda template no D3, D7 e D15 contados da última mensagem dele. Entre o D3 e o D6 o vendedor liga. 48 h depois do D15 sem resposta, a conversa sem venda vai para Saída · Sem resposta. Venda criada não recebe D3, D7 nem D15: segue pelo time.',
     cad_venda: 'Lembretes da venda: com o pedido feito, a Mari lembra a biometria no D+1 do pedido (no D+3 sem biometria, o time liga) e avisa a instalação assim que ela é agendada, com um lembrete na véspera. Saem mesmo com a conversa com o time; só "não contatar" para.',
+    // 13/11 (4b): Funil de vendas, Painel e Live apontando para a Leads
+    funil_tela: 'Funil de vendas: até onde os leads do período chegaram (largura), quantos passaram de um degrau para o outro (↓ %) e onde saíram (chips vermelhos, por motivo). É só relatório: todo clique abre a lista na tela Leads com o mesmo recorte. O que fazer: ache o degrau que mais perde e abra a lista dele.',
+    funil_k_leads: 'Leads: quem entrou no período (conversa ou venda), menos teste e duplicada. Comparado ao período anterior do mesmo tamanho.',
+    funil_k_qualif: 'Qualificados: chegaram em Qualificado ou além (dados completos, endereço viável, crédito não negado), menos quem saiu como Já é cliente Nio ou Crédito negado.',
+    funil_k_inst: 'Instaladas: leads do período que a Nio já instalou. Embaixo, o mês inteiro contra a meta (a mesma conta do Painel). É o que paga comissão.',
+    funil_k_jogo: 'Em jogo agora: a comissão prevista dos leads qualificados que ainda estão em andamento — o dinheiro que depende do nosso time. O que fazer: clique e trabalhe a lista; cada venda que chega à instalação vira comissão.',
+    funil_k_sai: 'Saíram: leads do período que foram para Saída, com o motivo que mais aparece. O que fazer: nos chips do funil, veja em que degrau e por quê.',
+    painel_escada: 'Escada: quantos leads do período chegaram até cada degrau — a mesma conta da tela Leads, do Funil de vendas e da ficha. Clique num degrau para ver a lista.',
+    painel_vez: 'Leads em andamento por "de quem é a vez". Vez do nosso time = a próxima ação é nossa. Prazo estourado = alguém (nós, o cliente ou a Nio) passou do prazo. O que fazer: comece pelos atrasados.',
+    painel_saidas: 'Saídas do período pela lista única de motivos (a mesma da ficha e da Leads). O que fazer: motivo que cresce é sinal — Fachada, ajuste o anúncio; Recusou, veja o porquê.',
+    live_leads: 'Todos os leads, com ou sem venda, na tela Leads: em que degrau está cada um, de quem é a vez e o prazo. A Live mostra só o que pede ação agora.',
+    live_funil: 'Funil de vendas: o relatório do período — onde os leads chegam e onde saem.',
+    leads_recorte: 'Recorte vindo do Funil de vendas (origem, cidade ou período de entrada). Os outros filtros valem por cima dele. Tirar o recorte volta para todos os leads.',
     cad_anteriores: 'Lembretes de rodadas anteriores: os que saíram antes da última mensagem do cliente. Quando ele responde, a contagem recomeça. Clique para ver todos no Histórico.',
     cad_avisos_venda: 'Avisos automáticos da Mari para esta venda: BIO1 = lembrete da biometria no D+1 do pedido · BIO3 = no D+3 sem biometria o nosso time liga (não é mensagem) · INSTALACAO = aviso assim que a instalação é agendada · VESPERA = lembrete na véspera. Passe o mouse para ver o texto.',
     interesse_futuro: 'Interesse futuro: a venda está em Saída e o cliente pediu para voltarmos a falar na data. A conversa ganha a etiqueta interesse-futuro no Chatwoot e uma nota privada com a data; o backoffice retoma por lá. A cadência não manda nada para ela.',
@@ -908,24 +921,63 @@
     return { nio_pedido: os || null, nio_os: os || null };
   }
 
+  // 13/11 (etapa 4a): uma lista só de motivos de saída — a da config_lead (0156), a mesma da ficha, da tela Leads e das contas do
+  // funil. O porquê (sub-motivo) segue a decisão D4. Quem grava é a lead_sair (0157), nunca a tela.
+  const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'pedido Nio em andamento', 'suporte'],
+    nio_nao_instalou: ['inviabilidade', 'pendência sem solução', 'outro'] };
+  const SAIDA_SO_VENDA = ['reprovado_biometria', 'nio_nao_instalou', 'venda_indevida_fraude'];
+  let saidaCache = null;
+  async function saidaLista() {
+    if (saidaCache) return saidaCache;
+    const { data, error } = await sb.from('config_lead').select('codigo, nome, ordem, volta, ajuda').eq('tipo', 'saida').order('ordem');
+    if (error) return [];
+    saidaCache = data || [];
+    return saidaCache;
+  }
+  // A linha que a lead_sair grava na venda (motivo_saida = "Nome · porquê"), para quem precisa criar a venda já em Saída (Nova venda).
+  async function saidaCampos(codigo, sub, volta, obs) {
+    const k = (await saidaLista()).find((x) => x.codigo === codigo);
+    if (!k) throw new Error(`Motivo de saída desconhecido: ${codigo}`);
+    return { motivo_saida: k.nome + (sub ? ` · ${sub}` : '') + (obs ? ` — ${obs}` : ''), saida_motivo: k.codigo, saida_sub: sub || null, interesse_futuro_em: volta || null };
+  }
+  // Arrastar para Saída no Quadro: o mesmo formulário da ficha (motivo · porquê · volta · observação · cancelou no portal?).
   async function pedirSaida(venda) {
+    const lista = (await saidaLista()).filter((x) => x.codigo !== 'nao_contatar');
+    if (!lista.length) { toast('A lista de motivos de saída não carregou. Tente de novo.', 'bad'); return null; }
+    const aberto = !!(String(venda.nio_pedido || '').trim() || String(venda.nio_os || '').trim());
+    const amanha = somaDias(diaSP(), 1);
     const fd = await modal(`
-      <h3>Encerrar com motivo</h3>
-      <p>${esc(venda.cliente_nome)}</p>
-      <label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${MOTIVOS_SAIDA.map((m) => `<option>${esc(m)}</option>`).join('')}</select></label>
-      <label class="campo" data-futuro hidden>Volta em<input type="date" name="futuro"></label>
+      <h3>Saída: encerrar com motivo</h3>
+      <p>${esc(venda.cliente_nome)} · o motivo vale para a tela Leads e para as contas do funil. ${dicaTxt(ajuda.saida_form)}</p>
+      <label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${lista.map((x) => `<option value="${esc(x.codigo)}" data-ajuda="${esc(x.ajuda || '')}" data-volta="${esc(x.volta || '')}">${esc(x.nome)}</option>`).join('')}</select></label>
+      <span class="nota-campo" data-saida-ajuda hidden></span>
+      <div class="campo" data-saida-sub hidden><span>Porquê ${dicaTxt(ajuda.saida_sub)}</span><select name="sub" aria-label="Porquê"></select></div>
+      <div class="campo"><span>Volta em (opcional) ${dicaTxt(ajuda.saida_volta)}</span><input type="date" name="volta" min="${amanha}" aria-label="Volta em"></div>
+      <label class="campo">Observação (opcional)<input type="text" name="obs" maxlength="200"></label>
+      ${aberto ? `<div class="campo"><span><b>Cancelou o pedido no portal?</b> ${dicaTxt(ajuda.saida_portal)}</span>
+        <label class="check"><input type="radio" name="cancelou" value="sim" required> Sim, já cancelei no portal PAP</label>
+        <label class="check"><input type="radio" name="cancelou" value="nao"> Ainda não — deixar a linha "Cancelar na Nio" na Live</label></div>` : ''}
     `, (d) => {
       const sel = d.querySelector('[name=motivo]');
-      const fut = d.querySelector('[data-futuro]');
+      const aj = d.querySelector('[data-saida-ajuda]');
+      const box = d.querySelector('[data-saida-sub]');
+      const sub = box.querySelector('select');
+      const volta = d.querySelector('[name=volta]');
       sel.addEventListener('change', () => {
-        const on = sel.value.startsWith('Interesse futuro');
-        fut.hidden = !on;
-        fut.querySelector('input').required = on;
+        const op = sel.selectedOptions[0];
+        aj.hidden = !sel.value;
+        aj.textContent = sel.value ? `${op.dataset.ajuda}${op.dataset.volta ? ` Volta: ${op.dataset.volta}.` : ''}` : '';
+        const subs = SAIDA_SUBS[sel.value] || [];
+        box.hidden = !subs.length;
+        sub.innerHTML = subs.length ? `<option value="">Escolher…</option>${subs.map((x) => `<option>${esc(x)}</option>`).join('')}` : '';
+        sub.required = sel.value === 'recusou';
+        if (sel.value === 'fachada_nao_atendida' && !volta.value) { volta.value = somaDias(diaSP(), 90); volta.dataset.auto = '1'; }
+        else if (sel.value !== 'fachada_nao_atendida' && volta.dataset.auto) { volta.value = ''; delete volta.dataset.auto; }
       });
     });
     if (!fd) return null;
-    const motivo = fd.get('motivo');
-    return { motivo_saida: motivo, interesse_futuro_em: motivo.startsWith('Interesse futuro') ? fd.get('futuro') : null };
+    return { motivo: fd.get('motivo'), sub: fd.get('sub') || null, volta: fd.get('volta') || null, obs: String(fd.get('obs') || '').trim() || null,
+      cancelou: aberto ? fd.get('cancelou') === 'sim' : null };
   }
 
   // Muda o status; os campos extras exigidos por cada destino são pedidos antes.
@@ -942,9 +994,13 @@
       if (!quando) return false;
       campos.instalacao_agendada_para = quando;
     } else if (destino === 'saida') {
-      const extra = await pedirSaida(venda);
-      if (!extra) return false;
-      campos = { ...campos, ...extra };
+      // 13/11 (4a): a saída é sempre pela função (lead_sair) — a mesma da ficha. Nada de gravar status direto.
+      const s = await pedirSaida(venda);
+      if (!s) return false;
+      const { data, error } = await sb.rpc('lead_sair', { p_conversa: null, p_venda: venda.id, p_motivo: s.motivo, p_sub: s.sub, p_volta: s.volta, p_obs: s.obs, p_cancelou_portal: s.cancelou });
+      if (error) { toast(msgErro(error), 'bad'); return false; }
+      toast(`${primeiroNome(venda.cliente_nome)} ${(data && data.resumo) || '→ Saída'}`, 'ok');
+      return true;
     }
     const { error } = await sb.from('vendas').update(campos).eq('id', venda.id);
     if (error) { toast(msgErro(error), 'bad'); return false; }
@@ -1458,7 +1514,7 @@
 
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, funilNomes, FUNIL_ALERTA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,

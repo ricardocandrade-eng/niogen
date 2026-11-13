@@ -30,13 +30,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-9">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-9"></script>
-<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-9"></script>
+<script src="assets/ficha.js?v=131126-10"></script>
 <script src="assets/pulso.js?v=121126-24"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -85,17 +85,18 @@
   const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
 
   let jor = { lista: [], todas: [] };
-  // 13/11 (Ricardo: "destino também no Live"): etapa/destino de cada conversa (0147), por conversa e por venda.
+  // 13/11 (Ricardo: "destino também no Live"). Etapa 4b: o degrau e o destino vêm da escada única (v_leads) — a mesma conta da
+  // tela Leads, do Funil de vendas, do Painel e da ficha — e o clique leva à Leads já filtrada.
   let funilMap = {};
-  let fnome = { etapa: {}, destino: {} };
   const funilDe = (j) => funilMap[j.conversa_id] || (j.venda_id ? funilMap[`v:${j.venda_id}`] : null);
   const funilHtml = (j) => {
     const f = funilDe(j);
-    if (!f || !f.funil_etapa) return '';
-    if (f.funil_destino && !['em_andamento', 'teste_duplicada'].includes(f.funil_destino)) {
-      return ` · <span class="cv-dest" title="Destino${f.funil_detalhe ? ': ' + esc(f.funil_detalhe) : ''}">${f.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[f.funil_destino] || f.funil_destino)}</span>`;
+    if (!f || !f.etapa) return '';
+    if (f.destino === 'saida' || f.destino === 'instalada') {
+      const q = f.destino === 'saida' ? `aba=saidas${f.saida_motivo ? `&amp;saida=${esc(f.saida_motivo)}` : ''}` : 'aba=instaladas';
+      return ` · <a class="cv-dest" data-leads href="leads.html?${q}" title="${esc(`${f.destino === 'saida' ? `Saída${f.saida_sub ? `: ${f.saida_sub}` : ''}` : 'Instalada'} — clique para ver na tela Leads`)}">${f.destino === 'instalada' ? '✅' : '⛔'} ${esc(f.destino === 'saida' ? f.saida_nome || 'Saída' : 'Instalada')}</a>`;
     }
-    return ` · <span class="cv-etp" title="Etapa mais alta alcançada">${esc(fnome.etapa[f.funil_etapa] || f.funil_etapa)}</span>`;
+    return ` · <a class="cv-etp" data-leads href="leads.html?aba=todos&amp;etapa=${esc(f.etapa)}" title="${esc(`Degrau da escada: ${f.etapa_nome}${f.status_nome ? ` · ${f.status_nome}` : ''} — clique para ver todos deste degrau na tela Leads`)}">${esc(f.etapa_nome || f.etapa)}</a>`;
   };
   let conf = [];      // 0153: lista "Conferir" — ação do Chatwoot que falhou, conversa mexida fora do NIOGEN, parada com dono, docs 15 d
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
@@ -165,13 +166,12 @@
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
     const [r, ap, rf, fn, rcf] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
-      NG.sb.from('mari_conversas').select('id, venda_id, funil_etapa, funil_destino, funil_detalhe').eq('canal', 'whatsapp').order('created_at', { ascending: false }).limit(1000),
-      NG.funilNomes(), NG.sb.rpc('live_conferir')]);
+      NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
+      null, NG.sb.rpc('live_conferir')]);
     conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
-    fnome = fn || fnome;
     if (rf && !rf.error) {
       funilMap = {};
-      (rf.data || []).slice().reverse().forEach((c) => { funilMap[c.id] = c; if (c.venda_id) funilMap[`v:${c.venda_id}`] = c; });   // a mais recente da venda vence
+      (rf.data || []).forEach((l) => { if (l.conversa_id) funilMap[l.conversa_id] = l; if (l.venda_id) funilMap[`v:${l.venda_id}`] = l; });
     }
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
@@ -206,7 +206,8 @@
     const nv = (e) => jor.lista.filter((j) => j.etapa === e && vez(j)).length;
     const sai = (jor.todas || []).filter((j) => j.etapa === 0).length;
     funilEl.innerHTML = NG.JORNADA.map((e) => `<button type="button" class="lv-stage${etapaSel === e.n ? ' on' : ''}" data-etapa="${e.n}" aria-pressed="${etapaSel === e.n}">${dot(e.n)}<span>${esc(e.nome)}</span><b>${n(e.n)}</b>${nv(e.n) ? `<small>sua vez ${nv(e.n)}</small>` : ''}</button>`).join('')
-      + `<span class="lv-stage-out" title="Fora da jornada (com motivo)">Saída <b>${sai}</b></span>`;
+      + `<span class="lv-stage-out" title="Fora da jornada (com motivo)">Saída <b>${sai}</b></span>`
+      + `<span class="lv-stage-lk"><a href="leads.html" data-leads title="${esc(NG.ajuda.live_leads)}">Todos os leads →</a><a href="funil.html" data-leads title="${esc(NG.ajuda.live_funil)}">Funil →</a></span>`;
   }
 
   function filtradas(comVez = soVez) {
@@ -492,6 +493,7 @@
     await carregar();
   }
   function clique(ev) {
+    if (ev.target.closest('a[data-leads]')) { ev.stopPropagation(); return; }   // 4b: o degrau da linha leva à tela Leads (o link segue)
     if (ev.target.closest('.mv-op-menu summary')) { ev.stopPropagation(); return; }
     const oe = ev.target.closest('[data-ope]');
     if (oe) { ev.stopPropagation(); enviarOp(oe.dataset.ope, oe); return; }

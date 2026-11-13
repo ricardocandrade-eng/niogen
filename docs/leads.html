@@ -17,13 +17,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-9">
+<link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-9"></script>
-<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/app.js?v=131126-10"></script>
+<script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-9"></script>
+<script src="assets/ficha.js?v=131126-10"></script>
 <style>
   .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
   .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
@@ -66,6 +66,7 @@
       <select id="f-vez" aria-label="Filtrar por de quem é a vez"></select>
       <select id="f-saida" aria-label="Filtrar por motivo de saída"></select>
       <button type="button" class="btn btn-sm btn-ghost" id="limpar">Limpar filtros</button>
+      <span id="recorte"></span>
     </div>
     <div class="ld-tab-wrap">
       <table class="tab">
@@ -84,7 +85,8 @@
   NGSidebar.montar();
   const tbody = document.getElementById('tbody');
   const Q = new URLSearchParams(location.search);
-  const f = { aba: Q.get('aba') || 'andamento', etapa: Q.get('etapa') || '', status: Q.get('status') || '', vez: Q.get('vez') || '', saida: Q.get('saida') || '', q: Q.get('q') || '' };
+  const f = { aba: Q.get('aba') || 'andamento', etapa: Q.get('etapa') || '', status: Q.get('status') || '', vez: Q.get('vez') || '', saida: Q.get('saida') || '', q: Q.get('q') || '',
+    origem: Q.get('origem') || '', cidade: Q.get('cidade') || '', de: Q.get('de') || '', ate: Q.get('ate') || '' };   // 13/11 (4b): recorte vindo do Funil de vendas
   if (f.saida && !Q.get('aba')) f.aba = 'saidas';
   let leads = [], cfg = { etapa: [], status: [], saida: [] }, ajuda = {};
   const VEZ = { mari: 'Mari', time: 'Nosso time', cliente: 'Cliente', nio: 'Nio' };
@@ -112,7 +114,11 @@
     const aba = ABAS.find((a) => a[0] === f.aba) || ABAS[1];
     const q = f.q.trim().toLowerCase();
     const dig = q.replace(/\D/g, '');
+    const ini = f.de ? new Date(`${f.de}T00:00:00-03:00`) : null;
+    const fim = f.ate ? new Date(`${NG.somaDias(f.ate, 1)}T00:00:00-03:00`) : null;
     return reais().filter((l) => aba[2](l)
+      && (!f.origem || l.origem === f.origem) && (!f.cidade || l.cidade === f.cidade)
+      && (!ini || new Date(l.criado_em) >= ini) && (!fim || new Date(l.criado_em) < fim)
       && (!f.etapa || l.etapa === f.etapa) && (!f.status || l.status === f.status)
       && (!f.vez || l.vez === f.vez) && (!f.saida || l.saida_motivo === f.saida)
       && (!q || [l.nome, l.cidade, l.plano].some((x) => String(x || '').toLowerCase().includes(q)) || (dig.length >= 3 && String(l.telefone || '').includes(dig))));
@@ -157,6 +163,8 @@
         <td>${esc(l.dono || '—')}</td>
         <td>${l.ultima_em ? esc(NG.fmtDataHora(l.ultima_em)) : '—'}</td></tr>`;
     }).join('') : '<tr><td colspan="10" class="vazio">Nenhum lead neste filtro.</td></tr>';
+    const rec = [f.origem && `origem ${ORIGEM[f.origem] || f.origem}`, f.cidade && f.cidade, (f.de || f.ate) && `entrou ${f.de ? NG.fmtDiaISO(f.de) : '…'} a ${f.ate ? NG.fmtDiaISO(f.ate) : '…'}`].filter(Boolean);
+    document.getElementById('recorte').innerHTML = rec.length ? `<span class="chip info">Recorte do Funil: ${esc(rec.join(' · '))}</span> <button type="button" class="btn btn-sm btn-ghost" data-tirar-recorte>Tirar o recorte</button> ${NG.dicaTxt(NG.ajuda.leads_recorte)}` : '';
     document.getElementById('rodape').textContent = `${NG.fmtNum(L.length)} lead${L.length === 1 ? '' : 's'} neste filtro${L.length > 500 ? ' (mostrando os 500 primeiros — refine a busca)' : ''} · ${NG.fmtNum(R.length)} no total · teste e duplicada ficam de fora`;
     document.getElementById('busca').value = f.q;
     document.getElementById('f-status').value = f.status;
@@ -198,7 +206,8 @@
     if (k === 'saida' && f.saida) f.aba = 'saidas';
     render();
   }));
-  document.getElementById('limpar').addEventListener('click', () => { Object.assign(f, { etapa: '', status: '', vez: '', saida: '', q: '' }); render(); });
+  document.getElementById('limpar').addEventListener('click', () => { Object.assign(f, { etapa: '', status: '', vez: '', saida: '', q: '', origem: '', cidade: '', de: '', ate: '' }); render(); });
+  document.getElementById('recorte').addEventListener('click', (ev) => { if (ev.target.closest('[data-tirar-recorte]')) { Object.assign(f, { origem: '', cidade: '', de: '', ate: '' }); render(); } });
   document.getElementById('csv').addEventListener('click', csv);
   const abrir = (tr) => { location.hash = `#${tr.dataset.abrir}`; };
   tbody.addEventListener('click', (ev) => { if (ev.target.closest('.dica, [data-operador]')) return; const tr = ev.target.closest('tr[data-abrir]'); if (tr) abrir(tr); });
