@@ -67,6 +67,25 @@
       <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para abrir o pagamento</span></div>
     </section>
     <div class="cartoes" id="cartoes" aria-label="Lista de pagamentos"></div>
+
+    <!-- 13/11 (0176): indicações de clientes instalados e o Pix de prêmio. O Pix é pago à mão; aqui fica o que há a pagar e o pago. -->
+    <header class="cab" id="ind-cab" style="margin-top:36px">
+      <div>
+        <h1 style="font-size:1.25rem">Indicações de clientes</h1>
+        <div class="sub" id="ind-sub">Cliente instalado indica · a Mari fala com o indicado · indicado instalou = Pix a quem indicou, 10 dias depois da instalação</div>
+      </div>
+    </header>
+    <div class="faixa amarelo" id="ind-faixa" role="status" hidden></div>
+    <section class="kpis quatro" id="ind-kpis" aria-label="Resultado das indicações"></section>
+    <section class="lista" aria-label="Lista de indicações">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr><th>Quem indicou</th><th>Indicado</th><th>Recebida</th><th>Situação</th><th class="num">Pix</th><th>Chave Pix</th><th>Ação</th></tr></thead>
+          <tbody id="ind-tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="ind-contagem"></span><span>O Pix é pago por você, fora do sistema; aqui só se registra</span></div>
+    </section>
   </main>
 </div>
 
@@ -419,10 +438,85 @@
     await carregar();
   });
 
-  NGFicha.aoMudar(() => carregar());
-  NG.botaoAtualizar(() => carregar());   // 09/11: dados frescos sem F5
+  // ---------- indicações de clientes (0176) ----------
+  const IND_SIT = {
+    recebida: ['Recebida · a Mari ainda não falou', ''], contatada: ['A Mari falou com o indicado', ''], em_venda: ['Indicado em venda', 'ok'],
+    aguarda_nio: ['Instalou · aguarda a confirmação da Nio', 'warn'], aguarda_prazo: ['Instalou · Pix no prazo', 'ok'],
+    falta_pix: ['Pix vencido · falta a chave', 'bad'], a_pagar: ['Pix a pagar', 'bad'], pago: ['Pago', 'dim'], cancelado: ['Prêmio cancelado', 'dim'],
+    invalida: ['Não vale', 'dim'], indicado_saiu: ['Indicado cancelou · confira antes de pagar', 'warn'], erro: ['Não abri a conversa do indicado', 'bad'],
+  };
+  const fone = (t) => { const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, ''); return d.length >= 10 ? `(${d.slice(0, 2)}) ${d.slice(2, -4)}-${d.slice(-4)}` : (t || '—'); };
+  let IND = [];
+  async function carregarInd() {
+    const [ri, rr, rc] = await Promise.all([
+      NG.sb.from('v_indicacoes').select('*').order('criado_em', { ascending: false }).limit(500),
+      NG.sb.from('v_indicacao_resumo').select('*').maybeSingle(),
+      NG.sb.from('config_regras').select('valor').eq('chave', 'indicacao').maybeSingle(),
+    ]);
+    const tb = document.getElementById('ind-tbody');
+    if (ri.error) { tb.innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(ri.error))}</td></tr>`; return; }
+    IND = ri.data || [];
+    const r = (rr && rr.data) || {};
+    const cfg = (rc && rc.data && rc.data.valor) || {};
+    const faixa = document.getElementById('ind-faixa');
+    faixa.hidden = !!cfg.ligado && !!cfg.abrir_conversa;
+    faixa.textContent = !cfg.ligado ? 'Desligado: nenhuma mensagem de pós-instalação está saindo (config_regras.indicacao → ligado).'
+      : 'A Mari ainda não fala sozinha com o indicado (config_regras.indicacao → abrir_conversa): as indicações ficam em "Recebida".';
+    const aPagar = IND.filter((i) => i.situacao === 'a_pagar' || i.situacao === 'falta_pix');
+    const soma = (l) => l.reduce((t, i) => t + Number(i.premio_valor || 0), 0);
+    document.getElementById('ind-kpis').innerHTML = [
+      NG.kpi({ rot: 'Pix a pagar agora', val: esc(moeda(soma(aPagar))), cls: aPagar.length ? 'bad' : '', nota: aPagar.length ? `${NG.fmtNum(aPagar.length)} indicação(ões) · ${moeda(r.pix_devido || 0)} previsto no total` : `${moeda(r.pix_devido || 0)} previsto · ${moeda(r.pix_pago || 0)} já pago` }),
+      NG.kpi({ rot: 'Indicações recebidas', val: NG.fmtNum(r.recebidas || 0), nota: `${NG.fmtNum(r.recebidas_7d || 0)} em 7 dias · ${NG.fmtNum(r.pedidas || 0)} pedidos feitos` }),
+      NG.kpi({ rot: 'Viraram venda', val: NG.fmtNum(r.viraram_venda || 0), cls: r.instaladas ? 'ok' : '', nota: `${NG.fmtNum(r.instaladas || 0)} instalada(s) · ${moeda(r.comissao_gerada || 0)} de comissão` }),
+      NG.kpi({ rot: 'Pós-instalação enviado', val: NG.fmtNum(r.enviadas || 0), nota: `${NG.fmtNum(r.satisfeitos || 0)} satisfeito(s) · ${NG.fmtNum(r.problemas || 0)} com problema · ${NG.fmtNum(r.com_time || 0)} com o time` }),
+    ].join('');
+    tb.innerHTML = IND.length ? IND.map((i) => {
+      const [txt, nivel] = IND_SIT[i.situacao] || [i.situacao, ''];
+      const prazo = i.premio_status === 'previsto' && i.premio_vence_em ? ` · ${NG.fmtDiaISO(i.premio_vence_em).slice(0, 5)}` : '';
+      const podePix = i.premio_status !== 'pago' && i.estado !== 'invalida';
+      const acoes = [
+        podePix ? `<button type="button" class="btn btn-sm" data-ind-pix="${i.id}">${i.pix_chave ? 'Trocar chave' : 'Gravar chave Pix'}</button>` : '',
+        ehAdmin && i.situacao === 'a_pagar' ? `<button type="button" class="btn btn-sm btn-acc" data-ind-pagar="${i.id}">Marcar pago</button>` : '',
+        ehAdmin && i.premio_status === 'previsto' ? `<button type="button" class="btn btn-sm btn-ghost" data-ind-cancelar="${i.id}">Cancelar prêmio</button>` : '',
+      ].join(' ');
+      return `<tr>
+        <td class="cli"><b>${esc(i.indicador_nome || '—')}</b><small>${esc(fone(i.indicador_whatsapp))}</small></td>
+        <td class="cli"><b>${esc(i.indicado_cliente_nome || i.indicado_nome || 'sem nome')}</b><small>${esc(fone(i.indicado_telefone))}</small></td>
+        <td class="apagado">${esc(NG.fmtData(i.criado_em))}</td>
+        <td>${NG.proxPasso({ txt: txt + prazo, nivel })}${i.motivo ? `<small class="apagado"> ${esc(i.motivo)}</small>` : ''}</td>
+        <td class="num">${i.premio_status === 'nenhum' ? '—' : esc(moeda(i.premio_valor))}</td>
+        <td>${i.pix_chave ? esc(i.pix_chave) : (i.pix_pedido_em ? '<span class="apagado">pedida ao cliente</span>' : '—')}</td>
+        <td>${acoes || (i.situacao === 'pago' ? esc('Pago ' + NG.fmtData(i.pago_em)) : '')}</td></tr>`;
+    }).join('') : '<tr><td colspan="7" class="vazio">Nenhuma indicação ainda</td></tr>';
+    document.getElementById('ind-contagem').textContent = `${NG.fmtNum(IND.length)} ${IND.length === 1 ? 'indicação' : 'indicações'}`;
+  }
+  document.getElementById('ind-tbody').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const id = b.dataset.indPix || b.dataset.indPagar || b.dataset.indCancelar;
+    const i = IND.find((x) => x.id === id); if (!i) return;
+    let r;
+    if (b.dataset.indPix) {
+      const chave = window.prompt(`Chave Pix de ${i.indicador_nome || 'quem indicou'}:`, i.pix_chave || '');
+      if (!chave || !chave.trim()) return;
+      r = await NG.sb.rpc('indicacao_gravar_pix', { p_id: id, p_chave: chave.trim() });
+    } else if (b.dataset.indPagar) {
+      if (!window.confirm(`Confirmar que você JÁ FEZ o Pix de ${moeda(i.premio_valor)} para ${i.indicador_nome || 'quem indicou'} (chave ${i.pix_chave})?`)) return;
+      r = await NG.sb.rpc('indicacao_pagar', { p_id: id });
+    } else {
+      const motivo = window.prompt('Motivo para cancelar este prêmio:');
+      if (!motivo || !motivo.trim()) return;
+      r = await NG.sb.rpc('indicacao_cancelar_premio', { p_id: id, p_motivo: motivo.trim() });
+    }
+    if (r.error) { NG.toast(NG.msgErro(r.error), 'bad'); return; }
+    NG.toast('Gravado', 'ok');
+    await carregarInd();
+  });
+
+  NGFicha.aoMudar(() => { carregar(); carregarInd(); });
+  NG.botaoAtualizar(() => { carregar(); carregarInd(); });   // 09/11: dados frescos sem F5
   const qs = new URLSearchParams(location.search);
   await carregar();
+  carregarInd();
   if (qs.get('parceiro')) { fParceiro.value = qs.get('parceiro'); render(); }
   NGFicha.iniciar();
 })();

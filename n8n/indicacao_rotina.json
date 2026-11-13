@@ -1,0 +1,368 @@
+{
+  "name": "indicacao_rotina",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 10 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "258d4922-5589-559a-aec3-4741c966b3e0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/indicacao_tick",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase rotina",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "c2846e74-5c47-5bf7-be8a-1747bf090f33",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.base + '/contacts/search' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.telefone }}"
+            }
+          ]
+        }
+      },
+      "name": "3 · Chatwoot buscar contato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "291fb1e1-92e6-5d75-91bd-63797ffec98e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 4 · Achou o contato? — o Chatwoot busca por texto; confere pelos 8 últimos dígitos (com ou sem o 9).\nconst t = $('2 · Supabase rotina').item.json;\nconst fim = String(t.telefone || '').replace(/\\D/g, '').slice(-8);\nconst lista = Array.isArray(($json || {}).payload) ? $json.payload : [];\nconst c = lista.find((p) => String(p.phone_number || '').replace(/\\D/g, '').slice(-8) === fim);\nreturn { json: { ...t, contact_id: c ? c.id : null } };\n"
+      },
+      "name": "4 · Achou o contato?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "bebf58da-e639-5781-b21d-36bfce5137c1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "5943609d-e5cf-56e3-a409-e2cc85ec8d70",
+              "leftValue": "={{ !!$json.contact_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "5 · Tem contato?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "4bdccdde-62c2-5fb6-8b19-c793ae06f8a8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.base + '/contacts' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inbox_id: $json.inbox_id, name: $json.nome, phone_number: $json.telefone }) }}"
+      },
+      "name": "5n · Chatwoot criar contato",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        160
+      ],
+      "id": "d56ffae9-4996-57a1-993a-44929fe63394",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 5m · Contato criado — a resposta traz payload.contact (ou payload direto, conforme a versão do Chatwoot).\nconst t = $('2 · Supabase rotina').item.json;\nconst p = ($json || {}).payload || {};\nconst id = (p.contact && p.contact.id) || p.id || null;\nreturn { json: { ...t, contact_id: id, erroContato: id ? null : JSON.stringify($json.error || $json).slice(0, 300) } };\n"
+      },
+      "name": "5m · Contato criado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        160
+      ],
+      "id": "6735ec6e-287b-55bc-b762-99e0c3d8867f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.base + '/conversations' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ inbox_id: $json.inbox_id, contact_id: $json.contact_id, status: \"open\" }) }}"
+      },
+      "name": "6 · Chatwoot criar conversa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        0
+      ],
+      "id": "e033f4f0-5a0a-528e-9d38-d53d82322b57",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 7 · Resultado — ok = o Chatwoot devolveu o id da conversa nova.\nconst t = $('2 · Supabase rotina').item.json;\nconst id = ($json || {}).id || null;\nconst erro = id ? null : JSON.stringify(($json || {}).error || $json || {}).slice(0, 400);\nreturn { json: { p_id: t.id, p_ok: !!id, p_chatwoot_conversation_id: id ? String(id) : null, p_erro: erro } };\n"
+      },
+      "name": "7 · Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        0
+      ],
+      "id": "ad61b794-ac0d-5789-9ccc-b50d2aede67e"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/indicacao_abertura_resultado",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "8 · Supabase resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        0
+      ],
+      "id": "e3953935-29c5-541d-893e-736081987f89",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "1 · A cada 10 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase rotina",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase rotina": {
+      "main": [
+        [
+          {
+            "node": "3 · Chatwoot buscar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Chatwoot buscar contato": {
+      "main": [
+        [
+          {
+            "node": "4 · Achou o contato?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Achou o contato?": {
+      "main": [
+        [
+          {
+            "node": "5 · Tem contato?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Tem contato?": {
+      "main": [
+        [
+          {
+            "node": "6 · Chatwoot criar conversa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "5n · Chatwoot criar contato",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5n · Chatwoot criar contato": {
+      "main": [
+        [
+          {
+            "node": "5m · Contato criado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5m · Contato criado": {
+      "main": [
+        [
+          {
+            "node": "6 · Chatwoot criar conversa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Chatwoot criar conversa": {
+      "main": [
+        [
+          {
+            "node": "7 · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Resultado": {
+      "main": [
+        [
+          {
+            "node": "8 · Supabase resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}
