@@ -210,7 +210,8 @@ projeto Nio seguem o `CLAUDE.md` da raiz.
 - **Venda remota (05/11):** não existe visita nem biometria em campo. Pedido pelo portal PAP (BO), link da biometria **disparado pela Nio** (e-mail + WhatsApp) na hora do pedido — nós não mandamos link, instalação agendada pelo nosso time. A Mari coleta preferência de período, nunca promete data. Viabilidade oficial pelo portal (n8n, nível A) antes dos planos; DFV é fallback.
 - Cadência de lead: 24h · D3 · ligação do vendedor · D7 · D15. Régua de pagamento: **D−2 · D0 · D+5**, só fatura em aberto. Depois do D+5, vendedor liga (15 dias perde o M-10).
 - Sempre dentro de 2 contatos/dia e 15/mês; nunca domingo ou feriado.
-- Template com marca Nio → aprovação da Nio antes da Meta.
+- Template com marca Nio → **só aprovação da Meta**; a da Nio não é mais necessária (Ricardo, 10/11/2026 16h42 — não perguntar de novo).
+- **Pós-instalação com indicação (13/11/2026, migration 0176):** instalou → a Mari agradece, indica o **App Nio** para suporte (só ele), pergunta se deu tudo certo e, a quem respondeu que sim, pede uma indicação (insiste 1 vez). Insatisfeito → humano, sem pedido de indicação. Indicado instalou → **Pix de R$ 100** a quem indicou, 10 dias depois, **pago à mão pelo Ricardo** (o sistema só mostra e registra). Pix autorizado por ele em 13/11 com o risco do contrato assumido ("benefício sem autorização da Nio"); não vale indicar a si mesmo. Roda no banco e na rotina `indicacao_rotina`, sem tocar no `mari_principal`; liga/desliga em `config_regras.indicacao`.
 
 ## Regras da Mari no código — o portão (08/11/2026, Onda 1.2)
 
