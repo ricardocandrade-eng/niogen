@@ -25,8 +25,8 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-15">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-15"></script>
-<script src="assets/sidebar.js?v=131126-10"></script>
+<script src="assets/app.js?v=131126-16"></script>
+<script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=131126-15"></script>
 </head>
@@ -312,7 +312,7 @@
     const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada') || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
     const semAgenda = osAg.length;
     blocos.push(`<section class="painel bloco-curto">
-      <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>
+      <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="operacoes.html">Operações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
       ${semAgenda ? `<span class="prox ${osAg.some((v) => Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} esperando abrir a OS ou agendar (4 h da biometria)</span>` : ''}

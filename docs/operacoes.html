@@ -1,0 +1,343 @@
+<!doctype html>
+<!-- NIOGEN | docs/operacoes.html | 13/11/2026 — Claude Code (Fable 5.2)
+     "Operações": da biometria até 30 dias depois de instalada. Entra no lugar da tela Instalações (etapa 4c do plano do sistema
+     fechado — docs/PLANO_sistema_fechado_etapas_121126_2135.md, no Drive).
+     Topo: instalam hoje (R$) · em risco (R$) · instaladas no mês contra a meta · dias entre a OS e a instalação · % na 1ª visita
+     (sem dado até o Operador de OS da etapa 3: a tela diz isso, nunca um número inventado).
+     Blocos: Hoje (por turno) · Amanhã (confirmou, não respondeu, pediu para remarcar) · Sem data (relógio das 4 h do contrato) ·
+     Pendências (por quem destrava) · Biometria (24 h avisa, 72 h liga) · Recém-instaladas (30 dias: documentos, 1ª fatura, estorno).
+     Cada cartão: quem · onde está · quanto vale · o que fazer; o clique abre a ficha única (#venda=). Selo ⓘ em cada bloco e número.
+     Dados, numa rodada só: NG.jornada() (dividida entre as abas, 45 s) + v_vendas + v_instalacao_confirmacao + v_dinheiro +
+     v_venda_andamento + importacoes (último OSAB) + config_regras + painel_meta_ritmo + v_adimplencia (faturas, quando existir).
+     Não lê mais contatos_cliente (5 mil linhas na tela antiga): o próximo passo vem da jornada.
+     Estado ao vivo da OS e técnico: etapa 3 (Operador de OS). Vendedor vê só as vendas dele (RLS). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Operações · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=131126-15">
+<script src="config.js?v=111126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=131126-16"></script>
+<script src="assets/sidebar.js?v=131126-16"></script>
+<script src="assets/conversa.js?v=121126-27"></script>
+<script src="assets/ficha.js?v=131126-15"></script>
+<style>
+  .op-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+  .op-kpis .kpi { padding: 12px 14px; border-radius: 12px; gap: 3px; min-width: 0; }
+  .op-kpis .kpi .rot { text-transform: uppercase; letter-spacing: .05em; display: flex; gap: 4px; align-items: center; }
+  .op-kpis .kpi .nota { font-size: 12px; }
+  .op-kpis .kpi.semdado .val { font-size: 14px; font-family: var(--sans); color: var(--muted); font-weight: 500; }
+  .op-nav { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .op-nav a { display: inline-flex; gap: 7px; align-items: center; min-height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); font-size: 13px; text-decoration: none; }
+  .op-nav a b { font-family: var(--mono); font-size: 12px; color: var(--text); background: var(--surface-2); border-radius: 999px; padding: 1px 7px; }
+  .op-nav a.bad b { background: var(--bad-bg); color: var(--bad-fg); }
+  .op-nav a.warn b { background: var(--warn-bg); color: var(--warn-fg); }
+  .op-nav input[type=search] { flex: 1 1 200px; min-width: 160px; min-height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+  .op-bloco { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+  .op-bloco > header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .op-bloco h2 { margin: 0; font-size: 15px; }
+  .op-bloco .op-tot { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+  .op-bloco .op-sub { font-size: 12px; color: var(--muted); flex-basis: 100%; }
+  .op-grupo { display: flex; flex-direction: column; gap: 6px; }
+  .op-grupo > h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .op-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; }
+  .op-c { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer; text-align: left; min-width: 0; }
+  .op-c:hover, .op-c:focus-visible { border-color: var(--border-strong); outline: none; }
+  .op-c.warn { border-color: var(--warn-border); }
+  .op-c.bad { border-color: var(--bad-border); }
+  .op-c .q { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .op-c .q small { font-weight: 400; color: var(--muted); font-size: 12px; }
+  .op-c .v { font-family: var(--mono); font-size: 13px; color: var(--ok-fg); white-space: nowrap; }
+  .op-c .o { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .op-c .f { grid-column: 1 / -1; font-size: 13px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .op-c .f::before { content: '→'; color: var(--muted); }
+  .op-c.bad .f { color: var(--bad-fg); } .op-c.warn .f { color: var(--warn-fg); }
+  .op-vazio { font-size: 13px; color: var(--muted); }
+  .op-rel { font-family: var(--mono); font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--surface-dim); border: 1px solid var(--border); white-space: nowrap; }
+  .op-rel.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
+  .op-rel.bad { background: var(--bad-bg); color: var(--bad-fg); border-color: transparent; }
+  .op-rel.ok { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+  @media (max-width: 1100px) { .op-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .op-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .op-grade { grid-template-columns: minmax(0, 1fr); } .op-bloco { padding: 10px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="operacoes"></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1>Operações <span id="i-tela"></span></h1>
+        <div class="sub">Da biometria até 30 dias depois de instalada: o que instala hoje, o que está em risco e o que fazer agora.</div>
+      </div>
+      <div class="cab-acoes" id="cab-acoes"></div>
+    </header>
+
+    <section class="op-kpis" id="kpis" aria-label="Resumo das operações"></section>
+    <div class="op-nav" id="nav" aria-label="Ir para o bloco"></div>
+    <div id="blocos"><div class="op-vazio">Carregando…</div></div>
+    <div class="apagado" id="rodape" style="font-size:12px"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const t0 = performance.now();
+  const { esc } = NG;
+  const A = NG.ajuda;
+  const eu = await NG.exigirLogin();
+  const BO = ['admin', 'backoffice'].includes(eu.perfil);
+  NGSidebar.montar();
+  document.getElementById('i-tela').innerHTML = NG.dicaTxt(A.ops_tela);
+  document.getElementById('cab-acoes').innerHTML = `<span class="osab-aviso" id="osab-aviso"></span><button type="button" class="btn btn-sm btn-ghost" id="csv">⇩ Exportar</button>${BO ? '<a class="btn btn-acc acao-principal" href="configuracoes.html">⇪ Importar OSAB</a>' : ''}`;
+
+  const VENDIDAS = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  const INST = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
+  const COLS = 'id, status, cliente_nome, cliente_whatsapp, bairro, cidade, plano_nome, valor_mensal, forma_pagamento, comissao_prevista, nio_pedido, nio_os, nio_os_em, nio_pendencia_cod, nio_pendencia_desc, credito_resultado, credito_em, biometria_status, biometria_link_enviado_em, biometria_validada_em, vendido_em, agendar_desde, instalacao_agendada_para, instalado_em, docs_entregues_em, docs_prazo_em, nio_osab_em, nio_venda_valida, vendedor_nome, origem, criado_em, cancelada_apos_instalar_em, pend_id, pend_motivo, pend_motivo_nome, pend_descricao, pend_quem, pend_desde, pend_revisar_em, pend_revisoes, pend_saida_sugerida';
+  let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
+
+  const fmtR = (x) => NG.fmtMoeda(x).replace(/,00$/, '');
+  const com = (v) => (v.comissao_prevista == null ? 0 : Number(v.comissao_prevista));
+  const soma = (l) => l.reduce((s, v) => s + com(v), 0);
+  const dia = (x) => NG.diaSP(x);
+  const hoje = () => NG.diaSP();
+  const amanha = () => NG.somaDias(NG.diaSP(), 1);
+  const diasAte = (x) => Math.ceil((new Date(x) - Date.now()) / 86400000);
+  const local = (v) => [v.bairro, v.cidade].filter(Boolean).join(' · ') || '—';
+  const nv = (n, um, varios) => `${NG.fmtNum(n)} ${n === 1 ? um : varios}`;
+
+  // ---------- em que bloco a venda está (uma venda, um bloco; a pendência aparece também no bloco Pendências) ----------
+  const instalada = (v) => !!v.instalado_em || INST.includes(v.status);
+  const pendNio = (v) => !!(v.nio_pendencia_cod || v.nio_pendencia_desc);
+  const pendDe = (v) => NG.pendencia(v);
+  const agDia = (v) => (v.instalacao_agendada_para ? dia(v.instalacao_agendada_para) : null);
+  const naBio = (v) => v.status === '0_qualificado' && v.biometria_status !== 'validada' && NG.naBiometria(v);
+  const semData = (v) => !instalada(v) && ((v.status === '0_qualificado' && v.biometria_status === 'validada') || v.status === '1_vendido' || (v.status === '2_aguardando_instalacao' && !v.instalacao_agendada_para));
+  const passou = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) && agDia(v) < hoje();
+  const ehHoje = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) === hoje();
+  const ehAmanha = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) === amanha();
+  const horasSemAgenda = (v) => { const d = v.agendar_desde || v.biometria_validada_em || v.vendido_em; return d ? (Date.now() - new Date(d)) / 3600000 : 0; };
+  const horasBio = (v) => { const d = v.biometria_link_enviado_em || v.credito_em; return d ? (Date.now() - new Date(d)) / 3600000 : 0; };
+  const recente = (v) => instalada(v) && v.instalado_em && (Date.now() - new Date(v.instalado_em)) / 86400000 <= Number((regras.protecao_receita || {}).reativacao_dias ?? 30);
+  const H4 = () => Number(regras.prazo_agendar_horas ?? 4);
+
+  // O que fazer: a regra única da jornada (a mesma da Live); sem linha na jornada, o texto do bloco.
+  const fazer = (v, padrao) => { const j = jor.porVenda[v.id]; return (j && j.o_que_fazer) || padrao; };
+  // Por que a venda está em risco (null = não está). É o que soma no número "Em risco".
+  function risco(v) {
+    if (instalada(v)) return null;
+    const c = conf[v.id] || {};
+    if (c.resposta === 'remarcar' && (ehHoje(v) || ehAmanha(v))) return 'pediu para remarcar';
+    if (pendNio(v)) return 'pendência da Nio';
+    if (pendDe(v)) return 'em espera';
+    if (passou(v)) return 'a data passou sem baixa';
+    if (semData(v) && horasSemAgenda(v) > H4()) return `sem data há mais de ${H4()} h`;
+    if (naBio(v) && horasBio(v) >= 72) return 'biometria parada há 72 h';
+    if (ehHoje(v) && c.resposta !== 'confirmou') return 'instala hoje sem confirmar';
+    return null;
+  }
+
+  // ---------- cartão: quem · onde está · quanto vale · o que fazer ----------
+  function cartao(v, { onde, fazerTxt, nivel, extra }) {
+    const r = com(v);
+    return `<div class="op-c ${nivel || ''}" role="button" tabindex="0" data-abrir="${esc(v.id)}" title="Abrir a ficha">
+      <span class="q">${esc(NG.primeiroNome(v.cliente_nome))} <small>· ${esc(local(v))}</small></span>
+      <span class="v" title="Comissão prevista desta venda (previsão até a conciliação)">${r ? esc(fmtR(r)) : '—'}</span>
+      <span class="o">${onde}</span>
+      <span class="f">${esc(fazerTxt)}${extra || ''}</span>
+    </div>`;
+  }
+  const grupo = (titulo, dica, lista, fn) => (lista.length ? `<div class="op-grupo"><h3>${esc(titulo)} · ${lista.length}${dica ? ` ${NG.dicaTxt(dica)}` : ''}</h3><div class="op-grade">${lista.map(fn).join('')}</div></div>` : '');
+  const bloco = (id, titulo, dica, lista, corpo, sub) => `<section class="op-bloco" id="b-${id}" aria-label="${esc(titulo)}">
+      <header><h2>${esc(titulo)}</h2>${NG.dicaTxt(dica)}<span class="op-tot">${nv(lista.length, 'venda', 'vendas')}${lista.length ? ` · ${esc(fmtR(soma(lista)))}` : ''}</span>${sub ? `<span class="op-sub">${sub}</span>` : ''}</header>
+      ${lista.length ? corpo : '<div class="op-vazio">Nada aqui agora.</div>'}</section>`;
+  const confSelo = (v) => {
+    const c = conf[v.id] || {};
+    if (c.resposta === 'confirmou') return `<span class="op-rel ok" title="${esc(`“${c.resposta_texto || 'Tudo certo'}” ${NG.fmtDataHora(c.resposta_em)}`)}">✓ confirmou</span>`;
+    if (c.resposta === 'remarcar') return `<span class="op-rel bad" title="${esc(`“${c.resposta_texto || 'Preciso remarcar'}” ${NG.fmtDataHora(c.resposta_em)}`)}">✕ pediu remarcar</span>`;
+    return `<span class="op-rel warn" title="${esc(c.lembrete_em ? `Lembrete enviado ${NG.fmtDataHora(c.lembrete_em)}; o cliente ainda não respondeu.` : 'O lembrete da véspera ainda não saiu.')}">não respondeu</span>`;
+  };
+
+  function filtradas() {
+    const q = busca.trim().toLowerCase(), qd = NG.soDigitos(q);
+    return vendas.filter((v) => !q || [v.cliente_nome, v.bairro, v.cidade, v.nio_pedido, v.nio_os].some((x) => String(x || '').toLowerCase().includes(q))
+      || (qd.length >= 3 && [v.cliente_whatsapp, v.nio_pedido, v.nio_os].some((x) => NG.soDigitos(x).includes(qd))));
+  }
+
+  function render() {
+    const V = filtradas();
+    const L = {
+      hoje: V.filter(ehHoje), amanha: V.filter(ehAmanha), semdata: V.filter(semData),
+      pend: V.filter((v) => !instalada(v) && (pendNio(v) || pendDe(v) || passou(v))),
+      bio: V.filter(naBio), rec: V.filter(recente),
+    };
+    const emRisco = V.filter((v) => risco(v));
+
+    // ----- topo -----
+    const inst = V.filter((v) => instalada(v) && v.instalado_em);
+    const prazos = inst.map((v) => { const d = v.nio_os_em || v.vendido_em; return d ? (new Date(v.instalado_em) - new Date(d)) / 86400000 : null; }).filter((x) => x != null && x >= 0);
+    const media = prazos.length ? prazos.reduce((s, x) => s + x, 0) / prazos.length : null;
+    const m = ritmo || {};
+    document.getElementById('kpis').innerHTML = [
+      NG.kpi({ rot: 'Instalam hoje', val: `${NG.fmtNum(L.hoje.length)}${L.hoje.length ? ` <small>= ${esc(fmtR(soma(L.hoje)))}</small>` : ''}`, cls: L.hoje.length ? 'kpi-verde' : '',
+        nota: L.hoje.length ? esc(L.hoje.slice(0, 2).map((v) => `${NG.primeiroNome(v.cliente_nome)} · ${NG.janela(v.instalacao_agendada_para)}`).join(' · ') + (L.hoje.length > 2 ? ` · +${L.hoje.length - 2}` : '')) : 'nenhuma visita hoje', dica: A.ops_hoje_num }),
+      NG.kpi({ rot: 'Em risco', val: `<span class="${emRisco.length ? 'bad-txt' : ''}">${esc(fmtR(soma(emRisco)))}</span>`,
+        nota: emRisco.length ? `${nv(emRisco.length, 'venda', 'vendas')} · ${esc(risco(emRisco[0]))}${emRisco.length > 1 ? ' e outras' : ''}` : 'nada em risco agora', dica: A.ops_risco }),
+      NG.kpi({ rot: 'Instaladas no mês', val: NG.fmtNum(m.instaladas ?? 0), de: m.meta ? NG.fmtNum(m.meta) : null, pct: m.meta ? (100 * (m.instaladas || 0)) / m.meta : null,
+        nota: m.meta ? `faltam ${NG.fmtNum(m.faltam ?? 0)} · ${esc(String(m.por_dia ?? '—').replace('.', ','))} por dia útil para bater` : 'sem meta cadastrada', dica: A.ops_meta }),
+      NG.kpi({ rot: 'Da OS à instalação', val: media == null ? '—' : `${esc(media.toFixed(1).replace('.', ','))} <small>dias</small>`,
+        nota: media == null ? 'aparece com a 1ª instalada' : `média de ${nv(prazos.length, 'instalada', 'instaladas')}`, dica: A.ops_prazo }),
+      NG.kpi({ rot: 'Na 1ª visita', val: 'chega com o Operador de OS', cls: 'semdado', nota: 'sem dado até a etapa 3', dica: A.ops_primeira }),
+    ].join('');
+
+    // ----- atalhos para os blocos -----
+    const NAV = [['hoje', 'Hoje', L.hoje, ''], ['amanha', 'Amanhã', L.amanha, L.amanha.some((v) => (conf[v.id] || {}).resposta === 'remarcar') ? 'bad' : ''],
+      ['semdata', 'Sem data', L.semdata, L.semdata.some((v) => horasSemAgenda(v) > H4()) ? 'bad' : L.semdata.length ? 'warn' : ''],
+      ['pend', 'Pendências', L.pend, L.pend.length ? 'warn' : ''], ['bio', 'Biometria', L.bio, L.bio.some((v) => horasBio(v) >= 72) ? 'bad' : L.bio.some((v) => horasBio(v) >= 24) ? 'warn' : ''],
+      ['rec', 'Recém-instaladas', L.rec, '']];
+    document.getElementById('nav').innerHTML = NAV.map(([id, n, l, cls]) => `<a href="#b-${id}" class="${cls}" data-ir="${id}">${esc(n)} <b>${l.length}</b></a>`).join('')
+      + `<input type="search" id="busca" placeholder="Buscar nome, bairro, pedido ou OS" aria-label="Buscar venda" value="${esc(busca)}">`;
+
+    // ----- Hoje, por turno -----
+    const turno = (v) => (NG.janela(v.instalacao_agendada_para) === '8–12h' ? 'manha' : 'tarde');
+    const cHoje = (v) => { const r = risco(v); const c = (conf[v.id] || {}).resposta;
+      return cartao(v, { onde: `<span class="op-rel">${esc(NG.janela(v.instalacao_agendada_para))}</span>${confSelo(v)}${v.nio_os ? `<span>OS ${esc(v.nio_os)}</span>` : ''}`,
+        fazerTxt: c === 'remarcar' ? 'Reagendar agora: o cliente pediu para remarcar' : pendNio(v) || pendDe(v) ? 'Resolver a pendência antes da visita' : c === 'confirmou' ? fazer(v, 'Nada a fazer: vira Instalada quando a baixa da Nio chegar no OSAB') : 'Ligar para confirmar a visita de hoje',
+        nivel: c === 'remarcar' || pendNio(v) ? 'bad' : r ? 'warn' : '' }); };
+    const bHoje = bloco('hoje', 'Hoje', A.ops_hoje, L.hoje,
+      grupo('Manhã · 8–12h', null, L.hoje.filter((v) => turno(v) === 'manha'), cHoje) + grupo('Tarde · 13–17h', null, L.hoje.filter((v) => turno(v) === 'tarde'), cHoje),
+      'Estado ao vivo da OS e do técnico: chega com o Operador de OS (etapa 3).');
+
+    // ----- Amanhã: confirmou · não respondeu · pediu para remarcar -----
+    const rAm = (v) => (conf[v.id] || {}).resposta || 'nada';
+    const cAm = (v) => { const c = rAm(v);
+      return cartao(v, { onde: `<span class="op-rel">${esc(NG.janela(v.instalacao_agendada_para))}</span>${confSelo(v)}`,
+        fazerTxt: c === 'remarcar' ? 'Reagendar agora, antes de a Nio mandar o técnico' : c === 'confirmou' ? 'Nada a fazer: visita confirmada' : (conf[v.id] || {}).lembrete_em ? 'Ligar ou mandar mensagem: não respondeu ao lembrete' : 'Aguardar: o lembrete da véspera ainda vai sair',
+        nivel: c === 'remarcar' ? 'bad' : c === 'confirmou' ? '' : (conf[v.id] || {}).lembrete_em ? 'warn' : '' }); };
+    const bAm = bloco('amanha', 'Amanhã', A.ops_amanha, L.amanha,
+      grupo('Pediu para remarcar', A.ops_remarcar, L.amanha.filter((v) => rAm(v) === 'remarcar'), cAm)
+      + grupo('Não respondeu', A.ops_nao_respondeu, L.amanha.filter((v) => rAm(v) === 'nada'), cAm)
+      + grupo('Confirmou', A.ops_confirmou, L.amanha.filter((v) => rAm(v) === 'confirmou'), cAm));
+
+    // ----- Sem data: relógio das 4 h -----
+    const cSem = (v) => { const h = horasSemAgenda(v), lim = H4(); const abrirOs = v.status === '0_qualificado';
+      return cartao(v, { onde: `<span class="op-rel ${h > lim ? 'bad' : h > lim / 2 ? 'warn' : ''}" title="Tempo desde a biometria validada (contrato: agendar em até ${lim} h)">⏱ ${esc(NG.fmtHoras(h))} de ${lim} h</span><span>${abrirOs ? 'biometria ok · falta abrir a OS' : v.nio_os ? `OS ${esc(v.nio_os)} · falta a data` : 'falta a data'}</span>`,
+        fazerTxt: fazer(v, abrirOs ? 'Abrir a OS no portal e agendar' : 'Agendar a instalação com o cliente'), nivel: h > lim ? 'bad' : 'warn' }); };
+    const bSem = bloco('semdata', 'Sem data', A.ops_semdata, L.semdata.sort((a, b) => horasSemAgenda(b) - horasSemAgenda(a)), `<div class="op-grade">${L.semdata.map(cSem).join('')}</div>`);
+
+    // ----- Pendências, por quem destrava -----
+    const quem = (v) => (passou(v) && !pendNio(v) && !pendDe(v) ? 'data' : pendNio(v) ? 'nio' : (pendDe(v) || {}).quem || 'interno');
+    const QUEM = { nio: ['Nio destrava', A.ops_pend_nio], rogerio: ['Rogério destrava', A.ops_pend_rogerio], cliente: ['Cliente destrava', A.ops_pend_cliente], interno: ['Nosso time destrava', A.ops_pend_time], data: ['A data passou sem baixa', A.ops_pend_data] };
+    const cPend = (v) => { const p = pendDe(v); const q = quem(v);
+      const onde = q === 'data' ? `<span class="op-rel bad">era ${esc(NG.fmtData(v.instalacao_agendada_para))}</span><span>sem baixa da Nio no OSAB</span>`
+        : pendNio(v) ? `<span class="op-rel bad">${esc(v.nio_pendencia_cod || 'pendência')}</span><span>${esc(v.nio_pendencia_desc || '')}</span>`
+          : `<span class="op-rel ${p.vencida ? 'bad' : 'warn'}">⏸ ${p.vencida ? 'revisar hoje' : `revisar ${esc(p.diaTxt || '—')}`}</span><span>${esc(p.nome || '')}${p.descricao ? ` · ${esc(p.descricao)}` : ''}</span>`;
+      return cartao(v, { onde, fazerTxt: q === 'data' ? 'Conferir no portal: instalou e falta o OSAB, ou reagendar' : fazer(v, pendNio(v) ? 'Tratar a pendência com a Nio e reagendar' : p.vencida ? 'Revisar a pendência hoje' : `Aguardar ${p.quemTxt}`),
+        nivel: q === 'data' || pendNio(v) || (p && p.vencida) ? 'bad' : 'warn' }); };
+    const bPend = bloco('pend', 'Pendências', A.ops_pend, L.pend, Object.keys(QUEM).map((k) => grupo(QUEM[k][0], QUEM[k][1], L.pend.filter((v) => quem(v) === k), cPend)).join(''));
+
+    // ----- Biometria: 24 h avisa, 72 h liga -----
+    const cBio = (v) => { const h = horasBio(v); const a = and[v.id] || {};
+      return cartao(v, { onde: `<span class="op-rel ${h >= 72 ? 'bad' : h >= 24 ? 'warn' : ''}" title="Tempo desde o pedido no portal (o link da biometria sai da Nio na hora do pedido)">⏱ ${esc(NG.haQuanto(v.biometria_link_enviado_em || v.credito_em))}</span><span>${esc(a.bio_rotulo || (v.nio_pedido ? 'link enviado pela Nio · esperando o cliente' : 'crédito aprovado · falta o pedido no portal'))}</span>`,
+        fazerTxt: h >= 72 ? 'Ligar para o cliente: biometria parada há 72 h' : h >= 24 ? fazer(v, 'Avisar o cliente: falta a biometria') : fazer(v, 'Aguardar o cliente fazer a biometria'),
+        nivel: h >= 72 ? 'bad' : h >= 24 ? 'warn' : '', extra: BO ? ` ${NG.botaoOperador({ vendaId: v.id })}` : '' }); };
+    const bBio = bloco('bio', 'Biometria', A.ops_bio, L.bio.sort((a, b) => horasBio(b) - horasBio(a)), `<div class="op-grade">${L.bio.map(cBio).join('')}</div>`);
+
+    // ----- Recém-instaladas (30 dias): documentos · 1ª fatura · janela de estorno -----
+    const cRec = (v) => { const d = din[v.id] || {};
+      const docsAte = d.docs_ate || v.docs_prazo_em, docsOk = d.docs_entregues_em || v.docs_entregues_em;
+      const fd = docsAte ? diasAte(docsAte) : null;
+      const docs = docsOk ? '<span class="op-rel ok">docs ✓</span>' : docsAte ? `<span class="op-rel ${fd < 0 ? 'bad' : fd <= 3 ? 'warn' : ''}" title="Documentos da venda: 15 dias do contrato, até ${esc(NG.fmtData(docsAte))}">docs ${fd < 0 ? `venceram há ${-fd} d` : `em ${fd} d`}</span>` : '';
+      const fats = faturasPor ? faturasPor[v.id] : null; const b1 = fats ? NG.faturasBolas(fats)[0] : null;
+      let fat = '<span class="op-rel" title="A 1ª fatura aparece quando o extrato de faturas da Nio for importado (FPD)">1ª fatura: sem extrato</span>', fNivel = '';
+      if (b1 && b1.f) { if (b1.e.cls === 'paga') fat = '<span class="op-rel ok">1ª fatura ✓</span>'; else if (b1.e.cls === 'avencer') { fat = `<span class="op-rel ${b1.e.faltam <= 2 ? 'warn' : ''}">1ª fatura em ${b1.e.faltam} d</span>`; } else { fat = `<span class="op-rel bad">1ª fatura D+${b1.e.atraso}</span>`; fNivel = 'bad'; } }
+      const ra = d.risco_ate ? diasAte(d.risco_ate) : 30 - Math.floor((Date.now() - new Date(v.instalado_em)) / 86400000);
+      const cancel = d.cancelada_apos_instalar_em || v.cancelada_apos_instalar_em;
+      const est = cancel ? '<span class="op-rel bad">cancelou depois de instalar</span>' : `<span class="op-rel ${ra > 0 ? 'warn' : 'ok'}" title="Cancelar e reativar em até 30 dias estorna 100 % da comissão">${ra > 0 ? `estorno: faltam ${ra} d` : 'fora da janela de estorno'}</span>`;
+      const semOsab = !v.nio_osab_em;
+      return cartao(v, { onde: `<span>instalada ${esc(NG.fmtData(v.instalado_em))}</span>${docs}${fat}${est}${semOsab ? '<span class="op-rel warn" title="A comissão só conta quando o OSAB confirma a instalação">sem OSAB</span>' : ''}`,
+        fazerTxt: cancel ? 'Conferir o motivo: cancelamento em 30 dias estorna a comissão' : fNivel === 'bad' ? 'Cobrar a 1ª fatura: ligue para o cliente' : !docsOk && fd != null && fd <= 3 ? 'Entregar os documentos da venda no prazo' : semOsab ? 'Importar o OSAB para confirmar a instalação' : !docsOk ? 'Entregar os documentos da venda' : 'Nada a fazer: acompanhar até fechar os 30 dias',
+        nivel: cancel || fNivel === 'bad' || (!docsOk && fd != null && fd < 0) ? 'bad' : (!docsOk && fd != null && fd <= 3) || semOsab ? 'warn' : '' }); };
+    const bRec = bloco('rec', 'Recém-instaladas', A.ops_rec, L.rec.sort((a, b) => new Date(b.instalado_em) - new Date(a.instalado_em)), `<div class="op-grade">${L.rec.map(cRec).join('')}</div>`,
+      faturasPor ? '' : 'Sem extrato de faturas da Nio ainda: a 1ª fatura aparece quando o FPD for importado.');
+
+    const el = document.getElementById('blocos');
+    el.innerHTML = bHoje + bAm + bSem + bPend + bBio + bRec;
+    el.style.cssText = 'display:flex;flex-direction:column;gap:12px';
+    const fora = V.filter((v) => !instalada(v) && !ehHoje(v) && !ehAmanha(v) && !semData(v) && !naBio(v) && !pendNio(v) && !pendDe(v) && !passou(v));
+    document.getElementById('rodape').textContent = `${nv(V.length, 'venda', 'vendas')} da biometria em diante${fora.length ? ` · ${nv(fora.length, 'agendada', 'agendadas')} para depois de amanhã (aparecem aqui na véspera; veja no Quadro de vendas)` : ''} · clique no cartão para abrir a ficha`;
+    if (!window.NGopTempo) window.NGopTempo = Math.round(performance.now() - t0);
+  }
+
+  function renderOsab() {
+    const el = document.getElementById('osab-aviso');
+    const al = Number(regras.osab_alerta_horas ?? 24), cr = Number(regras.osab_critico_horas ?? 48);
+    if (!osabEm) { el.className = 'osab-aviso bad'; el.textContent = '⚠ OSAB nunca importado'; el.title = 'A comissão só conta quando o OSAB confirma a instalação.'; return; }
+    const h = (Date.now() - new Date(osabEm)) / 3600000;
+    el.className = `osab-aviso ${h > cr ? 'bad' : h > al ? 'warn' : 'ok'}`;
+    el.textContent = `${h > al ? '⚠ ' : ''}OSAB lido há ${h < 48 ? `${Math.floor(h)} h` : `${Math.floor(h / 24)} dias`}`;
+    el.title = `Última importação do OSAB: ${NG.fmtDataHora(osabEm)}. A comissão só conta quando o OSAB confirma a instalação.`;
+  }
+
+  async function carregar() {
+    const [rj, rv, rk, rd, ra, ri, rg, rr, rf] = await Promise.all([
+      NG.jornada(),
+      NG.sb.from('v_vendas').select(COLS).in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
+      NG.sb.from('v_instalacao_confirmacao').select('venda_id, resposta, resposta_em, resposta_texto, lembrete_em'),
+      NG.sb.from('v_dinheiro').select('venda_id, estado, risco_ate, docs_ate, docs_entregues_em, cancelada_apos_instalar_em'),
+      NG.sb.from('v_venda_andamento').select('venda_id, bio_rotulo, bio_alerta_nivel'),
+      NG.sb.from('importacoes').select('aplicado_em').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
+      NG.sb.from('config_regras').select('chave, valor'),
+      NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
+      NG.sb.from('v_adimplencia').select('venda_id, faturas').limit(5000),
+    ]);
+    if (rv.error) { document.getElementById('blocos').innerHTML = `<div class="op-vazio">${esc(NG.msgErro(rv.error))}</div>`; NG.toast(NG.msgErro(rv.error), 'bad'); return; }
+    jor = rj || { porVenda: {} };
+    const mapa = (r) => Object.fromEntries(((r && !r.error && r.data) || []).map((x) => [x.venda_id, x]));
+    vendas = (rv.data || []).filter((v) => v.status !== '0_qualificado' || v.biometria_status === 'validada' || NG.naBiometria(v));
+    conf = mapa(rk); din = mapa(rd); and = mapa(ra);
+    osabEm = ((ri && ri.data) || [])[0] ? ri.data[0].aplicado_em : null;
+    regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
+    ritmo = rr && !rr.error ? rr.data : null;
+    faturasPor = rf && !rf.error ? Object.fromEntries((rf.data || []).map((x) => [x.venda_id, x.faturas])) : null;
+    renderOsab();
+    render();
+  }
+
+  // ---------- cliques ----------
+  const blocosEl = document.getElementById('blocos');
+  const abrir = (c, nova) => { if (nova) NG.abrirVenda(c.dataset.abrir, true); else location.hash = `#venda=${c.dataset.abrir}`; };
+  blocosEl.addEventListener('click', (ev) => { if (ev.target.closest('.dica, [data-operador]')) return; const c = ev.target.closest('[data-abrir]'); if (c) abrir(c, ev.ctrlKey || ev.metaKey); });
+  blocosEl.addEventListener('auxclick', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.button === 1) abrir(c, true); });
+  blocosEl.addEventListener('keydown', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.key === 'Enter' && ev.target === c) abrir(c); });
+  document.getElementById('nav').addEventListener('click', (ev) => { const a = ev.target.closest('[data-ir]'); if (!a) return; ev.preventDefault(); const b = document.getElementById(`b-${a.dataset.ir}`); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  document.getElementById('nav').addEventListener('input', (ev) => { if (ev.target.id !== 'busca') return; busca = ev.target.value; const p = ev.target.selectionStart; render(); const i = document.getElementById('busca'); i.focus(); i.setSelectionRange(p, p); });
+  document.getElementById('csv').addEventListener('click', () => {
+    const sit = (v) => (instalada(v) ? (recente(v) ? 'Recém-instalada' : 'Instalada') : ehHoje(v) ? 'Hoje' : ehAmanha(v) ? 'Amanhã' : passou(v) ? 'Data passou sem baixa' : semData(v) ? 'Sem data' : naBio(v) ? 'Biometria' : 'Agendada');
+    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
+    const cab = ['Cliente', 'Situação', 'Em risco', 'Agendada para', 'Instalada em', 'Plano', 'Comissão prevista', 'Vendedor', 'Bairro', 'Cidade', 'Pedido Nio', 'OS', 'Pendência'];
+    const csv = [cab.map(q).join(';')].concat(filtradas().map((v) => [v.cliente_nome, sit(v), risco(v) || '', v.instalacao_agendada_para ? NG.fmtDataHora(v.instalacao_agendada_para) : '', v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '',
+      v.plano_nome, v.comissao_prevista, v.vendedor_nome, v.bairro, v.cidade, v.nio_pedido, v.nio_os, [v.nio_pendencia_cod, v.nio_pendencia_desc, v.pend_motivo_nome].filter(Boolean).join(' · ')].map(q).join(';'))).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_operacoes_${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+
+  NGFicha.aoMudar(() => carregar());
+  NG.botaoAtualizar(() => carregar());
+  await carregar();
+  NGFicha.iniciar();
+  NG.aoVoltarAba(() => carregar());   // trocar de aba só recarrega depois de 1 min
+})();
+</script>
+</body>
+</html>

@@ -36,7 +36,7 @@
       { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html' },   // 0156: todos os leads, com ou sem venda (escada única)
       { id: 'funil', ico: '▽', nome: 'Funil de vendas', href: 'funil.html' },   // 13/11 (4b): relatório inteiro na tela (escada única)
       { id: 'vendas', ico: '≡', nome: 'Quadro de vendas', href: 'vendas.html', badge: 'vendas' },   // a lista e o quadro das vendas (Nova venda)
-      { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
+      { id: 'operacoes', ico: '⊞', nome: 'Operações', href: 'operacoes.html', badge: 'agendar' },   // 13/11 (4c): no lugar de Instalações
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
