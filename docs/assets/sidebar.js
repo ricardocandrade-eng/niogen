@@ -32,6 +32,7 @@
       { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
     ]],
     ['Vendas', [
+      { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html' },   // 0156: todos os leads, com ou sem venda (escada única)
       { id: 'vendas', ico: '≡', nome: 'Funil de vendas', href: 'vendas.html', badge: 'vendas' },
       { id: 'instalacoes', ico: '⊞', nome: 'Instalações', href: 'instalacoes.html', badge: 'agendar' },
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },

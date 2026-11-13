@@ -1,0 +1,214 @@
+<!doctype html>
+<!-- NIOGEN | docs/leads.html | 13/11/2026 — Claude Code (Fable 5.2)
+     "Leads": todos os leads num lugar só, com ou sem venda — etapa · status · de quem é a vez · prazo · destino.
+     Etapa 4b do plano do sistema fechado (docs/PLANO_sistema_fechado_etapas_121126_2135.md, no Drive).
+     Dados: view v_leads (0156/0157) + config_lead (nomes e o texto dos balões ⓘ). Uma leitura de cada, em paralelo.
+     No topo, a escada de 6 degraus ("chegaram até"): clicar num degrau filtra a lista.
+     Filtros na URL, para o Painel e o Funil apontarem para cá: ?aba= ?etapa= ?status= ?vez= ?saida= ?q=
+     Clique na linha abre a ficha que já existe (#venda= ou #conversa=). Vendedor vê só os leads das próprias vendas (RLS). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0E1116">
+<title>Leads · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=121126-33">
+<script src="config.js?v=111126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=131126-2"></script>
+<script src="assets/sidebar.js?v=131126-2"></script>
+<script src="assets/conversa.js?v=121126-27"></script>
+<script src="assets/ficha.js?v=121126-29"></script>
+<style>
+  .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
+  .ld-degrau.ativa { border-color: var(--accent); }
+  .ld-degrau b { font-size: 20px; font-family: 'JetBrains Mono', monospace; }
+  .ld-degrau span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ld-degrau small { font-size: 11px; color: var(--muted); }
+  .ld-barra { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
+  .ld-barra i { display: block; height: 100%; background: var(--accent); }
+  .ld-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .ld-filtros input[type=search] { flex: 1 1 220px; min-width: 180px; }
+  .ld-filtros select, .ld-filtros input { min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
+  .ld-tab-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+  table.tab td small { display: block; color: var(--muted); font-size: 11px; }
+  tr.ld-saida td { opacity: .72; }
+  .ld-vez { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+  .ld-vez.time { border-color: var(--warn-border); color: var(--warn-fg); background: var(--warn-bg); }
+  .ld-vez.cliente { color: var(--info-fg); background: var(--info-bg); border-color: transparent; }
+  .ld-vez.nio { color: var(--muted); }
+  .ld-vez.mari { color: var(--ok-fg); background: var(--ok-bg); border-color: transparent; }
+  @media (max-width: 760px) { .ld-escada { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="leads"></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1>Leads <span id="i-tela"></span></h1>
+        <div class="sub">Todo mundo que falou com a gente, com ou sem venda: em que degrau está, de quem é a vez e até quando.</div>
+      </div>
+      <div class="cab-acoes" id="cab-acoes"><button type="button" class="btn btn-sm" id="csv">⇩ Exportar a lista</button></div>
+    </header>
+    <section class="ld-escada" id="escada" aria-label="Escada: quantos chegaram até cada degrau"></section>
+    <div class="abas" id="abas" role="tablist"></div>
+    <div class="ld-filtros">
+      <input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou nº do pedido" autocomplete="off" aria-label="Buscar lead">
+      <select id="f-status" aria-label="Filtrar por status"></select>
+      <select id="f-vez" aria-label="Filtrar por de quem é a vez"></select>
+      <select id="f-saida" aria-label="Filtrar por motivo de saída"></select>
+      <button type="button" class="btn btn-sm btn-ghost" id="limpar">Limpar filtros</button>
+    </div>
+    <div class="ld-tab-wrap">
+      <table class="tab">
+        <thead><tr><th>Lead</th><th>Etapa</th><th>Status</th><th>De quem é a vez</th><th>Prazo</th><th>Cidade</th><th>Plano</th><th>Origem</th><th>Dono</th><th>Última</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="10" class="vazio">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="apagado" id="rodape" style="font-size:12px"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  await NG.exigirLogin();
+  NGSidebar.montar();
+  const tbody = document.getElementById('tbody');
+  const Q = new URLSearchParams(location.search);
+  const f = { aba: Q.get('aba') || 'andamento', etapa: Q.get('etapa') || '', status: Q.get('status') || '', vez: Q.get('vez') || '', saida: Q.get('saida') || '', q: Q.get('q') || '' };
+  if (f.saida && !Q.get('aba')) f.aba = 'saidas';
+  let leads = [], cfg = { etapa: [], status: [], saida: [] }, ajuda = {};
+  const VEZ = { mari: 'Mari', time: 'Nosso time', cliente: 'Cliente', nio: 'Nio' };
+  const VEZ_AJUDA = { mari: 'A Mari está cuidando. Nada a fazer, a não ser que ela peça uma pessoa.', time: 'A próxima ação é nossa. Abra o lead e faça o que o status pede.',
+    cliente: 'Estamos esperando o cliente. A Mari lembra sozinha; se passou do prazo, vale uma mensagem ou ligação sua.', nio: 'Estamos esperando a Nio (instalação marcada ou pendência dela).' };
+  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', parceiro: 'Parceiro PAP' };
+  const ABAS = [
+    ['todos', 'Todos', () => true, 'Todos os leads, menos teste e duplicada.'],
+    ['andamento', 'Em andamento', (l) => l.destino === 'em_andamento', 'Leads que ainda podem virar venda.'],
+    ['acao', 'Precisam de ação', (l) => l.destino === 'em_andamento' && !l.em_espera && (l.vez === 'time' || l.atrasado), 'A vez é nossa, ou o prazo de alguém estourou. Comece por aqui.'],
+    ['espera', 'Em espera', (l) => l.em_espera, 'Travados por terceiro, com motivo e data de revisão. Voltam sozinhos no dia.'],
+    ['saidas', 'Saídas', (l) => l.destino === 'saida', 'Quem saiu, em que degrau parou e por quê.'],
+    ['instaladas', 'Instaladas', (l) => l.destino === 'instalada', 'Instaladas pela Nio: contam na meta e geram comissão.'],
+  ];
+
+  document.getElementById('i-tela').innerHTML = NG.dicaTxt('Uma linha por lead. A etapa só sobe. O status diz o que falta; "de quem é a vez" diz quem tem de agir; o prazo fica vermelho quando estoura. Clique na linha para abrir a ficha.');
+
+  function gravarUrl() {
+    const p = new URLSearchParams();
+    Object.entries(f).forEach(([k, v]) => { if (v && !(k === 'aba' && v === 'andamento')) p.set(k, v); });
+    history.replaceState(null, '', `${location.pathname}${p.toString() ? `?${p}` : ''}${location.hash}`);
+  }
+  const reais = () => leads.filter((l) => l.destino !== 'teste_duplicada');
+  function filtrados() {
+    const aba = ABAS.find((a) => a[0] === f.aba) || ABAS[1];
+    const q = f.q.trim().toLowerCase();
+    const dig = q.replace(/\D/g, '');
+    return reais().filter((l) => aba[2](l)
+      && (!f.etapa || l.etapa === f.etapa) && (!f.status || l.status === f.status)
+      && (!f.vez || l.vez === f.vez) && (!f.saida || l.saida_motivo === f.saida)
+      && (!q || [l.nome, l.cidade, l.plano].some((x) => String(x || '').toLowerCase().includes(q)) || (dig.length >= 3 && String(l.telefone || '').includes(dig))));
+  }
+  const prazoCel = (l) => {
+    if (l.destino !== 'em_andamento') return '';
+    if (l.em_espera) return `<span class="chip info" title="${esc(`Em espera: ${l.espera_motivo || ''} · quem destrava: ${l.espera_quem || '—'}`)}">⏸ ${l.espera_revisar_em ? `revisar ${esc(NG.fmtData(l.espera_revisar_em))}` : 'em espera'}</span>`;
+    if (!l.prazo_em) return '<span class="apagado">—</span>';
+    const t = new Date(l.prazo_em);
+    return `<span class="chip ${l.atrasado ? 'bad' : t - Date.now() < 3600000 * 4 ? 'warn' : 'dim'}" title="Prazo de quem tem a vez">${l.atrasado ? 'estourou · ' : ''}${esc(NG.fmtDataHora(l.prazo_em))}</span>`;
+  };
+  function render() {
+    const R = reais();
+    // escada: chegaram até
+    const topo = R.length || 1;
+    document.getElementById('escada').innerHTML = cfg.etapa.map((e) => {
+      const n = R.filter((l) => l.etapa_ordem >= e.ordem).length;
+      const and = R.filter((l) => l.etapa === e.codigo && l.destino === 'em_andamento').length;
+      const sai = R.filter((l) => l.etapa === e.codigo && l.destino === 'saida').length;
+      return `<button type="button" class="ld-degrau${f.etapa === e.codigo ? ' ativa' : ''}" data-etapa="${esc(e.codigo)}" title="${esc(e.ajuda || '')}">
+        <span>${e.ordem} · ${esc(e.nome)}</span><b>${NG.fmtNum(n)}</b>
+        <small>${Math.round((n / topo) * 100)} % · ${and} em andamento · ${sai} saíram</small>
+        <div class="ld-barra"><i style="width:${Math.max(2, Math.round((n / topo) * 100))}%"></i></div></button>`;
+    }).join('');
+    document.getElementById('abas').innerHTML = ABAS.map(([id, nome, fn, dica]) =>
+      `<button type="button" class="aba${f.aba === id ? ' ativa' : ''}" role="tab" data-aba="${id}" title="${esc(dica)}">${esc(nome)} · ${NG.fmtNum(R.filter(fn).length)}</button>`).join('');
+    const L = filtrados().sort((a, b) => (b.atrasado - a.atrasado) || ((a.vez === 'time' ? 0 : 1) - (b.vez === 'time' ? 0 : 1)) || (new Date(b.ultima_em || 0) - new Date(a.ultima_em || 0)));
+    tbody.innerHTML = L.length ? L.slice(0, 500).map((l) => {
+      const saida = l.destino === 'saida';
+      const chave = l.venda_id ? `venda=${l.venda_id}` : `conversa=${l.conversa_id}`;
+      return `<tr class="clicavel${saida ? ' ld-saida' : ''}" data-abrir="${esc(chave)}" tabindex="0">
+        <td><b>${esc(l.nome)}</b><small>${l.telefone ? `final ${esc(String(l.telefone).slice(-4))}` : ''}${l.venda_id ? ' · com venda' : ''}</small></td>
+        <td>${esc(l.etapa_nome || l.etapa)}${saida ? '<small>onde parou</small>' : ''}</td>
+        <td>${saida ? `<span class="chip bad">⛔ ${esc(l.saida_nome || 'Saída')}</span> ${NG.dicaTxt(l.saida_ajuda || '')}<small>${esc(l.saida_sub || '')}${l.volta_em ? ` · volta ${esc(NG.fmtData(l.volta_em))}` : ''}</small>`
+          : l.destino === 'instalada' ? `<span class="chip ok">✅ Instalada</span>${l.cancelada_apos_instalar_em ? '<small>cancelada depois de instalar</small>' : ''}`
+          : `${esc(l.status_nome || l.status)} ${NG.dicaTxt(l.status_ajuda || '')}`}</td>
+        <td>${l.vez ? `<span class="ld-vez ${esc(l.vez)}" title="${esc(VEZ_AJUDA[l.vez] || '')}">${esc(VEZ[l.vez] || l.vez)}</span>` : ''}</td>
+        <td>${prazoCel(l)}</td>
+        <td>${esc(l.cidade || '—')}</td>
+        <td>${esc(l.plano || '—')}${l.comissao_prevista ? `<small>comissão ${esc(NG.fmtMoeda(l.comissao_prevista))}</small>` : ''}</td>
+        <td>${esc(ORIGEM[l.origem] || l.origem || '—')}</td>
+        <td>${esc(l.dono || '—')}</td>
+        <td>${l.ultima_em ? esc(NG.fmtDataHora(l.ultima_em)) : '—'}</td></tr>`;
+    }).join('') : '<tr><td colspan="10" class="vazio">Nenhum lead neste filtro.</td></tr>';
+    document.getElementById('rodape').textContent = `${NG.fmtNum(L.length)} lead${L.length === 1 ? '' : 's'} neste filtro${L.length > 500 ? ' (mostrando os 500 primeiros — refine a busca)' : ''} · ${NG.fmtNum(R.length)} no total · teste e duplicada ficam de fora`;
+    document.getElementById('busca').value = f.q;
+    document.getElementById('f-status').value = f.status;
+    document.getElementById('f-vez').value = f.vez;
+    document.getElementById('f-saida').value = f.saida;
+    gravarUrl();
+  }
+  function montarSelects() {
+    document.getElementById('f-status').innerHTML = '<option value="">Status: todos</option>' + cfg.status.map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)}</option>`).join('');
+    document.getElementById('f-vez').innerHTML = '<option value="">A vez: de qualquer um</option>' + Object.entries(VEZ).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('');
+    document.getElementById('f-saida').innerHTML = '<option value="">Saída: qualquer motivo</option>' + cfg.saida.filter((s) => s.codigo !== 'teste_duplicada').map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)}</option>`).join('');
+  }
+  async function carregar() {
+    const [rl, rc] = await Promise.all([
+      NG.sb.from('v_leads').select('*').order('ultima_em', { ascending: false }).limit(2000),
+      NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
+    ]);
+    if (rl.error) { tbody.innerHTML = `<tr><td colspan="10" class="vazio">${esc(NG.msgErro(rl.error))}</td></tr>`; return; }
+    leads = rl.data || [];
+    if (!rc.error) { cfg = { etapa: [], status: [], saida: [] }; (rc.data || []).forEach((k) => cfg[k.tipo] && cfg[k.tipo].push(k)); }
+    montarSelects();
+    render();
+  }
+  function csv() {
+    const cols = ['nome', 'telefone', 'cidade', 'origem', 'etapa_nome', 'status_nome', 'destino', 'vez', 'prazo_em', 'saida_nome', 'saida_sub', 'volta_em', 'plano', 'comissao_prevista', 'dono', 'ultima_em'];
+    const linhas = [cols.join(';')].concat(filtrados().map((l) => cols.map((c) => `"${String(l[c] == null ? '' : l[c]).replace(/"/g, '""')}"`).join(';')));
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    a.download = `niogen_leads_${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  document.getElementById('escada').addEventListener('click', (ev) => { const b = ev.target.closest('[data-etapa]'); if (!b) return; f.etapa = f.etapa === b.dataset.etapa ? '' : b.dataset.etapa; if (f.etapa && f.aba === 'andamento') f.aba = 'todos'; render(); });
+  document.getElementById('abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (!b) return; f.aba = b.dataset.aba; render(); });
+  document.getElementById('busca').addEventListener('input', (ev) => { f.q = ev.target.value; const p = ev.target.selectionStart; render(); ev.target.setSelectionRange(p, p); });
+  [['f-status', 'status'], ['f-vez', 'vez'], ['f-saida', 'saida']].forEach(([id, k]) => document.getElementById(id).addEventListener('change', (ev) => {
+    f[k] = ev.target.value;
+    if (k === 'saida' && f.saida) f.aba = 'saidas';
+    render();
+  }));
+  document.getElementById('limpar').addEventListener('click', () => { Object.assign(f, { etapa: '', status: '', vez: '', saida: '', q: '' }); render(); });
+  document.getElementById('csv').addEventListener('click', csv);
+  const abrir = (tr) => { location.hash = `#${tr.dataset.abrir}`; };
+  tbody.addEventListener('click', (ev) => { if (ev.target.closest('.dica')) return; const tr = ev.target.closest('tr[data-abrir]'); if (tr) abrir(tr); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-abrir]'); if (tr && ev.key === 'Enter') abrir(tr); });
+  NGFicha.aoMudar(() => carregar());
+  NG.botaoAtualizar(() => carregar());
+
+  await carregar();
+  NGFicha.iniciar();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(); });
+})();
+</script>
+</body>
+</html>
