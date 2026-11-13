@@ -271,6 +271,8 @@
   const FUNIL_ALERTA = {
     resolvida_fora_niogen: 'Resolvida no Chatwoot sem destino: registre o destino aqui no NIOGEN',
     mensagem_fora_niogen: 'Respondida direto no Chatwoot: responda pelo NIOGEN',
+    atribuida_fora_niogen: 'Atribuída direto no Chatwoot: a Mari calou — assuma pelo NIOGEN ou devolva para a Mari',   // 0153
+    adiada_fora_niogen: 'Adiada direto no Chatwoot: use ⏸ Aguardar no NIOGEN, com data de volta',
   };
 
   // ---------- formatação ----------
@@ -1114,6 +1116,11 @@
       }
       case '4_ativo_provisorio':
       case '5_comissao_firme': {
+        if (v.status === '4_ativo_provisorio' && !v.docs_entregues_em && v.docs_prazo_em) {   // 0153: o OSAB leva direto ao 4 — o prazo dos documentos não pode sumir
+          const dias = (new Date(v.docs_prazo_em) - Date.now()) / 86400000;
+          if (dias < 0) return { txt: `Documentos à Nio atrasados · prazo era ${dd(v.docs_prazo_em)}`, nivel: 'bad', acao: true, resolver: 'docs' };
+          return { txt: `Documentos à Nio · prazo ${dd(v.docs_prazo_em)} (15 dias)`, nivel: 'warn', acao: true, resolver: 'docs' };
+        }
         const b = v.ativado_em || v.instalado_em;
         return { txt: b ? `Instalada · ativa desde ${dd(b)}` : 'Instalada · ativa', nivel: 'ok' };
       }

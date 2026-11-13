@@ -19,7 +19,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-29">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=121126-28"></script>
+<script src="assets/app.js?v=121126-32"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=121126-29"></script>
@@ -145,7 +145,7 @@
           ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${silenciada(c) ? '<span class="cv-sil" title="Silenciada: cliente Nio com suporte/reclamação. A Mari não responde e a conversa não volta para o Live. Para desfazer: Abrir a ficha › 🔔 Reativar.">· 📵 silenciada</span>' : c.encerrada ? '<span>· encerrada</span>' : c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
           ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
           ${c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino) ? `<span class="cv-dest" title="Destino da conversa${c.funil_detalhe ? ': ' + esc(c.funil_detalhe) : ''}">· ${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>` : c.funil_etapa ? `<span class="cv-etp" title="Etapa mais alta alcançada">· ${esc(fnome.etapa[c.funil_etapa] || c.funil_etapa)}</span>` : ''}
-          ${c.funil_alerta ? `<span class="cv-furo" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">${c.funil_alerta === 'resolvida_fora_niogen' ? 'resolvida fora do NIOGEN' : 'respondida pelo Chatwoot'}</span>` : ''}
+          ${c.funil_alerta ? `<span class="cv-furo" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">${({ resolvida_fora_niogen: 'resolvida fora do NIOGEN', mensagem_fora_niogen: 'respondida pelo Chatwoot', atribuida_fora_niogen: 'atribuída pelo Chatwoot', adiada_fora_niogen: 'adiada pelo Chatwoot' })[c.funil_alerta] || 'fora do NIOGEN'}</span>` : ''}
           ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>' : ''}</span>
       </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
   }

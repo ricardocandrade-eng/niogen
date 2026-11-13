@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-29">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=121126-28"></script>
+<script src="assets/app.js?v=121126-32"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=121126-29"></script>
@@ -330,7 +330,7 @@
     const instHoje = vendas.filter((v) => !v.instalado_em && v.status === '2_aguardando_instalacao' && v.instalacao_agendada_para && NG.diaSP(v.instalacao_agendada_para) === hoje)
       .sort((a, b) => new Date(a.instalacao_agendada_para) - new Date(b.instalacao_agendada_para));
     const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
-    const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada' && String(v.nio_pedido || '').trim()) || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
+    const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada') || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
     const semAgenda = osAg.length;
     blocos.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="instalacoes.html">Instalações →</a></div>

@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-29">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=121126-28"></script>
+<script src="assets/app.js?v=121126-32"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=121126-29"></script>
@@ -97,6 +97,7 @@
     }
     return ` · <span class="cv-etp" title="Etapa mais alta alcançada">${esc(fnome.etapa[f.funil_etapa] || f.funil_etapa)}</span>`;
   };
+  let conf = [];      // 0153: lista "Conferir" — ação do Chatwoot que falhou, conversa mexida fora do NIOGEN, parada com dono, docs 15 d
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -163,9 +164,10 @@
     if (fresco) NG.limparCache();
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap, rf, fn] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+    const [r, ap, rf, fn, rcf] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('mari_conversas').select('id, venda_id, funil_etapa, funil_destino, funil_detalhe').eq('canal', 'whatsapp').order('created_at', { ascending: false }).limit(1000),
-      NG.funilNomes()]);
+      NG.funilNomes(), NG.sb.rpc('live_conferir')]);
+    conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
     fnome = fn || fnome;
     if (rf && !rf.error) {
       funilMap = {};
@@ -253,6 +255,20 @@
         <div class="lv-prox">${esc(p.alerta || 'O CPF desta biometria não tem venda aberta no NIOGEN — confira de quem é.')}</div>
         <div><span class="mv-dono apagado">GED360</span></div><div><span class="lv-pill">${p.alerta ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
+  // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
+  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', docs_prazo: 'Documentos à Nio' };
+  const confLinha = (c) => {
+    const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
+    const urg = c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || ''));
+    const visto = c.tipo === 'fora_niogen' && /^(Atribuída|Adiada)/.test(c.texto || '');
+    return `<div class="lv-row ${urg ? 'n-agora' : 'n-hoje'} lv-and"><div class="lv-who"><i class="lv-dot"></i><div><b>${esc(c.nome || 'Cliente')}</b><small>${c.desde ? `há ${esc(haTempo(c.desde))}` : ''}</small></div></div>
+        <div class="lv-sit">${esc(CONF_SIT[c.tipo] || c.tipo)}</div>
+        <div class="lv-prox lv-and-bts">${esc(c.texto || '')}
+          ${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}">Tentar de novo</button> <button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}">Dispensar</button>` : ''}
+          ${visto ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}">Visto</button>` : ''}</div>
+        <div><span class="mv-dono apagado">conferir</span></div><div><span class="lv-pill">${urg ? 'agora' : 'hoje'}</span></div>
+        <div class="lv-act">${k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : ''}</div></div>`;
+  };
   function renderLista() {
     const l = filtradas();
     const rol = listaEl.querySelector('.lv-rolar');
@@ -261,6 +277,7 @@
     if (soVez) {
       const ac = acompanhando();
       const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
+      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
       corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
       if (opL.length || opsCanal.length) {
@@ -451,6 +468,17 @@
     NG.toast(`Pedido casado${data && data.feito ? ` · ${data.feito}` : ''}${data && data.alerta ? ` · ${data.alerta}` : ''}`, data && data.alerta ? 'bad' : 'ok');
     await carregar();
   }
+  async function conferir(b) {
+    if (b.dataset.cfAbrir) { abrirChave(b.dataset.cfAbrir); return; }
+    b.disabled = true;
+    const [fn, arg] = b.dataset.cfRetentar ? ['chatwoot_acao_retentar', { p_id: Number(b.dataset.cfRetentar) }]
+      : b.dataset.cfDispensar ? ['chatwoot_acao_dispensar', { p_id: Number(b.dataset.cfDispensar) }]
+        : ['conversa_alerta_visto', { p_conversa: b.dataset.cfVisto }];
+    const { data, error } = await NG.sb.rpc(fn, arg);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    if (data && data.resumo) NG.toast(data.resumo, 'ok');
+    await carregar();
+  }
   async function vistoBio(b) {
     b.disabled = true;
     const { error } = await NG.sb.rpc('andamento_alerta_visto', { p_origem: 'ged360', p_chave: b.dataset.visto });
@@ -472,6 +500,8 @@
     const od = ev.target.closest('[data-opd]');
     if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
     if (ev.target.closest('.lv-op, .opc-bloco')) return;
+    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir]');
+    if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');
     if (bc) { ev.stopPropagation(); casar(bc); return; }
     const bv = ev.target.closest('[data-visto]');
