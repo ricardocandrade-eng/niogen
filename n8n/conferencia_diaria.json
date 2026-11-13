@@ -1,0 +1,137 @@
+{
+  "name": "conferencia_diaria",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 7 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · todo dia 7h10",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "4c05a183-7dc7-5360-b3cc-c697ea2e70f1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-conferencia-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "962bfc1e-5563-593e-9b43-4277a14e4b8a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "26131201-3365-5cdb-b6ab-0eac12fe0bb8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/conferencia_rodar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_origem: 'rotina' }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "2 · Supabase conferir",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "bc0f0ade-71c2-507d-b8af-b4b636365c2f",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só o resumo (sem nomes de cliente): o detalhe fica em conferencias_diarias.\nconst r = $input.first().json || {};\nconst itens = Array.isArray(r.itens) ? r.itens : [];\nreturn [{ json: { ok: true, dia: r.dia, verde: r.verde, falhas: r.falhas, atencoes: r.atencoes, dias_verdes_seguidos: r.dias_verdes_seguidos,\n                  nao_ok: itens.filter((i) => i.nivel === 'falha' || i.nivel === 'atencao').map((i) => i.codigo + ':' + i.nivel + ':' + i.n) } }];"
+      },
+      "name": "3 · Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "2d642da1-138c-55c2-aca0-2a8f8ffb07fd"
+    }
+  ],
+  "connections": {
+    "1 · todo dia 7h10": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase conferir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase conferir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase conferir": {
+      "main": [
+        [
+          {
+            "node": "3 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

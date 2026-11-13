@@ -411,6 +411,11 @@ fieldset.dfv-bloco legend { padding: 0 6px; font-size: 13px; font-weight: 600; c
 .grade3-end { display: grid; grid-template-columns: 130px 100px minmax(0, 1fr); gap: 10px; }
 .faixa { padding: 10px 12px; border-radius: 8px; font-size: 13px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .faixa.cinza { background: var(--surface); color: var(--muted); }
+.conf-det summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.conf-det ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.conf-det li.cf-falha b { color: var(--bad-fg); }
+.conf-det li.cf-atencao b { color: var(--warn-fg); }
+.conf-det li.cf-sem_dado { color: var(--muted); }
 .faixa.verde { background: var(--ok-bg); border-color: var(--ok-fg); color: var(--ok-fg); }
 .faixa.amarelo { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-fg); }
 .faixa.vermelho { background: var(--bad-bg); border-color: var(--bad-border); color: var(--bad-fg); }
