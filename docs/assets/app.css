@@ -2472,6 +2472,23 @@ body.fc-global-on { overflow: hidden; }
 .fc-venda-v { overflow-y: auto; padding: 4px 0 6px; }
 .fc-os-v { display: flex; flex-direction: column; }
 .fc-os-h { display: flex; align-items: center; gap: 4px; padding: 6px 16px 2px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+button.fc-es-os { font: inherit; font-size: 12.5px; background: none; border: 0; padding: 2px 6px 2px 0; margin: -2px 0; border-radius: 8px; cursor: pointer; }
+button.fc-es-os:hover, button.fc-es-os:focus-visible { background: rgba(255, 255, 255, .07); outline: none; }
+.fc-es-g { font-size: 13px; opacity: .75; margin-left: -2px; }
+button.fc-es-os:hover .fc-es-g { opacity: 1; }
+dialog.os-modal { width: min(480px, calc(100vw - 32px)); }
+.os-modal .os-lendo { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.os-modal .os-lendo::before { content: ''; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--border-strong); border-top-color: var(--text); animation: os-gira .8s linear infinite; flex: none; }
+@keyframes os-gira { to { transform: rotate(360deg); } }
+.os-modal .os-q { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.os-modal .os-q.velha { opacity: .7; }
+.os-modal .os-q h4 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.os-modal .os-l { display: flex; gap: 10px; justify-content: space-between; font-size: 13px; }
+.os-modal .os-l span { color: var(--muted); flex: none; }
+.os-modal .os-l b { text-align: right; font-weight: 600; }
+.os-modal .os-fazer { border-radius: 10px; padding: 9px 12px; font-size: 13px; line-height: 1.4; background: var(--ok-bg); color: var(--ok-fg); }
+.os-modal .os-fazer.bad { background: var(--bad-bg); color: var(--bad-fg); }
+.os-modal .os-fazer.warn { background: var(--warn-bg); color: var(--warn-fg); }
 .fc-ov { position: relative; display: grid; grid-template-columns: 20px auto minmax(0, 1fr); align-items: center; gap: 10px; min-height: 34px; padding: 0 14px 0 16px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .fc-ov:hover, .fc-ov.on { background: #171C23; }
 .fc-ov b { font-size: 13px; font-weight: 500; color: #C9D1DA; white-space: nowrap; }

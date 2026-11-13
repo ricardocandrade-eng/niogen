@@ -22,13 +22,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-15">
+<link rel="stylesheet" href="assets/app.css?v=131126-21">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-20"></script>
+<script src="assets/app.js?v=131126-21"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-17"></script>
+<script src="assets/ficha.js?v=131126-21"></script>
 <style>
   .op-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   .op-kpis .kpi { padding: 12px 14px; border-radius: 12px; gap: 3px; min-width: 0; }
@@ -65,6 +65,11 @@
   .op-rel.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
   .op-rel.bad { background: var(--bad-bg); color: var(--bad-fg); border-color: transparent; }
   .op-rel.ok { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+  .op-osb { margin-left: 8px; font: inherit; font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
+  .op-osb:hover:not(:disabled) { border-color: var(--accent, currentColor); }
+  .op-osb:disabled { opacity: .6; cursor: default; }
+  .op-varr { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .op-varr small { color: var(--muted); font-size: 12px; }
   @media (max-width: 1100px) { .op-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 760px) { .op-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .op-grade { grid-template-columns: minmax(0, 1fr); } .op-bloco { padding: 10px; } }
 </style>
@@ -101,7 +106,7 @@
   const VENDIDAS = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const INST = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const COLS = 'id, status, cliente_nome, cliente_whatsapp, bairro, cidade, plano_nome, valor_mensal, forma_pagamento, comissao_prevista, nio_pedido, nio_os, nio_os_em, nio_pendencia_cod, nio_pendencia_desc, credito_resultado, credito_em, biometria_status, biometria_link_enviado_em, biometria_validada_em, vendido_em, agendar_desde, instalacao_agendada_para, instalado_em, docs_entregues_em, docs_prazo_em, nio_osab_em, nio_venda_valida, vendedor_nome, origem, criado_em, cancelada_apos_instalar_em, pend_id, pend_motivo, pend_motivo_nome, pend_descricao, pend_quem, pend_desde, pend_revisar_em, pend_revisoes, pend_saida_sugerida';
-  let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, osa = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
+  let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, osa = {}, varr = null, lendo = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
 
   const fmtR = (x) => NG.fmtMoeda(x).replace(/,00$/, '');
   const com = (v) => (v.comissao_prevista == null ? 0 : Number(v.comissao_prevista));
@@ -152,7 +157,7 @@
       <span class="q">${esc(NG.primeiroNome(v.cliente_nome))} <small>· ${esc(local(v))}</small></span>
       <span class="v" title="Comissão prevista desta venda (previsão até a conciliação)">${r ? esc(fmtR(r)) : '—'}</span>
       <span class="o">${onde}</span>
-      <span class="f">${esc(fazerTxt)}${extra || ''}</span>
+      <span class="f">${esc(fazerTxt)}${extra || ''}${osBotao(v)}</span>
     </div>`;
   }
   const grupo = (titulo, dica, lista, fn) => (lista.length ? `<div class="op-grupo"><h3>${esc(titulo)} · ${lista.length}${dica ? ` ${NG.dicaTxt(dica)}` : ''}</h3><div class="op-grade">${lista.map(fn).join('')}</div></div>` : '');
@@ -169,6 +174,22 @@
     return `<span class="op-rel ${cls}" title="${esc(dica)}">Nio: ${esc(o.estado_nome)}</span>`;
   };
   const osAcao = (v) => { const o = osa[v.id]; return o && o.excecao && o.acao ? o.acao : null; };
+  // 0173: "consultar esta OS agora", dentro do cartão (só backoffice, só venda em andamento com nº de OS).
+  const temOs = (v) => !instalada(v) && ['1_vendido', '2_aguardando_instalacao'].includes(v.status) && /\d{8}/.test(String(v.nio_os || v.nio_pedido || ''));
+  const osBotao = (v) => (BO && temOs(v)
+    ? `<button type="button" class="op-osb" data-os-ler="${esc(v.id)}" ${lendo[v.id] ? 'disabled' : ''} title="${esc(A.ops_os_agora)}">${lendo[v.id] ? 'lendo na Nio…' : '⟳ OS agora'}</button>` : '');
+  const hm = (x) => (x ? new Date(x).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '');
+  // Botão da varredura, na linha dos atalhos. A trava é do banco (uma por vez + intervalo): aqui só se mostra o porquê.
+  function varrerBotao() {
+    if (!BO || !varr) return '';
+    const u = varr.ultima;
+    const ult = u ? `última ${hm(u.terminada_em)}: ${u.estado === 'falhou' ? 'não terminou' : `${NG.fmtNum(u.lidas || 0)} de ${NG.fmtNum(u.na_fila || 0)} lidas · ${NG.fmtNum(u.mudaram || 0)} com mudança${u.erros ? ` · ${u.erros} com erro` : ''}`}` : '';
+    let rot = `⟳ Varrer OS abertas${varr.abertas ? ` (${NG.fmtNum(varr.abertas)})` : ''}`, nota = ult, off = !varr.pode;
+    if (varr.motivo === 'em_andamento') { const a = varr.andamento || {}; rot = 'varrendo as OS…'; nota = `pedida por ${a.por || 'alguém'} às ${hm(a.pedida_em)} · ~12 s por OS`; }
+    else if (varr.motivo === 'intervalo') nota = `${ult ? ult + ' · ' : ''}libera às ${hm(varr.libera_em)}`;
+    else if (varr.motivo === 'sem_os') nota = 'nenhuma OS aberta para ler';
+    return `<span class="op-varr"><button type="button" class="btn btn-sm ${off ? 'btn-ghost' : 'btn-acc'}" id="varrer" ${off ? 'disabled' : ''}>${esc(rot)}</button>${NG.dicaTxt(A.ops_varrer)}${nota ? `<small>${esc(nota)}</small>` : ''}</span>`;
+  }
   const confSelo = (v) => {
     const c = conf[v.id] || {};
     if (c.resposta === 'confirmou') return `<span class="op-rel ok" title="${esc(`“${c.resposta_texto || 'Tudo certo'}” ${NG.fmtDataHora(c.resposta_em)}`)}">✓ confirmou</span>`;
@@ -219,6 +240,7 @@
       ['pend', 'Pendências', L.pend, L.pend.length ? 'warn' : ''], ['bio', 'Biometria', L.bio, L.bio.some((v) => horasBio(v) >= 72) ? 'bad' : L.bio.some((v) => horasBio(v) >= 24) ? 'warn' : ''],
       ['rec', 'Recém-instaladas', L.rec, '']];
     document.getElementById('nav').innerHTML = NAV.map(([id, n, l, cls]) => `<a href="#b-${id}" class="${cls}" data-ir="${id}">${esc(n)} <b>${l.length}</b></a>`).join('')
+      + varrerBotao()
       + `<input type="search" id="busca" placeholder="Buscar nome, bairro, pedido ou OS" aria-label="Buscar venda" value="${esc(busca)}">`;
 
     // ----- Hoje, por turno -----
@@ -303,7 +325,7 @@
   }
 
   async function carregar() {
-    const [rj, rv, rk, rd, ra, ri, rg, rr, ro] = await Promise.all([
+    const [rj, rv, rk, rd, ra, ri, rg, rr, ro, rs] = await Promise.all([
       NG.jornada(),
       NG.sb.from('v_vendas').select(COLS).in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('v_instalacao_confirmacao').select('venda_id, resposta, resposta_em, resposta_texto, lembrete_em'),
@@ -314,12 +336,15 @@
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
       // 0168 (etapa 3): o andamento da OS na Nio, lido pelo Operador de OS e pelo OSAB
       NG.sb.from('v_os_andamento').select('venda_id, estado, estado_nome, status_ordem, agendamento_data, janela, pendencia, acao, excecao, agendamentos, estado_ba, execucao_inicio, mudou_em, origem_ultima').not('venda_id', 'is', null),
+      BO ? NG.sb.rpc('os_varredura_estado') : null,   // 0173: o botão "Varrer OS abertas" e a trava dele
     ]);
     if (rv.error) { document.getElementById('blocos').innerHTML = `<div class="op-vazio">${esc(NG.msgErro(rv.error))}</div>`; NG.toast(NG.msgErro(rv.error), 'bad'); return; }
     jor = rj || { porVenda: {} };
     const mapa = (r) => Object.fromEntries(((r && !r.error && r.data) || []).map((x) => [x.venda_id, x]));
     vendas = (rv.data || []).filter((v) => v.status !== '0_qualificado' || v.biometria_status === 'validada' || NG.naBiometria(v));
     conf = mapa(rk); din = mapa(rd); and = mapa(ra); osa = mapa(ro);
+    varr = rs && !rs.error ? rs.data : null;
+    vigiarVarredura();
     osabEm = ((ri && ri.data) || [])[0] ? ri.data[0].aplicado_em : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
     ritmo = rr && !rr.error ? rr.data : null;
@@ -331,7 +356,42 @@
   // ---------- cliques ----------
   const blocosEl = document.getElementById('blocos');
   const abrir = (c, nova) => { if (nova) NG.abrirVenda(c.dataset.abrir, true); else location.hash = `#venda=${c.dataset.abrir}`; };
-  blocosEl.addEventListener('click', (ev) => { if (ev.target.closest('.dica, [data-operador]')) return; const c = ev.target.closest('[data-abrir]'); if (c) abrir(c, ev.ctrlKey || ev.metaKey); });
+  // 0173: consultar UMA OS agora (dentro do cartão) e varrer todas (linha dos atalhos).
+  async function lerOs(id) {
+    if (lendo[id]) return;
+    lendo[id] = true; render();
+    const v = vendas.find((x) => x.id === id) || {};
+    const r = await NG.osModal(id, v.cliente_nome);
+    delete lendo[id];
+    if (r && r.mudou) { NG.limparCache(); await carregar(); } else { const { data } = await NG.sb.from('v_os_andamento').select('venda_id, estado, estado_nome, status_ordem, agendamento_data, janela, pendencia, acao, excecao, agendamentos, estado_ba, execucao_inicio, mudou_em, origem_ultima').eq('venda_id', id).limit(1); if (data && data[0]) osa[id] = data[0]; render(); }
+  }
+  let vigia = null;
+  function vigiarVarredura() {   // só pergunta ao banco enquanto há varredura rodando; terminou, para
+    const rodando = !!(varr && varr.motivo === 'em_andamento');
+    if (rodando && !vigia) {
+      vigia = setInterval(async () => {
+        if (document.hidden) return;
+        const { data, error } = await NG.sb.rpc('os_varredura_estado');
+        if (error || !data) return;
+        const acabou = data.motivo !== 'em_andamento';
+        varr = data;
+        if (acabou) { clearInterval(vigia); vigia = null; NG.limparCache(); await carregar(); const u = data.ultima || {}; NG.toast(u.estado === 'falhou' ? 'A varredura não terminou. Veja o pulso do Operador de OS.' : `Varredura pronta: ${u.lidas || 0} de ${u.na_fila || 0} OS lidas, ${u.mudaram || 0} com mudança.`, u.estado === 'falhou' ? 'bad' : 'ok'); }
+      }, 10000);
+    } else if (!rodando && vigia) { clearInterval(vigia); vigia = null; }
+  }
+  async function varrer(botao) {
+    botao.disabled = true;
+    const { data, error } = await NG.sb.rpc('os_varredura_pedir');
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); botao.disabled = false; return; }
+    varr = data;
+    if (data.ok) NG.toast(`Varredura pedida: o Operador de OS começa em até 1 minuto (${data.abertas || 0} OS, ~12 s cada).`, 'ok');
+    else NG.toast(data.motivo === 'em_andamento' ? 'Já há uma varredura em andamento.' : data.motivo === 'intervalo' ? `Varredura feita há pouco. Libera às ${hm(data.libera_em)}.` : 'Nenhuma OS aberta para ler.', 'bad');
+    vigiarVarredura();
+    render();
+  }
+  document.getElementById('nav').addEventListener('click', (ev) => { const b = ev.target.closest('#varrer'); if (b && !b.disabled) varrer(b); });
+  blocosEl.addEventListener('click', (ev) => { const o = ev.target.closest('[data-os-ler]'); if (o) { ev.stopPropagation(); lerOs(o.dataset.osLer); return; }
+    if (ev.target.closest('.dica, [data-operador]')) return; const c = ev.target.closest('[data-abrir]'); if (c) abrir(c, ev.ctrlKey || ev.metaKey); });
   blocosEl.addEventListener('auxclick', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.button === 1) abrir(c, true); });
   blocosEl.addEventListener('keydown', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.key === 'Enter' && ev.target === c) abrir(c); });
   document.getElementById('nav').addEventListener('click', (ev) => { const a = ev.target.closest('[data-ir]'); if (!a) return; ev.preventDefault(); const b = document.getElementById(`b-${a.dataset.ir}`); if (b) b.scrollIntoView({ behavior: 'smooth', block: 'start' }); });

@@ -2658,6 +2658,15 @@
     const el = raiz && raiz.querySelector(`[data-fc-op="${tipo}"]`);
     if (el) el.outerHTML = opPainel(tipo);
   }
+  // 13/11 (etapa 3): o degrau "Instalação" da Escada consulta a OS na Nio (Operador de OS) e responde num modal.
+  // Mudou alguma coisa → recarrega a ficha (status, data, Live).
+  const temOsNio = () => !!(d && !d.soConversa && d.v && ehBO() && /\d{8}/.test(String(d.v.nio_os || d.v.nio_pedido || '')));
+  async function abrirOsModal() {
+    if (!temOsNio()) return;
+    const alvo = idAtual;
+    const r = await NG.osModal(d.v.id, d.v.cliente_nome);
+    if (r && r.mudou && idAtual === alvo) { NG.limparCache(); await recarregar(); }
+  }
   async function rodarOp(tipo) {
     const e = entradaOp(tipo);
     if (e.falta) { NG.toast(e.falta, 'bad'); return; }
@@ -2770,6 +2779,9 @@
     const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
     const steps = etapas.map((e, i) => {
       const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
+      if (e.codigo === 'instalacao' && temOsNio()) {
+        return `<button type="button" class="fc-es fc-es-os s-${st}" data-f="fc-os-ler" title="${esc(`${e.ajuda || ''} Clique para consultar esta OS agora na Nio (uns 15 segundos).`.trim())}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}<span class="fc-es-g" aria-hidden="true">⟳</span></button>`;
+      }
       return `<span class="fc-es s-${st}" title="${esc(e.ajuda || '')}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}</span>`;
     }).join('');
     const cv = d.soConversa ? d.conv : d.convInfo;
@@ -3461,6 +3473,7 @@
     if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
     if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
+    if (a === 'fc-os-ler') { abrirOsModal(); return; }
     if (a === 'fc-op-reg') {
       const r = b.dataset.r;
       if (b.dataset.t === 'viab') {

@@ -325,8 +325,10 @@
     menu_mari: 'Conversas esperando alguém do time: handoff da Mari, A resolver no Chatwoot e a última mensagem é do cliente. Vermelho = alguma passou de 15 min em horário de contato.',
     menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação (venda em espera só conta na data de revisão).',
     // 13/11 — ficha única (etapa 4a): as três trilhas no topo, a saída única e as ações que vieram da gaveta
-    tr_escada: 'Escada: em que ponto da venda o lead está (6 degraus), o status dentro do degrau, de quem é a vez e o prazo. O que fazer: se a vez é do nosso time, faça o que o status pede antes do prazo. Se é da Mari, do cliente ou da Nio, só acompanhe.',
-    tr_os: 'OS: o que já foi feito no portal da Nio para este pedido — viabilidade, crédito, biometria, pedido (OS) e instalação. O que fazer: clique numa etapa para ver o detalhe e rodar o operador de viabilidade ou de crédito.',
+    tr_escada: 'Escada: em que ponto da venda o lead está (6 degraus), o status dentro do degrau, de quem é a vez e o prazo. O que fazer: se a vez é do nosso time, faça o que o status pede antes do prazo. Se é da Mari, do cliente ou da Nio, só acompanhe. Em venda com OS aberta, o degrau “Instalação ⟳” é clicável: o Operador de OS lê no portal da Nio como está a OS (uns 15 segundos) e mostra numa janela o status, o agendamento, a pendência, o motivo de cancelamento e o que fazer. Use antes de falar com o cliente; não precisa clicar toda hora, a leitura já é automática ao longo do dia.',
+    tr_os: 'OS: o que já foi feito no portal da Nio para este pedido — viabilidade, crédito, biometria, pedido (OS) e instalação. O que fazer: clique numa etapa para ver o detalhe e rodar o operador de viabilidade ou de crédito. Para saber como a OS está na Nio agora, clique no degrau “Instalação ⟳” da Escada, no topo.',
+    ops_varrer: 'Varrer OS abertas: manda o Operador de OS ler agora, no portal da Nio, todas as OS em andamento (uns 12 segundos por OS, uma de cada vez). Use quando precisar do retrato de todas na hora, por exemplo antes de ligar para os clientes do dia. Só roda uma varredura por vez e há um intervalo mínimo entre uma e outra, igual para toda a equipe: enquanto não libera, o botão mostra a hora. A leitura automática continua a cada 30 minutos.',
+    ops_os_agora: 'Consultar esta OS agora: o Operador de OS lê no portal da Nio como está esta OS (uns 15 segundos) e mostra numa janela o status, o agendamento, a pendência e o que fazer. O selo “Nio:” do cartão é atualizado. Se o operador estiver ocupado com uma consulta de crédito, tente de novo em 1 minuto.',
     tr_dinheiro: 'Dinheiro: se esta venda virou comissão. Prevista nasce na instalação; em risco nos primeiros 30 dias (cancelou e reativou = estorno de 100 %); firme depois disso; no extrato quando a Nio lança; paga quando o dinheiro entra. O que fazer: clique para ver as datas. Em risco: acompanhe a 1ª fatura. Diferença no extrato: conteste dentro do prazo.',
     din_antes: 'A comissão só nasce quando a Nio instala. Até lá o valor é só previsão. O que fazer: levar a venda até a instalação.',
     din_estados: {
@@ -703,6 +705,72 @@
   const viabIniciar = (endereco) => creditoFn({ acao: 'viabilidade', endereco });
   // 11/11 ~22h30: print da tela do portal quando a viabilidade não saiu ({tipo, base64, em}). Só admin/backoffice.
   const portalPrint = (jobId) => creditoFn({ acao: 'print', job_id: jobId });
+  // 13/11 (etapa 3): "Consultar OS agora" — o Operador de OS lê o andamento da OS de UMA venda na Consulta OS do portal (~15 s).
+  // O CPF e o nº da OS saem do banco, na edge function; daqui vai só o id da venda. A leitura que mudou já volta gravada.
+  async function osConsultar(vendaId, aoAndar) {
+    let s = await creditoFn({ acao: 'os', venda_id: vendaId });
+    const fim = Date.now() + 90 * 1000;
+    while (s && !['pronto', 'erro'].includes(s.estado)) {
+      if (Date.now() > fim) throw new Error('O portal demorou demais. Tente de novo em 1 minuto.');
+      if (aoAndar) aoAndar(s);
+      await new Promise((r) => setTimeout(r, 3000));
+      s = await creditoFn({ acao: 'os_status', job_id: s.job_id, venda_id: vendaId });
+    }
+    return s || {};
+  }
+  // Modal da consulta de UMA OS (ficha: degrau Instalação da Escada; Operações: "⟳ OS agora" do cartão). Abre na hora com a
+  // última leitura guardada e manda o operador ler; em ~15 s troca pelo resultado. Fechar antes não cancela: a leitura
+  // termina e fica gravada. Resolve com { mudou } quando o modal fecha.
+  function osModal(vendaId, nome) {
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal os-modal';
+      dlg.innerHTML = `<form method="dialog"><h3>OS na Nio${nome ? ` · ${esc(primeiroNome(nome))}` : ''}</h3><div data-os-corpo></div>
+        <div class="acoes"><button type="submit" class="btn btn-acc" value="ok">Fechar</button></div></form>`;
+      document.body.appendChild(dlg);
+      const corpo = dlg.querySelector('[data-os-corpo]');
+      let mudou = false;
+      let aberto = true;
+      let velha = null;
+      const lin = (k, v) => (v ? `<div class="os-l"><span>${esc(k)}</span><b>${esc(v)}</b></div>` : '');
+      const dataBR = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
+      const quadroVelho = () => (velha ? `<div class="os-q velha"><h4>Última leitura guardada · ${esc(fmtDataHora(velha.mudou_em))}</h4>
+          ${lin('Estado', velha.estado_nome)}${lin('Status na Nio', velha.status_ordem)}
+          ${lin('Agendamento', [dataBR(velha.agendamento_data), velha.janela].filter(Boolean).join(' · '))}${lin('Pendência', velha.pendencia)}
+          ${lin('Motivo do cancelamento', velha.motivo_cancelamento)}</div>` : '');
+      const pinta = (s, erro) => {
+        if (!aberto) return;
+        if (erro) { corpo.innerHTML = `<div class="os-fazer bad">${esc(erro)}</div>${quadroVelho()}`; return; }
+        if (!s) { corpo.innerHTML = `<div class="os-lendo">Lendo na Nio… leva uns 15 segundos. Pode fechar: a leitura continua.</div>${quadroVelho()}`; return; }
+        const r = osResumo(s);
+        if (s.resultado !== 'lida') { corpo.innerHTML = `<div class="os-fazer ${r.cls}">${esc(r.txt)}</div>${quadroVelho()}`; return; }
+        const l = s.leitura || {}, g = s.registro || {};
+        const oQue = g.ok === false ? g.erro : g.efeito ? `Mudou: ${g.efeito}.` : g.mudou === false ? 'Nada mudou desde a última leitura.' : 'Leitura gravada.';
+        corpo.innerHTML = `<div class="os-q"><h4>Lido agora${s.consultado_em ? ` · ${esc(fmtDataHora(s.consultado_em))}` : ''}${s.cache ? ' · guardada há menos de 10 min' : ''}</h4>
+            ${lin('Status na Nio', l.status_ordem)}${lin('Agendamento', l.agendamento)}${lin('Situação do agendamento', l.status_agendamento)}
+            ${lin('Pendência', l.pendencia)}${lin('Caso aberto na Nio', l.caso)}${lin('Motivo do cancelamento', l.motivo_cancelamento)}</div>
+          <div class="os-fazer ${g.excecao || g.ok === false ? 'bad' : ''}">${g.excecao && g.acao ? `<b>O que fazer:</b> ${esc(g.acao)}<br>` : ''}${esc(oQue)}</div>`;
+      };
+      dlg.addEventListener('close', () => { aberto = false; dlg.remove(); resolve({ mudou }); });
+      pinta(null);
+      dlg.showModal();
+      sb.from('v_os_andamento').select('estado_nome, status_ordem, agendamento_data, janela, pendencia, motivo_cancelamento, mudou_em')
+        .eq('venda_id', vendaId).order('mudou_em', { ascending: false }).limit(1)
+        .then(({ data }) => { velha = (data || [])[0] || null; if (aberto && corpo.querySelector('.os-lendo')) pinta(null); });
+      osConsultar(vendaId).then((s) => { mudou = !!(s && s.registro && s.registro.mudou === true); pinta(s); if (!aberto && mudou) limparCache(); })
+        .catch((err) => pinta(null, err.naoInstalado ? 'Operador fora do ar — consulte direto no portal.' : msgErro(err)));
+    });
+  }
+  // O que dizer depois da leitura: { txt, cls ('ok' | 'warn' | 'bad'), mudou }.
+  function osResumo(s) {
+    if (!s || s.resultado === 'erro' || s.estado === 'erro') return { txt: `A leitura não saiu: ${(s && s.motivo) || 'erro no operador'}. Confira direto no portal.`, cls: 'bad', mudou: false };
+    if (s.resultado === 'nao_encontrada') return { txt: 'A Nio não achou esta OS com este CPF. Confira o nº da OS e o CPF da venda.', cls: 'warn', mudou: false };
+    const l = s.leitura || {}, g = s.registro || {};
+    const partes = [`Na Nio: ${l.status_ordem || 'sem status'}`, l.agendamento ? `agendada ${l.agendamento}` : '', l.pendencia ? `pendência: ${l.pendencia}` : '',
+      l.motivo_cancelamento ? `motivo: ${l.motivo_cancelamento}` : '', g.efeito || (g.mudou === false ? 'nada mudou desde a última leitura' : ''),
+      g.excecao && g.acao ? g.acao : '', g.ok === false ? g.erro : ''].filter(Boolean);
+    return { txt: partes.join(' · '), cls: g.excecao || g.ok === false ? 'bad' : 'ok', mudou: g.mudou === true };
+  }
 
   // Bloco "Cobertura (DFV)": os mesmos campos na venda de rua e no detalhe da venda.
   function dfvCampos(v) {
@@ -1587,7 +1655,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
