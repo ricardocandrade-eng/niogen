@@ -8,7 +8,7 @@
      Pendências (por quem destrava) · Biometria (24 h avisa, 72 h liga) · Recém-instaladas (30 dias: documentos, 1ª fatura, estorno).
      Cada cartão: quem · onde está · quanto vale · o que fazer; o clique abre a ficha única (#venda=). Selo ⓘ em cada bloco e número.
      Dados, numa rodada só: NG.jornada() (dividida entre as abas, 45 s) + v_vendas + v_instalacao_confirmacao + v_dinheiro +
-     v_venda_andamento + importacoes (último OSAB) + config_regras + painel_meta_ritmo + v_adimplencia (faturas, quando existir).
+     v_venda_andamento + importacoes (último OSAB) + config_regras + painel_meta_ritmo. A 1ª fatura entra com o FPD (etapa 5d).
      Não lê mais contatos_cliente (5 mil linhas na tela antiga): o próximo passo vem da jornada.
      Estado ao vivo da OS e técnico: etapa 3 (Operador de OS). Vendedor vê só as vendas dele (RLS). -->
 <html lang="pt-BR">
@@ -273,7 +273,7 @@
     el.style.cssText = 'display:flex;flex-direction:column;gap:12px';
     const fora = V.filter((v) => !instalada(v) && !ehHoje(v) && !ehAmanha(v) && !semData(v) && !naBio(v) && !pendNio(v) && !pendDe(v) && !passou(v));
     document.getElementById('rodape').textContent = `${nv(V.length, 'venda', 'vendas')} da biometria em diante${fora.length ? ` · ${nv(fora.length, 'agendada', 'agendadas')} para depois de amanhã (aparecem aqui na véspera; veja no Quadro de vendas)` : ''} · clique no cartão para abrir a ficha`;
-    if (!window.NGopTempo) window.NGopTempo = Math.round(performance.now() - t0);
+    if (!window.NGopTempo) { window.NGopTempo = Math.round(performance.now() - t0); window.NGopDesdeAbrir = Math.round(performance.now()); }   // regra 19: tempo até a lista
   }
 
   function renderOsab() {
@@ -287,7 +287,7 @@
   }
 
   async function carregar() {
-    const [rj, rv, rk, rd, ra, ri, rg, rr, rf] = await Promise.all([
+    const [rj, rv, rk, rd, ra, ri, rg, rr] = await Promise.all([
       NG.jornada(),
       NG.sb.from('v_vendas').select(COLS).in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('v_instalacao_confirmacao').select('venda_id, resposta, resposta_em, resposta_texto, lembrete_em'),
@@ -296,7 +296,6 @@
       NG.sb.from('importacoes').select('aplicado_em').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
       NG.sb.from('config_regras').select('chave, valor'),
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
-      NG.sb.from('v_adimplencia').select('venda_id, faturas').limit(5000),
     ]);
     if (rv.error) { document.getElementById('blocos').innerHTML = `<div class="op-vazio">${esc(NG.msgErro(rv.error))}</div>`; NG.toast(NG.msgErro(rv.error), 'bad'); return; }
     jor = rj || { porVenda: {} };
@@ -306,7 +305,7 @@
     osabEm = ((ri && ri.data) || [])[0] ? ri.data[0].aplicado_em : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
     ritmo = rr && !rr.error ? rr.data : null;
-    faturasPor = rf && !rf.error ? Object.fromEntries((rf.data || []).map((x) => [x.venda_id, x.faturas])) : null;
+    faturasPor = null;   // a 1ª fatura entra quando existir a leitura de faturas da Nio (FPD, etapa 5d) — hoje a view v_adimplencia não existe
     renderOsab();
     render();
   }
