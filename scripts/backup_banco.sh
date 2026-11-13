@@ -16,6 +16,7 @@
 #   NIOGEN_BACKUP_MANTER  quantos pacotes ficam (padrão 30)
 #   PG_BIN                pasta bin do cliente PostgreSQL 17 (padrão ~/tools/pgsql17/pgsql/bin)
 #   NIOGEN_BACKUP_AVISAR  1 = abre o aviso na tela se falhar (a tarefa agendada liga)
+#   NIOGEN_BACKUP_SO_SE_FALTA  1 = só roda se ainda não há pacote de hoje (a tarefa agendada liga; à mão, roda sempre)
 
 set -Eeuo pipefail
 
@@ -72,6 +73,14 @@ pg_dump --version | grep -q " 17\." || falha "precisa do cliente PostgreSQL 17 (
 export PGSSLMODE=require PGCONNECT_TIMEOUT=20 PGCLIENTENCODING=UTF8
 
 mkdir -p "$DEST"
+# 13/11: a tarefa agendada passou a tentar de 2 em 2 horas, das 06h00 às 22h00 (PC desligado ou dormindo às 06h00 não perde
+# mais o dia — em 12/11 o "rodar assim que possível" do Windows não disparou). Com NIOGEN_BACKUP_SO_SE_FALTA=1 (a tarefa liga),
+# se já existe um pacote de hoje o script sai sem fazer nada: não lê o banco nem mexe no ULTIMO_BACKUP.txt.
+if [ "${NIOGEN_BACKUP_SO_SE_FALTA:-0}" = "1" ] && ls "$DEST"/niogen_backup_"$(date '+%d%m%y')"_*.tar.gz >/dev/null 2>&1; then
+  trap - ERR
+  echo "já existe o pacote de hoje — nada a fazer"
+  exit 0
+fi
 # Uma execução por vez. Trava com mais de 1 h é resto de execução interrompida (PC desligado no meio): descarta.
 if [ -d "$DEST/.rodando" ] && [ -n "$(find "$DEST/.rodando" -maxdepth 0 -mmin +60 2>/dev/null)" ]; then
   rmdir "$DEST/.rodando" 2>/dev/null || true
