@@ -2,6 +2,7 @@
 # NIOGEN | portal/testar_travas.py | 11/11/2026 — Claude Code (docs/Prompt_operador_credito_consulta_111126_1650.md)
 # Testa as travas do operador de crédito SEM navegador: lista negra de clique, Avançar proibido na Etapa 5, padrões de
 # rede (casam com o que é proibido e NÃO casam com o que a consulta precisa), CPF, máscara, classificação e redação.
+# 13/11/2026 — + seção 6: operador de OS (consulta_os.py), lista BRANCA de clique e de rede.
 # Uso: python portal/testar_travas.py   → "VERDE" e código 0, ou a lista do que falhou e código 1.
 import os
 import sys
@@ -170,6 +171,55 @@ if shutil.which('node'):
         ok(r.returncode == 0, f'{nome} compila')
 else:
     print('  (sem node: pulado)')
+
+print('6. Operador de OS — Consulta OS (13/11): lista BRANCA de clique e de rede, e nenhum dado pessoal na leitura')
+import consulta_os as co  # noqa: E402
+for t_ in ('Filtros', 'Filtrar', '  FILTRAR ', 'filtros'):
+    a = Alvo(t_)
+    co.clicar(a)
+    ok(a.clicado, f'"{t_.strip()}" permitido')
+for t_ in ('Detalhar', 'Atualizar o status da OS', 'Enviar link de pagamento', 'Reenviar link de pagamento', 'Agendar instalação',
+           'Reagendar', 'Cancelar OS', 'Salvar', 'Atualizar Pedido', 'Carregar pedido', 'Novo Pedido', 'Sair', 'Filtrar e salvar', ''):
+    a = Alvo(t_)
+    levanta(lambda a=a: co.clicar(a), f'recusa "{t_}"')
+    ok(not a.clicado, f'"{t_}" não foi clicado')
+API = 'https://pap-api.niointernet.com.br/'
+ok(co.rede_bloqueada(API + 'api/portal/novafibra/consultastatusos?startDate=1&cpf=2&orderId=3', 'GET', 'xhr') is None, 'GET consultastatusos passa')
+ok(bool(co.rede_bloqueada(API + 'api/portal/novafibra/consultastatusos', 'POST', 'xhr')), 'POST consultastatusos é barrado')
+ok(bool(co.rede_bloqueada(API + 'api/portal/novafibra/consultastatusos/atualizar', 'GET', 'xhr')), 'rota mais funda de consultastatusos é barrada')
+for c in ('manutencao?x=1', 'auth/user/info', 'api/portal/permissoes', 'api/portal/permissoes/skills'):
+    ok(co.rede_bloqueada(API + c, 'GET', 'xhr') is None, f'sessão: GET {c.split("?")[0]} passa')
+ok(co.rede_bloqueada(API + 'api/portal/loginbo', 'POST', 'xhr') is None, 'sessão: loginbo passa (a página confere o login ao abrir)')
+for c in ('api/portal/pagamento/reenviolink', 'api/portal/novafibra/reenviolinkpagamento', 'api/portal/novafibra/agendamento',
+          'api/portal/novafibra/reagendamento', 'api/portal/novafibra/cancelamentoos', 'api/portal/novafibra/atualizastatusos',
+          'api/portal/aberturaos/checkout/enviar', 'api/portal/historico', 'api/portal/novafibra/analiseCredito',
+          'api/portal/gestao/usuario', 'api/portal/powerbi/embed-info'):
+    ok(bool(co.rede_bloqueada(API + c, 'GET', 'xhr')), f'barra GET {c}')
+    ok(bool(co.rede_bloqueada(API + c, 'POST', 'fetch')), f'barra POST {c}')
+ok(bool(co.rede_bloqueada(API + 'api/portal/permissoes', 'POST', 'xhr')), 'POST em rota de sessão é barrado')
+ok(co.rede_bloqueada('https://pap.niointernet.com.br/administrativo/consulta-os', 'GET', 'document') is None, 'abrir a tela (GET no front) passa')
+ok(co.rede_bloqueada('https://pap.niointernet.com.br/static/js/bundle.js', 'GET', 'script') is None, 'script do front passa')
+ok(bool(co.rede_bloqueada('https://pap.niointernet.com.br/qualquer', 'POST', 'fetch')), 'POST no front é barrado')
+ok(co.rede_bloqueada('https://browser-intake-datadoghq.com/api/v2/rum?x=1', 'POST', 'fetch') is None, 'telemetria de outro host não é pedido ao portal (passa)')
+ok(bool(co.rede_bloqueada('https://outro.exemplo.com/api/pagamento/reenviolink', 'POST', 'fetch')), 'pagamento em qualquer host é barrado')
+RESP = {'codigo': 2000, 'mensagem': 'Sucesso', 'data': [{
+    'idVenda': 'abc', 'addressId': '1', 'statusOS': 'Em Aprovisionamento', 'numeroOS': '90000001', 'plano': 'Nio Fibra',
+    'statusAgendamento': 'Concluído com sucesso', 'agendamento': '13/11/2026 - 08:00 às 12:00', 'pendencia': '', 'caseNumber': '',
+    'motivoCancelamento': '-', 'subMotivoCancelamento': '-', 'numeroBA': 'SA-1', 'idSalesforce': 'x',
+    'clientEmail': 'pessoa@exemplo.com.br', 'clientPhoneWhatsapp': '32999990000', 'attendancePdv': 'PDV X',
+    'reenvioLinkPagamentoHabilitado': False}]}
+r = co.ler_resposta(RESP, '90000001')
+ok(r['resultado'] == 'lida' and r['leitura'] == {'status_ordem': 'Em Aprovisionamento', 'status_agendamento': 'Concluído com sucesso',
+   'agendamento': '13/11/2026 - 08:00 às 12:00', 'numero_ba': 'SA-1'}, 'lê status, agendamento e BA; vazio e "-" não entram')
+ok('exemplo.com' not in str(r) and '32999990000' not in str(r) and 'PDV X' not in str(r) and 'abc' not in str(r),
+   'e-mail, telefone, PDV e ids internos do cliente não saem da leitura')
+RESP['data'][0].update(statusOS='Cancelado', motivoCancelamento='Inviabilidade Total', subMotivoCancelamento='Sem rede', pendencia='LOCAL FECHADO')
+r = co.ler_resposta(RESP, '90000001')
+ok(r['leitura']['motivo_cancelamento'] == 'Inviabilidade Total · Sem rede' and r['leitura']['pendencia'] == 'LOCAL FECHADO', 'lê motivo de cancelamento e pendência')
+ok(co.ler_resposta(RESP, '90000002')['resultado'] == 'nao_encontrada', 'OS que não veio na resposta → nao_encontrada (não lê a OS de outro)')
+ok(co.ler_resposta({'codigo': 2000, 'data': []}, '90000001')['resultado'] == 'nao_encontrada', 'lista vazia → nao_encontrada')
+ok(co.ler_resposta({'erro': 'x'}, '90000001')['resultado'] == 'erro', 'resposta fora do formato → erro')
+ok(co.ler_resposta({'data': [{'numeroOS': '90000001', 'statusOS': '-'}]}, '90000001')['resultado'] == 'erro', 'sem status → erro (não grava leitura vazia)')
 
 print()
 if FALHAS:

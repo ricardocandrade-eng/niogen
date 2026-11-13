@@ -16,6 +16,12 @@
 #   POST /credito/viabilidade {endereco} → 202 {job_id, ...} — SÓ Etapas 0–2, sem CPF/contato (11/11 ~21h, consulta
 #                                         unificada). Resultado viavel | sem_viabilidade | complemento_fora_lista | ...
 #                                         Cache 6 h por endereço; limite VIAB_LIMITE_HORA (60). Mesma fila do navegador.
+#   POST /os {cpf, os, criada_em?}      → 202 {job_id, ...} — OPERADOR DE OS (13/11, etapa 3): lê o andamento da OS na
+#                                         Consulta OS (consulta_os.py: só "Filtros" e "Filtrar"; rede em lista branca).
+#                                         Resultado lida {leitura} | nao_encontrada | erro. Crédito e viabilidade primeiro:
+#                                         com qualquer job na fila ou rodando, responde 429 e a rotina tenta na próxima volta.
+#                                         Cache 10 min por OS; limite OS_LIMITE_HORA (padrão 40).
+#   GET  /os/{job_id}                   → igual a GET /credito/{job_id}
 #
 # Limites: até 40 chamadas/min no /chamar; crédito: fila máx. 3, CREDITO_LIMITE_HORA / CREDITO_LIMITE_DIA (429), mesmo
 # CPF < 24 h = resultado da memória (sem abrir o portal, sem Serasa repetido). Log sem corpo e sem CPF.
@@ -53,6 +59,7 @@ def _carregar_env():
 
 _carregar_env()
 
+import consulta_os as co  # noqa: E402
 import credito as cr  # noqa: E402
 import portal_login as pl  # noqa: E402
 
@@ -68,6 +75,7 @@ VIAB_TTL = 6 * 3600       # viabilidade do portal vale "hoje": 6 h por endereço
 VIAB_CACHEAVEIS = {'viavel', 'sem_viabilidade', 'complemento_fora_lista'}
 CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento'}
 DUP_CACHEAVEIS = {'pedido_em_andamento', 'sem_pedido_em_andamento'}   # 12/11: modo duplicidade (Mari), 24 h por CPF
+OS_TTL = 10 * 60          # 13/11: a mesma OS não é lida de novo no portal em menos de 10 min
 
 
 def chave_viab(endereco, sal):
@@ -100,6 +108,7 @@ def cfg_credito():
         'amostras': e('CREDITO_AMOSTRAS_DIR') or '/amostras',
         'viab_limite_hora': int(e('VIAB_LIMITE_HORA') or 60),
         'dup_limite_hora': int(e('DUP_LIMITE_HORA') or 20),
+        'os_limite_hora': int(e('OS_LIMITE_HORA') or 40),
     }
 
 
@@ -196,6 +205,23 @@ class Operador:
                 self.login()
         raise pl.Falha(8, 'inalcançável')
 
+    def consultar_os(self, params):
+        """Uma leitura da Consulta OS numa página nova do mesmo contexto. Sessão caída → login 1× e recomeça."""
+        if self.ctx is None or not self.estado.get('logado'):
+            self.login()
+        for tentativa in (1, 2):
+            c = co.ConsultaOS(self.ctx, params, log=pl.log)
+            try:
+                out = c.rodar()
+                self.estado['ultimo_uso'] = agora()
+                return out
+            except cr.SessaoCaida:
+                if tentativa == 2:
+                    raise pl.Falha(8, 'portal pediu login de novo logo após o login')
+                pl.log('os: sessão caída — login e recomeço da leitura')
+                self.login()
+        raise pl.Falha(8, 'inalcançável')
+
 
 # ------------------------------------------------------------------------------------------- thread do navegador
 FILA = queue.Queue()
@@ -246,6 +272,7 @@ TRAVA_JOBS = threading.Lock()
 INICIOS = deque()          # horários de consultas que abriram o portal (freio hora/dia)
 VIAB_INICIOS = deque()     # idem, só viabilidade (não passa pela Receita/Serasa)
 DUP_INICIOS = deque()      # idem, só duplicidade de pedido (Etapas 0–3, Receita sim, Serasa não)
+OS_INICIOS = deque()       # idem, só leitura da Consulta OS (13/11)
 CACHE = {}                 # chave sha256(sal+cpf) → (time, resultado). Só memória: nada vai a disco.
 
 
@@ -253,7 +280,8 @@ def _limpar_jobs():
     t = time.time()
     for k in [k for k, j in JOBS.items() if t - j['criado'] > JOB_TTL and j['estado'] in ('pronto', 'erro')]:
         JOBS.pop(k, None)
-    for k in [k for k, (ts, _) in CACHE.items() if t - ts > (VIAB_TTL if k.startswith('v:') else CACHE_TTL)]:
+    for k in [k for k, (ts, _) in CACHE.items()
+              if t - ts > (VIAB_TTL if k.startswith('v:') else OS_TTL if k.startswith('o:') else CACHE_TTL)]:
         CACHE.pop(k, None)
     while VIAB_INICIOS and t - VIAB_INICIOS[0] > 3600:
         VIAB_INICIOS.popleft()
@@ -390,7 +418,7 @@ def novo_job_credito(b):
             JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
             log_credito(job_id, origem_end, res['resultado'], 0, res.get('etapa_parada'), cache=True)
             return 200, _publico(JOBS[job_id])
-        if sum(1 for j in JOBS.values() if j['estado'] == 'fila') >= FILA_MAX:
+        if sum(1 for j in JOBS.values() if j['estado'] == 'fila' and j.get('modo') != 'os') >= FILA_MAX:
             raise pl.Falha(429, f'fila cheia ({FILA_MAX}) — tente em alguns minutos')
         t = time.time()
         if sum(1 for x in INICIOS if t - x < 3600) >= cfg['limite_hora']:
@@ -428,7 +456,7 @@ def novo_job_duplicidade(b):
             JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
             log_credito(job_id, 'duplicidade', res['resultado'], 0, res.get('etapa_parada'), cache=True)
             return 200, _publico(JOBS[job_id])
-        if sum(1 for j in JOBS.values() if j['estado'] == 'fila') >= FILA_MAX:
+        if sum(1 for j in JOBS.values() if j['estado'] == 'fila' and j.get('modo') != 'os') >= FILA_MAX:
             raise pl.Falha(429, f'fila cheia ({FILA_MAX}) — tente em alguns minutos')
         t = time.time()
         while DUP_INICIOS and t - DUP_INICIOS[0] > 3600:
@@ -468,7 +496,7 @@ def novo_job_viabilidade(b):
             JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
             log_credito(job_id, 'viabilidade', res['resultado'], 0, res.get('etapa_parada'), cache=True)
             return 200, _publico(JOBS[job_id])
-        if sum(1 for j in JOBS.values() if j['estado'] == 'fila') >= FILA_MAX:
+        if sum(1 for j in JOBS.values() if j['estado'] == 'fila' and j.get('modo') != 'os') >= FILA_MAX:
             raise pl.Falha(429, f'fila cheia ({FILA_MAX}) — tente em alguns minutos')
         if len(VIAB_INICIOS) >= cfg['viab_limite_hora']:
             raise pl.Falha(429, f'limite de {cfg["viab_limite_hora"]} viabilidades por hora')
@@ -478,6 +506,61 @@ def novo_job_viabilidade(b):
                   'modo': 'viabilidade', 'chave': chave}
         _rodar_job(job_id, params, cfg)
         return 202, _publico(JOBS[job_id])
+
+
+def novo_job_os(b):
+    """13/11 (etapa 3): leitura de acompanhamento da OS. Crédito, duplicidade e viabilidade têm prioridade: se o navegador
+    está ocupado ou há alguém na fila, não entra (429) — a rotina tenta de novo na próxima volta."""
+    cfg = cfg_credito()
+    doc = cr.so_digitos(b.get('cpf'))
+    if not (cr.cpf_valido(doc) or len(doc) == 14):
+        raise pl.Falha(400, 'CPF/CNPJ inválido')
+    num = cr.so_digitos(b.get('os'))
+    if len(num) != 8:
+        raise pl.Falha(400, 'número da OS com 8 dígitos')
+    chave = 'o:' + hashlib.sha256((str(cfg['sal']) + '|' + num).encode()).hexdigest()
+    with TRAVA_JOBS:
+        _limpar_jobs()
+        job_id = uuid.uuid4().hex
+        base = {'id': job_id, 'criado': time.time(), 'cpf_mascara': None, 'modo': 'os',
+                'origem': str(b.get('origem') or '')[:40] or None}
+        hit = CACHE.get(chave)
+        if hit and time.time() - hit[0] < OS_TTL:
+            JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': dict(hit[1], cache=True)}
+            return 200, _publico(JOBS[job_id])
+        if any(j['estado'] in ('fila', 'rodando') for j in JOBS.values()):
+            raise pl.Falha(429, 'operador ocupado (crédito e viabilidade primeiro) — tente na próxima volta')
+        t = time.time()
+        while OS_INICIOS and t - OS_INICIOS[0] > 3600:
+            OS_INICIOS.popleft()
+        if len(OS_INICIOS) >= cfg['os_limite_hora']:
+            raise pl.Falha(429, f'limite de {cfg["os_limite_hora"]} leituras de OS por hora')
+        OS_INICIOS.append(t)
+        JOBS[job_id] = {**base, 'estado': 'fila'}
+        params = {'cpf': doc, 'os': num, 'criada_em': str(b.get('criada_em') or '')[:10]}
+
+    def tarefa(op):
+        j = JOBS[job_id]
+        j['estado'] = 'rodando'
+        try:
+            out = op.consultar_os(params)
+        except pl.Falha as f:
+            out = {'resultado': 'erro', 'motivo': cr.sem_pii(f), 'ms': 0}
+        except cr.TravaAcionada as e:
+            out = {'resultado': 'erro', 'motivo': str(e)[:200], 'trava': True, 'ms': 0}
+        except Exception as e:  # noqa: BLE001
+            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}'[:200], 'ms': 0}
+        out.update(consultado_em=agora_br(), cache=False)
+        j['resultado'] = out
+        j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
+        if out['resultado'] == 'lida':
+            CACHE[chave] = (time.time(), out)
+        # Log sem CPF e sem número da OS: só o resultado e o tempo.
+        log_credito(job_id, 'os', out['resultado'], out.get('ms'), None,
+                    extra=(out.get('motivo') or '')[:120] if out['resultado'] == 'erro' else '')
+        return None
+    FILA.put(Tarefa(tarefa))
+    return 202, _publico(JOBS[job_id])
 
 
 # ------------------------------------------------------------------------------------------- HTTP
@@ -514,7 +597,8 @@ class Handler(BaseHTTPRequestHandler):
     def _rota(self, metodo):
         t0 = time.time()
         rota = self.path.split('?')[0].rstrip('/') or '/'
-        rota_log = '/credito/print/<job>' if rota.startswith('/credito/print/') else '/credito/<job>' if rota.startswith('/credito/') else rota
+        rota_log = ('/credito/print/<job>' if rota.startswith('/credito/print/') else '/credito/<job>' if rota.startswith('/credito/')
+                    else '/os/<job>' if rota.startswith('/os/') else rota)
         if not self._autorizado():
             self._resp(401, {'ok': False, 'erro': 'segredo inválido'})
             pl.log(f'{metodo} {rota_log} → 401 (segredo)')
@@ -552,6 +636,20 @@ class Handler(BaseHTTPRequestHandler):
             elif metodo == 'POST' and rota == '/credito':
                 code, r = novo_job_credito(self._json())
                 self._resp(code, r)
+                return
+            elif metodo == 'POST' and rota == '/os':
+                code, r = novo_job_os(self._json())
+                self._resp(code, r)
+                return
+            elif metodo == 'GET' and rota.startswith('/os/'):
+                jid = rota.split('/os/', 1)[1][:64]
+                with TRAVA_JOBS:
+                    j = JOBS.get(jid)
+                    r = _publico(j) if j and j.get('modo') == 'os' else None
+                if not r:
+                    self._resp(404, {'ok': False, 'erro': 'job inexistente ou expirado (30 min)'})
+                else:
+                    self._resp(200, r)
                 return
             elif metodo == 'GET' and rota.startswith('/credito/print/'):
                 arq = _arquivo_print(cfg_credito()['amostras'], rota.split('/credito/print/', 1)[1])
