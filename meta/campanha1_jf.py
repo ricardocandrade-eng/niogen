@@ -92,10 +92,19 @@ REGRA_VERTICAL = {
 # 07/11/2026 (ordem do Ricardo): posicionamentos MANUAIS, sem Status do WhatsApp e sem Audience Network.
 # Medido de 06/11 10h59 a 07/11: Status do WhatsApp levou R$ 41,76 de R$ 89,21 (47 %), CTR 0,28 %, 0 conversas;
 # Audience Network R$ 2,54, 0 conversas. As 2 conversas vieram do feed do Instagram. O resto fica como estava.
+#
+# 13/11/2026 (Agente de Tráfego, "Sim, executar"): saíram do Facebook 'marketplace', 'search', 'profile_feed' e
+# 'notification'. Medido em 13/11, por publisher_platform × platform_position: search R$ 1,94 em 12 impressões
+# (CPM R$ 162) e 0 clique · marketplace 122 impressões e 0 clique · profile_feed 4 impressões · notification 6.
+# Juntos: 144 impressões e R$ 3,59 — 2 % do dia, nenhuma conversa. No mesmo dia o Facebook Reels fez CTR 1,50 %
+# (1.336 impressões, 9 cliques no link) e o feed do Instagram 0,32 % (937 impressões, 3 cliques).
+# A mudança foi aplicada à mão pela API nos conjuntos CJ_JF e CJ_REGULAR da campanha 2 em 13/11 20h44; esta
+# constante estava com a lista antiga e `--posicionamentos` reporia o lixo. O Instagram NÃO foi mexido: o feed do
+# Instagram é o pior posicionamento do dia 13/11, mas carrega volume de verdade e 1 dia não condena.
 POSICIONAMENTOS = {
     'publisher_platforms': ['facebook', 'instagram'],
-    'facebook_positions': ['feed', 'instream_video', 'marketplace', 'story', 'search',
-                           'facebook_reels', 'facebook_reels_overlay', 'profile_feed', 'notification'],
+    'facebook_positions': ['feed', 'instream_video', 'story',
+                           'facebook_reels', 'facebook_reels_overlay'],
     'instagram_positions': ['stream', 'story', 'reels', 'explore_home', 'profile_feed'],
     'device_platforms': ['mobile', 'desktop'],
 }
@@ -272,11 +281,18 @@ def aplicar_posicionamentos(dry_run):
             continue
         api('POST', s['id'], {'targeting': t})
         r = api('GET', s['id'], {'fields': 'status,effective_status,targeting'})['targeting']
-        ok = r.get('publisher_platforms') == POSICIONAMENTOS['publisher_platforms'] and \
-            'whatsapp_positions' not in r and 'audience_network_positions' not in r
+        # 13/11: a conferência olhava só publisher_platforms, então um posicionamento a mais ou a menos passava
+        # batido. Agora compara as 4 listas (sem ordem, porque a Meta devolve na ordem dela).
+        divergiu = [k for k, v in POSICIONAMENTOS.items() if sorted(r.get(k) or []) != sorted(v)]
+        ok = not divergiu and 'whatsapp_positions' not in r and 'audience_network_positions' not in r
         print(f'    conferido: {r.get("publisher_platforms")} · fb {r.get("facebook_positions")} · '
               f'ig {r.get("instagram_positions")} · {"OK" if ok else "DIVERGENTE"}')
         if not ok:
+            if divergiu:
+                for k in divergiu:
+                    print(f'    {k}: esperado {sorted(POSICIONAMENTOS[k])} · veio {sorted(r.get(k) or [])}')
+            else:
+                print('    veio com whatsapp_positions ou audience_network_positions')
             raise SystemExit('Posicionamento não ficou como o esperado. Parado.')
 
 
