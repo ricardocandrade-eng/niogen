@@ -363,6 +363,35 @@ def cen_ab(c):   # P27 (12/11, Ricardo): operador decidiu sem_cobertura (portal 
     c.exige(not (r.get('interativo') or {}).get('tipo') == 'carrossel', '[P27] mandou os planos para quem não tem cobertura')
 
 
+def cen_ae(c):   # P30 (13/11, Ricardo; conversa #86): depois do "sem cobertura" a Mari convida a mandar o CEP certo — e tem de cumprir
+    c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        c.diz('Sim')
+    B.sql(f"update mari_conversas set cobertura_decisao = 'sem_cobertura', nio_viab_em = now(), nio_viab_resultado = 'sem_viabilidade', "
+          f"cobertura_em = now() where telefone = '{c.tel}'", escrita=True)
+    r = c.diz('Não tem complemento, perto da padaria')
+    c.exige((r.get('handoff') or {}).get('motivo') == 'sem_cobertura', f'[P30] preparo: sem handoff sem_cobertura: {r.get("handoff")}')
+    # a cliente repete o CEP e diz que errou (o que a Edilamar fez): a Mari não pode ficar muda nem repetir o "não chega"
+    r = c.diz('Me desculpe mandei errado')
+    t = fala(r)
+    c.exige(t.strip(), '[P30] a Mari ficou muda depois de convidar a mandar o CEP certo')
+    c.exige(re.search(r'cep|numero', t), f'[P30] não pediu o CEP ou o número certo: «{t[:200]}»')
+    c.exige(not re.search(r'nao chega|ainda nao chegou|nao atende', t), f'[P30] repetiu o aviso de sem cobertura: «{t[:200]}»')
+    row = conv_row(c, 'status, handoff_motivo')   # sem endereço novo, a conversa volta a sair (a cadência não persegue quem não tem cobertura)
+    c.exige(row.get('status') == 'handoff_realizado' and row.get('handoff_motivo') == 'sem_cobertura', f'[P30] sem endereço novo a conversa devia voltar a sair: {row}')
+    # a cliente manda outro endereço: volta para a consulta, sem o veredito antigo
+    r = c.diz('O certo é CEP 36015510 número 200')
+    t = fala(r)
+    row = conv_row(c, 'status, cep, numero, cobertura_decisao, handoff_motivo')
+    c.exige(row.get('status') == 'ativo', f'[P30] conversa não voltou a ativa: {row}')
+    c.exige(str(row.get('cep') or '').replace('-', '') == '36015510', f'[P30] CEP novo não gravado: {row}')
+    c.exige(row.get('cobertura_decisao') != 'sem_cobertura', f'[P30] veredito antigo ficou no endereço novo: {row}')
+    c.exige((r.get('handoff') or {}).get('motivo') != 'sem_cobertura', f'[P30] sem cobertura no endereço novo sem consultar: «{t[:200]}»')
+    c.exige(not re.search(r'nao chega|ainda nao chegou|nao atende', t), f'[P30] disse que não chega no endereço novo sem consultar: «{t[:200]}»')
+
+
 def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
     c.diz('Oi')
     c.diz('36035130')
@@ -426,6 +455,8 @@ PORTAO = {
     # 12/11 — operador na Mari (cobertura pela decisão da tela; pedido Nio em andamento no CPF)
     'ab': (27, cen_ab, 'P27'), 'ac': (28, cen_ac, 'P28'),
     'ad': (29, cen_ad, 'P29'),
+    # 13/11 — conversa #86: cliente volta depois do "sem cobertura"
+    'ae': (30, cen_ae, 'P30'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

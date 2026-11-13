@@ -548,7 +548,34 @@ const dados = {};
 const d = kv(tags.dados_coletados);
 // 12/11 (Ricardo; portão P27): o operador decidiu SEM COBERTURA (portal sem viabilidade + DFV sem fachada no CEP) → a Mari
 // avisa, registra o interesse e encerra (handoff sem_cobertura) — determinístico: o modelo tendia a seguir para os planos.
-if (V7 && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'sem_cobertura'
+// 13/11 (0167, Ricardo; conversa #86, portão P30): a Mari convidou a mandar o CEP certo e o cliente voltou (mari_entrada reabriu
+// a conversa e marcou dados.sem_cobertura_avisado = hora do veredito). Endereço novo neste turno → segue o fluxo (a consulta
+// sai de novo); mesmo endereço → vai a fala do modelo (pede o CEP/número certo), sem repetir o aviso, e a conversa volta a sair.
+const scC = ctx.conversa || {};
+const scAv = (scC.dados || {}).sem_cobertura_avisado;
+const scVoltou = V7 && scC.cobertura_decisao === 'sem_cobertura' && scAv != null && !!scC.cobertura_em
+  && Number(scAv) === Math.floor(new Date(scC.cobertura_em).getTime() / 1000);
+const scE = tags.endereco ? kv(tags.endereco) : {};
+const scDig = (x) => String(x || '').replace(/\D/g, '');
+const scNum = (x) => String(x || '').trim().toUpperCase();
+const scMudou = scVoltou && ((scDig(d.cep).length === 8 && scDig(d.cep) !== scDig(scC.cep))
+  || (scDig(scE.cep).length === 8 && scDig(scE.cep) !== scDig(scC.cep))
+  || (!!scE.numero && scE.numero !== '—' && !/^(null|nenhum)$/i.test(scE.numero) && scNum(scE.numero) !== scNum(scC.numero)));
+const scNega = (t) => /nao chega|ainda nao chegou|nao atende|sem cobertura|nao tem (cobertura|fibra)/.test(norm(t || ''));
+if (scVoltou && !posHandoff && !erro) {
+  delete tags.carrossel; delete tags.botoes;
+  if (scMudou) {
+    if (!String(texto || '').trim() || scNega(texto)) texto = 'Deixa comigo, vou conferir esse endereço e já te falo 😊';
+    if (handoffYaml && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'sem_cobertura') { handoffYaml = null; delete tags.handoff; }
+  } else {
+    if (!String(texto || '').trim() || scNega(texto)) texto = 'Sem problema! Qual é o CEP (são 8 números) e o número da casa certos? Eu confiro de novo pra você.';
+    handoffYaml = { motivo_handoff: 'sem_cobertura',
+      briefing_humano: 'O cliente voltou a escrever depois do aviso de sem cobertura e não mandou um endereço diferente; a Mari respondeu (pediu o CEP e o número certos). '
+        + 'Se ele mandar outro CEP/número, a Mari consulta de novo sozinha (até 3 voltas). Sem cobertura pelo operador (portal sem viabilidade e DFV sem fachada viável no CEP).' };
+    tags.handoff = handoffYaml;
+  }
+}
+if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'sem_cobertura'
   && !(handoffYaml && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'sem_cobertura')) {
   const pn = String(((ctx.conversa || {}).dados || {}).nome || (ctx.conversa || {}).nome_contato || '').trim().split(/\s+/)[0];
   texto = `Poxa${pn && (ctx.conversa || {}).nome_confiavel !== false ? `, ${pn}` : ''}, infelizmente a fibra da Nio ainda não chega no seu endereço 😕\n\n`

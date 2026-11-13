@@ -243,6 +243,15 @@ if (V4) {
     L.push(`cobertura_decisao (uso interno, nunca citar portal/sistema/consulta): ${cd}`
       + (unid.length ? ` | unidades_cadastradas: ${unid.join('; ')}` : '')
       + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
+    // 13/11 (0167, Ricardo; conversa #86, portão P30): a Mari avisou "não chega", convidou a mandar o CEP certo e o cliente voltou.
+    const scAv = (conv.dados || {}).sem_cobertura_avisado;
+    if (cd === 'sem_cobertura' && scAv != null && conv.cobertura_em && Number(scAv) === Math.floor(new Date(conv.cobertura_em).getTime() / 1000)) {
+      L.push('sem_cobertura_cliente_voltou: SIM — você JÁ avisou que a fibra ainda não chega no endereço acima e convidou o cliente a mandar '
+        + 'o CEP ou o número certo; ele voltou a escrever agora. NÃO repita o aviso, não fale de planos, não emita [HANDOFF]. '
+        + 'Se ele mandou um CEP ou um número DIFERENTE do que está acima: registre na tag de endereço e diga só que vai conferir. '
+        + 'Se disse que errou, repetiu o mesmo endereço ou não mandou endereço: peça, numa frase curta e gentil, o CEP (8 números) e o número da casa certos. '
+        + 'Se só agradeceu ou se despediu: responda curto ("Imagina! 💚 Assim que a rede chegar aí eu te aviso.").');
+    }
     // 0138: crédito pela Mari — o sistema pede a autorização com botões e consulta sozinho; a Mari só usa o resultado (Bloco 9).
     L.push(`credito (uso interno): ${conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
       : conv.credito_em ? 'consultando' : 'ainda não consultado (sai sozinho com CPF e e-mail)'}${conv.credito_consultas >= 2 ? ' | já é a 2ª consulta (CPF do parente)' : ''}`);
@@ -503,7 +512,7 @@ return [{ json: {
       dados, dfv_resultado: conv.dfv_resultado, lgpd_enviada: conv.lgpd_enviada,
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei,
       // 12/11 (0133): decisão do operador e pedido Nio em andamento — o 7 · Extrair decide/anota com eles (portão P27/P28)
-      cobertura_decisao: conv.cobertura_decisao, cobertura_detalhe: conv.cobertura_detalhe, nio_pedido_aberto: conv.nio_pedido_aberto,
+      cobertura_decisao: conv.cobertura_decisao, cobertura_em: conv.cobertura_em, cobertura_detalhe: conv.cobertura_detalhe, nio_pedido_aberto: conv.nio_pedido_aberto,
       nome_confiavel: conv.nome_confiavel,
       // 0138: crédito pela Mari (autorização do titular gravada → n8n mari_credito)
       credito_autorizado_em: conv.credito_autorizado_em, credito_autorizacao_frase: conv.credito_autorizacao_frase,
