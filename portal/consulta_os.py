@@ -58,6 +58,14 @@ REDE_SESSAO = (
     re.compile(r'^api/portal/loginbo$'),
 )
 TIPOS_VIGIADOS = cr.TIPOS_VIGIADOS
+# Quando a sessão do portal cai, a própria página chama o logout. A chamada continua BARRADA (o robô não desloga ninguém),
+# mas isso não é tentativa de gravar: é sinal de sessão caída — o operador entra de novo e repete a leitura (visto em 13/11).
+REDE_SAIDA = re.compile(r'^auth/logout$')
+
+
+def e_saida_de_sessao(barrado):
+    """True se o caminho barrado é o logout que a página dispara sozinha quando a sessão caiu."""
+    return bool(REDE_SAIDA.match(str(barrado or '')))
 
 
 def _host(url):
@@ -135,6 +143,7 @@ class ConsultaOS:
         self.log = log
         self.page = None
         self.trava = None
+        self.sessao_caiu = False
 
     def _rota(self, route, request):
         try:
@@ -142,12 +151,16 @@ class ConsultaOS:
         except Exception:  # noqa: BLE001
             barrado = '(erro na trava)'
         if barrado:
-            if not self.trava:
+            if e_saida_de_sessao(barrado):
+                self.sessao_caiu = True
+            elif not self.trava:
                 self.trava = f'{request.method} {barrado}'
             return route.abort()
         return route.continue_()
 
     def _checar_trava(self):
+        if self.sessao_caiu and not self.trava:
+            raise cr.SessaoCaida('a página do portal pediu para sair (sessão caída)')
         if self.trava:
             raise cr.TravaAcionada(f'trava de rede acionada na Consulta OS: {self.trava}')
 
