@@ -2365,3 +2365,94 @@ body.lv-com-cliente .mv-feito { display: none; }
 .cvp-foto img { display: block; max-width: 220px; max-height: 220px; width: auto; height: auto; border-radius: 8px; object-fit: cover; }
 .cvp-foto-grande { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; padding: 16px; background: rgba(0,0,0,.86); cursor: zoom-out; }
 .cvp-foto-grande img { max-width: 100%; max-height: calc(100vh - 80px); border-radius: 8px; }
+
+/* ===== 13/11 — FICHA ÚNICA (etapa 4a): três trilhas no topo · a ficha por cima de qualquer tela · celular ===== */
+.fc-global { position: fixed; inset: 0; z-index: 45; background: var(--bg); display: none; }
+.fc-global.open { display: block; }
+body.fc-global-on { overflow: hidden; }
+.fc [hidden] { display: none !important; }
+.fc-trilhas { flex: none; position: relative; z-index: 7; border-bottom: 1px solid #1D232B; background: #0F1318; }
+.fc-tr { display: flex; align-items: center; gap: 12px; padding: 0 16px 0 22px; min-height: 36px; border-top: 1px solid #171C23; position: relative; }
+.fc-tr:first-child { border-top: 0; }
+.fc-tr-k { flex: none; width: 104px; display: inline-flex; align-items: center; gap: 4px; }
+.fc-tr-tg { background: none; border: 0; padding: 0; font: inherit; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: #AAB4BF; cursor: default; }
+.fc-tr-curto { display: none; }
+.fc-es-l { display: flex; align-items: center; flex: none; }
+.fc-es { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #7F8A96; white-space: nowrap; }
+.fc-es + .fc-es::before { content: ''; width: 16px; height: 2px; background: #2A313B; margin: 0 8px; border-radius: 2px; }
+.fc-es i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid #39424D; display: inline-flex; align-items: center; justify-content: center; flex: none; box-sizing: border-box; }
+.fc-es i .fc-ic { width: 9px; height: 9px; stroke-width: 3.5; }
+.fc-es.s-done { color: #C9D1DA; }
+.fc-es.s-done i { background: #1D5C3B; border-color: #1D5C3B; color: #CDEFD9; }
+.fc-es.s-done + .fc-es::before { background: #1D5C3B; }
+.fc-es.s-now { color: #fff; font-weight: 600; }
+.fc-es.s-now i { border-color: #E3B341; background: radial-gradient(circle, #E3B341 0 36%, transparent 40%); }
+.fc-es.s-stop { color: #FFA39B; font-weight: 600; }
+.fc-es.s-stop i { border-color: #C94A42; background: #C94A42; color: #fff; }
+.fc-tr-res { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; color: #B6BFCA; white-space: nowrap; overflow: hidden; }
+.fc-tr-res > b { color: #E1E6EC; }
+.fc-tr-res .btn-sm { flex: none; }
+.fc-vez.v-time { color: #F2CC6B; }
+.fc-tr-os .fc-rail { flex: 1; min-width: 0; height: 54px; border: 0; background: none; padding: 0; z-index: auto; }
+.fc-tr-os .fc-rs { padding: 2px 0; }
+.fc-tr-os .fc-rb { height: 50px; padding-top: 7px; gap: 4px; }
+.fc-tr-os .fc-rs::before { top: 19px; }
+.fc-pop-din { left: 126px; right: auto; width: 440px; max-width: calc(100vw - 150px); top: 100%; border-top: 1px solid #3A434E; border-radius: 12px; }
+.fc-selo { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.fc-mlin { display: flex; align-items: center; gap: 2px; }
+.fc-mlin .fc-mitem { flex: 1; }
+.fc-abas { display: none; }
+.fc-pend-over.alto { bottom: auto; min-height: calc(100% + 2px); max-height: 440px; overflow: auto; }
+.fc-pend-hist { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #B6BFCA; padding: 4px 8px 6px 0; }
+.fc-pend-hist .f-rot { display: inline-flex; align-items: center; gap: 4px; }
+.fc-brief { white-space: pre-wrap; color: #C9D1DA; }
+.fc-chk label { display: inline-flex; gap: 8px; align-items: center; }
+.f-saida-portal { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid rgba(227,179,65,.4); border-radius: 8px; background: rgba(227,179,65,.06); }
+.fc-chave { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+@media (max-width: 900px) {
+  .fc { overflow-y: auto; overflow-x: hidden; }
+  .fc-top { height: auto; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .fc-tit { flex: 1 1 60%; }
+  .fc-l1 { flex-wrap: wrap; row-gap: 4px; }
+  .fc-l1 h1 { font-size: 17px; white-space: normal; }
+  .fc-meta { white-space: normal; }
+  .fc-nav { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .fc-pos { margin-right: auto; }
+  .fc-tr { flex-wrap: wrap; padding: 4px 12px; gap: 4px 10px; min-height: 40px; }
+  .fc-tr-k { width: auto; }
+  .fc-tr-tg { cursor: pointer; min-height: 32px; }
+  .fc-tr-tg::after { content: ' ▸'; }
+  .fc-tr.on .fc-tr-tg::after { content: ' ▾'; }
+  .fc-tr-curto { display: block; flex: 1; min-width: 0; font-size: 13px; color: #D6DDE5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fc-tr .fc-es-l, .fc-tr .fc-tr-res, .fc-tr-os .fc-rail { display: none; }
+  .fc-tr.on .fc-es-l { display: flex; flex-wrap: wrap; flex: 1 1 100%; row-gap: 6px; padding: 4px 0; }
+  .fc-tr.on .fc-tr-res { display: flex; flex: 1 1 100%; flex-wrap: wrap; white-space: normal; overflow: visible; padding-bottom: 6px; }
+  .fc-tr-os.on .fc-rail { display: grid; flex: 1 1 100%; grid-template-columns: minmax(0, 1fr); height: auto; }
+  .fc-tr-os .fc-rs::before { display: none; }
+  .fc-tr-os .fc-rb { height: auto; min-height: 44px; flex-direction: row; align-items: center; padding: 8px; gap: 10px; }
+  .fc-pop, .fc-pop-din { position: static; width: auto; max-width: none; min-width: 0; border: 1px solid #3A434E; border-radius: 10px; margin: 2px 0 8px; box-shadow: none; flex: 1 1 100%; }
+  .fc-abas { display: grid; grid-template-columns: 1fr 1fr; flex: none; border-bottom: 1px solid #1D232B; position: sticky; top: 0; z-index: 6; background: var(--bg); }
+  .fc-abas button { min-height: 44px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font: inherit; font-weight: 600; cursor: pointer; }
+  .fc-abas button.on { color: var(--text); border-bottom-color: var(--text); }
+  .fc-grid { display: block; flex: none; }
+  .fc-col { border-right: 0; overflow: visible; }
+  .fc-grid.aba-ficha .fc-col-conv, .fc-grid.aba-conv .fc-col-ficha { display: none; }
+  .fc-col-conv { height: calc(100dvh - 120px); min-height: 380px; }
+  .fc-ficha { display: flex; flex-direction: column; padding: 12px; }
+  .fc-agora { height: auto; min-height: 120px; }
+  .fc-ag-main { flex-wrap: wrap; padding-bottom: 10px; }
+  .fc-ag-t, .fc-ag-s { white-space: normal; }
+  .fc-ag-pend { height: auto; min-height: 40px; flex-wrap: wrap; }
+  .fc-cards { grid-template-columns: minmax(0, 1fr); }
+  .fc-card, .fc-dl { overflow: visible; }
+  .fc-dv { white-space: normal; overflow-wrap: anywhere; }
+  .fc-cards-over { position: fixed; inset: 0; z-index: 80; border-radius: 0; }
+  .fc-full2 { column-count: 1; }
+  .fc-pend-over, .fc-pend-over.alto { position: static; margin-top: 8px; max-height: none; }
+  .fc-pend-grid { grid-template-columns: 1fr 1fr; }
+  .fc-pend-grid b, .fc-po-f span { white-space: normal; }
+  .fc-po-h { flex-wrap: wrap; }
+  .fc-hist { position: fixed; z-index: 80; }
+  .fc-menu { position: fixed; left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; }
+}

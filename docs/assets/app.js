@@ -263,8 +263,41 @@
     // menu lateral
     menu_mari: 'Conversas esperando alguém do time: handoff da Mari, A resolver no Chatwoot e a última mensagem é do cliente. Vermelho = alguma passou de 15 min em horário de contato.',
     menu_vendas: 'Vendas novas em 0 · Qualificado desde a última vez que você abriu Vendas, mais as que precisam de ação (venda em espera só conta na data de revisão).',
+    // 13/11 — ficha única (etapa 4a): as três trilhas no topo, a saída única e as ações que vieram da gaveta
+    tr_escada: 'Escada: em que ponto da venda o lead está (6 degraus), o status dentro do degrau, de quem é a vez e o prazo. O que fazer: se a vez é do nosso time, faça o que o status pede antes do prazo. Se é da Mari, do cliente ou da Nio, só acompanhe.',
+    tr_os: 'OS: o que já foi feito no portal da Nio para este pedido — viabilidade, crédito, biometria, pedido (OS) e instalação. O que fazer: clique numa etapa para ver o detalhe e rodar o operador de viabilidade ou de crédito.',
+    tr_dinheiro: 'Dinheiro: se esta venda virou comissão. Prevista nasce na instalação; em risco nos primeiros 30 dias (cancelou e reativou = estorno de 100 %); firme depois disso; no extrato quando a Nio lança; paga quando o dinheiro entra. O que fazer: clique para ver as datas. Em risco: acompanhe a 1ª fatura. Diferença no extrato: conteste dentro do prazo.',
+    din_antes: 'A comissão só nasce quando a Nio instala. Até lá o valor é só previsão. O que fazer: levar a venda até a instalação.',
+    din_estados: {
+      em_risco: 'Em risco: instalada há menos de 30 dias, ou cancelada depois de instalar. Se o cliente cancelar e reativar nesse prazo, a Nio estorna 100 %. O que fazer: confirmar que o cliente está usando e que a 1ª fatura foi paga.',
+      firme: 'Firme: passou dos 30 dias sem cancelamento. Falta a Nio lançar no extrato. O que fazer: conferir no próximo extrato.',
+      no_extrato: 'No extrato: a Nio lançou a comissão desta venda. O que fazer: se o valor veio diferente do previsto, contestar dentro do prazo.',
+      paga: 'Paga: o dinheiro desta venda entrou. Nada a fazer.',
+      estornada: 'Estornada: a Nio descontou a comissão desta venda. O que fazer: conferir o motivo; se for indevido, contestar dentro do prazo.',
+      contestada: 'Contestada: há uma contestação aberta na Nio para esta venda. O que fazer: acompanhar a resposta.',
+    },
+    vez: {
+      mari: 'A vez é da Mari: ela está cuidando. Nada a fazer, a não ser que ela peça uma pessoa.',
+      time: 'A vez é do nosso time: a próxima ação é nossa. Faça o que o status pede antes do prazo.',
+      cliente: 'A vez é do cliente: estamos esperando ele responder ou fazer algo (ex.: a biometria). Os lembretes saem sozinhos.',
+      nio: 'A vez é da Nio: o pedido está com ela (instalação ou pendência). Só acompanhe o prazo.',
+    },
+    saida_form: 'Saída: encerra o lead com o motivo. Vale para conversa e para venda, e é o mesmo motivo que aparece na tela Leads e nas contas do funil. O que fazer: escolha o motivo certo; em Recusou, diga o porquê.',
+    saida_sub: 'Porquê: o detalhe do motivo. Em "Recusou" é obrigatório — é o que mostra se perdemos por preço, concorrente ou momento.',
+    saida_volta: 'Volta em: se o cliente deu uma data (ou a rede pode chegar), marque o dia. O lead volta sozinho para a Live nesse dia, como "Hora de voltar". Sem data, ele só volta se o cliente escrever.',
+    saida_portal: 'Esta venda tem pedido ou OS aberta na Nio. Sair aqui não cancela lá. O que fazer: cancele o pedido no portal PAP e marque "Sim". Se marcar "Ainda não", a linha "Cancelar na Nio" fica na Live até alguém confirmar — pedido esquecido aberto vira instalação indevida.',
+    saida_reabrir: 'Reabrir: tira o lead da Saída e devolve para o degrau onde ele parou. A conversa reabre no Chatwoot. Use quando o cliente voltou a querer ou a saída foi marcada por engano.',
+    lead_registrar: 'Registrar no lead: grava no lead (ainda sem venda) o que o operador acabou de ler no portal. A escada anda sozinha: viável passa de Viabilidade; crédito aprovado leva a Qualificado. Sem registrar, a leitura some ao fechar a ficha.',
+    ficha_auditar: 'Auditar: o Claude lê esta conversa (até 7 dias) e aponta o que a Mari errou e como corrigir. Use quando a conversa andou mal e você quer saber por quê.',
+    pend_hist: 'Histórico de pendências: as esperas que esta venda já teve, com o motivo, quanto durou e como terminou. Mostra se a venda vive parada pelo mesmo motivo.',
+    contato_autorizou: 'Marque quando foi o cliente que pediu ou autorizou este contato. Fica escrito no histórico — é a prova se alguém reclamar de insistência.',
+    ficha_selo_conv: 'Selo da conversa: como ela está no Chatwoot (aberta ou resolvida), com quem está e se a janela de 24 h do WhatsApp ainda está aberta. Janela fechada: só template.',
+    ficha_fora: 'Alguém agiu direto no Chatwoot e o NIOGEN ficou diferente. O que fazer: acerte por aqui (Saída ou Reabrir) — o atendimento é só pelo NIOGEN.',
+    hist_briefing: 'Briefing do handoff: o resumo que a Mari escreveu quando passou a conversa para o time — o que o cliente quer e o que falta.',
+    hist_erros: 'Erros da Mari: falhas técnicas do robô nesta conversa (uma mensagem que não saiu, um nó que quebrou). Se o cliente ficou sem resposta por causa disso, responda à mão.',
+    ficha_chave: 'Ficha única: a ficha do cliente em tela cheia, igual em todas as telas, com as três trilhas no topo. Desligue só se algo faltar — e avise o Ricardo, para a ação voltar.',
     // pendência com terceiro (0064)
-    pendencia: 'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
+    pendencia:'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
   };
   const opcoes = (mapa, atual, vazio = '—') => `<option value="">${vazio}</option>${Object.entries(mapa).map(([k, t]) => `<option value="${k}" ${atual === k ? 'selected' : ''}>${t}</option>`).join('')}`;
   const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice' };
