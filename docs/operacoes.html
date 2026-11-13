@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-15">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-17"></script>
+<script src="assets/app.js?v=131126-20"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=131126-17"></script>
@@ -101,7 +101,7 @@
   const VENDIDAS = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const INST = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const COLS = 'id, status, cliente_nome, cliente_whatsapp, bairro, cidade, plano_nome, valor_mensal, forma_pagamento, comissao_prevista, nio_pedido, nio_os, nio_os_em, nio_pendencia_cod, nio_pendencia_desc, credito_resultado, credito_em, biometria_status, biometria_link_enviado_em, biometria_validada_em, vendido_em, agendar_desde, instalacao_agendada_para, instalado_em, docs_entregues_em, docs_prazo_em, nio_osab_em, nio_venda_valida, vendedor_nome, origem, criado_em, cancelada_apos_instalar_em, pend_id, pend_motivo, pend_motivo_nome, pend_descricao, pend_quem, pend_desde, pend_revisar_em, pend_revisoes, pend_saida_sugerida';
-  let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
+  let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, osa = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
 
   const fmtR = (x) => NG.fmtMoeda(x).replace(/,00$/, '');
   const com = (v) => (v.comissao_prevista == null ? 0 : Number(v.comissao_prevista));
@@ -135,6 +135,7 @@
     if (instalada(v)) return null;
     const c = conf[v.id] || {};
     if (c.resposta === 'remarcar' && (ehHoje(v) || ehAmanha(v))) return 'pediu para remarcar';
+    if (osAcao(v)) return `OS na Nio: ${(osa[v.id].estado_nome || '').toLowerCase()}`;
     if (pendNio(v)) return 'pendência da Nio';
     if (pendDe(v)) return 'em espera';
     if (passou(v)) return 'a data passou sem baixa';
@@ -158,6 +159,16 @@
   const bloco = (id, titulo, dica, lista, corpo, sub) => `<section class="op-bloco" id="b-${id}" aria-label="${esc(titulo)}">
       <header><h2>${esc(titulo)}</h2>${NG.dicaTxt(dica)}<span class="op-tot">${nv(lista.length, 'venda', 'vendas')}${lista.length ? ` · ${esc(fmtR(soma(lista)))}` : ''}</span>${sub ? `<span class="op-sub">${sub}</span>` : ''}</header>
       ${lista.length ? corpo : '<div class="op-vazio">Nada aqui agora.</div>'}</section>`;
+  // 0168: o que a Nio diz da OS agora (Operador de OS · OSAB). Sem leitura ainda: não mostra nada.
+  const osSelo = (v) => {
+    const o = osa[v.id];
+    if (!o) return '';
+    const cls = o.excecao ? 'bad' : o.estado === 'concluida' ? 'ok' : o.estado === 'em_campo' ? 'warn' : '';
+    const dica = [`Na Nio: ${o.status_ordem || 'sem status'}`, o.estado_ba ? `atendimento de campo: ${o.estado_ba}` : '', o.pendencia ? `pendência: ${o.pendencia}` : '',
+      o.agendamentos > 1 ? `${o.agendamentos} datas de agendamento já vistas` : '', `lido ${NG.fmtDataHora(o.mudou_em)} (${o.origem_ultima === 'osab' ? 'OSAB' : 'Operador de OS'})`].filter(Boolean).join(' · ');
+    return `<span class="op-rel ${cls}" title="${esc(dica)}">Nio: ${esc(o.estado_nome)}</span>`;
+  };
+  const osAcao = (v) => { const o = osa[v.id]; return o && o.excecao && o.acao ? o.acao : null; };
   const confSelo = (v) => {
     const c = conf[v.id] || {};
     if (c.resposta === 'confirmou') return `<span class="op-rel ok" title="${esc(`“${c.resposta_texto || 'Tudo certo'}” ${NG.fmtDataHora(c.resposta_em)}`)}">✓ confirmou</span>`;
@@ -194,7 +205,12 @@
         nota: m.meta ? `faltam ${NG.fmtNum(m.faltam ?? 0)} · ${esc(String(m.por_dia ?? '—').replace('.', ','))} por dia útil para bater` : 'sem meta cadastrada', dica: A.ops_meta }),
       NG.kpi({ rot: 'Da OS à instalação', val: media == null ? '—' : `${esc(media.toFixed(1).replace('.', ','))} <small>dias</small>`,
         nota: media == null ? 'aparece com a 1ª instalada' : `média de ${nv(prazos.length, 'instalada', 'instaladas')}`, dica: A.ops_prazo }),
-      NG.kpi({ rot: 'Na 1ª visita', val: 'chega com o Operador de OS', cls: 'semdado', nota: 'sem dado até a etapa 3', dica: A.ops_primeira }),
+      (() => {   // 0168: instalou sem a Nio trocar a data do agendamento (1 data vista nas leituras da OS)
+        const lidas = inst.filter((v) => osa[v.id] && osa[v.id].agendamentos >= 1), prim = lidas.filter((v) => osa[v.id].agendamentos === 1);
+        return lidas.length
+          ? NG.kpi({ rot: 'Na 1ª visita', val: `${Math.round((100 * prim.length) / lidas.length)}<small>%</small>`, nota: `${prim.length} de ${nv(lidas.length, 'instalada', 'instaladas')} com OS lida`, dica: A.ops_primeira })
+          : NG.kpi({ rot: 'Na 1ª visita', val: '—', cls: 'semdado', nota: 'aparece com a 1ª instalada lida pelo Operador de OS', dica: A.ops_primeira });
+      })(),
     ].join('');
 
     // ----- atalhos para os blocos -----
@@ -208,12 +224,12 @@
     // ----- Hoje, por turno -----
     const turno = (v) => (NG.janela(v.instalacao_agendada_para) === '8–12h' ? 'manha' : 'tarde');
     const cHoje = (v) => { const r = risco(v); const c = (conf[v.id] || {}).resposta;
-      return cartao(v, { onde: `<span class="op-rel">${esc(NG.janela(v.instalacao_agendada_para))}</span>${confSelo(v)}${v.nio_os ? `<span>OS ${esc(v.nio_os)}</span>` : ''}`,
-        fazerTxt: c === 'remarcar' ? 'Reagendar agora: o cliente pediu para remarcar' : pendNio(v) || pendDe(v) ? 'Resolver a pendência antes da visita' : c === 'confirmou' ? fazer(v, 'Nada a fazer: vira Instalada quando a baixa da Nio chegar no OSAB') : 'Ligar para confirmar a visita de hoje',
-        nivel: c === 'remarcar' || pendNio(v) ? 'bad' : r ? 'warn' : '' }); };
+      return cartao(v, { onde: `<span class="op-rel">${esc(NG.janela(v.instalacao_agendada_para))}</span>${osSelo(v)}${confSelo(v)}${v.nio_os ? `<span>OS ${esc(v.nio_os)}</span>` : ''}`,
+        fazerTxt: osAcao(v) ? osAcao(v) : c === 'remarcar' ? 'Reagendar agora: o cliente pediu para remarcar' : pendNio(v) || pendDe(v) ? 'Resolver a pendência antes da visita' : c === 'confirmou' ? fazer(v, 'Nada a fazer: vira Instalada quando a baixa da Nio chegar no OSAB') : 'Ligar para confirmar a visita de hoje',
+        nivel: c === 'remarcar' || pendNio(v) || osAcao(v) ? 'bad' : r ? 'warn' : '' }); };
     const bHoje = bloco('hoje', 'Hoje', A.ops_hoje, L.hoje,
       grupo('Manhã · 8–12h', null, L.hoje.filter((v) => turno(v) === 'manha'), cHoje) + grupo('Tarde · 13–17h', null, L.hoje.filter((v) => turno(v) === 'tarde'), cHoje),
-      'Estado ao vivo da OS e do técnico: chega com o Operador de OS (etapa 3).');
+      Object.keys(osa).length ? 'O selo "Nio:" é o estado da OS lido no portal. A Nio não mostra o técnico a caminho.' : 'Estado da OS na Nio: aparece depois da 1ª leitura do Operador de OS.');
 
     // ----- Amanhã: confirmou · não respondeu · pediu para remarcar -----
     const rAm = (v) => (conf[v.id] || {}).resposta || 'nada';
@@ -287,7 +303,7 @@
   }
 
   async function carregar() {
-    const [rj, rv, rk, rd, ra, ri, rg, rr] = await Promise.all([
+    const [rj, rv, rk, rd, ra, ri, rg, rr, ro] = await Promise.all([
       NG.jornada(),
       NG.sb.from('v_vendas').select(COLS).in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('v_instalacao_confirmacao').select('venda_id, resposta, resposta_em, resposta_texto, lembrete_em'),
@@ -296,12 +312,14 @@
       NG.sb.from('importacoes').select('aplicado_em').eq('tipo', 'osab').not('aplicado_em', 'is', null).order('aplicado_em', { ascending: false }).limit(1),
       NG.sb.from('config_regras').select('chave, valor'),
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: NG.diaSP() }),
+      // 0168 (etapa 3): o andamento da OS na Nio, lido pelo Operador de OS e pelo OSAB
+      NG.sb.from('v_os_andamento').select('venda_id, estado, estado_nome, status_ordem, agendamento_data, janela, pendencia, acao, excecao, agendamentos, estado_ba, execucao_inicio, mudou_em, origem_ultima').not('venda_id', 'is', null),
     ]);
     if (rv.error) { document.getElementById('blocos').innerHTML = `<div class="op-vazio">${esc(NG.msgErro(rv.error))}</div>`; NG.toast(NG.msgErro(rv.error), 'bad'); return; }
     jor = rj || { porVenda: {} };
     const mapa = (r) => Object.fromEntries(((r && !r.error && r.data) || []).map((x) => [x.venda_id, x]));
     vendas = (rv.data || []).filter((v) => v.status !== '0_qualificado' || v.biometria_status === 'validada' || NG.naBiometria(v));
-    conf = mapa(rk); din = mapa(rd); and = mapa(ra);
+    conf = mapa(rk); din = mapa(rd); and = mapa(ra); osa = mapa(ro);
     osabEm = ((ri && ri.data) || [])[0] ? ri.data[0].aplicado_em : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
     ritmo = rr && !rr.error ? rr.data : null;
