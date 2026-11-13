@@ -518,8 +518,14 @@
     const dias6 = p6.dias || {}, nunca6 = p6.nunca || [], fora6 = p6.fora_area || [];
     // 13/11 (4a): o nome do motivo vem da lista única (config_lead, via v_leads); a classe (recuperável…) segue a regra O6 de sempre.
     const chaveMot = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : (saidaDe[v.id] && saidaDe[v.id].saida_nome) || v.motivo_saida || 'Sem motivo');
-    const chaveO6 = (v) => (ehFuturo(v) ? 'Interesse futuro (com data)' : v.motivo_saida || 'Sem motivo');
-    const classe = (v) => { const m = chaveO6(v); return nunca6.includes(v.motivo_saida) || ['ja_cliente_nio', 'suspeita_fraude', 'ja_tem_pedido_nio'].includes(v.conferencia_motivo) ? 'nunca' : m in dias6 ? 'recup' : fora6.includes(v.motivo_saida) ? 'fora' : 'outro'; };
+    // 13/11 (0164): a chave da O6 entende a lista única de saída — o mesmo mapa da _oport_chave_motivo() do banco; saída antiga casa pelo texto.
+    const SUB6 = { 'preço': 'Preço', concorrente: 'Concorrente', momento: 'Interesse futuro (com data)', desistiu: 'Desistiu' };
+    const MOT6 = { sem_resposta: 'Sem contato (cadência esgotada)', fachada_nao_atendida: 'Sem cobertura', cidade_nao_atendida: 'Fora da área', ja_cliente_nio: 'Já é cliente Nio',
+      credito_negado: 'Crédito negado', reprovado_biometria: 'Reprovado na biometria', venda_indevida_fraude: 'Fraude' };
+    const chaveO6 = (v) => (v.saida_motivo ? (v.saida_motivo === 'recusou' ? SUB6[String(v.saida_sub || '').toLowerCase()] || 'Recusou' : MOT6[v.saida_motivo] || v.saida_motivo)
+      : ehFuturo(v) ? 'Interesse futuro (com data)' : v.motivo_saida || 'Sem motivo');
+    const NUNCA_LISTA = ['ja_cliente_nio', 'credito_negado', 'reprovado_biometria', 'venda_indevida_fraude', 'nao_contatar'];
+    const classe = (v) => { const m = chaveO6(v); return nunca6.includes(m) || nunca6.includes(v.motivo_saida) || NUNCA_LISTA.includes(v.saida_motivo) || ['ja_cliente_nio', 'suspeita_fraude', 'ja_tem_pedido_nio'].includes(v.conferencia_motivo) ? 'nunca' : m in dias6 ? 'recup' : fora6.includes(m) || fora6.includes(v.motivo_saida) ? 'fora' : 'outro'; };
     const porMot = {};
     fora.forEach((v) => { const m = chaveMot(v); (porMot[m] = porMot[m] || { m, k6: chaveO6(v), cls: classe(v), n: 0, com: 0 }); porMot[m].n++; porMot[m].com += comPrev(v) || 0; });
     const recup = fora.filter((v) => classe(v) === 'recup');
