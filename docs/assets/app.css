@@ -2398,7 +2398,9 @@ body.fc-global-on { overflow: hidden; }
 .fc-tr-os .fc-rb { height: 50px; padding-top: 7px; gap: 4px; }
 .fc-tr-os .fc-rs::before { top: 19px; }
 .fc-pop-din { left: 126px; right: auto; width: 440px; max-width: calc(100vw - 150px); top: 100%; border-top: 1px solid #3A434E; border-radius: 12px; }
-.fc-selo { display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.fc-selo { display: inline-flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.fc-selo .dica { flex: none; }
+.fc-l1 h1 { flex: 0 0 auto; max-width: 45%; }
 .fc-mlin { display: flex; align-items: center; gap: 2px; }
 .fc-mlin .fc-mitem { flex: 1; }
 .fc-abas { display: none; }
@@ -2415,7 +2417,10 @@ body.fc-global-on { overflow: hidden; }
   .fc-top { height: auto; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
   .fc-tit { flex: 1 1 60%; }
   .fc-l1 { flex-wrap: wrap; row-gap: 4px; }
-  .fc-l1 h1 { font-size: 17px; white-space: normal; }
+  .fc-top { align-items: flex-start; }
+  .fc-selo { flex: 0 1 auto; flex-wrap: wrap; row-gap: 4px; }
+  .fc-chip { height: 26px; }
+  .fc-l1 h1 { font-size: 17px; white-space: normal; max-width: 100%; flex: 1 1 100%; }
   .fc-meta { white-space: normal; }
   .fc-nav { flex: 1 1 100%; justify-content: flex-end; flex-wrap: wrap; }
   .fc-pos { margin-right: auto; }

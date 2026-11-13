@@ -441,7 +441,8 @@
     box.hidden = !subs.length;
     box.querySelector('select').innerHTML = subs.length ? `<option value="">Escolher…</option>${subs.map((x) => `<option${x === pre ? ' selected' : ''}>${esc(x)}</option>`).join('')}` : '';
     const volta = form.querySelector('[name="volta"]');
-    if (cod === 'fachada_nao_atendida' && !volta.value) volta.value = NG.somaDias(NG.diaSP(), 90);   // a rede cresce: rever em 90 dias
+    if (cod === 'fachada_nao_atendida' && !volta.value) { volta.value = NG.somaDias(NG.diaSP(), 90); volta.dataset.auto = '1'; }   // a rede cresce: rever em 90 dias
+    else if (cod !== 'fachada_nao_atendida' && volta.dataset.auto) { volta.value = ''; delete volta.dataset.auto; }
   }
   async function sairLead(motivo, sub, volta, obs, cancelou) {
     const { data, error } = await NG.sb.rpc('lead_sair', { p_conversa: d.soConversa ? d.conversaId : null, p_venda: d.soConversa ? null : d.v.id,
