@@ -9,6 +9,10 @@
 #     08:00 13:00 18:00 → 'abertas'     (toda OS em andamento)                                       3× ao dia
 #     as outras voltas → 'hoje'        (só OS com instalação marcada para hoje)                    a cada 30 min
 #
+# 13/11 (0173) — VARREDURA PEDIDA PELA TELA: um segundo gatilho, de 1 em 1 min (7h–21h), pergunta os_varredura_proxima(). Sem
+# pedido, a execução acaba ali (uma leitura no banco, nenhuma gravação). Com pedido, roda a volta 'abertas' com teto de 40 OS
+# e fecha com os_varredura_fechar(). A trava (uma por vez + intervalo) fica no banco, em os_varredura_pedir().
+#
 # O que o robô faz no portal está em portal/consulta_os.py (só "Filtros" e "Filtrar"; rede em lista branca; regra 5).
 # Crédito e viabilidade da Mari têm prioridade: operador ocupado responde 429 e a OS fica para a próxima volta.
 # TRAVA acionada no operador → a execução FALHA de propósito (aparece no pulso e para a volta).
@@ -45,23 +49,28 @@ CRED_PORTAL = 'Portal Nio (operador)'
 ROTA_TESTE = 'niogen-os-leitura-teste'
 OPERADOR = 'http://niogen-portal-tunel:8090'     # túnel SSH até a VPS BR, só dentro da rede do n8n
 VPS_BR = 'root@216.128.168.202'
-LIMITE = 12                                      # no máximo 12 OS por volta
+LIMITE = 12                                      # no máximo 12 OS por volta agendada
+LIMITE_VARREDURA = 40                            # varredura pedida pela tela: até 40 OS
 
 JS_VOLTA = r"""
-// Rota de teste: { "tipo": "hoje" | "abertas" | "instaladas" }. Agendado: decide pela hora de Brasília.
+// Varredura pedida pela tela (vem do "2v"): { id } → todas as abertas. Rota de teste: { "tipo": "hoje" | "abertas" |
+// "instaladas" }. Agendado: decide pela hora de Brasília.
+const varredura = $json.id ? Number($json.id) : null;
 const b = ($json.body && typeof $json.body === 'object') ? $json.body : {};
-let tipo = ['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null;
+let tipo = varredura ? 'abertas' : (['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null);
 if (!tipo) {
   const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
   const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);
   tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';
 }
-return [{ json: { tipo } }];
+return [{ json: { tipo, varredura, limite: varredura ? __LIMITE_VARREDURA__ : __LIMITE__ } }];
 """
 
 JS_LIMITE = r"""
-// Só linha com pedido e CPF; no máximo __LIMITE__ por volta (o resto fica para a próxima).
-return $input.all().filter((i) => i.json && i.json.pedido && i.json.cpf).slice(0, __LIMITE__);
+// Só linha com pedido e CPF; no máximo "limite" por volta (o resto fica para a próxima).
+// Fila vazia: sai um item "vazio" para a volta chegar ao Resumo (e fechar a varredura, se havia uma pedida).
+const fila = $input.all().filter((i) => i.json && i.json.pedido && i.json.cpf).slice(0, $('2 · Qual volta').first().json.limite);
+return fila.length ? fila : [{ json: { vazio: true } }];
 """
 
 JS_ESTADO = r"""
@@ -87,7 +96,8 @@ return [{ json: { fim, lida: resultado === 'lida' && !!b.leitura, resultado, mot
 """
 
 JS_RESUMO = r"""
-// Fim da volta: conta o que aconteceu (sem CPF). Nenhuma leitura boa e alguma falha de verdade → a execução falha (pulso).
+// Fim da volta: conta o que aconteceu (sem CPF). Nenhuma leitura boa e alguma falha de verdade → "falha": o "13" fecha a
+// varredura (se havia) e o "14" derruba a execução de propósito, para aparecer no pulso.
 const fins = [];
 for (let i = 0; i < 400; i++) {
   let it = null;
@@ -96,13 +106,19 @@ for (let i = 0; i < 400; i++) {
   for (const x of it) if (x.json && x.json.fim) fins.push(x.json);
 }
 const conta = (res) => fins.filter((f) => f.resultado === res).length;
-const resumo = { ok: true, tipo: $('2 · Qual volta').first().json.tipo, na_fila: $('4 · Limite').all().length, lidas: conta('lida'),
+const volta = $('2 · Qual volta').first().json;
+const resumo = { ok: true, tipo: volta.tipo, varredura: volta.varredura || null, na_fila: $('4 · Limite').all().filter((i) => i.json && i.json.pedido).length, lidas: conta('lida'),
                  nao_encontradas: conta('nao_encontrada'), ocupado: conta('ocupado'), erros: conta('erro'),
                  motivos: [...new Set(fins.filter((f) => f.resultado === 'erro' && f.motivo).map((f) => f.motivo.slice(0, 120)))].slice(0, 3) };
-if (resumo.na_fila > 0 && resumo.lidas === 0 && resumo.erros > 0) {
-  throw new Error('Operador de OS: nenhuma OS lida nesta volta (' + resumo.erros + ' com erro) — ' + (resumo.motivos[0] || 'sem motivo'));
-}
+resumo.falha = resumo.na_fila > 0 && resumo.lidas === 0 && resumo.erros > 0;
 return [{ json: resumo }];
+"""
+
+JS_FALHOU = r"""
+// Depois de fechar a varredura: volta sem nenhuma leitura boa derruba a execução (aparece no pulso).
+const r = $('12 · Resumo').first().json;
+if (r.falha) throw new Error('Operador de OS: nenhuma OS lida nesta volta (' + r.erros + ' com erro) — ' + ((r.motivos || [])[0] || 'sem motivo'));
+return [{ json: r }];
 """
 
 
@@ -148,10 +164,26 @@ def build(ids):
     add('1t · rota de teste', 'n8n-nodes-base.webhook', 2,
         {'httpMethod': 'POST', 'path': ROTA_TESTE, 'authentication': 'headerAuth', 'responseMode': 'lastNode', 'options': {}},
         0, 200, credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/os_leitura/webhook')))
-    add('2 · Qual volta', 'n8n-nodes-base.code', 2, {'jsCode': JS_VOLTA.strip()}, 220, 100)
+    add('1v · a cada 1 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
+        {'rule': {'interval': [{'field': 'cronExpression', 'expression': '* 7-21 * * *'}]}}, -440, 400)
+    sb('2v · Supabase varredura', 'os_varredura_proxima', '={{ JSON.stringify({}) }}', -220, 400)
+    add('2w · Tem varredura?', 'n8n-nodes-base.if', 2, {
+        'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose'},
+                       'conditions': [{'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/os_leitura/2w/c')),
+                                       'leftValue': '={{ Number($json.id) > 0 }}', 'rightValue': '',
+                                       'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
+                       'combinator': 'and'}, 'options': {}}, 0, 400)
+    add('2 · Qual volta', 'n8n-nodes-base.code', 2,
+        {'jsCode': JS_VOLTA.replace('__LIMITE_VARREDURA__', str(LIMITE_VARREDURA)).replace('__LIMITE__', str(LIMITE)).strip()}, 220, 100)
     sb('3 · Supabase fila', 'os_fila', '={{ JSON.stringify({ p_tipo: $json.tipo }) }}', 440, 100, alwaysOutputData=True)
-    add('4 · Limite', 'n8n-nodes-base.code', 2, {'jsCode': JS_LIMITE.replace('__LIMITE__', str(LIMITE)).strip()}, 660, 100,
+    add('4 · Limite', 'n8n-nodes-base.code', 2, {'jsCode': JS_LIMITE.strip()}, 660, 100,
         alwaysOutputData=False)
+    add('4b · Fila vazia?', 'n8n-nodes-base.if', 2, {
+        'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose'},
+                       'conditions': [{'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/os_leitura/4b/c')),
+                                       'leftValue': '={{ $json.vazio === true }}', 'rightValue': '',
+                                       'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
+                       'combinator': 'and'}, 'options': {}}, 770, 300)
     add('5 · Uma por vez', 'n8n-nodes-base.splitInBatches', 3, {'batchSize': 1, 'options': {}}, 880, 100)
     op('6 · Pedir leitura', 'POST', f'{OPERADOR}/os', 1100, 200,
        "={{ JSON.stringify({ cpf: $json.cpf, os: $json.pedido, criada_em: $json.criada_em, origem: 'rotina' }) }}")
@@ -165,6 +197,8 @@ def build(ids):
        "={{ JSON.stringify({ p_pedido: $json.pedido, p_origem: 'operador', p_dados: $json.leitura, p_referencia_em: $json.consultado_em }) }}",
        1980, 100)
     add('12 · Resumo', 'n8n-nodes-base.code', 2, {'jsCode': JS_RESUMO.strip()}, 1100, -60)
+    sb('13 · Fechar varredura', 'os_varredura_fechar', '={{ JSON.stringify({ p_id: $json.varredura, p_resumo: $json }) }}', 1320, -60)
+    add('14 · Falhou?', 'n8n-nodes-base.code', 2, {'jsCode': JS_FALHOU.strip()}, 1540, -60)
 
     def liga(*alvos):
         return {'main': [[{'node': a, 'type': 'main', 'index': 0}] if a else [] for a in alvos]}
@@ -172,9 +206,13 @@ def build(ids):
     conns = {
         '1 · a cada 30 min': liga('2 · Qual volta'),
         '1t · rota de teste': liga('2 · Qual volta'),
+        '1v · a cada 1 min': liga('2v · Supabase varredura'),
+        '2v · Supabase varredura': liga('2w · Tem varredura?'),
+        '2w · Tem varredura?': liga('2 · Qual volta', None),              # sem pedido: a execução acaba aqui
         '2 · Qual volta': liga('3 · Supabase fila'),
         '3 · Supabase fila': liga('4 · Limite'),
-        '4 · Limite': liga('5 · Uma por vez'),
+        '4 · Limite': liga('4b · Fila vazia?'),
+        '4b · Fila vazia?': liga('12 · Resumo', '5 · Uma por vez'),
         '5 · Uma por vez': liga('12 · Resumo', '6 · Pedir leitura'),        # saída 0 = acabou · saída 1 = próxima OS
         '6 · Pedir leitura': liga('7 · Estado'),
         '7 · Estado': liga('8 · Terminou?'),
@@ -183,6 +221,8 @@ def build(ids):
         '9 · Status': liga('7 · Estado'),
         '10 · Lida?': liga('11 · Supabase gravar', '5 · Uma por vez'),
         '11 · Supabase gravar': liga('5 · Uma por vez'),
+        '12 · Resumo': liga('13 · Fechar varredura'),
+        '13 · Fechar varredura': liga('14 · Falhou?'),
     }
     settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'none',
                 'saveManualExecutions': True, 'timezone': 'America/Sao_Paulo'}

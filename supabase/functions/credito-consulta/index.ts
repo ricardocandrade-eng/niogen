@@ -7,9 +7,14 @@
 //        portal, sem CPF/contato (11/11 ~21h, docs/Prompt_consulta_unificada_111126_2045.md). Qualquer usuário logado.
 //   {acao: 'print', job_id}                                → GET {CREDITO_OP_URL}/credito/print/{job_id} — print da tela do portal
 //        quando a viabilidade NÃO saiu (11/11 ~22h30, pedido do Ricardo). Só Etapas 0–2, sem CPF; fica 7 dias na VPS. Só admin/backoffice.
+//   {acao: 'os', venda_id}                                  → 13/11 (etapa 3, "Consultar OS agora"): lê o andamento da OS de UMA venda
+//        registrada. O CPF e o nº da OS saem do banco (nunca do navegador) → POST {CREDITO_OP_URL}/credito/os. Só admin/backoffice.
+//   {acao: 'os_status', job_id, venda_id}                   → GET /credito/{job_id}; quando a leitura chega, grava com
+//        os_registrar_leitura (origem operador) e devolve {estado, resultado, leitura, registro}. Leitura igual não regrava.
 // A consulta leva ~2 min no portal: a tela faz polling; esta função nunca segura a conexão aberta.
 // Segredos (Supabase › Edge Functions › Secrets): CREDITO_OP_URL, NIO_PORTAL_SERVICO_SECRET. Nada no front nem no repo.
-// Nada é gravado no Supabase nesta rodada. Log: usuário, ação, resultado, ms — nunca o CPF.
+// Crédito e viabilidade não gravam nada aqui. A leitura da OS grava só o andamento (sem dado pessoal). Log: usuário, ação,
+// resultado, ms — nunca o CPF.
 import { createClient } from 'npm:@supabase/supabase-js@2.45.4';
 
 const CORS = {
@@ -55,14 +60,52 @@ Deno.serve(async (req) => {
     acao = String(b.acao ?? '');
     if (servico === true && !['viabilidade', 'status', 'duplicidade', 'iniciar'].includes(acao)) { log('403 n8n so viabilidade'); return json({ error: 'Só viabilidade.' }, 403); }
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
-    if (['iniciar', 'print', 'duplicidade'].includes(acao) && servico !== true && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
+    if (['iniciar', 'print', 'duplicidade', 'os', 'os_status'].includes(acao) && servico !== true && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');
     const segredo = Deno.env.get('NIO_PORTAL_SERVICO_SECRET') ?? '';
     if (!opUrl || !segredo) { log('503 nao_instalado'); return json({ error: 'Operador de crédito ainda não instalado.', nao_instalado: true }, 503); }
     const hdr = { 'X-Portal-Secret': segredo, 'Content-Type': 'application/json' };
 
     let r: Response;
-    if (acao === 'iniciar') {
+    if (acao === 'os' || acao === 'os_status') {
+      // 13/11: leitura de acompanhamento de UMA OS. Tudo que identifica o cliente sai do banco, pela chave de serviço.
+      const vendaId = String(b.venda_id ?? '');
+      if (!/^[0-9a-f-]{36}$/.test(vendaId)) return json({ error: 'venda inválida.' }, 400);
+      const adm = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+      const { data: v, error: eV } = await adm.from('vendas')
+        .select('cliente_cpf_cnpj, nio_os, nio_pedido, nio_os_em, nio_pedido_em, vendido_em, criado_em').eq('id', vendaId).maybeSingle();
+      if (eV || !v) { log('404 venda'); return json({ error: 'Venda não encontrada.' }, 404); }
+      const doc = so(v.cliente_cpf_cnpj);
+      const num = so(String(v.nio_os ?? '').trim() || v.nio_pedido);
+      if (num.length !== 8) { log('400 sem os'); return json({ error: 'Esta venda ainda não tem o nº da OS (8 dígitos).' }, 400); }
+      if (!(doc.length === 14 || cpfValido(doc))) { log('400 sem cpf'); return json({ error: 'Esta venda está sem CPF válido — a Nio só pesquisa a OS com o CPF.' }, 400); }
+      if (acao === 'os') {
+        const criada = String(v.nio_os_em ?? v.nio_pedido_em ?? v.vendido_em ?? v.criado_em ?? '').slice(0, 10);
+        r = await fetch(`${opUrl}/credito/os`, { method: 'POST', headers: hdr,
+          body: JSON.stringify({ cpf: doc, os: num, criada_em: criada, origem: `niogen:${perfil}` }), signal: AbortSignal.timeout(15000) });
+      } else {
+        const id = String(b.job_id ?? '');
+        if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
+        r = await fetch(`${opUrl}/credito/${id}`, { headers: hdr, signal: AbortSignal.timeout(10000) });
+      }
+      const d = await r.json().catch(() => null);
+      if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON.` }, 502); }
+      if (!r.ok || d.ok === false) {
+        log(`${r.status} ${d.erro ?? ''}`);
+        return json({ error: r.status === 429 ? 'O operador está ocupado com outra consulta. Tente de novo em 1 minuto.' : (d.erro ?? `Operador respondeu ${r.status}.`) },
+          r.status === 429 ? 429 : r.status === 400 ? 400 : 502);
+      }
+      if (d.modo !== 'os') { log('400 job de outro tipo'); return json({ error: 'job inválido.' }, 400); }
+      const fora: Record<string, unknown> = { job_id: d.job_id, estado: d.estado, resultado: d.resultado ?? null, motivo: d.motivo ?? null,
+        leitura: d.leitura ?? null, consultado_em: d.consultado_em ?? null, cache: d.cache === true };
+      if (d.estado === 'pronto' && d.resultado === 'lida' && d.leitura) {
+        const { data: reg, error: eR } = await adm.rpc('os_registrar_leitura',
+          { p_pedido: num, p_origem: 'operador', p_dados: d.leitura, p_referencia_em: d.consultado_em ?? null });
+        fora.registro = eR ? { ok: false, erro: 'A leitura veio, mas não consegui gravar no NIOGEN.' } : reg;
+      }
+      log(`${d.estado}${d.resultado ? ` ${d.resultado}` : ''}${d.cache ? ' cache' : ''}`);
+      return json(fora);
+    } else if (acao === 'iniciar') {
       if (b.autorizado !== true) { log('400 sem autorizacao'); return json({ error: 'Marque que o titular autorizou a consulta.' }, 400); }
       const cpf = so(b.cpf);
       if (!cpfValido(cpf)) { log('400 cpf invalido'); return json({ error: 'CPF inválido (confira os dígitos).' }, 400); }
@@ -111,7 +154,7 @@ Deno.serve(async (req) => {
       log('print ok');
       return json({ tipo: d.tipo, base64: d.base64, em: d.em });
     } else {
-      return json({ error: 'acao deve ser iniciar, viabilidade, duplicidade, status ou print.' }, 400);
+      return json({ error: 'acao deve ser iniciar, viabilidade, duplicidade, status, print, os ou os_status.' }, 400);
     }
     const d = await r.json().catch(() => null);
     if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON (rota do proxy?).` }, 502); }

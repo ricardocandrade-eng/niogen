@@ -20,8 +20,11 @@
 #                                         Consulta OS (consulta_os.py: só "Filtros" e "Filtrar"; rede em lista branca).
 #                                         Resultado lida {leitura} | nao_encontrada | erro. Crédito e viabilidade primeiro:
 #                                         com qualquer job na fila ou rodando, responde 429 e a rotina tenta na próxima volta.
-#                                         Cache 10 min por OS; limite OS_LIMITE_HORA (padrão 40).
+#                                         Cache 10 min por OS; limite OS_LIMITE_HORA (padrão 90).
 #   GET  /os/{job_id}                   → igual a GET /credito/{job_id}
+#   POST /credito/os {cpf, os, criada_em?} → o MESMO /os, no caminho que o proxy da tela já repassa (/credito/*). É por aqui
+#                                         que a edge function credito-consulta pede a leitura de UMA OS ("Consultar OS agora",
+#                                         13/11); o status sai por GET /credito/{job_id}. A rotina do n8n segue no /os.
 #
 # Limites: até 40 chamadas/min no /chamar; crédito: fila máx. 3, CREDITO_LIMITE_HORA / CREDITO_LIMITE_DIA (429), mesmo
 # CPF < 24 h = resultado da memória (sem abrir o portal, sem Serasa repetido). Log sem corpo e sem CPF.
@@ -108,7 +111,7 @@ def cfg_credito():
         'amostras': e('CREDITO_AMOSTRAS_DIR') or '/amostras',
         'viab_limite_hora': int(e('VIAB_LIMITE_HORA') or 60),
         'dup_limite_hora': int(e('DUP_LIMITE_HORA') or 20),
-        'os_limite_hora': int(e('OS_LIMITE_HORA') or 40),
+        'os_limite_hora': int(e('OS_LIMITE_HORA') or 90),   # rotina + varredura pedida + consulta de uma OS pela ficha
     }
 
 
@@ -637,7 +640,7 @@ class Handler(BaseHTTPRequestHandler):
                 code, r = novo_job_credito(self._json())
                 self._resp(code, r)
                 return
-            elif metodo == 'POST' and rota == '/os':
+            elif metodo == 'POST' and rota in ('/os', '/credito/os'):
                 code, r = novo_job_os(self._json())
                 self._resp(code, r)
                 return

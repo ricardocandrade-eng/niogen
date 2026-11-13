@@ -47,7 +47,91 @@
     },
     {
       "parameters": {
-        "jsCode": "// Rota de teste: { \"tipo\": \"hoje\" | \"abertas\" | \"instaladas\" }. Agendado: decide pela hora de Brasília.\nconst b = ($json.body && typeof $json.body === 'object') ? $json.body : {};\nlet tipo = ['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null;\nif (!tipo) {\n  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());\n  const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);\n  tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';\n}\nreturn [{ json: { tipo } }];"
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "* 7-21 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1v · a cada 1 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -440,
+        400
+      ],
+      "id": "2357ecbb-0fb0-5c47-a0b0-6f5310134121"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/os_varredura_proxima",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2v · Supabase varredura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -220,
+        400
+      ],
+      "id": "c7862b35-7e8c-55f6-bb6f-15377ccb427e",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "77c556c7-7bcb-587f-a8eb-655908b9979b",
+              "leftValue": "={{ Number($json.id) > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "2w · Tem varredura?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "id": "46d322f6-0215-5052-9f08-76276771b076"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Varredura pedida pela tela (vem do \"2v\"): { id } → todas as abertas. Rota de teste: { \"tipo\": \"hoje\" | \"abertas\" |\n// \"instaladas\" }. Agendado: decide pela hora de Brasília.\nconst varredura = $json.id ? Number($json.id) : null;\nconst b = ($json.body && typeof $json.body === 'object') ? $json.body : {};\nlet tipo = varredura ? 'abertas' : (['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null);\nif (!tipo) {\n  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());\n  const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);\n  tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';\n}\nreturn [{ json: { tipo, varredura, limite: varredura ? 40 : 12 } }];"
       },
       "name": "2 · Qual volta",
       "type": "n8n-nodes-base.code",
@@ -92,7 +176,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Só linha com pedido e CPF; no máximo 12 por volta (o resto fica para a próxima).\nreturn $input.all().filter((i) => i.json && i.json.pedido && i.json.cpf).slice(0, 12);"
+        "jsCode": "// Só linha com pedido e CPF; no máximo \"limite\" por volta (o resto fica para a próxima).\n// Fila vazia: sai um item \"vazio\" para a volta chegar ao Resumo (e fechar a varredura, se havia uma pedida).\nconst fila = $input.all().filter((i) => i.json && i.json.pedido && i.json.cpf).slice(0, $('2 · Qual volta').first().json.limite);\nreturn fila.length ? fila : [{ json: { vazio: true } }];"
       },
       "name": "4 · Limite",
       "type": "n8n-nodes-base.code",
@@ -103,6 +187,39 @@
       ],
       "id": "b5d40326-d5c8-54c2-af51-ab3b949dd7fe",
       "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "5a6babfe-c26b-5320-984a-86049e7e3aab",
+              "leftValue": "={{ $json.vazio === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "4b · Fila vazia?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        770,
+        300
+      ],
+      "id": "491d3d9e-3af6-5bc8-90ea-167d9b81c97e"
     },
     {
       "parameters": {
@@ -310,7 +427,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Fim da volta: conta o que aconteceu (sem CPF). Nenhuma leitura boa e alguma falha de verdade → a execução falha (pulso).\nconst fins = [];\nfor (let i = 0; i < 400; i++) {\n  let it = null;\n  try { it = $('7 · Estado').all(0, i); } catch (e) { break; }\n  if (!it || !it.length) break;\n  for (const x of it) if (x.json && x.json.fim) fins.push(x.json);\n}\nconst conta = (res) => fins.filter((f) => f.resultado === res).length;\nconst resumo = { ok: true, tipo: $('2 · Qual volta').first().json.tipo, na_fila: $('4 · Limite').all().length, lidas: conta('lida'),\n                 nao_encontradas: conta('nao_encontrada'), ocupado: conta('ocupado'), erros: conta('erro'),\n                 motivos: [...new Set(fins.filter((f) => f.resultado === 'erro' && f.motivo).map((f) => f.motivo.slice(0, 120)))].slice(0, 3) };\nif (resumo.na_fila > 0 && resumo.lidas === 0 && resumo.erros > 0) {\n  throw new Error('Operador de OS: nenhuma OS lida nesta volta (' + resumo.erros + ' com erro) — ' + (resumo.motivos[0] || 'sem motivo'));\n}\nreturn [{ json: resumo }];"
+        "jsCode": "// Fim da volta: conta o que aconteceu (sem CPF). Nenhuma leitura boa e alguma falha de verdade → \"falha\": o \"13\" fecha a\n// varredura (se havia) e o \"14\" derruba a execução de propósito, para aparecer no pulso.\nconst fins = [];\nfor (let i = 0; i < 400; i++) {\n  let it = null;\n  try { it = $('7 · Estado').all(0, i); } catch (e) { break; }\n  if (!it || !it.length) break;\n  for (const x of it) if (x.json && x.json.fim) fins.push(x.json);\n}\nconst conta = (res) => fins.filter((f) => f.resultado === res).length;\nconst volta = $('2 · Qual volta').first().json;\nconst resumo = { ok: true, tipo: volta.tipo, varredura: volta.varredura || null, na_fila: $('4 · Limite').all().filter((i) => i.json && i.json.pedido).length, lidas: conta('lida'),\n                 nao_encontradas: conta('nao_encontrada'), ocupado: conta('ocupado'), erros: conta('erro'),\n                 motivos: [...new Set(fins.filter((f) => f.resultado === 'erro' && f.motivo).map((f) => f.motivo.slice(0, 120)))].slice(0, 3) };\nresumo.falha = resumo.na_fila > 0 && resumo.lidas === 0 && resumo.erros > 0;\nreturn [{ json: resumo }];"
       },
       "name": "12 · Resumo",
       "type": "n8n-nodes-base.code",
@@ -320,6 +437,50 @@
         -60
       ],
       "id": "27e8f4dd-c0cd-5fc5-87cf-3f15b7ce247d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/os_varredura_fechar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_id: $json.varredura, p_resumo: $json }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "13 · Fechar varredura",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        -60
+      ],
+      "id": "4071bf9e-7a45-53a6-b7f2-96da40ecfb1b",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Depois de fechar a varredura: volta sem nenhuma leitura boa derruba a execução (aparece no pulso).\nconst r = $('12 · Resumo').first().json;\nif (r.falha) throw new Error('Operador de OS: nenhuma OS lida nesta volta (' + r.erros + ' com erro) — ' + ((r.motivos || [])[0] || 'sem motivo'));\nreturn [{ json: r }];"
+      },
+      "name": "14 · Falhou?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        -60
+      ],
+      "id": "000b547d-0905-5d97-a03f-0f8ba3b8bb06"
     }
   ],
   "connections": {
@@ -343,6 +504,40 @@
             "index": 0
           }
         ]
+      ]
+    },
+    "1v · a cada 1 min": {
+      "main": [
+        [
+          {
+            "node": "2v · Supabase varredura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2v · Supabase varredura": {
+      "main": [
+        [
+          {
+            "node": "2w · Tem varredura?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2w · Tem varredura?": {
+      "main": [
+        [
+          {
+            "node": "2 · Qual volta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "2 · Qual volta": {
@@ -369,6 +564,24 @@
     },
     "4 · Limite": {
       "main": [
+        [
+          {
+            "node": "4b · Fila vazia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4b · Fila vazia?": {
+      "main": [
+        [
+          {
+            "node": "12 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "5 · Uma por vez",
@@ -481,6 +694,28 @@
         [
           {
             "node": "5 · Uma por vez",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12 · Resumo": {
+      "main": [
+        [
+          {
+            "node": "13 · Fechar varredura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "13 · Fechar varredura": {
+      "main": [
+        [
+          {
+            "node": "14 · Falhou?",
             "type": "main",
             "index": 0
           }
