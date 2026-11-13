@@ -25,10 +25,10 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-26">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-24"></script>
+<script src="assets/app.js?v=131126-27"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-23"></script>
+<script src="assets/ficha.js?v=131126-27"></script>
 <style>
   .op-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   .op-kpis .kpi { padding: 12px 14px; border-radius: 12px; gap: 3px; min-width: 0; }
@@ -292,7 +292,8 @@
     const cRec = (v) => { const d = din[v.id] || {};
       const docsAte = d.docs_ate || v.docs_prazo_em, docsOk = d.docs_entregues_em || v.docs_entregues_em;
       const fd = docsAte ? diasAte(docsAte) : null;
-      const docs = docsOk ? '<span class="op-rel ok">docs ✓</span>' : docsAte ? `<span class="op-rel ${fd < 0 ? 'bad' : fd <= 3 ? 'warn' : ''}" title="Documentos da venda: 15 dias do contrato, até ${esc(NG.fmtData(docsAte))}">docs ${fd < 0 ? `venceram há ${-fd} d` : `em ${fd} d`}</span>` : '';
+      const semDocs = regras.docs_exigidos === false;   // 0177: venda remota — não há documento a entregar
+      const docs = semDocs ? '' : docsOk ? '<span class="op-rel ok">docs ✓</span>' : docsAte ? `<span class="op-rel ${fd < 0 ? 'bad' : fd <= 3 ? 'warn' : ''}" title="Documentos da venda: 15 dias do contrato, até ${esc(NG.fmtData(docsAte))}">docs ${fd < 0 ? `venceram há ${-fd} d` : `em ${fd} d`}</span>` : '';
       const fats = faturasPor ? faturasPor[v.id] : null; const b1 = fats ? NG.faturasBolas(fats)[0] : null;
       let fat = '<span class="op-rel" title="A 1ª fatura aparece quando o extrato de faturas da Nio for importado (FPD)">1ª fatura: sem extrato</span>', fNivel = '';
       if (b1 && b1.f) { if (b1.e.cls === 'paga') fat = '<span class="op-rel ok">1ª fatura ✓</span>'; else if (b1.e.cls === 'avencer') { fat = `<span class="op-rel ${b1.e.faltam <= 2 ? 'warn' : ''}">1ª fatura em ${b1.e.faltam} d</span>`; } else { fat = `<span class="op-rel bad">1ª fatura D+${b1.e.atraso}</span>`; fNivel = 'bad'; } }

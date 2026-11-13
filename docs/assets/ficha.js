@@ -270,7 +270,7 @@
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
+      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, docs_dispensados_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
@@ -1856,7 +1856,7 @@
       },
       {
         id: 'instalacao', titulo: 'Instalação',
-        resumo: v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}${v.docs_entregues_em ? ' · docs ✓' : v.docs_prazo_em ? ` · docs até ${NG.fmtData(v.docs_prazo_em)}` : ''}`
+        resumo: v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}${v.docs_dispensados_em ? '' : v.docs_entregues_em ? ' · docs ✓' : v.docs_prazo_em ? ` · docs até ${NG.fmtData(v.docs_prazo_em)}` : ''}`
           : v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : vendida ? 'sem data' : 'depois da venda',
         corpo: () => {
           const h = v.vendido_em && v.agendamento_registrado_em ? (new Date(v.agendamento_registrado_em) - new Date(v.vendido_em)) / 3600000 : null;
@@ -1869,7 +1869,7 @@
             ${linha('Instalada em', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}
             ${linha('Situação OSAB', esc(v.nio_situacao || '—'))}
             ${v.nio_pendencia_cod || v.nio_pendencia_desc ? linha('Pendência Nio', `<span class="warn-txt">${esc([v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · '))}</span>`) : ''}
-            ${linha('Documentos à Nio', esc(v.docs_entregues_em ? `entregues ${NG.fmtDataAno(v.docs_entregues_em)}` : v.docs_prazo_em ? `prazo ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}`;
+            ${linha('Documentos à Nio', esc(v.docs_dispensados_em ? 'dispensados — venda remota, o aceite é a biometria da Nio' : v.docs_entregues_em ? `entregues ${NG.fmtDataAno(v.docs_entregues_em)}` : v.docs_prazo_em ? `prazo ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}`;
         },
         editar: vendida && v.status !== 'saida' ? () => `<form class="f-formulario" data-form="ed_instalacao" novalidate>
           <div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : '')}
@@ -2740,7 +2740,7 @@
         ${linhaDet('Instalada', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}
         ${linhaDet('OSAB', esc(v.nio_situacao || '—'))}
         ${v.nio_pendencia_cod || v.nio_pendencia_desc ? linhaDet('Pendência Nio', `<span class="warn-txt">${esc([v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · '))}</span>`) : ''}
-        ${linhaDet('Documentos', esc(v.docs_entregues_em ? `entregues ${NG.fmtData(v.docs_entregues_em)}` : v.docs_prazo_em ? `até ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}
+        ${linhaDet('Documentos', esc(v.docs_dispensados_em ? 'dispensados (venda remota)' : v.docs_entregues_em ? `entregues ${NG.fmtData(v.docs_entregues_em)}` : v.docs_prazo_em ? `até ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}
         ${fonte('portal PAP · OSAB da Nio')}`;
     }
     return `<div class="fc-pop" role="dialog" aria-label="${esc(p.nome)}"><div class="fc-pop-h"><b>${esc(p.nome)}</b><small>${esc(p.d || '')}</small>
@@ -2881,7 +2881,7 @@
       ${linhaDet('Estorno parcial', `até ${esc(NG.fmtData(x.downgrade_ate))} (plano menor)`)}
       ${linhaDet('Contestar', `até ${esc(NG.fmtData(x.contestar_ate))}`)}
       ${linhaDet('M-10', `apura em ${esc(NG.fmtData(x.m10_em))}${bo && Number(x.bonus_m10_potencial || 0) ? ` · até ${esc(m(x.bonus_m10_potencial))}` : ''}`)}
-      ${linhaDet('Documentos', esc(x.docs_entregues_em ? `entregues ${NG.fmtData(x.docs_entregues_em)}` : `até ${NG.fmtData(x.docs_ate)}`))}
+      ${linhaDet('Documentos', esc(d.v && d.v.docs_dispensados_em ? 'dispensados (venda remota)' : x.docs_entregues_em ? `entregues ${NG.fmtData(x.docs_entregues_em)}` : `até ${NG.fmtData(x.docs_ate)}`))}
       <span class="fc-src">fonte: tabela de comissão (previsto) · extrato da Nio (real)</span></div>`;
   }
   // Detalhe de um passo da OS ou do dinheiro: abre por cima dos dois cartões (nada empurra nada).

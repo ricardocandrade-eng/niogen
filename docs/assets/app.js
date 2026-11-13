@@ -380,7 +380,7 @@
     ops_pend_time: 'Nosso time destrava: depende de nós. O que fazer: resolva hoje e encerre a pendência na ficha.',
     ops_pend_data: 'A data passou sem baixa: a instalação estava marcada, o dia passou e a Nio não confirmou no OSAB. O que fazer: confira no portal — se instalou, importe o OSAB; se não instalou, reagende com o cliente.',
     ops_bio: 'Biometria: pedido feito no portal, esperando o cliente fazer a biometria pelo link que a Nio manda. Com 24 h o cartão fica amarelo (avise o cliente); com 72 h fica vermelho (ligue). Sem biometria não há instalação nem comissão.',
-    ops_rec: 'Recém-instaladas: instaladas nos últimos 30 dias. Mostra os documentos da venda (15 dias do contrato), a 1ª fatura (quando o extrato da Nio for importado) e a janela de estorno: cancelar e reativar em até 30 dias estorna 100 % da comissão. O que fazer: entregue os documentos no prazo e, se a 1ª fatura atrasar, ligue para o cliente.',
+    ops_rec: 'Recém-instaladas: instaladas nos últimos 30 dias. Mostra a 1ª fatura (quando o extrato da Nio for importado) e a janela de estorno: cancelar e reativar em até 30 dias estorna 100 % da comissão. O que fazer: entregue os documentos no prazo e, se a 1ª fatura atrasar, ligue para o cliente. Documentos: na venda remota não há documento a entregar (o aceite é a biometria da Nio), então o prazo de 15 dias está desligado.',
     // pendência com terceiro (0064)
     pendencia:'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
   };
