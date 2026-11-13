@@ -746,7 +746,7 @@
         if (s.resultado !== 'lida') { corpo.innerHTML = `<div class="os-fazer ${r.cls}">${esc(r.txt)}</div>${quadroVelho()}`; return; }
         const l = s.leitura || {}, g = s.registro || {};
         const oQue = g.ok === false ? g.erro : g.efeito ? `Mudou: ${g.efeito}.` : g.mudou === false ? 'Nada mudou desde a última leitura.' : 'Leitura gravada.';
-        corpo.innerHTML = `<div class="os-q"><h4>Lido agora${s.consultado_em ? ` · ${esc(fmtDataHora(s.consultado_em))}` : ''}${s.cache ? ' · guardada há menos de 10 min' : ''}</h4>
+        corpo.innerHTML = `<div class="os-q"><h4>${s.cache ? 'Leitura de' : 'Lido agora ·'} ${s.consultado_em ? esc(fmtDataHora(s.consultado_em)) : ''}${s.cache ? ' · a mesma OS só é lida de novo depois de 10 min' : ''}</h4>
             ${lin('Status na Nio', l.status_ordem)}${lin('Agendamento', l.agendamento)}${lin('Situação do agendamento', l.status_agendamento)}
             ${lin('Pendência', l.pendencia)}${lin('Caso aberto na Nio', l.caso)}${lin('Motivo do cancelamento', l.motivo_cancelamento)}</div>
           <div class="os-fazer ${g.excecao || g.ok === false ? 'bad' : ''}">${g.excecao && g.acao ? `<b>O que fazer:</b> ${esc(g.acao)}<br>` : ''}${esc(oQue)}</div>`;

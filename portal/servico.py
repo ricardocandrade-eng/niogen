@@ -216,6 +216,13 @@ class Operador:
             c = co.ConsultaOS(self.ctx, params, log=pl.log)
             try:
                 out = c.rodar()
+                # 13/11: a tela não carregou (visto às 11h30, sem a página pedir para sair). Antes de desistir, confere a
+                # sessão — caiu: entra de novo — e tenta UMA vez mais. Nenhuma pesquisa foi feita no portal nessa falha.
+                if tentativa == 1 and out.get('resultado') == 'erro' and 'não carregou' in str(out.get('motivo') or ''):
+                    pl.log('os: a tela não carregou — conferindo a sessão e tentando de novo')
+                    if not self.sessao_viva():
+                        self.login()
+                    continue
                 self.estado['ultimo_uso'] = agora()
                 return out
             except cr.SessaoCaida:
