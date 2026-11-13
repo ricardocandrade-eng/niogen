@@ -208,6 +208,15 @@
   // ---------- ajuda ao passar o mouse (prompt 27) ----------
   // Um único dicionário: o que é e o que fazer. Tela Mari, ficha e menu usam daqui (title= + ⓘ via NG.dicaTxt).
   const ajuda = {
+    // Live › ⚠ Conferir (0153)
+    conf_secao: 'Conferir: o que ficou parado ou saiu do trilho. Não é a fila do dia — é o que ninguém estava vendo. Resolva cada linha ou dispense; a seção some quando estiver vazia.',
+    conf_acao_falhou: 'Um botão seu (resolver, etiqueta, atribuir, nota ou mensagem) falhou 3 vezes no Chatwoot, então o NIOGEN e o Chatwoot estão diferentes. O que fazer: Tentar de novo. Se já foi resolvido de outro jeito, Dispensar.',
+    conf_fora_niogen: 'Alguém resolveu, respondeu, atribuiu ou adiou esta conversa direto no Chatwoot. O que fazer: resolvida → registre a Saída (ou reabra); respondida → responda pelo NIOGEN; atribuída → Assumir pelo NIOGEN ou Devolver para a Mari; adiada → use ⏸ Aguardar, com data. "Visto" tira a linha de atribuída e adiada.',
+    conf_dono_parado: 'A conversa tem dono (você ou o time) e ninguém fala há mais de 24 h. Enquanto ela tem dono, a Mari e os lembretes ficam parados. O que fazer: retomar o cliente, Devolver para a Mari ou registrar a Saída. A linha some quando alguém falar.',
+    conf_docs_prazo: 'Venda instalada sem os documentos entregues à Nio. O contrato dá 15 dias depois da instalação. O que fazer: entregar os documentos e gravar a data na ficha (Instalação › Docs entregues).',
+    conf_tentar: 'Põe a ação de volta na fila: o Chatwoot recebe em até 1 minuto.',
+    conf_dispensar: 'Tira a linha sem refazer a ação. Use só se o caso já foi resolvido de outro jeito.',
+    conf_visto: 'Tira a linha. A conversa continua como está no Chatwoot.',
     // situação da conversa
     sit_andamento: 'Em andamento: a Mari ainda está conversando com o cliente. Nada a fazer — acompanhe pela conversa.',
     sit_qualificada: 'Qualificada: a Mari juntou os dados e passou para o time (a venda nasceu em 0 · Qualificado). Próximo passo: consultar a viabilidade no portal e abrir o pedido.',

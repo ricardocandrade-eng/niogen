@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-33">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=121126-32"></script>
+<script src="assets/app.js?v=121126-33"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=121126-29"></script>
@@ -262,10 +262,10 @@
     const urg = c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || ''));
     const visto = c.tipo === 'fora_niogen' && /^(Atribuída|Adiada)/.test(c.texto || '');
     return `<div class="lv-row ${urg ? 'n-agora' : 'n-hoje'} lv-and"><div class="lv-who"><i class="lv-dot"></i><div><b>${esc(c.nome || 'Cliente')}</b><small>${c.desde ? `há ${esc(haTempo(c.desde))}` : ''}</small></div></div>
-        <div class="lv-sit">${esc(CONF_SIT[c.tipo] || c.tipo)}</div>
+        <div class="lv-sit">${esc(CONF_SIT[c.tipo] || c.tipo)} ${NG.dicaTxt(NG.ajuda[`conf_${c.tipo}`] || NG.ajuda.conf_secao)}</div>
         <div class="lv-prox lv-and-bts">${esc(c.texto || '')}
-          ${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}">Tentar de novo</button> <button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}">Dispensar</button>` : ''}
-          ${visto ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}">Visto</button>` : ''}</div>
+          ${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Tentar de novo</button> <button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}
+          ${visto ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}</div>
         <div><span class="mv-dono apagado">conferir</span></div><div><span class="lv-pill">${urg ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act">${k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : ''}</div></div>`;
   };
@@ -277,7 +277,7 @@
     if (soVez) {
       const ac = acompanhando();
       const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
-      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
+      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
       corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
       if (opL.length || opsCanal.length) {
