@@ -108,6 +108,12 @@
     });
     return () => { ult = Date.now(); };
   }
+  // Rotina que só precisa rodar de tempos em tempos, valendo para todas as abas e telas: true = é a vez desta (e já marca a hora).
+  function aCada(chave, ms) {
+    const k = `niogen.acada.${chave}`;
+    try { if (Date.now() - Number(localStorage.getItem(k) || 0) < ms) return false; localStorage.setItem(k, String(Date.now())); } catch (e) { /* sem armazenamento: roda */ }
+    return true;
+  }
   // Leitura que muda pouco (ex.: resumo da base DFV, que só muda quando a Nio manda base nova): guardada no navegador por `ms`.
   async function guardado(chave, ms, fn) {
     const k = `niogen.guardado.${chave}`;
@@ -1561,7 +1567,7 @@
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
-    aoVoltarAba, guardado,   // 13/11: aliviar a carga do Supabase
+    aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

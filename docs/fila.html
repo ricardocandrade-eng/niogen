@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="assets/app.css?v=131126-10">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-12"></script>
+<script src="assets/app.js?v=131126-13"></script>
 <script src="assets/sidebar.js?v=131126-10"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=131126-12"></script>
@@ -102,7 +102,6 @@
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
-  let opAtualizado = 0;
   let opAberta = null;     // conversa_id da linha com "Dispensar" aberto (motivo em 1 clique)
   const opFeitas = {};     // conversa_id → "Enviada · volta pra Mari" (o resultado fica na linha)
   let motivosDispensa = [{ codigo: 'ja_falei', nome: 'Já falei' }, { codigo: 'nao_vale', nome: 'Não vale' }, { codigo: 'depois', nome: 'Depois' }];
@@ -180,10 +179,8 @@
     const [ro, rc] = await Promise.all([NG.oportunidades(r, pOp), pOpc]);
     ops = ro.erro ? [] : ro.lista;
     opsCanal = (rc && rc.lista) || [];
-    if (!opAtualizado || Date.now() - opAtualizado > 5 * 60000) {
-      opAtualizado = Date.now();
-      NG.sb.rpc('oportunidades_atualizar').then(() => {}, () => {});
-    }
+    // 13/11 (aliviar a carga): ~0,8 s de banco — no máximo 1× a cada 5 min somando todas as abas e o Painel.
+    if (NG.aCada('op_atualizar', 5 * 60000)) NG.sb.rpc('oportunidades_atualizar').then(() => {}, () => {});
     render();
     if (NGFicha.modo === 'cheia' && NGFicha.aberta) NGFicha.redesenhar();   // "1 de N na sua vez" e ↑ ↓ seguem a lista nova
   }
