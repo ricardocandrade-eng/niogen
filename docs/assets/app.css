@@ -2531,6 +2531,10 @@ button.fc-din-l:hover, button.fc-din-l.on { background: #171C23; }
 /* ===== 13/11 — Lembretes da Mari na ficha única (etapa 4a; Ricardo: "mostrar de forma visível os lembretes já enviados, o próximo
    e por que está parada"). Só leitura: espelha a mari_cadencia_avaliar. ===== */
 .fc-ficha.com-cad { grid-template-rows: auto auto minmax(0, 1fr); }
+/* 13/11 (Ricardo): com o "Próximo passo" (Fazer, Abrir pendência), o detalhe de uma etapa ou o Dinheiro abertos, o cartão
+   Lembretes da Mari sai da frente e o quadro ocupa o lugar de Lembretes + Cliente + Venda. A conversa segue visível ao lado. */
+.fc-ficha.com-cad:has(.fc-cards > .fc-cards-over) { grid-template-rows: auto minmax(0, 1fr); }
+.fc-ficha:has(.fc-cards > .fc-cards-over) > .fc-cb { display: none; }
 .fc-cb { border: 1px solid #1E242C; border-radius: 12px; background: #12161C; display: flex; flex-direction: column; min-width: 0; }
 .fc-cb.t-warn { border-color: #5C4A1E; } .fc-cb.t-bad { border-color: #5A2B2B; } .fc-cb.t-pausa { border-color: #4A2626; }
 .fc-cb.solta { border: 0; background: none; }
