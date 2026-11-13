@@ -22,9 +22,9 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=131126-17"></script>
+<script src="assets/app.js?v=131126-20"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
-<script src="assets/osab.js?v=111126-12"></script>
+<script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
 </head>
 <body>
@@ -362,7 +362,8 @@ Guardar?`)) return;
       .map(([s, n]) => `<span class="chip">${esc(s)} · ${NG.fmtNum(n)}</span>`).join('');
     const linhaVenda = (x, extra) => `<tr><td><a href="venda.html?id=${x.v.id}" target="_blank" rel="noopener">${esc(x.v.cliente_nome)}</a><div class="sub mono">#${esc(x.o.pedido)}</div></td><td>${extra}</td></tr>`;
     previa.innerHTML = `
-      <div class="rel-topo"><h2>Prévia · ${esc(arquivo)}</h2><span class="chip">aba ${esc(leitura.aba)} · DT_REF ${fmtDtRef(leitura.dt_ref)}</span></div>
+      <div class="rel-topo"><h2>Prévia · ${esc(arquivo)}</h2><span class="chip">${leitura.fonte === 'painel' ? 'OSAB do painel' : 'OSAB do e-mail'} · aba ${esc(leitura.aba)} · DT_REF ${fmtDtRef(leitura.dt_ref)}</span></div>
+      ${leitura.fonte === 'painel' ? `<div class="aviso">Arquivo do painel Performance em Foco (Exportação - OSAB). Ele não traz a marca de venda válida: aqui, "Concluído" com a data real da instalação conta como instalada. Confira os filtros usados na exportação: ${esc(leitura.filtros || 'não informados')}. O que não veio no arquivo sai do retrato da Nio.</div>` : ''}
       <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
         <div class="kpi"><span class="rot">Linhas lidas</span><span class="val">${NG.fmtNum(leitura.lidas)}</span><span class="nota">${plural(leitura.linhas.length, 'pedido distinto', 'pedidos distintos')}</span></div>
         <div class="kpi"><span class="rot">Casam com venda nossa</span><span class="val ok">${NG.fmtNum(casam.length)}</span></div>
@@ -452,7 +453,7 @@ Guardar?`)) return;
     const { data: imp, error: e1 } = await NG.sb.from('importacoes').insert({
       tipo: 'osab', arquivo_nome: arquivo, dt_ref: leitura.dt_ref, linhas: leitura.lidas,
       ignoradas: leitura.duplicadas + leitura.semPedido,
-      resumo: { pedidos: leitura.linhas.length, duplicadas: leitura.duplicadas, sem_pedido: leitura.semPedido,
+      resumo: { fonte: leitura.fonte, filtros: leitura.filtros || null, pedidos: leitura.linhas.length, duplicadas: leitura.duplicadas, sem_pedido: leitura.semPedido,
         previa: { casam: casam.length, mudam: mudam.length, pendencias: pend.length, invalidas: invalidas.length, sem_venda: semVenda } },
     }).select('id').single();
     if (e1) { NG.toast(NG.msgErro(e1), 'bad'); botao.disabled = false; passo('Aplicar'); return; }

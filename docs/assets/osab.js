@@ -1,12 +1,17 @@
 /* NIOGEN | docs/assets/osab.js | 03/11/2026
  * Leitura do relatório OSAB da Nio no navegador (SheetJS) e a mesma classificação que public.aplicar_osab()
  * faz no banco — a prévia mostra exatamente o que o "Aplicar" vai mudar. Mudou a regra lá, muda aqui.
+ * 13/11/2026 (etapa 3 / 5b): lê DOIS formatos. 'email' = o OSAB que o Rogério manda (PEDIDO, SITUACAO, fg_venda_valida…).
+ * 'painel' = a tabela "Exportação - OSAB" do painel Performance em Foco do portal (NR ORDEM, STATUS, DATA ATIVACAO…),
+ * que NÃO traz fg_venda_valida nem código de pendência e traz o andamento do atendimento de campo (BA).
+ * Levantamento: docs/LEVANTAMENTO_consulta_os_131126_0955.md (Drive). Teste: node tests/osab_formatos.js
  */
 (function () {
   'use strict';
 
   // O arquivo é reconhecido pelas colunas, não pelo nome.
   const OBRIGATORIAS = ['PEDIDO', 'SITUACAO', 'fg_venda_valida', 'DATA_ABERTURA', 'DT_REF'];
+  const OBRIGATORIAS_PAINEL = ['NR ORDEM', 'STATUS', 'DATA VENDA', 'DATA HORA - Atualização', 'DATA ATIVACAO'];
 
   const pad = (n, w = 2) => String(n).padStart(w, '0');
 
@@ -44,15 +49,18 @@
       const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: null, blankrows: false });
       for (let i = 0; i < Math.min(linhas.length, 20); i++) {
         const cab = (linhas[i] || []).map((c) => (c == null ? '' : String(c).trim()));
-        const faltam = OBRIGATORIAS.filter((c) => !cab.includes(c));
-        if (!melhor || faltam.length < melhor.faltam.length) melhor = { nome, i, cab, faltam, linhas };
-        if (!faltam.length) break;
+        for (const [fonte, obrig] of [['email', OBRIGATORIAS], ['painel', OBRIGATORIAS_PAINEL]]) {
+          const faltam = obrig.filter((c) => !cab.includes(c));
+          if (!melhor || faltam.length < melhor.faltam.length) melhor = { nome, i, cab, faltam, linhas, fonte };
+        }
+        if (!melhor.faltam.length) break;
       }
       if (melhor && !melhor.faltam.length) break;
     }
     if (!melhor || melhor.faltam.length) {
       return { erro: `Não parece um OSAB: faltam as colunas ${(melhor ? melhor.faltam : OBRIGATORIAS).join(', ')}.` };
     }
+    if (melhor.fonte === 'painel') return lerPainel(melhor);
 
     const idx = Object.fromEntries(melhor.cab.map((c, i) => [c, i]));
     const col = (row, nome) => (idx[nome] == null ? null : row[idx[nome]]);
@@ -102,6 +110,7 @@
     const linhas = [...porPedido.values()];
     const dtRef = Object.entries(dtRefs).sort((a, b) => b[1] - a[1])[0];
     return {
+      fonte: 'email',
       aba: melhor.nome,
       lidas,
       semPedido,
@@ -109,6 +118,84 @@
       linhas,
       situacoes,
       dt_ref: dtRef ? dtRef[0] : null,
+    };
+  }
+
+  // Formato do painel (Exportação - OSAB do Performance em Foco). Cabeçalho na 1ª linha, dados, linha em branco e um
+  // rodapé "Filtros aplicados: …" na coluna A — o rodapé não é linha de pedido e não conta como "sem pedido".
+  function lerPainel(melhor) {
+    const idx = Object.fromEntries(melhor.cab.map((c, i) => [c, i]));
+    const col = (row, nome) => (idx[nome] == null ? null : row[idx[nome]]);
+    const porPedido = new Map();
+    let lidas = 0;
+    let semPedido = 0;
+    let filtros = null;
+    const situacoes = {};
+    const dtRefs = {};
+    const juntar = (...p) => { const s = p.map(texto).filter(Boolean).join(' · '); return s || null; };
+
+    for (const row of melhor.linhas.slice(melhor.i + 1)) {
+      if (!row || row.every((c) => c == null || c === '')) continue;
+      const primeira = texto(row[0]);
+      if (primeira && /^filtros aplicados/i.test(primeira)) { filtros = primeira.replace(/\s*\n\s*/g, ' · ').slice(0, 400); continue; }
+      lidas++;
+      const pedido = pedidoTexto(col(row, 'NR ORDEM'));
+      if (!pedido) { semPedido++; continue; }
+      const atualizacao = col(row, 'DATA HORA - Atualização');
+      const o = {
+        pedido,
+        dt_ref: dataISO(atualizacao),
+        produto: texto(col(row, 'PLANO')),
+        uf: texto(col(row, 'UF')),
+        localidade: texto(col(row, 'MUNICIPIO')),
+        celula: texto(col(row, 'CELULA')),
+        segmento: texto(col(row, 'SEGMENTO')),
+        velocidade: texto(col(row, 'VELOCIDADE')),
+        matricula_vendedor: texto(col(row, 'MATRICULA VENDEDOR')),
+        situacao: texto(col(row, 'STATUS')),
+        data_agendamento: dataHoraSP(col(row, 'DATA AGENDAMENTO')),
+        data_abertura: dataHoraSP(col(row, 'DATA VENDA')),
+        // A data real da instalação: o fim do atendimento em campo; sem ele, a data da ativação.
+        data_fechamento: dataHoraSP(col(row, 'FIM EXECUÇÃO REAL')) || dataHoraSP(col(row, 'DATA ATIVACAO')),
+        cod_pendencia: null,
+        desc_pendencia: texto(col(row, 'PENDENCIA BA')),
+        numero_ba: texto(col(row, 'NR BA')),
+        venda_valida: null,                       // o painel não traz fg_venda_valida
+        meio_pagamento: texto(col(row, 'MÉTODO PGTO')),
+        campanha: texto(col(row, 'CAMPANHA')),
+        flg_mei: texto(col(row, 'TP MEI')),
+        motivo_cancelamento: texto(col(row, 'MOTIVO ORDEM')),
+        submotivo_cancelamento: juntar(col(row, 'SUB MOTIVO'), col(row, 'DETALHE MOTIVO')),
+        classificacao: null,
+        // só o painel traz (0168):
+        fonte: 'painel',
+        atualizado_nio_em: dataHoraSP(atualizacao),
+        data_ativacao: dataHoraSP(col(row, 'DATA ATIVACAO')),
+        estado_ba: texto(col(row, 'ESTADO BA')),
+        status_ba: texto(col(row, 'STATUS BA')),
+        motivo_ba: texto(col(row, 'MOTIVO BA')),
+        faixa_agendamento: texto(col(row, 'FAIXA AGENDAMENTO')),
+        execucao_inicio: dataHoraSP(col(row, 'INÍCIO EXECUÇÃO REAL')),
+        execucao_fim: dataHoraSP(col(row, 'FIM EXECUÇÃO REAL')),
+      };
+      situacoes[o.situacao || '(vazia)'] = (situacoes[o.situacao || '(vazia)'] || 0) + 1;
+      if (o.dt_ref) dtRefs[o.dt_ref] = (dtRefs[o.dt_ref] || 0) + 1;
+      // Pedido repetido: fica a linha atualizada por último.
+      const atual = porPedido.get(pedido);
+      if (!atual || String(o.atualizado_nio_em || '') > String(atual.atualizado_nio_em || '')) porPedido.set(pedido, o);
+    }
+    const linhas = [...porPedido.values()];
+    const dtRef = Object.entries(dtRefs).sort((a, b) => b[1] - a[1])[0];
+    return {
+      fonte: 'painel',
+      aba: melhor.nome,
+      lidas,
+      semPedido,
+      duplicadas: lidas - semPedido - linhas.length,
+      linhas,
+      situacoes,
+      dt_ref: dtRef ? dtRef[0] : null,
+      filtros,
     };
   }
 
@@ -128,7 +215,9 @@
 
   // o = linha do OSAB, v = venda do NIOGEN com o mesmo pedido.
   function classificar(o, v) {
-    const concl = o.situacao === 'Concluído' && o.venda_valida === true;
+    // E-mail: concluído E venda válida. Painel (0168): não traz a validade — vale concluído com a data real da instalação.
+    const concl = o.situacao === 'Concluído'
+      && (o.venda_valida === true || (o.fonte === 'painel' && o.venda_valida == null && !!o.data_fechamento));
     const motivo = [o.motivo_cancelamento, o.submotivo_cancelamento].filter(Boolean).join(' ');
     let para = null;
     if (concl && ['2_aguardando_instalacao', '3_instalado'].includes(v.status)) para = '4_ativo_provisorio';
@@ -143,5 +232,7 @@
     };
   }
 
-  window.NGOsab = { OBRIGATORIAS, ler, classificar };
+  const api = { OBRIGATORIAS, OBRIGATORIAS_PAINEL, ler, classificar };
+  if (typeof window !== 'undefined') window.NGOsab = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;   // node tests/osab_formatos.js
 })();
