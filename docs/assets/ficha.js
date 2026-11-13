@@ -2753,11 +2753,14 @@
   // No celular o rótulo abre e fecha a trilha (fechada = uma linha com o estado atual); no computador ela fica sempre aberta.
   const trK = (k, rot, ajuda) => `<span class="fc-tr-k"><button type="button" class="fc-tr-tg" data-f="fc-tr" data-k="${k}" aria-expanded="${fc.tr === k}">${esc(rot)}</button>${NG.dicaTxt(ajuda)}</span>`;
   const silenciadaConv = () => !!(d.soConversa && d.conv && d.conv.quadro_encerrada_motivo === 'suporte_nio');
-  function escadaHtml() {
+  // 13/11 (Ricardo: "o olho cansa", "foco no que a tela está pedindo"): no topo fica SÓ a escada, em uma linha. O status, a vez
+  // e o prazo vão para o cartão Agora (o único lugar que diz o que fazer); a OS vira a lista vertical do cartão Venda e o
+  // dinheiro, uma linha discreta no pé dele. Nada se repete.
+  function escadaPartes(semNome) {
     const l = d.lead;
     const A = NG.ajuda;
     const etapas = (d.leadCfg || []).filter((x) => x.tipo === 'etapa');
-    if (!l || !etapas.length) return `<div class="fc-tr fc-tr-esc">${trK('esc', 'Escada', A.tr_escada)}<span class="fc-tr-curto">sem leitura</span><div class="fc-tr-res"><span class="apagado">sem leitura da escada para este lead</span></div></div>`;
+    if (!l || !etapas.length) return null;
     const fora = l.destino === 'saida' || l.destino === 'teste_duplicada';
     const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
     const steps = etapas.map((e, i) => {
@@ -2766,72 +2769,79 @@
     }).join('');
     const cv = d.soConversa ? d.conv : d.convInfo;
     const alerta = cv && cv.funil_alerta ? `<span class="fc-pill warn">⚠ ${esc(NG.FUNIL_ALERTA[cv.funil_alerta] || cv.funil_alerta)}</span>${NG.dicaTxt(A.ficha_fora)}` : '';
-    let res;
+    let info;
     let curto;
+    let reabrir = '';
     if (fora) {
       const parou = (etapas.find((e) => e.codigo === l.etapa_parou) || {}).nome;
       const nome = l.saida_nome || (l.destino === 'teste_duplicada' ? 'Teste ou duplicada' : 'sem motivo');
       const sub = l.saida_sub && !String(l.saida_sub).toLowerCase().startsWith(nome.toLowerCase()) ? l.saida_sub : '';
       curto = `Saída · ${nome}`;
-      res = `<span class="fc-pill bad">Saída</span><b>${esc(nome)}</b>${sub ? `<span>· ${esc(sub)}</span>` : ''}${l.saida_ajuda ? NG.dicaTxt(l.saida_ajuda) : ''}
-        ${parou ? `<span>· parou em ${esc(parou)}</span>` : ''}${l.volta_em ? `<span>· volta ${esc(NG.fmtDiaISO(l.volta_em))}</span>` : ''}
-        ${ehBO() && !silenciadaConv() ? `<button type="button" class="btn btn-sm" data-f="reabrir">Reabrir</button>${NG.dicaTxt(A.saida_reabrir)}` : ''}`;
+      info = `${semNome ? '' : `<span>Saída: <b>${esc(nome)}</b>${sub ? ` · ${esc(sub)}` : ''}</span>`}${l.saida_ajuda ? NG.dicaTxt(l.saida_ajuda) : ''}${parou ? `<span>${semNome ? '' : '· '}parou em ${esc(parou)}</span>` : ''}${l.volta_em ? `<span>· volta ${esc(NG.fmtDiaISO(l.volta_em))}</span>` : ''}`;
+      if (ehBO() && !silenciadaConv()) reabrir = `<span class="fc-reab"><button type="button" class="btn btn-sm" data-f="reabrir">Reabrir</button>${NG.dicaTxt(A.saida_reabrir)}</span>`;
     } else if (l.destino === 'instalada') {
       const canc = d.din && d.din.cancelada_apos_instalar_em;
       curto = canc ? 'Instalada · cancelada depois' : 'Instalada';
-      res = `<span class="fc-pill ok">Instalada</span>${canc ? `<span class="fc-pill bad">cancelada depois de instalar em ${esc(NG.fmtData(canc))}</span>` : '<span>a venda chegou ao fim da escada</span>'}`;
+      info = canc ? `<span class="fc-pill bad">cancelada depois de instalar em ${esc(NG.fmtData(canc))}</span>` : '';
     } else {
       const prazo = l.prazo_em ? `<span class="${l.atrasado ? 'bad-txt' : ''}">· prazo ${esc(NG.fmtDiaSemana(l.prazo_em))} ${esc(NG.fmtHora(l.prazo_em))}${l.atrasado ? ' · atrasado' : ''}</span>` : '';
       curto = `${l.etapa_nome || ''} · vez: ${VEZ_ROT[l.vez] || '—'}${l.atrasado ? ' · atrasado' : ''}`;
-      res = `<b>${esc(l.status_nome || l.status || '—')}</b>${l.status_ajuda ? NG.dicaTxt(l.status_ajuda) : ''}<span>· vez: <b class="fc-vez v-${esc(l.vez || '')}">${esc(VEZ_ROT[l.vez] || '—')}</b></span>${l.vez && A.vez[l.vez] ? NG.dicaTxt(A.vez[l.vez]) : ''}${prazo}
-        ${l.em_espera ? `<span class="fc-pill pend">${IC.pausa}em espera${l.espera_revisar_em ? ` até ${esc(NG.fmtData(l.espera_revisar_em))}` : ''}</span>` : ''}`;
+      info = `<span>${esc(l.status_nome || l.status || '—')}</span>${l.status_ajuda ? NG.dicaTxt(l.status_ajuda) : ''}<span>· vez: <b class="fc-vez v-${esc(l.vez || '')}">${esc(VEZ_ROT[l.vez] || '—')}</b></span>${l.vez && A.vez[l.vez] ? NG.dicaTxt(A.vez[l.vez]) : ''}${prazo}
+        ${l.em_espera && !d.pend ? `<span class="fc-pill pend">${IC.pausa}em espera${l.espera_revisar_em ? ` até ${esc(NG.fmtData(l.espera_revisar_em))}` : ''}</span>` : ''}`;
     }
-    return `<div class="fc-tr fc-tr-esc${fc.tr === 'esc' ? ' on' : ''}">${trK('esc', 'Escada', A.tr_escada)}<span class="fc-tr-curto">${esc(curto)}</span><div class="fc-es-l">${steps}</div><div class="fc-tr-res">${res}${alerta}</div></div>`;
+    return { steps, curto, info: `${info}${alerta}`, reabrir, etapaNome: l.etapa_nome || '' };
   }
-  function osHtml(passos) {
-    const L = trilhaPassos(passos);
-    const at = L.find((x) => x.st !== 'done');
-    const curto = at ? `${at.nome} · ${at.d || (at.st === 'wait' ? 'aguardando' : at.st === 'now' ? 'agora' : 'a fazer')}` : 'tudo feito';
-    const aberta = fc.tr === 'os' || ETAPAS_K.includes(fc.etapa);
-    return `<div class="fc-tr fc-tr-os${aberta ? ' on' : ''}">${trK('os', 'OS', NG.ajuda.tr_os)}<span class="fc-tr-curto">${esc(curto)}</span>${trilhaHtml(passos)}</div>`;
+  function escadaHtml() {
+    const E = escadaPartes();
+    const A = NG.ajuda;
+    if (!E) return `<div class="fc-tr fc-tr-esc">${trK('esc', 'Escada', A.tr_escada)}<span class="fc-tr-curto">sem leitura</span><div class="fc-es-l"><span class="apagado">sem leitura da escada para este lead</span></div></div>`;
+    return `<div class="fc-tr fc-tr-esc${fc.tr === 'esc' ? ' on' : ''}">${trK('esc', 'Escada', A.tr_escada)}<span class="fc-tr-curto">${esc(E.curto)}</span><div class="fc-es-l">${E.steps}</div></div>`;
   }
-  function dinheiroHtml() {
+  // OS na vertical, dentro do cartão Venda: os 5 passos de sempre; o clique abre o detalhe (e o operador) por cima dos cartões.
+  function osLista(passos) {
+    return `<div class="fc-os-v"><div class="fc-os-h"><span>Pedido na Nio</span>${NG.dicaTxt(NG.ajuda.tr_os)}</div>${trilhaPassos(passos).map((x) => {
+      const o = fc.op[x.k] && fc.op[x.k].estado === 'rodando';
+      const st = o ? 'run' : x.st;
+      const ic = st === 'done' ? IC.ok : st === 'now' ? '<span class="fc-rdot"></span>' : st === 'wait' ? IC.pausa : st === 'run' ? IC.gira : '';
+      return `<button type="button" class="fc-ov r-${st}${fc.etapa === x.k ? ' on' : ''}" data-f="fc-etapa" data-k="${x.k}" aria-expanded="${fc.etapa === x.k}">
+        <span class="fc-ri">${ic}</span><b>${esc(x.nome)}</b><small title="${esc(x.d || '')}">${esc(o ? 'rodando operador…' : x.d || (st === 'now' ? 'agora' : '—'))}</small></button>`;
+    }).join('')}</div>`;
+  }
+  // Dinheiro: uma linha discreta no pé do cartão Venda. Depois de instalada ela ganha cor e o clique abre os estados e as datas.
+  function dinLinha() {
     const A = NG.ajuda;
     const bo = ehBO();
     const m = NG.fmtMoeda;
     const v = d.soConversa ? null : d.v;
     const x = d.soConversa ? null : d.din;
-    let estado = null;
-    let res;
-    let curto;
     if (!x) {
       const fora = v && v.status === 'saida';
-      curto = fora ? 'fora da jornada' : 'nasce na instalação';
-      res = fora ? '<span class="apagado">fora da jornada — sem comissão</span>'
-        : `<span>${bo && v && v.comissao_prevista != null ? `<b>${esc(m(v.comissao_prevista))}</b> previstos · ` : ''}a comissão nasce na instalação</span>${NG.dicaTxt(A.din_antes)}`;
-    } else {
-      estado = x.estado;
-      const prox = estado === 'em_risco' ? (x.cancelada_apos_instalar_em ? `cancelada depois de instalar em ${NG.fmtData(x.cancelada_apos_instalar_em)}` : `estorno de 100 % até ${NG.fmtData(x.risco_ate)}`)
-        : estado === 'firme' ? 'aguardando o extrato da Nio' : estado === 'no_extrato' ? `contestar até ${NG.fmtData(x.contestar_ate)}` : '';
-      const dif = Number(x.diferenca || 0);
-      const real = Number(x.no_extrato || 0) + Number(x.estornado || 0) + Number(x.multas || 0);
-      const temReal = Number(x.no_extrato || 0) !== 0 || Number(x.estornado || 0) !== 0 || Number(x.multas || 0) !== 0;
-      const valores = bo ? `<b>${esc(m(x.previsto_total))}</b> previstos${temReal ? ` · ${esc(m(real))} no extrato${dif ? ` <span class="${dif < 0 ? 'bad-txt' : 'ok-txt'}">(${dif > 0 ? '+' : ''}${esc(m(dif))})</span>` : ''}` : ''}${Number(x.pago || 0) ? ` · ${esc(m(x.pago))} pagos` : ''}` : '';
-      curto = `${DIN_ROT[estado] || estado}${bo ? ` · ${m(x.previsto_total)}` : ''}`;
-      res = `<span class="fc-pill ${DIN_CLS[estado] || 'mute'}">${esc(DIN_ROT[estado] || estado)}</span>${A.din_estados[estado] ? NG.dicaTxt(A.din_estados[estado]) : ''}${valores ? `<span>${valores}</span>` : ''}${prox ? `<span>· ${esc(prox)}</span>` : ''}
-        <button type="button" class="fc-link" data-f="fc-etapa" data-k="din" aria-expanded="${fc.etapa === 'din'}">Ver datas</button>`;
+      return `<div class="fc-din-w"><div class="fc-din-l"><span>Dinheiro</span><span class="fc-din-t">${fora ? 'fora da jornada — sem comissão'
+        : `${bo && v && v.comissao_prevista != null ? `<b>${esc(m(v.comissao_prevista))}</b> previstos · ` : ''}nasce na instalação`}</span></div>${fora ? '' : NG.dicaTxt(`${A.tr_dinheiro} ${A.din_antes}`)}</div>`;
     }
+    const estado = x.estado;
+    const prox = estado === 'em_risco' ? (x.cancelada_apos_instalar_em ? 'cancelada depois de instalar' : `estorno até ${NG.fmtData(x.risco_ate)}`)
+      : estado === 'firme' ? 'aguardando o extrato' : estado === 'no_extrato' ? `contestar até ${NG.fmtData(x.contestar_ate)}` : '';
+    return `<div class="fc-din-w"><button type="button" class="fc-din-l${fc.etapa === 'din' ? ' on' : ''}" data-f="fc-etapa" data-k="din" aria-expanded="${fc.etapa === 'din'}" title="Ver os estados e as datas">
+      <span>Dinheiro</span><span class="fc-pill ${DIN_CLS[estado] || 'mute'}">${esc(DIN_ROT[estado] || estado)}</span><span class="fc-din-t">${bo ? `<b>${esc(m(x.previsto_total))}</b>` : ''}${prox ? `${bo ? ' · ' : ''}${esc(prox)}` : ''}</span></button>${NG.dicaTxt(`${A.tr_dinheiro} ${A.din_estados[estado] || ''}`)}</div>`;
+  }
+  function dinDet() {
+    const x = d.din;
+    const bo = ehBO();
+    const m = NG.fmtMoeda;
+    const estado = x.estado;
     const fim = ['estornada', 'contestada'].includes(estado);
-    const iAt = !estado ? -1 : fim ? 3 : DIN_PASSOS.findIndex(([k]) => k === estado);
+    const iAt = fim ? 3 : DIN_PASSOS.findIndex(([k]) => k === estado);
     const steps = DIN_PASSOS.map(([, rot], i) => {
-      const st = iAt < 0 ? 'todo' : i < iAt || estado === 'paga' ? 'done' : i === iAt ? (estado === 'estornada' ? 'stop' : 'now') : 'todo';
+      const st = i < iAt || estado === 'paga' ? 'done' : i === iAt ? (estado === 'estornada' ? 'stop' : 'now') : 'todo';
       return `<span class="fc-es s-${st}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(rot)}</span>`;
     }).join('');
-    const det = x && fc.etapa === 'din' ? `<div class="fc-pop fc-pop-din" role="dialog" aria-label="Dinheiro desta venda"><div class="fc-pop-h"><b>Dinheiro desta venda</b><small>${esc(DIN_ROT[estado] || '')}</small>
+    return `<div class="fc-pop" role="dialog" aria-label="Dinheiro desta venda"><div class="fc-pop-h"><b>Dinheiro desta venda</b><small>${esc(DIN_ROT[estado] || '')}</small>
         <button type="button" class="fc-x" data-f="fc-etapa" data-k="din" aria-label="Fechar">${IC.x}</button></div>
+      <div class="fc-es-l fc-es-din">${steps}</div>
       ${linhaDet('Ativada em', esc(NG.fmtData(x.ativada_em)))}
       ${bo ? linhaDet('Previsto', `${esc(m(x.prevista))} de comissão${Number(x.bonus_previsto || 0) ? ` + ${esc(m(x.bonus_previsto))} de bônus` : ''}`) : ''}
-      ${bo ? linhaDet('No extrato', Number(x.no_extrato || 0) ? esc(m(x.no_extrato)) : 'ainda não lançado') : ''}
+      ${bo ? linhaDet('No extrato', Number(x.no_extrato || 0) ? `${esc(m(x.no_extrato))}${Number(x.diferenca || 0) ? ` <span class="${Number(x.diferenca) < 0 ? 'bad-txt' : 'ok-txt'}">(${Number(x.diferenca) > 0 ? '+' : ''}${esc(m(x.diferenca))} contra o previsto)</span>` : ''}` : 'ainda não lançado') : ''}
       ${bo && Number(x.estornado || 0) ? linhaDet('Estornado', `<span class="bad-txt">${esc(m(x.estornado))}</span>`) : ''}
       ${bo && Number(x.multas || 0) ? linhaDet('Multas', `<span class="bad-txt">${esc(m(x.multas))}</span>`) : ''}
       ${bo && Number(x.pago || 0) ? linhaDet('Pago', esc(m(x.pago))) : ''}
@@ -2840,10 +2850,15 @@
       ${linhaDet('Contestar', `até ${esc(NG.fmtData(x.contestar_ate))}`)}
       ${linhaDet('M-10', `apura em ${esc(NG.fmtData(x.m10_em))}${bo && Number(x.bonus_m10_potencial || 0) ? ` · até ${esc(m(x.bonus_m10_potencial))}` : ''}`)}
       ${linhaDet('Documentos', esc(x.docs_entregues_em ? `entregues ${NG.fmtData(x.docs_entregues_em)}` : `até ${NG.fmtData(x.docs_ate)}`))}
-      <span class="fc-src">fonte: tabela de comissão (previsto) · extrato da Nio (real)</span></div>` : '';
-    return `<div class="fc-tr fc-tr-din${fc.tr === 'din' || fc.etapa === 'din' ? ' on' : ''}">${trK('din', 'Dinheiro', A.tr_dinheiro)}<span class="fc-tr-curto">${esc(curto)}</span><div class="fc-es-l">${steps}</div><div class="fc-tr-res">${res}</div>${det}</div>`;
+      <span class="fc-src">fonte: tabela de comissão (previsto) · extrato da Nio (real)</span></div>`;
   }
-  const trilhasHtml = (passos) => `<div class="fc-trilhas">${escadaHtml()}${osHtml(passos)}${dinheiroHtml()}</div>`;
+  // Detalhe de um passo da OS ou do dinheiro: abre por cima dos dois cartões (nada empurra nada).
+  function etapaOver(passos) {
+    if (fc.etapa === 'din') return d.din ? `<div class="fc-cards-over fc-etapa-over">${dinDet()}</div>` : '';
+    const x = fc.etapa ? trilhaPassos(passos).find((y) => y.k === fc.etapa) : null;
+    return x ? `<div class="fc-cards-over fc-etapa-over">${etapaDetalhe(x)}</div>` : '';
+  }
+  const trilhasHtml = () => `<div class="fc-trilhas">${escadaHtml()}</div>`;
   // Selo da conversa dentro da ficha (vinha no cabeçalho da gaveta): status no Chatwoot, janela de 24 h e etiquetas.
   const seloConv = (cv) => (!cv || !cv.chatwoot_conversation_id || !ehBO() ? ''
     : `<span class="fc-selo"><span class="fc-pill mute">${cv.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span><span class="fc-pill mute">Janela ${esc(janelaTxt(cv))}</span>${(cv.chatwoot_etiquetas || []).slice(0, 3).map((e) => `<span class="fc-pill mute">${esc(e)}</span>`).join('')}${NG.dicaTxt(NG.ajuda.ficha_selo_conv)}</span>`);
@@ -2876,9 +2891,9 @@
   const chipCopia = (rot, val, cls = '') => (val ? `<span class="fc-chip ${cls}"><span>${esc(rot)} ${esc(val)}</span>${btCopiar(NG.soDigitos(val) || val, rot)}</span>` : '');
 
   // ---------- Agora + pendência ----------
-  function agoraHtml(tom, k, t, s, botao, pendHtml) {
+  function agoraHtml(tom, k, t, s, botao, pendHtml, info) {
     return `<div class="fc-agora ag-${tom}">
-      <div class="fc-ag-main"><div class="fc-ag-txt"><div class="fc-ag-k">${esc(k)}</div><div class="fc-ag-t" title="${esc(t)}">${esc(t || '—')}</div><div class="fc-ag-s" title="${esc(s || '')}">${esc(s || '')}</div></div>${botao}</div>
+      <div class="fc-ag-main"><div class="fc-ag-txt"><div class="fc-ag-k">${esc(k)}</div>${info ? `<div class="fc-ag-i">${info}</div>` : ''}<div class="fc-ag-t" title="${esc(t)}">${esc(t || '—')}</div><div class="fc-ag-s" title="${esc(s || '')}">${esc(s || '')}</div></div>${botao}</div>
       ${pendHtml}</div>`;
   }
   function pendLinha(v) {
@@ -2962,9 +2977,8 @@
       : v.comissao_prevista != null ? `${m(v.comissao_prevista)} prevista${cicloPrevisto(v.instalado_em || v.instalacao_agendada_para) ? ` · ciclo ${cicloPrevisto(v.instalado_em || v.instalacao_agendada_para)}` : ''}` : '';
     const estorno = Number(v.estorno_previsto || 0) ? `${m(v.estorno_previsto)} previsto` : travas.length ? `risco: ${travas.join(', ')}` : 'sem risco';
     const inst = v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}` : v.instalacao_agendada_para ? `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}` : '';
-    const resumo = `<div class="fc-dl">${di('Plano', d.nomeCurto || v.plano_nome, false)}${di('Mensalidade', v.valor_mensal != null ? m(Number(v.valor_mensal) + valorAd) : '', false)}${di('Pagamento', FORMAS[v.forma_pagamento] || '', false)}
-        ${di('Pedido PAP', v.nio_os || v.nio_pedido || '', true, 'mono')}${di('Biometria', v.biometria_status ? (NG.BIOMETRIA[v.biometria_status] || v.biometria_status).split(' (')[0] : '', false)}${di('Instalação', inst, false)}
-        ${comissao || ehBO() ? `<div class="fc-sep"></div>${comissao ? di('Comissão', comissao, false) : ''}<div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill ${travas.length || Number(v.estorno_previsto || 0) ? 'bad' : 'ok'}">${esc(estorno)}</span></span><span></span></div>` : ''}</div>`;
+    const resumo = `<div class="fc-dl fc-venda-v">${osLista(passosVenda(v))}${dinLinha()}
+        ${ehBO() && (travas.length || Number(v.estorno_previsto || 0)) ? `<div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill bad">${esc(estorno)}</span></span><span></span></div>` : ''}</div>`;
     const confHtml = `<div class="fc-full"><div class="fc-conf-intro">Conferências do contrato — é o que evita estorno e multa.</div>${cf.map(([k, rot, val, onde]) => `<div class="fc-cf">
         <span class="fc-cf-ic ${val === true ? 'ok' : val === false ? 'bad' : ''}">${val === true ? IC.ok : val === false ? IC.x : ''}</span>
         <span>${esc(rot)}<small>${val === true ? 'conferido' : val === false ? 'não passou — ver antes de seguir' : 'não verificado'}</small></span>
@@ -3095,20 +3109,21 @@
       const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
         v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ');
-      cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}${seloConv(cv)}`,
+      cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
         `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
-      trilha = trilhasHtml(passosVenda(v));
+      trilha = trilhasHtml();
+      const E = escadaPartes(true);
       const tom = p.alertaConv ? 'now' : TOM[p.nivel] || 'mute';
-      const k = p.alertaConv ? 'Agora · conversa' : `${NIVEL_K[p.nivel] || 'Próximo passo'}${etapa ? ` · ${d.jor ? d.jor.etapa_nome : NG.etapaDe(v).nome}` : ''}`;
+      const k = p.alertaConv ? 'Agora · conversa' : `${NIVEL_K[p.nivel] || 'Próximo passo'}${E ? '' : etapa ? ` · ${d.jor ? d.jor.etapa_nome : NG.etapaDe(v).nome}` : ''}`;
       const t = etapa === 0 ? `Saída · ${v.motivo_saida || 'sem motivo'}` : p.alertaConv ? p.jReal.o_que_fazer : p.texto;
       const s = etapa === 0 ? (v.interesse_futuro_em ? `Volta em ${NG.fmtDiaISO(v.interesse_futuro_em)}` : '') : p.alertaConv ? `Depois: ${p.texto || '—'}`
         : feitoUltimo ? feitoUltimo.resumo : p.nota || (p.sozinho ? `O NIOGEN faz sozinho: ${p.sozinho}` : '');
       const responder = p.alertaConv && p.jReal.botao === 'responder' && d.conversaId;
       const rot = responder ? 'Responder' : p.temAcao && p.rotuloAcao ? p.rotuloAcao : p.temAcao ? 'Fazer' : 'Ações';
       const botao = `<div class="fc-ag-bts"><button type="button" class="btn${responder || (p.temAcao && ['now', 'today'].includes(tom)) ? ' btn-acc' : ''} fc-ag-bt" data-f="${responder ? 'conversa' : 'fc-passo'}">${esc(rot.length > 26 ? 'Fazer' : rot)}${IC.seta}</button>
-        ${responder ? '<button type="button" class="fc-link" data-f="fc-passo" title="Próximo passo da venda e atalhos (pendência, devolver para a Mari, saída…)">Ações da venda</button>' : ''}</div>`;
-      agora = `<div class="fc-agora-w">${agoraHtml(tom, k, t, s, botao, pendLinha(v))}${pendOver()}</div>`;
-      cards = `<div class="fc-cards">${cardsVenda(v)}${verTudo(v)}${passoOver(v, p)}</div>`;
+        ${responder ? '<button type="button" class="fc-link" data-f="fc-passo" title="Próximo passo da venda e atalhos (pendência, devolver para a Mari, saída…)">Ações da venda</button>' : ''}${E ? E.reabrir : ''}</div>`;
+      agora = `<div class="fc-agora-w">${agoraHtml(tom, k, t, s, botao, pendLinha(v), E ? E.info : '')}${pendOver()}</div>`;
+      cards = `<div class="fc-cards">${cardsVenda(v)}${verTudo(v)}${passoOver(v, p)}${etapaOver(passosVenda(v))}</div>`;
     } else {
       const P = conversaPartes();
       const c = P.c;
@@ -3116,26 +3131,28 @@
       document.title = `${c.nome} · Live · NIOGEN`;
       const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>${auditarItem()}
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
-      cab = cabCheia(c.nome, `${chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : '')}${seloConv(c)}`, `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu,
+      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu,
         ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
-      trilha = trilhasHtml(P.passosConv);
+      trilha = trilhasHtml();
+      const E = escadaPartes(false);
       const tom = P.silenciada ? 'mute' : TOM[P.nivel] || 'wait';
-      const botao = `<button type="button" class="btn${tom === 'now' ? ' btn-acc' : ''} fc-ag-bt" data-f="fc-passo">${dn.tipo === 'mari' && !c.nao_contatar && ehBO() && !P.silenciada ? 'Assumir' : 'Ações'}${IC.seta}</button>`;
+      const botao = `<div class="fc-ag-bts"><button type="button" class="btn${tom === 'now' ? ' btn-acc' : ''} fc-ag-bt" data-f="fc-passo">${dn.tipo === 'mari' && !c.nao_contatar && ehBO() && !P.silenciada ? 'Assumir' : 'Ações'}${IC.seta}</button>${E ? E.reabrir : ''}</div>`;
       const pendH = P.emEspera ? `<div class="fc-ag-pend"><span class="fc-pill pend">${IC.pausa}em espera</span><span class="fc-pt">até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}</span></div>` : '<div class="fc-ag-pend none"><span>Sem pendência</span></div>';
       agora = `<div class="fc-agora-w">${agoraHtml(tom, `${P.silenciada ? 'Silenciada' : NIVEL_K[P.nivel] || 'Conversa'} · conversa sem venda`, P.silenciada ? 'Cliente Nio · suporte — fora do Live' : (P.j.o_que_fazer || 'Mari atendendo'),
-        feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`, botao, pendH)}</div>`;
+        feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`, botao, pendH, E ? E.info : '')}</div>`;
       const L = dadosConversaLista(c);
       const travas = P.travasC;
       const abertoP = fc.passo || formAtivo === 'conv_espera' || formAtivo === 'saida';
       cards = `<div class="fc-cards"><div class="fc-card"><div class="fc-card-h"><h3>Cliente</h3><span class="fc-sp"></span><span class="apagado">coletado pela Mari</span></div>
           <div class="fc-dl">${L.length ? L.map(([kk, val]) => di(kk, String(val), true)).join('') : '<div class="apagado fc-pad">A Mari ainda não coletou dados deste cliente.</div>'}</div></div>
         <div class="fc-card"><div class="fc-card-h"><h3>Venda</h3><span class="fc-sp"></span><span class="fc-pill mute">ainda sem venda</span></div>
-          <div class="fc-dl fc-pad">${P.itens.length ? `<div class="f-itens">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : ''}
-            <div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill ${travas.length ? 'bad' : 'ok'}">${esc(travas.length ? `risco: ${travas.join(', ')}` : 'sem risco')}</span></span><span></span></div></div></div>
+          <div class="fc-dl fc-venda-v">${osLista(P.passosConv)}${dinLinha()}
+            ${P.itens.length ? `<div class="f-itens fc-itens-v">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : ''}
+            ${travas.length ? `<div class="fc-di"><span class="fc-dk">Estorno</span><span class="fc-dv"><span class="fc-pill bad">${esc(`risco: ${travas.join(', ')}`)}</span></span><span></span></div>` : ''}</div></div>
         ${abertoP ? `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Ações"><div class="fc-card-h"><h3>${esc(NIVEL_ROT[P.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
-          <div class="fc-passo-corpo"><div class="fc-passo-b"><b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>${P.corpoPasso}</div>${P.feito}</div></div>` : ''}</div>`;
+          <div class="fc-passo-corpo"><div class="fc-passo-b"><b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>${P.corpoPasso}</div>${P.feito}</div></div>` : ''}${etapaOver(P.passosConv)}</div>`;
     }
-    const etapaNome = d.jor ? d.jor.etapa_nome : '';
+    const etapaNome = (d.lead && d.lead.etapa_nome) || (d.jor ? d.jor.etapa_nome : '');
     const temConv = !!d.conversaId;
     raiz.innerHTML = `<div class="fc">
       ${cab}${trilha}
@@ -3194,7 +3211,7 @@
   function cliqueCheia(ev) {
     if (modo !== 'cheia' || !d) return;
     let mudou = false;
-    if ((fc.etapa || fc.menu) && !ev.target.closest('.fc-rs, .fc-menuw, .fc-tr-din, .dica-pop')) { fc.etapa = null; fc.menu = false; mudou = true; }
+    if ((fc.etapa || fc.menu) && !ev.target.closest('.fc-ov, .fc-din-w, .fc-etapa-over, .fc-menuw, .dica-pop')) { fc.etapa = null; fc.menu = false; mudou = true; }
     const rp = ev.target.closest('[data-resolver]');
     if (rp) {
       const q = rp.dataset.resolver;
@@ -3219,7 +3236,7 @@
     if (a === 'fc-concluir') { dispensarAviso(b); return; }
     if (a === 'fc-nav') { if (cheiaOpts.aoNavegar) cheiaOpts.aoNavegar(Number(b.dataset.dir)); return; }
     if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
-    if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; render(); return; }
+    if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
     if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
     if (a === 'fc-op-reg') {
       const r = b.dataset.r;
@@ -3232,9 +3249,9 @@
       credPreset = r; formAtivo = 'credito'; fc.etapa = null; fc.passo = true; render(); return;
     }
     if (a === 'fc-pend') { fc.pend = !fc.pend; render(); return; }
-    if (a === 'fc-passo') { fc.passo = true; fc.ver = null; fc.pend = false; render(); return; }
+    if (a === 'fc-passo') { fc.passo = true; fc.ver = null; fc.pend = false; fc.etapa = null; render(); return; }
     if (a === 'fc-passo-x') { fc.passo = false; formAtivo = null; passoAberto = new Set(); render(); return; }
-    if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; render(); return; }
+    if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; fc.etapa = null; render(); return; }
     if (a === 'fc-ver-x') { fc.ver = null; edicao = null; render(); return; }
     if (a === 'fc-conf') { fc.conf = !fc.conf; if (fc.ver) fc.ver = null; render(); return; }
     if (a === 'fc-conferir') {
@@ -3255,7 +3272,7 @@
       }
       render(); return;
     }
-    if (a === 'fc-tr') { fc.tr = fc.tr === b.dataset.k ? null : b.dataset.k; if (!fc.tr) fc.etapa = null; render(); return; }
+    if (a === 'fc-tr') { fc.tr = fc.tr === b.dataset.k ? null : b.dataset.k; render(); return; }
     if (a === 'fc-aba') { fc.aba = b.dataset.a; render(); return; }
     if (a === 'fc-hf') { fc.histF = b.dataset.h; render(); return; }
     if (a === 'fc-reg') { fc.reg = !fc.reg; fc.cad = false; render(); if (fc.reg) { const i = raiz.querySelector('[data-fc-resumo]'); if (i) i.focus(); } return; }
