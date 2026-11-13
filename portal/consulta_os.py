@@ -38,7 +38,14 @@ def conferir_clique(texto):
 def clicar(loc):
     """ÚNICO caminho de clique do operador de OS: lê o texto do alvo, confere a lista branca e só então clica."""
     conferir_clique(cr._texto_do(loc))
-    loc.click(timeout=15000)
+    try:
+        loc.click(timeout=6000)
+    except Exception as e:  # noqa: BLE001
+        # No navegador sem tela o menu lateral fica por cima do botão e o clique de mouse não completa (visto em 13/11).
+        # O alvo já passou pela lista branca: aciona o clique no próprio elemento.
+        if 'Timeout' not in type(e).__name__:
+            raise
+        loc.dispatch_event('click')
 
 
 # ----------------------------------------------------------------------------------------------- travas de rede
@@ -173,14 +180,16 @@ class ConsultaOS:
             self.page = self.ctx.new_page()
             self.page.route('**/*', self._rota)
             self.page.goto(PORTAL_HOST + ROTA_TELA, wait_until='domcontentloaded', timeout=45000)
-            abrir = self._esperar(lambda: self._botao('Filtros'), 25)
-            if not abrir:
+            # A gaveta do filtro às vezes já vem aberta (visto em 13/11): só clica em "Filtros" se os campos não estão na tela.
+            pronto = self._esperar(lambda: self._campo('CPF/CNPJ') or self._botao('Filtros'), 25)
+            if not pronto:
                 if ROTA_TELA not in self.page.url:
                     raise cr.SessaoCaida('portal pediu login')
-                raise RuntimeError('botão Filtros não apareceu')
-            clicar(abrir)
-            campo_cpf = self._esperar(lambda: self._campo('Digite o CPF/CNPJ'), 10)
-            campo_os = self._campo('Digite o número de OS')
+                raise RuntimeError('a tela da Consulta OS não carregou')
+            if not self._campo('CPF/CNPJ'):
+                clicar(self._botao('Filtros'))
+            campo_cpf = self._esperar(lambda: self._campo('CPF/CNPJ'), 10)
+            campo_os = self._campo('mero de OS')
             if not campo_cpf or not campo_os:
                 raise RuntimeError('campos do filtro não apareceram')
             self._preencher(campo_cpf, cr.so_digitos(self.p['cpf']))
@@ -206,7 +215,7 @@ class ConsultaOS:
             raise
         except Exception as e:  # noqa: BLE001
             self._checar_trava()
-            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}'[:200]}
+            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}'[:300], 'diag': self._diagnostico()}
         finally:
             try:
                 if self.page:
@@ -217,12 +226,37 @@ class ConsultaOS:
         return out
 
     # ---------------------------------------------------------------- utilidades
-    def _campo(self, placeholder):
-        loc = self.page.get_by_placeholder(re.compile(re.escape(placeholder), re.I))
+    def _diagnostico(self):
+        """O que a tela mostrava quando a leitura falhou: caminho, tamanho da janela, botões e o começo do texto.
+        Só é chamado ANTES da pesquisa (a tela ainda não tem dado de cliente); mesmo assim passa por sem_pii."""
         try:
-            return loc.first if loc.count() > 0 and loc.first.is_visible() else None
-        except Exception:  # noqa: BLE001
-            return None
+            d = self.page.evaluate(r"""() => ({
+                caminho: location.pathname,
+                janela: innerWidth + 'x' + innerHeight,
+                botoes: [...document.querySelectorAll('button, a[href]')].slice(0, 30).map(b => {
+                    const r = b.getBoundingClientRect();
+                    return ((b.innerText || b.getAttribute('aria-label') || b.id || '?').trim().slice(0, 30)) + '@' + Math.round(r.x) + ',' + Math.round(r.y) + (r.width ? '' : ' (oculto)');
+                }),
+                texto: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 400),
+                dialogos: [...document.querySelectorAll('[role=dialog], [role=presentation], .MuiBackdrop-root')].length,
+                campos: [...document.querySelectorAll('input')].slice(0, 8).map(i => (i.placeholder || i.type) + (i.getBoundingClientRect().width ? '' : ' (oculto)')),
+            })""")
+            d['texto'] = cr.sem_pii(d.get('texto') or '')
+            return d
+        except Exception as e:  # noqa: BLE001
+            return {'falhou': type(e).__name__}
+
+    def _campo(self, placeholder):
+        # Pelo texto de dica (contém, sem caixa) e, se não achar, pelo atributo — o primeiro que estiver visível.
+        for loc in (self.page.get_by_placeholder(placeholder, exact=False),
+                    self.page.locator(f'input[placeholder*="{placeholder}" i]')):
+            try:
+                for i in range(min(loc.count(), 4)):
+                    if loc.nth(i).is_visible():
+                        return loc.nth(i)
+            except Exception:  # noqa: BLE001
+                pass
+        return None
 
     def _campos_data(self):
         loc = self.page.locator('input[type="text"]')

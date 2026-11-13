@@ -549,7 +549,7 @@ def novo_job_os(b):
         except cr.TravaAcionada as e:
             out = {'resultado': 'erro', 'motivo': str(e)[:200], 'trava': True, 'ms': 0}
         except Exception as e:  # noqa: BLE001
-            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}'[:200], 'ms': 0}
+            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}'[:900], 'ms': 0}
         out.update(consultado_em=agora_br(), cache=False)
         j['resultado'] = out
         j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
