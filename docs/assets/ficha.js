@@ -2924,6 +2924,13 @@
   function cabCheia(nome, chips, meta, menu, extra = '') {
     const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
     const naFila = !!cheiaOpts.posicao;   // fora da Live não há fila: só Voltar
+    // 13/11 (Ricardo): a Saída ficava escondida (dentro do Próximo passo e do menu ⋯). Agora tem lugar fixo no topo da ficha,
+    // com contorno vermelho, sempre que o cliente ainda pode sair: venda antes de instalar ou conversa em andamento.
+    const vS = d && !d.soConversa ? d.v : null;
+    const podeSair = vS
+      ? !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
+      : !!(d && d.soConversa && ehBO() && !(d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)));
+    const btSaida = podeSair ? `<button type="button" class="btn fc-saida${formAtivo === 'saida' ? ' on' : ''}" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída</button>` : '';
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div></div>
@@ -2931,7 +2938,7 @@
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1"${naFila ? '' : ' hidden'} aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
-        ${extra}<button type="button" class="btn btn-acc" data-f="fc-concluir"${naFila || (d.conversaId && ehBO()) ? '' : ' hidden'} title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
+        ${extra}${btSaida}<button type="button" class="btn btn-acc" data-f="fc-concluir"${naFila || (d.conversaId && ehBO()) ? '' : ' hidden'} title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
         <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Mais ações">${IC.mais}</button>
           ${fc.menu ? `<div class="fc-menu" role="menu">${menu}</div>` : ''}</div>
       </div></header>`;
