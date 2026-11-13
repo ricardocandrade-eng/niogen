@@ -158,7 +158,8 @@
     trab.classList.add('com-conversa');
     direita.innerHTML = `<div class="cv-topo"><button type="button" class="btn btn-sm cv-voltar" id="voltar">← Conversas</button>
       ${c && c.venda_id ? `<a class="btn btn-sm" href="#venda=${esc(c.venda_id)}">Abrir a ficha da venda</a>` : `<a class="btn btn-sm" href="#conversa=${esc(id)}">Abrir a ficha</a>`}
-      ${c ? `<span class="apagado">${esc(NOME_ET[c.etapa] || '')}${c.telefone ? ` · ${esc(c.telefone)}` : ''}</span>` : ''}</div><div class="cv-host"></div>`;
+      ${c && (c.funil_destino || 'em_andamento') === 'em_andamento' && !c.encerrada && !['agendada', 'instalada'].includes(c.funil_etapa) ? NG.botaoOperador({ vendaId: c.venda_id, conversaId: c.venda_id ? null : id }) : ''}
+      ${c ? `<span class="apagado">${esc(NOME_ET[c.etapa] || '')}${c.telefone ? ` · ${esc(c.telefone)}` : ''}</span>` : ''}</div><div class="cv-host"></div>`;   // 13/11: ⌖ Consultar (viabilidade e crédito pelo operador), só admin/backoffice e lead em andamento antes da Instalação
     document.getElementById('voltar').onclick = fechar;
     if (comp) comp.destruir();
     comp = NGConversa.montar(direita.querySelector('.cv-host'), { conversaId: id, nome: c ? c.nome : null, aoMudar: () => carregar() });
