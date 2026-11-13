@@ -264,7 +264,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, funil_etapa, funil_destino, funil_detalhe, funil_alerta').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -339,7 +339,7 @@
     let cad = null;
     if (rcad) {
       const [rkc, rtc, tpl] = rcad;
-      cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), tpl: tpl || {} };
+      cad = { k: rkc.error ? null : rkc.data, enviados: NG.cadEnviados(rtc.data), lista: rtc.data || [], tpl: tpl || {} };
     }
     const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
@@ -1973,7 +1973,7 @@
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.from('v_mari_cadencia').select('*').eq('conversa_id', cid).maybeSingle(),
@@ -1992,7 +1992,7 @@
     return {
       soConversa: true, ultTime, fnome, lead, leadCfg: lcfg || [], conv: { ...c, nome: (c.dados && c.dados.nome) || c.nome_contato || 'Contato' },
       jor: jo || null, q: rq.error ? {} : (rq.data || {}),
-      cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data) },
+      cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data), lista: rt.data || [] },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
     };
@@ -2553,7 +2553,7 @@
   let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
   let cvCheia = null;      // NGConversa montado na metade esquerda
   let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
-  const novoFc = () => ({ etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
+  const novoFc = () => ({ etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
   let fc = novoFc();
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -3033,8 +3033,10 @@
     const v = d.soConversa ? {} : d.v;
     const its = [];
     (d.eventos || []).forEach((e) => its.push({ em: e.criado_em, k: KIND_EV(e.tipo), html: eventoHtml(e, v) }));
-    const env = (d.cad && d.cad.enviados) || {};
-    Object.entries(env).forEach(([cod, x]) => its.push({ em: x.em, k: 'mari', html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong>Mari · lembrete ${esc(cod)}${x.simulado ? ' (simulado)' : ''}</strong><span>${esc(NG.fmtDataHora(x.em))}${x.texto ? ` · ${esc(String(x.texto).slice(0, 120))}` : ''}</span></div></div>` }));
+    ((d.cad && d.cad.lista) || []).filter((t) => t.tags && t.tags.cadencia).forEach((t) => {
+      const cod = t.tags.cadencia;
+      its.push({ em: t.created_at, k: 'mari', html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong>Mari · lembrete ${esc(CAD_ROT[cod] && CAD_ROT[cod] !== cod ? `${CAD_ROT[cod]} (${cod})` : cod)}${t.tags.simulado ? ' (simulado)' : ''}</strong><span>${esc(NG.fmtDataHora(t.created_at))}${t.texto ? ` · ${esc(String(t.texto).slice(0, 160))}` : ''}</span></div></div>` });
+    });
     const cvh = d.soConversa ? d.conv : d.convInfo;
     if (cvh && cvh.handoff_briefing && ehBO()) its.push({ em: cvh.handoff_em || new Date(0).toISOString(), k: 'mari', html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong>Mari · briefing do handoff${cvh.handoff_motivo ? ` (${esc(String(cvh.handoff_motivo).replace(/_/g, ' '))})` : ''} ${NG.dicaTxt(NG.ajuda.hist_briefing)}</strong><span>${cvh.handoff_em ? esc(NG.fmtDataHora(cvh.handoff_em)) : ''}</span><span class="fc-brief">${esc(cvh.handoff_briefing)}</span></div></div>` });
     (fc.erros || []).forEach((e) => its.push({ em: e.created_at, k: 'mari', html: `<div class="tl-item"><span class="tl-dot"></span><div class="tl-txt"><strong class="bad-txt">Erro da Mari${e.no_n8n ? ` · ${esc(e.no_n8n)}` : ''} ${NG.dicaTxt(NG.ajuda.hist_erros)}</strong><span>${esc(NG.fmtDataHora(e.created_at))} · ${esc(String(e.mensagem || '').slice(0, 240))}</span></div></div>` }));
@@ -3050,8 +3052,207 @@
         ${fc.hist && !d.soConversa ? proximosMarcos(d.v) : ''}</div></div>`;
   }
 
+  // ---------- Lembretes da Mari (13/11, etapa 4a) ----------
+  // Ricardo (13/11): "mostrar de forma visível os lembretes já enviados, o próximo (qual e quando) e por que está parada". SÓ
+  // LEITURA: espelha a mari_cadencia_avaliar (0141 · 0114) com o que a ficha já carregou — a linha da v_mari_cadencia (o próximo e
+  // o bloqueio) e os turnos da Mari com tags.cadencia (o que saiu). Nenhuma chamada nova; não grava nada nem muda a régua.
+  const CAD_ROT = { P1: '1º contato', L15: '15 min', F1: '15 min', F2: '1 h', F3: '3 h', F4: '6 h', F5: '20 h', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída',
+    BIO1: 'Biometria D+1', BIO3: 'Ligar D+3', INSTALACAO: 'Aviso da instalação', VESPERA: 'Véspera', RETORNO: 'Retorno combinado' };
+  const CAD_O_QUE = { P1: 'template de 1º contato', F1: 'cutucada 15 min depois da última fala da Mari', F2: 'cutucada 1 h depois da última fala da Mari',
+    F3: 'cutucada 3 h depois da última fala da Mari', F4: 'cutucada 6 h depois da última fala da Mari', F5: 'última chamada ~20 h depois da mensagem do cliente',
+    D3: 'template de retomada no 3º dia', LIG: 'o vendedor liga entre o D3 e o D6 (a Mari não liga)', D7: 'template de retomada no 7º dia', D15: 'último template, no 15º dia',
+    FIM: '48 h depois do D15 sem resposta, a conversa sem venda vai para Saída · Sem resposta', BIO1: 'lembrete da biometria no D+1 do pedido',
+    BIO3: 'no D+3 sem biometria o time liga (nunca automático)', INSTALACAO: 'aviso assim que a instalação é agendada', VESPERA: 'lembrete na véspera da instalação',
+    RETORNO: 'retorno no dia e hora que o cliente pediu' };
+  const CAD_ACAO = { texto: 'mensagem livre (janela aberta)', template: 'template', ligar: 'ligação do time', encerrar: 'vai para Saída · Sem resposta' };
+  const HMS = 3600000;
+  // Horário do contrato para toque automático: seg–sex 9–21, sáb 10–16, nunca domingo. Brasília = UTC−3 fixo. Feriado o banco
+  // resolve na hora; aqui é só a estimativa do "quando".
+  function cadHorario(ms) {
+    let t = ms;
+    for (let i = 0; i < 10; i++) {
+      const l = new Date(t - 3 * HMS);
+      const dow = l.getUTCDay();
+      const min = l.getUTCHours() * 60 + l.getUTCMinutes();
+      const dia0 = Date.UTC(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate()) + 3 * HMS;
+      const [ab, fe] = dow === 0 ? [null, null] : dow === 6 ? [600, 960] : [540, 1260];
+      if (ab != null && min < ab) return dia0 + ab * 60000;
+      if (ab != null && min < fe) return t;
+      t = dia0 + 24 * HMS;
+    }
+    return ms;
+  }
+  const cadDia = (ms) => {
+    const hoje = NG.diaSP();
+    const dia = NG.diaSP(new Date(ms).toISOString());
+    const amanha = NG.diaSP(new Date(Date.now() + 24 * HMS).toISOString());
+    return dia === hoje ? 'hoje' : dia === amanha ? 'amanhã' : `${NG.fmtDiaSemana(new Date(ms).toISOString())} ${NG.fmtData(new Date(ms).toISOString())}`;
+  };
+  const cadQuando = (ms, soDia) => (ms == null ? '' : soDia ? cadDia(ms) : `${cadDia(ms)} ${NG.fmtHora(new Date(ms).toISOString())}`);
+  const cadCurto = (ms) => {   // embaixo do passo: "13:20" hoje · "qua 13:20" na semana · "10/11 13:20" antes
+    const iso = new Date(ms).toISOString();
+    if (NG.diaSP(iso) === NG.diaSP()) return NG.fmtHora(iso);
+    return Math.abs(Date.now() - ms) < 6 * 24 * HMS ? `${NG.fmtDiaSemana(iso)} ${NG.fmtHora(iso)}` : NG.fmtDataHora(iso);
+  };
+
+  function cadPlano() {
+    if (!d || !ehBO()) return null;
+    const conv = !!d.soConversa;
+    const v = conv ? null : d.v;
+    const c = conv ? d.conv : d.convInfo;
+    if (!c || !c.id) return null;   // sem conversa no WhatsApp (rua, parceiro): a Mari não manda lembrete
+    const A = NG.ajuda;
+    const k = (d.cad && d.cad.k) || null;
+    const lista = ((d.cad && d.cad.lista) || []).filter((t) => t.tags && t.tags.cadencia);
+    const agora = Date.now();
+    const ms = (x) => (x ? new Date(x).getTime() : null);
+    const lead = d.lead || {};
+    const dn = donoConversa(c);
+    const proxCod = k && k.proximo_passo ? (k.proximo_passo === 'ENCERRAR' ? 'FIM' : k.proximo_passo === 'L15' ? 'F1' : k.proximo_passo) : null;
+    const vInst = !!v && v.status === '2_aguardando_instalacao' && ms(v.instalacao_agendada_para) > agora;
+    const fluxoVenda = !!(v || c.venda_id) && (c.status === 'handoff_realizado' || vInst);
+    const L = ms(c.ultima_msg_lead_at);
+    const P = { grupos: [], passos: [], anteriores: 0, titulo: '', sub: '', tom: 'ok', pill: 'andando', pillCls: 'ok', linha: '', acao: '', resumo: '' };
+    let corte = 0;
+    const mk = (cod, extra = {}) => ({ cod, rot: CAD_ROT[cod] || cod, st: 'fut', sub: '', em: null, texto: null, ...extra });
+
+    if (fluxoVenda) {
+      // Venda (0114 · 0032): biometria (BIO1 · BIO3) e instalação (aviso · véspera). Saem mesmo com a conversa com o time.
+      P.titulo = 'venda';
+      const bio = v && v.biometria_link_enviado_em && v.biometria_status !== 'validada' && v.status === '0_qualificado';
+      const inst = v && v.instalacao_agendada_para && !v.instalado_em;
+      if (bio) {
+        const base = ms(v.biometria_link_enviado_em);
+        corte = base - 60000;
+        P.grupos.push({ rot: 'Biometria', dica: A.cad_venda, passos: [mk('BIO1', { prev: cadHorario(base + 24 * HMS) }), mk('BIO3', { prev: base + 72 * HMS })] });
+      }
+      if (inst) {
+        corte = Math.max(corte, ms(v.instalacao_agendada_para) - 30 * 24 * HMS);
+        P.grupos.push({ rot: 'Instalação', dica: A.cad_venda, passos: [mk('INSTALACAO'), mk('VESPERA')] });
+      }
+    } else if (c.status === 'ativo') {
+      if (!L) {
+        // Sem mensagem do cliente: só lead de formulário (Meta Ads, site, indicação) tem escada — P1 · D7 · D15.
+        if (['meta_ads', 'site', 'indicacao'].includes(c.origem)) {
+          const p1 = lista.find((t) => t.tags.cadencia === 'P1');
+          const B = ms(p1 && p1.created_at) || ms(c.created_at);
+          P.grupos.push({ rot: 'Retomada', dica: A.cad_retomada, passos: v ? [mk('P1')] : [mk('P1'), mk('D7', { prev: B + 7 * 24 * HMS }), mk('D15', { prev: B + 15 * 24 * HMS }), mk('FIM')] });
+        }
+      } else {
+        const B = Math.max(L, ms(c.cadencia_retorno_em) || 0);
+        corte = L;
+        P.sub = `desde a mensagem do cliente, ${cadQuando(L)}`;
+        P.grupos.push({ rot: 'Janela de 24 h', dica: A.cad_janela, janela: true, passos: ['F1', 'F2', 'F3', 'F4', 'F5'].map((x) => mk(x)) });
+        // Venda criada não recebe D3/D7/D15 (0050): segue pelo time.
+        if (!v && !c.venda_id) {
+          P.grupos.push({ rot: 'Retomada', dica: A.cad_retomada, passos: [mk('D3', { prev: B + 3 * 24 * HMS }), mk('LIG', { prev: B + 4 * 24 * HMS }), mk('D7', { prev: B + 7 * 24 * HMS }),
+            mk('D15', { prev: B + 15 * 24 * HMS }), mk('FIM', { prev: B + 17 * 24 * HMS })] });
+        }
+        if (c.agendamento_retorno && ms(c.agendamento_retorno) > L) P.grupos.unshift({ rot: 'Combinado', dica: A.cad_retomada, passos: [mk('RETORNO', { prev: ms(c.agendamento_retorno) })] });
+      }
+    }
+
+    // O que saiu nesta rodada (depois da última mensagem do cliente; L15 = a cutucada de 15 min da abertura) e o que ficou para trás.
+    const daRodada = lista.filter((t) => ms(t.created_at) > corte);
+    P.anteriores = lista.length - daRodada.length;
+    const saiu = (cod) => [...daRodada].reverse().find((t) => t.tags.cadencia === cod || (cod === 'F1' && t.tags.cadencia === 'L15'));
+    const seq = P.grupos.flatMap((g) => g.passos);
+    const iProx = seq.findIndex((p) => p.cod === proxCod);
+    let iUlt = -1;
+    seq.forEach((p, i) => {
+      const t = saiu(p.cod);
+      if (t) { p.st = 'ok'; p.em = ms(t.created_at); p.texto = t.texto; p.simulado = !!t.tags.simulado; iUlt = i; }
+    });
+    // Instalação e biometria: o banco marca o aviso na própria conversa (instalacao_avisada_para · bio_lembrete_em) — o turno pode ter vindo antes.
+    seq.forEach((p, i) => {
+      if (p.st === 'ok' || p.cod === 'LIG') return;
+      if (i === iProx) {
+        p.st = p.cod === 'BIO3' && k.ligar_sugerido ? 'agora' : 'prox';
+        const quando = k.bloqueio === 'fora do horário' ? ms(k.proximo_em) : cadHorario(ms(k.proximo_em));
+        p.em = p.cod === 'BIO3' || p.cod === 'FIM' ? ms(k.proximo_em) : quando;
+        p.texto = k.texto || null;
+      } else if (i < Math.max(iProx, iUlt) || (p.cod.startsWith('F') && L && agora >= L + 23 * HMS)) p.st = 'pul';
+    });
+    const lig = seq.find((p) => p.cod === 'LIG');
+    if (lig) {
+      const ligou = (d.contatos || []).find((x) => x.canal === 'ligacao' && ms(x.em) > lig.prev - 24 * HMS);
+      if (ligou) { lig.st = 'ok'; lig.em = ms(ligou.em); } else if (k && k.ligar_sugerido) lig.st = 'agora';
+      else if (agora > lig.prev + 2 * 24 * HMS) lig.st = 'pul';
+    }
+    seq.forEach((p) => {
+      p.sub = p.st === 'ok' ? cadCurto(p.em) : p.st === 'pul' ? 'não saiu' : p.st === 'agora' ? 'ligar agora' : p.st === 'prox' ? cadQuando(p.em) : p.prev ? `~${cadDia(p.prev)}` : '';
+      p.tit = `${p.rot} · ${CAD_O_QUE[p.cod] || ''}${p.st === 'ok' ? ` · saiu ${NG.fmtDataHora(new Date(p.em).toISOString())}` : p.st === 'pul' ? ' · não saiu (passou a hora ou a janela fechou)' : p.st === 'prox' ? ` · próximo, ${cadQuando(p.em)}` : ''}`;
+    });
+    P.passos = seq;
+
+    // Por que está parada (o mesmo texto do banco, na língua de quem atende) — a ordem é a da mari_cadencia_avaliar.
+    const comPessoa = dn.tipo === 'pessoa' || dn.tipo === 'time' || c.humano_atribuido || c.time_atribuido;
+    const quem = dn.tipo === 'pessoa' ? (c.chatwoot_agente || 'alguém do time') : 'o time';
+    const devolver = '<button type="button" class="btn btn-sm" data-momento="devolver_mari">Devolver para a Mari</button>';
+    const b = k && k.bloqueio && k.bloqueio !== 'aguardando' ? k.bloqueio : '';
+    const set = (tom, pill, linha, acao = '') => Object.assign(P, { tom, pill, pillCls: { ok: 'ok', warn: 'warn', bad: 'bad', fim: 'mute', pausa: 'pend', mute: 'mute' }[tom], linha, acao });
+    const prox = seq[iProx];
+    const proxTxt = prox ? `Próximo: <b>${esc(prox.rot)} · ${esc(cadQuando(prox.em))}</b>${k.acao && CAD_ACAO[k.acao] ? ` · ${esc(CAD_ACAO[k.acao])}` : ''}` : '';
+    const verTexto = prox && prox.texto ? `<button type="button" class="fc-link" data-f="fc-cadp" data-c="${prox.cod}">Ver o texto</button>` : '';
+    const emSaida = (v && v.status === 'saida') || lead.destino === 'saida' || lead.destino === 'teste_duplicada';
+    if (emSaida) {
+      const sr = lead.saida_motivo === 'sem_resposta';
+      set('fim', 'encerrada', sr ? 'Terminou: o cliente não respondeu à cadência e o lead foi para Saída · Sem resposta. Se ele escrever, a conversa reabre.'
+        : `Encerrada: o lead está em Saída${lead.saida_nome ? ` · ${esc(lead.saida_nome)}` : ''}. A Mari não manda lembrete.`);
+    } else if (c.nao_contatar) set('fim', 'encerrada', 'Encerrada: o cliente pediu para não ser contatado. A Mari não volta a escrever.');
+    else if (!['ativo', 'handoff_realizado'].includes(c.status)) set('fim', 'encerrada', 'Encerrada: a conversa foi encerrada pelo time. Se o cliente escrever, ela reabre.');
+    else if (/humano atribu|time atribu/.test(b) || (!k && comPessoa && !fluxoVenda)) set('warn', 'parada', `Parada: a conversa está com ${esc(quem)}. A Mari não manda lembrete enquanto alguém do time estiver nela.`, devolver);
+    else if (/resolvida/.test(b) || (!k && !fluxoVenda && (c.chatwoot_resolvida || c.chatwoot_status === 'resolved'))) set('warn', 'parada', 'Parada: a conversa foi resolvida no Chatwoot. Volta sozinha se o cliente escrever.');
+    else if (/pendência/.test(b) || (!k && d.pend && !vInst)) set('pausa', 'pausada', `Pausada pela pendência${d.pend ? ` até ${esc(d.pend.diaTxt)}` : ''}. Os lembretes voltam quando ela for encerrada.`, d.pend ? '<button type="button" class="btn btn-sm" data-f="fc-pend">Ver a pendência</button>' : '');
+    else if (/telefone de teste/.test(b)) set('mute', 'teste', 'Número de teste: os lembretes não saem.');
+    else if (/template não aprovado|texto reprovado|limite do/.test(b)) set('bad', 'travada', `Travada: ${esc(b)}. ${prox ? `O ${esc(prox.rot)} não sai até resolver. ` : ''}Avise o Ricardo.`);
+    else if (/D\+3 sem biometria/.test(b)) set('warn', 'ligar', 'D+3 sem biometria: ligue para o cliente — a Mari não liga.', v && d.conversaId ? '<button type="button" class="btn btn-sm" data-f="fc-reg">Registrar a ligação</button>' : '');
+    else if (/venda criada/.test(b)) set('mute', 'com o time', 'A venda segue pelo time: D3, D7 e D15 não saem depois que a venda nasce.');
+    else if (/time falou com o cliente hoje/.test(b)) set('ok', 'adiada', `Adiada: o time falou com o cliente hoje (🔥). ${proxTxt || 'O próximo sai no dia útil seguinte.'}`, verTexto);
+    else if (/Mari respondendo|aguardando a Mari/.test(b)) set('ok', 'respondendo', 'A Mari está respondendo agora.');
+    else if (/janela de 24 h fechada/.test(b)) set('mute', 'esperando', `A janela de 24 h fechou: as cutucadas não saem mais.${seq.some((p) => p.cod === 'D3') ? ' Segue no D3.' : ''}`);
+    else if (/véspera passou|próxima demais/.test(b)) set('mute', 'sem lembrete', b.includes('véspera') ? 'A véspera passou: o lembrete diz "amanhã", então não sai mais.' : 'A instalação está perto demais para o lembrete da véspera.');
+    else if (/C2\) saiu há menos/.test(b)) set('ok', 'andando', `O aviso do agendamento saiu há pouco: a véspera espera 12 h. ${proxTxt}`, verTexto);
+    else if (/retorno agendado/.test(b)) set('ok', 'combinado', `Retorno combinado com o cliente: <b>${esc(cadQuando(ms(c.agendamento_retorno)))}</b>.`, verTexto);
+    else if (prox && (prox.st === 'prox' || prox.st === 'agora')) set(prox.st === 'agora' ? 'warn' : 'ok', prox.st === 'agora' ? 'ligar' : b === 'fora do horário' ? 'esperando a hora' : 'andando', `${proxTxt}${b === 'fora do horário' ? ' · espera o horário do contrato' : ''}`, verTexto);
+    else if (lig && lig.st === 'agora') set('warn', 'ligar', 'Hora de ligar: o D3 saiu e o cliente não respondeu. A Mari não liga.', v ? '<button type="button" class="btn btn-sm" data-f="fc-reg">Registrar a ligação</button>' : '');
+    else if (fluxoVenda && !seq.length) {
+      const e = (lead.etapa || '');
+      set('mute', 'com o time', e === 'instalada' ? 'Instalada: sem lembrete da Mari. A régua de pagamento (D−2 · D0 · D+5) começa com a 1ª fatura — ainda falta o extrato da Nio.'
+        : 'Nenhum lembrete agora: a venda está com o time. Os da biometria começam quando o pedido sai no portal; os da instalação, quando ela é agendada.');
+    } else if (!seq.length) set('mute', 'sem cadência', 'Sem cadência: o cliente ainda não escreveu e o lead não veio de formulário.');
+    else if (seq.every((p) => p.st === 'ok' || p.st === 'pul')) set('mute', 'terminou', 'Todos os lembretes desta rodada já saíram ou passaram.');
+    else set('ok', 'andando', 'Nada marcado agora: o próximo lembrete aparece aqui quando o banco agendar.');
+    // Resumo de uma linha (faixa acima da caixa da conversa).
+    const nOk = seq.filter((p) => p.st === 'ok').length;
+    P.resumo = P.tom === 'ok' && prox ? `Lembretes${nOk ? ` · ${nOk} enviado${nOk > 1 ? 's' : ''}` : ''} · próximo ${prox.rot} ${cadQuando(prox.em)}`
+      : `Lembretes · ${P.pill}${P.tom === 'warn' && /com /.test(P.linha) && comPessoa ? `: com ${quem}` : ''}`;
+    return P;
+  }
+  // Nunca derruba a ficha: se a leitura falhar, a faixa some e a ficha abre igual.
+  function cadPlanoSeguro() { try { return cadPlano(); } catch (e) { console.warn('[ficha] lembretes da Mari', e); return null; } }
+  function cadFaixa(P, solta) {
+    if (!P) return '';
+    const A = NG.ajuda;
+    const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○' };
+    const passo = (p) => `<button type="button" class="fc-cb-p s-${p.st}${fc.cadp === p.cod ? ' on' : ''}" data-f="fc-cadp" data-c="${p.cod}" title="${esc(p.tit)}" aria-pressed="${fc.cadp === p.cod}">
+        <i aria-hidden="true">${ic[p.st]}</i><b>${esc(p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
+    const grupos = P.grupos.filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
+    const sel = fc.cadp && P.passos.find((p) => p.cod === fc.cadp);
+    let pe;
+    if (sel) {
+      const quando = sel.st === 'ok' ? `saiu ${NG.fmtDataHora(new Date(sel.em).toISOString())}${sel.simulado ? ' (simulado)' : ''}` : sel.st === 'prox' ? `próximo, ${cadQuando(sel.em)}` : sel.st === 'pul' ? 'não saiu' : sel.prev ? `previsto ~${cadDia(sel.prev)}` : 'futuro';
+      const txt = sel.texto ? `<q>${esc(String(sel.texto).slice(0, 600))}</q>` : `<span class="apagado">${esc(CAD_O_QUE[sel.cod] || '')}${sel.st === 'fut' ? ' · o texto depende da conversa na hora do envio' : ''}</span>`;
+      pe = `<div class="fc-cb-f sel"><span><b>${esc(sel.rot)}</b> · ${esc(quando)}<br>${txt}</span><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-cadp" data-c="${sel.cod}" aria-label="Fechar o texto">${IC.x}</button></div>`;
+    } else {
+      pe = `<div class="fc-cb-f t-${P.tom}"><span>${P.linha}</span><span class="fc-sp"></span>${P.acao}${P.anteriores ? `<button type="button" class="fc-link" data-f="fc-cadhist" title="${esc(A.cad_anteriores)}">${P.anteriores} antes</button>` : ''}</div>`;
+    }
+    return `<section class="fc-cb${solta ? ' solta' : ''} t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span><span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
+      ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${pe}</section>`;
+  }
+
   // ---------- faixa da Mari (acima da caixa da conversa) ----------
-  const PASSO_ROT_C = { P1: '1º contato', F1: '+1 h', F2: '+4 h', D3: 'D3', D7: 'D7', D15: 'D15', L15: '15 min', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'INSTALACAO', VESPERA: 'VESPERA' };
+  const PASSO_ROT_C ={ P1: '1º contato', F1: '+1 h', F2: '+4 h', D3: 'D3', D7: 'D7', D15: 'D15', L15: '15 min', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'INSTALACAO', VESPERA: 'VESPERA' };
   function mariFaixa() {
     const conv = !!d.soConversa;
     const v = conv ? null : d.v;
@@ -3059,7 +3260,9 @@
     const env = Object.keys((d.cad && d.cad.enviados) || {});
     const dn = donoConversa(d.convInfo || d.conv);
     let txt;
-    if (v && v.status === 'saida') txt = 'Lembretes: nenhum (fora da jornada)';
+    const cadP = cadPlanoSeguro();   // 13/11 (4a): o mesmo cálculo da faixa "Lembretes da Mari" da ficha
+    if (cadP) txt = cadP.resumo;
+    else if (v && v.status === 'saida') txt = 'Lembretes: nenhum (fora da jornada)';
     else if (d.pend) txt = `Lembretes pausados pela pendência até ${d.pend.diaTxt}`;
     else if (dn.tipo === 'pessoa' || dn.tipo === 'time') txt = `${env.length ? `Lembretes ${env.map((c) => `${PASSO_ROT_C[c] || c} ✓`).join(' · ')} · ` : ''}cadência parada: a conversa está com uma pessoa`;
     else if (k && k.proximo_passo && k.proximo_em) txt = `${env.length ? `${env.map((c) => `${PASSO_ROT_C[c] || c} ✓`).join(' · ')} · ` : ''}próximo ${PASSO_ROT_C[k.proximo_passo] || k.proximo_passo} ${NG.fmtDiaSemana(k.proximo_em)} ${NG.fmtHora(k.proximo_em)}`;
@@ -3075,7 +3278,7 @@
         <small class="apagado">Fica no histórico e conta nos contatos do mês.</small></div>`;
     }
     if (fc.cad) {
-      return `<div class="fc-reg fc-cad">${conv ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">CADÊNCIA DO LEAD</span></div><span>${esc(txt)}</span></div>` : lembretes(v)}
+      return `<div class="fc-reg fc-cad">${cadP ? cadFaixa(cadP, true) : conv ? `<div class="f-lembretes"><div class="f-lb-cab"><span class="f-rot">CADÊNCIA DO LEAD</span></div><span>${esc(txt)}</span></div>` : lembretes(v)}
         <div class="fc-reg-bts">${conv ? '' : '<button type="button" class="fc-link" data-f="fc-reg">Registrar contato</button>'}<span class="fc-sp"></span><button type="button" class="fc-link" data-f="fc-cad">Fechar</button></div></div>`;
     }
     return `<div class="fc-mstrip"><span class="fc-mdot" aria-hidden="true"></span><button type="button" class="fc-mtbtn" data-f="fc-cad" title="Ver cadência e lembretes">${esc(txt)}</button>
@@ -3154,6 +3357,7 @@
     }
     const etapaNome = (d.lead && d.lead.etapa_nome) || (d.jor ? d.jor.etapa_nome : '');
     const temConv = !!d.conversaId;
+    const cadB = cadFaixa(cadPlanoSeguro());   // 13/11 (4a): Lembretes da Mari, sempre à vista
     raiz.innerHTML = `<div class="fc">
       ${cab}${trilha}
       <div class="fc-abas" role="tablist" aria-label="O que mostrar"><button type="button" role="tab" class="${fc.aba === 'ficha' ? 'on' : ''}" data-f="fc-aba" data-a="ficha" aria-selected="${fc.aba === 'ficha'}">Ficha</button><button type="button" role="tab" class="${fc.aba === 'conv' ? 'on' : ''}" data-f="fc-aba" data-a="conv" aria-selected="${fc.aba === 'conv'}">Conversa</button></div>
@@ -3164,7 +3368,7 @@
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc-col fc-col-ficha" aria-label="Ficha do cliente">
           <div class="fc-colh"><h2>Ficha</h2><span class="apagado">${esc(etapaNome)}</span><span class="fc-sp"></span><button type="button" class="btn btn-sm" data-f="fc-hist" aria-expanded="${fc.hist}">${IC.hist}Histórico</button></div>
-          <div class="fc-ficha">${agora}${cards}</div>
+          <div class="fc-ficha${cadB ? ' com-cad' : ''}">${agora}${cadB}${cards}</div>
           ${histOver()}
         </section>
       </div>${over}</div>`;
@@ -3275,8 +3479,10 @@
     if (a === 'fc-tr') { fc.tr = fc.tr === b.dataset.k ? null : b.dataset.k; render(); return; }
     if (a === 'fc-aba') { fc.aba = b.dataset.a; render(); return; }
     if (a === 'fc-hf') { fc.histF = b.dataset.h; render(); return; }
-    if (a === 'fc-reg') { fc.reg = !fc.reg; fc.cad = false; render(); if (fc.reg) { const i = raiz.querySelector('[data-fc-resumo]'); if (i) i.focus(); } return; }
+    if (a === 'fc-reg') { fc.reg = !fc.reg; fc.cad = false; if (fc.reg) fc.aba = 'conv'; render(); if (fc.reg) { const i = raiz.querySelector('[data-fc-resumo]'); if (i) i.focus(); } return; }
     if (a === 'fc-cad') { fc.cad = !fc.cad; fc.reg = false; render(); return; }
+    if (a === 'fc-cadp') { fc.cadp = fc.cadp === b.dataset.c ? null : b.dataset.c; render(); return; }
+    if (a === 'fc-cadhist') { fc.hist = true; fc.histF = 'mari'; render(); return; }
     if (a === 'fc-contato') {
       const fd = new FormData();
       fd.set('canal', b.dataset.canal);

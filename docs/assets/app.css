@@ -2497,3 +2497,45 @@ button.fc-din-l:hover, button.fc-din-l.on { background: #171C23; }
   .fc-venda-v { overflow: visible; }
   .fc-etapa-over .fc-pop { margin: 0; flex: 1 1 auto; }
 }
+
+/* ===== 13/11 — Lembretes da Mari na ficha única (etapa 4a; Ricardo: "mostrar de forma visível os lembretes já enviados, o próximo
+   e por que está parada"). Só leitura: espelha a mari_cadencia_avaliar. ===== */
+.fc-ficha.com-cad { grid-template-rows: auto auto minmax(0, 1fr); }
+.fc-cb { border: 1px solid #1E242C; border-radius: 12px; background: #12161C; display: flex; flex-direction: column; min-width: 0; }
+.fc-cb.t-warn { border-color: #5C4A1E; } .fc-cb.t-bad { border-color: #5A2B2B; } .fc-cb.t-pausa { border-color: #4A2626; }
+.fc-cb.solta { border: 0; background: none; }
+.fc-cb-h { display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 8px 0 16px; min-width: 0; }
+.fc-cb-h h3 { margin: 0; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #AAB4BF; font-weight: 600; white-space: nowrap; }
+.fc-cb-sub { font-size: 12px; color: #7F8A96; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fc-cb-sub::before { content: '· '; }
+.fc-cb-st { display: flex; flex-wrap: wrap; align-items: stretch; gap: 4px 14px; padding: 0 10px 6px 12px; }
+.fc-cb-g { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fc-cb-g + .fc-cb-g { border-left: 1px solid #1F262F; padding-left: 12px; }
+.fc-cb-gk { display: flex; align-items: center; gap: 2px; font-size: 11px; color: #7F8A96; padding-left: 4px; white-space: nowrap; }
+.fc-cb-ps { display: flex; flex-wrap: wrap; gap: 2px; }
+.fc-cb-p { display: grid; grid-template-rows: 18px auto auto; justify-items: center; gap: 1px; min-width: 50px; padding: 4px 4px 3px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; cursor: pointer; }
+.fc-cb-p:hover, .fc-cb-p.on { background: #1A2028; }
+.fc-cb-p:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fc-cb-p i { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; border: 1px solid #3A434E; color: #7F8A96; }
+.fc-cb-p b { font-size: 12px; font-weight: 500; color: #C9D1DA; white-space: nowrap; }
+.fc-cb-p small { font-size: 11px; color: #7F8A96; white-space: nowrap; }
+.fc-cb-p.s-ok i { background: rgba(87,211,140,.15); border-color: #1D5C3B; color: #8AE8B2; }
+.fc-cb-p.s-prox i { border: 2px solid #6FB1F7; color: #9CCBFF; }
+.fc-cb-p.s-prox b, .fc-cb-p.s-prox small { color: #E9EDF3; }
+.fc-cb-p.s-agora i { border: 2px solid #F2B84B; color: #F2CC6B; }
+.fc-cb-p.s-agora small { color: #F2CC6B; }
+.fc-cb-p.s-pul i { border-style: dashed; }
+.fc-cb-p.s-pul b, .fc-cb-p.s-fut b { color: #8E98A4; }
+.fc-cb-f { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px 4px 16px; border-top: 1px solid #1A2028; font-size: 12.5px; color: #C9D1DA; flex-wrap: wrap; }
+.fc-cb-f > span:first-child { min-width: 0; flex: 1 1 260px; }
+.fc-cb-f b { color: #E9EDF3; font-weight: 600; }
+.fc-cb-f.t-warn { background: rgba(227,179,65,.08); color: #F2CC6B; } .fc-cb-f.t-bad { background: rgba(244,112,103,.08); color: #FFA39B; }
+.fc-cb-f.t-pausa { background: rgba(201,74,66,.08); color: #F08A80; } .fc-cb-f.t-fim, .fc-cb-f.t-mute { color: #9AA4B0; }
+.fc-cb-f.sel { align-items: flex-start; padding-top: 8px; padding-bottom: 8px; }
+.fc-cb-f.sel q { display: block; margin-top: 4px; color: #D6DDE5; white-space: pre-wrap; quotes: '“' '”'; max-height: 120px; overflow: auto; }
+.fc-cb .fc-pill { flex: none; }
+@media (max-width: 900px) {
+  .fc-cb-sub { display: none; }
+  .fc-cb-g + .fc-cb-g { border-left: 0; padding-left: 0; }
+  .fc-cb-p { min-width: 46px; }
+}
