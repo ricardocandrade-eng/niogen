@@ -33,7 +33,7 @@
 <link rel="stylesheet" href="assets/app.css?v=121126-33">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=121126-35"></script>
+<script src="assets/app.js?v=121126-36"></script>
 <script src="assets/sidebar.js?v=121126-24"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=121126-29"></script>
@@ -256,7 +256,7 @@
         <div><span class="mv-dono apagado">GED360</span></div><div><span class="lv-pill">${p.alerta ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
-  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', docs_prazo: 'Documentos à Nio' };
+  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio' };
   const confLinha = (c) => {
     const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
     const urg = c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || ''));
@@ -265,6 +265,8 @@
         <div class="lv-sit">${esc(CONF_SIT[c.tipo] || c.tipo)} ${NG.dicaTxt(NG.ajuda[`conf_${c.tipo}`] || NG.ajuda.conf_secao)}</div>
         <div class="lv-prox lv-and-bts">${esc(c.texto || '')}
           ${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Tentar de novo</button> <button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}
+          ${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}
+          ${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}
           ${visto ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}</div>
         <div><span class="mv-dono apagado">conferir</span></div><div><span class="lv-pill">${urg ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act">${k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : ''}</div></div>`;
@@ -470,8 +472,12 @@
   }
   async function conferir(b) {
     if (b.dataset.cfAbrir) { abrirChave(b.dataset.cfAbrir); return; }
+    if (b.dataset.cfCancelei && !confirm('Confirma que o pedido desta venda já foi cancelado no portal da Nio?')) return;
+    if (b.dataset.cfSemresp && !confirm('Registrar a Saída · Sem resposta desta venda? Se o cliente escrever de novo, ela volta.')) return;
     b.disabled = true;
-    const [fn, arg] = b.dataset.cfRetentar ? ['chatwoot_acao_retentar', { p_id: Number(b.dataset.cfRetentar) }]
+    const [fn, arg] = b.dataset.cfCancelei ? ['venda_cancelada_no_portal', { p_venda: b.dataset.cfCancelei }]
+      : b.dataset.cfSemresp ? ['lead_sair', { p_conversa: null, p_venda: b.dataset.cfSemresp, p_motivo: 'sem_resposta' }]
+      : b.dataset.cfRetentar ? ['chatwoot_acao_retentar', { p_id: Number(b.dataset.cfRetentar) }]
       : b.dataset.cfDispensar ? ['chatwoot_acao_dispensar', { p_id: Number(b.dataset.cfDispensar) }]
         : ['conversa_alerta_visto', { p_conversa: b.dataset.cfVisto }];
     const { data, error } = await NG.sb.rpc(fn, arg);
@@ -500,7 +506,7 @@
     const od = ev.target.closest('[data-opd]');
     if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
     if (ev.target.closest('.lv-op, .opc-bloco')) return;
-    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir]');
+    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp]');
     if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');
     if (bc) { ev.stopPropagation(); casar(bc); return; }
