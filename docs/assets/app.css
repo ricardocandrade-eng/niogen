@@ -1461,7 +1461,7 @@ a.selo-ficha:hover { filter: brightness(1.15); }
 .cv-dest { font-weight: 600; }
 .cv-etp { color: var(--muted, #6E747C); }
 .cv-furo { display: inline-block; font-size: 11px; font-weight: 600; color: var(--bad-fg, #b42318); border: 1px solid currentColor; border-radius: 999px; padding: 0 6px; margin-left: 4px; }
-.mv-semdono { margin: 0 0 8px; }
+
 .cv-direita { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
 .cv-vazia { flex: 1; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); font-size: 13px; }
 .cv-topo { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12px; }
@@ -2598,3 +2598,68 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
 .selo-meta.ok { color: var(--accent); border-color: var(--accent); }
 .selo-meta.bad { color: var(--bad-fg); background: var(--bad-bg); border-color: var(--bad-border); }
 .selo-meta.dim { opacity: .65; }
+
+/* ===== 14/11 (Ricardo: "aumentar o número de linhas visíveis na Live") — Live compacta =====
+   Pulso recolhido numa linha (abre por cima da lista) · aviso "sem dono" numa linha ao lado das abas, com ✕ ·
+   blocos mais juntos · linhas mais baixas · título e subtítulo na mesma linha. */
+.lv-fila { gap: 8px; }
+.lv-fila .cab { align-items: center; }
+.lv-cab-tit { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; min-width: 0; }
+.lv-cab-tit .sub { margin-top: 0; }
+.lv-fila .cab .btn, .lv-fila .cab .seg button { min-height: 34px; }
+.lv-stage { min-height: 34px; padding: 0 14px; }
+.lv-tabs { min-height: 32px; }
+.lv-tab { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.lv-rolar { gap: 12px; }
+.lv-sec-h { margin-bottom: 4px; gap: 10px; }
+.lv-sec-h h2 { font-size: 14px; }
+.lv-sec-h .apagado { font-size: 12px; }
+.lv-table { border-radius: 10px; }
+.lv-thead { min-height: 26px; }
+.lv-row { min-height: 46px; padding-top: 4px; padding-bottom: 4px; }
+.lv-who { gap: 10px; }
+.lv-who b { font-size: 13.5px; line-height: 1.25; }
+.lv-who small { font-size: 12px; line-height: 1.3; }
+.lv-sit, .lv-prox, .lv-omot { line-height: 1.3; }
+.lv-row .btn-sm { min-height: 30px; padding: 0 10px; }
+.lv-pill { min-height: 22px; }
+.lv-vazio { padding: 10px 18px; font-size: 13px; }
+.mv-semdono { flex: 1 1 260px; min-width: 0; margin: 0; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 4px 0 12px; box-sizing: border-box;
+  border-radius: 8px; border: 1px solid var(--bad-border); background: var(--bad-bg); color: var(--bad-fg); font-size: 13px; }
+.mv-semdono > span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-semdono button { flex: none; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: inherit; font-size: 13px; cursor: pointer; }
+.mv-semdono button:hover { background: rgba(255,255,255,.08); }
+.mv-semdono button:focus-visible { outline: 2px solid currentColor; outline-offset: -2px; }
+.pl { position: relative; z-index: 6; gap: 8px; }
+.pl-barra { display: flex; align-items: stretch; width: 100%; min-height: 34px; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; overflow: hidden; }
+.pl-barra:hover { border-color: var(--border-strong); }
+.pl-barra:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pl-barra.pl-n-parado { border-color: var(--bad-border); }
+.pl-barra.pl-n-atencao { border-color: var(--warn-border); }
+.pl-mini { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-left: 1px solid var(--border); white-space: nowrap; overflow: hidden; }
+.pl-mini .pl-nome { overflow: hidden; text-overflow: ellipsis; }
+.pl-mini.pl-n-atencao { background: var(--warn-bg); }
+.pl-mini.pl-n-parado { background: var(--bad-bg); border-left-color: var(--bad-border); }
+.pl-mini.pl-n-sem_leitura .pl-rot { color: var(--muted); }
+.pl-mgeral { border-left: 0; background: var(--surface-dim); justify-content: center; flex: 0 1 auto; }
+.pl-mgeral .pl-ecg { width: 84px; height: 18px; flex: none; }
+.pl-mgeral .pl-gtit { font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.pl-mfunil { background: var(--surface-dim); }
+.pl-mnum { font: 600 13px 'JetBrains Mono', monospace; color: var(--text); }
+.pl-chev { flex: none; display: flex; align-items: center; padding: 0 10px; color: var(--muted); font-size: 11px; border-left: 1px solid var(--border); }
+.pl-pop { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; border-radius: 12px; box-shadow: 0 18px 44px rgba(0,0,0,.6); }
+.pl-barra[aria-expanded="true"] ~ .pl-alerta { visibility: hidden; }   /* o painel aberto cobre o alerta; ele volta ao recolher */
+.pl-alerta { padding: 6px 12px; border-radius: 10px; gap: 6px 12px; }
+.pl-alerta .pl-bt { min-height: 30px; padding: 0 12px; }
+@media (min-width: 901px) {
+  .lv-fila { padding: 12px 28px 8px; }
+  .lv-fila .lv-lista { gap: 8px; }
+}
+@media (max-width: 900px) {
+  .pl-barra { flex-wrap: wrap; }
+  .pl-mini { flex: 1 1 45%; min-height: 32px; border-top: 1px solid var(--border); border-left: 0; }
+  .pl-mgeral { flex-basis: 100%; border-top: 0; }
+  .pl-chev { display: none; }
+  .pl-pop { position: static; max-height: none; box-shadow: none; }
+  .lv-row { min-height: 0; }
+}

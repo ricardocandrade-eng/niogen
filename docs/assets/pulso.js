@@ -3,6 +3,7 @@
  * cada 60 s com a aba visível; os "há X min" são refeitos no navegador a cada 30 s. Se a leitura falhar ou envelhecer, a faixa fica
  * cinza com "sem leitura há X" — nunca mostra verde velho. Nível nunca só por cor: bolinha (ok), triângulo (atenção), quadrado
  * (parado), anel (sem leitura) + o rótulo em texto. Clique num elo abre o detalhe; o alerta leva a Conversas › Esperando resposta.
+ * 14/11: recolhida numa linha (batimento + rótulo de cada elo); o clique abre os dados por cima da lista, sem empurrar a tela.
  * Também entrega os selos do menu (NGSidebar.pintarStatus) — na Live o menu não faz chamada própria. Só leitura; sem dado de cliente. */
 (function () {
   const ORDEM = ['meta', 'entrada', 'mari', 'fluxos'];
@@ -12,7 +13,7 @@
   const ECG = 'M0 20 H42 L50 20 L56 6 L64 30 L70 14 L76 20 H104 L110 12 L116 24 L121 20 H150';
   const ECG_PARADO = 'M0 20 H42 L50 20 L56 6 L64 30 L70 14 L76 20 H150';
 
-  let el = null; let dados = null; let recebido = 0; let desvio = 0; let aberto = null; let falhou = false; let timer = null;
+  let el = null; let dados = null; let recebido = 0; let desvio = 0; let aberto = null; let expandido = false; let falhou = false; let timer = null;
   const esc = (s) => NG.esc(s == null ? '' : String(s));
 
   // "agora" / "há 4 min" / "há 2 h" a partir de um ISO do servidor (corrigido pelo relógio do servidor).
@@ -119,13 +120,36 @@
       <span class="pl-dbts">${link}<button type="button" class="pl-bt" data-fechar aria-label="Fechar o detalhe">Fechar</button></span></div>${corpo}</section>`;
   }
 
+  // 14/11 (Ricardo: "mais linhas visíveis na Live"): a faixa fica RECOLHIDA numa linha só — batimento, bolinha e rótulo de cada elo,
+  // funil de hoje. Clique abre os dados completos POR CIMA da lista (não empurra a tela); Esc ou clique fora fecha.
+  function barra(cinza, elos, nivelG) {
+    const g = dados ? dados.geral : { titulo: 'Sem leitura' };
+    const f = dados && dados.funil;
+    const mini = elos.map((k) => {
+      const e = dados.elos[k];
+      const n = cinza ? 'sem_leitura' : e.nivel;
+      return `<span class="pl-mini pl-n-${n}">${marca(n)}<span class="pl-nome">${esc(NOME[k])}</span><span class="pl-rot">${esc(cinza ? 'sem leitura' : e.rotulo)}</span></span>`;
+    }).join('');
+    return `<button type="button" class="pl-barra pl-n-${nivelG}" data-expandir aria-expanded="${expandido}" aria-controls="pl-pop"
+        aria-label="${esc(cinza ? 'Sem leitura' : g.titulo)}. ${expandido ? 'Recolher' : 'Ver os dados'}" title="${expandido ? 'Recolher' : 'Ver os dados de cada elo'}">
+      <span class="pl-mini pl-mgeral pl-n-${nivelG}"><svg class="pl-ecg" aria-hidden="true" viewBox="0 0 150 34"><path class="${nivelG === 'ok' ? 'pl-traco' : ''}" d="${nivelG === 'parado' ? ECG_PARADO : ECG}"/></svg>${nivelG === 'ok' ? '' : `<span class="pl-gtit">${esc(cinza ? 'Sem leitura' : g.titulo)}</span>`}</span>
+      ${mini}
+      ${f ? `<span class="pl-mini pl-mfunil"><span class="pl-nome">Funil de hoje</span><span class="pl-rot pl-mnum">${f.hoje.conversas} › ${f.hoje.qualificadas} › ${f.hoje.vendas}</span></span>` : ''}
+      <span class="pl-chev" aria-hidden="true">${expandido ? '▴' : '▾'}</span></button>`;
+  }
+
   function pintar() {
     if (!el) return;
     const cinza = semLeitura();
     const elos = dados ? ORDEM.filter((k) => dados.elos[k]) : [];
     const nivelG = cinza ? 'sem_leitura' : (dados ? dados.geral.nivel : 'sem_leitura');
-    el.innerHTML = `<section class="pl-faixa pl-n-${nivelG}" aria-label="Pulso da máquina">${geral(cinza)}${elos.map((k) => celula(k, dados.elos[k], cinza)).join('')}${funil()}</section>
-      ${alerta(cinza)}${detalhe(cinza)}`;
+    const pop = el.querySelector('.pl-pop');
+    const pos = pop ? pop.scrollTop : 0;
+    el.innerHTML = `${barra(cinza, elos, nivelG)}
+      ${expandido ? `<div class="pl-pop" id="pl-pop"><section class="pl-faixa pl-n-${nivelG}" aria-label="Pulso da máquina">${geral(cinza)}${elos.map((k) => celula(k, dados.elos[k], cinza)).join('')}${funil()}</section>${detalhe(cinza)}</div>` : ''}
+      ${alerta(cinza)}`;
+    const novo = el.querySelector('.pl-pop');
+    if (novo) novo.scrollTop = pos;
     el.hidden = false;
   }
 
@@ -145,14 +169,17 @@
     el = alvo;
     if (!el) return;
     el.addEventListener('click', (ev) => {
-      const b = ev.target.closest('[data-elo],[data-ver],[data-fechar],[data-visto]');
+      const b = ev.target.closest('[data-expandir],[data-elo],[data-ver],[data-fechar],[data-visto]');
       if (!b) return;
       if (b.hasAttribute('data-visto')) NG.sb.rpc('pulso_incidente_visto').then(() => {}, () => {});
-      if (b.dataset.elo) { aberto = aberto === b.dataset.elo ? null : b.dataset.elo; pintar(); }
-      else if (b.dataset.ver) { aberto = b.dataset.ver; pintar(); const d = el.querySelector('#pl-detalhe'); if (d) d.scrollIntoView({ block: 'nearest' }); }
+      if (b.hasAttribute('data-expandir')) { expandido = !expandido; if (!expandido) aberto = null; pintar(); }
+      else if (b.dataset.elo) { aberto = aberto === b.dataset.elo ? null : b.dataset.elo; pintar(); }
+      else if (b.dataset.ver) { expandido = true; aberto = b.dataset.ver; pintar(); }
       else if (b.hasAttribute('data-fechar')) { aberto = null; pintar(); }
     });
-    el.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && aberto) { aberto = null; pintar(); } });
+    const recolher = () => { if (expandido) { expandido = false; aberto = null; pintar(); } };
+    el.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && expandido) { recolher(); const bt = el.querySelector('[data-expandir]'); if (bt) bt.focus(); } });
+    document.addEventListener('click', (ev) => { if (expandido && !ev.composedPath().includes(el)) recolher(); });   // composedPath: o alvo pode ter sido redesenhado
     ler();
     clearInterval(timer);
     timer = setInterval(() => { if (document.visibilityState === 'visible') ler(); }, 60000);

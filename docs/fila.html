@@ -30,14 +30,14 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-36">
+<link rel="stylesheet" href="assets/app.css?v=141126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=131126-36"></script>
+<script src="assets/app.js?v=141126-1"></script>
 <script src="assets/sidebar.js?v=131126-16"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=131126-36"></script>
-<script src="assets/pulso.js?v=121126-24"></script>
+<script src="assets/ficha.js?v=141126-1"></script>
+<script src="assets/pulso.js?v=141126-1"></script>
 </head>
 <body class="tela-fila lv-tela">
 <div class="app">
@@ -45,7 +45,7 @@
   <main class="main mv lv">
     <div class="lv-fila" id="fila">
       <header class="cab">
-        <div>
+        <div class="lv-cab-tit">
           <h1 class="live-tit"><span class="live-dot" aria-hidden="true"></span>Live</h1>
           <div class="sub" id="sub">Pegue a primeira linha e aperte o botão. O NIOGEN cuida do Chatwoot.</div>
         </div>
@@ -218,15 +218,20 @@
   }
   // 0102 (trava B2): lead que a Mari passou e ninguém assumiu há mais de 30 min (horário de atendimento).
   const semDono = () => jor.lista.filter((j) => (j.sem_dono_min || 0) > 30);
+  // 14/11 (Ricardo): o aviso cabe numa linha, ao lado das abas, e tem ✕. Fechar vale só para ESTES clientes: entrou outro sem
+  // dono, o aviso volta (regra 20: ninguém parado em silêncio). As linhas seguem no topo, em vermelho, com ou sem o aviso.
+  const chaveSemDono = (l) => l.map(chaveFicha).sort().join('|');
   const faixaSemDono = () => {
     const l = semDono();
-    if (!l.length) return '';
-    return `<div class="faixa vermelho mv-semdono" role="alert"><b>${l.length} ${l.length === 1 ? 'cliente passado' : 'clientes passados'} pela Mari sem dono há mais de 30 min</b> — aperte <b>Assumir</b> na linha (estão no topo, em vermelho): ${l.slice(0, 4).map((j) => esc(j.nome || 'Contato')).join(', ')}${l.length > 4 ? '…' : ''}</div>`;
+    if (!l.length || ls.ler('niogen.fila.semdono_visto') === chaveSemDono(l)) return '';
+    const nomes = `${l.slice(0, 4).map((j) => j.nome || 'Contato').join(', ')}${l.length > 4 ? '…' : ''}`;
+    const txt = `${l.length} ${l.length === 1 ? 'cliente passado' : 'clientes passados'} pela Mari sem dono há mais de 30 min`;
+    return `<div class="mv-semdono" role="alert" title="${esc(`${txt} — aperte Assumir na linha (estão no topo, em vermelho): ${nomes}`)}"><span><b>${esc(txt)}</b> — aperte <b>Assumir</b> na linha: ${esc(nomes)}</span><button type="button" data-semdono-x aria-label="Fechar o aviso" title="Fechar — volta se outro cliente ficar sem dono">✕</button></div>`;
   };
-  const abas = () => `${faixaSemDono()}<div class="lv-tabs" role="tablist" aria-label="Visão da lista">
+  const abas = () => `<div class="lv-tabs" role="tablist" aria-label="Visão da lista">
       <button type="button" role="tab" data-aba="vez" aria-selected="${soVez}" class="lv-tab${soVez ? ' on' : ''}">Sua vez · ${filtradas(true).length} <span class="apagado">+ acompanhando ${acompanhando().length}</span></button>
       <button type="button" role="tab" data-aba="todas" aria-selected="${!soVez}" class="lv-tab${soVez ? '' : ' on'}">Todas · ${filtradas(false).length}</button>
-      ${etapaSel ? `<button type="button" class="btn btn-sm" data-tirar-etapa>Filtro: ${esc(NG.JORNADA[etapaSel - 1].nome)} ✕</button>` : ''}</div>`;
+      ${etapaSel ? `<button type="button" class="btn btn-sm" data-tirar-etapa>Filtro: ${esc(NG.JORNADA[etapaSel - 1].nome)} ✕</button>` : ''}${faixaSemDono()}</div>`;
 
   // ---------- lista ----------
   const situacao = (j) => [j.etapa_nome, j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
@@ -277,8 +282,9 @@
     if (soVez) {
       const ac = acompanhando();
       const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
-      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
+      // 14/11 (Ricardo): "Para fazer" é sempre o primeiro bloco; "Conferir" vem logo depois.
       corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
+      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
       if (opL.length || opsCanal.length) {
         corpo += secao(`<span aria-hidden="true">🔥</span> Oportunidades · ${opL.length + opsCanal.length}`, 'o NIOGEN achou — não é obrigação; a mensagem sai pelo NIOGEN e a conversa volta para a Mari',
@@ -511,6 +517,7 @@
     if (bc) { ev.stopPropagation(); casar(bc); return; }
     const bv = ev.target.closest('[data-visto]');
     if (bv) { ev.stopPropagation(); vistoBio(bv); return; }
+    if (ev.target.closest('[data-semdono-x]')) { ls.gravar('niogen.fila.semdono_visto', chaveSemDono(semDono())); render(); return; }
     if (ev.target.closest('[data-tirar-etapa]')) { etapaSel = null; render(); return; }
     const b = ev.target.closest('[data-bt]');
     if (b) { ev.stopPropagation(); botao(b); return; }
