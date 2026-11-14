@@ -19,8 +19,8 @@
 <link rel="stylesheet" href="assets/app.css?v=141126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-1"></script>
-<script src="assets/sidebar.js?v=131126-16"></script>
+<script src="assets/app.js?v=141126-2"></script>
+<script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=141126-1"></script>
 </head>
@@ -195,7 +195,9 @@
   const m = location.hash.match(/^#c=([0-9a-f-]{36})$/i);
   if (m) abrir(m[1]);
   NGFicha.iniciar();
-  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 30000);
+  NG.mudou('conversas', 2 * 60000);
+  // 14/11 (0190): o tick de 30 s só refaz se o banco foi gravado (mensagem nova muda o carimbo) ou a cada 2 min.
+  setInterval(async () => { if (document.visibilityState === 'visible' && await NG.mudou('conversas', 2 * 60000)) carregar(); }, 30000);
   NG.aoVoltarAba(() => carregar(), 30000);   // 13/11: trocar de aba só recarrega depois de 30 s (o timer de 30 s segue)
 })();
 </script>

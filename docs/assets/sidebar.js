@@ -126,7 +126,10 @@
       await NG.sb.from('usuario_vistos').upsert({ usuario_id: u.id, tela: 'vendas', visto_em: new Date().toISOString() }, { onConflict: 'usuario_id,tela' });
     }
     await avisos(nav);
-    setInterval(() => { if (document.visibilityState === 'visible') avisos(nav); }, 60000);   // 11/11: aba oculta não consulta
+    NG.mudou('avisos', 2 * 60000);
+    // 11/11: aba oculta não consulta · 14/11 (0190): só refaz se o banco foi gravado (ou a cada 2 min) — os mesmos 2 min da
+    // Live, para as duas cargas caírem juntas na resposta dividida entre abas (NG compartilhado, 45 s).
+    setInterval(async () => { if (document.visibilityState === 'visible' && await NG.mudou('avisos', 2 * 60000)) avisos(nav); }, 60000);
   }
 
   // ---------- Selos de operação no rodapé do menu (0129, Ricardo 12/11 ~01h) ----------

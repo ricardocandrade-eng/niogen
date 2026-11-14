@@ -33,8 +33,8 @@
 <link rel="stylesheet" href="assets/app.css?v=141126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-1"></script>
-<script src="assets/sidebar.js?v=131126-16"></script>
+<script src="assets/app.js?v=141126-2"></script>
+<script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=141126-1"></script>
 </head>
@@ -219,7 +219,7 @@
     + 'chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, chatwoot_sync_em, cadencia_passo';
 
   async function carregar() {
-    const pOp = NG.sb.rpc('oportunidades_abertas');   // 0108: em paralelo com o resto
+    const pOp = NG.rpcOportunidades();   // 0108: em paralelo com o resto · 14/11: a mesma resposta dividida entre abas
     teto = await NG.tetoContato();
     const [rc, rk, rp, re, rq, rcol] = await Promise.all([
       NG.sb.from('mari_conversas').select(COLS).order('updated_at', { ascending: false }).limit(2000),
@@ -1078,11 +1078,17 @@
   }
   NGFicha.iniciar();   // mari.html#venda=<id> abre a ficha direto
   // Atualiza sozinha a cada minuto com a aba visível (filtros, vista e aba ficam); Atualizar recarrega na hora.
-  setInterval(() => { if (document.visibilityState === 'visible') carregar(); }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { carregar(); carregarVivo(); } });
+  // 14/11 (0190 — Supabase engasgado): os ticks só refazem se o banco foi gravado (NG.mudou) ou passou o teto de tempo.
+  NG.mudou('mari', 5 * 60000); NG.mudou('mari_vivo', 2 * 60000);
+  setInterval(async () => { if (document.visibilityState === 'visible' && await NG.mudou('mari', 5 * 60000)) carregar(); }, 60000);
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState !== 'visible') return;
+    if (await NG.mudou('mari', 5 * 60000)) carregar();
+    if (await NG.mudou('mari_vivo', 2 * 60000)) carregarVivo();
+  });
   // 0107: pulso + feed a cada 15 s com a aba visível; "último turno há…" anda a cada 5 s.
   carregarVivo();
-  setInterval(() => { if (document.visibilityState === 'visible') carregarVivo(); }, 15000);
+  setInterval(async () => { if (document.visibilityState === 'visible' && await NG.mudou('mari_vivo', 2 * 60000)) carregarVivo(); }, 15000);
   setInterval(() => { const u = pulsoEl.querySelector('[data-ult]'); if (u && aoVivo) u.textContent = desdeTxt(aoVivo.ultimo_turno_em); }, 5000);
   NG.botaoAtualizar(() => { carregar(); carregarVivo(); });   // 09/11: o ↻ antigo virou o botão Atualizar comum
 })();

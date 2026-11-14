@@ -114,6 +114,26 @@
     try { if (Date.now() - Number(localStorage.getItem(k) || 0) < ms) return false; localStorage.setItem(k, String(Date.now())); } catch (e) { /* sem armazenamento: roda */ }
     return true;
   }
+  // 14/11 (0190 — Supabase engasgado, Ricardo: "cortar carga"): os timers refaziam jornada, oportunidades, conferir etc.
+  // a cada 30–60 s mesmo sem nada gravado. mudou(chave) lê o carimbo do banco (live_carimbo, ~1 ms, um pedido a cada 10 s
+  // somando as telas da aba) e diz se vale refazer: true se o carimbo mudou desde a última vez que `chave` refez, se passou
+  // `maxMs` (prazos vencem com o relógio) ou se o carimbo falhou (na dúvida, refaz como antes).
+  const _carimboVisto = new Map();
+  let carimboDesligado = false;
+  async function mudou(chave, maxMs = 5 * 60000) {
+    let c = null;
+    if (!carimboDesligado) {
+      try {
+        const r = await memo('carimbo', () => sb.rpc('live_carimbo'), 10000);
+        if (r && !r.error && r.data != null) c = String(r.data);
+        else if (r && r.error && ['PGRST202', '42883'].includes(String(r.error.code))) carimboDesligado = true;
+      } catch (e) { /* refaz */ }
+    }
+    const v = _carimboVisto.get(chave);
+    if (c !== null && v && v.c === c && Date.now() - v.t < maxMs) return false;
+    _carimboVisto.set(chave, { c, t: Date.now() });
+    return true;
+  }
   // Leitura que muda pouco (ex.: resumo da base DFV, que só muda quando a Nio manda base nova): guardada no navegador por `ms`.
   async function guardado(chave, ms, fn) {
     const k = `niogen.guardado.${chave}`;
@@ -1662,6 +1682,7 @@
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
     dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
+    mudou,   // 14/11 (0190): timer só refaz a leitura pesada se o banco foi gravado
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

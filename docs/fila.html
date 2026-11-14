@@ -33,8 +33,8 @@
 <link rel="stylesheet" href="assets/app.css?v=141126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-1"></script>
-<script src="assets/sidebar.js?v=131126-16"></script>
+<script src="assets/app.js?v=141126-2"></script>
+<script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
 <script src="assets/ficha.js?v=141126-1"></script>
 <script src="assets/pulso.js?v=141126-1"></script>
@@ -159,9 +159,11 @@
   const telaCheia = () => vista === 'lista' && !movel.matches;
   const filtroBase = (l) => l.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
 
+  const LIVE_MAX_MS = 2 * 60000;   // 14/11 (0190): recarga obrigatória da Live mesmo sem gravação no banco
   // fresco=true (padrão): após ação/Atualizar, descarta o cache. Carga inicial e timer usam o que a barra lateral já buscou.
   async function carregar(fresco = true) {
     if (fresco) NG.limparCache();
+    NG.mudou('live', LIVE_MAX_MS);   // 14/11 (0190): marca o carimbo desta carga — o timer só refaz se o banco mudar depois
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
     const [r, ap, rf, fn, rcf] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
@@ -561,8 +563,13 @@
   sincCliente();
   await carregar(false);
   // O refresh de 1 min também atualiza a ficha aberta (quieto: só redesenha se mudou, nunca por cima de formulário).
-  setInterval(() => { if (document.visibilityState === 'visible') { carregar(false); if (NGFicha.atual) NGFicha.recarregar({ quieto: true }); } }, 60000);
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregar(false); });
+  // 14/11 (0190 — Supabase engasgado): o tick de 1 min só refaz se algo foi gravado no banco (NG.mudou) ou a cada 2 min
+  // (prazos que vencem com o relógio). Lead novo, mensagem ou ação de qualquer pessoa mudam o carimbo e entram no tick seguinte.
+  setInterval(async () => {
+    if (document.visibilityState !== 'visible' || !(await NG.mudou('live', LIVE_MAX_MS))) return;
+    carregar(false); if (NGFicha.atual) NGFicha.recarregar({ quieto: true });
+  }, 60000);
+  document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && await NG.mudou('live', LIVE_MAX_MS)) carregar(false); });
 })();
 </script>
 </body>
