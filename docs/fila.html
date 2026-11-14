@@ -214,7 +214,11 @@
   }
   // Acompanhando: vendas que não pedem nada agora, mas que o time acompanha — biometria, instalação, pendência com terceiro;
   // conversa em espera (0101) ou em que o cliente só confirmou (0103).
-  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou)));
+  // 14/11 (Ricardo, caso Helton: "venda que o backoffice está negociando… deveria estar na Live"): conversa SEM venda com o
+  // time (assumida ou atribuída a alguém/ao time backoffice) passava no filtro mas não caía em bloco nenhum — sumia. Agora fica
+  // em Acompanhando enquanto espera o cliente; quando ele escreve, sobe para Para fazer (precisa_acao).
+  const comTime = (j) => j.dono_tipo === 'pessoa' || j.dono_tipo === 'time';
+  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou || (comTime(j) && j.etapa >= 1 && j.nivel !== 'fora'))));
   function acompanhando() {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
   }

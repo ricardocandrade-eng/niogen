@@ -217,14 +217,21 @@
       const jn = janela();
       const nome = (c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente';
       const link = NG.linkChatwoot(c.chatwoot_conversation_id);
-      const optsDono = [['mari', 'Sem dono · Mari atende'], ['eu', 'Você'], ['time', 'Time backoffice']];
+      // 14/11 (Ricardo: "não precisamos das opções Ricardo, Time backoffice e Mari… um botão de interruptor entre os dois"):
+      // o seletor de dono virou interruptor de 2 posições — Mari ⇄ Time backoffice. Conversa com uma pessoa (agente no
+      // Chatwoot ou assumida) fica do lado do Time; ligar a Mari = devolver_mari, ligar o Time = atribuir ao time (tira o agente).
+      const ladoTime = dn.v !== 'mari' && dn.v !== 'parar';
+      const titSw = c.nao_contatar ? 'O cliente pediu para não ser contatado.'
+        : ladoTime ? `Ligado: Time backoffice${dn.v === 'outro' || dn.v === 'eu' ? ` (com ${dn.v === 'eu' ? 'você' : dn.txt})` : ''} — a Mari está calada. Clique para devolver à Mari.`
+        : 'Ligado: a Mari atende. Clique para passar ao time backoffice (a Mari cala).';
+      const htmlSw = `<button type="button" class="cvp-sw ${ladoTime ? 'time' : 'mari'}" data-cv="dono-sw" role="switch" aria-checked="${ladoTime}" aria-label="Quem atende: ${ladoTime ? 'Time backoffice' : 'Mari'}" title="${esc(titSw)}"${c.nao_contatar || st.trocandoDono ? ' disabled' : ''}>
+          <span class="cvp-sw-opc mari">Mari</span><span class="cvp-sw-trilho" aria-hidden="true"><span class="cvp-sw-bola"></span></span><span class="cvp-sw-opc time">Time backoffice</span></button>`;
       // Cliente com venda: "Este cliente tem venda em {etapa} — o próximo passo é {botão}. …" (sem venda: nada).
       const vj = st.venda;
       const passo = vj ? (vj.botao && vj.botao !== 'abrir' && NG.BOTAO_PASSO[vj.botao] ? NG.BOTAO_PASSO[vj.botao] : vj.o_que_fazer) : '';
       const htmlVenda = vj ? `Este cliente tem venda em <b>${esc(vj.etapa_nome || '—')}</b> — o próximo passo é <b>${esc(passo || 'abrir a ficha')}</b>. Faça pelo botão da ficha para a venda andar. <a href="#venda=${esc(vj.venda_id)}">Abrir ficha →</a>` : '';
       vendaEl.hidden = !vj || !!o.cheia;
       troca('venda', vendaEl, htmlVenda);
-      if (dn.v === 'outro') optsDono.push(['outro', dn.txt]);
       // 10/11 (Ricardo: "organiza melhor esse cabeçalho, seguindo esses padrões" — os da ficha): linha 1 = ← Lista · nome ·
       // Chatwoot ↗; linha 2 = chips pequenos (status, dono, janela — os dois primeiros trocam pelo próprio chip); linha 3 =
       // etiquetas em chips finos com o "+ etiqueta" do mesmo tamanho.
@@ -234,7 +241,7 @@
         ${o.aoConcluir ? '<button type="button" class="btn btn-acc btn-sm" data-cv="concluir" title="Terminou com este cliente? Fecha o caso e abre o próximo da fila. Até apertar aqui, a conversa fica aberta.">✓ Concluir</button>' : ''}</div>
         <div class="cvp-chips">
         <select class="cvp-pill" data-cv="status" aria-label="Status da conversa" title="Status da conversa"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select>
-        <select class="cvp-pill" data-cv="dono" aria-label="Atribuída a" title="Atribuída a"${c.nao_contatar ? ' disabled' : ''}>${optsDono.map(([v, t]) => `<option value="${v}"${v === dn.v ? ' selected' : ''}${v === 'outro' ? ' disabled' : ''}>${esc(t)}</option>`).join('')}</select>
+        ${htmlSw}
         <span class="cvp-pill fixo${jn.aberta ? '' : ' warn'}">${esc(jn.txt)}</span></div>`);
       const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
       troca('etq', etqEl, `<span class="cvp-rot">ETIQUETAS</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
@@ -509,6 +516,15 @@
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
       if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
       if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
+      if (a === 'dono-sw') {
+        if (b.disabled || st.trocandoDono) return;
+        const praTime = b.classList.contains('mari');
+        st.trocandoDono = true;
+        b.disabled = true;
+        b.classList.toggle('mari', !praTime); b.classList.toggle('time', praTime);   // mexe na hora; o carregar confirma
+        conversaAcao('atribuir', praTime ? 'time' : 'mari').finally(() => { st.trocandoDono = false; st.sig.cab = null; desenhar(); });
+        return;
+      }
       if (a === 'reenviar') {
         if (b.dataset.local) st.locais = st.locais.filter((l) => l.id !== b.dataset.local);
         ta.value = b.dataset.txt || '';
@@ -520,7 +536,6 @@
       if (!s) return;
       const a = s.dataset.cv;
       if (a === 'status') { conversaAcao('status', s.value); return; }
-      if (a === 'dono') { if (['eu', 'mari', 'time'].includes(s.value)) conversaAcao('atribuir', s.value); return; }
       if (a === 'etiqueta' && s.value) {
         if (s.value === 'nao-contatar' && !window.confirm('O cliente pediu para não ser contatado?\n\nUse "Cliente pediu para parar" na ficha: além da etiqueta, para tudo e resolve a conversa.')) { s.value = ''; return; }
         conversaAcao('etiqueta_add', s.value);

@@ -2685,3 +2685,19 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
 .pl-n-atencao .pl-rot, .pl-n-parado .pl-rot { color: var(--text); }
 .pl-n-atencao .pl-gtit, .pl-n-parado .pl-gtit, .pl-n-parado .pl-gsub { color: var(--text); }
 .pl-sinal.pl-n-atencao, .pl-sinal.pl-n-parado { color: var(--text) !important; }
+
+/* ===== 14/11 (Ricardo: "um botão de interruptor entre os dois, para saber de forma mais clara qual está ligado") —
+   quem atende a conversa: Mari ⇄ Time backoffice. O lado ligado fica aceso; o outro, apagado. Vale na Conversa e na Ficha. ===== */
+.cvp-sw { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border: 1px solid var(--border); border-radius: 999px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; flex: 0 0 auto; }
+.cvp-sw:hover:not(:disabled) { border-color: var(--border-strong); }
+.cvp-sw:disabled { opacity: .6; cursor: default; }
+.cvp-sw:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 2px; }
+.cvp-sw-opc { opacity: .5; transition: opacity .15s; }
+.cvp-sw.mari .cvp-sw-opc.mari, .cvp-sw.time .cvp-sw-opc.time { opacity: 1; font-weight: 600; color: var(--text); }
+.cvp-sw-trilho { position: relative; width: 30px; height: 16px; border-radius: 999px; background: #2D6A4F; transition: background .15s; flex: 0 0 auto; }
+.cvp-sw.time .cvp-sw-trilho { background: #2F5D9A; }
+.cvp-sw-bola { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.cvp-sw.time .cvp-sw-bola { transform: translateX(14px); }
+.cvp-raiz.cheia .cvp-sw { border-color: #252B34; }
+@media (prefers-reduced-motion: reduce) { .cvp-sw-trilho, .cvp-sw-bola, .cvp-sw-opc { transition: none; } }
