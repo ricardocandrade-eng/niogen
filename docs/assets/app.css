@@ -2701,3 +2701,11 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
 .cvp-sw.time .cvp-sw-bola { transform: translateX(14px); }
 .cvp-raiz.cheia .cvp-sw { border-color: #252B34; }
 @media (prefers-reduced-motion: reduce) { .cvp-sw-trilho, .cvp-sw-bola, .cvp-sw-opc { transition: none; } }
+
+/* 14/11 (Ricardo: "alguns dropdowns do sistema estão ficando com fundo branco"): select com fundo transparente abria a lista
+   com fundo branco do sistema e texto claro (ilegível). Regra geral: toda lista aberta no tema escuro. */
+select option, select optgroup { background-color: var(--surface); color: var(--text); }
+select option:disabled { color: var(--muted); }
+/* Conversas: três filtros (destino · etapa · atendimento) — quebram linha em tela estreita */
+.cv-funil { flex-wrap: wrap; }
+.cv-funil select { min-width: 110px; }

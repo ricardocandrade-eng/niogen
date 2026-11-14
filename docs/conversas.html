@@ -39,7 +39,7 @@
       <section class="cv-lista" aria-label="Lista de conversas">
         <div class="cv-busca"><input type="search" id="busca" placeholder="Buscar nome, telefone ou cidade" autocomplete="off" aria-label="Buscar conversa"></div>
         <div class="cv-filtros" id="filtros" role="tablist"></div>
-        <div class="cv-funil"><select id="f-destino" aria-label="Filtrar por destino"></select><select id="f-etapa" aria-label="Filtrar por etapa"></select></div>
+        <div class="cv-funil"><select id="f-destino" aria-label="Filtrar por destino"></select><select id="f-etapa" aria-label="Filtrar por etapa"></select><select id="f-dono" aria-label="Filtrar por quem atende"></select></div>
         <div class="cv-itens" id="itens"><div class="carregando">Carregando…</div></div>
       </section>
       <section class="cv-direita" id="direita">
@@ -66,6 +66,12 @@
   const URLQ = new URLSearchParams(location.search);
   let fDestino = URLQ.get('destino') ?? ls.ler('niogen.conversas.destino') ?? '';
   let fEtapa = URLQ.get('etapa') ?? ls.ler('niogen.conversas.etapa') ?? '';
+  // 14/11 (Ricardo: "na tela Conversas não tem filtro por atribuição (backoffice x mari)"): ?dono=mari|time.
+  let fDono = URLQ.get('dono') ?? ls.ler('niogen.conversas.dono') ?? '';
+  if (!['', 'mari', 'time'].includes(fDono)) fDono = '';
+  // Mari = a Mari atende (sem dono no Chatwoot); Time = com o time backoffice ou com uma pessoa (assumida).
+  const ladoDono = (c) => (c.dono_tipo === 'mari' ? 'mari' : c.dono_tipo === 'pessoa' || c.dono_tipo === 'time' ? 'time' : '');
+  const doDono = (c) => !fDono || ladoDono(c) === fDono;
   // 0144: ?filtro=esperando (botão do alerta da faixa de pulso) vale por cima do último filtro usado.
   const FILTRO_URL = new URLSearchParams(location.search).get('filtro');
   const IDS_FILTRO = ['esperando', 'minhas', 'abertas', 'fora', 'todas', 'encerradas'];
@@ -115,7 +121,7 @@
     const q = document.getElementById('busca').value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     const casa = (c) => !q || [c.nome, c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) || (qd.length >= 3 && NG.soDigitos(c.telefone).includes(qd));
-    const doFunil = (c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && (!fEtapa || (c.funil_etapa || 'nova') === fEtapa);
+    const doFunil = (c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && (!fEtapa || (c.funil_etapa || 'nova') === fEtapa) && doDono(c);
     const porBusca = lista.filter(casa);
     const base = porBusca.filter(doFunil);
     // contagem de cada opção com o outro filtro aplicado (o número diz o que você vai ver)
@@ -128,8 +134,13 @@
         + Object.entries(fnome[tipo] || {}).map(([k, nome]) => `<option value="${esc(k)}"${atual === k ? ' selected' : ''}>${esc(nome)} (${n(k)})</option>`).join('');
       sel.classList.toggle('on', !!atual);
     };
-    opc(document.getElementById('f-destino'), 'destino', fDestino, (c) => !fEtapa || (c.funil_etapa || 'nova') === fEtapa);
-    opc(document.getElementById('f-etapa'), 'etapa', fEtapa, (c) => !fDestino || (c.funil_destino || 'em_andamento') === fDestino);
+    opc(document.getElementById('f-destino'), 'destino', fDestino, (c) => (!fEtapa || (c.funil_etapa || 'nova') === fEtapa) && doDono(c));
+    opc(document.getElementById('f-etapa'), 'etapa', fEtapa, (c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && doDono(c));
+    const uDono = porBusca.filter((c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && (!fEtapa || (c.funil_etapa || 'nova') === fEtapa));
+    const selDono = document.getElementById('f-dono');
+    selDono.innerHTML = [['', `Atendimento: todos (${uDono.length})`], ['mari', `Mari (${uDono.filter((c) => ladoDono(c) === 'mari').length})`], ['time', `Time backoffice (${uDono.filter((c) => ladoDono(c) === 'time').length})`]]
+      .map(([v, t]) => `<option value="${v}"${fDono === v ? ' selected' : ''}>${esc(t)}</option>`).join('');
+    selDono.classList.toggle('on', !!fDono);
     // 12/11: com busca, acha a conversa em qualquer filtro (encerrada ou silenciada inclusive).
     const fn = q ? () => true : (FILTROS.find((f) => f[0] === filtro) || FILTROS[2])[2];
     const silenciada = (c) => (c.etiquetas || []).includes('suporte-nio');
@@ -182,6 +193,7 @@
   });
   document.getElementById('busca').addEventListener('input', render);
   // Destino ou etapa escolhido: a aba vai para Todas (senão "Abertas" esconderia as saídas).
+  document.getElementById('f-dono').addEventListener('change', (ev) => { fDono = ev.target.value; ls.gravar('niogen.conversas.dono', fDono); render(); });
   ['f-destino', 'f-etapa'].forEach((idSel) => document.getElementById(idSel).addEventListener('change', (ev) => {
     if (idSel === 'f-destino') { fDestino = ev.target.value; ls.gravar('niogen.conversas.destino', fDestino); }
     else { fEtapa = ev.target.value; ls.gravar('niogen.conversas.etapa', fEtapa); }
