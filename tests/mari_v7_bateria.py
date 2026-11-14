@@ -395,16 +395,36 @@ BOTOES_B2 = ['📍 Ver minha rua', '💰 Ver os planos', '💬 Falar com alguém
 RX_RS = r'r\$\s*\d'
 
 
+def formato_abertura():
+    """Formato da abertura vigente na config (0188): 'texto' (padrão) ou 'botoes' (menu da B2)."""
+    rows = sql("select texto from config_mari_textos where chave = 'abertura_formato'")
+    v = (rows[0].get('texto') if rows else '') or 'texto'
+    return 'botoes' if v.strip() == 'botoes' else 'texto'
+
+
 def exige_abertura(c, r, inicio, rot):
+    """1ª resposta da conversa. Formato 'texto' (0188, 13/11): saudação + PEDIDO DO CEP, sem botões."""
     it = r.get('interativo') or {}
-    c.exige(it.get('chave') == 'abertura', f'({rot}) 1ª resposta sem a abertura B2 com botões: {it or (r.get("resposta") or "")[:120]}')
-    corpo = it.get('corpo') or ''
-    c.exige(corpo.startswith(inicio) or corpo.startswith(inicio.replace('😊', '💚')),
-            f'({rot}) saudação errada: «{corpo[:60]}» (esperado «{inicio.replace("😊", "💚")}…»)')
-    c.exige([b.get('title') for b in it.get('botoes') or []] == BOTOES_B2, f'({rot}) botões errados: {it.get("botoes")}')
-    c.exige(all(len(b.get('title') or '') <= 20 for b in it.get('botoes') or []), f'({rot}) título de botão com mais de 20 caracteres')
+    if formato_abertura() == 'texto':
+        corpo = r.get('resposta') or ''
+        c.exige(not it, f'({rot}) abertura em texto não devia mandar interativo: {it}')
+        c.exige(corpo.startswith(inicio) or corpo.startswith(inicio.replace('😊', '💚')),
+                f'({rot}) saudação errada: «{corpo[:60]}» (esperado «{inicio}…»)')
+        # P31: o CEP é pedido na 1ª resposta — é a razão desta abertura existir.
+        c.exige('cep' in norm(corpo), f'({rot}) [P31] a 1ª resposta não pediu o CEP: «{corpo[:200]}»')
+        c.exige('?' not in corpo.split('\n')[0] or 'cep' in norm(corpo),
+                f'({rot}) [P31] abertura sem pedido de dado: «{corpo[:200]}»')
+        c.exige(not re.search(r'prefere ver primeiro|falar com alguem', norm(corpo)),
+                f'({rot}) [P31] abertura ainda oferece o menu: «{corpo[:200]}»')
+    else:
+        corpo = it.get('corpo') or ''
+        c.exige(it.get('chave') == 'abertura', f'({rot}) 1ª resposta sem a abertura B2 com botões: {it or (r.get("resposta") or "")[:120]}')
+        c.exige(corpo.startswith(inicio) or corpo.startswith(inicio.replace('😊', '💚')),
+                f'({rot}) saudação errada: «{corpo[:60]}» (esperado «{inicio.replace("😊", "💚")}…»)')
+        c.exige([b.get('title') for b in it.get('botoes') or []] == BOTOES_B2, f'({rot}) botões errados: {it.get("botoes")}')
+        c.exige(all(len(b.get('title') or '') <= 20 for b in it.get('botoes') or []), f'({rot}) título de botão com mais de 20 caracteres')
     c.exige(r.get('modelo') == 'abertura_b2', f'({rot}) a abertura passou pelo Claude (modelo {r.get("modelo")!r})')
-    c.exige(not re.search(RX_RS, norm(it.get('corpo'))), f'({rot}) preço na abertura')
+    c.exige(not re.search(RX_RS, norm(corpo)), f'({rot}) preço na abertura')
     rows = sql(f"select dados->>'abertura' ab from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
     c.exige(rows and rows[0].get('ab') == 'b2_081126', f'({rot}) dados.abertura não gravado: {rows}')
 

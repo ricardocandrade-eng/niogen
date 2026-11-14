@@ -341,7 +341,11 @@ if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cl
 // 08/11 (abertura B2): a saudação com botões já saiu pelo sistema e o cliente respondeu em TEXTO (sem tocar) — o Claude
 // segue sem repetir a saudação; pede só o CEP (ou rua e bairro) e o número depois da cidade.
 if (V7 && (conv.dados || {}).abertura && !conv.cep) {
-  L.push('abertura_b2: a 1ª mensagem (saudação + botões "Ver minha rua / Ver os planos / Falar com alguém") JÁ FOI ENVIADA pelo sistema — '
+  // 13/11 (0188): no formato 'texto' a 1ª mensagem já pediu o CEP e o número — o Claude não repete a saudação.
+  const comBotoes = String((inter.textos || {}).abertura_formato || 'texto').trim() === 'botoes';
+  L.push(`abertura_b2: a 1ª mensagem (${comBotoes
+    ? 'saudação + botões "Ver minha rua / Ver os planos / Falar com alguém"'
+    : 'saudação + pedido do CEP e do número da casa'}) JÁ FOI ENVIADA pelo sistema — `
     + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
 }
 const estadoTxt = L.join('\n');
@@ -427,8 +431,13 @@ if (V7) {
 // (rua / planos) ou humano na hora. Textos e títulos em config_mari_textos (0070) — sem 'abertura_versao' a B2 fica
 // desligada e tudo segue como antes. Fica de fora (vai para o Claude, como hoje): 1ª mensagem já com CEP ou endereço,
 // cliente Nio reclamando, luto, urgência, desconto, pedido de atendente, retomada de ciclo e conversa em handoff.
+// 13/11 (0188): a 1ª resposta volta a PEDIR O CEP, em texto, no lugar do menu. Medido em 13/11: a saudação com
+// botões não perguntava nada e 37 das 108 conversas de 14 dias nunca deram CEP (0 de 11 entre quem tocou
+// "Falar com alguém"; 23 de 50 entre quem não tocou botão nenhum). 'abertura_formato' = 'botoes' em
+// config_mari_textos devolve o menu sem deploy; a resposta a cada botão continua valendo (conversa antiga na tela).
 const tx = inter.textos || {};
 const B2 = String(tx.abertura_versao || '').trim();
+const FORMATO = String(tx.abertura_formato || 'texto').trim() === 'botoes' ? 'botoes' : 'texto';
 const nrm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const semEmoji = (s) => nrm(s).replace(/\p{Extended_Pictographic}|️|‍/gu, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
@@ -481,7 +490,14 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       const comNome = (s) => (nome ? s.replace(/\{nome\}/g, nome) : s.replace(/,?\s*\{nome\}\s*,?\s*/g, ', ').replace(/^Oi, ,/, 'Oi,'));
       const corpo = comNome(tx.abertura_corpo || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nTe mostro rapidinho, sem compromisso nenhum. O que você prefere ver primeiro?');
       const fb = comNome(tx.abertura_fallback || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nMe manda seu CEP (ou o nome da rua e o bairro) que eu já te mostro os planos daí 😉');
-      textoFixo = {
+      // 13/11 (0188): formato 'texto' (padrão) — saudação + pedido do CEP e do número, uma mensagem só, sem botões.
+      const corpoTexto = comNome(tx.abertura_corpo_texto || 'Oi, {nome}, tudo bem? 😊 Aqui é a Mari, da Nio.\n\nMe manda seu CEP e o número da casa que eu já vejo o que tem aí pra você. Se não lembrar o CEP, pode mandar a rua e o bairro.');
+      textoFixo = FORMATO === 'texto' ? {
+        texto: corpoTexto,
+        tags: { abertura: B2, abertura_formato: 'texto' },
+        upd: { dados: { abertura: B2 } },
+        modelo: 'abertura_b2',
+      } : {
         texto: null,
         interativo: { tipo: 'botoes', chave: 'abertura', corpo: corpo.slice(0, 1024),
           botoes: BOT_AB.map((b) => ({ id: b.id, title: b.title })),

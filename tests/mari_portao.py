@@ -259,6 +259,7 @@ def cen_q(c):   # P15 — controle: fora do assunto → volta ao fluxo sem inven
 
 # ───────── rodada única 10/11 (docs/Prompt_mari_rodada_unica_091126_2350.md): P20–P26 ─────────
 RX_DESPEDE = re.compile(r'se mudar de ideia|nao quero tomar mais|foi um prazer|quando quiser retomar|qualquer coisa (e|eh) so (me )?chamar')
+RX_RS_P31 = re.compile(r'r\$\s*\d')   # P31: nenhum preço na abertura (a cidade ainda não é conhecida)
 
 
 def ate_planos_jf(c):
@@ -392,6 +393,29 @@ def cen_ae(c):   # P30 (13/11, Ricardo; conversa #86): depois do "sem cobertura"
     c.exige(not re.search(r'nao chega|ainda nao chegou|nao atende', t), f'[P30] disse que não chega no endereço novo sem consultar: «{t[:200]}»')
 
 
+def cen_af(c):   # P31 (13/11, medido): a 1ª resposta PEDE O CEP — sem menu, uma mensagem só, e o CEP sozinho segue o fluxo
+    # Falha de produção que este cenário reproduz: na janela de 14 dias de 13/11, a 1ª resposta citava o CEP em 35 de 108
+    # conversas (o resto saía como "O que você prefere ver primeiro?" + 3 botões) e 37 conversas nunca deram CEP.
+    r = c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
+    t = fala(r)
+    c.exige(not (r.get('interativo') or {}), f'[P31] 1ª resposta com interativo (menu): {(r.get("interativo") or {}).get("chave")}')
+    c.exige('cep' in t, f'[P31] a 1ª resposta não pediu o CEP: «{t[:220]}»')
+    c.exige(not re.search(r'prefere ver primeiro|falar com alguem|ver os planos', t), f'[P31] a 1ª resposta ainda oferece o menu: «{t[:220]}»')
+    bal = r.get('baloes') if isinstance(r.get('baloes'), list) else [r.get('resposta') or '']
+    c.exige(len([b for b in bal if (b or '').strip()]) == 1, f'[P31] abertura em mais de 1 mensagem: {bal}')
+    c.exige(not re.search(RX_RS_P31, t), f'[P31] preço na abertura: «{t[:200]}»')
+    c.exige(not re.search(r'\bchega\b[^.?!]{0,30}\bsim\b|temos cobertura|atendemos (o|a|seu|sua)', t), f'[P31] prometeu cobertura antes do DFV: «{t[:200]}»')
+    c.exige(r.get('modelo') == 'abertura_b2', f'[P31] a abertura passou pelo Claude (modelo {r.get("modelo")!r})')
+    # o cliente manda só o CEP: segue o fluxo (pede o número), sem repetir a saudação
+    r = c.diz('36035130')
+    t = fala(r)
+    c.exige(t.strip(), '[P31] a Mari ficou muda depois do CEP')
+    c.exige('aqui e a mari' not in t, f'[P31] apresentou-se de novo: «{t[:160]}»')
+    c.exige(re.search(r'numero', t), f'[P31] não pediu o número da casa: «{t[:200]}»')
+    row = conv_row(c, 'cep, cidade')
+    c.exige(str(row.get('cep') or '').replace('-', '') == '36035130', f'[P31] CEP não gravado: {row}')
+
+
 def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
     c.diz('Oi')
     c.diz('36035130')
@@ -457,6 +481,8 @@ PORTAO = {
     'ad': (29, cen_ad, 'P29'),
     # 13/11 — conversa #86: cliente volta depois do "sem cobertura"
     'ae': (30, cen_ae, 'P30'),
+    # 13/11 — a 1ª resposta pede o CEP (0188): o menu da B2 não perguntava nada e 1/3 das conversas morria sem CEP
+    'af': (31, cen_af, 'P31'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
