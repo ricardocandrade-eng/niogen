@@ -435,6 +435,31 @@ def cen_ag(c):   # P32 (13/11, visto em produção): nome do contato que não é
         c.log += h.log
 
 
+def cen_ah(c):   # P33 (13/11, Ricardo; conversa #88): "vou dar outra chance à operadora X" não é "não quero" → argumenta antes de aceitar
+    ate_planos_jf(c)
+    r = c.diz('Agradeço, mas darei uma nova chance à Leopoldina net. Obrigado.')
+    t = fala(r)
+    bruto = (r.get('resposta') or '') + ((r.get('interativo') or {}).get('corpo') or '')
+    c.exige(not r.get('handoff'), f'[P33] aceitou a recusa na 1ª vez (concorrente): {r.get("handoff")}')
+    c.exige(not RX_DESPEDE.search(t), f'[P33] despediu-se sem argumentar: «{t[:200]}»')
+    c.exige('2030' in t, f'[P33] não usou o preço fixo até 2030: «{t[:200]}»')
+    c.exige('?' in bruto, f'[P33] não terminou com pergunta: «{t[:200]}»')
+    c.exige(not re.search(r'leopoldina', t), f'[P33] citou a outra operadora: «{t[:200]}»')
+    r = c.diz('Não quero, obrigado')
+    c.exige((r.get('handoff') or {}).get('motivo') == 'recusa_compra', f'[P33] "não quero" explícito sem handoff recusa_compra: {r.get("handoff")}')
+
+
+def cen_ai(c):   # P34 (13/11, Ricardo; conversa #88): "esse atendimento eu dispenso, quero a empresa" → uma tentativa, sem despedida
+    c.diz('Oi')
+    c.diz('De onde são vocês')
+    r = c.diz('Esse atendimento, eu dispenso, nada com você, e sim com a Empresa. Aliás todas. Obrigado.')
+    t = fala(r)
+    bruto = (r.get('resposta') or '') + ((r.get('interativo') or {}).get('corpo') or '')
+    c.exige((r.get('handoff') or {}).get('motivo') != 'recusa_compra', f'[P34] registrou recusa na 1ª objeção (confiança): {r.get("handoff")}')
+    c.exige(not RX_DESPEDE.search(t), f'[P34] despediu-se sem argumentar: «{t[:200]}»')
+    c.exige('?' in bruto, f'[P34] não terminou com pergunta: «{t[:200]}»')
+
+
 def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
     c.diz('Oi')
     c.diz('36035130')
@@ -504,6 +529,8 @@ PORTAO = {
     'af': (31, cen_af, 'P31'),
     # 13/11 — "Oi, Deus" e "Oi, Pedroernestoromaoptc" em conversa real: nome do WhatsApp que não é nome de pessoa
     'ag': (40, cen_ag, 'P32'),
+    # 13/11 — conversa #88: recusa com motivo fora da lista de objeções (concorrente, confiança) virava despedida na 1ª vez
+    'ah': (41, cen_ah, 'P33'), 'ai': (42, cen_ai, 'P34'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

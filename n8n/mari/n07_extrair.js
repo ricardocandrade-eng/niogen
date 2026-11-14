@@ -323,11 +323,18 @@ const OBJ_RE = {
   ja_tem: /\bja tenho (internet|net|fibra|wi-?fi|plano)\b|\bja (uso|sou cliente)\b|\bme atende (bem|super bem)\b|\bto satisfeit|\bestou satisfeit|\bpago (so )?(r\$ ?)?\d+|\bfidelizad/,
   marca: /\bnao conhec\w* (a )?nio\b|\bmarca nova\b|\bnunca ouvi\b|\b(e|eh) a oi\b|\boi com outro nome\b/,
   sem_5g: /\bnao (preciso|quero|uso) (d[oe] )?(5g|chip|celular|internet movel)\b/,
+  // 13/11 (Ricardo; conversa #88, portão P33 e P34): "darei uma nova chance à Leopoldina net" e "esse atendimento eu dispenso,
+  // e sim com a Empresa" não estavam na lista — a Mari se despediu sem um argumento.
+  concorrente: /\b(vou|irei|prefiro|decidi|resolvi|quero) (ficar|continuar|permanecer|seguir|fechar) (com|na|no) (?!((o|a|os|as) )?(plano|esse|essa|este|esta|ess[ea] mesmo|nio|fibra|essencial|super|ultra|giga|de \d|\d))|\b(nova|outra|mais uma|segunda) chance\b|\b(fechei|fiquei) com (a|o|outra)\b/,
+  confianca: /\bdispenso\b|\bnao confio\b|\bnada com voce\b|\b(falar|tratar|resolver) (direto )?com a empresa\b|\b(tenho|fico com|to com|estou com) (medo|receio|o pe atras)\b/,
 };
 const NAO_QUERO_RE = /\bnao (tenho|tem) interesse\b|\bnao quero\b|\bpode parar\b|\bnao me (mand|cham|lig)\w*\b|\bpara de me\b|\bchega\b|\bvou bloquear\b|\bme (tira|remove) da lista\b|\bsem interesse\b/;
 const msgObj = norm((prep.consolidado || {}).mensagem || '');
 const objecaoDaMsg = Object.keys(OBJ_RE).find((k) => OBJ_RE[k].test(msgObj)) || null;
 const naoQuero = NAO_QUERO_RE.test(msgObj);
+// 13/11 (P33/P34): recusa com motivo fora da lista também ganha UMA tentativa — desde que não seja "não quero" explícito
+// e a Mari ainda não tenha contornado nada nesta conversa. Chave "outra".
+const contornosAntes = Object.values((((ctx.conversa || {}).dados || {}).objecoes) || {}).reduce((a, b) => a + Number(b || 0), 0);
 const objecoesAntes = (((ctx.conversa || {}).dados || {}).objecoes) || {};
 function violacoesDe(t) {
   const n = norm(t);
@@ -404,6 +411,9 @@ function violacoesDe(t) {
       || (objecaoDaMsg === 'preco' && !/descont|abaix|faz (um |por )?menos|mais barat/.test(msgObj)
         && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'objecao'))) {
     v.push(`encerrou a conversa numa objeção (${objecaoDaMsg}) que ainda não foi contornada 2 vezes — objeção não é despedida: tire o [HANDOFF], responda a objeção com UM argumento do Bloco 4b, termine com uma pergunta e emita [OBJECAO: ${objecaoDaMsg}]`);
+  } else if (V7 && handoffYaml && !objecaoDaMsg && !naoQuero && !posHandoff && contornosAntes === 0 && msgObj.replace(/[^a-z]/g, '').length >= 3
+    && ['recusa_compra', 'interesse_caindo'].includes(norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, ''))) {
+    v.push('aceitou o primeiro "não" do cliente sem nenhum argumento — ele não disse "não quero" nem pediu para parar: tire o [HANDOFF], valide em meia frase, responda ao motivo que ele deu com UM argumento do Bloco 4b (sem motivo claro: preço fixo até janeiro/2030), termine com uma pergunta leve e emita [OBJECAO: outra]. Se ele recusar de novo, aí sim despedida recusa_compra');
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
@@ -651,7 +661,7 @@ if (V7) {
   if (/migra(cao|r)|operadora parceira|outra operadora|desligamento|(pedido|contrato|instalacao) (foi )?cancelad/.test(mAl) && !al.golpe) { al.golpe = agoraIso; novoAl = true; }
   if (novoAl) dados.alertas = al;
   // Objeção contornada (tag do modelo; sem tag, a objeção que a mensagem do cliente trouxe e que a Mari não encerrou).
-  const OBJS = ['preco', 'ja_tem', 'marca', 'sem_5g', 'pensar', 'consultar_alguem'];
+  const OBJS = ['preco', 'ja_tem', 'marca', 'sem_5g', 'pensar', 'consultar_alguem', 'concorrente', 'confianca', 'outra'];
   const tObj = norm(tags.objecao || '').replace(/[^a-z_]/g, '');
   const objAgora = OBJS.includes(tObj) ? tObj : (!handoffYaml && objecaoDaMsg ? objecaoDaMsg : null);
   if (objAgora && !posHandoff) {
