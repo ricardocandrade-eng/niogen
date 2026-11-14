@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-32">
+<link rel="stylesheet" href="assets/app.css?v=131126-33">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=131126-29"></script>
@@ -428,6 +428,7 @@
   // O caminho de volta: o que o NIOGEN devolveu à Meta pela API de Conversões para mensagens. Vermelho com erro de envio
   // ou com evento parado na fila há mais de 1 h (o workflow roda de 5 em 5 min). Leitura de uma view só (v_meta_capi_painel).
   const CAPI_EV = [
+    ['cidade', 'CEP em cidade atendida', 'ViewContent — o CEP que o cliente deu é de uma das cidades da campanha.'],
     ['viaveis', 'Rua com rede', 'QualifiedLead — é por este que a campanha deve otimizar: é o degrau mais fundo que ainda tem volume e já exclui fora da área, sem cobertura e já cliente Nio.'],
     ['qualificadas', 'Qualificadas', 'LeadSubmitted — a Mari passou ao time com os dados completos.'],
     ['vendas', 'Vendas (OS)', 'Purchase — OS gravada. Com ~1 por semana não dá volume para a Meta otimizar: vai junto só para medir.'],

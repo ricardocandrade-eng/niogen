@@ -308,17 +308,20 @@ comment on view public.v_meta_eventos_resumo is
 grant select on public.v_meta_eventos_resumo to authenticated;
 
 -- o cartão "A Meta recebeu" em Meta Ads › Desempenho: uma linha só, hoje e 7 dias
-create or replace view public.v_meta_capi_painel
+drop view if exists public.v_meta_capi_painel;
+create view public.v_meta_capi_painel
 with (security_invoker = true) as
 with j as (select (now() at time zone 'America/Sao_Paulo')::date as hoje),
 e as (select e.*, (e.fato_em at time zone 'America/Sao_Paulo')::date as dia from public.meta_eventos e)
 select
+  (select count(*) from e, j where e.dia = j.hoje and e.status = 'enviado' and e.evento = 'ViewContent')::int   as cidade_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'enviado' and e.evento = 'QualifiedLead')::int as viaveis_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'enviado' and e.evento = 'LeadSubmitted')::int as qualificadas_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'enviado' and e.evento = 'Purchase')::int      as vendas_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'enviado')::int                                as enviados_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'sem_clique')::int                             as sem_clique_hoje,
   (select count(*) from e, j where e.dia = j.hoje and e.status = 'erro')::int                                   as erros_hoje,
+  (select count(*) from e, j where e.dia > j.hoje - 7 and e.status = 'enviado' and e.evento = 'ViewContent')::int   as cidade_7d,
   (select count(*) from e, j where e.dia > j.hoje - 7 and e.status = 'enviado' and e.evento = 'QualifiedLead')::int as viaveis_7d,
   (select count(*) from e, j where e.dia > j.hoje - 7 and e.status = 'enviado' and e.evento = 'LeadSubmitted')::int as qualificadas_7d,
   (select count(*) from e, j where e.dia > j.hoje - 7 and e.status = 'enviado' and e.evento = 'Purchase')::int      as vendas_7d,
