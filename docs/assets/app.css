@@ -2668,3 +2668,20 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
   .pl-pop { position: static; max-height: none; box-shadow: none; }
   .lv-row { min-height: 0; }
 }
+
+/* ===== 14/11 (Ricardo: "em vez de ficar toda a barra amarela, deixe apenas a bolinha correspondente amarela ou vermelha,
+   em todos os casos"): a faixa de pulso não pinta fundo, borda nem texto — a cor fica só no indicador de cada parte
+   (.pl-marca) e na linha do batimento (.pl-ecg). O aviso com botões (.pl-alerta) continua como estava. ===== */
+.pl-faixa.pl-n-atencao, .pl-faixa.pl-n-parado,
+.pl-barra.pl-n-atencao, .pl-barra.pl-n-parado { border-color: var(--border); }
+.pl-geral.pl-n-atencao, .pl-geral.pl-n-parado,
+.pl-mgeral.pl-n-atencao, .pl-mgeral.pl-n-parado { background: var(--surface-dim); }
+.pl-elo.pl-n-atencao, .pl-elo.pl-n-parado,
+.pl-mini.pl-n-atencao, .pl-mini.pl-n-parado { background: transparent; border-left-color: var(--border); }
+.pl-elo.pl-n-atencao:hover, .pl-elo.pl-n-parado:hover, .pl-elo.pl-sel { background: var(--surface-2); }
+.pl-n-atencao .pl-nome, .pl-n-parado .pl-nome { color: var(--muted); }
+.pl-n-atencao .pl-princ, .pl-n-parado .pl-princ { color: var(--text); }
+.pl-n-atencao .pl-linhas, .pl-n-parado .pl-linhas { color: var(--muted); }
+.pl-n-atencao .pl-rot, .pl-n-parado .pl-rot { color: var(--text); }
+.pl-n-atencao .pl-gtit, .pl-n-parado .pl-gtit, .pl-n-parado .pl-gsub { color: var(--text); }
+.pl-sinal.pl-n-atencao, .pl-sinal.pl-n-parado { color: var(--text) !important; }
