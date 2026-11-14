@@ -484,11 +484,11 @@
     // 24/72 h e o D+1 partem dali (trigger vendas_antes_biometria, 0032). O backoffice só avisa o cliente na conversa.
     // 0111 (Ricardo, 10/11): o nº do pedido só existe na OS (OS = nº do pedido, o único ID da Nio). Aqui só o crédito.
     portal: (v) => formWrap('portal', 'Crédito no portal',
-      'Portal PAP (perfil BO): viabilidade · cadastro e crédito · oferta. Grave aqui o resultado do crédito — aprovado, a Nio manda o link da biometria ao cliente. O nº do pedido só existe quando a OS se abre (depois da biometria validada) e é gravado lá. Nunca abra pedido com CPF de teste.',
+      'Portal PAP (perfil BO): viabilidade · cadastro e crédito · oferta. Grave aqui o resultado do crédito. Depois, no portal: forma de pagamento → agenda → OS (é a OS que faz a venda contar; a Nio manda o link da biometria em seguida). Nunca abra pedido com CPF de teste.',
       `${botoesPortal}<span class="nota-campo mono">${esc(enderecoPortal(v))}</span>
        <label class="campo">Análise de crédito<select name="credito" autofocus>${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label>
        <label class="campo">Link da biometria (opcional — só referência; quem manda é a Nio)<input type="url" name="link" value="${esc(v.biometria_link || '')}" placeholder="https://…" autocomplete="off"></label>${v.status === '0_qualificado' ? checkRecompra() : ''}`, 'Salvar'),
-    bio_status: (v) => formWrap('bio_status', 'Biometria e crédito', 'O portal mostra a biometria como Pendente, com Risco ou Validada (Consulta OS). Validada libera abrir a OS (o nº do pedido = a OS).',
+    bio_status: (v) => formWrap('bio_status', 'Biometria e crédito', 'A biometria vem depois da OS: o GED360 (degrau Biometria › Consultar agora) e o portal mostram Pendente, com Risco ou Validada.',
       `${botoesPortal}<div class="grade2"><label class="campo">Biometria<select name="biometria">${optBiometria(v.biometria_status)}</select></label>
        <label class="campo">Análise de crédito<select name="credito">${NG.opcoes(NG.CREDITO, v.credito_resultado)}</select></label></div>`, 'Salvar'),
     // Contato. 0102 (Ricardo, 10/11): sem teto 2/dia · 15/mês — só vale se alguém configurar contato_teto_dia/_mes.
@@ -500,24 +500,27 @@
     // Instalação: agendar (Vendido → Aguardando) ou reagendar; limpa a pendência da Nio (os campos do antigo NG.registrarAgendamento).
     agendar: (v) => formWrap('agendar', v.instalacao_agendada_para ? 'Reagendar a instalação' : 'Agendar a instalação',
       v.instalacao_agendada_para ? 'Exceção: só quando a Nio ou o cliente mudar a data. O NIOGEN confirma a nova data ao cliente sozinho.'
-        : 'OS aberta. Agende no portal o dia e o período combinados com o cliente e grave aqui — o NIOGEN confirma ao cliente sozinho. Contrato: até 4 h da biometria validada.',
+        : 'A OS está gravada sem data. Grave o dia e o período que o portal agendou — o NIOGEN avisa o cliente sozinho.',
       `<div class="grade2">${campoData('Data da instalação', 'dia', v.instalacao_agendada_para ? NG.diaSP(v.instalacao_agendada_para) : amanhaISO(), 'required')}
        ${campoPeriodo('periodo', v.instalacao_agendada_para ? periodoDe(v.instalacao_agendada_para) : '08:00')}</div>`, v.instalacao_agendada_para ? 'Reagendar' : 'Agendar'),
     // 0111: etapa 2 → 3 pelo CRÉDITO (sem número). Aprovado = a Nio manda o link da biometria; negado = outro CPF + pendência.
     credito: (v) => formWrap('credito', 'Gravar o crédito',
-      'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode a análise de crédito e grave aqui o resultado — <b>não precisa de número</b>: o nº do pedido só existe na OS. Aprovado: a Nio manda o link da biometria e <b>o NIOGEN avisa o cliente sozinho</b>. Negado: o NIOGEN pede outro CPF ao cliente e abre a pendência.',
+      'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode a análise de crédito e grave aqui o resultado — <b>não precisa de número</b>. Aprovado: siga no portal (forma de pagamento → agenda → OS) e grave a OS e a data no passo seguinte. Negado: o NIOGEN pede outro CPF ao cliente e abre a pendência.',
       `${botoesPortal}<label class="campo">Análise de crédito<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, credPreset || (['aprovado', 'so_cartao', 'pendente', 'negado'].includes(v.credito_resultado) ? v.credito_resultado : ''), 'Escolher o resultado…')}</select>${credPreset ? '<span class="nota-campo">Resultado trazido do operador de crédito — confira e grave.</span>' : ''}</label>
-       <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente do link da biometria (o NIOGEN não manda o aviso)</label>${checkRecompra()}`, 'Gravar o crédito'),
+       ${checkRecompra()}`, 'Gravar o crédito'),
     // 0096 / 0111: etapa 3 → 4 (VENDA). O nº do pedido = a OS (o único ID da Nio); agendar é o passo seguinte.
     os: (v) => formWrap('os', 'Abrir a OS = VENDA',
-      'Biometria validada. Abra a OS no portal e grave aqui o nº do pedido (é o mesmo número da OS — o ID da venda na Nio para instalação e comissão). Com isso a venda conta. Depois vem o agendamento. Contrato: até 4 h da biometria validada.',
+      'Grave aqui o nº da OS que o portal mostrou (é o ID da venda na Nio para instalação e comissão). Com isso a venda conta e a Nio manda o link da biometria. Prefira o "Gravar OS e agenda", com a data.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (OS)<input type="text" name="os" value="${esc(v.nio_os || v.nio_pedido || '')}" autocomplete="off" autofocus></label></div>`, 'Gravar o pedido (OS) → vira Venda'),
     // 0089 (mantido): OS + dia + período num formulário só.
-    os_agendar: (v) => formWrap('os_agendar', 'Abrir a OS e agendar = VENDA',
-      'Biometria validada. No portal, abra a OS já com o dia e o período combinados com o cliente e grave aqui. Com isso, a venda conta. Contrato: até 4 h da biometria validada.',
-      `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (OS)<input type="text" name="os" value="${esc(v.nio_os || '')}" autocomplete="off" autofocus></label>
+    // 0194 (Ricardo, 14/11): no portal a ordem é forma de pagamento + plano → agenda → nº da OS → a Nio manda o link da biometria.
+    os_agendar: (v) => formWrap('os_agendar', 'Gravar OS e agenda = VENDA',
+      'No portal: forma de pagamento → agenda → OS. Grave o nº da OS, o dia e o período que o portal agendou e a forma de pagamento escolhida. Com isso a venda conta, a Nio manda o link da biometria e <b>o NIOGEN avisa o cliente sozinho</b>. Também dá para gravar pela extensão, na etapa Abrir OS.',
+      `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" inputmode="numeric" autocomplete="off" autofocus></label>
+       <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === (v.forma_pagamento || '') ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label>
        ${campoData('Dia da instalação', 'dia', amanhaISO(), `min="${hojeISO()}" required`)}
-       ${campoPeriodo('periodo', '08:00')}</div>`, 'Gravar OS e agendamento → vira Venda'),
+       ${campoPeriodo('periodo', '08:00')}</div>
+       <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente da biometria (o NIOGEN não manda o aviso)</label>`, 'Gravar OS e agenda → vira Venda'),
     docs: () => formWrap('docs', 'Documentos entregues à Nio', 'Contrato: termos assinados e documentação em até 15 dias após a habilitação.',
       campoData('Entregues em', 'dia', hojeISO(), 'required'), 'Registrar'),
     // 13/11 (4a): a saída única (lead_sair, 0157) — vale para venda e para conversa sem venda. Motivos da config_lead.
@@ -801,7 +804,7 @@
       const resultado = fd.get('credito') || '';
       if (!resultado) { NG.toast('Escolha o resultado do crédito.', 'bad'); return false; }
       if (['aprovado', 'so_cartao'].includes(resultado) && !(await conferiuRecompra(fd, 'ficha'))) return false;
-      return !!(await rodarMomento('credito', { resultado, sem_aviso: !!fd.get('sem_aviso') }));
+      return !!(await rodarMomento('credito', { resultado }));
     },
     async os(fd) {
       const os = String(fd.get('os') || '').trim();
@@ -812,7 +815,7 @@
       const os = String(fd.get('os') || '').trim();
       if (!os) { NG.toast('Informe o nº do pedido (OS).', 'bad'); return false; }
       if (!fd.get('dia')) { NG.toast('Informe o dia da instalação.', 'bad'); return false; }
-      return !!(await rodarMomento('os_agendar', { os, dia: fd.get('dia'), periodo: fd.get('periodo') }));
+      return !!(await rodarMomento('os_agendar', { os, dia: fd.get('dia'), periodo: fd.get('periodo'), forma: fd.get('forma') || null, sem_aviso: !!fd.get('sem_aviso') }));
     },
     async docs(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data.', 'bad'); return false; }
@@ -1264,12 +1267,12 @@
       : { s: 'no', d: '' };
     const bio = v.biometria_status;
     const pBio = bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)}` : 'validada' }
-      : v.credito_resultado === 'negado' ? { s: 'wa', d: 'crédito negado' }
       : bio === 'com_risco' ? { s: 'wa', d: 'com risco' }
-      : v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
-      : { s: 'no', d: '' };
+      : v.nio_os && v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
+      : { s: 'no', d: v.nio_os ? '' : 'depois da OS' };
     const pendNio = v.nio_pendencia_cod || v.nio_pendencia_desc;
     const pInst = v.instalado_em ? { s: 'ok', d: NG.fmtData(v.instalado_em) }
+      : d.lead && d.lead.status === 'aguarda_cartao' ? { s: 'wa', d: 'aguardando o cadastro do cartão' }
       : pendNio ? { s: 'wa', d: `pendência Nio${v.nio_pendencia_cod ? ' ' + v.nio_pendencia_cod : ''}` }
       : v.instalacao_agendada_para ? { s: 'no', d: `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}`, azul: true }
       : { s: 'no', d: '' };
@@ -1279,8 +1282,8 @@
       { nome: 'Crédito', ...(['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
         : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' } : v.credito_resultado === 'pendente' ? { s: 'wa', d: 'pendente' }
         : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
-      { nome: 'Biometria', ...pBio },
       { nome: 'Pedido (OS)', s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' },
+      { nome: 'Biometria', ...pBio },
       { nome: 'Instalação', ...pInst },
     ];
   }
@@ -1449,11 +1452,12 @@
     assumir: 'atribui a você no Chatwoot, cala a Mari e para a cadência.',
     viabilidade: 'nota no Chatwoot. Sem viabilidade: tente variações de CEP/rua/nº ou abra a pendência "Nio confirma".',
     pedido: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria.',
-    credito: 'aprovado: etiqueta biometria-pendente · nota · avisa o cliente do link da biometria. Negado: pede outro CPF ao cliente e abre a pendência.',
-    biometria: 'Validada: o próximo passo vira abrir a OS (4 h). Negado: pede outro CPF ao cliente e abre a pendência.',
-    os: 'nota no Chatwoot. Com a OS a venda conta; o próximo passo é agendar a instalação.',
+    credito: 'nota no Chatwoot. Aprovado: o próximo passo é gravar a OS e a agenda do portal. Negado: pede outro CPF ao cliente e abre a pendência.',
+    biometria: 'Validada: tira a etiqueta biometria-pendente; a Mari confirma a instalação ao cliente (no cartão, avisa do cadastro do cartão e lembra em 24 h).',
+    os: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria. Com a OS a venda conta.',
     agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
-    os_agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
+    os_agendar: 'etiquetas biometria-pendente e instalacao-agendada · nota · avisa o cliente do link da biometria com a data pré-agendada · lembra no D+1 · resolve a conversa (a Mari volta se ele escrever).',
+    cartao: 'a Mari avisou do cadastro do cartão e lembra em 24 h; quando a Consulta OS deixar de mostrar "Aguardando Pagamento", segue sozinho para a confirmação da instalação.',
     reagendar: 'confirma a nova data ao cliente e resolve a conversa.',
     docs: 'registra a entrega (contrato: 15 dias depois da instalação).',
     pendencia: 'a venda sai da sua vez até a data de revisão e a cadência da Mari pausa.',
@@ -1485,7 +1489,7 @@
     if (!bo) {
       // Vendedor: o passo de sempre (contato, documentos…). Os botões dos momentos são do backoffice.
       if (pr.resolver && BOTAO[pr.resolver] && !['pedido', 'credito', 'portal', 'bio_status', 'os', 'agendar', 'reagendar', 'os_agendar'].includes(pr.resolver)) bts.push(`<button type="button" class="btn" data-resolver="${pr.resolver}">${esc(BOTAO[pr.resolver])}</button>`);
-      if (etapa >= 2 && etapa <= 3) nota = 'O backoffice anda a venda pelo portal (pedido → biometria → OS → agendamento).';
+      if (etapa >= 2 && etapa <= 4) nota = 'O backoffice anda a venda pelo portal (crédito → forma de pagamento, agenda e OS → biometria → cartão, se for o caso).';
     } else if (j && j.botao === 'pendencia') {
       bts.push(B('data-resolver="pendencia"', 'Ver a pendência', nivel === 'agora'));
       sozinho = '';
@@ -1514,14 +1518,19 @@
         sozinho = SOZINHO.credito;
       }
     } else if (etapa === 3) {
-      if (v.biometria_status === 'validada') {
-        if (!form) formAtivoPadrao = 'os';
-        sozinho = SOZINHO.os;
-      } else {
-        bts.push(B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', true), B('data-momento="biometria" data-r="risco"', 'Com risco', false),
-          B('data-momento="biometria" data-r="negado"', 'Crédito negado', false));
-        sozinho = SOZINHO.biometria;
-      }
+      // 0194: crédito aprovado → no portal forma de pagamento, agenda e OS → grava tudo de uma vez (a venda conta).
+      if (!form) formAtivoPadrao = 'os_agendar';
+      sozinho = SOZINHO.os_agendar;
+    } else if (etapa === 4 && ['pendente', 'com_risco'].includes(v.biometria_status)) {
+      // 0194: a biometria vem DEPOIS da OS.
+      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
+        B('data-momento="biometria" data-r="risco"', 'Com risco', false));
+      nota = 'A Nio mandou o link da biometria quando a OS foi aberta. "Consultar agora" lê o GED360 na hora (uns 10 s); aprovada, o NIOGEN marca sozinho.';
+      sozinho = SOZINHO.biometria;
+    } else if (etapa === 4 && d.lead && d.lead.status === 'aguarda_cartao') {
+      bts.push(temOsNio() ? B('data-f="os-ler"', '⟳ Consultar a OS agora', nivel === 'agora') : '', B('data-resolver="reagendar"', 'Reagendar', false));
+      nota = 'Pagamento no cartão: a Nio mandou o link do cadastro do cartão depois da biometria. A visita depende dele. Com 48 h sem cadastro, ligue para o cliente.';
+      sozinho = SOZINHO.cartao;
     } else if (etapa === 4 && !v.instalacao_agendada_para) {
       if (!form) formAtivoPadrao = 'agendar';
       sozinho = SOZINHO.agendar;
@@ -2093,7 +2102,7 @@
     const viabC = c.nio_viab_resultado;
     const passosConv = [
       { nome: 'Viabilidade', s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' },
-      { nome: 'Crédito', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
+      { nome: 'Crédito', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
     // 0147: destino único + etapa; alerta quando alguém agiu direto no Chatwoot.
@@ -2260,6 +2269,8 @@
         return;
       }
       if (acao === 'voltar-lista') { if (voltarFn) voltarFn(); return; }
+      if (acao === 'bio-ler') { abrirBioModal(); return; }   // 0194: biometria no GED360, agora
+      if (acao === 'os-ler') { abrirOsModal(); return; }
       if (acao === 'menu') {
         const lista = b.parentElement.querySelector('.f-menu-lista');
         lista.hidden = !lista.hidden;
@@ -2613,7 +2624,7 @@
   const NIVEL_K = { agora: 'Agora', hoje: 'Hoje', espera: 'Aguardando', ok: 'Nada a fazer agora', fora: 'Fora da jornada' };
 
   // ---------- trilha das etapas ----------
-  const ETAPAS_K = ['viab', 'cred', 'bio', 'os', 'inst'];
+  const ETAPAS_K = ['viab', 'cred', 'os', 'bio', 'inst'];   // 0194: a OS vem antes da biometria
   function trilhaPassos(passos) {
     const iAtual = passos.findIndex((p) => p.s !== 'ok');
     return passos.map((p, i) => {
@@ -2699,6 +2710,13 @@
   // 13/11 (etapa 3): o degrau "OS aberta" (código instalacao) da Escada consulta a OS na Nio (Operador de OS) e responde num modal.
   // Mudou alguma coisa → recarrega a ficha (status, data, Live).
   const temOsNio = () => !!(d && !d.soConversa && d.v && ehBO() && /\d{8}/.test(String(d.v.nio_os || d.v.nio_pedido || '')));
+  // 0194: degrau Biometria → o robô do GED360 lê na hora (edge credito-consulta, acao bio). Mudou → recarrega a ficha.
+  async function abrirBioModal() {
+    if (!d || d.soConversa || !d.v || !ehBO()) return;
+    const alvo = idAtual;
+    const r = await NG.bioModal(d.v.id, d.v.cliente_nome);
+    if (r && r.mudou && idAtual === alvo) { NG.limparCache(); await recarregar(); }
+  }
   async function abrirOsModal() {
     if (!temOsNio()) return;
     const alvo = idAtual;
@@ -2761,15 +2779,16 @@
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
     } else if (p.k === 'bio') {
-      corpo = conv ? linhaDet('Biometria', 'depois do crédito aprovado')
+      corpo = conv ? linhaDet('Biometria', 'depois da OS')
         : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
         ${v.biometria_link_enviado_em ? linhaDet('Link da Nio', esc(NG.fmtDataHora(v.biometria_link_enviado_em))) : ''}
         ${v.biometria_validada_em ? linhaDet('Validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
         ${a.bio_resultado ? linhaDet('GED360', `${esc(a.bio_rotulo || a.bio_resultado)} · protocolo ${esc(a.bio_protocolo)} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}`) : ''}
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
-        ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}`;
+        ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
+        ${v.nio_os && ehBO() && v.status !== 'saida' ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>' : ''}`;
     } else if (p.k === 'os') {
-      corpo = conv ? linhaDet('Pedido (OS)', 'depois da biometria') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
+      corpo = conv ? linhaDet('Pedido (OS)', 'depois do crédito aprovado') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
         ${a.portal_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.portal_alerta)}</span>${visto('portal', a.portal_pedido)}</div>` : ''}
         ${fonte('portal PAP')}`;
@@ -3092,7 +3111,10 @@
   // Painel de ações do próximo passo (por cima dos cards): o corpo de sempre — botões, formulário, "faz sozinho", atalhos.
   function passoOver(v, p) {
     const formCartao = formAtivo && FORMS_NO_CARTAO.includes(formAtivo);
-    const aberto = fc.passo || p.forcar || (!!formAtivo && formAtivo !== 'contato');
+    // 0194 (Ricardo, 14/11: "precisa ficar caçando o que fazer em cada etapa"): o passo da vez já abre com o formulário/botões
+    // à vista, por cima dos cartões. Fechou no X → fica fechado nesta ficha; abrir um degrau, o histórico ou a pendência esconde.
+    const sozinhoAberto = ehBO() && p.temAcao && !p.alertaConv && !fc.passoX && !fc.etapa && !fc.ver && !fc.pend && !fc.hist && v.status !== 'saida';
+    const aberto = fc.passo || p.forcar || (!!formAtivo && formAtivo !== 'contato') || sozinhoAberto;
     if (!aberto) return '';
     const pend = formAtivo && formAtivo.startsWith('pend_');
     const extra = pend ? cartaoPendencia(v) : formCartao ? `<div class="f-form-solto">${FORMS[formAtivo](v)}</div>` : '';
@@ -3548,8 +3570,8 @@
       credPreset = r; formAtivo = 'credito'; fc.etapa = null; fc.passo = true; render(); return;
     }
     if (a === 'fc-pend') { fc.pend = !fc.pend; render(); return; }
-    if (a === 'fc-passo') { fc.passo = true; fc.ver = null; fc.pend = false; fc.etapa = null; render(); return; }
-    if (a === 'fc-passo-x') { fc.passo = false; formAtivo = null; passoAberto = new Set(); render(); return; }
+    if (a === 'fc-passo') { fc.passo = true; fc.passoX = false; fc.ver = null; fc.pend = false; fc.etapa = null; render(); return; }
+    if (a === 'fc-passo-x') { fc.passo = false; fc.passoX = true; formAtivo = null; passoAberto = new Set(); render(); return; }
     if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; fc.etapa = null; render(); return; }
     if (a === 'fc-ver-x') { fc.ver = null; edicao = null; render(); return; }
     if (a === 'fc-conf') { fc.conf = !fc.conf; if (fc.ver) fc.ver = null; render(); return; }

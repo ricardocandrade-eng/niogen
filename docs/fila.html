@@ -33,10 +33,10 @@
 <link rel="stylesheet" href="assets/app.css?v=141126-5">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-2"></script>
+<script src="assets/app.js?v=141126-7"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-1"></script>
+<script src="assets/ficha.js?v=141126-7"></script>
 <script src="assets/pulso.js?v=141126-1"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -131,7 +131,7 @@
   let vista = ['lista', 'quadro'].includes(ls.ler('niogen.fila.vista')) ? ls.ler('niogen.fila.vista') : 'lista';
 
   const BOTAO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', credito: 'Crédito', biometria: 'Biometria',
-    os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
+    os: 'OS e agenda', agendar: 'Agendar', os_agendar: 'OS e agenda', cartao: 'Cartão', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
   const dot = (n) => `<i class="mv-dot" style="--c:${COR[n] || '#6E747C'}"></i>`;
   const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';

@@ -1,4 +1,6 @@
 /* NIOGEN | extensao/panel.js | 06/11/2026 — Claude Code (prompt 28) · rev. 08/11/2026 (rolagem + conversas da Mari)
+ * rev. 14/11 (0194, 0.7.0): ordem real do portal — forma de pagamento → agenda → nº da OS → link da biometria. Etapa 7 · Abrir OS ganha
+ *   o registro "Gravar OS e agenda" (nº da OS, dia, período, forma de pagamento; momento os_agendar). Crédito aprovado não avisa mais a biometria.
  * rev. 08/11: (1) "Preencher esta etapa" rola o painel até a etapa seguinte quando a etapa fechou; (2) orelha "Conversas da Mari":
  * consulta o portal a partir de uma conversa ainda sem venda (mari_conversas, RLS admin/backoffice) e orelha "Conversa" com a
  * negociação (mari_turnos = o que passou pelo Chatwoot). Só leitura no banco; nada novo é gravado.
@@ -165,7 +167,7 @@
     S.sess = null; S.nome = ''; S.perfil = ''; S.fila = null; S.venda = null; S.dados = null;
     S.resultados = {}; S.msg = null; S.matricula = ''; S.pedido = ''; S.os = '';
     S.convs = null; S.conversa = null; S.turnos = null; S.busca = ''; S.aba = 'vendas'; S.orelha = 'portal';
-    S.feitas = {}; S.todos = false; S.registro = null; S.etapaManual = null;
+    S.feitas = {}; S.todos = false; S.registro = null; S.osForm = null; S.etapaManual = null;
     try { await chrome.storage.local.remove('niogen_sess'); await chrome.storage.session.remove('niogen_sess'); } catch (e) { /* ignora */ }
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* aba sem content script */ }
   }
@@ -421,7 +423,7 @@
   }
   async function voltar() {
     S.venda = null; S.dados = null; S.resultados = {}; S.matricula = ''; S.pedido = ''; S.os = ''; aviso('');
-    S.feitas = {}; S.registro = null; S.etapaManual = null; S.todos = false;   // ficam guardados em storage.session; reabrir acende de novo
+    S.feitas = {}; S.registro = null; S.osForm = null; S.etapaManual = null; S.todos = false;   // ficam guardados em storage.session; reabrir acende de novo
     S.conversa = null; S.turnos = null; S.orelha = 'portal';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
     desenha();
@@ -443,7 +445,7 @@
     try { await chrome.storage.session.set({ [k]: { feitas: S.feitas, resultados: S.resultados, registro: S.registro || null, manual: S.etapaManual || null } }); } catch (e) { /* ok */ }
   }
   async function carregaJornada() {
-    S.feitas = {}; S.resultados = {}; S.registro = null; S.etapaManual = null; S.todos = false;
+    S.feitas = {}; S.resultados = {}; S.registro = null; S.osForm = null; S.etapaManual = null; S.todos = false;
     const k = chaveJornada(); if (!k) return;
     try {
       const g = (await chrome.storage.session.get(k))[k];
@@ -452,7 +454,7 @@
   }
   async function limpaJornada() {
     const k = chaveJornada();
-    S.feitas = {}; S.resultados = {}; S.registro = null; S.etapaManual = null; S.todos = false;
+    S.feitas = {}; S.resultados = {}; S.registro = null; S.osForm = null; S.etapaManual = null; S.todos = false;
     if (k) { try { await chrome.storage.session.remove(k); } catch (e) { /* ok */ } }
   }
   const acende = (n) => { if (!S.feitas[n]) { S.feitas[n] = true; salvaJornada(); } };
@@ -498,7 +500,7 @@
       if (aprovou(qual, resultado) && (S.selos || []).length) {
         try { await rpc('venda_conferencia_recompra', { p_venda: S.dados.venda_id, p_selos: S.selos.map((x) => x.tipo), p_origem: 'extensao' }); } catch (e) { /* não segura a venda */ }
       }
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao', sem_aviso: !!S.semAviso } });
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
       S.registro = { ...(S.registro || {}), [qual]: resultado };
       S.feitas[qual === 'viabilidade' ? 2 : 3] = true; salvaJornada();
       aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
@@ -692,7 +694,7 @@
   async function concluiVenda() {
     S.fila = (S.fila || []).filter((x) => x.venda_id !== (S.venda || {}).venda_id);
     await limpaJornada();   // "Concluir" apaga as luzes guardadas desta venda
-    S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null;
+    S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null; S.osForm = null;
     S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
     try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
     aviso('');
@@ -714,7 +716,7 @@
       const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'pedido', p_dados: { pedido: ped, origem: 'extensao', sem_aviso: !!S.semAviso } });
       const nome = S.venda.cliente_nome;
       S.fila = (S.fila || []).filter((x) => x.venda_id !== S.venda.venda_id);
-      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null;
+      S.venda = null; S.dados = null; S.resultados = {}; S.pedido = ''; S.os = ''; S.matricula = ''; S.semAviso = false; S.registro = null; S.osForm = null;
       S.conversa = null; S.turnos = null; S.orelha = 'portal'; S.aba = 'vendas';
       try { await mandar({ tipo: 'limpar' }); } catch (e) { /* ok */ }
       aviso(`Pedido gravado no NIOGEN (${nome}). ${(r && r.resumo) || ''}${r && r.aviso ? ` · ${r.aviso}` : ' · o cliente é avisado pelo sistema.'}`, r && r.aviso ? 'bad' : 'ok');
@@ -905,9 +907,9 @@
       h('div', { class: `etapa-tit${atual ? ' atual' : ''}` }, `Etapa ${n} · ${ETAPAS[n - 1]}${atual ? ' — aberta no portal' : ''}`),
       corpo, extraTxt ? h('span', { class: 'sub' }, extraTxt) : null,
       n === 6 || n === 7 ? h('ul', { class: 'lista sub' }, CHECKLIST.map((x) => h('li', {}, x))) : null,
-      // Decisão do Ricardo (10/11 22h45): o nº do pedido (OS) e o agendamento só se gravam na ficha do NIOGEN — nenhum campo deles aqui.
-      n === 7 ? h('div', { class: 'dica' }, h('div', {}, 'Pedido (OS) e agendamento: grave na ficha do NIOGEN.'),
-        idVenda ? h('a', { class: 'btn btn-sm', target: '_blank', rel: 'noopener', href: `${NIOGEN_URL}/vendas.html#venda=${encodeURIComponent(idVenda)}` }, 'Abrir a ficha') : null) : null,
+      // 0.7.0 (Ricardo, 14/11): depois do Resumo o portal abre a agenda e logo o modal com o nº da OS — o humano grava aqui
+      // (à mão) a OS, o dia/período agendados e a forma de pagamento escolhida. Nada é lido nem clicado no portal por este bloco.
+      n === 7 ? registroOS(idVenda) : null,
       acao, resultados, registroNiogen(n));
   }
   // 0092: botões "registrar no NIOGEN" das etapas 2 (viabilidade) e 3 (crédito). Só com venda aberta no painel.
@@ -919,13 +921,50 @@
       h('span', { class: 'sub' }, n === 2 ? 'Viabilidade no NIOGEN:' : 'Crédito no NIOGEN:'),
       n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
         : h('div', { class: 'acoes' }, B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')),
-      n === 3 ? h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.semAviso, onchange: (ev) => { S.semAviso = ev.target.checked; } }),
-        ' Já avisei o cliente do link da biometria') : null,
       n === 3 && (S.selos || []).length ? h('div', { class: 'aviso bad' },
         h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
           ' Conferi: não é cliente nem endereço Nio (recompra = multa R$ 500; já Nio = estorno 100 %)')) : null,
       feito ? h('span', { class: 'sub ok' }, `✓ registrado: ${ROT_REG[feito] || feito}`) : null);
+  }
+
+  // 0.7.0 (0194): Etapa 7 · Abrir OS — OS + agenda + forma de pagamento num registro só (momento os_agendar). A venda conta e a
+  // Nio manda o link da biometria; o NIOGEN avisa o cliente. Os valores ficam só em memória até gravar.
+  function registroOS(idVenda) {
+    const linkFicha = idVenda ? h('a', { class: 'btn btn-sm', target: '_blank', rel: 'noopener', href: `${NIOGEN_URL}/vendas.html#venda=${encodeURIComponent(idVenda)}` }, 'Abrir a ficha') : null;
+    if (!S.venda || !idVenda) return h('div', { class: 'dica' }, h('div', {}, 'Abra a venda no painel para gravar a OS e a agenda aqui.'), linkFicha);
+    const f = S.osForm = S.osForm || { os: '', dia: '', periodo: '08:00', forma: (S.dados.oferta || {}).forma_pagamento || '', semAviso: false };
+    const feito = (S.registro || {}).os_agendar;
+    if (feito) return h('div', { class: 'registro' }, h('span', { class: 'sub ok' }, `✓ ${feito}`), linkFicha);
+    const inp = (k, attrs) => h('input', { ...attrs, value: f[k] || '', oninput: (ev) => { f[k] = ev.target.value; } });
+    const sel = (k, opts) => h('select', { onchange: (ev) => { f[k] = ev.target.value; } },
+      opts.map(([v, t]) => h('option', { value: v, selected: f[k] === v }, t)));
+    return h('div', { class: 'registro' },
+      h('span', { class: 'sub' }, 'Gravar no NIOGEN (o portal mostrou a agenda e o nº da OS):'),
+      h('label', { class: 'sub' }, 'Nº da OS', inp('os', { type: 'text', inputmode: 'numeric', autocomplete: 'off', placeholder: '8 dígitos' })),
+      h('label', { class: 'sub' }, 'Dia agendado', inp('dia', { type: 'date' })),
+      h('label', { class: 'sub' }, 'Período', sel('periodo', [['08:00', 'Manhã · 8–12h'], ['13:00', 'Tarde · 13–17h']])),
+      h('label', { class: 'sub' }, 'Forma de pagamento escolhida', sel('forma', [['', 'Escolher…'], ...Object.entries(FORMAS).map(([k, x]) => [k, x[0]])])),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!f.semAviso, onchange: (ev) => { f.semAviso = ev.target.checked; } }),
+        ' Já avisei o cliente da biometria (o NIOGEN não manda o aviso)'),
+      h('div', { class: 'acoes' }, h('button', { class: 'btn btn-sm btn-acc', type: 'button', disabled: S.ocupado, onclick: gravaOS }, 'Gravar OS e agenda → vira Venda'), linkFicha),
+      h('span', { class: 'sub' }, f.forma === 'cartao' ? 'Cartão: depois da biometria a Nio manda o link do cadastro do cartão; a Mari avisa o cliente.' : 'A Nio manda o link da biometria; o NIOGEN avisa o cliente e lembra no D+1.'));
+  }
+  async function gravaOS() {
+    const f = S.osForm || {};
+    const os = String(f.os || '').replace(/\D/g, '');
+    if (os.length < 3) { aviso('Informe o nº da OS que o portal mostrou.', 'bad'); desenha(); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(f.dia || '')) { aviso('Informe o dia agendado no portal.', 'bad'); desenha(); return; }
+    if (!f.forma) { aviso('Escolha a forma de pagamento escolhida no portal.', 'bad'); desenha(); return; }
+    S.ocupado = true; aviso(''); desenha();
+    try {
+      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'os_agendar',
+        p_dados: { os, dia: f.dia, periodo: f.periodo || '08:00', forma: f.forma, origem: 'extensao', sem_aviso: !!f.semAviso } });
+      S.registro = { ...(S.registro || {}), os_agendar: (r && r.resumo) || 'OS gravada' };
+      S.feitas[7] = true; salvaJornada();
+      aviso(`${(r && r.resumo) || 'OS gravada no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
+    } catch (e) { aviso(e.message, 'bad'); }
+    S.ocupado = false; desenha();
   }
 
   // Jornada fixa: uma linha por etapa. atual (aberta no portal) · feita (✓ acesa até Concluir) · pendente (○) · "N faltam".

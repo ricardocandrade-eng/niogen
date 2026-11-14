@@ -20,9 +20,17 @@
 #   python n8n/deploy_ged360_biometria.py estrutura  # PUT do workflow inteiro, backup antes (mantém o active atual)
 #   python n8n/deploy_ged360_biometria.py ativar     # liga (recusa se a credencial GED360 não existir)
 #   python n8n/deploy_ged360_biometria.py exportar   # baixa o estado atual e grava o export sanitizado
+#   python n8n/deploy_ged360_biometria.py agora_segredo  # grava na Supabase (secret N8N_GED360_AGORA_URL) o endereço do gatilho "ler agora"
+#
+# 14/11 (0194, Ricardo: "ao clicar na etapa Biometria, consultar o status com ajuda do operador da VPS"): o mesmo fluxo ganha um
+# gatilho por webhook ("0 · Ler agora (NIOGEN)") que a edge function credito-consulta (acao 'bio') chama. Mesmo login, mesmo
+# Relatório Detalhado em CSV, mesma RPC — a regra 5 não muda. O caminho do webhook é SECRETO (token aleatório): mora só no n8n
+# e no secret da Supabase; o export do repo leva '<segredo>'. Responde o retorno da ged360_registrar.
 
 import json
 import os
+import secrets
+import subprocess
 import sys
 import time
 import urllib.request
@@ -163,7 +171,7 @@ return [{ json: { p_linhas: out, p_erro: null } }];
 """
 
 
-def build(ids):
+def build(ids, agora_path=None):
     cred = ids.get('credenciais', {})
     sb_cred = {'supabaseApi': {'id': cred.get('supabase', ''), 'name': dm.CRED_SUPABASE}}
     ged_cred = {'httpCustomAuth': {'id': cred.get('ged360', ''), 'name': CRED_GED}}
@@ -210,17 +218,43 @@ def build(ids):
         'jsonBody': '={{ JSON.stringify({ p_linhas: $json.p_linhas, p_erro: $json.p_erro }) }}',
         'options': {'timeout': 30000}}, 1540, 0, credentials=sb_cred)
 
+    if agora_path:
+        add('0 · Ler agora (NIOGEN)', 'n8n-nodes-base.webhook', 2,
+            {'path': agora_path, 'httpMethod': 'POST', 'responseMode': 'lastNode', 'responseData': 'firstEntryJson', 'options': {}},
+            0, 200, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/ged360_biometria/agora')),
+            notes='Chamado pela edge function credito-consulta (acao bio) quando alguém clica no degrau Biometria. Caminho secreto.',
+            notesInFlow=True)
     ordem = ['1 · 15 min, 24 h', '2 · GED360 tela de login', '3 · Cookies da sessão', '4 · GED360 login',
              '5 · Datas e cookie', '6 · Relatório Detalhado (CSV) e sair', '7 · CSV → linhas', '8 · Supabase ged360_registrar']
     conns = {}
     for o, d in zip(ordem, ordem[1:]):
         conns.setdefault(o, {'main': [[]]})['main'][0].append({'node': d, 'type': 'main', 'index': 0})
+    if agora_path:
+        conns['0 · Ler agora (NIOGEN)'] = {'main': [[{'node': '2 · GED360 tela de login', 'type': 'main', 'index': 0}]]}
     settings = {'executionOrder': 'v1', 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'none',
                 'saveManualExecutions': True, 'timezone': 'America/Sao_Paulo'}
     return {'name': WF_NOME, 'nodes': nodes, 'connections': conns, 'settings': settings}
 
 
+def sem_caminho(wf):
+    # O caminho do webhook "ler agora" é segredo: nunca vai para o export do repo.
+    wf = json.loads(json.dumps(wf))
+    for n in wf.get('nodes', []):
+        if n.get('type') == 'n8n-nodes-base.webhook':
+            n.setdefault('parameters', {})['path'] = '<segredo>'
+            n.pop('webhookId', None)
+    return wf
+
+
+def caminho_agora(wf):
+    for n in (wf or {}).get('nodes', []):
+        if n.get('type') == 'n8n-nodes-base.webhook' and (n.get('parameters') or {}).get('path', '') not in ('', '<segredo>'):
+            return n['parameters']['path']
+    return None
+
+
 def salvar(wf):
+    wf = sem_caminho(wf)
     dm.checar_sem_segredo(wf)
     keep = {k: wf[k] for k in ('name', 'nodes', 'connections', 'settings') if k in wf}
     keep['active'] = wf.get('active', False)
@@ -290,7 +324,8 @@ def cmd_estrutura():
     with open(bk, 'w', encoding='utf-8') as f:
         json.dump(atual, f, ensure_ascii=False, indent=2)
     print('backup:', os.path.relpath(bk, REPO))
-    dm.put(ids[ID_KEY], build(ids))
+    caminho = caminho_agora(atual) or ('ged360-agora-' + secrets.token_hex(16))
+    dm.put(ids[ID_KEY], build(ids, caminho))
     print('ok (active =', dm.api('GET', f'/workflows/{ids[ID_KEY]}').get('active'), ')')
     cmd_exportar()
 
@@ -304,6 +339,17 @@ def cmd_ativar():
     cmd_exportar()
 
 
+def cmd_agora_segredo():
+    """Lê o caminho do webhook no n8n e grava a URL como secret da edge function (sem imprimir)."""
+    ids = dm.ler_ids()
+    caminho = caminho_agora(dm.api('GET', f'/workflows/{ids[ID_KEY]}'))
+    if not caminho:
+        raise SystemExit('o fluxo ainda não tem o gatilho "ler agora" — rode estrutura antes.')
+    r = subprocess.run(['npx', 'supabase', 'secrets', 'set', '--yes', f'N8N_GED360_AGORA_URL={dm.N8N}/webhook/{caminho}'],
+                       cwd=REPO, capture_output=True, text=True, shell=(os.name == 'nt'))
+    print('secret N8N_GED360_AGORA_URL:', 'gravado' if r.returncode == 0 else 'FALHOU (' + (r.stderr or '')[-200:].replace(caminho, '<segredo>') + ')')
+
+
 def cmd_exportar():
     ids = dm.ler_ids()
     salvar(dm.api('GET', f'/workflows/{ids[ID_KEY]}'))
@@ -311,7 +357,7 @@ def cmd_exportar():
 
 if __name__ == '__main__':
     acoes = {'build': cmd_build, 'teste_ip': cmd_teste_ip, 'criar': cmd_criar, 'estrutura': cmd_estrutura,
-             'ativar': cmd_ativar, 'exportar': cmd_exportar}
+             'ativar': cmd_ativar, 'exportar': cmd_exportar, 'agora_segredo': cmd_agora_segredo}
     if len(sys.argv) < 2 or sys.argv[1] not in acoes:
         raise SystemExit('uso: ' + ' | '.join(acoes))
     acoes[sys.argv[1]]()

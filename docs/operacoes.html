@@ -25,10 +25,10 @@
 <link rel="stylesheet" href="assets/app.css?v=141126-5">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-2"></script>
+<script src="assets/app.js?v=141126-7"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-1"></script>
+<script src="assets/ficha.js?v=141126-7"></script>
 <style>
   .op-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   .op-kpis .kpi { padding: 12px 14px; border-radius: 12px; gap: 3px; min-width: 0; }
@@ -123,13 +123,15 @@
   const pendNio = (v) => !!(v.nio_pendencia_cod || v.nio_pendencia_desc);
   const pendDe = (v) => NG.pendencia(v);
   const agDia = (v) => (v.instalacao_agendada_para ? dia(v.instalacao_agendada_para) : null);
-  const naBio = (v) => v.status === '0_qualificado' && v.biometria_status !== 'validada' && NG.naBiometria(v);
+  // 0194: a biometria vem depois da OS — conta a venda já aberta com a biometria pendente (e as antigas, de antes da OS).
+  const naBio = (v) => (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && ['pendente', 'com_risco'].includes(v.biometria_status))
+    || (v.status === '0_qualificado' && ['pendente', 'com_risco'].includes(v.biometria_status) && NG.naBiometria(v));
   const semData = (v) => !instalada(v) && ((v.status === '0_qualificado' && v.biometria_status === 'validada') || v.status === '1_vendido' || (v.status === '2_aguardando_instalacao' && !v.instalacao_agendada_para));
   const passou = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) && agDia(v) < hoje();
   const ehHoje = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) === hoje();
   const ehAmanha = (v) => !instalada(v) && v.status === '2_aguardando_instalacao' && agDia(v) === amanha();
   const horasSemAgenda = (v) => { const d = v.agendar_desde || v.biometria_validada_em || v.vendido_em; return d ? (Date.now() - new Date(d)) / 3600000 : 0; };
-  const horasBio = (v) => { const d = v.biometria_link_enviado_em || v.credito_em; return d ? (Date.now() - new Date(d)) / 3600000 : 0; };
+  const horasBio = (v) => { const d = v.biometria_link_enviado_em || v.nio_os_em || v.credito_em; return d ? (Date.now() - new Date(d)) / 3600000 : 0; };
   const recente = (v) => instalada(v) && v.instalado_em && (Date.now() - new Date(v.instalado_em)) / 86400000 <= Number((regras.protecao_receita || {}).reativacao_dias ?? 30);
   const H4 = () => Number(regras.prazo_agendar_horas ?? 4);
 

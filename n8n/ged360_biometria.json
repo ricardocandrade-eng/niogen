@@ -224,6 +224,25 @@
           "name": "Supabase Nio (service role)"
         }
       }
+    },
+    {
+      "parameters": {
+        "path": "<segredo>",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "name": "0 · Ler agora (NIOGEN)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "2ba9c42e-6e8d-5efd-9cc8-a9902566137f",
+      "notes": "Chamado pela edge function credito-consulta (acao bio) quando alguém clica no degrau Biometria. Caminho secreto.",
+      "notesInFlow": true
     }
   ],
   "connections": {
@@ -298,6 +317,17 @@
         [
           {
             "node": "8 · Supabase ged360_registrar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "0 · Ler agora (NIOGEN)": {
+      "main": [
+        [
+          {
+            "node": "2 · GED360 tela de login",
             "type": "main",
             "index": 0
           }

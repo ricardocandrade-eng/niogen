@@ -40,13 +40,13 @@
   const JORNADA = [
     { n: 1, id: 'conversa', nome: 'Conversa', cor: '#6B8AFD' },
     { n: 2, id: 'qualificado', nome: 'Lead qualificado', cor: '#5FB3F9' },
-    { n: 3, id: 'pedido', nome: 'Biometria', cor: '#E3B341' },
+    { n: 3, id: 'pedido', nome: 'Pedido (OS)', cor: '#E3B341' },   // 0194: crédito aprovado, falta gravar a OS e a agenda
     { n: 4, id: 'vendido', nome: 'Ativação/Agenda', cor: '#32E000' },
     { n: 5, id: 'instalado', nome: 'Instalada', cor: '#2EA043' },
   ];
   const ETAPAS = [
     { id: 'qualificado', n: 2, nome: 'Lead qualificado', status: ['0_qualificado'] },
-    { id: 'pedido', n: 3, nome: 'Biometria', status: ['0_qualificado'] },
+    { id: 'pedido', n: 3, nome: 'Pedido (OS)', status: ['0_qualificado'] },
     { id: 'vendido', n: 4, nome: 'Ativação/Agenda', status: ['1_vendido', '2_aguardando_instalacao'] },
     { id: 'instalado', n: 5, nome: 'Instalada', status: ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'] },
     { id: 'saida', n: 0, nome: 'Saída', status: ['saida'] },
@@ -223,7 +223,7 @@
   const contatosTxt = (hoje, mes, t) => `hoje ${hoje || 0}${t && t.dia != null ? `/${t.dia}` : ''} · mês ${mes || 0}${t && t.mes != null ? `/${t.mes}` : ''}`;
   // Rótulo do botão do próximo passo (v_jornada.botao) — o mesmo do Live.
   const BOTAO_PASSO = { assumir: 'Assumir', responder: 'Responder', viabilidade: 'Viabilidade', pedido: 'Gravar pedido', credito: 'Crédito', biometria: 'Biometria',
-    os: 'Abrir a OS', agendar: 'Agendar', os_agendar: 'OS + agendar', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
+    os: 'OS e agenda', agendar: 'Agendar', os_agendar: 'OS e agenda', cartao: 'Cartão', reagendar: 'Reagendar', docs: 'Documentos', pendencia: 'Pendência', conferencia: 'Conferir', manual: 'Mandar à mão', abrir: 'Abrir' };
   // Linha da v_jornada → o mesmo formato do proximoPasso ({txt, nivel, acao, espera}).
   const passoJornada = (j) => (j ? { txt: j.o_que_fazer, nivel: NIVEL_COR[j.nivel] || 'dim', acao: !!j.precisa_acao, espera: j.nivel === 'espera', botao: j.botao } : null);
   const ordemJornada = (a, b) => (({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[a.nivel] - ({ agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 })[b.nivel])
@@ -255,7 +255,7 @@
   const SEGMENTOS = { PF: 'PF · Varejo', MEI: 'PJ · MEI', NMEI: 'PJ · NMEI' };
   // Venda remota (05/11): não existe biometria em campo. A própria Nio manda o LINK ao cliente (WhatsApp + e-mail) na hora
   // em que o pedido é aberto no portal (prompt 19); o portal mostra Pendente · com Risco · Validada. "Não enviada" = sem pedido.
-  const BIOMETRIA = { nao_enviada: 'sem pedido (link ainda não saiu)', pendente: 'pendente (link enviado pela Nio)', com_risco: 'com risco', validada: 'validada' };
+  const BIOMETRIA = { nao_enviada: 'link ainda não saiu (sai com a OS)', pendente: 'pendente (link enviado pela Nio)', com_risco: 'com risco', validada: 'validada' };
   const CREDITO = { pendente: 'pendente (24 h)', aprovado: 'aprovado', so_cartao: 'aprovado só no cartão', negado: 'negado' };
   // Viabilidade oficial do portal (nível A em espera: hoje registrada à mão na ficha). Nunca nega venda sozinha (05/11 10h05):
   // ≠ viável = conferir manualmente no portal (variações de CEP/rua/número); quem decide sem cobertura é o humano.
@@ -784,6 +784,41 @@
         .then(({ data }) => { velha = (data || [])[0] || null; if (aberto && corpo.querySelector('.os-lendo')) pinta(null); });
       osConsultar(vendaId).then((s) => { mudou = !!(s && s.registro && s.registro.mudou === true); pinta(s); if (!aberto && mudou) limparCache(); })
         .catch((err) => pinta(null, err.naoInstalado ? 'Operador fora do ar — consulte direto no portal.' : msgErro(err)));
+    });
+  }
+  // 0194 (Ricardo, 14/11): degrau Biometria → o robô do GED360 (n8n) lê o Relatório Detalhado AGORA (~10 s) e grava; o modal mostra
+  // a biometria desta venda. Fechar antes não cancela. Resolve com { mudou } (status da biometria mudou → a ficha recarrega).
+  const BIO_RES = { 'APROVADO': 'Aprovada', 'APROVADA': 'Aprovada', 'CONCLUIDO': 'Concluída', 'CONCLUÍDO': 'Concluída' };
+  function bioModal(vendaId, nome) {
+    return new Promise((resolve) => {
+      const dlg = document.createElement('dialog');
+      dlg.className = 'modal os-modal';
+      dlg.innerHTML = `<form method="dialog"><h3>Biometria na Nio${nome ? ` · ${esc(primeiroNome(nome))}` : ''}</h3><div data-bio-corpo></div>
+        <div class="acoes"><button type="submit" class="btn btn-acc" value="ok">Fechar</button></div></form>`;
+      document.body.appendChild(dlg);
+      const corpo = dlg.querySelector('[data-bio-corpo]');
+      let aberto = true;
+      let mudou = false;
+      const lin = (k, v) => (v ? `<div class="os-l"><span>${esc(k)}</span><b>${esc(v)}</b></div>` : '');
+      dlg.addEventListener('close', () => { aberto = false; dlg.remove(); resolve({ mudou }); });
+      corpo.innerHTML = '<div class="os-lendo">Lendo no GED360… leva uns 10 segundos. Pode fechar: a leitura continua.</div>';
+      dlg.showModal();
+      const antes = sb.from('vendas').select('biometria_status').eq('id', vendaId).maybeSingle();
+      creditoFn({ acao: 'bio', venda_id: vendaId }).then(async (r) => {
+        const a = ((await antes).data || {}).biometria_status;
+        const v = r.venda || {};
+        mudou = !!(v.biometria_status && v.biometria_status !== a);
+        if (!aberto) { if (mudou) limparCache(); return; }
+        const bs = r.biometrias || [];
+        const st = BIOMETRIA[v.biometria_status] || v.biometria_status || '—';
+        const q = bs.length ? bs.map((b) => `<div class="os-q${b.casada ? '' : ' velha'}"><h4>Protocolo ${esc(b.protocolo || '—')}${b.casada ? '' : ' · ainda não casado com a venda'}</h4>
+            ${lin('Resultado no GED360', BIO_RES[String(b.resultado || '').toUpperCase()] || b.resultado || 'sem resultado ainda')}
+            ${lin('Enviada em', b.data_envio ? fmtDataHora(b.data_envio) : '')}${lin('Conferida em', b.data_conferencia ? fmtDataHora(b.data_conferencia) : '')}
+            ${b.alerta ? `<div class="os-fazer warn">${esc(b.alerta)}</div>` : ''}</div>`).join('')
+          : '<div class="os-fazer warn">O GED360 ainda não tem biometria com o CPF desta venda (últimos 15 dias). Se o cliente diz que já fez, peça o print e confira o CPF da venda.</div>';
+        corpo.innerHTML = `${r.erro ? `<div class="os-fazer bad">${esc(r.erro)} · mostrando a última leitura guardada.</div>` : `<div class="os-q"><h4>Lido agora · ${esc(fmtDataHora(new Date().toISOString()))}${r.linhas != null ? ` · ${esc(r.linhas)} biometrias no relatório` : ''}</h4></div>`}
+          ${q}<div class="os-fazer ${v.biometria_status === 'validada' ? '' : 'warn'}">Na venda: <b>${esc(st)}</b>${mudou ? ' — mudou agora' : ''}${v.biometria_status === 'validada' ? '. A Mari segue com o cliente (no cartão, o aviso do cadastro do cartão).' : ''}</div>`;
+      }).catch((err) => { if (aberto) corpo.innerHTML = `<div class="os-fazer bad">${esc(err.naoInstalado ? 'Leitura na hora ainda não instalada — confira no GED360.' : msgErro(err))}</div>`; });
     });
   }
   // O que dizer depois da leitura: { txt, cls ('ok' | 'warn' | 'bad'), mudou }.
@@ -1401,9 +1436,9 @@
   // (prazo_agendar_horas, prazo_docs_dias); os números abaixo são só o padrão se a config não carregar.
   const PARADAS = [
     { id: 'qualificado', nome: 'Lead qualificado', dica: 'Etapa 2 · ainda NÃO é venda: falta a viabilidade do portal e o crédito aprovado' },
-    { id: 'biometria', nome: 'Biometria', dica: 'Etapa 3 · crédito aprovado: esperando o cliente fazer a biometria (link automático da Nio)' },
-    { id: 'agendamento', nome: 'Abrir a OS', dica: 'Etapa 3 · biometria validada, falta abrir a OS no portal e gravar o nº do pedido — contrato: até 4 h' },
-    { id: 'agendar', nome: 'Agendar', dica: 'Etapa 4 · OS aberta (venda), falta agendar a instalação — contrato: até 4 h da biometria' },
+    { id: 'agendamento', nome: 'OS e agenda', dica: 'Etapa 3 · crédito aprovado: no portal forma de pagamento, agenda e OS — gravar a OS e a data (a venda conta)' },
+    { id: 'biometria', nome: 'Biometria', dica: 'Etapa 4 · OS aberta (venda): esperando o cliente fazer a biometria (link automático da Nio)' },
+    { id: 'agendar', nome: 'Agendar', dica: 'Etapa 4 · OS gravada sem data: gravar a agenda do portal' },
     { id: 'instalacao', nome: 'Ativação/Agenda', dica: 'Etapa 4 · instalação agendada: esperando o técnico / a baixa da Nio no OSAB' },
     { id: 'instalada', nome: 'Instalada · docs', dica: 'Etapa 5 · instalada, documentos à Nio pendentes — contrato: 15 dias' },
   ];
@@ -1415,12 +1450,16 @@
     switch (v.status) {
       case '0_qualificado': {
         if (!naBiometria(v)) return { id: 'qualificado', desde: v.criado_em };
-        if (v.biometria_status !== 'validada') return { id: 'biometria', desde: v.biometria_link_enviado_em || v.nio_pedido_em || v.credito_em || v.criado_em };
-        const desde = v.biometria_validada_em || v.criado_em;
-        return { id: 'agendamento', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
+        // 0194: crédito aprovado → a próxima é a OS com a agenda (a biometria vem depois dela).
+        const desde = v.credito_em || v.nio_pedido_em || v.criado_em;
+        return { id: 'agendamento', desde, atrasada: horas(desde) > 2, prazo: '2 h' };
       }
       case '1_vendido':
       case '2_aguardando_instalacao': {
+        if (['pendente', 'com_risco'].includes(v.biometria_status)) {
+          const desde = v.biometria_link_enviado_em || v.nio_os_em || v.vendido_em || v.criado_em;
+          return { id: 'biometria', desde, atrasada: horas(desde) > 72, prazo: '72 h' };
+        }
         if (!v.instalacao_agendada_para) {
           const desde = v.biometria_validada_em || v.vendido_em || v.criado_em;
           return { id: 'agendar', desde, atrasada: horas(desde) > hAg, prazo: `${hAg} h` };
@@ -1680,7 +1719,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     mudou,   // 14/11 (0190): timer só refaz a leitura pesada se o banco foi gravado
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
