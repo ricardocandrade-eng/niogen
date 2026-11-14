@@ -1194,7 +1194,7 @@
       erro:       ['✗', 'bad',  'O envio à Meta falhou depois de 3 tentativas. Avisar o Claude Code; não reenviar à mão.'],
       pendente:   ['⏳', '',    'Na fila para a Meta — o envio roda de 5 em 5 min.'],
       sem_clique: ['—', 'dim',  'A conversa não trouxe o id do clique do anúncio: não há o que enviar à Meta.'],
-      sem_anuncio:['—', 'dim',  'Esta venda não veio de anúncio.'],
+      sem_anuncio:['—', 'dim',  'Não há anúncio ligado a esta venda: a conversa não trouxe o clique de nenhum anúncio. Nada a enviar à Meta.'],
       anterior:   ['—', 'dim',  'Venda anterior à ligação com a Meta (13/11): não há envio retroativo.'],
       sem_evento: ['!', 'bad',  'Veio de anúncio e deveria ter gerado evento, mas não gerou. Avisar o Claude Code.'],
     };
