@@ -2590,3 +2590,9 @@ a.cv-etp:hover, a.cv-dest:hover { color: var(--link); }
   .cvp-raiz.cheia .cvp-chips { flex-wrap: wrap; }
   .cvp-raiz.cheia .cvp-l2 { overflow-x: auto; }
 }
+
+/* 0186 — selo Meta na ficha da venda: a Meta recebeu (✓), o envio falhou (✗), está na fila (⏳) ou não veio de anúncio (—). */
+.selo-meta { font-size: 11.5px; font-weight: 600; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); white-space: nowrap; cursor: help; }
+.selo-meta.ok { color: var(--accent); border-color: var(--accent); }
+.selo-meta.bad { color: var(--bad-fg); background: var(--bad-bg); border-color: var(--bad-border); }
+.selo-meta.dim { opacity: .65; }

@@ -18,7 +18,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=131126-30">
+<link rel="stylesheet" href="assets/app.css?v=131126-32">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=131126-29"></script>
@@ -38,6 +38,14 @@
   .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
   .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
   .saude-cab .info { font-size: 11px; color: var(--muted); cursor: help; white-space: nowrap; }
+  /* "A Meta recebeu" (0186): o caminho de volta, em uma linha de itens. Vermelho só com erro ou fila parada há mais de 1 h. */
+  #capi { padding: 12px 16px; gap: 10px; }
+  #capi.ruim { border-color: var(--bad-border); background: var(--bad-bg); }
+  #capi #capi-corpo { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 18px; }
+  .linha-folga { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .linha-folga .rot { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .linha-folga .val { font-size: 13px; }
+  .linha-folga.alerta .val { color: var(--bad-fg); }
   .saude-grade { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px 22px; }
   .saude-col { display: flex; flex-direction: column; gap: calc(12px + var(--f, 0px) / 10); min-width: 0; }
   .bloco { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); min-width: 0; }
@@ -120,6 +128,13 @@
 
     <div id="vista-desempenho" class="vista">
       <section class="kpis seis" id="kpis-d" aria-label="Resumo do período"></section>
+      <!-- 0186: o caminho de volta. Antes disto a Meta não recebia nenhum resultado e otimizava por "conversa iniciada". -->
+      <section class="painel" aria-labelledby="t-capi" id="capi">
+        <div class="saude-cab"><h2 id="t-capi">A Meta recebeu</h2>
+          <span class="resumo" id="capi-resumo">Carregando…</span>
+          <span class="info" title="O que o NIOGEN devolveu à Meta pela API de Conversões para mensagens: CEP em cidade atendida (ViewContent), rua com rede (QualifiedLead — é por este que a campanha deve otimizar), qualificada (LeadSubmitted) e OS gravada (Purchase, só para medir). Vai só o telefone com hash SHA-256 e o id do clique; nada de nome, CPF, e-mail, endereço ou CEP. Conversa que não veio de anúncio não tem id de clique: entra como &quot;sem clique&quot; e não é enviada. Envio de 5 em 5 min pelo workflow meta_capi_envio.">ⓘ</span></div>
+        <div id="capi-corpo" class="lista-folga"><div class="carregando">Carregando…</div></div>
+      </section>
       <section class="painel funil-vis" aria-labelledby="t-funil">
         <div class="fv-cab"><h3 id="t-funil">Funil · anúncio → venda</h3>
           <span class="info" title="Espessura da fita em escala logarítmica suavizada (de milhares de impressões a poucas vendas): mostra a ordem, não a proporção exata — os números valem. O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
@@ -406,7 +421,48 @@
     setSub('desempenho', `Conta Nio · ${ativas.size ? `${[...ativas].join(', ')} ativa${ativas.size > 1 ? 's' : ''}` : 'nenhuma campanha ativa'}`
       + ' · o número que manda é o custo por venda com biometria');
     if (vista === 'desempenho') abrirVista('desempenho');
-    await carregarSaude(p, dias, ads);
+    await Promise.all([carregarSaude(p, dias, ads), carregarCapi()]);
+  }
+
+  // ───────────── A Meta recebeu (0186) ─────────────
+  // O caminho de volta: o que o NIOGEN devolveu à Meta pela API de Conversões para mensagens. Vermelho com erro de envio
+  // ou com evento parado na fila há mais de 1 h (o workflow roda de 5 em 5 min). Leitura de uma view só (v_meta_capi_painel).
+  const CAPI_EV = [
+    ['viaveis', 'Rua com rede', 'QualifiedLead — é por este que a campanha deve otimizar: é o degrau mais fundo que ainda tem volume e já exclui fora da área, sem cobertura e já cliente Nio.'],
+    ['qualificadas', 'Qualificadas', 'LeadSubmitted — a Mari passou ao time com os dados completos.'],
+    ['vendas', 'Vendas (OS)', 'Purchase — OS gravada. Com ~1 por semana não dá volume para a Meta otimizar: vai junto só para medir.'],
+  ];
+  async function carregarCapi() {
+    const corpo = document.getElementById('capi-corpo');
+    const { data, error } = await NG.sb.from('v_meta_capi_painel').select('*').maybeSingle();
+    const sec = document.getElementById('capi');
+    if (error || !data) {
+      sec.classList.remove('ruim');
+      document.getElementById('capi-resumo').textContent = error ? NG.msgErro(error) : 'sem leitura';
+      corpo.innerHTML = '<div class="vazio">Não deu para ler o que a Meta recebeu.</div>';
+      return;
+    }
+    const d = data;
+    const ruim = (d.erros_7d || 0) > 0 || (d.atrasados || 0) > 0;
+    sec.classList.toggle('ruim', ruim);
+    const linhas = CAPI_EV.map(([k, rot, dica]) => `<div class="linha-folga" title="${esc(dica)}">
+        <span class="rot">${esc(rot)}</span>
+        <span class="val"><b>${NG.fmtNum(d[`${k}_hoje`] || 0)}</b> hoje · ${NG.fmtNum(d[`${k}_7d`] || 0)} em 7 dias</span>
+      </div>`).join('');
+    const extras = `<div class="linha-folga" title="Conversa que não veio de anúncio: não tem id de clique, então não há o que enviar. Não é erro.">
+        <span class="rot">Sem clique (não enviadas)</span>
+        <span class="val">${NG.fmtNum(d.sem_clique_hoje || 0)} hoje · ${NG.fmtNum(d.sem_clique_7d || 0)} em 7 dias</span></div>
+      <div class="linha-folga${(d.erros_7d || 0) > 0 ? ' alerta' : ''}" title="Envio recusado pela Meta depois de 3 tentativas. Avisar o Claude Code; não reenviar à mão.">
+        <span class="rot">Erros de envio</span>
+        <span class="val">${NG.fmtNum(d.erros_hoje || 0)} hoje · ${NG.fmtNum(d.erros_7d || 0)} em 7 dias</span></div>
+      <div class="linha-folga${(d.atrasados || 0) > 0 ? ' alerta' : ''}">
+        <span class="rot">Na fila agora</span>
+        <span class="val">${NG.fmtNum(d.na_fila || 0)}${(d.atrasados || 0) > 0 ? ` · <b>${NG.fmtNum(d.atrasados)} há mais de 1 h</b>` : ''}</span></div>`;
+    corpo.innerHTML = linhas + extras;
+    const quando = d.ultimo_envio ? `último envio ${NG.quando(d.ultimo_envio)} ${NG.fmtHora(d.ultimo_envio)}` : 'nenhum envio ainda';
+    document.getElementById('capi-resumo').textContent =
+      `${NG.fmtNum(d.enviados_7d || 0)} evento${(d.enviados_7d || 0) === 1 ? '' : 's'} em 7 dias · ${quando}`
+      + (ruim ? ' · precisa de olhada' : '');
   }
 
   // ───────────── Saúde da campanha (07/11) ─────────────

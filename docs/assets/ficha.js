@@ -258,7 +258,7 @@
     ]);
     const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
     const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
-    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg] = await Promise.all([
+    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow] = await Promise.all([
       NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle(),
       NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
       NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
@@ -288,6 +288,8 @@
       opcL(NG.sb.from('v_leads').select('*').eq('venda_id', id).limit(1)),
       opcL(NG.sb.from('v_dinheiro').select('*').eq('venda_id', id).limit(1)),
       leadCfg(),
+      // 0186: o selo Meta da venda (✓ enviado · ✗ erro · — não veio de anúncio) e o anúncio de origem.
+      bo ? opc(NG.sb.from('v_venda_meta').select('*').eq('venda_id', id).maybeSingle()) : null,
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
@@ -371,6 +373,7 @@
       chatwoot: NG.linkChatwoot(((rc.data || [])[0] || {}).chatwoot_conversation_id),
       contatos: rk.data || [],
       usuarios: ru,
+      meta: (metaRow && metaRow.data) || null,   // 0186: selo Meta ✓/✗/— da venda
       nomeCurto,
     };
   }
@@ -1182,6 +1185,25 @@
   const DESTINOS = [['0_qualificado', 'Lead qualificado'], ['2_aguardando_instalacao', 'Ativação/Agenda'],
     ['3_instalado', 'Instalada'], ['saida', 'Saída']];   // só admin (menu ⋯); ativo vem do OSAB
 
+  // 0186 — selo Meta na venda: ✓ a Meta recebeu o Purchase · ✗ o envio falhou (avisar o Claude Code, NÃO reenviar à mão)
+  // · ⏳ está na fila (o envio roda de 5 em 5 min) · — não veio de anúncio, ou é anterior à 0186 (sem backfill).
+  function seloMeta(m) {
+    if (!m) return '';
+    const T = {
+      enviado:    ['✓', 'ok',   'A Meta recebeu esta venda (evento Purchase).'],
+      erro:       ['✗', 'bad',  'O envio à Meta falhou depois de 3 tentativas. Avisar o Claude Code; não reenviar à mão.'],
+      pendente:   ['⏳', '',    'Na fila para a Meta — o envio roda de 5 em 5 min.'],
+      sem_clique: ['—', 'dim',  'A conversa não trouxe o id do clique do anúncio: não há o que enviar à Meta.'],
+      sem_anuncio:['—', 'dim',  'Esta venda não veio de anúncio.'],
+      anterior:   ['—', 'dim',  'Venda anterior à ligação com a Meta (13/11): não há envio retroativo.'],
+      sem_evento: ['!', 'bad',  'Veio de anúncio e deveria ter gerado evento, mas não gerou. Avisar o Claude Code.'],
+    };
+    const t = T[m.meta_status];
+    if (!t) return '';
+    const anun = m.ad_nome || m.ad_id;
+    return ` · <span class="selo-meta ${t[1]}" title="${esc(t[2])}${anun ? ` Anúncio: ${anun}.` : ''}">Meta ${t[0]}</span>`;
+  }
+
   function cabecalho(v) {
     const ehAdmin = (NG.usuario || {}).perfil === 'admin';
     const atual = NG.etapaDe(v).id;
@@ -1203,7 +1225,7 @@
         <div class="f-ctl">${botaoVoltar()}<div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
           <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         ${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span></div>
+      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span>${seloMeta(d.meta)}</div>
     </header>`;
   }
 

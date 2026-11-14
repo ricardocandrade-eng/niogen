@@ -1,0 +1,222 @@
+{
+  "name": "meta_capi_envio",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "9f91e93d-42f5-5e61-91fb-de8be8332401"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-meta-capi-envio",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1w · Rodar agora (teste)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "3f6dca41-0731-5c7e-8369-a0fb2ade8d1e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "7a342744-e9a1-54a2-8662-8ee40b98a9ae"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_capi_pendentes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_limite: 50 }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "2 · Supabase pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "d023ce81-6321-5177-96af-4c6568f78321",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const r = $json || {};\nconst dataset = r.dataset_id;\nconst versao = r.graph_versao || 'v23.0';\nconst teste = r.test_event_code || null;\nconst eventos = Array.isArray(r.eventos) ? r.eventos : [];\nif (!dataset) { throw new Error('config_regras.meta_capi sem dataset_id'); }\n\nconst saida = [];\nfor (const ev of eventos) {\n  const fila = ev.fila || {};\n  const evento = { ...ev };\n  delete evento.fila;\n  if (evento.custom_data === null) { delete evento.custom_data; }\n  const corpo = { data: [evento], partner_agent: 'niogen' };\n  if (teste) { corpo.test_event_code = teste; }\n  saida.push({ json: {\n    fila_id: fila.id,\n    tentativas: fila.tentativas,\n    event_name: evento.event_name,\n    event_id: evento.event_id,\n    url: 'https://graph.facebook.com/' + versao + '/' + dataset + '/events',\n    corpo,\n  } });\n}\nreturn saida;"
+      },
+      "name": "3 · Montar eventos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "5334283d-55b7-5bb5-8cf6-fbe7d5ef682d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "4 · Meta evento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "66496f0e-b12d-594c-965c-7c248d6e6a4a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_capi_marcar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const c = $json.statusCode || 0; const b = $json.body || {}; const ok = c >= 200 && c < 300 && (b.events_received || 0) > 0; return JSON.stringify({ p_id: $('3 · Montar eventos').item.json.fila_id, p_status: ok ? 'enviado' : 'erro', p_http: c, p_resposta: JSON.stringify(b).slice(0, 500), p_fbtrace: b.fbtrace_id || (b.error && b.error.fbtrace_id) || null }); })() }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "5 · Supabase marcar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "3f2b447a-b4c6-5b28-b435-9ed60c464e82",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1 · A cada 5 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1w · Rodar agora (teste)": {
+      "main": [
+        [
+          {
+            "node": "2 · Supabase pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Supabase pendentes": {
+      "main": [
+        [
+          {
+            "node": "3 · Montar eventos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Montar eventos": {
+      "main": [
+        [
+          {
+            "node": "4 · Meta evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Meta evento": {
+      "main": [
+        [
+          {
+            "node": "5 · Supabase marcar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}
