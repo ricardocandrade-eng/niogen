@@ -373,7 +373,7 @@
       chatwoot: NG.linkChatwoot(((rc.data || [])[0] || {}).chatwoot_conversation_id),
       contatos: rk.data || [],
       usuarios: ru,
-      meta: (metaRow && metaRow.data) || null,   // 0186: selo Meta ✓/✗/— da venda
+      meta: metaRow || null,   // 0186: selo Meta ✓/✗/— da venda (opc devolve o data direto)
       nomeCurto,
     };
   }
@@ -3402,7 +3402,7 @@
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
       const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
-        v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ');
+        v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);   // 0186: selo Meta
       cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
         `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
       trilha = trilhasHtml();
