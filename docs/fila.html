@@ -239,11 +239,11 @@
   const situacao = (j) => [j.etapa_nome, j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
   const linha = (j, paraFazer) => `<div class="lv-row n-${esc(j.nivel || 'ok')}${NGFicha.atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
       <div class="lv-who"><i class="lv-dot" aria-hidden="true"></i><div><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')} · há ${esc(haTempo(j.desde))}${funilHtml(j)}</small></div></div>
-      <div class="lv-sit">${esc(situacao(j) || '—')}</div>
-      <div class="lv-prox">${esc(j.o_que_fazer || '—')}</div>
+      <div class="lv-sit">${confSelo(j)}${esc(situacao(j) || '—')}</div>
+      <div class="lv-prox" title="${esc(j.o_que_fazer || '')}">${esc(j.o_que_fazer || '—')}</div>
       <div>${donoHtml(j)}</div>
       <div><span class="lv-pill">${esc(PRAZO[j.nivel] || '—')}</span></div>
-      <div class="lv-act">${j.etapa >= 1 && j.etapa <= 3 ? NG.botaoOperador({ vendaId: j.venda_id, conversaId: j.conversa_id }, '⌖') : ''}<button type="button" class="btn btn-sm${paraFazer ? ' lv-go' : ''}" data-bt="${paraFazer ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(paraFazer ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}${SETA}</button></div>
+      <div class="lv-act">${j.etapa >= 1 && j.etapa <= 3 ? NG.botaoOperador({ vendaId: j.venda_id, conversaId: j.conversa_id }, '⌖') : ''}${confDe(j).map(confBts).join('') || `<button type="button" class="btn btn-sm${paraFazer ? ' lv-go' : ''}" data-bt="${paraFazer ? esc(j.botao || 'abrir') : 'abrir'}" data-k="${esc(chaveFicha(j))}">${esc(paraFazer ? (BOTAO[j.botao] || 'Abrir') : 'Abrir')}${SETA}</button>`}</div>
     </div>`;
   const cabTab = '<div class="lv-thead"><span>Cliente</span><span>Situação</span><span>Próximo passo</span><span>Dono</span><span>Prazo</span><span></span></div>';
   const secao = (tit, dica, corpo, cls = '') => `<section class="lv-sec${cls ? ` ${cls}` : ''}"><div class="lv-sec-h"><h2>${tit}</h2><span class="apagado">${dica}</span></div><div class="lv-table">${corpo}</div></section>`;
@@ -262,20 +262,23 @@
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
   const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio' };
+  // 14/11 (Ricardo): os botões do Conferir ficam na coluna da ação — o texto não empurra a altura da linha (2 linhas, o resto no title).
+  const confBts = (c) => `${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}`;
+  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || ''));
   const confLinha = (c) => {
     const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
-    const urg = c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || ''));
-    const visto = c.tipo === 'fora_niogen';   // 0189: vale para os quatro avisos (resolvida, respondida, atribuída, adiada)
-    return `<div class="lv-row ${urg ? 'n-agora' : 'n-hoje'} lv-and"><div class="lv-who"><i class="lv-dot"></i><div><b>${esc(c.nome || 'Cliente')}</b><small>${c.desde ? `há ${esc(haTempo(c.desde))}` : ''}</small></div></div>
+    const urg = confUrg(c);
+    return `<div class="lv-row ${urg ? 'n-agora' : 'n-hoje'} lv-and"${k ? ` data-k="${esc(k)}" tabindex="0" role="button"` : ''}><div class="lv-who"><i class="lv-dot"></i><div><b>${esc(c.nome || 'Cliente')}</b><small>${c.desde ? `há ${esc(haTempo(c.desde))}` : ''}</small></div></div>
         <div class="lv-sit">${esc(CONF_SIT[c.tipo] || c.tipo)} ${NG.dicaTxt(NG.ajuda[`conf_${c.tipo}`] || NG.ajuda.conf_secao)}</div>
-        <div class="lv-prox lv-and-bts">${esc(c.texto || '')}
-          ${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Tentar de novo</button> <button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}
-          ${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}
-          ${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}
-          ${visto ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}</div>
+        <div class="lv-prox" title="${esc(c.texto || '')}">${esc(c.texto || '')}</div>
         <div><span class="mv-dono apagado">conferir</span></div><div><span class="lv-pill">${urg ? 'agora' : 'hoje'}</span></div>
-        <div class="lv-act">${k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : ''}</div></div>`;
+        <div class="lv-act">${confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '')}</div></div>`;
   };
+  // 14/11 (Ricardo: "Ivon não deveria estar em dois lugares"): aviso do Conferir de um cliente que já tem linha em Para fazer ou
+  // Acompanhando vira um selo ⚠ nessa linha (texto no title, botões do aviso na ação) e sai da seção Conferir.
+  let confDaLinha = {};
+  const confDe = (j) => confDaLinha[chaveFicha(j)] || [];
+  const confSelo = (j) => confDe(j).map((c) => `<span class="lv-conf${confUrg(c) ? ' urg' : ''}" title="${esc(`${CONF_SIT[c.tipo] || c.tipo}: ${c.texto || ''}`)}">⚠ ${esc(CONF_SIT[c.tipo] || 'Conferir')}</span>`).join('');
   function renderLista() {
     const l = filtradas();
     const rol = listaEl.querySelector('.lv-rolar');
@@ -284,9 +287,18 @@
     if (soVez) {
       const ac = acompanhando();
       const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
+      const naLista = {};
+      [...l, ...ac].forEach((j) => { naLista[chaveFicha(j)] = j; if (j.conversa_id) naLista[`c:${j.conversa_id}`] = j; });
+      confDaLinha = {};
+      const confSoltos = conf.filter((c) => {
+        const j = (c.venda_id && naLista[c.venda_id]) || (c.conversa_id && naLista[`c:${c.conversa_id}`]);
+        if (!j) return true;
+        (confDaLinha[chaveFicha(j)] = confDaLinha[chaveFicha(j)] || []).push(c);
+        return false;
+      });
       // 14/11 (Ricardo): "Para fazer" é sempre o primeiro bloco; "Conferir" vem logo depois.
       corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
-      if (conf.length && !etapaSel) corpo += secao(`⚠ Conferir · ${conf.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', conf.map(confLinha).join(''));
+      if (confSoltos.length && !etapaSel) corpo += secao(`⚠ Conferir · ${confSoltos.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', confSoltos.map(confLinha).join(''));
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
       if (opL.length || opsCanal.length) {
         corpo += secao(`<span aria-hidden="true">🔥</span> Oportunidades · ${opL.length + opsCanal.length}`, 'o NIOGEN achou — não é obrigação; a mensagem sai pelo NIOGEN e a conversa volta para a Mari',
@@ -294,6 +306,7 @@
       }
       if (andPend.length) corpo += secao(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN', andPend.map(andLinha).join(''));
     } else {
+      confDaLinha = {};
       corpo = secao(`Todas · ${l.length}`, '', l.length ? cabTab + l.map((j) => linha(j, vez(j))).join('') : '<div class="lv-vazio">Nenhuma linha.</div>');
     }
     listaEl.innerHTML = `${abas()}<div class="lv-rolar">${corpo}

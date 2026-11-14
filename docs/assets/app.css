@@ -1929,7 +1929,7 @@ dialog.bal-modal:not([open]) { display: none; }
 .lv-sec-h h2 { margin: 0; font-size: 15px; font-weight: 600; }
 .lv-sec-h .apagado { font-size: 13px; }
 .lv-table { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface-dim); }
-.lv-thead, .lv-row { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(170px, 1.15fr) minmax(190px, 1.3fr) 110px 100px 150px; gap: 18px; align-items: center; padding: 0 18px; }
+.lv-thead, .lv-row { display: grid; grid-template-columns: minmax(210px, 1.35fr) minmax(170px, 1.15fr) minmax(190px, 1.3fr) 110px 100px 196px; gap: 18px; align-items: center; padding: 0 18px; }
 .lv-thead { min-height: 36px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
 .lv-row { min-height: 66px; border-bottom: 1px solid #1B2029; cursor: pointer; }
 .lv-row:last-child { border-bottom: 0; }
@@ -1958,6 +1958,11 @@ dialog.bal-modal:not([open]) { display: none; }
 .lv-omot small { color: var(--muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lv-vale { font-weight: 600; color: #86E6AE; white-space: nowrap; }
 .lv-and { cursor: default; }
+.lv-and[data-k] { cursor: pointer; }
+/* 14/11: a linha da Live não cresce — texto em 2 linhas (o resto no title), ação numa linha só */
+.lv-act { flex-wrap: nowrap; overflow: hidden; }
+.lv-conf { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(227,179,65,.15); color: #F2CC6B; cursor: help; }
+.lv-conf.urg { background: rgba(244,112,103,.15); color: #FFA39B; }
 .lv-and-bts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; -webkit-line-clamp: unset; }
 .lv-sec-op .opc-bloco { border-top: 1px solid var(--border); }
 .lv-legend { color: var(--muted); font-size: 12px; display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding-bottom: 8px; }
