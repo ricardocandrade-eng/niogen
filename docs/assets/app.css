@@ -2006,6 +2006,8 @@ dialog.bal-modal:not([open]) { display: none; }
 /* 13/11 (Ricardo): Saída sempre no mesmo lugar, no topo da ficha, com contorno vermelho. */
 .btn.fc-saida { background: transparent; border: 1px solid #C94A42; color: #FFA39B; font-weight: 600; }
 .btn.fc-saida:hover, .btn.fc-saida:focus-visible, .btn.fc-saida.on { background: rgba(201, 74, 66, .16); color: #FFD0CB; border-color: #E0635A; }
+.btn.fc-reabrir { background: transparent; border: 1px solid #3FA66B; color: #9BE3B8; font-weight: 600; }
+.btn.fc-reabrir:hover, .btn.fc-reabrir:focus-visible { background: rgba(63, 166, 107, .16); color: #CFF5DE; border-color: #55C484; }
 .fc-pos { color: var(--muted); font-size: 13px; white-space: nowrap; margin-right: 2px; }
 .fc-bi { width: 40px; padding: 0; }
 .fc-bi:disabled { opacity: .35; cursor: default; }

@@ -461,7 +461,7 @@
     return true;
   }
   async function reabrirLead(bt) {
-    if (!window.confirm('Reabrir este lead?\n\nEle sai da Saída e volta para o degrau onde parou. A conversa reabre no Chatwoot.')) return false;
+    if (!window.confirm('Reabrir este lead?\n\nEle sai da Saída (Recusou e Não contatar também) e volta para o degrau onde parou. A conversa reabre no Chatwoot e a Mari volta a responder.')) return false;
     if (bt) bt.disabled = true;
     const { data, error } = await NG.sb.rpc('lead_reabrir', { p_conversa: d.soConversa ? d.conversaId : null, p_venda: d.soConversa ? null : d.v.id });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); if (bt && bt.isConnected) bt.disabled = false; return false; }
@@ -2953,6 +2953,9 @@
       ? !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
       : !!(d && d.soConversa && ehBO() && !(d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)));
     const btSaida = podeSair ? `<button type="button" class="btn fc-saida${formAtivo === 'saida' ? ' on' : ''}" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída</button>` : '';
+    // 13/11 (0189, Ricardo: "não tenho opção de remover o Recusou"): quem está em Saída ganha o Reabrir no mesmo lugar fixo.
+    const emSaida = vS ? vS.status === 'saida' : !!(d && d.soConversa && d.lead && d.lead.destino === 'saida');
+    const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="btn fc-reabrir" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div></div>
@@ -2960,7 +2963,7 @@
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1"${naFila ? '' : ' hidden'} aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
-        ${extra}${btSaida}<button type="button" class="btn btn-acc" data-f="fc-concluir"${naFila || (d.conversaId && ehBO()) ? '' : ' hidden'} title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
+        ${extra}${btSaida}${btReabrir}<button type="button" class="btn btn-acc" data-f="fc-concluir"${naFila || (d.conversaId && ehBO()) ? '' : ' hidden'} title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
         <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Mais ações">${IC.mais}</button>
           ${fc.menu ? `<div class="fc-menu" role="menu">${menu}</div>` : ''}</div>
       </div></header>`;
