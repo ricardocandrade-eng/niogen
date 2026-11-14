@@ -510,12 +510,12 @@
        ${checkRecompra()}`, 'Gravar o crédito'),
     // 0096 / 0111: etapa 3 → 4 (VENDA). O nº do pedido = a OS (o único ID da Nio); agendar é o passo seguinte.
     os: (v) => formWrap('os', 'Abrir a OS = VENDA',
-      'Grave aqui o nº da OS que o portal mostrou (é o ID da venda na Nio para instalação e comissão). Com isso a venda conta e a Nio manda o link da biometria. Prefira o "Gravar OS e agenda", com a data.',
+      'Grave aqui o nº da OS que o portal mostrou (é o ID da venda na Nio para instalação e comissão). Com isso a venda conta (no cartão, quando o cliente cadastrar o cartão) e a Nio manda o link da biometria. Prefira o "Gravar OS e agenda", com a data.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (OS)<input type="text" name="os" value="${esc(v.nio_os || v.nio_pedido || '')}" autocomplete="off" autofocus></label></div>`, 'Gravar o pedido (OS) → vira Venda'),
     // 0089 (mantido): OS + dia + período num formulário só.
     // 0194 (Ricardo, 14/11): no portal a ordem é forma de pagamento + plano → agenda → nº da OS → a Nio manda o link da biometria.
     os_agendar: (v) => formWrap('os_agendar', 'Gravar OS e agenda = VENDA',
-      'No portal: forma de pagamento → agenda → OS. Grave o nº da OS, o dia e o período que o portal agendou e a forma de pagamento escolhida. Com isso a venda conta, a Nio manda o link da biometria e <b>o NIOGEN avisa o cliente sozinho</b>. Também dá para gravar pela extensão, na etapa Abrir OS.',
+      'No portal: forma de pagamento → agenda → OS. Grave o nº da OS, o dia e o período que o portal agendou e a forma de pagamento escolhida. Com isso a venda conta (venda bruta; <b>no cartão, só quando o cliente cadastrar o cartão</b>), a Nio manda o link da biometria e <b>o NIOGEN avisa o cliente sozinho</b>. Também dá para gravar pela extensão, na etapa Abrir OS.',
       `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || '')}" inputmode="numeric" autocomplete="off" autofocus></label>
        <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === (v.forma_pagamento || '') ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label>
        ${campoData('Dia da instalação', 'dia', amanhaISO(), `min="${hojeISO()}" required`)}
@@ -1865,7 +1865,7 @@
           ${linha('Análise de crédito', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ' · ' + NG.fmtDataHora(v.credito_em) : ''}` : '—'))}
           ${linha('Biometria (link da Nio)', esc(`${NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada}${v.biometria_link_enviado_em ? ' · link enviado pela Nio ' + NG.fmtDataHora(v.biometria_link_enviado_em) : ''}${v.biometria_validada_em ? ' · validada ' + NG.fmtDataHora(v.biometria_validada_em) : ''}`))}
           ${avisosMari(['BIO1', 'BIO3'])}
-          ${linha('Venda (OS aberta) em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : '— ainda não é venda'))}
+          ${linha('Venda bruta em', esc(v.vendido_em ? NG.fmtDataHora(v.vendido_em) : v.nio_os && v.forma_pagamento === 'cartao' ? '— OS gerada; conta quando o cliente cadastrar o cartão' : '— ainda não é venda'))}
           ${linha('Vendedor', esc(v.vendedor_nome || '—'))}
           ${v.status === '0_qualificado' ? botoesPortal : ''}
           <div class="f-sub">Conferências do contrato</div>
