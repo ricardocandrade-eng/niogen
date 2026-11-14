@@ -481,11 +481,36 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
     const especial = /\b(ja sou cliente|sou cliente|ja tenho (a )?nio|minha internet|sem internet|internet (caiu|parou|lenta|ruim)|caiu|parou de funcionar|reclama|cancel|suporte|tecnico|defeito|problema|fatura|segunda via|2a via|boleto|conta da nio|luto|falec|morreu|velorio|urgen|emergencia|desconto|mais barat|abatimento|atendente|humano|pessoa de verdade|falar com (alguem|uma pessoa|um atendente|o consultor|um vendedor))/.test(m0);
     if (!temEndereco && !especial) {
       // {nome} = 1º nome do contato no Chatwoot, só se parecer nome de pessoa (sem número, emoji, "Cliente", loja…).
+      // 13/11: em conversa real saíram "Oi, Deus" e "Oi, Pedroernestoromaoptc". No resto do sistema
+      // nome_confiavel = false quer dizer "não chame por esse nome" (o 5b avisa isso ao Claude na linha de estado);
+      // só esta saudação usava o nome do WhatsApp. Na dúvida, SEM nome: "Oi, tudo bem? 😊" não custa nada,
+      // e chamar alguém de "Deus" ou de um apelido colado custa a conversa. Nome de pessoa de verdade continua valendo.
       const nc = String(conv.nome_contato || '').trim();
-      const NAO_PESSOA = /^(familia|casa|eu|mae|pai|amor|vida|cliente|whatsapp|contato|teste|oi|ola|nio|internet|loja|vendas|atendimento|suporte|sr|sra|dr|dra)$/;
+      // A lista é comparada contra nrm(p1), que já vem sem acento: escrever sem acento ("nenem", "irmao", "vo").
+      const NAO_PESSOA = new RegExp('^(' + [
+        'familia', 'casa', 'eu', 'mae', 'pai', 'amor', 'vida', 'cliente', 'whatsapp', 'contato', 'teste', 'oi', 'ola',
+        'nio', 'internet', 'loja', 'vendas', 'atendimento', 'suporte', 'sr', 'sra', 'dr', 'dra',
+        // 13/11: o que apareceu em conversa real e o que costuma aparecer em nome de contato
+        'deus', 'senhor', 'senhora', 'dona', 'dono', 'anjo', 'bebe', 'nenem', 'princesa', 'principe', 'rei', 'rainha',
+        'chefe', 'boss', 'admin', 'sistema', 'robo', 'zap', 'whats', 'numero', 'pessoa', 'moca', 'rapaz',
+        'amigo', 'amiga', 'irmao', 'irma', 'filho', 'filha', 'vo', 'vovo', 'vovoo', 'tio', 'tia', 'primo', 'prima',
+        'sobrinho', 'sobrinha', 'neto', 'neta', 'esposa', 'esposo', 'marido', 'mulher', 'namorado', 'namorada',
+        'noivo', 'noiva', 'sogro', 'sogra', 'padrinho', 'madrinha', 'patrao', 'vizinho', 'vizinha', 'colega',
+        'trabalho', 'servico',
+        // possessivo no 1º lugar quer dizer etiqueta, não nome ("Minha Vida", "Meu Amor") — e o apelido carinhoso
+        'meu', 'meus', 'minha', 'minhas', 'nosso', 'nossa', 'nene', 'bb', 'baby', 'lindo', 'linda', 'gato', 'gata',
+        'querido', 'querida', 'titio', 'titia', 'dinda', 'dindo', 'coracao', 'fofo', 'fofa',
+      ].join('|') + ')$');
       const LOJA = /\b(loja|store|ltda|me|eireli|comercio|comercial|distribuidora|empresa|servicos|atacado|oficina|studio|estudio|salao|bar|lanchonete|restaurante|mercado|acougue|padaria|farmacia|igreja|escola)\b/;
       const p1 = nc.split(/\s+/)[0] || '';
-      const pessoa = /^[A-Za-zÀ-ÿ' .-]{2,40}$/.test(nc) && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) && !NAO_PESSOA.test(nrm(p1)) && !LOJA.test(nrm(nc));
+      const n1 = nrm(p1);
+      const pessoa = /^[A-Za-zÀ-ÿ' .-]{2,40}$/.test(nc)
+        // 13/11: 1º nome de 2 a 12 letras. Era 20, e passava apelido colado ("Pedroernestoromaoptc", 20 letras);
+        // nome brasileiro de verdade não passa de 12 ("Maximiliano" = 11, "Constantino" = 11).
+        && /^[A-Za-zÀ-ÿ']{2,12}$/.test(p1)
+        && /[aeiou]/.test(n1)                       // sem vogal não é nome ("Zzz", "Mkt")
+        && !/(.)\1\1/.test(n1)                      // 3 letras iguais seguidas ("Aaaa", "Ooo")
+        && !NAO_PESSOA.test(n1) && !LOJA.test(nrm(nc));
       const nome = pessoa ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : null;
       const comNome = (s) => (nome ? s.replace(/\{nome\}/g, nome) : s.replace(/,?\s*\{nome\}\s*,?\s*/g, ', ').replace(/^Oi, ,/, 'Oi,'));
       const corpo = comNome(tx.abertura_corpo || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nTe mostro rapidinho, sem compromisso nenhum. O que você prefere ver primeiro?');

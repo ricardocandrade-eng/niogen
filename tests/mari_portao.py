@@ -416,6 +416,25 @@ def cen_af(c):   # P31 (13/11, medido): a 1ª resposta PEDE O CEP — sem menu, 
     c.exige(str(row.get('cep') or '').replace('-', '') == '36035130', f'[P31] CEP não gravado: {row}')
 
 
+def cen_ag(c):   # P32 (13/11, visto em produção): nome do contato que não é nome de pessoa → saudação SEM nome
+    # Saíram em conversa real: "Oi, Deus, tudo bem?" e "Oi, Pedroernestoromaoptc, tudo bem?". Em todo o resto do
+    # sistema nome_confiavel = false quer dizer "não chame por esse nome"; só a abertura usava o nome do WhatsApp.
+    # Um nome de pessoa de verdade continua valendo (é o cen_s, "Ana Paula Teste" → "Oi, Ana").
+    RUINS = ['Deus', 'Pedroernestoromaoptc', 'Minha Vida', 'Nenem', 'Vovo', 'Zap Novo']
+    for i, nome in enumerate(RUINS):
+        h = type(c)(f'ag{i}', int(c.tel[-3:]) + i, nome)
+        r = h.diz('Oi! Vi o anuncio e quero internet')
+        corpo = (r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or '')
+        p1 = nome.split()[0]
+        # só a SAUDAÇÃO (1ª linha): o corpo inteiro tem o botão "Ver minha rua", que contém "minha".
+        saudacao = norm(corpo.strip().split('\n')[0])
+        h.exige(p1.lower() not in saudacao,
+                f'[P32] chamou o cliente de «{p1}» (nome do WhatsApp, não de pessoa): «{corpo[:120]}»')
+        h.exige(norm(corpo).startswith('oi, tudo bem?'), f'[P32] saudação sem nome errada para «{nome}»: «{corpo[:80]}»')
+        c.falhas += h.falhas
+        c.log += h.log
+
+
 def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
     c.diz('Oi')
     c.diz('36035130')
@@ -483,6 +502,8 @@ PORTAO = {
     'ae': (30, cen_ae, 'P30'),
     # 13/11 — a 1ª resposta pede o CEP (0188): o menu da B2 não perguntava nada e 1/3 das conversas morria sem CEP
     'af': (31, cen_af, 'P31'),
+    # 13/11 — "Oi, Deus" e "Oi, Pedroernestoromaoptc" em conversa real: nome do WhatsApp que não é nome de pessoa
+    'ag': (40, cen_ag, 'P32'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
