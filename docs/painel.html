@@ -28,7 +28,7 @@
 <script src="assets/app.js?v=141126-7"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-8"></script>
+<script src="assets/ficha.js?v=141126-9"></script>
 </head>
 <body>
 <div class="app">
@@ -85,8 +85,9 @@
 
   // O principal (vendas) desenha primeiro; Cobertura (v_dfv_resumo, pesada) e Mari chegam depois, sem segurar a tela.
   let extrasPedidos = false;
+  let radarBio = null;
   async function carregar() {
-    const [rv, rm, rc, ri, rr, rg, rf, rj, rlc] = await Promise.all([
+    const [rv, rm, rc, ri, rr, rg, rf, rj, rlc, rbr] = await Promise.all([
       NG.sb.from('v_vendas').select('*').order('criado_em', { ascending: false }).limit(2000),
       NG.sb.from('config_metas').select('*'),
       NG.sb.from('contatos_cliente').select('venda_id, em').not('venda_id', 'is', null).order('em', { ascending: false }).limit(5000),
@@ -96,6 +97,7 @@
       NG.sb.from('v_leads').select('etapa, etapa_ordem, destino, saida_motivo, saida_nome, criado_em, vez, atrasado, em_espera').limit(5000),
       NG.jornada(),
       NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
+      veMari ? NG.sb.rpc('biometria_radar') : null,   // 0196: radar da biometria da Nio
     ]);
     jor = rj && !rj.erro ? rj : jor;
     if (rv.error) { NG.toast(NG.msgErro(rv.error), 'bad'); document.getElementById('lista-acao').innerHTML = `<div class="placeholder">${esc(NG.msgErro(rv.error))}</div>`; return; }
@@ -107,6 +109,7 @@
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
     leads = rf && !rf.error ? (rf.data || []) : null;
     leadCfg = rlc && !rlc.error ? (rlc.data || []) : [];
+    radarBio = rbr && !rbr.error ? rbr.data : null;
     render();
     if (!extrasPedidos) { extrasPedidos = true; carregarExtras(); }
   }
@@ -265,6 +268,9 @@
         dica: 'A meta do mês conta instaladas (data da instalação, sem Saída) — é o que paga comissão.' }),
       NG.kpi({ rot: 'Vendas brutas', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} esperando a instalação`,
         dica: 'Venda bruta (a conta da Nio, Ricardo 14/11): OS gerada no portal; no cartão de crédito, OS gerada E o cartão cadastrado pelo cliente. Pela data da venda bruta. Lead qualificado e crédito aprovado não contam.' }),
+      radarBio ? NG.kpi({ rot: radarBio.queda ? 'Biometria da Nio · fora do ar' : 'Biometria', val: NG.fmtNum(Number(radarBio.paradas || 0)), cls: radarBio.queda ? 'bad' : radarBio.paradas_24h ? 'warn' : '',
+        nota: `${radarBio.queda ? `fora desde ${esc(NG.fmtDataHora(radarBio.queda.inicio))} · ` : ''}esperando · OS → aprovada ${radarBio.mediana_os_bio_h != null ? `${esc(String(radarBio.mediana_os_bio_h).replace('.', ','))} h` : '—'}`,
+        dica: 'Vendas com OS gravada esperando a biometria agora, e o tempo mediano da OS até a biometria aprovada (30 dias). Vermelho = o sistema de biometria da Nio está (ou parece estar) fora do ar: veja Operações › Radar da biometria.' }) : '',
       NG.kpi({ rot: 'Comissão prevista', val: esc(NG.fmtMoeda(comissao)), nota: `${V.length === 1 ? 'da venda' : `das ${NG.fmtNum(V.length)} vendas`} do período`,
         dica: 'Soma da comissão prevista das vendas do período (antes do pagamento). Paga = o que chegou no extrato da Nio.' }),
       NG.kpi({ rot: 'Precisam de ação', val: NG.fmtNum(acao.length), cls: verm ? 'bad' : acao.length ? 'warn' : '',

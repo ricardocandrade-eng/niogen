@@ -28,7 +28,7 @@
 <script src="assets/app.js?v=141126-7"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-8"></script>
+<script src="assets/ficha.js?v=141126-9"></script>
 <style>
   .op-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
   .op-kpis .kpi { padding: 12px 14px; border-radius: 12px; gap: 3px; min-width: 0; }
@@ -72,6 +72,13 @@
   .op-varr small { color: var(--muted); font-size: 12px; }
   @media (max-width: 1100px) { .op-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (max-width: 760px) { .op-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .op-grade { grid-template-columns: minmax(0, 1fr); } .op-bloco { padding: 10px; } }
+  /* 0196: radar da biometria da Nio */
+  .op-radar-n { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 6px 0 10px; }
+  .op-radar-t { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 12px; }
+  .op-radar-t th, .op-radar-t td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--borda, rgba(127,127,127,.2)); }
+  .op-radar-t td:nth-child(2) { width: 45%; }
+  .op-barra { display: inline-block; height: 8px; border-radius: 4px; background: var(--acc, #32E000); vertical-align: middle; margin-right: 6px; min-width: 2px; }
+  .op-radar-q { font-size: 12px; margin-top: 8px; } .op-radar-q ul { margin: 4px 0 0 18px; padding: 0; }
 </style>
 </head>
 <body>
@@ -106,6 +113,7 @@
   const VENDIDAS = ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const INST = ['3_instalado', '4_ativo_provisorio', '5_comissao_firme'];
   const COLS = 'id, status, cliente_nome, cliente_whatsapp, bairro, cidade, plano_nome, valor_mensal, forma_pagamento, comissao_prevista, nio_pedido, nio_os, nio_os_em, nio_pendencia_cod, nio_pendencia_desc, credito_resultado, credito_em, biometria_status, biometria_link_enviado_em, biometria_validada_em, vendido_em, agendar_desde, instalacao_agendada_para, instalado_em, docs_entregues_em, docs_prazo_em, nio_osab_em, nio_venda_valida, vendedor_nome, origem, criado_em, cancelada_apos_instalar_em, pend_id, pend_motivo, pend_motivo_nome, pend_descricao, pend_quem, pend_desde, pend_revisar_em, pend_revisoes, pend_saida_sugerida';
+  let radar = null;   // 0196: biometria_radar() — queda da biometria da Nio e o gargalo
   let vendas = [], jor = { porVenda: {} }, conf = {}, din = {}, and = {}, osa = {}, varr = null, lendo = {}, regras = {}, osabEm = null, ritmo = null, faturasPor = null, busca = '';
 
   const fmtR = (x) => NG.fmtMoeda(x).replace(/,00$/, '');
@@ -286,9 +294,10 @@
     // ----- Biometria: 24 h avisa, 72 h liga -----
     const cBio = (v) => { const h = horasBio(v); const a = and[v.id] || {};
       return cartao(v, { onde: `<span class="op-rel ${h >= 72 ? 'bad' : h >= 24 ? 'warn' : ''}" title="Tempo desde o pedido no portal (o link da biometria sai da Nio na hora do pedido)">⏱ ${esc(NG.haQuanto(v.biometria_link_enviado_em || v.credito_em))}</span><span>${esc(a.bio_rotulo || (v.nio_pedido ? 'link enviado pela Nio · esperando o cliente' : 'crédito aprovado · falta o pedido no portal'))}</span>`,
-        fazerTxt: h >= 72 ? 'Ligar para o cliente: biometria parada há 72 h' : h >= 24 ? fazer(v, 'Avisar o cliente: falta a biometria') : fazer(v, 'Aguardar o cliente fazer a biometria'),
+        fazerTxt: radar && radar.queda ? 'Biometria da Nio fora do ar: pedir a dispensa à Nio e marcar "Nio dispensou" na ficha'
+          : h >= 72 ? 'Ligar para o cliente: biometria parada há 72 h' : h >= 24 ? fazer(v, 'Avisar o cliente: falta a biometria') : fazer(v, 'Aguardar o cliente fazer a biometria'),
         nivel: h >= 72 ? 'bad' : h >= 24 ? 'warn' : '', extra: BO ? ` ${NG.botaoOperador({ vendaId: v.id })}` : '' }); };
-    const bBio = bloco('bio', 'Biometria', A.ops_bio, L.bio.sort((a, b) => horasBio(b) - horasBio(a)), `<div class="op-grade">${L.bio.map(cBio).join('')}</div>`);
+    const bBio = bloco('bio', 'Biometria', A.ops_bio, L.bio.sort((a, b) => horasBio(b) - horasBio(a)), `<div class="op-grade">${L.bio.map(cBio).join('')}</div>`, radarSub()) + radarHtml();
 
     // ----- Recém-instaladas (30 dias): documentos · 1ª fatura · janela de estorno -----
     const cRec = (v) => { const d = din[v.id] || {};
@@ -328,7 +337,7 @@
   }
 
   async function carregar() {
-    const [rj, rv, rk, rd, ra, ri, rg, rr, ro, rs] = await Promise.all([
+    const [rj, rv, rk, rd, ra, ri, rg, rr, ro, rs, rb] = await Promise.all([
       NG.jornada(),
       NG.sb.from('v_vendas').select(COLS).in('status', VENDIDAS).order('vendido_em', { ascending: false }).limit(2000),
       NG.sb.from('v_instalacao_confirmacao').select('venda_id, resposta, resposta_em, resposta_texto, lembrete_em'),
@@ -340,6 +349,7 @@
       // 0168 (etapa 3): o andamento da OS na Nio, lido pelo Operador de OS e pelo OSAB
       NG.sb.from('v_os_andamento').select('venda_id, estado, estado_nome, status_ordem, agendamento_data, janela, pendencia, acao, excecao, agendamentos, estado_ba, execucao_inicio, mudou_em, origem_ultima').not('venda_id', 'is', null),
       BO ? NG.sb.rpc('os_varredura_estado') : null,   // 0173: o botão "Varrer OS abertas" e a trava dele
+      BO ? NG.sb.rpc('biometria_radar') : null,   // 0196
     ]);
     if (rv.error) { document.getElementById('blocos').innerHTML = `<div class="op-vazio">${esc(NG.msgErro(rv.error))}</div>`; NG.toast(NG.msgErro(rv.error), 'bad'); return; }
     jor = rj || { porVenda: {} };
@@ -347,6 +357,7 @@
     vendas = (rv.data || []).filter((v) => v.status !== '0_qualificado' || v.biometria_status === 'validada' || NG.naBiometria(v));
     conf = mapa(rk); din = mapa(rd); and = mapa(ra); osa = mapa(ro);
     varr = rs && !rs.error ? rs.data : null;
+    radar = rb && !rb.error ? rb.data : null;
     vigiarVarredura();
     osabEm = ((ri && ri.data) || [])[0] ? ri.data[0].aplicado_em : null;
     regras = Object.fromEntries(((rg && rg.data) || []).map((x) => [x.chave, x.valor]));
@@ -354,6 +365,42 @@
     faturasPor = null;   // a 1ª fatura entra quando existir a leitura de faturas da Nio (FPD, etapa 5d) — hoje a view v_adimplencia não existe
     renderOsab();
     render();
+  }
+
+  // 0196 (Ricardo, 14/11): radar da biometria da Nio — a queda (automática pelo GED360 ou marcada), os botões e o gargalo por dia.
+  function radarSub() {
+    if (!radar) return '';
+    const q = radar.queda;
+    return q ? `<span class="op-rel bad">${q.confirmada_em ? 'Biometria da Nio FORA DO AR' : 'Biometria da Nio parece fora do ar'} desde ${esc(NG.fmtDataHora(q.inicio))}</span>`
+      : `<span class="op-rel">Biometria da Nio funcionando · última no GED360 ${esc(radar.ultima_envio ? NG.haQuanto(radar.ultima_envio) : '—')}</span>`;
+  }
+  function radarHtml() {
+    if (!radar) return '';
+    const q = radar.queda;
+    const n = (x) => NG.fmtNum(Number(x || 0));
+    const dias = (radar.por_dia || []).slice(-10);
+    const max = Math.max(1, ...dias.map((x) => Number(x.enviadas || 0)));
+    const linha = (x) => `<tr><td>${esc(NG.fmtDiaISO(x.dia).slice(0, 5))}</td><td><span class="op-barra" style="width:${Math.round((Number(x.enviadas) / max) * 100)}%"></span> ${n(x.enviadas)}</td><td>${n(x.aprovadas)}</td><td>${n(x.expiradas)}</td><td>${n(x.so_link)}</td></tr>`;
+    const quedas = (radar.quedas || []).slice(0, 5).map((x) => `<li>${esc(NG.fmtDataHora(x.inicio))} → ${x.fim ? esc(NG.fmtDataHora(x.fim)) : '<b>aberta</b>'} · ${esc(x.horas)} h · ${x.origem === 'auto' ? (x.confirmada ? 'automática, confirmada' : 'automática') : 'marcada pelo time'}</li>`).join('');
+    return `<section class="op-bloco op-radar" aria-label="Radar da biometria da Nio">
+      <header><h2>Radar da biometria da Nio</h2>${NG.dicaTxt('O robô do GED360 lê o relatório de todo o PDV a cada 15 min. Sem biometria nova por 3 h no horário comercial, o NIOGEN suspeita que o sistema de biometria da Nio caiu e põe no ⚠ Conferir do Live. Confirmado (aviso do Rogério no grupo), peça à Nio a dispensa e marque "Nio dispensou a biometria" em cada ficha. Quando voltar, a Mari avisa quem ficou esperando e o Live prioriza.')}
+        <span class="op-sub">${q ? `<button type="button" class="btn btn-sm" data-bq="fora">${q.confirmada_em ? 'Confirmada' : 'Confirmar: está fora'}</button> <button type="button" class="btn btn-sm btn-acc" data-bq="voltou">Voltou</button>`
+          : '<button type="button" class="btn btn-sm" data-bq="fora">Biometria da Nio fora do ar</button>'}</span></header>
+      <div class="op-radar-n"><span><b>${n(radar.paradas)}</b> vendas esperando a biometria${radar.paradas_24h ? ` · <b>${n(radar.paradas_24h)}</b> há mais de 24 h` : ''}</span>
+        <span>OS → biometria aprovada: <b>${radar.mediana_os_bio_h != null ? `${esc(String(radar.mediana_os_bio_h).replace('.', ','))} h` : '—'}</b> (mediana, 30 dias, ${n(radar.medidas)} vendas)</span>
+        <span>Dispensadas pela Nio (30 dias): <b>${n(radar.dispensadas_30d)}</b></span></div>
+      ${dias.length ? `<table class="op-radar-t"><thead><tr><th>Dia</th><th>Links enviados (PDV)</th><th>Aprovadas</th><th>Expiradas</th><th>Só link</th></tr></thead><tbody>${dias.map(linha).join('')}</tbody></table>` : ''}
+      ${quedas ? `<div class="op-radar-q"><b>Quedas (30 dias)</b><ul>${quedas}</ul></div>` : ''}</section>`;
+  }
+  async function marcarQueda(acao) {
+    const obs = acao === 'fora' ? window.prompt('Biometria da Nio fora do ar. Quem avisou / observação (opcional):', 'Rogério avisou no grupo de parceiros') : '';
+    if (acao === 'fora' && obs === null) return;
+    if (acao === 'voltou' && !window.confirm('A biometria da Nio voltou?\n\nA Mari avisa quem ficou esperando (na janela de 24 h) e o Live põe essas vendas em vermelho, das mais antigas primeiro.')) return;
+    const { data, error } = await NG.sb.rpc('biometria_queda_marcar', { p_acao: acao, p_obs: obs || null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`✓ ${(data && data.resumo) || 'marcado'}`, 'ok');
+    NG.limparCache();
+    await carregar();
   }
 
   // ---------- cliques ----------
@@ -394,6 +441,7 @@
   }
   document.getElementById('nav').addEventListener('click', (ev) => { const b = ev.target.closest('#varrer'); if (b && !b.disabled) varrer(b); });
   blocosEl.addEventListener('click', (ev) => { const o = ev.target.closest('[data-os-ler]'); if (o) { ev.stopPropagation(); lerOs(o.dataset.osLer); return; }
+    const bq = ev.target.closest('[data-bq]'); if (bq) { ev.stopPropagation(); marcarQueda(bq.dataset.bq); return; }
     if (ev.target.closest('.dica, [data-operador]')) return; const c = ev.target.closest('[data-abrir]'); if (c) abrir(c, ev.ctrlKey || ev.metaKey); });
   blocosEl.addEventListener('auxclick', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.button === 1) abrir(c, true); });
   blocosEl.addEventListener('keydown', (ev) => { const c = ev.target.closest('[data-abrir]'); if (c && ev.key === 'Enter' && ev.target === c) abrir(c); });

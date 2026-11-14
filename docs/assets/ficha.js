@@ -271,7 +271,7 @@
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, docs_dispensados_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
+      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
@@ -1266,7 +1266,8 @@
       : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viab) ? { s: 'wa', d: (NG.VIAB_NIO[viab] || viab).toLowerCase() }
       : { s: 'no', d: '' };
     const bio = v.biometria_status;
-    const pBio = bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)}` : 'validada' }
+    const pBio = bio === 'validada' && v.biometria_dispensada_em ? { s: 'ok', d: `dispensada pela Nio ${NG.fmtData(v.biometria_dispensada_em)}` }
+      : bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)}` : 'validada' }
       : bio === 'com_risco' ? { s: 'wa', d: 'com risco' }
       : v.nio_os && v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
       : { s: 'no', d: v.nio_os ? '' : 'depois da OS' };
@@ -1524,8 +1525,8 @@
     } else if (etapa === 4 && ['pendente', 'com_risco'].includes(v.biometria_status)) {
       // 0194: a biometria vem DEPOIS da OS.
       bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
-        B('data-momento="biometria" data-r="risco"', 'Com risco', false));
-      nota = 'A Nio mandou o link da biometria quando a OS foi aberta. "Consultar agora" lê o GED360 na hora (uns 10 s); aprovada, o NIOGEN marca sozinho.';
+        B('data-momento="biometria" data-r="risco"', 'Com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Nio dispensou a biometria', false));
+      nota = 'A Nio mandou o link da biometria quando a OS foi aberta. "Consultar agora" lê o GED360 na hora (uns 10 s); aprovada, o NIOGEN marca sozinho. Sistema de biometria da Nio fora do ar? Peça à Nio a dispensa e toque "Nio dispensou a biometria".';
       sozinho = SOZINHO.biometria;
     } else if (etapa === 4 && d.lead && d.lead.status === 'aguarda_cartao') {
       bts.push(temOsNio() ? B('data-f="os-ler"', '⟳ Consultar a OS agora', nivel === 'agora') : '', B('data-resolver="reagendar"', 'Reagendar', false));
@@ -2206,6 +2207,7 @@
         const qual = mo.dataset.momento;
         const res = mo.dataset.r || null;
         if (qual === 'parar' && !window.confirm('O cliente pediu para parar?\n\nA conversa ganha a etiqueta nao-contatar, uma nota, é resolvida e ninguém mais chama esse cliente.')) return;
+        if (res === 'dispensada' && !window.confirm('A Nio liberou esta venda da biometria (sistema de biometria fora do ar)?\n\nVale como biometria aprovada: a venda segue para a instalação, a comissão é normal e, no cartão, a Mari avisa do cadastro do cartão. Fica registrado quem marcou.')) return;
         if (res === 'negado' && !window.confirm('Crédito negado no CPF do cliente?\n\nO sistema manda ao cliente o pedido de outro CPF e abre a pendência "aguardando outro CPF".')) return;
         mo.disabled = true;
         const r = d.soConversa ? await rodarMomentoConversa(qual) : await rodarMomento(qual, res ? { resultado: res } : {});
@@ -2783,6 +2785,7 @@
         : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
         ${v.biometria_link_enviado_em ? linhaDet('Link da Nio', esc(NG.fmtDataHora(v.biometria_link_enviado_em))) : ''}
         ${v.biometria_validada_em ? linhaDet('Validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
+        ${v.biometria_dispensada_em ? linhaDet('Dispensada pela Nio', esc(`${NG.fmtDataHora(v.biometria_dispensada_em)} · ${v.biometria_dispensa_motivo || 'sistema fora do ar'}`)) : ''}
         ${a.bio_resultado ? linhaDet('GED360', `${esc(a.bio_rotulo || a.bio_resultado)} · protocolo ${esc(a.bio_protocolo)} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}`) : ''}
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
         ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
