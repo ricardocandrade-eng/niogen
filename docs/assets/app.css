@@ -2809,3 +2809,11 @@ select option:disabled { color: var(--muted); }
   .fc2-grid > section { display: none; border-right: 0; }
   .fc2-grid.aba-conv > .fc-col-conv, .fc2-grid.aba-jor > .fc2-jor, .fc2-grid.aba-ficha > .fc2-dados { display: flex; }
 }
+/* 14/11 ajuste da ficha nova: a Jornada não rola para o lado; a etapa aberta fica compacta para as 7 caberem na tela */
+.fc2-lista { overflow-x: hidden; }
+.fc2-det .fc-dr { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.fc2-det .fc-dr b { white-space: normal; min-width: 0; font-weight: 500; }
+.fc2-det .fc-pill { white-space: normal; height: auto; line-height: 1.3; }
+.fc2-det .fc-src.op { display: none; }
+.fc2-det .fc-op-bts small { flex: 1 1 100%; font-size: 11.5px; }
+.fc2-det .fc-aviso { margin: 0; padding: 6px 9px; }

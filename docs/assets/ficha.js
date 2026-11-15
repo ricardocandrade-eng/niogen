@@ -2841,15 +2841,14 @@
       const r = c.nio_viab_resultado;
       const dec = c.cobertura_decisao;
       const rc = c.rua_conferir_em && c.rua_conferir ? c.rua_conferir : null;
-      const DEC = { viavel: ['Viável', 'ok'], elegivel_200m: ['Portal disse não · DFV tem fachada viável perto', 'warn'], sem_cobertura: ['Sem cobertura', 'bad'],
+      const DEC = { viavel: ['Viável', 'ok'], elegivel_200m: ['Portal: não · DFV: viável perto', 'warn'], sem_cobertura: ['Sem cobertura', 'bad'],
         unidade_fora_lista: ['Unidade fora da lista do portal', 'warn'], indefinida: ['O portal não decidiu', 'warn'] };
       const [rot, cls] = DEC[dec] || (r ? [NG.VIAB_NIO[r] || r, r === 'viavel' ? 'ok' : 'warn'] : ['Ainda não consultada', 'mute']);
       const quando = c.cobertura_em || c.nio_viab_em;
       const endTxt = [convRua(c), convComp(c) && convComp(c) !== 'sem complemento' ? convComp(c) : '', convCep(c) ? `CEP ${convCep(c)}` : '', c.cidade].filter(Boolean).join(' · ');
       corpo = `${linhaDet('Endereço', esc(endTxt || '—'))}
         ${linhaDet('Hoje na ficha', `<span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? ` até ${esc(c.nio_viab_velocidade)}` : ''}${quando ? ` <small class="apagado">· ${esc(NG.fmtDataHora(quando))}</small>` : ''}`)}
-        ${rc ? `<div class="fc-aviso warn"><b>${rc.motivo === 'rua_divergente' ? 'O portal consultou outra rua' : 'O portal disse não, mas o DFV tem esta casa como viável'}</b><br>
-          Cliente: <b>${esc(rc.esperada || convLogr(c) || '?')}</b> · portal: <b>${esc(String(rc.portal || '?').split(',')[0])}</b>. Consulte de novo: o robô agora escolhe a rua do cliente.</div>` : ''}
+        ${rc ? `<div class="fc-aviso warn">Cliente: <b>${esc(rc.esperada || convLogr(c) || '?')}</b> · portal consultou: <b>${esc(String(rc.portal || '?').split(',')[0])}</b></div>` : ''}
         ${dec === 'viavel' && !rc ? '<div class="nota-campo">Nada a fazer: a viabilidade já está gravada.</div>' : ''}
         ${opPainel('viab')}`;
     } else if (p.k === 'viab') {
@@ -3204,7 +3203,8 @@
     const formCartao = formAtivo && FORMS_NO_CARTAO.includes(formAtivo);
     // 0194 (Ricardo, 14/11: "precisa ficar caçando o que fazer em cada etapa"): o passo da vez já abre com o formulário/botões
     // à vista, por cima dos cartões. Fechou no X → fica fechado nesta ficha; abrir um degrau, o histórico ou a pendência esconde.
-    const sozinhoAberto = ehBO() && p.temAcao && !p.alertaConv && !fc.passoX && !fc.etapa && !fc.ver && !fc.pend && !fc.hist && v.status !== 'saida';
+    // 14/11 (ficha nova, regra "nada escondido"): o painel não abre mais sozinho por cima dos Dados — abre pelo botão da faixa AGORA.
+    const sozinhoAberto = false && ehBO() && p.temAcao && !p.alertaConv && !fc.passoX && !fc.etapa && !fc.ver && !fc.pend && !fc.hist && v.status !== 'saida';
     const aberto = fc.passo || p.forcar || (!!formAtivo && formAtivo !== 'contato') || sozinhoAberto;
     if (!aberto) return '';
     const pend = formAtivo && formAtivo.startsWith('pend_');
@@ -3523,7 +3523,9 @@
     L.forEach((x) => {
       const o = fc.op[x.k] && fc.op[x.k].estado === 'rodando';
       const st = o ? 'run' : (x.k === 'viab' && at.ruaConferir ? 'warn' : x.st);
-      itens.push(linha(x.k, x.nome === 'OS' ? 'Pedido na Nio (OS)' : x.nome, o ? 'consultando o portal…' : (x.k === 'viab' && at.ruaConferir ? 'conferir: o portal consultou outra rua' : x.d), st, etapaDetalhe(x)));
+      const ANTES = { viab: 'consultar o endereço no portal', cred: 'depois da viabilidade', os: 'depois do crédito aprovado', bio: 'a Nio manda o link quando a OS abre', inst: 'agendada depois da biometria' };
+      const sub = x.d && x.d !== '—' ? x.d : (ANTES[x.k] || '—');
+      itens.push(linha(x.k, x.nome, o ? 'consultando o portal…' : (x.k === 'viab' && at.ruaConferir ? 'conferir: o portal consultou outra rua' : sub), st, etapaDetalhe(x)));
     });
     const din = d && !d.soConversa ? d.din : null;
     const v = d && !d.soConversa ? d.v : null;
