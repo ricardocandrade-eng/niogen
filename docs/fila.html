@@ -220,7 +220,9 @@
   // time (assumida ou atribuída a alguém/ao time backoffice) passava no filtro mas não caía em bloco nenhum — sumia. Agora fica
   // em Acompanhando enquanto espera o cliente; quando ele escreve, sobe para Para fazer (precisa_acao).
   const comTime = (j) => j.dono_tipo === 'pessoa' || j.dono_tipo === 'time';
-  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou || (comTime(j) && j.etapa >= 1 && j.nivel !== 'fora'))));
+  // 15/11 (Ricardo, casos Mauricio R. e José Lúcio: "não deveriam estar na Live para o bko acompanhar e cutucar?"): conversa
+  // com a Mari, vez do cliente, parado há 1 h ou mais (v_jornada.cliente_parado, 0214) também fica em Acompanhando.
+  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou || !!j.cliente_parado || (comTime(j) && j.etapa >= 1 && j.nivel !== 'fora'))));
   function acompanhando() {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
   }
