@@ -3671,7 +3671,7 @@
     const sub = passou ? `pedido já aberto${quando ? ` · passou em ${quando}` : ''}` : `👉 ${fazer}`;
     return `<section class="fc2-ho${passou || comMari ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}">
       <button type="button" class="fc2-ho-b" data-f="fc2-ho" aria-expanded="${aberto}"><span class="fc2-ho-k">${rotulo}</span>
-        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b><small title="${esc(sub)}">${esc(sub)}</small></span>
+        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b>${aberto && !passou ? '' : `<small title="${esc(sub)}">${esc(sub)}</small>`}</span>
         <span class="fc2-ho-sx">${aberto ? IC.cima : IC.baixo}</span></button>
       ${aberto ? `<div class="fc2-ho-c">
         <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
