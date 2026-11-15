@@ -160,8 +160,11 @@
   const vez = (j) => !!j.precisa_acao;
   const PRAZO = { agora: 'agora', hoje: 'hoje', espera: 'aguardando', ok: '—', fora: 'saída' };
   const telaCheia = () => vista === 'lista' && !movel.matches;
-  // 15/11 (0214): conversa da Mari com o cliente parado (cliente_parado) também entra — antes caía aqui e nunca chegava ao Acompanhando.
-  const filtroBase = (l) => l.filter((j) => j.precisa_acao || j.cliente_parado || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
+  // 15/11 (0219, Ricardo: "Pode fechar as 7 caixas"): a Live mostra a CAIXA de cada lead, calculada só no banco (v_jornada.caixa).
+  // 2 Time precisa agir + 5 Sem caixa = Para fazer · 3 Com o time + 4 Venda andando = Acompanhando · 1 Mari conduzindo = uma linha
+  // de radar · 6 Saída e 7 Instalada ficam fora. Sem a coluna (cache antigo), a regra de antes.
+  const comCaixa = (j) => j.caixa !== undefined && j.caixa !== null;
+  const filtroBase = (l) => l.filter((j) => (comCaixa(j) ? (j.precisa_acao || [3, 4].includes(j.caixa)) : (j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia)));
 
   const LIVE_MAX_MS = 2 * 60000;   // 14/11 (0190): recarga obrigatória da Live mesmo sem gravação no banco
   // fresco=true (padrão): após ação/Atualizar, descarta o cache. Carga inicial e timer usam o que a barra lateral já buscou.
@@ -225,7 +228,7 @@
   const comTime = (j) => j.dono_tipo === 'pessoa' || j.dono_tipo === 'time';
   // 15/11 (Ricardo, casos Mauricio R. e José Lúcio: "não deveriam estar na Live para o bko acompanhar e cutucar?"): conversa
   // com a Mari, vez do cliente, parado há 1 h ou mais (v_jornada.cliente_parado, 0214) também fica em Acompanhando.
-  const acompanha = (j) => !vez(j) && ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou || !!j.cliente_parado || (comTime(j) && j.etapa >= 1 && j.nivel !== 'fora'))));
+  const acompanha = (j) => !vez(j) && (comCaixa(j) ? [3, 4].includes(j.caixa) : ((!!j.venda_id && j.etapa >= 2 && j.etapa <= 5 && j.nivel !== 'ok' && j.nivel !== 'fora') || (!j.venda_id && (!!j.pendencia || !!j.cliente_confirmou || (comTime(j) && j.etapa >= 1 && j.nivel !== 'fora')))));
   function acompanhando() {
     return jor.lista.filter((j) => (!etapaSel || j.etapa === etapaSel) && acompanha(j)).sort(NG.ordemJornada);
   }
@@ -338,6 +341,13 @@
       const miraL = mira.filter((m) => !naLista[`c:${m.conversa_id}`]);
       if (miraL.length && !etapaSel) corpo += secao(`<span aria-hidden="true">👀</span> Na mira · ${miraL.length} ${NG.dicaTxt(NG.ajuda.live_na_mira)}`, 'cliente conversando agora com a Mari em Viabilidade, Pré-qualificado ou Qualificado — a Mari segue; acompanhe para não perder', miraL.map(miraLinha).join(''), 'lv-sec-mira');
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
+      // 0219: caixa 1 (Mari conduzindo) não ocupa linhas — uma linha de radar; quem tiver sinal de dinheiro já aparece em 👀 Na mira e 🔥 Oportunidades.
+      const mariC = (jor.todas || []).filter((j) => j.caixa === 1 && (!etapaSel || j.etapa === etapaSel));
+      if (mariC.length) {
+        const prox = mariC.map((j) => j.proximo_toque_em).filter(Boolean).sort()[0];
+        const proxTxt = prox ? new Date(prox).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+        corpo += `<div class="lv-radar apagado" style="padding:10px 4px;font-size:13px"><span aria-hidden="true">🤖</span> <b>Mari conduzindo · ${mariC.length}</b> — cadência com próximo toque marcado${proxTxt ? ` (o próximo sai ${esc(proxTxt)})` : ''}. Sobe para cá sozinho se precisar de você · <a href="leads.html" data-leads>ver em Todos os leads →</a></div>`;
+      }
       if (opL.length || opsCanal.length) {
         corpo += secao(`<span aria-hidden="true">🔥</span> Oportunidades · ${opL.length + opsCanal.length}`, 'o NIOGEN achou — não é obrigação; a mensagem sai pelo NIOGEN e a conversa volta para a Mari',
           `${opL.length ? `<div class="lv-thead lv-op"><span>Cliente</span><span>Por que agora · mensagem sugerida</span><span>Vale</span><span></span></div>${opL.map(opLinha).join('')}` : ''}${opsCanal.length ? `<div class="opc-bloco">${opsCanal.map((o) => NG.opCanalLinha(o)).join('')}</div>` : ''}`, 'lv-sec-op');
