@@ -621,6 +621,23 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
     dados.credito_negado_avisado = true;
   }
 }
+// 0212 (15/11, caso Helton): "Negado - Critérios Antifraude" — a Nio vê Nio no endereço. NUNCA oferecer outro CPF (num endereço
+// com Nio isso é o que a Nio lê como fraude/recompra). A Mari avisa sem falar em fraude e passa para o BKO, que confere com o cliente
+// se a Nio é dele ou de outro morador (defesa na Nio). Determinístico, uma vez só.
+{
+  const cc = ctx.conversa || {};
+  if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado_antifraude' && !((cc.dados || {}).credito_antifraude_avisado)) {
+    const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
+    texto = `${pn ? `${pn}, ` : ''}a Nio pediu uma conferência do seu endereço antes de seguir com o pedido 🔎
+
+`
+      + 'Vou passar pro nosso time, que confere com você por aqui. Uma pergunta já adianta: a internet Nio que aparece nesse endereço é sua (ou de alguém da casa) ou de um morador que já se mudou?';
+    handoffYaml = { motivo_handoff: 'pedido_humano',
+      briefing_humano: 'Crédito NEGADO por "Critérios Antifraude" (a Nio vê Nio no endereço). NÃO consultar outro CPF. A Mari perguntou se a Nio é do cliente/da casa ou de outro morador. Ficha › Crédito › Antifraude.' };
+    tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+    dados.credito_antifraude_avisado = true;
+  }
+}
 const hy = handoffYaml || {};
 const nome = d.nome || hy.nome;
 const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');
@@ -903,6 +920,7 @@ if (motivo) {
     else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
     else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
     else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
+    else if (cr === 'negado_antifraude') fazer = 'Antifraude (a Nio vê Nio no endereço): NÃO consultar outro CPF. Confirmar com o cliente se a Nio é dele/da casa (→ Já é cliente Nio) ou de outro morador (→ defesa na Nio); gravar em ficha › Crédito.';
     else if (cr === 'negado' && nCons < 2) fazer = 'Titular parente: consultar o crédito do CPF do parente; no portal, celular e e-mail DO TITULAR (a biometria vai para ele) → Continuar → Salvar Interesse; na ficha ⋯ › Trocar o titular e Gravar o Interesse. A Live avisa quando a biometria aprovar.';
     else if (!venda) fazer = (sugestao ? sugestao.charAt(0).toUpperCase() + sugestao.slice(1) : '') || {
       pedido_humano: 'Responder o cliente agora e entender o que ele precisa.',

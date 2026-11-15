@@ -155,12 +155,17 @@ def sem_pii(msg):
 
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
-RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
+RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'negado_antifraude',
+              'pedido_em_andamento',
               'sem_pedido_em_andamento',
               'sem_viabilidade', 'complemento_fora_lista', 'rua_divergente', 'erro_receita', 'contato_repetido', 'email_invalido',
               'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
+# 15/11 (Helton, print do Ricardo): popup "Resultado da análise de crédito · Crédito negado · Negado - Critérios Antifraude".
+# É negado de outra natureza: a Nio vê Nio no endereço (ou outro sinal). NUNCA vira "tente outro CPF" — vai para o backoffice
+# conferir com o cliente (dele → Já é cliente Nio; de outro morador → defesa na Nio). Migration 0212.
+RE_ANTIFRAUDE = re.compile(r'anti\s*-?\s*fraude', re.I)
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
 RE_RECEITA = re.compile(r'ops,?\s*ocorreu um erro', re.I)
 # Etapa 4 (11/11 18h50): "Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições
@@ -188,6 +193,8 @@ def classificar_popup(titulo, texto, etapa=None):
         return 'pedido_em_andamento'
     if RE_RECEITA.search(t) and etapa == 3:
         return 'receita_retry'
+    if RE_ANTIFRAUDE.search(t):
+        return 'negado_antifraude'
     if RE_NEGADO.search(t):
         return 'negado'
     if RE_APROVADO.search(t):

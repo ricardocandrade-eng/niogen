@@ -100,5 +100,10 @@ process.exitCode = falhas ? 1 : 0;
   const c5 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 2 }), 'Manhã');
   const ok5 = c5.handoff && c5.handoff.motivo === 'pedido_humano' && /também não aprovou/.test(c5.texto);
   console.log((ok5 ? 'ok   ' : 'FALHOU ') + 'C5 · 2º negado (CPF do parente) → passa para o time');
+  // 0212 (15/11, Helton): "Negado - Critérios Antifraude" → nunca oferece outro CPF; avisa sem falar em fraude e passa para o BKO
+  const c6 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado_antifraude', credito_consultas: 1 }), 'Manhã');
+  const ok6 = c6.handoff && c6.handoff.motivo === 'pedido_humano' && /conferência do seu endereço/.test(c6.texto) && !/parente|outro CPF|fraude/i.test(c6.texto)
+    && /Antifraude/.test(JSON.stringify(c6.handoff)) && c6.upd.dados && c6.upd.dados.credito_antifraude_avisado === true && !c6.upd.dados.credito_negado_avisado;
+  console.log((ok6 ? 'ok   ' : 'FALHOU ') + 'C6 · negado por antifraude → sem outro CPF, conferência do endereço e BKO (0212)');
   if (!(ok1 && ok3 && ok4 && ok5)) process.exitCode = 1;
 }

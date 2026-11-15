@@ -76,7 +76,7 @@ CACHE_TTL = 24 * 3600
 # ser refeitos (ex.: "Consultar com o endereço padrão" depois de um endereço do cliente sem viabilidade).
 VIAB_TTL = 6 * 3600       # viabilidade do portal vale "hoje": 6 h por endereço
 VIAB_CACHEAVEIS = {'viavel', 'sem_viabilidade', 'complemento_fora_lista'}
-CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento'}
+CACHEAVEIS = {'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'}
 DUP_CACHEAVEIS = {'pedido_em_andamento', 'sem_pedido_em_andamento'}   # 12/11: modo duplicidade (Mari), 24 h por CPF
 OS_TTL = 10 * 60          # 13/11: a mesma OS não é lida de novo no portal em menos de 10 min
 

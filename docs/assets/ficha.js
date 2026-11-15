@@ -265,7 +265,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -2070,7 +2070,7 @@
     const plP = planosCache ? null : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco')
       .then((r) => { if (!r.error) planosCache = r.data || []; }, () => {});
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2403,6 +2403,29 @@
         if (b.isConnected) b.disabled = false;
         return;
       }
+      if (acao === 'af-dec') {   // 0212: decisão do antifraude
+        const dec = b.dataset.dec;
+        const cid = (d.conv && d.conv.id) || d.conversaId;
+        let obs = null;
+        if (dec === 'outro_morador') {
+          obs = window.prompt('Defesa na Nio — o que foi (ou vai ser) enviado e por onde?\n\nEx.: comprovante de residência e contrato de aluguel no nome do cliente, mudou em 08/2026; e-mail ao Rogério.');
+          if (obs == null) return;
+        } else if (dec === 'dele' || dec === 'recusado') {
+          if (!window.confirm(dec === 'dele' ? 'A Nio do endereço é do cliente ou de alguém da casa?\n\nO lead vai para Saída · Já é cliente Nio. Mudança de plano é com a Nio (App Nio).' : 'A Nio recusou a defesa?\n\nO lead vai para Saída · Já é cliente Nio.')) return;
+          obs = window.prompt('Observação (opcional):', '') || null;
+        } else {
+          obs = window.prompt(dec === 'liberado' ? 'Como a Nio liberou? (opcional — depois consulte o crédito de novo)' : 'Observação (opcional):', '') || null;
+        }
+        b.disabled = true;
+        const { data, error } = await NG.sb.rpc('lead_antifraude_decidir', { p_conversa: cid, p_decisao: dec, p_obs: obs });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); if (b.isConnected) b.disabled = false; return; }
+        NG.toast(data.resumo || 'Registrado', 'ok');
+        feitoUltimo = { resumo: data.resumo || '✓ antifraude registrado' };
+        fc.etapa = null;
+        await recarregar();
+        avisarOuvintes(data);
+        return;
+      }
       if (acao === 'fc-op-lead') {   // 0159: grava no lead sem venda o que o operador leu
         b.disabled = true;
         const { data, error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: b.dataset.t === 'viab' ? 'viabilidade' : 'credito', p_resultado: b.dataset.r });
@@ -2708,7 +2731,7 @@
   }
   const linhaDet = (k, v) => `<div class="fc-dr"><span>${esc(k)}</span><b>${v}</b></div>`;
   const VIAB_ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', complemento_fora_lista: 'Unidade fora da lista do portal' };
-  const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado',
+  const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado', negado_antifraude: 'Negado — Critérios Antifraude',
     pedido_em_andamento: 'Já tem pedido em andamento', pendente: 'Pendente', nao_classificado: 'Não classificado', sem_viabilidade: 'Endereço sem viabilidade',
     complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', email_invalido: 'E-mail recusado pelo portal — confira o e-mail do cliente (ex.: @uol.com.br)', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
   const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
@@ -2759,7 +2782,7 @@
     const avisosTela = !s.popup && s.texto_tela ? (String(s.texto_tela).split('\n').find((l) => /^Avisos:/.test(l)) || '').replace(/^Avisos:\s*/, '') : '';
     const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? '' : avisosTela ? `o portal mostrou: "${avisosTela}"` : (s.motivo || '')}`.replace(/ · $/, '');
     return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
-      cls: padrao ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : s.resultado === 'negado' || s.resultado === 'pedido_em_andamento' ? 'bad' : 'warn', registrar: padrao ? null : reg };
+      cls: padrao ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : ['negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? 'bad' : 'warn', registrar: padrao ? null : reg };
   }
   // 15/11 (Ricardo: "retirar essa msg 2x"): o texto do portal uma vez, sem linhas repetidas nem os nomes dos botões do popup.
   function telaPortal(s) {
@@ -2772,6 +2795,23 @@
       vistas.add(k);
       return true;
     }).join('\n').slice(0, 900);
+  }
+  // 15/11 (0212, caso Helton): "Negado - Critérios Antifraude" — a Nio vê Nio no endereço. Não é saída automática (Ricardo: "pode ter
+  // solução se for tratado pelo backoffice ... outro morador que se mudou"): o BKO confere com o cliente e, se for outro morador, defende na Nio.
+  function antifraudeBloco() {
+    const c = d.conv || {};
+    if (!c.antifraude_situacao) return '';
+    const ult = (c.antifraude_hist || []).slice(-1)[0];
+    const quando = c.antifraude_em ? NG.fmtDataHora(c.antifraude_em) : '';
+    const bt = (dec, txt, acc) => `<button type="button" class="btn btn-sm${acc ? ' btn-acc' : ''}" data-f="af-dec" data-dec="${dec}">${esc(txt)}</button>`;
+    const conferir = c.antifraude_situacao === 'conferir';
+    const txt = conferir
+      ? '<b>Crédito negado por "Critérios Antifraude".</b> A Nio vê Nio neste endereço. <b>Não consulte outro CPF</b> — vira fraude/recompra. Pergunte ao cliente: a Nio é dele (ou de alguém da casa) ou de outro morador que se mudou?'
+      : `<b>Defesa na Nio em andamento</b>${ult && ult.obs ? ` — ${esc(ult.obs)}` : ''}. A vez é da Nio (48 h). Quando ela responder, grave aqui.`;
+    const bts = !ehBO() ? '' : conferir
+      ? `${bt('outro_morador', 'É de outro morador → defesa na Nio', true)}${bt('dele', 'É dele / da casa → Já é cliente Nio')}${bt('cobrar', 'Cliente não respondeu')}`
+      : `${bt('liberado', 'A Nio liberou', true)}${bt('recusado', 'A Nio recusou → Já é cliente Nio')}${bt('cobrar', 'Cobrei a Nio')}`;
+    return `<div class="fc-aviso bad">${txt}${quando ? ` <small class="apagado">· desde ${esc(quando)}</small>` : ''}</div>${bts ? `<div class="fc-op-bts">${bts}</div>` : ''}`;
   }
   function opPainel(tipo) {
     const bo = ehBO();
@@ -2790,7 +2830,7 @@
       const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida';
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
-        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
+        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
       const telaP = !['viavel'].includes(o.s.resultado) && !/^aprovado/.test(o.s.resultado || '') && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
         ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
@@ -2943,13 +2983,14 @@
         ${!conv && v.status !== 'saida' && ehBO() ? `<div class="fc-op-bts"><a class="btn btn-sm" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal">Abrir o portal ↗</a><button type="button" class="btn btn-sm" data-f="viab-form">Registrar resultado à mão</button></div>` : ''}`;
     } else if (p.k === 'cred') {
       const cc = conv ? d.conv : null;
+      const afB = antifraudeBloco();
       const padraoC = cc && cc.credito_endereco === 'padrao' && /^aprovado/.test(cc.credito_resultado || '');
       corpo = conv ? `${linhaDet('Resultado', padraoC ? '<span class="warn-txt">sem resultado válido para este endereço</span>'
           : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
-        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${opPainel('cred')}`
+        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
-        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
+        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${opPainel('cred')}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';

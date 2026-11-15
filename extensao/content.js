@@ -557,6 +557,7 @@
     const msg = cls === 'pedido_em_andamento' ? 'O portal diz que já existe pedido para este cliente/endereço (recompra = multa de R$ 500). Parei — confira o Histórico de Pedidos.'
       : cls === 'contato_repetido' ? 'O portal recusou o celular (repetido em outros pedidos). Peça outro número ao cliente.'
       : cls === 'email_invalido' ? 'O portal recusou o e-mail. Confirme o e-mail com o cliente.'
+      : cls === 'negado_antifraude' ? 'Negado por critérios antifraude: a Nio vê Nio neste endereço. NÃO consulte outro CPF — pergunte ao cliente se a Nio é dele ou de outro morador e grave na ficha (Crédito).'
       : cls === 'negado' ? 'Crédito negado no portal.' : cls === 'pendente' ? 'Crédito pendente no portal.'
       : cls === 'dados_pessoais' ? 'O portal pede nascimento ou nome da mãe — pergunte ao cliente e preencha você.'
       : 'O portal mostrou um aviso que eu não esperava. Leia e decida você.';
