@@ -100,6 +100,11 @@ process.exitCode = falhas ? 1 : 0;
   const c5 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 2 }), 'Manhã');
   const ok5 = c5.handoff && c5.handoff.motivo === 'pedido_humano' && /também não aprovou/.test(c5.texto);
   console.log((ok5 ? 'ok   ' : 'FALHOU ') + 'C5 · 2º negado (CPF do parente) → passa para o time');
+  // 15/11 (caso Lucas 17:31): lead já em Saída "crédito negado" (o time tratou) → o roteiro do negado NÃO roda
+  const c4s = rodar('Imagina! Qualquer coisa estou por aqui.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 1,
+    funil_destino: 'credito_negado', saida_motivo: 'credito_negado' }), '53 99999-0000');
+  const ok4s = !/parente ou familiar/.test(c4s.texto) && !(c4s.handoff && /Crédito NEGADO/.test(JSON.stringify(c4s.handoff)));
+  console.log((ok4s ? 'ok   ' : 'FALHOU ') + 'C4s · negado com o lead já em Saída → sem roteiro de outro CPF (15/11, caso Lucas)');
   // 0212 (15/11, Helton): "Negado - Critérios Antifraude" → nunca oferece outro CPF; avisa sem falar em fraude e passa para o BKO
   const c6 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado_antifraude', credito_consultas: 1 }), 'Manhã');
   const ok6 = c6.handoff && c6.handoff.motivo === 'pedido_humano' && /conferência do seu endereço/.test(c6.texto) && !/parente|outro CPF|fraude/i.test(c6.texto)

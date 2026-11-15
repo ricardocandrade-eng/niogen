@@ -598,7 +598,10 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
 // 0138: a análise de crédito da Nio NEGOU (consulta autorizada) → a Mari avisa e chama o time (determinístico).
 {
   const cc = ctx.conversa || {};
-  if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado' && !((cc.dados || {}).credito_negado_avisado)) {
+  // 15/11 (Ricardo, caso Lucas 17:31): com o lead já em Saída (o time tratou e encerrou), o roteiro NÃO roda — a Mari responde pelo
+  // modelo, sabendo da Saída (motor: "situacao_lead"). Antes ela oferecia de novo o CPF de um parente depois do time ter testado 2.
+  const naSaida = !!cc.funil_destino && !['em_andamento', 'instalada'].includes(cc.funil_destino);
+  if (V7 && !posHandoff && !erro && !handoffYaml && !naSaida && cc.credito_resultado === 'negado' && !((cc.dados || {}).credito_negado_avisado)) {
     const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
     if (Number(cc.credito_consultas || 0) < 2) {
       // 12/11 ~10h (Ricardo): avisa com gentileza e oferece o CPF de um parente/familiar como titular.
@@ -626,7 +629,8 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
 // se a Nio é dele ou de outro morador (defesa na Nio). Determinístico, uma vez só.
 {
   const cc = ctx.conversa || {};
-  if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado_antifraude' && !((cc.dados || {}).credito_antifraude_avisado)) {
+  const naSaidaAf = !!cc.funil_destino && !['em_andamento', 'instalada'].includes(cc.funil_destino);   // 15/11: idem
+  if (V7 && !posHandoff && !erro && !handoffYaml && !naSaidaAf && cc.credito_resultado === 'negado_antifraude' && !((cc.dados || {}).credito_antifraude_avisado)) {
     const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
     texto = `${pn ? `${pn}, ` : ''}a Nio pediu uma conferência do seu endereço antes de seguir com o pedido 🔎
 

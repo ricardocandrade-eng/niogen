@@ -252,6 +252,12 @@ if (V4) {
         + 'Se disse que errou, repetiu o mesmo endereço ou não mandou endereço: peça, numa frase curta e gentil, o CEP (8 números) e o número da casa certos. '
         + 'Se só agradeceu ou se despediu: responda curto ("Imagina! 💚 Assim que a rede chegar aí eu te aviso.").');
     }
+    // 15/11 (Ricardo, caso Lucas): o time já tratou e encerrou o lead → a Mari sabe e não reabre a venda por conta própria.
+    if (conv.funil_destino && !['em_andamento', 'instalada'].includes(conv.funil_destino)) {
+      L.push(`situacao_lead (uso interno): o nosso time JÁ tratou este cliente e encerrou o lead — saída "${conv.saida_motivo || conv.funil_destino}". `
+        + 'Leia no histórico o que o consultor já disse e tentou (ex.: outros CPFs). NÃO repita ofertas que o time já fez nem refaça consultas. '
+        + 'Responda curto e gentil ao que o cliente perguntou; se ele quiser seguir com um pedido novo ou tiver dúvida do pedido, emita [HANDOFF] pedido_humano.');
+    }
     // 0138: crédito pela Mari — o sistema pede a autorização com botões e consulta sozinho; a Mari só usa o resultado (Bloco 9).
     L.push(`credito (uso interno): ${conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
       : conv.credito_em ? 'consultando' : 'ainda não consultado (sai sozinho com CPF e e-mail)'}${conv.credito_consultas >= 2 ? ' | já é a 2ª consulta (CPF do parente)' : ''}`);

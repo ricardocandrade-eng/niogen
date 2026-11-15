@@ -2,18 +2,22 @@
 // Padrão Renata (no2 §0a): humano atribuído, time atribuído ou conversa resolvida = Mari calada.
 // 05/11 (prompt 16, adendo 2): etiqueta `nao-contatar` também cala a Mari, mesmo sem dono.
 // Modo 'teste': não há Chatwoot → sempre "sem humano".
-// Modo 'chatwoot': lê a resposta do nó "2g · Chatwoot conversa" (GET da conversa). Fail-open.
+// Modo 'chatwoot': lê a resposta do nó "2g · Chatwoot conversa" (GET da conversa). Sem resposta → a foto do webhook (15/11).
 
 // 12/11 (0145): com mídia, a entrada que vale é a do 2b8 · Juntar mídia (texto com a transcrição + lista de mídia).
 const e = (() => { try { if ($('2b8 · Juntar mídia').isExecuted) return $('2b8 · Juntar mídia').first().json; } catch (x) { /* sem mídia */ } return $('2 · Entrada').first().json; })();
 if (e.modo !== 'chatwoot') return [{ json: { ...e, humano: false, guard: 'sem humano (modo teste)' } }];
 
 const c = $input.first().json || {};
-const assignee = c.meta?.assignee || c.assignee || null;
-const teamId = c.meta?.team?.id ?? c.team_id ?? null;
-const status = c.status || null;
+// 15/11 (revisão dos fluxos, M6): era fail-open — com o GET do Chatwoot falhando a Mari respondia mesmo com uma pessoa na
+// conversa. Agora, sem resposta do Chatwoot, vale a foto da conversa que veio no próprio webhook da mensagem (e.cwStatus).
+const temDados = c && (c.id !== undefined || c.status !== undefined || c.meta !== undefined);
+const foto = !temDados && e.cwStatus ? e.cwStatus : null;
+const assignee = foto ? (foto.p_agente ? { id: foto.p_agente } : null) : (c.meta?.assignee || c.assignee || null);
+const teamId = foto ? (foto.p_time || null) : (c.meta?.team?.id ?? c.team_id ?? null);
+const status = foto ? (foto.p_status || null) : (c.status || null);
 
-const labels = Array.isArray(c.labels) ? c.labels : [];
+const labels = foto ? (Array.isArray(foto.p_etiquetas) ? foto.p_etiquetas : []) : (Array.isArray(c.labels) ? c.labels : []);
 
 let motivo = null;
 if (labels.includes('nao-contatar')) motivo = 'etiqueta nao-contatar';   // adendo 2: não falar, mesmo sem dono
