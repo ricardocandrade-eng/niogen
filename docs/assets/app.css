@@ -2817,3 +2817,16 @@ select option:disabled { color: var(--muted); }
 .fc2-det .fc-src.op { display: none; }
 .fc2-det .fc-op-bts small { flex: 1 1 100%; font-size: 11.5px; }
 .fc2-det .fc-aviso { margin: 0; padding: 6px 9px; }
+
+/* 14/11 (Ricardo: "precisa organizar o topo da ficha, os dados estão embolados"): na ficha nova a coluna Conversa é mais
+   estreita — o cabeçalho dela volta a caber numa linha de 38 px, alinhado aos títulos da Jornada e dos Dados; etiquetas numa
+   segunda linha fina. O link do Chatwoot sai daqui (fica no menu ⋯ da ficha). */
+.fc2 .cvp-raiz.cheia .cvp-l1 { height: 38px; padding: 0 10px 0 12px; gap: 6px; border-bottom: 1px solid #1D232B; }
+.fc2 .cvp-raiz.cheia .cvp-chips { flex-wrap: nowrap; overflow: hidden; gap: 2px; }
+.fc2 .cvp-raiz.cheia .cvp-chips .cvp-pill.fixo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc2 .cvp-raiz.cheia .cvp-cw { display: none; }
+.fc2 .cvp-raiz.cheia .cvp-sw { flex: none; }
+.fc2 .cvp-raiz.cheia .cvp-sw-opc { font-size: 12px; }
+.fc2 .cvp-raiz.cheia .cvp-l2 { height: 32px; padding: 0 12px; }
+.fc2 .fc-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2 .fc-dono-k { color: #7F8A96; }

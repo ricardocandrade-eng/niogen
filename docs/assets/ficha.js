@@ -2767,7 +2767,9 @@
     } else if (o && o.estado === 'erro') {
       corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(o.erro)}</span></div><div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Tentar de novo</button>${tipo === 'viab' ? '' : ''}</div>`;
     } else if (e.falta) {
-      corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(e.falta)}</span><small>complete a ficha para rodar o operador</small></div>`;
+      const grupoFalta = /CEP|número/.test(e.falta) ? 'endereco' : 'contato';
+      corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(e.falta)}</span><small>complete a ficha para rodar o operador</small></div>${d.soConversa && bo && !silenciadaConv()
+        ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="fc2-ed" data-g="${grupoFalta}">Preencher na ficha</button></div>` : ''}`;
     } else {
       corpo = `${tipo === 'cred' ? '<label class="fc-chk"><input type="checkbox" data-fc-autoriza> O titular autorizou a consulta do CPF</label>' : ''}
         <div class="fc-op-bts"><button type="button" class="btn btn-sm${tipo === 'viab' ? ' btn-acc' : ''}" data-f="fc-op" data-t="${tipo}">${IC.play}${tipo === 'viab' ? 'Consultar agora' : 'Rodar operador'}</button>${tipo === 'viab' ? '<small class="apagado">o robô consulta o portal da Nio (20–40 s), só leitura — nada é gravado até você mandar</small>' : ''}</div>`;
@@ -3631,7 +3633,7 @@
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
         v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);   // 0186: selo Meta
       cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
-        `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
+        `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
       trilha = trilhasHtml();
       const E = escadaPartes(true);
       const tom = p.alertaConv ? 'now' : TOM[p.nivel] || 'mute';
@@ -3660,7 +3662,7 @@
       document.title = tituloCom(c.nome);
       const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>${auditarItem()}
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
-      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, NG.ORIGENS[c.origem] || c.origem].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono">${dn.html}</span>`, menu,
+      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : null].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>`, menu,
         ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
       trilha = trilhasHtml();
       const E = escadaPartes(false);
@@ -3775,7 +3777,7 @@
     }
     const b = ev.target.closest('[data-f]');
     const a = b ? b.dataset.f : '';
-    if (!a.startsWith('fc-')) {
+    if (!a.startsWith('fc-') && !a.startsWith('fc2-')) {   // 14/11: fc2-* = ficha nova (corrigir, etapas da Jornada, Consultar viabilidade)
       if (['pend-abrir', 'pend-adiar', 'pend-encerrar', 'pend-saida', 'viab-form', 'ref-form', 'saida-form', 'ir-conferencia', 'pend-viab', 'pend-conf'].includes(a)) { fc.pend = false; fc.etapa = null; fc.passo = true; fc.aba = 'ficha'; render(); return; }   // celular: o formulário abre na aba Ficha
       if (a === 'trocar-plano') { fc.ver = 'venda'; fc.passo = false; render(); return; }
       if (a === 'cancelar' && !(b && b.closest('.f-bloco'))) { fc.passo = false; render(); return; }
