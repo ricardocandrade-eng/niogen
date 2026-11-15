@@ -225,6 +225,30 @@ ok(co.ler_resposta({'codigo': 2000, 'data': []}, '90000001')['resultado'] == 'na
 ok(co.ler_resposta({'erro': 'x'}, '90000001')['resultado'] == 'erro', 'resposta fora do formato → erro')
 ok(co.ler_resposta({'data': [{'numeroOS': '90000001', 'statusOS': '-'}]}, '90000001')['resultado'] == 'erro', 'sem status → erro (não grava leitura vazia)')
 
+print('\n7. Rua conferida antes de aceitar o endereço (14/11, Helton — CEP 36087-460 com duas ruas)')
+HELTON_PORTAL = 'Rua Alvaro Coelho De Andrade Lemos, 99 - Santa Cruz, Juiz De Fora - MG'
+ok(cr.mesma_rua(HELTON_PORTAL, 'Rua Álvaro Cruz') is False, 'Helton: "Alvaro Coelho De Andrade Lemos" × "Álvaro Cruz" → outra rua')
+ok(cr.mesma_rua('Rua Alvaro Cruz, 99 - Santa Cruz, Juiz De Fora - MG', 'Rua Álvaro Cruz') is True, 'Helton: "Alvaro Cruz, 99 - …" × "Rua Álvaro Cruz" → mesma rua')
+ok(cr.mesma_rua('R. Dr. João Pinheiro', 'Rua Doutor Joao Pinheiro') is True, 'R. Dr. João Pinheiro × Rua Doutor Joao Pinheiro → mesma')
+ok(cr.mesma_rua('Travessa Grão Mogol, 49 - Nossa Senhora Das Graças, Juiz De Fora - MG', 'Rua Grão Mogol') is False,
+   'Matheus (14/11): Travessa Grão Mogol × Rua Grão Mogol → outra rua (os dois dizem o tipo)')
+ok(cr.mesma_rua('Beco Santo Antonio, 1009 - Vera Cruz, Belo Horizonte - MG', 'Rua Desembargador Bráulio') is False,
+   'Sérggio (12/11): Beco Santo Antonio × Rua Desembargador Bráulio → outra rua')
+ok(cr.mesma_rua('Av. Rio Branco', 'Avenida Rio Branco') is True, 'Av. × Avenida → mesmo tipo, mesma rua')
+ok(cr.mesma_rua('Rio Branco', 'Rua Rio Branco') is True, 'sem tipo num dos lados → o tipo não decide')
+ok(cr.mesma_rua('R. Quinze, 23 - Vista Do Sol', 'Rua Quinze') is True, 'Christian (12/11): R. Quinze × Rua Quinze → mesma')
+ok(cr.mesma_rua('Rua São Mateus', 'Rua Santos Dumont') is False, 'São Mateus × Santos Dumont → outra')
+ok(cr.mesma_rua('Rua Doutor João Pinheiro', 'Rua João Pinheiro') is True, 'título a mais (Doutor) com o mesmo nome → mesma')
+ok(cr.mesma_rua('Rua Sta. Rita', 'Rua Santa Rita de Cássia') is False, 'Santa Rita × Santa Rita de Cássia → outra (último nome diferente)')
+ok(cr.mesma_rua('Rua Halfeld', 'Rua Halfeld, 100 - Centro') is True, 'nome de uma palavra, igual → mesma')
+ok(cr.mesma_rua('Rua Halfeld', 'Rua Marechal Deodoro') is False, 'uma palavra × outra → outra')
+ok(cr.mesma_rua('', 'Rua Álvaro Cruz') is None and cr.mesma_rua(None, None) is None, 'vazio → não dá para dizer (None)')
+OPS = [HELTON_PORTAL, 'Rua Alvaro Cruz, 99 - Santa Cruz, Juiz De Fora - MG', 'Rua Alvaro Cruz, 98 - Santa Cruz, Juiz De Fora - MG']
+ok(cr.opcao_da_rua(OPS, 'Rua Álvaro Cruz', '99') == OPS[1], 'lista: escolhe a da MESMA rua e mesmo número (não a 1ª com o 99)')
+ok(cr.opcao_da_rua(OPS[:1], 'Rua Álvaro Cruz', '99') is None, 'lista só com a outra rua → nenhuma (vira rua_divergente)')
+ok(cr.opcao_da_rua(OPS, 'Rua Álvaro Cruz', '7') is None, 'rua certa sem o número → nenhuma (não chuta outro número)')
+ok('rua_divergente' in cr.RESULTADOS, 'rua_divergente é resultado conhecido')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')

@@ -385,14 +385,14 @@
     else {
       const car = `${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
       const sit = s.resultado === 'complemento_fora_lista' ? situacaoUnidade(s) : '';
-      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'],
+      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'], rua_divergente: ['Outra rua', 'warn'],
         complemento_fora_lista: ['escolher', 'ambiguo'].includes(sit) ? ['Escolha a unidade', 'info'] : ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
       const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
       p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1]);
     }
     // 2 · DFV
     let p2;
-    if (!dfv) p2 = passo(2, '', 'DFV', 'fachadas próximas', 'painel DFV Sudeste · ao consultar', '—', 'dim');
+    if (!dfv) p2 = passo(2, '', 'DFV', 'fachadas próximas', 'painel DFV da Nio · ao consultar', '—', 'dim');
     else if (dfv.estado === 'rodando') p2 = passo(2, 'info', 'DFV', 'fachadas próximas', 'consultando o painel DFV da Nio…', 'consultando…', 'info');
     else if (dfv.estado === 'erro') p2 = passo(2, 'warn', 'DFV', 'fachadas próximas', `${esc(dfv.erro)} — use o mapa ao lado`, 'Indisponível', 'warn');
     else {
@@ -637,7 +637,12 @@
       html = caixa('Viável no portal', 'ok', `Endereço com viabilidade oficial da Nio${s.velocidade ? ` · até <b>${esc(s.velocidade)}</b>` : ''}.${s.endereco && s.endereco.viabilidade ? ` <span class="muted">${esc(s.endereco.viabilidade)}</span>` : ''}`, carPortal);
       acoesDec = [BT.pedido, BT.credito];
     } else if (p.estado === 'pronto' && r === 'sem_viabilidade') {
-      if (v === 'viavel' || v === 'elegivel') {
+      if (v === 'viavel') {   // 14/11 (0202, Helton): a própria fachada está viável no DFV — o "não" do portal pode ser de OUTRA rua do CEP
+        const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
+        const ruaD = dfv && dfv.r && dfv.r.fachada ? dfv.r.fachada.logradouro : '';
+        html = caixa('Conferir a rua no portal', 'warn', `O portal diz <b>sem viabilidade</b>, mas o DFV tem <b>esta fachada como viável</b>${ruaD ? ` (${esc(ruaD)})` : ''}. ${ruaP ? `O portal consultou <b>${esc(ruaP)}</b> — ` : ''}confira se é a rua do cliente: se não for, consulte de novo escolhendo a rua certa; se for, peça a liberação.`, `${carPortal} · ${carDfv}`);
+        acoesDec = ['<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.liberacao(), BT.mapa];
+      } else if (v === 'elegivel') {
         html = caixa('Elegível pelos 200 m', 'warn', `O portal diz <b>sem viabilidade</b>, mas o DFV tem ${v === 'viavel' ? 'esta fachada como viável' : 'fachadas viáveis neste CEP'}: a Nio instala até 200 m da última casa viável. Confira a distância no mapa e peça a liberação.`, `${carPortal} · ${carDfv}`);
         acoesDec = [BT.liberacao(), BT.mapa, BT.padrao];
       } else if (v === 'sem') {
@@ -662,6 +667,12 @@
         html = caixa('Unidade fora da lista do portal', 'warn', (semNenhuma ? '<b>O portal não tem nenhuma unidade cadastrada neste endereço.</b> ' : `A unidade "${esc((ultimo && ultimo.complemento) || '')}" não está entre as ${predio} do portal. `) + 'Pode já ter Nio nela (aí não dá para vender — confira no DFV) ou faltar o cadastro: peça à Nio pelo formulário e consulte de novo quando ela cadastrar. Para saber já o crédito do CPF, use o endereço padrão.', carPortal);
         acoesDec = [BT.cadastro(), BT.padrao, BT.conferirDfv];
       }
+    } else if (p.estado === 'pronto' && r === 'rua_divergente') {   // 14/11 (0202): o portal resolveu OUTRA rua do CEP
+      const e2 = s.endereco || {};
+      const ruaP = String(e2.resolvido || '').split(',')[0].trim();
+      const viaDfv = v === 'viavel' ? ' O DFV tem a fachada do cliente como viável.' : v === 'elegivel' ? ' O DFV tem fachadas viáveis neste CEP.' : '';
+      html = caixa('O portal consultou outra rua', 'warn', `${ruaP ? `O portal resolveu <b>${esc(ruaP)}</b>` : 'O portal não tem a rua do cliente na lista'}${e2.esperado ? ` e o cliente é da <b>${esc(e2.esperado)}</b>` : ''}. A viabilidade dessa outra rua não vale para o cliente — por isso o operador parou antes de consultar.${viaDfv} ${(s.opcoes && (s.opcoes.lista || []).length) ? 'Toque no endereço do cliente na lista abaixo.' : 'Confira o endereço com o cliente e consulte de novo no portal.'}`, carPortal);
+      acoesDec = ['<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.mapa];
     } else {   // portal fora / não classificado / erro → o DFV decide, marcado
       const motivo = p.estado === 'erro' ? (p.erro || 'sem resposta') : (s.motivo || r || '—');
       const faixa = `<div class="faixa amarelo"><strong>Portal da Nio não decidiu</strong><span>${esc(motivo)} — abaixo, só o DFV (retrato de ~15 dias). Confirme no portal antes de falar em instalação.</span></div>`;
@@ -901,6 +912,7 @@
     pendente: ['Pendente', 'warn', 'A Nio deixou a análise pendente. Consulte de novo mais tarde (o portal costuma pedir 24 h).'],
     nao_classificado: ['Não classificado', 'warn', 'O portal respondeu algo que o NIOGEN ainda não conhece. Leia a resposta do portal aqui embaixo e confira no portal.'],
     sem_viabilidade: ['Endereço sem viabilidade', 'warn', 'O endereço do cliente não tem viabilidade no portal. O crédito não foi consultado — use o endereço padrão para medir o crédito do CPF.'],
+    rua_divergente: ['O portal consultou outra rua', 'warn', 'O portal resolveu uma rua diferente da do cliente (CEP com mais de uma rua) e o operador parou antes de consultar. Escolha o endereço do cliente na lista e consulte de novo.'],
     complemento_fora_lista: ['Unidade fora da lista do portal', 'warn', 'A unidade do cliente não está na lista do portal. Para saber já o crédito do CPF, consulte com o endereço padrão.'],
     email_invalido: ['E-mail recusado pelo portal', 'warn', 'A Nio não aceitou este e-mail. Confira com o cliente — o mais comum é o domínio incompleto (ex.: "@uol.com" em vez de "@uol.com.br", "@bol.com" em vez de "@bol.com.br") — corrija e consulte de novo.'],
     contato_repetido: ['Celular recusado pelo portal', 'warn', 'A Nio não aceitou este celular: ele já aparece em pedidos demais. Use o celular do próprio cliente (outro número dele, se tiver) e consulte de novo.'],

@@ -157,7 +157,8 @@ def sem_pii(msg):
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'pedido_em_andamento',
               'sem_pedido_em_andamento',
-              'sem_viabilidade', 'complemento_fora_lista', 'erro_receita', 'contato_repetido', 'email_invalido', 'nao_classificado', 'erro')
+              'sem_viabilidade', 'complemento_fora_lista', 'rua_divergente', 'erro_receita', 'contato_repetido', 'email_invalido',
+              'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
@@ -204,6 +205,76 @@ def tem_numero(opcao, numero):
 def _sem_acento(t):
     import unicodedata
     return ''.join(c for c in unicodedata.normalize('NFD', str(t or '')) if unicodedata.category(c) != 'Mn')
+
+
+# ---- 14/11/2026 (Helton, CEP 36087-460 com DUAS ruas): o portal resolveu "Rua Alvaro Coelho De Andrade Lemos, 99" e o cliente é da
+# Rua Álvaro Cruz → "sem viabilidade" da rua errada. Antes de aceitar o endereço, o operador confere a RUA com a esperada (a que o
+# cliente confirmou, ou a do CEP pelo ViaCEP). docs/Prompt_dfv_api_e_rua_do_portal_141126_1935.md, parte B.
+# Tipo de via → forma única. Rua × Travessa do MESMO nome são ruas diferentes (visto em 14/11: "Travessa Grão Mogol" no lugar
+# de "Rua Grão Mogol", JF): quando os DOIS lados dizem o tipo e ele difere, é outra rua. Sem tipo num dos lados, o tipo não decide.
+RUA_TIPO = {'RUA': 'RUA', 'R': 'RUA', 'AV': 'AVENIDA', 'AVE': 'AVENIDA', 'AVENIDA': 'AVENIDA', 'TV': 'TRAVESSA', 'TRAV': 'TRAVESSA',
+            'TRAVESSA': 'TRAVESSA', 'AL': 'ALAMEDA', 'ALAMEDA': 'ALAMEDA', 'PC': 'PRACA', 'PCA': 'PRACA', 'PRACA': 'PRACA',
+            'EST': 'ESTRADA', 'ESTR': 'ESTRADA', 'ESTRADA': 'ESTRADA', 'ROD': 'RODOVIA', 'RODOVIA': 'RODOVIA', 'BC': 'BECO',
+            'BECO': 'BECO', 'LGO': 'LARGO', 'LARGO': 'LARGO', 'LADEIRA': 'LADEIRA', 'LD': 'LADEIRA', 'VIELA': 'VIELA', 'VLA': 'VIELA',
+            'PASSAGEM': 'PASSAGEM', 'PSG': 'PASSAGEM', 'SERVIDAO': 'SERVIDAO', 'VIA': 'VIA', 'ACESSO': 'ACESSO', 'RODOANEL': 'RODOANEL',
+            'CAMINHO': 'CAMINHO', 'TRECHO': 'TRECHO', 'QUADRA': 'QUADRA', 'Q': 'QUADRA', 'BOULEVARD': 'BOULEVARD', 'BLV': 'BOULEVARD',
+            'MARGINAL': 'MARGINAL'}
+RUA_TIPOS = set(RUA_TIPO)
+RUA_ABREV = {'DR': 'DOUTOR', 'DRA': 'DOUTORA', 'PROF': 'PROFESSOR', 'PROFA': 'PROFESSORA', 'CEL': 'CORONEL', 'STA': 'SANTA',
+             'STO': 'SANTO', 'S': 'SAO', 'PE': 'PADRE', 'PDE': 'PADRE', 'GAL': 'GENERAL', 'GEN': 'GENERAL', 'MAL': 'MARECHAL',
+             'ENG': 'ENGENHEIRO', 'DEP': 'DEPUTADO', 'SEN': 'SENADOR', 'VER': 'VEREADOR', 'PRES': 'PRESIDENTE', 'CAP': 'CAPITAO',
+             'TEN': 'TENENTE', 'SGT': 'SARGENTO', 'MONS': 'MONSENHOR', 'ALM': 'ALMIRANTE', 'BRIG': 'BRIGADEIRO', 'VISC': 'VISCONDE',
+             'CONS': 'CONSELHEIRO', 'CDE': 'CONDE', 'JD': 'JARDIM', 'VL': 'VILA', 'NSA': 'NOSSA', 'NS': 'NOSSA', 'N': 'NOSSA',
+             'SRA': 'SENHORA', 'GOV': 'GOVERNADOR', 'MIN': 'MINISTRO', 'DES': 'DESEMBARGADOR', 'IRM': 'IRMA', 'FR': 'FREI'}
+RUA_ABREV['D'] = 'DOM'
+RUA_LIGA = {'DE', 'DA', 'DO', 'DAS', 'DOS', 'E'}
+
+
+def rua_partes(t):
+    """'Rua Dr. João Pinheiro, 99 - Centro, Juiz de Fora - MG' → ('RUA', ['DOUTOR', 'JOAO', 'PINHEIRO']): tipo da via (ou None) e o
+    nome sem de/da/do, abreviações por extenso. Só o que vem antes da 1ª vírgula ou do ' - ' (o resto é número, bairro e cidade)."""
+    x = _sem_acento(str(t or '')).upper()
+    x = re.split(r',|\s-\s', x, maxsplit=1)[0]
+    x = re.sub(r'\(.*?\)', ' ', x)
+    toks = [w for w in re.sub(r'[^A-Z0-9]+', ' ', x).split() if w]
+    tipo = None
+    while toks and toks[0] in RUA_TIPOS and len(toks) > 1:
+        tipo = tipo or RUA_TIPO[toks[0]]
+        toks = toks[1:]
+    toks = [RUA_ABREV.get(w, w) for w in toks]
+    return tipo, [w for w in toks if w not in RUA_LIGA]
+
+
+def rua_tokens(t):
+    return rua_partes(t)[1]
+
+
+def mesma_rua(a, b):
+    """True = mesma rua · False = outra rua · None = não dá para dizer (um dos dois vazio). Tipo diferente com os dois lados
+    dizendo o tipo (Rua × Travessa) = outra rua. Nome: iguais, ou um é subsequência do outro com ≥ 2 nomes e o mesmo último
+    nome ("Doutor João Pinheiro" × "João Pinheiro")."""
+    (tpa, ta), (tpb, tb) = rua_partes(a), rua_partes(b)
+    if not ta or not tb:
+        return None
+    if tpa and tpb and tpa != tpb:
+        return False
+    if ta == tb:
+        return True
+    curto, longo = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
+    if len(curto) >= 2 and curto[-1] == longo[-1]:
+        it = iter(longo)
+        if all(w in it for w in curto):
+            return True
+    return False
+
+
+def opcao_da_rua(opcoes, rua, numero):
+    """Opção da lista do portal com a MESMA rua e o MESMO número (ou, sem número, a única da rua). Nunca devolve outra rua."""
+    da_rua = [o for o in opcoes if mesma_rua(o, rua)]
+    if numero:
+        com_num = [o for o in da_rua if tem_numero(o, numero)]
+        return com_num[0] if com_num else None
+    return da_rua[0] if len(da_rua) == 1 else None
 
 
 RE_BLOCO = re.compile(r'^\s*(?:bl(?:oco)?|torre|tr|ed(?:if[ií]cio)?)\.?\s*([a-z0-9]+)', re.I)
@@ -703,6 +774,7 @@ class Consulta:
             raise Parar('sem_viabilidade')
         if not ref:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='endereço não resolveu na Etapa 2')
+        ref = self.conferir_rua(e, ref)
         self.complemento(str(e.get('complemento') or '').strip())
         self.preencher(ref, e.get('referencia') or 'Sem referência', devagar=False)
         try:
@@ -730,6 +802,56 @@ class Consulta:
         self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
         raise Parar('sem_viabilidade')
 
+    def conferir_rua(self, e, ref):
+        """14/11 (Helton): depois do Buscar o portal pode preencher SOZINHO outra rua do mesmo CEP. Antes de Avançar, compara a rua
+        resolvida com a esperada. Diferente → abre a lista de "Endereço de instalação" e escolhe a da rua certa (mesma rua e
+        mesmo número); sem ela, PARA com rua_divergente — o modal de viabilidade de uma rua errada nunca vira "sem viabilidade".
+        Opção tocada na tela (e['opcao']) é escolha do humano: não confere. Sem rua esperada: como antes."""
+        rua = str(e.get('logradouro_esperado') or '').strip()
+        if not rua or str(e.get('opcao') or '').strip():
+            return ref
+        try:
+            resolvido = self.page.evaluate(ENDERECO_JS)
+        except Exception:  # noqa: BLE001
+            resolvido = None
+        if mesma_rua(resolvido, rua) is not False:
+            return ref
+        num = str(e.get('numero') or '').strip()
+        ops = []
+        try:
+            self.clicar(self.page.locator('input[placeholder="Endereço de instalação"]').first)
+            fim = time.time() + 6
+            while time.time() < fim:
+                info = self.page.evaluate(ENDERECO_OPCOES_JS)
+                if info and info.get('aberto'):
+                    ops = info['opcoes']
+                    break
+                self.page.wait_for_timeout(500)
+        except TravaAcionada:
+            raise
+        except Exception:  # noqa: BLE001
+            ops = []
+        alvo = opcao_da_rua(ops, rua, num) if ops else None
+        if alvo:
+            self.clicar(self.page.locator('input[placeholder="Endereço de instalação"] ~ ul li', has_text=alvo).first)
+            self.page.wait_for_timeout(1500)
+            novo = self.resolver_endereco(e)
+            try:
+                resolvido2 = self.page.evaluate(ENDERECO_JS)
+            except Exception:  # noqa: BLE001
+                resolvido2 = None
+            if novo is not None and mesma_rua(resolvido2, rua) is not False:
+                self.out['rua_corrigida'] = {'de': sem_pii(resolvido), 'para': sem_pii(resolvido2)}
+                return novo
+        try:
+            self.page.keyboard.press('Escape')
+        except Exception:  # noqa: BLE001
+            pass
+        self.out['endereco'] = {'origem': self.p['origem_endereco'], 'resolvido': resolvido, 'esperado': rua, 'viabilidade': None}
+        raise Parar('rua_divergente', motivo=f'o portal resolveu "{str(resolvido or "?").split(",")[0].strip()}" e o cliente é '
+                                             f'da "{rua}" — escolha o endereço certo',
+                    opcoes={'tipo': 'endereco', 'lista': ops[:30]} if ops else None)
+
     def resolver_endereco(self, e):
         """Depois do Buscar: espera a Referência habilitar. Se o CEP trouxe mais de um endereço, o portal abre uma lista
         em "Endereço de instalação" e espera a escolha (visto em 11/11 com um CEP de várias ruas/complementos): escolhe a
@@ -756,11 +878,19 @@ class Consulta:
                 num = str(e.get('numero') or '').strip()
                 alvo = None
                 escolhida = str(e.get('opcao') or '').strip()     # opção tocada na tela do NIOGEN (texto exato)
+                rua = str(e.get('logradouro_esperado') or '').strip()
                 if escolhida:
                     alvo = next((o for o in ops if o.strip() == escolhida), None) or escolher_opcao(ops, escolhida)
-                if alvo is None and num:
+                elif rua:
+                    # 14/11 (Helton): com a rua esperada, só a opção da MESMA rua e do mesmo número — nunca a 1ª com o número.
+                    alvo = opcao_da_rua(ops, rua, num)
+                    if alvo is None and not any(mesma_rua(o, rua) for o in ops):
+                        self.out['endereco'] = {'origem': self.p['origem_endereco'], 'resolvido': None, 'esperado': rua, 'viabilidade': None}
+                        raise Parar('rua_divergente', motivo=f'o portal não tem "{rua}" na lista deste CEP — escolha o endereço certo',
+                                    opcoes={'tipo': 'endereco', 'lista': ops[:30]})
+                if alvo is None and num and not rua:
                     alvo = next((o for o in ops if tem_numero(o, num)), None)
-                if alvo is None and len(ops) == 1:
+                if alvo is None and len(ops) == 1 and not (rua and mesma_rua(ops[0], rua) is False):
                     alvo = ops[0]
                 if alvo is None:
                     raise Parar('nao_classificado', texto_tela=sem_pii('CEP com mais de um endereço; nenhum com o número '

@@ -3,6 +3,8 @@
 //   {acao: 'iniciar', cpf, endereco?, contato?, autorizado} → exige autorizado === true e CPF com dígito válido →
 //        POST {CREDITO_OP_URL}/credito (X-Portal-Secret) → {job_id, posicao_fila, estado} (cache 24 h → já vem pronto)
 //   {acao: 'status', job_id}                               → GET {CREDITO_OP_URL}/credito/{job_id}
+//   14/11: endereco.logradouro_esperado (rua confirmada pelo cliente ou a do ViaCEP) vai ao operador, que confere a rua resolvida
+//        pelo portal antes de aceitar (resultado novo rua_divergente). Ver ruaEsperada() no fim.
 //   {acao: 'viabilidade', endereco}                       → POST {CREDITO_OP_URL}/credito/viabilidade — SÓ Etapas 0–2 do
 //        portal, sem CPF/contato (11/11 ~21h, docs/Prompt_consulta_unificada_111126_2045.md). Qualquer usuário logado.
 //   {acao: 'print', job_id}                                → GET {CREDITO_OP_URL}/credito/print/{job_id} — print da tela do portal
@@ -149,6 +151,7 @@ Deno.serve(async (req) => {
           cep: so(e.cep), numero: String(e.numero ?? '').trim().slice(0, 20),
           complemento: String(e.complemento ?? '').trim().slice(0, 60), referencia: String(e.referencia ?? '').trim().slice(0, 80),
           opcao: String(e.opcao ?? '').trim().slice(0, 200),   // endereço escolhido na lista do portal (botão da tela)
+          logradouro_esperado: await ruaEsperada(e),
         };
       }
       const c = b.contato ?? null;
@@ -165,6 +168,7 @@ Deno.serve(async (req) => {
           cep: so(e.cep), numero: String(e.numero ?? '').trim().slice(0, 20),
           complemento: String(e.complemento ?? '').trim().slice(0, 60), referencia: String(e.referencia ?? '').trim().slice(0, 80),
           opcao: String(e.opcao ?? '').trim().slice(0, 200),
+          logradouro_esperado: await ruaEsperada(e),
         },
       };
       r = await fetch(`${opUrl}/credito/viabilidade`, { method: 'POST', headers: hdr, body: JSON.stringify(corpo), signal: AbortSignal.timeout(15000) });
@@ -203,3 +207,22 @@ Deno.serve(async (req) => {
     return json({ error: m }, 502);
   }
 });
+
+// 14/11/2026 (Helton — docs/Prompt_dfv_api_e_rua_do_portal_141126_1935.md, parte B): a rua que o operador confere antes de aceitar o
+// endereço que o portal resolveu. Vem do pedido (a rua que o cliente confirmou, mandada pela Mari/tela) ou, sem ela, do ViaCEP
+// pelo CEP (só o CEP sai daqui; 4 s no máximo). Sem nenhuma das duas: '' e o operador segue como antes. Opção tocada na tela
+// (e.opcao) é escolha do humano — o operador não confere.
+// deno-lint-ignore no-explicit-any
+async function ruaEsperada(e: any): Promise<string> {
+  const dada = String(e?.logradouro_esperado ?? '').trim().slice(0, 120);
+  if (dada || String(e?.opcao ?? '').trim()) return dada;
+  const cep = so(e?.cep);
+  if (cep.length !== 8) return '';
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`, { signal: AbortSignal.timeout(4000) });
+    const d = await r.json().catch(() => null);
+    return d && !d.erro ? String(d.logradouro ?? '').trim().slice(0, 120) : '';
+  } catch {
+    return '';
+  }
+}

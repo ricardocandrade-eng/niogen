@@ -112,7 +112,8 @@ def build(ids):
         http('2 · Supabase pendentes', f'{dm.SB}/rest/v1/rpc/mari_viab_pendentes', '={{ JSON.stringify({ p_limite: 1 }) }}', 240, 100,
              retryOnFail=True, maxTries=2, waitBetweenTries=5000)
         http('3 · Pedir ao portal', EDGE_CRED,
-             "={{ JSON.stringify({ acao: 'viabilidade', endereco: { cep: $json.cep, numero: $json.numero, complemento: $json.complemento } }) }}",
+             # 14/11 (0202, Helton): + a rua esperada — o operador confere a rua que o portal resolveu antes de aceitar
+             "={{ JSON.stringify({ acao: 'viabilidade', endereco: { cep: $json.cep, numero: $json.numero, complemento: $json.complemento, logradouro_esperado: $json.logradouro_esperado || '' } }) }}",
              480, 100, full=True, onError='continueRegularOutput')
     add('4 · Estado', 'n8n-nodes-base.code', 2, {'jsCode': JS_ESTADO.replace('%MAX%', str(MAX_VOLTAS)).strip()}, 720, 100)
     se('5 · Terminou?', '={{ $json.fim }}', 940, 100)

@@ -288,6 +288,7 @@
     conf_tentar: 'Põe a ação de volta na fila: o Chatwoot recebe em até 1 minuto.',
     conf_dispensar: 'Tira a linha sem refazer a ação. Use só se o caso já foi resolvido de outro jeito.',
     conf_visto: 'Tira a linha. A conversa continua como está no Chatwoot.',
+    conf_conferir_rua: 'Portal: outra rua (0202). O portal consultou uma rua diferente da do cliente (CEP com mais de uma rua) ou disse "sem viabilidade" com a fachada viável no DFV. O que fazer: abra o cliente, refaça a viabilidade na Cobertura tocando na rua do cliente; se o portal mantiver o "não" na rua certa, peça a liberação. Depois, "Conferi". Prazo: 4 h. A Mari não nega nada ao cliente enquanto isso.',
     // situação da conversa
     sit_andamento: 'Em andamento: a Mari ainda está conversando com o cliente. Nada a fazer — acompanhe pela conversa.',
     sit_qualificada: 'Qualificada: a Mari juntou os dados e passou para o time (a venda nasceu em 0 · Qualificado). Próximo passo: consultar a viabilidade no portal e abrir o pedido.',

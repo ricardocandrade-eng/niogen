@@ -84,7 +84,7 @@
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ acao: 'viabilidade', endereco: { cep: $json.cep, numero: $json.numero, complemento: $json.complemento } }) }}",
+        "jsonBody": "={{ JSON.stringify({ acao: 'viabilidade', endereco: { cep: $json.cep, numero: $json.numero, complemento: $json.complemento, logradouro_esperado: $json.logradouro_esperado || '' } }) }}",
         "options": {
           "timeout": 30000,
           "response": {

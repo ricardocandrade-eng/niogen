@@ -85,6 +85,8 @@ def chave_viab(endereco, sal):
     """Chave do cache de viabilidade: CEP · número · complemento · opção, sem caixa e espaços repetidos (com letras)."""
     norm = lambda t: ' '.join(str(t or '').lower().split())   # noqa: E731
     base = '|'.join(norm(endereco.get(k)) for k in ('cep', 'numero', 'complemento', 'opcao'))
+    if norm(endereco.get('logradouro_esperado')):     # 14/11: com rua esperada, não reaproveita a consulta feita sem ela
+        base += '|' + norm(endereco.get('logradouro_esperado'))
     return hashlib.sha256((str(sal or '') + '|' + base).encode()).hexdigest()
 
 
@@ -397,7 +399,8 @@ def novo_job_credito(b):
         endereco = {'cep': cr.so_digitos(end_in.get('cep')), 'numero': str(end_in.get('numero') or '').strip()[:20],
                     'complemento': str(end_in.get('complemento') or '').strip()[:60],
                     'referencia': str(end_in.get('referencia') or '').strip()[:80] or 'Sem referência',
-                    'opcao': str(end_in.get('opcao') or '').strip()[:200]}
+                    'opcao': str(end_in.get('opcao') or '').strip()[:200],
+                    'logradouro_esperado': str(end_in.get('logradouro_esperado') or '').strip()[:120]}
         origem_end = 'cliente'
     else:
         if len(cfg['end_cep']) != 8:
@@ -491,7 +494,9 @@ def novo_job_viabilidade(b):
     endereco = {'cep': cep, 'numero': str(e.get('numero') or '').strip()[:20],
                 'complemento': str(e.get('complemento') or '').strip()[:60],
                 'referencia': str(e.get('referencia') or '').strip()[:80] or 'Sem referência',
-                'opcao': str(e.get('opcao') or '').strip()[:200]}
+                'opcao': str(e.get('opcao') or '').strip()[:200],
+                # 14/11 (Helton): rua que o cliente confirmou ou a do CEP — o operador confere antes de aceitar o endereço do portal
+                'logradouro_esperado': str(e.get('logradouro_esperado') or '').strip()[:120]}
     # 12/11 00h10: a chave guarda o TEXTO do complemento. Antes passava por cpf_chave (só dígitos) e "Casa A" virava "" —
     # caía no cache da consulta sem complemento e voltava "escolha a unidade" mesmo depois de tocar na unidade.
     chave = 'v:' + chave_viab(endereco, cfg['sal'])

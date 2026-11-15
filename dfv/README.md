@@ -4,7 +4,23 @@
 
 # Operador DFV — Cobertura ao vivo
 
-## Caminho de uma consulta
+## 14/11/2026 — a DFV sai pela API do Power BI (o operador abaixo virou reserva até 21/11)
+Prompt `docs/Prompt_dfv_api_e_rua_do_portal_141126_1935.md` (Drive). Ordem nova na edge function **`dfv-consulta`**:
+1. **API do Power BI**: o mesmo `querydata` da tabela `BASE_HP_F` que o operador repetia de dentro da página, chamado direto
+   (liberado pelo Rogério/Nio). A região sai pela faixa do CEP. Chave (`X-PowerBI-ResourceKey`) e `modelId` de cada uma das **5 regiões**
+   (SP, Sudeste, NN, CO, Sul) ficam em `config_regras.dfv_api.regioes`, gravados pelo CLI e **nunca no repo** (migration `0201`). Uma
+   chamada traz o CEP inteiro **com lat/long**: ~0,4–1,0 s, cache de 10 min por CEP. A resposta tem o mesmo formato do `GET /dfv` abaixo,
+   com `fonte: 'api'`, `regiao` e `colunas` (`completas` ou `base`, as 11 do documento do Rogério se um modelo recusar uma coluna).
+   `HPS`/`HCS` não existem na tabela: `hps`/`hcs` vêm de `HP_TOT`/`HC_TOT`. A tabela repete a fachada quando muda outra coluna, então a
+   função tira as duplicadas (rua · número · complementos).
+2. Erro na API, ou `dfv_api.ligado = false` (desliga sem deploy) → o **operador `niogen-dfv`** da VPS (abaixo), com `motivo_api` na resposta.
+3. Operador fora → base congelada (`dfv_consultar`), como antes.
+Conferência diária: o item `dfv_pela_api` fica amarelo se mais de 5 % das consultas de 24 h saírem fora da API (a Nio republicou o relatório?).
+CEPs de teste (14/11): Sudeste `36087460` nº 99 (exato) · SP `01227200` · Sul `80010000` · CO `70040020` · NN `40010000`.
+**Atenção, CEP com mais de uma rua:** o casamento é pelo número, não pela rua (o `36087460` tem a Rua Alvaro Cruz e a Rua Alvaro Coelho
+de Andrade Lemos). Quem confere a rua é o operador do portal (`portal/credito.py`, `mesma_rua`).
+
+## Caminho de uma consulta (operador da VPS — reserva)
 `cobertura.html` → `NG.dfvAoVivo()` → edge function **`dfv-consulta`** (usuário logado) → `GET {DFV_OP_URL}/dfv?cep=&numero=&complemento=[&uf=&municipio=]`
 com `Authorization: Bearer DFV_OP_TOKEN` → operador **`niogen-dfv`** na VPS do n8n → JSON.
 Operador sem resposta em 12 s (`DFV_OP_TIMEOUT_MS`) ou com erro → a função chama a RPC `dfv_consultar` (base congelada de JF, `nio_hp`)
