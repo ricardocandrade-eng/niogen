@@ -3267,3 +3267,8 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc2 .fc-tit .fc-hag:hover .fc2-ag-t b { text-decoration: underline; text-underline-offset: 3px; }
 .fc2 .fc-tit .fc-hag .fc2-ag-k { color: #B8433B; font-size: 11px; }
 .fc2 .fc-tit .fc-hag .fc-hag-bt { color: #8D97A3; }
+/* 15/11 noite: cadência inteira na trilha — passo que não se aplica agora fica apagado */
+.fc-cb-tri .fc-cb-p { min-width: 46px; }
+.fc-cb-tri .fc-cb-p.s-na { opacity: .45; }
+.fc-cb-tri .fc-cb-p.s-na i { border-style: dotted; }
+.fc-cb-tri .fc-cb-h .btn-sm { height: 26px; min-height: 26px; font-size: 12px; }

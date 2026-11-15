@@ -3427,6 +3427,25 @@
       p.tit = `${p.rot} · ${CAD_O_QUE[p.cod] || ''}${p.st === 'ok' ? (p.em ? ` · saiu ${NG.fmtDataHora(new Date(p.em).toISOString())}` : ' · saiu') : p.st === 'pul' ? ' · não saiu (passou a hora ou a janela fechou)' : p.st === 'prox' ? ` · próximo, ${cadQuando(p.em)}` : ''}`;
     });
     P.passos = seq;
+    // 15/11 noite (Ricardo: "a cadência da Mari deve mostrar F1 F2 F3 D3 D7 D15 e por aí vai"): para a trilha do pé da ficha, a
+    // cadência inteira — os passos desta rodada com o estado de agora; os outros com o que já saiu (histórico) ou "não se aplica agora".
+    const hist = (cod) => [...lista].reverse().find((t) => t.tags.cadencia === cod || (cod === 'F1' && t.tags.cadencia === 'L15'));
+    const todo = (cod) => {
+      const ja = seq.find((x) => x.cod === cod);
+      if (ja) return ja;
+      const t = hist(cod);
+      const q = mk(cod);
+      if (t) { q.st = 'ok'; q.em = ms(t.created_at); q.texto = t.texto; q.sub = cadCurto(q.em); } else q.st = 'na';
+      q.tit = `${q.rot} · ${CAD_O_QUE[cod] || ''}${t ? ` · saiu ${NG.fmtDataHora(t.created_at)}` : ' · não se aplica agora'}`;
+      return q;
+    };
+    const extra = [...(hist('P1') ? ['P1'] : []), ...seq.filter((x) => ['P1', 'RETORNO'].includes(x.cod)).map((x) => x.cod)];
+    P.todos = [
+      { rot: 'Janela de 24 h', dica: A.cad_janela, passos: [...new Set([...extra, 'F1', 'F2', 'F3', 'F4', 'F5'])].map(todo) },
+      { rot: 'Retomada', dica: A.cad_retomada, passos: ['D3', 'LIG', 'D7', 'D15', 'FIM'].map(todo) },
+      { rot: 'Biometria', dica: A.cad_venda, passos: ['BIO1', 'BIO3'].map(todo) },
+      { rot: 'Instalação', dica: A.cad_venda, passos: ['INSTALACAO', 'VESPERA'].map(todo) },
+    ];
 
     // Por que está parada (o mesmo texto do banco, na língua de quem atende) — a ordem é a da mari_cadencia_avaliar.
     const comPessoa = dn.tipo === 'pessoa' || dn.tipo === 'time' || c.humano_atribuido || c.time_atribuido;
@@ -3485,14 +3504,15 @@
   function cadFaixa(P, solta, trilha) {
     if (!P) return '';
     const A = NG.ajuda;
-    const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○' };
+    const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○', na: '' };
+    const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno' };
     const passo = (p) => `<button type="button" class="fc-cb-p s-${p.st}${fc.cadp === p.cod ? ' on' : ''}" data-f="fc-cadp" data-c="${p.cod}" title="${esc(p.tit)}" aria-pressed="${fc.cadp === p.cod}">
-        <i aria-hidden="true">${ic[p.st]}</i><b>${esc(p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
-    const grupos = P.grupos.filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
-    const sel = fc.cadp && P.passos.find((p) => p.cod === fc.cadp);
+        <i aria-hidden="true">${ic[p.st]}</i><b>${esc(trilha ? COD[p.cod] || p.cod : p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
+    const grupos = ((trilha && P.todos) || P.grupos).filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
+    const sel = fc.cadp && ((trilha && P.todos ? P.todos.flatMap((g) => g.passos) : P.passos).find((p) => p.cod === fc.cadp));
     let pe;
     if (sel) {
-      const quando = sel.st === 'ok' ? `saiu ${NG.fmtDataHora(new Date(sel.em).toISOString())}${sel.simulado ? ' (simulado)' : ''}` : sel.st === 'prox' ? `próximo, ${cadQuando(sel.em)}` : sel.st === 'pul' ? 'não saiu' : sel.prev ? `previsto ~${cadDia(sel.prev)}` : 'futuro';
+      const quando = sel.st === 'ok' ? `saiu ${NG.fmtDataHora(new Date(sel.em).toISOString())}${sel.simulado ? ' (simulado)' : ''}` : sel.st === 'prox' ? `próximo, ${cadQuando(sel.em)}` : sel.st === 'pul' ? 'não saiu' : sel.st === 'na' ? 'não se aplica agora' : sel.prev ? `previsto ~${cadDia(sel.prev)}` : 'futuro';
       const txt = sel.texto ? `<q>${esc(String(sel.texto).slice(0, 600))}</q>` : `<span class="apagado">${esc(CAD_O_QUE[sel.cod] || '')}${sel.st === 'fut' ? ' · o texto depende da conversa na hora do envio' : ''}</span>`;
       pe = `<div class="fc-cb-f sel"><span><b>${esc(sel.rot)}</b> · ${esc(quando)}<br>${txt}</span><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-cadp" data-c="${sel.cod}" aria-label="Fechar o texto">${IC.x}</button></div>`;
     } else {
@@ -3505,9 +3525,9 @@
       // 15/11 noite (Ricardo: "antes era uma trilha, com toda a cadência dela, e ao clicar abria um balão com o texto do template"):
       // no pé da ficha a cadência inteira fica à vista como trilha; o passo clicado abre um balão com o texto que saiu (ou sai).
       const bal = sel ? `<div class="fc-cb-bal" role="dialog" aria-label="Texto do lembrete">${pe.replace('class="fc-cb-f sel"', 'class="fc-cb-balc"')}</div>` : '';
-      const resumo = `<div class="fc-cb-f t-${P.tom}"><span>${P.linha}</span><span class="fc-sp"></span>${P.acao}${P.anteriores ? `<button type="button" class="fc-link" data-f="fc-cadhist" title="${esc(A.cad_anteriores)}">${P.anteriores} antes</button>` : ''}</div>`;
-      return `<section class="fc-cb fc-cb-tri t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span><span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
-        ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${resumo}${bal}</section>`;
+      // sem o texto-resumo embaixo (Ricardo, 15/11 noite): o estado fica no selo; a ação (ex.: Devolver para a Mari) sobe para o cabeçalho
+      return `<section class="fc-cb fc-cb-tri t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span>${P.acao}<span class="fc-pill ${P.pillCls}" title="${esc(String(P.linha || '').replace(/<[^>]+>/g, ''))}">${esc(P.pill)}</span></div>
+        ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${bal}</section>`;
     }
     const tg = grupos ? `<button type="button" class="fc-link fc-cb-tg" data-f="fc-cadtg" aria-expanded="${aberto}">${aberto ? 'fechar ▴' : 'ver etapas ▾'}</button>` : '';
     return `<section class="fc-cb${solta ? ' solta' : ''}${aberto ? '' : ' fechado'} t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span>${tg}<span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
