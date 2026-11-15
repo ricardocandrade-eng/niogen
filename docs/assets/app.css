@@ -2830,3 +2830,10 @@ select option:disabled { color: var(--muted); }
 .fc2 .cvp-raiz.cheia .cvp-l2 { height: 32px; padding: 0 12px; }
 .fc2 .fc-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fc2 .fc-dono-k { color: #7F8A96; }
+
+/* 15/11: mapa da Nio (DFV) na etapa Viabilidade — clientes Nio na fachada, portas livres, classificação, crédito do bairro */
+.fc2-dfv { display: flex; flex-direction: column; gap: 5px; padding: 8px 10px; border: 1px solid #262E38; border-radius: 9px; background: #10151B; }
+.fc2-dfv-h { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #9AA4B0; }
+.fc2-dfv-h .apagado { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.fc-aviso.bad { background: rgba(244, 112, 103, .08); border-color: #5A2B2B; }
+.fc2-fv.risco { color: #F47067; font-weight: 600; }

@@ -2675,7 +2675,7 @@
   let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
   let cvCheia = null;      // NGConversa montado na metade esquerda
   let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
-  const novoFc = () => ({ cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
+  const novoFc = () => ({ dfv: undefined, cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
   let fc = novoFc();
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -2855,13 +2855,13 @@
         ${linhaDet('Hoje na ficha', `<span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? ` até ${esc(c.nio_viab_velocidade)}` : ''}${quando ? ` <small class="apagado">· ${esc(NG.fmtDataHora(quando))}</small>` : ''}`)}
         ${rc ? `<div class="fc-aviso warn">Cliente: <b>${esc(rc.esperada || convLogr(c) || '?')}</b> · portal consultou: <b>${esc(String(rc.portal || '?').split(',')[0])}</b></div>` : ''}
         ${dec === 'viavel' && !rc ? '<div class="nota-campo">Nada a fazer: a viabilidade já está gravada.</div>' : ''}
-        ${opPainel('viab')}`;
+        ${dfvBloco()}${opPainel('viab')}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
         ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
         ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
-        ${!conv ? linhaDet('Pista do DFV', esc(pistaDfv(v).txt)) : ''}
+        ${!conv ? dfvBloco() : ''}
         ${fonte(conv ? 'Mari / portal' : v.nio_viab_origem === 'manual' ? 'registrada à mão (portal PAP)' : v.nio_viab_origem ? `portal PAP · ${v.nio_viab_origem}` : 'portal PAP')}
         ${opPainel('viab')}
         ${!conv && v.status !== 'saida' && ehBO() ? `<div class="fc-op-bts"><a class="btn btn-sm" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal">Abrir o portal ↗</a><button type="button" class="btn btn-sm" data-f="viab-form">Registrar resultado à mão</button></div>` : ''}`;
@@ -2869,7 +2869,8 @@
       const cc = conv ? d.conv : null;
       const padraoC = cc && cc.credito_endereco === 'padrao' && /^aprovado/.test(cc.credito_resultado || '');
       corpo = conv ? `${linhaDet('Resultado', cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
-        ${padraoC ? '<div class="fc-aviso warn"><b>Lido no endereço PADRÃO, não no do cliente.</b> O antifraude da Nio olha o endereço: consulte de novo aqui (com o endereço do cliente) antes do pedido.</div>' : ''}${opPainel('cred')}`
+        ${padraoC ? '<div class="fc-aviso warn"><b>Lido no endereço PADRÃO, não no do cliente.</b> O antifraude da Nio olha o endereço: consulte de novo aqui (com o endereço do cliente) antes do pedido.</div>' : ''}
+        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
     } else if (p.k === 'bio') {
@@ -3512,6 +3513,58 @@
   // ======================================================================================================================
   const ICL = { lapis: SVG('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
     cadeado: SVG('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>'), alerta: SVG('<path d="M12 7v6"/><path d="M12 17h.01"/>') };
+  // 15/11 (Ricardo: "é interessante eu ter essa informação do DFV, de que já tem Nio nesse endereço ou qualquer outro retorno"):
+  // a ficha lê a DFV ao vivo (API do Power BI, ~1 s) uma vez ao abrir, sem travar a tela. HC = clientes Nio na fachada;
+  // HP livre = portas livres. Cliente Nio no endereço + nenhuma porta livre = recompra possível e explica "Critérios Antifraude".
+  function dfvEnd() {
+    const v = d && !d.soConversa ? d.v : null;
+    const c = d && d.soConversa ? d.conv : null;
+    const cep = NG.soDigitos(v ? v.cep : (c && c.cep) || '');
+    const numero = String(v ? v.numero || '' : (c && c.numero) || '').trim();
+    return cep.length === 8 && numero ? { cep, numero, complemento: String(v ? v.complemento || '' : (c && c.complemento) || '').trim() } : null;
+  }
+  function carregarDfvFicha() {
+    const e = dfvEnd();
+    if (!e) { fc.dfv = null; return; }
+    const alvo = idAtual;
+    fc.dfv = { estado: 'rodando' };
+    NG.dfvAoVivo(e).then((r) => { if (idAtual === alvo && d) { fc.dfv = { estado: 'pronto', r }; render(); } },
+      (err) => { if (idAtual === alvo && d) { fc.dfv = { estado: 'erro', erro: NG.msgErro(err) }; render(); } });
+  }
+  // {nio: n de clientes Nio na fachada, livre, total, fach, r} ou null
+  function dfvLeitura() {
+    const x = fc.dfv;
+    if (!x || x.estado !== 'pronto' || !x.r || x.r.fonte === 'base_congelada') return null;
+    const f = x.r.fachada || null;
+    return { r: x.r, f, nio: f ? Number(f.hcs || 0) : null, livre: f && f.hp_livre != null ? Number(f.hp_livre) : null, total: f && f.hps != null ? Number(f.hps) : null };
+  }
+  const dfvNioTxt = () => {
+    const L = dfvLeitura();
+    if (!L) return fc.dfv && fc.dfv.estado === 'rodando' ? 'consultando o mapa da Nio…' : null;
+    if (!L.f) return 'número fora da lista de viáveis do CEP';
+    return L.nio > 0 ? `JÁ TEM Nio: ${L.nio} cliente${L.nio > 1 ? 's' : ''} na fachada · ${L.livre ?? '?'} porta${L.livre === 1 ? '' : 's'} livre${L.livre === 1 ? '' : 's'}` : `nenhum cliente Nio · ${L.livre ?? '?'} porta${L.livre === 1 ? '' : 's'} livre${L.livre === 1 ? '' : 's'}`;
+  };
+  const dfvRisco = () => { const L = dfvLeitura(); return !!(L && L.f && L.nio > 0); };
+  function dfvBloco() {
+    const x = fc.dfv;
+    if (x === null) return '<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)</div><span class="apagado">sem CEP e número para consultar</span></div>';
+    if (!x || x.estado === 'rodando') return '<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)</div><span class="apagado">consultando… (uns 2 s)</span></div>';
+    if (x.estado === 'erro') return `<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)</div><span class="apagado">não respondeu: ${esc(x.erro || '')}</span></div>`;
+    const r = x.r || {};
+    if (r.fonte === 'base_congelada') return '<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)</div><span class="apagado">painel ao vivo fora — só a base congelada de JF</span></div>';
+    const L = dfvLeitura();
+    const f = L && L.f;
+    const lin = (k, val, cls = '') => `<div class="fc-dr"><span>${esc(k)}</span><b class="${cls}">${val}</b></div>`;
+    const aviso = f && L.nio > 0
+      ? `<div class="fc-aviso ${L.livre === 0 ? 'bad' : 'warn'}"><b>Já existe cliente Nio neste endereço${L.livre === 0 ? ' e não há porta livre' : ''}.</b> Confira se é o próprio cliente ou alguém da casa: aí é <b>recompra</b> (estorno + multa de R$ 500). Isso também costuma aparecer no portal como "Negado – Critérios Antifraude".</div>` : '';
+    return `<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)<span class="apagado">${r.atualizado_painel ? ` · base de ${esc(r.atualizado_painel)}` : ''}${r.regiao ? ` · ${esc(r.regiao)}` : ''}</span></div>
+      ${lin('Este número', f ? `viável · ${esc(f.logradouro || '')}, ${esc(f.numero || '')}${f.complemento ? ` ${esc(f.complemento)}` : ''}` : `não está entre as ${esc(String(r.total_fachadas_no_cep || 0))} fachadas viáveis do CEP`, f ? 'ok-txt' : 'warn-txt')}
+      ${f ? lin('Clientes Nio aqui', `${L.nio > 0 ? `<b class="bad-txt">${L.nio}</b>` : '0'} de ${L.total ?? '?'} ${L.total === 1 ? 'casa/unidade' : 'unidades'} · portas livres: ${L.livre ?? '?'}`) : ''}
+      ${aviso}
+      ${f ? lin('Classificação', esc([f.classificacao, f.celula].filter(Boolean).join(' · ') || '—')) : ''}
+      ${f && f.cd_cdo ? lin('CDO', `<span class="mono">${esc(f.cd_cdo)}</span>`) : ''}
+      ${lin('Crédito no bairro', esc((f && f.faixa_credito) || r.faixa_credito_bairro || '—'))}</div>`;
+  }
   function bandHtml(tom, k, t, s, botao, chip) {
     return `<section class="fc2-agora ag-${tom}" aria-label="O que fazer agora"><span class="fc2-ag-k">AGORA</span>${k ? `<span class="fc2-ag-pill">${esc(k)}</span>` : ''}
       <div class="fc2-ag-t"><b title="${esc(t || '')}">${esc(t || '—')}</b>${s ? `<small title="${esc(s)}">${esc(s)}</small>` : ''}</div>${chip || ''}${botao}</section>`;
@@ -3546,6 +3599,7 @@
   // Uma linha de dado: rótulo · valor (ou "falta" em amarelo) · cadeado/lápis · copiar.
   const dl = (rot, val, o = {}) => `<div class="fc2-f"><span class="fc2-fk">${esc(rot)}</span><span class="fc2-fv${val ? '' : ' falta'}${o.mono ? ' mono' : ''}" title="${esc(val || o.falta || 'falta')}">${esc(val || o.falta || 'falta')}</span>
     ${o.trava ? `<span class="fc2-tr" title="${esc(o.trava)}">${ICL.cadeado}</span>` : '<span></span>'}${val && o.cp !== false ? btCopiar(o.cpv || val, rot) : '<span></span>'}</div>`;
+  const dlNio = () => { const t = dfvNioTxt(); return t ? `<div class="fc2-f"><span class="fc2-fk">Nio no endereço</span><span class="fc2-fv${dfvRisco() ? ' risco' : ''}" title="${esc(`${t} (mapa da Nio, DFV)`)}">${esc(t)}</span><span></span><span></span></div>` : ''; };
   const grupoH = (g, tit, pode, extra = '') => `<div class="fc2-sec"><span>${esc(tit)}</span>${extra}<span class="fc-sp"></span>${pode ? `<button type="button" class="fc2-ed" data-f="fc2-ed" data-g="${g}" aria-label="Corrigir ${esc(tit.toLowerCase())}">${ICL.lapis}corrigir</button>` : ''}</div>`;
   const inp = (rot, nome, val, o = {}) => `<label class="fc2-in${o.full ? ' full' : ''}"><span>${esc(rot)}</span><input name="${nome}" value="${esc(val || '')}"${o.tipo ? ` type="${o.tipo}"` : ''}${o.mode ? ` inputmode="${o.mode}"` : ''}${o.lista ? ` list="${o.lista}"` : ''}${o.ph ? ` placeholder="${esc(o.ph)}"` : ''}${o.auto ? ' autofocus' : ''}></label>`;
   const formBts = (rot) => `<div class="fc2-fbts"><button type="button" class="btn btn-sm" data-f="fc2-ed-x">Cancelar</button><button type="submit" class="btn btn-sm btn-acc fc2-salvar">${esc(rot)}</button></div>`;
@@ -3564,7 +3618,8 @@
         <span class="fc2-nota">O WhatsApp é a própria conversa: não se troca aqui.</span>${formBts('Salvar')}</form>`);
     const ruas = [...new Set([convLogr(c), vc.logradouro].filter(Boolean))];
     const endereco = g('endereco', 'Endereço de instalação', dl('CEP', convCep(c) ? `${convCep(c)}${c.cidade ? ` · ${c.cidade}${c.uf ? `/${c.uf}` : ''}` : ''}` : conta(null), { mono: true, cpv: c.cep })
-      + dl('Rua e número', conta(convRua(c))) + dl('Complemento', convComp(c), { falta: 'não informado' }) + dl('Bairro', vc.bairro, { falta: '—' }) + dl('Referência', x.referencia, { falta: 'falta (o portal exige)' }),
+      + dl('Rua e número', conta(convRua(c))) + dl('Complemento', convComp(c), { falta: 'não informado' }) + dl('Bairro', vc.bairro, { falta: '—' }) + dl('Referência', x.referencia, { falta: 'falta (o portal exige)' })
+      + dlNio(),
       `<form class="fc2-form" data-form="lead_corr" data-g="endereco" novalidate>${inp('CEP', 'cep', convCep(c) || '', { mode: 'numeric', auto: true })}${inp('Número', 'numero', c.numero)}
         ${inp('Rua', 'rua', convLogr(c), { full: true, lista: 'fc2-ruas', ph: 'a rua que o cliente confirmou' })}<datalist id="fc2-ruas">${ruas.map((r) => `<option value="${esc(r)}"></option>`).join('')}</datalist>
         ${inp('Complemento', 'complemento', c.complemento, { ph: 'Apto, bloco, casa A…' })}${inp('Referência', 'referencia', x.referencia)}
@@ -3593,7 +3648,7 @@
     const contato = `${grupoH('contato', 'Contato', editavel)}${dl('Nome', v.cliente_nome, { trava })}${dl('CPF/CNPJ', conta(v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : null), { mono: true, trava, cpv: v.cliente_cpf_cnpj })}
       ${dl('WhatsApp', v.cliente_whatsapp ? fmtTel(v.cliente_whatsapp) : null, { mono: true })}${dl('E-mail', conta(v.cliente_email))}`;
     const endLinhas = `${dl('CEP', v.cep ? `${NG.fmtCep(v.cep)}${v.cidade ? ` · ${v.cidade}${v.uf ? `/${v.uf}` : ''}` : ''}` : conta(null), { mono: true, trava, cpv: v.cep })}${dl('Rua e número', conta([v.logradouro, v.numero].filter(Boolean).join(', ')), { trava })}
-      ${dl('Complemento', v.complemento, { falta: 'não informado', trava })}${dl('Bairro', v.bairro, { falta: '—' })}${dl('Referência', conta(v.ponto_referencia), { falta: 'falta (o portal exige)' })}`;
+      ${dl('Complemento', v.complemento, { falta: 'não informado', trava })}${dl('Bairro', v.bairro, { falta: '—' })}${dl('Referência', conta(v.ponto_referencia), { falta: 'falta (o portal exige)' })}${dlNio()}`;
     const endForm = `<form class="fc2-form" data-form="venda_end" novalidate>${inp('CEP', 'cep', v.cep ? NG.fmtCep(v.cep) : '', { mode: 'numeric', auto: true })}${inp('Número', 'numero', v.numero)}
       ${inp('Rua', 'logradouro', v.logradouro, { full: true })}${inp('Complemento', 'complemento', v.complemento)}${inp('Bairro', 'bairro', v.bairro)}${inp('Referência', 'referencia', v.ponto_referencia, { full: true })}
       <span class="fc2-nota">Mudar CEP, rua, número ou complemento apaga a viabilidade gravada: consulte de novo na etapa Viabilidade.</span>${formBts('Salvar')}</form>`;
@@ -3746,6 +3801,7 @@
       cvCheia.mari(mariFaixa(), fc.reg || fc.cad);
     } else if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
     ligarDfvSeEditando();
+    if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f && (formAtivo || edicao || fc.edG)) f.focus({ preventScroll: true });
   }
