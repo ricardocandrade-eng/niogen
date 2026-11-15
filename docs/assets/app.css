@@ -3272,3 +3272,5 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc-cb-tri .fc-cb-p.s-na { opacity: .45; }
 .fc-cb-tri .fc-cb-p.s-na i { border-style: dotted; }
 .fc-cb-tri .fc-cb-h .btn-sm { height: 26px; min-height: 26px; font-size: 12px; }
+/* 16/11: indicação — "indicado por" na linha do plano */
+.fc-ind-por { color: #C9B37E; }

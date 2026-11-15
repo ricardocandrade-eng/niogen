@@ -2679,7 +2679,7 @@
   let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
   let cvCheia = null;      // NGConversa montado na metade esquerda
   let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
-  const novoFc = () => ({ dfv: undefined, dados: false, cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
+  const novoFc = () => ({ dfv: undefined, ind: undefined, dados: false, cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
   let fc = novoFc();
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -3112,7 +3112,7 @@
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
-      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div><!--AGORA--></div>
+      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
@@ -3294,13 +3294,14 @@
   // LEITURA: espelha a mari_cadencia_avaliar (0141 · 0114) com o que a ficha já carregou — a linha da v_mari_cadencia (o próximo e
   // o bloqueio) e os turnos da Mari com tags.cadencia (o que saiu). Nenhuma chamada nova; não grava nada nem muda a régua.
   const CAD_ROT = { P1: '1º contato', L15: '15 min', F1: '15 min', F2: '1 h', F3: '3 h', F4: '6 h', F5: '20 h', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída',
-    BIO1: 'Biometria D+1', BIO3: 'Ligar D+3', INSTALACAO: 'Aviso da instalação', VESPERA: 'Véspera', RETORNO: 'Retorno combinado' };
+    BIO1: 'Biometria D+1', BIO3: 'Ligar D+3', INSTALACAO: 'Aviso da instalação', VESPERA: 'Véspera', RETORNO: 'Retorno combinado', POS: 'Pós-instalação', IND: 'Pedido de indicação', IND2: 'Insistir na indicação' };
   const CAD_O_QUE = { P1: 'template de 1º contato', F1: 'cutucada 15 min depois da última fala da Mari', F2: 'cutucada 1 h depois da última fala da Mari',
     F3: 'cutucada 3 h depois da última fala da Mari', F4: 'cutucada 6 h depois da última fala da Mari', F5: 'última chamada ~20 h depois da mensagem do cliente',
     D3: 'template de retomada no 3º dia', LIG: 'o vendedor liga entre o D3 e o D6 (a Mari não liga)', D7: 'template de retomada no 7º dia', D15: 'último template, no 15º dia',
     FIM: '48 h depois do D15 sem resposta, a conversa sem venda vai para Saída · Sem resposta', BIO1: 'lembrete da biometria no D+1 do pedido',
     BIO3: 'no D+3 sem biometria o time liga (nunca automático)', INSTALACAO: 'aviso assim que a instalação é agendada', VESPERA: 'lembrete na véspera da instalação',
-    RETORNO: 'retorno no dia e hora que o cliente pediu' };
+    RETORNO: 'retorno no dia e hora que o cliente pediu', POS: 'agradece, indica o App Nio para suporte e pergunta se deu tudo certo (template nio_pos_instalacao)',
+    IND: 'a quem respondeu "tudo certo": pede o nome e o WhatsApp de alguém — R$ 100 no Pix se o indicado instalar', IND2: 'sem indicação, a Mari insiste 1 vez (vizinho, parente, colega)' };
   const CAD_ACAO = { texto: 'mensagem livre (janela aberta)', template: 'template', ligar: 'ligação do time', encerrar: 'vai para Saída · Sem resposta' };
   const HMS = 3600000;
   // Horário do contrato para toque automático: seg–sex 9–21, sáb 10–16, nunca domingo. Brasília = UTC−3 fixo. Feriado o banco
@@ -3445,6 +3446,7 @@
       { rot: 'Retomada', dica: A.cad_retomada, passos: ['D3', 'LIG', 'D7', 'D15', 'FIM'].map(todo) },
       { rot: 'Biometria', dica: A.cad_venda, passos: ['BIO1', 'BIO3'].map(todo) },
       { rot: 'Instalação', dica: A.cad_venda, passos: ['INSTALACAO', 'VESPERA'].map(todo) },
+      { rot: 'Pós-instalação', dica: 'Depois que instala: a Mari agradece, indica o App Nio e pergunta se deu tudo certo; a quem disse que sim, pede uma indicação (R$ 100 no Pix se o indicado instalar) e insiste 1 vez.', passos: posPassos() },
     ];
 
     // Por que está parada (o mesmo texto do banco, na língua de quem atende) — a ordem é a da mari_cadencia_avaliar.
@@ -3500,12 +3502,26 @@
     return P;
   }
   // Nunca derruba a ficha: se a leitura falhar, a faixa some e a ficha abre igual.
+  function posPassos() {
+    const po = fc.ind && fc.ind.pos;
+    const ms = (x) => (x ? new Date(x).getTime() : null);
+    const mk = (cod, st, em, sub) => ({ cod, rot: CAD_ROT[cod], st, em, sub: sub || (em && st === 'ok' ? cadCurto(em) : st === 'prox' && em ? cadQuando(em) : ''),
+      tit: `${CAD_ROT[cod]} · ${CAD_O_QUE[cod]}${st === 'ok' && em ? ` · saiu ${NG.fmtDataHora(new Date(em).toISOString())}` : st === 'na' ? ' · ainda não instalou' : ''}`, texto: null });
+    if (!po) return [mk('POS', 'na'), mk('IND', 'na'), mk('IND2', 'na')];
+    const prob = ['insatisfeito', 'com_time'].includes(po.estado);
+    const fim = ['sem_resposta', 'encerrada', 'expirada', 'sem_conversa'].includes(po.estado);
+    return [
+      po.enviada_em ? mk('POS', 'ok', ms(po.enviada_em)) : po.estado === 'agendada' ? mk('POS', 'prox', ms(po.enviar_em)) : mk('POS', 'pul', null, 'não saiu'),
+      po.pediu_em ? mk('IND', 'ok', ms(po.pediu_em)) : prob ? mk('IND', 'pul', null, po.estado === 'insatisfeito' ? 'teve problema' : 'com o time') : fim ? mk('IND', 'pul', null, 'não saiu') : mk('IND', 'fut', null, po.enviada_em ? 'se responder "tudo certo"' : ''),
+      po.insistiu_em ? mk('IND2', 'ok', ms(po.insistiu_em)) : po.pediu_em && !fim ? mk('IND2', 'fut', null, 'se não indicar') : mk('IND2', po.pediu_em || prob || fim ? 'pul' : 'fut', null, po.pediu_em || prob || fim ? 'não saiu' : ''),
+    ];
+  }
   function cadPlanoSeguro() { try { return cadPlano(); } catch (e) { console.warn('[ficha] lembretes da Mari', e); return null; } }
   function cadFaixa(P, solta, trilha) {
     if (!P) return '';
     const A = NG.ajuda;
     const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○', na: '' };
-    const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno' };
+    const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno', POS: 'Pós', IND: 'Indicação', IND2: 'Insistir' };
     const passo = (p) => `<button type="button" class="fc-cb-p s-${p.st}${fc.cadp === p.cod ? ' on' : ''}" data-f="fc-cadp" data-c="${p.cod}" title="${esc(p.tit)}" aria-pressed="${fc.cadp === p.cod}">
         <i aria-hidden="true">${ic[p.st]}</i><b>${esc(trilha ? COD[p.cod] || p.cod : p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
     const grupos = ((trilha && P.todos) || P.grupos).filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
@@ -3585,6 +3601,29 @@
     const cep = NG.soDigitos(v ? v.cep : (c && c.cep) || '');
     const numero = String(v ? v.numero || '' : (c && c.numero) || '').trim();
     return cep.length === 8 && numero ? { cep, numero, complemento: String(v ? v.complemento || '' : (c && c.complemento) || '').trim() } : null;
+  }
+  // 16/11 (Ricardo: "falta o pedido de indicação da Mari… sem poluir a tela"): pós-instalação e indicações (0176), lidos depois
+  // de a ficha aparecer — 1 rodada, 3 leituras em paralelo, só admin/backoffice. Vira um grupo na trilha dos Lembretes, o passo
+  // "Indicações" na Jornada (só depois de instalar) e "indicado por" na linha do plano.
+  const IND_SIT = { recebida: 'recebida', contatada: 'a Mari já falou', em_venda: 'virou venda', aguarda_nio: 'instalou · falta a Nio confirmar',
+    aguarda_prazo: 'instalou · Pix no prazo', falta_pix: 'instalou · falta a chave Pix', a_pagar: 'Pix a pagar', pago: 'Pix pago', cancelado: 'prêmio cancelado',
+    invalida: 'não vale', indicado_saiu: 'indicado saiu', erro: 'erro ao abrir a conversa' };
+  function carregarIndFicha() {
+    if (!d || !ehBO()) { fc.ind = null; return; }
+    const vid = d.soConversa ? (d.conv && d.conv.venda_id) || null : d.v.id;
+    const cid = d.conversaId || null;
+    const quem = [cid && `conversa_id.eq.${cid}`, vid && `venda_id.eq.${vid}`].filter(Boolean).join(',');
+    const alvo = d;
+    fc.ind = null;
+    Promise.all([
+      vid ? NG.sb.from('pos_instalacao').select('estado, enviar_em, enviada_em, respondeu_em, pediu_em, insistencias, insistiu_em').eq('venda_id', vid).maybeSingle() : null,
+      vid ? NG.sb.from('v_indicacoes').select('id, criado_em, indicado_nome, indicado_cliente_nome, conversa_id, venda_id, situacao, premio_valor, premio_vence_em').eq('indicador_venda_id', vid).order('criado_em') : null,
+      quem ? NG.sb.from('v_indicacoes').select('indicador_nome').or(quem).limit(1) : null,
+    ]).then(([rp, rm, rq]) => {
+      if (d !== alvo) return;
+      fc.ind = { pos: (rp && !rp.error && rp.data) || null, minhas: (rm && !rm.error && rm.data) || [], por: ((rq && !rq.error && rq.data) || [])[0] || null };
+      if (fc.ind.pos || fc.ind.minhas.length || fc.ind.por) render();
+    }, () => {});
   }
   function carregarDfvFicha() {
     const e = dfvEnd();
@@ -3810,6 +3849,20 @@
     const dinSub = din ? `${DIN_ROT[din.estado] || din.estado}${ehBO() && din.previsto_total != null ? ` · ${NG.fmtMoeda(din.previsto_total)}` : ''}`
       : v && v.status === 'saida' ? 'fora da jornada — sem comissão' : `${ehBO() && v && v.comissao_prevista != null ? `${NG.fmtMoeda(v.comissao_prevista)} previstos · ` : ''}nasce na instalação`;
     itens.push(linha('din', 'Pagamento da comissão', dinSub, din ? (din.estado === 'paga' ? 'done' : din.estado === 'estornada' ? 'warn' : 'wait') : 'todo', din ? dinDet() : ''));
+    const ind = fc.ind;
+    if (ind && (ind.pos || ind.minhas.length)) {
+      const M = ind.minhas;
+      const inst = M.filter((x) => ['aguarda_nio', 'aguarda_prazo', 'falta_pix', 'a_pagar', 'pago'].includes(x.situacao)).length;
+      const aPagar = M.filter((x) => ['falta_pix', 'a_pagar'].includes(x.situacao)).reduce((t, x) => t + Number(x.premio_valor || 0), 0);
+      const po = ind.pos;
+      const sub = M.length ? `${M.length} indicado${M.length > 1 ? 's' : ''}${inst ? ` · ${inst} instal${inst > 1 ? 'aram' : 'ou'}` : ''}${aPagar ? ` · ${NG.fmtMoeda(aPagar)} de Pix a pagar` : ''}`
+        : !po ? '—' : po.estado === 'agendada' ? 'a Mari agradece e pede indicação depois da instalação' : po.estado === 'insatisfeito' ? 'cliente teve problema: sem pedido de indicação'
+        : po.pediu_em ? 'a Mari pediu indicação · ninguém indicado ainda' : 'aguardando o cliente dizer se deu tudo certo';
+      const det = M.length ? M.map((x) => `<div class="fc-dr"><span>${esc(x.indicado_cliente_nome || x.indicado_nome || 'sem nome')}</span><b>${esc(IND_SIT[x.situacao] || x.situacao)}${x.venda_id || x.conversa_id ? ` · <a href="#${x.venda_id ? `venda=${esc(x.venda_id)}` : `conversa=${esc(x.conversa_id)}`}">abrir</a>` : ''}</b></div>`).join('')
+        + '<span class="fc-src">Pix pago à mão pelo Ricardo · a tela Pagamentos mostra e registra</span>'
+        : `<span class="apagado">${esc(sub)}. Quem o cliente indicar aparece aqui, com o que virou.</span>`;
+      itens.push(linha('ind', 'Indicações', sub, inst ? 'done' : M.length || (po && po.pediu_em) ? 'now' : 'todo', det));
+    }
     const feitas = L.filter((x) => x.st === 'done').length + (at.st === 'done' ? 1 : 0) + (din && din.estado === 'paga' ? 1 : 0);
     return { html: `<div class="fc2-lista">${itens.join('')}</div>`, feitas, total: L.length + 2 };
   }
@@ -4059,6 +4112,7 @@
     }
     ligarDfvSeEditando();
     if (fc.rolarEt) { fc.rolarEt = false; const eo = raiz.querySelector('.fc2-et.on'); if (eo) eo.scrollIntoView({ block: 'nearest' }); }
+    if (fc.ind === undefined) carregarIndFicha();
     if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f && (formAtivo || edicao || fc.edG)) f.focus({ preventScroll: true });
