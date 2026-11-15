@@ -3251,3 +3251,19 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
   .fc2-veu { display: none; }
   .fc2 .fc-tit .fc-hag .fc2-ag-t { flex-direction: column; gap: 0; }
 }
+
+/* 15/11 noite, rodada 4: Jornada agrupada pelos degraus da Escada · AGORA sem contorno, só a palavra em vermelho escuro */
+.fc2-grp { display: flex; flex-direction: column; gap: 1px; }
+.fc2-grp + .fc2-grp { margin-top: 4px; }
+.fc2-grp-h { display: flex; align-items: baseline; gap: 8px; padding: 6px 8px 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #6F7A86; }
+.fc2-grp-h small { font-size: 11px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #6F7A86; }
+.fc2-grp.g-done .fc2-grp-h { color: #4FA874; }
+.fc2-grp.g-now .fc2-grp-h { color: #E3B341; }
+.fc2-grp.g-now .fc2-grp-h small { color: #C9A24A; }
+.fc2-grp.g-stop .fc2-grp-h { color: #E8867E; }
+.fc2-grp-v { padding: 2px 8px 6px 44px; font-size: 12px; color: #7F8A96; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2 .fc-tit .fc-hag { border: 0; padding: 0; margin-top: 1px; border-radius: 4px; }
+.fc2 .fc-tit .fc-hag:hover { background: none; }
+.fc2 .fc-tit .fc-hag:hover .fc2-ag-t b { text-decoration: underline; text-underline-offset: 3px; }
+.fc2 .fc-tit .fc-hag .fc2-ag-k { color: #B8433B; font-size: 11px; }
+.fc2 .fc-tit .fc-hag .fc-hag-bt { color: #8D97A3; }

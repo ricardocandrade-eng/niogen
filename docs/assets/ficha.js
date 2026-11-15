@@ -3737,6 +3737,31 @@
     deg.push(`<button type="button" class="fc-es s-${stPg}${fc.etapa === 'din' ? ' on' : ''}" data-f="fc2-deg" data-k="din" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}"><i>${stPg === 'done' ? IC.ok : stPg === 'stop' ? IC.x : ''}</i>Pagamento</button>`);
     return `<section class="fc2-trilha" aria-label="Escada do lead"><span class="fc2-tri-k">ESCADA</span><div class="fc2-tri-l">${deg.join('')}</div>${E ? `<div class="fc2-tri-i">${E.info}</div>` : ''}</section>`;
   }
+  // 15/11 noite (Ricardo: "A Escada e a Jornada são o mesmo conteúdo?" → "Sim"): a Escada (topo) diz ONDE o lead está; a Jornada
+  // mostra O QUE foi feito, agrupada pelos degraus da Escada — cada grupo traz os passos que pertencem àquele degrau
+  // (OS aberta = Pedido + Biometria). Degrau sem passo próprio (Pré-qualificado) mostra só o que ele quer dizer.
+  const GRUPO_K = { atendimento: ['atend'], viabilidade: ['viab'], pre_qualificado: [], qualificado: ['cred'], instalacao: ['os', 'bio'], instalada: ['inst'] };
+  const ST_TXT = { done: 'feito', now: 'o lead está aqui', stop: 'parou aqui', todo: '' };
+  function jornadaGrupos(ks, itens) {
+    const l = d && d.lead;
+    const etapas = ((d && d.leadCfg) || []).filter((x) => x.tipo === 'etapa');
+    if (!l || !etapas.length) return '';
+    const fora = l.destino === 'saida' || l.destino === 'teste_duplicada';
+    const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
+    const html = Object.fromEntries(ks.map((k, i) => [k, itens[i]]));
+    const usados = new Set();
+    const pg = d && !d.soConversa && d.din ? d.din.estado : null;
+    const grupos = etapas.map((e, i) => ({ k: e.codigo, nome: e.nome, ajuda: e.ajuda, ks: GRUPO_K[e.codigo] || [],
+      st: l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo' }));
+    grupos.push({ k: 'pagamento', nome: 'Pagamento', ks: ['din'], st: pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo' });
+    const out = grupos.map((g) => {
+      const corpo = g.ks.filter((k) => html[k]).map((k) => { usados.add(k); return html[k]; }).join('');
+      return `<div class="fc2-grp g-${g.st}" data-grp="${esc(g.k)}"><div class="fc2-grp-h"><span>${esc(g.nome)}</span>${ST_TXT[g.st] ? `<small>${esc(ST_TXT[g.st])}</small>` : ''}</div>
+        ${corpo || `<div class="fc2-grp-v" title="${esc(g.ajuda || '')}">${esc(g.ajuda || 'sem passo próprio')}</div>`}</div>`;
+    });
+    const resto = ks.filter((k) => !usados.has(k) && html[k]).map((k) => html[k]).join('');
+    return out.join('') + (resto ? `<div class="fc2-grp g-todo"><div class="fc2-grp-h"><span>Outros</span></div>${resto}</div>` : '');
+  }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
     const atual = at.st !== 'done' ? 'atend' : ((L.find((x) => x.st !== 'done') || {}).k || null);
@@ -3762,7 +3787,7 @@
       : v && v.status === 'saida' ? 'fora da jornada — sem comissão' : `${ehBO() && v && v.comissao_prevista != null ? `${NG.fmtMoeda(v.comissao_prevista)} previstos · ` : ''}nasce na instalação`;
     itens.push(linha('din', 'Pagamento da comissão', dinSub, din ? (din.estado === 'paga' ? 'done' : din.estado === 'estornada' ? 'warn' : 'wait') : 'todo', din ? dinDet() : ''));
     const feitas = L.filter((x) => x.st === 'done').length + (at.st === 'done' ? 1 : 0) + (din && din.estado === 'paga' ? 1 : 0);
-    return { html: `<div class="fc2-lista">${itens.join('')}</div>`, feitas, total: L.length + 2 };
+    return { html: `<div class="fc2-lista">${jornadaGrupos(['atend', ...L.map((x) => x.k), 'din'], itens) || itens.join('')}</div>`, feitas, total: L.length + 2 };
   }
   // Uma linha de dado: rótulo · valor (ou "falta" em amarelo) · cadeado/lápis · copiar.
   const dl = (rot, val, o = {}) => `<div class="fc2-f"><span class="fc2-fk">${esc(rot)}</span><span class="fc2-fv${val ? '' : ' falta'}${o.mono ? ' mono' : ''}" title="${esc(val || o.falta || 'falta')}">${esc(val || o.falta || 'falta')}</span>
@@ -4005,6 +4030,7 @@
       bal.style.setProperty('--seta', `${Math.max(14, Math.min(w - 14, B.left + B.width / 2 - R.left - x))}px`);
     }
     ligarDfvSeEditando();
+    if (fc.rolarEt) { fc.rolarEt = false; const eo = raiz.querySelector('.fc2-et.on'); if (eo) eo.scrollIntoView({ block: 'nearest' }); }
     if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
     const f = raiz.querySelector('[data-form] [autofocus]');
     if (f && (formAtivo || edicao || fc.edG)) f.focus({ preventScroll: true });
@@ -4065,7 +4091,7 @@
       const k = b.dataset.k;
       if (b.dataset.os === '1') abrirOsModal();
       if (fc.etapa === k && !fc.etapaX && b.dataset.os !== '1') { fc.etapa = null; fc.etapaX = true; } else { fc.etapa = k; fc.etapaX = false; }
-      fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; fc.dados = false;
+      fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; fc.dados = false; fc.rolarEt = true;
       if (fc.aba !== 'jor' && window.matchMedia('(max-width: 900px)').matches) fc.aba = 'jor';
       render(); return;
     }
