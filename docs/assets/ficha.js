@@ -2751,9 +2751,21 @@
     const padrao = s.endereco && s.endereco.origem === 'padrao';
     if (padrao && /^aprovado/.test(s.resultado || '')) rot = `${rot} · NO ENDEREÇO PADRÃO`;
     const avisosTela = !s.popup && s.texto_tela ? (String(s.texto_tela).split('\n').find((l) => /^Avisos:/.test(l)) || '').replace(/^Avisos:\s*/, '') : '';
-    const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? `o portal respondeu: "${String(s.popup.texto).trim()}"` : avisosTela ? `o portal mostrou: "${avisosTela}"` : ''}`;
+    const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? '' : avisosTela ? `o portal mostrou: "${avisosTela}"` : (s.motivo || '')}`.replace(/ · $/, '');
     return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
       cls: padrao ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : s.resultado === 'negado' || s.resultado === 'pedido_em_andamento' ? 'bad' : 'warn', registrar: padrao ? null : reg };
+  }
+  // 15/11 (Ricardo: "retirar essa msg 2x"): o texto do portal uma vez, sem linhas repetidas nem os nomes dos botões do popup.
+  function telaPortal(s) {
+    const bruto = s.popup && s.popup.texto ? `${s.popup.titulo || ''}\n${s.popup.texto}` : String(s.texto_tela || '');
+    const botoes = new Set(((s.popup && s.popup.botoes) || []).map((b) => String(b).trim().toLowerCase()));
+    const vistas = new Set();
+    return bruto.split('\n').map((l) => l.trim()).filter((l) => {
+      const k = l.toLowerCase();
+      if (!l || vistas.has(k) || botoes.has(k)) return false;
+      vistas.add(k);
+      return true;
+    }).join('\n').slice(0, 900);
   }
   function opPainel(tipo) {
     const bo = ehBO();
@@ -2775,7 +2787,7 @@
         : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
       const telaP = !['viavel'].includes(o.s.resultado) && !/^aprovado/.test(o.s.resultado || '') && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
-        ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(String(o.s.popup && o.s.popup.texto ? `${o.s.popup.titulo || ''}\n${o.s.popup.texto}` : o.s.texto_tela).trim().slice(0, 900))}</pre></details>` : '';
+        ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
       corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>${telaP}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
