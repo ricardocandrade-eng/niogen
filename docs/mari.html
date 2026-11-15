@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=151126-3">
+<link rel="stylesheet" href="assets/app.css?v=151126-4">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=151126-1"></script>
@@ -58,10 +58,24 @@
       </div>
     </header>
 
-    <section class="mav-pulso" id="pulso" aria-label="Pulso da Mari" aria-live="polite"><span class="apagado">Lendo o pulso da Mari…</span></section>
-    <section class="mav-ritmo" id="ritmo" aria-label="Ritmo da Mari" hidden></section>
-    <section class="mav-funil" id="funil" aria-label="Funil de resultado de hoje"></section>
-    <div class="seg mav-abas-movel" role="group" aria-label="Ver"><button type="button" data-mav="conversas" class="on">Conversas</button><button type="button" data-mav="agora">Agora</button></div>
+    <!-- 15/11 (Ricardo: "o quadro que se abre, sem qualquer rolagem, deve ser uma tela muito mais visual, com gráficos… uma fonte
+         viva da Mari. Ela é a estrela do ecossistema"): o PALCO ocupa a tela inteira sem rolar; as conversas ficam abaixo, e a barra
+         do pé do palco leva até elas. Dados: mari_ao_vivo (15 s), mari_ritmo e mari_painel (0207, 1×/min). -->
+    <section class="mp-palco" id="palco" aria-label="A Mari agora">
+      <div class="mp-grid">
+        <section class="mp-card mav-pulso" id="pulso" aria-label="Pulso da Mari" aria-live="polite"><span class="apagado">Lendo o pulso da Mari…</span></section>
+        <section class="mp-card mp-ritmo" id="ritmo" aria-label="Ritmo da Mari"><span class="apagado">Lendo o ritmo…</span></section>
+        <section class="mp-card mp-horas" id="mp-horas" aria-label="Conversa por hora"></section>
+        <section class="mp-card mp-funil" id="funil" aria-label="Funil de hoje"></section>
+        <section class="mp-card mp-14" id="mp-14" aria-label="Últimos 14 dias"></section>
+        <section class="mp-card mp-escada" id="mp-escada" aria-label="Leads da Mari por degrau"></section>
+        <section class="mp-card mp-mix" id="mp-mix" aria-label="De onde vêm e por que passam ao time"></section>
+        <aside class="mp-card mav-feed" id="feed" aria-label="Agora, na Mari"><h4>Agora, na Mari <span class="apagado">ao vivo</span></h4><div id="feed-lista"><span class="apagado">Carregando…</span></div>
+          <p class="apagado mav-feed-pe">O que a Mari e o sistema fizeram hoje. Clique no nome para abrir a ficha.</p></aside>
+      </div>
+      <button type="button" class="mp-desce" id="mp-desce" title="Desce para a lista e o quadro das conversas"><span class="mp-desce-s" aria-hidden="true">⌄</span><b>Conversas da Mari</b><span id="mp-desce-n"></span><span class="fc-sp"></span>
+        <span class="mp-desce-v" data-v="lista">Lista</span><span class="mp-desce-v" data-v="quadro">Quadro</span></button>
+    </section>
 
     <div id="abas"></div>
 
@@ -102,8 +116,6 @@
       </div>
     </section>
     </div>
-    <aside class="mav-feed" id="feed" aria-label="Agora, na Mari"><h4>Agora, na Mari <span class="apagado">atualiza a cada 15 s</span></h4><div id="feed-lista"><span class="apagado">Carregando…</span></div>
-      <p class="apagado mav-feed-pe">Só o que a Mari e o sistema fizeram hoje. Clique no nome para abrir a conversa. Sem CPF, telefone ou endereço.</p></aside>
     </div>
   </main>
 </div>
@@ -588,9 +600,9 @@
     const px = v.proximo_toque;
     const waba = { GREEN: ['verde', 'ok'], YELLOW: ['amarela', 'warn'], RED: ['vermelha', 'bad'] }[v.waba_qualidade] || [v.waba_qualidade || '—', ''];
     const n = Number(v.respondendo_agora || 0);
-    pulsoEl.className = `mav-pulso ${cls}`;
+    pulsoEl.className = `mp-card mav-pulso ${cls}`;
     pulsoEl.innerHTML = `
-      <div class="it" title="${esc(dica)}"><span class="mav-est"><i class="mav-dot ${cls}" aria-hidden="true"></i><b>${rot}</b></span><small>último turno há <span data-ult>${desdeTxt(v.ultimo_turno_em)}</span></small></div>
+      <div class="it mp-eu" title="${esc(dica)}"><span class="mp-av" aria-hidden="true">M</span><span class="mp-eu-t"><span class="mav-est"><b>Mari</b><i class="mav-dot ${cls}" aria-hidden="true"></i><b class="mp-est">${rot}</b></span><small>último turno há <span data-ult>${desdeTxt(v.ultimo_turno_em)}</span></small></span></div>
       <div class="it"><b>${n} ${n === 1 ? 'conversa' : 'conversas'}</b><small>respondendo agora (últimos 2 min)</small></div>
       <div class="it" title="Da mensagem do cliente até a 1ª resposta da Mari, média de hoje (toques da cadência fora)."><b>${segTxt(v.resposta_media_s)}</b><small>tempo médio de resposta hoje</small></div>
       <div class="it" title="Próximo toque automático da cadência (já no horário do contrato)."><b>${px ? `${esc(px.nome)} · ${esc(PASSO[px.passo] || px.passo)} ${esc(quandoCurto(px.em))}` : 'nenhum agendado'}</b><small>próximo toque · ${NG.fmtNum(v.toques_hoje || 0)} hoje</small></div>
@@ -601,19 +613,27 @@
     const f = aoVivo.funil || {};
     const neg = aoVivo.em_negociacao || {};
     const nOp = Object.keys(opDe).length;
-    const pct = f.conversas ? Math.round((Number(f.responderam || 0) * 100) / f.conversas) : null;
-    const caixa = (rot, val, nota, dica, cls = '') => `<div class="mav-f ${cls}" title="${esc(dica)}"><span class="lb">${rot}</span><b>${val}</b>${nota ? `<small>${nota}</small>` : ''}</div>`;
-    funilEl.innerHTML = [
-      caixa('Conversas hoje', NG.fmtNum(f.conversas || 0), '', 'Conversas que começaram hoje (a mesma conta do Agente de Tráfego). Testes ficam fora.'),
-      caixa('Responderam', NG.fmtNum(f.responderam || 0), pct == null ? '' : `${pct}%`, 'Das conversas de hoje, as em que o cliente escreveu.'),
-      caixa('CEP válido', NG.fmtNum(f.cep_valido || 0), '', 'Informaram um CEP dentro da área de atuação.'),
-      caixa('Viram planos', NG.fmtNum(f.viram_planos || 0), '', 'A Mari mostrou os planos (carrossel) ou o cliente já escolheu um.'),
-      caixa('Qualificadas', NG.fmtNum(f.qualificadas || 0), '', 'Handoff com dados completos: viraram venda em Lead qualificado.'),
-      caixa('Vendas (mês)', NG.fmtNum(f.vendas_mes || 0), `${NG.fmtNum(f.instaladas_mes || 0)} instaladas · meta ${NG.fmtNum(f.meta || 0)}`, 'Vendas criadas no mês (sem Saída). A meta conta as instaladas.'),
-      caixa('Em negociação', `${NG.fmtMoeda(neg.valor || 0)}/mês`,
-        `${NG.fmtNum(neg.conversas || 0)} ${neg.conversas === 1 ? 'conversa' : 'conversas'} com plano visto ou escolhido · <a href="fila.html">🔥 ${nOp} ${nOp === 1 ? 'oportunidade' : 'oportunidades'}</a>`,
-        'Soma do valor por mês das conversas abertas sem venda que já viram os planos ou escolheram um (sem plano escolhido, conta o mais barato da tabela do cliente). 🔥 = oportunidades no Live.', 'rs'),
-    ].join('');
+    const passos = [
+      ['Conversas', f.conversas, 'Conversas que começaram hoje (a mesma conta do Agente de Tráfego). Testes ficam fora.'],
+      ['Responderam', f.responderam, 'Das conversas de hoje, as em que o cliente escreveu.'],
+      ['CEP válido', f.cep_valido, 'Informaram um CEP dentro da área de atuação.'],
+      ['Viram planos', f.viram_planos, 'A Mari mostrou os planos (carrossel) ou o cliente já escolheu um.'],
+      ['Qualificadas', f.qualificadas, 'Handoff com dados completos: viraram venda em Lead qualificado.'],
+    ];
+    const top = Math.max(1, Number(f.conversas || 0));
+    const meta = Number(f.meta || 0);
+    const inst = Number(f.instaladas_mes || 0);
+    const pm = meta ? Math.min(100, Math.round((inst * 100) / meta)) : 0;
+    funilEl.innerHTML = `<div class="mp-h"><b>Funil de hoje</b><span class="apagado">da conversa à venda</span></div>
+      <div class="mp-fun">${passos.map(([rot, n, dica], i) => {
+        const v = Number(n || 0);
+        const ant = i ? Number(passos[i - 1][1] || 0) : null;
+        return `<div class="mp-fun-l" title="${esc(dica)}"><span>${rot}</span><span class="mp-fun-b"><i style="width:${Math.max(v ? 3 : 0, Math.round((v * 100) / top))}%"></i></span><b>${NG.fmtNum(v)}</b><small>${i && ant ? `${Math.round((v * 100) / ant)}%` : ''}</small></div>`;
+      }).join('')}</div>
+      <div class="mp-fun-pe">
+        <div title="Vendas criadas no mês (sem Saída). A meta conta as instaladas."><span class="mp-k">Vendas no mês</span><b>${NG.fmtNum(f.vendas_mes || 0)}</b><small>${NG.fmtNum(inst)} instaladas · meta ${NG.fmtNum(meta)}</small><span class="mp-meta"><i style="width:${pm}%"></i></span></div>
+        <div class="rs" title="Soma do valor por mês das conversas abertas sem venda que já viram os planos ou escolheram um. 🔥 = oportunidades no Live."><span class="mp-k">Em negociação</span><b>${NG.fmtMoeda(neg.valor || 0)}<small>/mês</small></b><small>${NG.fmtNum(neg.conversas || 0)} ${neg.conversas === 1 ? 'conversa' : 'conversas'} · <a href="fila.html">🔥 ${nOp}</a></small></div>
+      </div>`;
   }
   const chaveFeed = (r) => `${r.em}|${r.tipo}|${r.conversa_id || ''}|${r.texto}`;
   function renderFeed(rows) {
@@ -636,44 +656,155 @@
     pico: ['Pico', 'warn', 'Muita gente conversando ao mesmo tempo. Olhe o Na mira da Live: as conversas quentes merecem um olho humano.'],
     sobrecarga: ['Sobrecarga', 'bad', 'Muitas conversas ao mesmo tempo ou cliente esperando resposta há mais de 6 min. Confira se a Mari está respondendo (pulso acima) e reforce com o time.'],
   };
+  const horasEl = document.getElementById('mp-horas');
+  const p14El = document.getElementById('mp-14');
+  const escadaEl = document.getElementById('mp-escada');
+  const mixEl = document.getElementById('mp-mix');
+  const COR_NIVEL = { calmo: '#6B7581', bom: '#32C25A', pico: '#E3B341', sobrecarga: '#F47067' };
+  // posição do ponteiro: cada faixa ocupa 1/4 do arco (0–bom, bom–pico, pico–sobrecarga, sobrecarga–2×)
+  function posNivel(v, lim) {
+    const b = lim.bom_conversas ?? 2; const pc = lim.pico_conversas ?? 6; const so = lim.sobrecarga_conversas ?? 12;
+    const faixa = (x, a, z, i) => i / 4 + Math.min(1, Math.max(0, (x - a) / Math.max(1, z - a))) / 4;
+    return v < b ? faixa(v, 0, b, 0) : v < pc ? faixa(v, b, pc, 1) : v < so ? faixa(v, pc, so, 2) : faixa(v, so, so * 2, 3);
+  }
+  function arco(a0, a1, r) {   // ângulos em fração (0 = esquerda, 1 = direita) num semicírculo de centro (100,100)
+    const pt = (a) => [100 - r * Math.cos(Math.PI * a), 100 - r * Math.sin(Math.PI * a)];
+    const [x0, y0] = pt(a0); const [x1, y1] = pt(a1);
+    return `M${x0.toFixed(1)} ${y0.toFixed(1)} A${r} ${r} 0 0 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`;
+  }
   function renderRitmo(r) {
-    if (!r) { ritmoEl.hidden = true; return; }
+    if (!r) { ritmoEl.innerHTML = '<span class="apagado">Ritmo indisponível agora.</span>'; horasEl.innerHTML = ''; return; }
     const [rot, cls, dica] = NIVEL[r.nivel] || NIVEL.calmo;
-    const ordem = ['calmo', 'bom', 'pico', 'sobrecarga'];
-    const iN = Math.max(0, ordem.indexOf(r.nivel));
     const lim = r.limites || {};
-    const hs = r.horas || [];
-    const max = Math.max(1, ...hs.map((h) => Math.max(Number(h.cliente || 0), Number(h.media7 || 0))));
-    const W = 168; const H = 30; const bw = W / Math.max(1, hs.length);
-    const barras = hs.map((h, i) => {
-      const a = (Number(h.cliente || 0) / max) * (H - 2);
-      const m = H - (Number(h.media7 || 0) / max) * (H - 2);
-      return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - a).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${a.toFixed(1)}" rx="1" class="${i === hs.length - 1 ? 'ag' : ''}"><title>${esc(`${h.hora}h: ${h.cliente} falas do cliente · ${h.mari} da Mari · média da semana ${h.media7}`)}</title></rect>`
-        + `<line x1="${(i * bw + 1).toFixed(1)}" x2="${(i * bw + bw - 1).toFixed(1)}" y1="${m.toFixed(1)}" y2="${m.toFixed(1)}" class="md"></line>`;
-    }).join('');
-    const tot = hs.reduce((a, h) => a + Number(h.cliente || 0), 0);
-    const tot7 = Math.round(hs.reduce((a, h) => a + Number(h.media7 || 0), 0));
+    const ag = Number(r.agora || 0);
+    const pos = posNivel(ag, lim);
+    const ang = Math.PI * pos;
+    const nx = 100 - 70 * Math.cos(ang); const ny = 100 - 70 * Math.sin(ang);
     const esp = Number(r.esperando || 0);
     const espMax = Number(r.espera_max_min || 0);
-    ritmoEl.hidden = false;
-    ritmoEl.className = `mav-ritmo ${cls}`;
-    ritmoEl.innerHTML = `
-      <div class="it rt-nivel" title="${esc(`${dica} Limites: Ritmo bom a partir de ${lim.bom_conversas ?? 2} conversas ao mesmo tempo, Pico a partir de ${lim.pico_conversas ?? 6}, Sobrecarga a partir de ${lim.sobrecarga_conversas ?? 12} ou alguém esperando resposta há mais de ${2 * (lim.espera_alerta_min ?? 3)} min.`)}">
-        <small>Ritmo da Mari</small><b>${rot}</b><span class="rt-barra" aria-hidden="true">${ordem.map((o, i) => `<i class="${i <= iN ? `on n-${ordem[iN]}` : ''}"></i>`).join('')}</span></div>
-      <div class="it" title="Conversas em que o cliente escreveu nos últimos 15 min."><b>${NG.fmtNum(r.agora || 0)}</b><small>conversando agora</small></div>
-      <div class="it" title="Conversas (últimas 3 h) em que a última fala é do cliente: ainda sem resposta da Mari ou do time."><b class="${espMax >= 2 * (lim.espera_alerta_min ?? 3) ? 'bad-txt' : esp ? 'warn-txt' : ''}">${NG.fmtNum(esp)} esperando</b><small>${esp ? `a maior há ${espMax < 1 ? 'menos de 1' : NG.fmtNum(Math.round(espMax))} min` : 'ninguém esperando resposta'}</small></div>
-      <div class="it" title="Na última hora: da fala do cliente até a próxima resposta (Mari ou time). Típico = metade das respostas sai até esse tempo; lento = 9 em 10."><b>${r.resposta_p50_s ? segTxt(r.resposta_p50_s) : '—'}</b><small>resposta típica${r.resposta_p90_s ? ` · lenta ${segTxt(r.resposta_p90_s)}` : ''}</small></div>
-      <div class="it" title="Conversas com ${lim.quente_falas ?? 3} ou mais mensagens do cliente na última hora — elas estão no Na mira da Live."><b class="${r.quentes ? 'warn-txt' : ''}">${NG.fmtNum(r.quentes || 0)} 🔥</b><small>quentes na última hora</small></div>
-      <div class="it rt-graf" title="Falas do cliente por hora nas últimas 24 h (barras) e a média da mesma hora nos 7 dias anteriores (traço)."><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Falas do cliente por hora, 24 h">${barras}</svg>
-        <small>${NG.fmtNum(tot)} falas do cliente em 24 h · semana ${NG.fmtNum(tot7)}${tot7 ? ` (${tot >= tot7 ? '+' : ''}${Math.round(((tot - tot7) * 100) / tot7)}%)` : ''}</small></div>`;
+    const alerta = 2 * (lim.espera_alerta_min ?? 3);
+    ritmoEl.className = `mp-card mp-ritmo ${cls}`;
+    ritmoEl.innerHTML = `<div class="mp-h"><b>Ritmo da Mari</b><span class="apagado" title="${esc(dica)}">${esc(dica.split('.')[0])}</span></div>
+      <div class="mp-rit">
+        <div class="mp-gauge" title="${esc(`${dica} Ritmo bom a partir de ${lim.bom_conversas ?? 2} conversas ao mesmo tempo, Pico a partir de ${lim.pico_conversas ?? 6}, Sobrecarga a partir de ${lim.sobrecarga_conversas ?? 12} ou alguém esperando resposta há mais de ${alerta} min.`)}">
+          <svg viewBox="0 0 200 112" role="img" aria-label="${esc(`Ritmo: ${rot}, ${ag} conversando agora`)}">
+            ${['calmo', 'bom', 'pico', 'sobrecarga'].map((n, i) => `<path d="${arco(i / 4 + 0.008, (i + 1) / 4 - 0.008, 80)}" class="seg${r.nivel === n ? ' on' : ''}" style="stroke:${COR_NIVEL[n]}"/>`).join('')}
+            <line x1="100" y1="100" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" class="pt"/><circle cx="100" cy="100" r="6" class="pt-c"/>
+          </svg>
+          <div class="mp-gauge-t"><b style="color:${COR_NIVEL[r.nivel] || COR_NIVEL.calmo}">${rot}</b><small>${NG.fmtNum(ag)} conversando agora</small></div>
+        </div>
+        <div class="mp-rit-n">
+          <div title="Conversas (últimas 3 h) em que a última fala é do cliente: ainda sem resposta da Mari ou do time."><b class="${espMax >= alerta ? 'bad-txt' : esp ? 'warn-txt' : ''}">${NG.fmtNum(esp)}</b><small>${esp ? `esperando · a maior há ${espMax < 1 ? '<1' : NG.fmtNum(Math.round(espMax))} min` : 'esperando resposta'}</small></div>
+          <div title="Na última hora: da fala do cliente até a próxima resposta (Mari ou time). Típico = metade sai até esse tempo; lento = 9 em 10."><b>${r.resposta_p50_s ? segTxt(r.resposta_p50_s) : '—'}</b><small>resposta típica${r.resposta_p90_s ? ` · lenta ${segTxt(r.resposta_p90_s)}` : ''}</small></div>
+          <div title="Conversas com ${lim.quente_falas ?? 3} ou mais mensagens do cliente na última hora — estão no Na mira da Live."><b class="${r.quentes ? 'warn-txt' : ''}">${NG.fmtNum(r.quentes || 0)} 🔥</b><small>quentes na última hora · <a href="fila.html">Na mira</a></small></div>
+        </div>
+      </div>`;
+    // conversa por hora (24 h): cliente × Mari × média da semana
+    const hs = r.horas || [];
+    const max = Math.max(1, ...hs.map((h) => Math.max(Number(h.cliente || 0), Number(h.mari || 0), Number(h.media7 || 0))));
+    const W = 480; const H = 120; const bw = W / Math.max(1, hs.length);
+    const y = (v) => H - (Number(v || 0) / max) * (H - 6);
+    const barras = hs.map((h, i) => {
+      const x = i * bw;
+      return `<g><title>${esc(`${h.hora}h — cliente ${h.cliente} · Mari ${h.mari} · média da semana ${h.media7}`)}</title>
+        <rect x="${(x + bw * 0.12).toFixed(1)}" y="${y(h.cliente).toFixed(1)}" width="${(bw * 0.38).toFixed(1)}" height="${(H - y(h.cliente)).toFixed(1)}" class="cli${i === hs.length - 1 ? ' ag' : ''}"/>
+        <rect x="${(x + bw * 0.5).toFixed(1)}" y="${y(h.mari).toFixed(1)}" width="${(bw * 0.38).toFixed(1)}" height="${(H - y(h.mari)).toFixed(1)}" class="mar"/>
+        <rect x="${x}" y="0" width="${bw}" height="${H}" class="hit"/></g>`;
+    }).join('');
+    const media = hs.map((h, i) => `${i ? 'L' : 'M'}${(i * bw).toFixed(1)} ${y(h.media7).toFixed(1)} L${((i + 1) * bw).toFixed(1)} ${y(h.media7).toFixed(1)}`).join(' ');
+    const tot = hs.reduce((a, h) => a + Number(h.cliente || 0), 0);
+    const totM = hs.reduce((a, h) => a + Number(h.mari || 0), 0);
+    const tot7 = Math.round(hs.reduce((a, h) => a + Number(h.media7 || 0), 0));
+    const dif = tot7 ? Math.round(((tot - tot7) * 100) / tot7) : null;
+    horasEl.innerHTML = `<div class="mp-h"><b>Conversa por hora</b><span class="apagado">últimas 24 h</span><span class="fc-sp"></span>
+        <span class="mp-leg"><i class="cli"></i>cliente ${NG.fmtNum(tot)}</span><span class="mp-leg"><i class="mar"></i>Mari ${NG.fmtNum(totM)}</span><span class="mp-leg"><i class="med"></i>média da semana ${NG.fmtNum(tot7)}${dif != null ? ` <b class="${dif >= 0 ? 'ok-txt' : 'warn-txt'}">${dif >= 0 ? '+' : ''}${dif}%</b>` : ''}</span></div>
+      <div class="mp-graf"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Mensagens por hora nas últimas 24 horas">${barras}<path d="${media}" class="med"/></svg></div>
+      <div class="mp-eixo">${hs.map((h, i) => `<span>${i % 3 === 0 || i === hs.length - 1 ? `${esc(h.hora)}h` : ''}</span>`).join('')}</div>`;
   }
-  function carregarRitmo() {
-    if (Date.now() - ritmoEm < 60000) return;
+  const MOTIVO = { dados_completos: 'Dados completos', pedido_humano: 'Pediu uma pessoa', fora_de_area: 'Fora da área', sem_cobertura: 'Sem cobertura',
+    interesse_caindo: 'Interesse caindo', multiplos_decisores: 'Vários decisores', recusa_compra: 'Recusou', 'sem motivo': 'Sem motivo' };
+  const ORIGEM = { meta_ads: 'Meta Ads', instagram: 'Instagram', facebook: 'Facebook', direto: 'Direto', indicacao: 'Indicação' };
+  const barrinhas = (itens, rot, cls = '') => {
+    const mx = Math.max(1, ...itens.map((x) => Number(x.n || 0)));
+    return itens.map((x) => `<div class="mp-bl ${cls}"><span title="${esc(rot(x))}">${esc(rot(x))}</span><span class="mp-bl-b"><i style="width:${Math.round((Number(x.n || 0) * 100) / mx)}%"></i></span><b>${NG.fmtNum(x.n || 0)}</b></div>`).join('');
+  };
+  function renderPainel(p) {
+    if (!p) return;
+    // 14 dias
+    const ds = p.dias || [];
+    const mx = Math.max(1, ...ds.map((d) => Number(d.conversas || 0)));
+    const W = 280; const H = 100; const bw = W / Math.max(1, ds.length);
+    const tc = ds.reduce((a, d) => a + Number(d.conversas || 0), 0);
+    const tv = ds.reduce((a, d) => a + Number(d.vendas || 0), 0);
+    const ti = ds.reduce((a, d) => a + Number(d.instaladas || 0), 0);
+    const th = ds.reduce((a, d) => a + Number(d.handoffs || 0), 0);
+    p14El.innerHTML = `<div class="mp-h"><b>Últimos 14 dias</b><span class="fc-sp"></span><span class="mp-leg"><i class="cli"></i>conversas ${NG.fmtNum(tc)}</span><span class="mp-leg"><i class="ven"></i>vendas ${NG.fmtNum(tv)}</span></div>
+      <div class="mp-graf"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Conversas e vendas por dia, 14 dias">${ds.map((d, i) => {
+        const h = (Number(d.conversas || 0) / mx) * (H - 8);
+        const hv = (Number(d.vendas || 0) / mx) * (H - 8);
+        const fds = d.dow >= 6;
+        return `<g><title>${esc(`${d.dia.slice(8)}/${d.dia.slice(5, 7)} — ${d.conversas} conversas · ${d.responderam} responderam · ${d.handoffs} passaram ao time · ${d.vendas} vendas · ${d.instaladas} instaladas`)}</title>
+          <rect x="${(i * bw + bw * 0.14).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${h.toFixed(1)}" class="cli${fds ? ' fds' : ''}${i === ds.length - 1 ? ' ag' : ''}"/>
+          <rect x="${(i * bw + bw * 0.14).toFixed(1)}" y="${(H - hv).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${hv.toFixed(1)}" class="ven"/>
+          <rect x="${(i * bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H}" class="hit"/></g>`;
+      }).join('')}</svg></div>
+      <div class="mp-eixo">${ds.map((d, i) => `<span>${i % 2 === 1 || i === ds.length - 1 ? esc(d.dia.slice(8)) : ''}</span>`).join('')}</div>
+      <div class="mp-14-pe"><span><b>${tc ? `${((tv * 100) / tc).toFixed(1).replace('.', ',')}%` : '—'}</b> viram venda</span><span><b>${NG.fmtNum(th)}</b> passaram ao time</span><span><b>${NG.fmtNum(ti)}</b> instaladas</span></div>`;
+    // escada
+    const es = p.escada || [];
+    const te = es.reduce((a, x) => a + Number(x.n || 0), 0);
+    escadaEl.innerHTML = `<div class="mp-h"><b>Escada agora</b><span class="apagado">${NG.fmtNum(te)} em andamento</span></div>
+      <div class="mp-esc">${barrinhas(es, (x) => x.nome, 'esc')}</div><a class="mp-link" href="leads.html">Ver os leads →</a>`;
+    // de onde vêm / por que passam ao time
+    const cid = (p.cidades || []).filter((x) => x.cidade !== 'sem cidade').slice(0, 4);
+    const sem = (p.cidades || []).find((x) => x.cidade === 'sem cidade');
+    const org = p.origens || [];
+    const to = Math.max(1, org.reduce((a, x) => a + Number(x.n || 0), 0));
+    mixEl.innerHTML = `<div class="mp-h"><b>De onde vêm</b><span class="apagado">7 dias</span></div>
+      <div class="mp-org" title="${esc(org.map((x) => `${ORIGEM[x.origem] || x.origem}: ${x.n}`).join(' · '))}">${org.map((x, i) => `<i class="o${i % 4}" style="width:${((Number(x.n) * 100) / to).toFixed(1)}%"></i>`).join('')}</div>
+      <div class="mp-org-l">${org.slice(0, 3).map((x, i) => `<span><i class="o${i % 4}"></i>${esc(ORIGEM[x.origem] || x.origem)} ${Math.round((Number(x.n) * 100) / to)}%</span>`).join('')}</div>
+      ${barrinhas(cid, (x) => x.cidade)}${sem ? `<div class="mp-sem apagado">${NG.fmtNum(sem.n)} sem cidade (não chegaram a dizer)</div>` : ''}
+      <div class="mp-h mp-h2"><b>Passaram ao time</b><span class="apagado">7 dias</span></div>
+      ${(p.motivos || []).length ? barrinhas((p.motivos || []).slice(0, 4), (x) => MOTIVO[x.motivo] || x.motivo, 'mot') : '<span class="apagado">Nenhum handoff.</span>'}`;
+  }
+  let painelEm = 0;
+  function carregarRitmo(forcar) {
+    if (!forcar && Date.now() - ritmoEm < 60000) return;
     ritmoEm = Date.now();
     NG.sb.rpc('mari_ritmo').then((r) => renderRitmo(r.error ? null : r.data), () => {});
+    if (forcar || Date.now() - painelEm > 5 * 60000) {
+      painelEm = Date.now();
+      NG.sb.rpc('mari_painel').then((r) => { if (!r.error) renderPainel(r.data); }, () => {});
+    }
   }
+  // o palco ocupa a tela sem rolar (no computador); a barra do pé leva às conversas
+  const palcoEl = document.getElementById('palco');
+  function ajustarPalco() {
+    if (window.innerWidth <= 900) { palcoEl.style.height = ''; return; }
+    const topo = palcoEl.getBoundingClientRect().top + (document.scrollingElement ? document.scrollingElement.scrollTop : 0);
+    palcoEl.style.height = `${Math.max(560, window.innerHeight - topo - 10)}px`;
+  }
+  window.addEventListener('resize', ajustarPalco);
+  setTimeout(ajustarPalco, 0);
+  function atualizarDesce() {
+    const el = document.getElementById('mp-desce-n');
+    if (!el) return;
+    const n = convs.filter((c) => !ehTeste(c)).length;
+    const pa = convs.filter((c) => precisaAcao(c)).length;
+    el.innerHTML = `· ${NG.fmtNum(n)} ${n === 1 ? 'conversa' : 'conversas'}${pa ? ` · <b class="bad-txt">${NG.fmtNum(pa)} ${pa === 1 ? 'precisa' : 'precisam'} de ação</b>` : ''}`;
+    document.querySelectorAll('.mp-desce-v').forEach((x) => x.classList.toggle('on', x.dataset.v === vista));
+  }
+  document.getElementById('mp-desce').addEventListener('click', (ev) => {
+    const v = ev.target.closest('.mp-desce-v');
+    if (v && v.dataset.v !== vista) {
+      const r = document.querySelector(`input[name="vista"][value="${v.dataset.v}"]`);
+      if (r) { r.checked = true; r.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    document.getElementById('abas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   async function carregarVivo() {
     carregarRitmo();
+    atualizarDesce();
     const [rv, rf] = await Promise.all([NG.sb.rpc('mari_ao_vivo'), NG.sb.from('v_mari_feed').select('*')]);
     if (rv.error) {
       pulsoEl.className = 'mav-pulso bad';
@@ -854,6 +985,7 @@
   }
 
   function render() {
+    atualizarDesce();
     const b = base();
     renderKpis(b);
     renderAbas(b);
@@ -1009,7 +1141,13 @@
     </section>`;
   }
 
-  async function abrir(id) {
+  // 15/11 (Ricardo: "a ficha que se abre ao clicar… pode substituir pela ficha do sistema"): o clique abre a FICHA ÚNICA
+  // (#venda= ou #conversa=, NGFicha) por cima da tela; a gaveta antiga fica como abrirGavetaAntiga (sem uso).
+  function abrir(id) {
+    const c = convs.find((x) => x.id === id);
+    location.hash = c && c.venda_id ? `#venda=${c.venda_id}` : `#conversa=${id}`;
+  }
+  async function abrirGavetaAntiga(id) {
     const c = convs.find((x) => x.id === id);
     if (!c) return;
     document.getElementById('d-titulo').textContent = contatoDe(c);
@@ -1137,6 +1275,7 @@
   });
   // 0107: pulso + feed a cada 15 s com a aba visível; "último turno há…" anda a cada 5 s.
   carregarVivo();
+  setInterval(() => { if (document.visibilityState === 'visible') carregarRitmo(); }, 60000);   // 0207: ritmo 1×/min, painel 1×/5 min
   setInterval(async () => { if (document.visibilityState === 'visible' && await NG.mudou('mari_vivo', 2 * 60000)) carregarVivo(); }, 15000);
   setInterval(() => { const u = pulsoEl.querySelector('[data-ult]'); if (u && aoVivo) u.textContent = desdeTxt(aoVivo.ultimo_turno_em); }, 5000);
   NG.botaoAtualizar(() => { carregar(); carregarVivo(); });   // 09/11: o ↻ antigo virou o botão Atualizar comum
