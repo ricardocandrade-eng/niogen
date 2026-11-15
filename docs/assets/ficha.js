@@ -2145,8 +2145,11 @@
     else if (bo && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time')) bts.push('<button type="button" class="btn" data-f="conv-espera">⏸ Aguardar…</button>');
     const amanhaC = NG.somaDias(NG.diaSP(), 1);
     // 0103: o cliente só confirmou ("ok") → o ⏸ Aguardar já vem aberto, com a última fala do time como motivo. Um clique resolve.
-    const confC = bo && soConfirmou(j) && !emEspera && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time');
-    if (confC && formAtivo == null && !convEsperaFechado) formAtivo = 'conv_espera';
+    // 15/11 (Ricardo, moraesligia575: "abriu travada… não permite fazer nada"): na ficha nova o formulário aberto vira a gaveta com
+    // véu; abrir sozinho prendia a tela (o X e o véu limpavam e a regra reabria). Agora só a dica; o ⏸ Aguardar abre no clique.
+    // E "Pediu um consultor" não é "só confirmou": o "ok" é a resposta ao "já chamei o consultor" — o time precisa falar.
+    const confC = bo && soConfirmou(j) && !emEspera && !silenciada && !c.nao_contatar && (dono.tipo === 'pessoa' || dono.tipo === 'time')
+      && !/^Pediu um consultor/.test(String(j.o_que_fazer || ''));
     const formEspera = formAtivo === 'conv_espera' ? `<form class="f-form" data-form="conv_espera">
         ${confC ? `<span class="f-nota">💬 O cliente só confirmou. Se você ficou de dar um retorno, marque a espera — senão a conversa volta para a sua vez em 4 h úteis.</span>` : ''}
         <label>Aguardando o quê? <input name="motivo" list="f-esp-motivos" maxlength="80" placeholder="ex.: parente decidir" value="${esc(confC && d.ultTime ? d.ultTime : '')}" required autofocus></label>
@@ -2184,9 +2187,10 @@
           ${dono.tipo === 'mari' && nivel !== 'agora' && !silenciada ? '<span class="f-nota">Não precisa fazer nada. Se quiser entrar, assuma antes de escrever.</span>' : ''}
           ${emEspera && !silenciada ? `<span class="f-nota">⏸ Em espera até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}. Volta para o Live no dia, ou antes se o cliente escrever.</span>` : ''}
           ${bts.length ? `<div class="f-prox-bts">${bts.join('')}</div>` : ''}
-          ${formEspera}${formAtivo === 'saida' ? `<div class="f-prox-form">${FORMS.saida()}</div>` : ''}
           ${sozinho ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
-          <div class="f-atalhos">${at.join('')}</div>`;
+          ${confC && formAtivo !== 'conv_espera' ? '<span class="f-nota">💬 O cliente só confirmou. Se você ficou de dar um retorno, use ⏸ Aguardar… — senão a conversa volta para a sua vez em 4 h úteis.</span>' : ''}
+          ${formEspera}${formAtivo === 'saida' ? `<div class="f-prox-form">${FORMS.saida()}</div>` : ''}
+          <div class="f-atalhos-t">Outras ações</div><div class="f-atalhos">${at.join('')}</div>`;
     return { c, j, q, dono, nivel, silenciada, emEspera, corpoPasso, itens, ESTADO, feito, k, passosConv, travasC };
   }
   function renderConversa() {
@@ -4271,7 +4275,7 @@
     if (a === 'fc2-dados') {   // 15/11 noite: faixa recolhida dos Dados do cliente — abre para a esquerda / recolhe
       const aberto = b.getAttribute('aria-expanded') === 'true';
       fc.dados = !aberto;
-      if (aberto) { fc.passo = false; fc.passoX = true; fc.ver = null; fc.conf = false; fc.pend = false; fc.hist = false; fc.edG = null; formAtivo = null; }
+      if (aberto) { fc.passo = false; fc.passoX = true; fc.ver = null; fc.conf = false; fc.pend = false; fc.hist = false; fc.edG = null; if (formAtivo === 'conv_espera') convEsperaFechado = true; formAtivo = null; }
       render(); return;
     }   // 15/11: quadro "Handoff da Mari"
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; fc.etapaX = !fc.etapa; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
@@ -4289,7 +4293,7 @@
     }
     if (a === 'fc-pend') { fc.pend = !fc.pend; render(); return; }
     if (a === 'fc-passo') { fc.passo = true; fc.passoX = false; fc.ver = null; fc.pend = false; fc.etapa = null; render(); return; }
-    if (a === 'fc-passo-x') { fc.passo = false; fc.passoX = true; formAtivo = null; passoAberto = new Set(); render(); return; }
+    if (a === 'fc-passo-x') { fc.passo = false; fc.passoX = true; if (formAtivo === 'conv_espera') convEsperaFechado = true; formAtivo = null; passoAberto = new Set(); render(); return; }
     if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; fc.etapa = null; render(); return; }
     if (a === 'fc-ver-x') { fc.ver = null; edicao = null; render(); return; }
     if (a === 'fc-conf') { fc.conf = !fc.conf; if (fc.ver) fc.ver = null; render(); return; }

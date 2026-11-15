@@ -3461,3 +3461,9 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
   body.tela-pulso .cab { margin-bottom: 10px; }
   .pa-nome { flex-basis: 84px; }
 }
+
+/* 15/11 (Ricardo, moraesligia575: card "Próximo passo" desorganizado): o que fazer · ação principal · Outras ações, separados */
+.fc-passo .f-prox-bts { margin: 10px 0 6px; }
+.fc-passo .f-nota, .fc-passo .f-sozinho { display: block; margin: 6px 0; font-size: 12.5px; color: #9AA6B2; }
+.f-atalhos-t { margin-top: 14px; padding-top: 10px; border-top: 1px solid #2A333D; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #8A96A3; }
+.fc-passo .f-atalhos { justify-content: flex-start; margin-top: 8px; }
