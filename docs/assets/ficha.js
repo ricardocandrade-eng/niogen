@@ -2707,6 +2707,12 @@
     complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', email_invalido: 'E-mail recusado pelo portal — confira o e-mail do cliente (ex.: @uol.com.br)', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
   const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
   // O que o operador precisa (venda: da ficha; conversa: o que a Mari coletou). Falta = selo no lugar do botão.
+  function celularBR(t) {
+    let n = NG.soDigitos(t || '');
+    if (/^55\d{10,11}$/.test(n)) n = n.slice(2);
+    if (n.length === 10 && /[6-9]/.test(n[2])) n = `${n.slice(0, 2)}9${n.slice(2)}`;
+    return n;
+  }
   function entradaOp(tipo) {
     const v = d.soConversa ? null : d.v;
     const x = d.soConversa ? ((d.conv && d.conv.dados) || {}) : {};
@@ -2722,7 +2728,9 @@
     if (tipo === 'viab') return { end };
     const cpf = NG.soDigitos(v ? v.cliente_cpf_cnpj : x.cpf);
     if (cpf.length !== 11) return { falta: cpf.length === 14 ? 'CNPJ: consulte no portal' : 'falta CPF' };
-    const cel = NG.soDigitos(v ? v.cliente_whatsapp : (d.conv || {}).telefone).replace(/^55(?=\d{10,11}$)/, '');
+    // 15/11 (Helton): o WhatsApp da conversa vem como 55 + 10 dígitos (sem o 9) e o portal não libera o Avançar da etapa 4.
+    // Usa o celular que a Mari confirmou (dados.telefone) e, se ainda vier com 10 dígitos de celular, põe o 9.
+    const cel = celularBR(v ? v.cliente_whatsapp : (x.telefone || (d.conv || {}).telefone));
     if (![10, 11].includes(cel.length)) return { falta: 'falta o celular' };
     const email = String(v ? v.cliente_email || '' : x.email || '').trim();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { falta: 'falta o e-mail' };
@@ -2742,7 +2750,8 @@
     const reg = so ? 'so_cartao' : /^aprovado/.test(s.resultado || '') ? 'aprovado' : s.resultado === 'negado' ? 'negado' : s.resultado === 'pendente' ? 'pendente' : null;
     const padrao = s.endereco && s.endereco.origem === 'padrao';
     if (padrao && /^aprovado/.test(s.resultado || '')) rot = `${rot} · NO ENDEREÇO PADRÃO`;
-    const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? `o portal respondeu: "${String(s.popup.texto).trim()}"` : ''}`;
+    const avisosTela = !s.popup && s.texto_tela ? (String(s.texto_tela).split('\n').find((l) => /^Avisos:/.test(l)) || '').replace(/^Avisos:\s*/, '') : '';
+    const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? `o portal respondeu: "${String(s.popup.texto).trim()}"` : avisosTela ? `o portal mostrou: "${avisosTela}"` : ''}`;
     return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
       cls: padrao ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : s.resultado === 'negado' || s.resultado === 'pedido_em_andamento' ? 'bad' : 'warn', registrar: padrao ? null : reg };
   }
@@ -2764,7 +2773,10 @@
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
         : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
-      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>
+      // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
+      const telaP = !['viavel'].includes(o.s.resultado) && !/^aprovado/.test(o.s.resultado || '') && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
+        ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(String(o.s.popup && o.s.popup.texto ? `${o.s.popup.titulo || ''}\n${o.s.popup.texto}` : o.s.texto_tela).trim().slice(0, 900))}</pre></details>` : '';
+      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>${telaP}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
@@ -2868,8 +2880,9 @@
     } else if (p.k === 'cred') {
       const cc = conv ? d.conv : null;
       const padraoC = cc && cc.credito_endereco === 'padrao' && /^aprovado/.test(cc.credito_resultado || '');
-      corpo = conv ? `${linhaDet('Resultado', cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
-        ${padraoC ? '<div class="fc-aviso warn"><b>Lido no endereço PADRÃO, não no do cliente.</b> O antifraude da Nio olha o endereço: consulte de novo aqui (com o endereço do cliente) antes do pedido.</div>' : ''}
+      corpo = conv ? `${linhaDet('Resultado', padraoC ? '<span class="warn-txt">sem resultado válido para este endereço</span>'
+          : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
+        ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
         ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;

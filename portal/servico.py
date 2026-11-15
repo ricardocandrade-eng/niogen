@@ -411,6 +411,10 @@ def novo_job_credito(b):
     c_in = b.get('contato') or None
     if c_in and (cr.so_digitos(c_in.get('celular')) or c_in.get('email')):
         cel = cr.so_digitos(c_in.get('celular'))
+        if len(cel) in (12, 13) and cel.startswith('55'):
+            cel = cel[2:]
+        if len(cel) == 10 and cel[2] in '6789':      # 15/11 (Helton): celular sem o 9 → o portal não libera a etapa 4
+            cel = cel[:2] + '9' + cel[2:]
         email = str(c_in.get('email') or '').strip()
         if len(cel) not in (10, 11) or '@' not in email:
             raise pl.Falha(400, 'contato do cliente precisa de celular com DDD e e-mail')

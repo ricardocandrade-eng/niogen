@@ -2837,3 +2837,8 @@ select option:disabled { color: var(--muted); }
 .fc2-dfv-h .apagado { text-transform: none; letter-spacing: 0; font-weight: 400; }
 .fc-aviso.bad { background: rgba(244, 112, 103, .08); border-color: #5A2B2B; }
 .fc2-fv.risco { color: #F47067; font-weight: 600; }
+
+/* 15/11: o que o portal mostrou (quando o resultado não é claro) */
+.fc2-tela { font-size: 12px; color: #B6BFCA; }
+.fc2-tela summary { cursor: pointer; color: #9AA4B0; }
+.fc2-tela pre { margin: 4px 0 0; white-space: pre-wrap; font: inherit; font-size: 12px; background: #10151B; border: 1px solid #262E38; border-radius: 8px; padding: 6px 8px; max-height: 140px; overflow: auto; }
