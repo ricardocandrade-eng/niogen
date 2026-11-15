@@ -3171,3 +3171,4 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 /* 15/11 noite: o nome do degrau não corta — quem encolhe é o traço entre eles e o resumo da direita */
 .fc2-tri-l .fc-es { min-width: max-content; }
 .fc2-tri-i { max-width: 28%; text-overflow: ellipsis; }
+.fc2-ho-tt .fc2-ho-k { width: auto; white-space: nowrap; }
