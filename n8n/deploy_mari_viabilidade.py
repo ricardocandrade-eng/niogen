@@ -101,7 +101,8 @@ def build(ids):
         http('2 · Supabase pendentes', f'{dm.SB}/rest/v1/rpc/mari_credito_pendentes', '={{ JSON.stringify({ p_limite: 1 }) }}', 240, 100,
              retryOnFail=True, maxTries=2, waitBetweenTries=5000)
         http('3 · Pedir ao portal', EDGE_CRED,
-             "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email } }) }}",
+             # 15/11 (0204, Helton): com o endereço do cliente quando ele é viável — o antifraude da Nio olha o endereço
+             "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email }, endereco: $json.endereco || undefined }) }}",
              480, 100, full=True, onError='continueRegularOutput')
     elif DUP:
         http('2 · Supabase pendentes', f'{dm.SB}/rest/v1/rpc/mari_dup_pendentes', '={{ JSON.stringify({ p_limite: 1 }) }}', 240, 100,

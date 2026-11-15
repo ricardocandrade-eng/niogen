@@ -84,7 +84,7 @@
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email } }) }}",
+        "jsonBody": "={{ JSON.stringify({ acao: 'iniciar', autorizado: true, cpf: $json.cpf, contato: { celular: $json.celular, email: $json.email }, endereco: $json.endereco || undefined }) }}",
         "options": {
           "timeout": 30000,
           "response": {

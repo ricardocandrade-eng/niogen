@@ -419,6 +419,10 @@ def novo_job_credito(b):
         if not cfg['contato_celular'] or '@' not in cfg['contato_email']:
             raise pl.Falha(503, 'contato padrão não configurado (CREDITO_CONTATO_*)')
         contato = {'celular': cfg['contato_celular'], 'email': cfg['contato_email']}
+    # 15/11 (Helton: aprovado no NIOGEN, "Negado - Critérios Antifraude" no portal): o cache era só por CPF e a consulta com o
+    # endereço do cliente devolveu a resposta guardada do ENDEREÇO PADRÃO. A análise antifraude da Nio olha o endereço: a chave do
+    # cache passa a separar o endereço padrão de cada endereço de cliente.
+    chave = chave + ('|padrao' if origem_end == 'padrao' else '|' + chave_viab(endereco, cfg['sal'])[:16])
 
     with TRAVA_JOBS:
         _limpar_jobs()

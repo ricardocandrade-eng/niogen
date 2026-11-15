@@ -23,3 +23,6 @@ meta/_previas/
 
 # extensão do Chrome (prompt 28): config local com a anon key, igual ao docs/config.js
 extensao/config.js
+
+# Claude Code: permissões locais (não versionar)
+.claude/settings.local.json
