@@ -271,7 +271,7 @@
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
+      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
       NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
@@ -2342,6 +2342,8 @@
       }
       if (acao === 'voltar-lista') { if (voltarFn) voltarFn(); return; }
       if (acao === 'bio-ler') { abrirBioModal(); return; }   // 0194: biometria no GED360, agora
+      if (acao === 'trocar-titular') { trocarTitular(); return; }   // 0210: titular diferente de quem conversa
+      if (acao === 'gravar-interesse') { gravarInteresse(); return; }   // 0210: nº do Interesse do portal
       if (acao === 'os-ler') { abrirOsModal(); return; }
       if (acao === 'menu') {
         const lista = b.parentElement.querySelector('.f-menu-lista');
@@ -2815,11 +2817,53 @@
   // Mudou alguma coisa → recarrega a ficha (status, data, Live).
   const temOsNio = () => !!(d && !d.soConversa && d.v && ehBO() && /\d{8}/.test(String(d.v.nio_os || d.v.nio_pedido || '')));
   // 0194: degrau Biometria → o robô do GED360 lê na hora (edge credito-consulta, acao bio). Mudou → recarrega a ficha.
+  // 15/11: CPF que a conversa guardou (lead sem venda) — o GED360 casa pelo CPF.
+  function cpfConversa() { const c = d && d.conv; const x = String(((c && c.dados) || {}).cpf || '').replace(/\D/g, ''); return x.length === 11 ? x : ''; }
   async function abrirBioModal() {
-    if (!d || d.soConversa || !d.v || !ehBO()) return;
+    if (!d || !ehBO()) return;
     const alvo = idAtual;
+    if (d.soConversa || !d.v) {
+      if (!cpfConversa() || !d.conversaId) { NG.toast('Esta conversa ainda não tem CPF.', 'bad'); return; }
+      await NG.bioModal(null, d.conv && d.conv.nome, { conversaId: d.conversaId });
+      return;
+    }
     const r = await NG.bioModal(d.v.id, d.v.cliente_nome);
     if (r && r.mudou && idAtual === alvo) { NG.limparCache(); await recarregar(); }
+  }
+  // 0210 (15/11, caso Grace): crédito negado no CPF de quem conversa → o pedido sai no CPF de um parente. O titular vira o nome/CPF
+  // da venda (o que a Nio registra: biometria, OS e comissão casam pelo CPF) e quem conversa fica como contato.
+  async function trocarTitular() {
+    if (!d || d.soConversa || !d.v || !ehBO()) return;
+    const v = d.v;
+    const quem = esc(NG.primeiroNome(v.contato_nome || v.cliente_nome));
+    const fd = await NG.modal(`<h3>Trocar o titular</h3>
+      <p>Use quando o pedido sai no CPF de outra pessoa (crédito negado no CPF de quem conversa). ${quem} continua como contato; a biometria é do <b>novo titular</b>.</p>
+      <label class="campo">Nome completo do titular (como saiu na Receita)<input name="nome" required minlength="5" autocomplete="off"></label>
+      <label class="campo">CPF do titular<input name="cpf" required inputmode="numeric" autocomplete="off"></label>
+      <label class="campo">Parentesco com ${quem}<input name="relacao" required list="f-rel" placeholder="ex.: filho" autocomplete="off"></label>
+      <datalist id="f-rel"><option value="pai"><option value="mãe"><option value="filho(a)"><option value="cônjuge"><option value="irmão(ã)"><option value="avô/avó"><option value="outro parente"></datalist>
+      <label class="campo">Crédito no CPF do titular<select name="credito"><option value="">ainda não consultado</option><option value="aprovado">aprovado</option><option value="so_cartao">aprovado só no cartão</option><option value="pendente">pendente</option><option value="negado">negado</option></select></label>
+      <label class="campo">Observação (opcional)<input name="motivo" maxlength="200" placeholder="ex.: crédito negado no CPF dela" autocomplete="off"></label>`);
+    if (!fd) return;
+    const { error } = await NG.sb.rpc('venda_trocar_titular', { p_venda: v.id, p_nome: String(fd.get('nome') || ''), p_cpf: String(fd.get('cpf') || ''),
+      p_relacao: String(fd.get('relacao') || ''), p_motivo: String(fd.get('motivo') || '') || null, p_credito: String(fd.get('credito') || '') || null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Titular trocado · o GED360 casa a biometria dele pelo CPF', 'ok');
+    NG.limparCache();
+    await recarregar();
+  }
+  async function gravarInteresse() {
+    if (!d || d.soConversa || !d.v || !ehBO()) return;
+    const v = d.v;
+    const fd = await NG.modal(`<h3>Interesse salvo no portal</h3>
+      <p>O portal não abre a OS antes da biometria: o pedido fica em <b>Histórico de Pedidos › tipo Interesse</b>. Grave o nº aqui — quando a biometria aprovar, a Live avisa para voltar nele e gerar a OS.</p>
+      <label class="campo">Nº do Interesse<input name="num" inputmode="numeric" value="${esc(v.nio_interesse || '')}" placeholder="ex.: 202611150250837725" autocomplete="off"></label>`);
+    if (!fd) return;
+    const { error } = await NG.sb.rpc('venda_gravar_interesse', { p_venda: v.id, p_numero: String(fd.get('num') || '') });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Interesse gravado', 'ok');
+    NG.limparCache();
+    await recarregar();
   }
   async function abrirOsModal() {
     if (!temOsNio()) return;
@@ -2907,15 +2951,19 @@
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
     } else if (p.k === 'bio') {
-      corpo = conv ? linhaDet('Biometria', 'depois da OS')
+      // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
+      const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
+      corpo = conv ? `${linhaDet('Biometria', cpfConversa() ? 'sem venda ainda — dá para consultar o GED360 pelo CPF da conversa' : 'depois da OS')}${cpfConversa() && ehBO() ? btBio : ''}`
         : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
+        ${v.contato_nome ? linhaDet('Quem faz', `<b>${esc(v.cliente_nome)}</b> (titular) — o link chegou no contato de ${esc(NG.primeiroNome(v.contato_nome))}${v.contato_relacao ? ` (${esc(v.contato_relacao)})` : ''}`) : ''}
+        ${v.nio_interesse && !v.nio_pedido ? linhaDet('Interesse no portal', `<span class="mono">${esc(v.nio_interesse)}</span> · aprovada a biometria, abrir em Histórico de Pedidos › Interesse e gerar a OS`) : ''}
         ${v.biometria_link_enviado_em ? linhaDet('Link da Nio', esc(NG.fmtDataHora(v.biometria_link_enviado_em))) : ''}
         ${v.biometria_validada_em ? linhaDet('Validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
         ${v.biometria_dispensada_em ? linhaDet('Dispensada pela Nio', esc(`${NG.fmtDataHora(v.biometria_dispensada_em)} · ${v.biometria_dispensa_motivo || 'sistema fora do ar'}`)) : ''}
         ${a.bio_resultado ? linhaDet('GED360', `${esc(a.bio_rotulo || a.bio_resultado)} · protocolo ${esc(a.bio_protocolo)} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}`) : ''}
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
         ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
-        ${v.nio_os && ehBO() && v.status !== 'saida' ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>' : ''}`;
+        ${ehBO() && v.status !== 'saida' ? btBio : ''}`;
     } else if (p.k === 'os') {
       corpo = conv ? linhaDet('Pedido (OS)', 'depois do crédito aprovado') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
@@ -3915,7 +3963,7 @@
     const inst = v.instalado_em ? `instalada ${NG.fmtData(v.instalado_em)}` : v.instalacao_agendada_para ? `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}` : (v.instalacao_preferencia ? `prefere ${v.instalacao_preferencia}` : null);
     let n = 0;
     const conta = (x) => { if (!x) n += 1; return x; };
-    const contato = `${grupoH('contato', 'Contato', editavel)}${dl('Nome', v.cliente_nome, { trava })}${dl('CPF/CNPJ', conta(v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : null), { mono: true, trava, cpv: v.cliente_cpf_cnpj })}
+    const contato = `${grupoH('contato', 'Contato', editavel)}${v.contato_nome ? `${dl('Titular', v.cliente_nome, { trava })}${dl('Contato', `${v.contato_nome}${v.contato_relacao ? ` · ${v.contato_relacao} do titular` : ''}`, { cp: false })}` : dl('Nome', v.cliente_nome, { trava })}${dl('CPF/CNPJ', conta(v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : null), { mono: true, trava, cpv: v.cliente_cpf_cnpj })}
       ${dl('WhatsApp', v.cliente_whatsapp ? fmtTel(v.cliente_whatsapp) : null, { mono: true })}${dl('E-mail', conta(v.cliente_email))}`;
     const endLinhas = `${dl('CEP', v.cep ? `${NG.fmtCep(v.cep)}${v.cidade ? ` · ${v.cidade}${v.uf ? `/${v.uf}` : ''}` : ''}` : conta(null), { mono: true, trava, cpv: v.cep })}${dl('Rua e número', conta([v.logradouro, v.numero].filter(Boolean).join(', ')), { trava })}
       ${dl('Complemento', v.complemento, { falta: 'não informado', trava })}${dl('Bairro', v.bairro, { falta: '—' })}${dl('Referência', conta(v.ponto_referencia), { falta: 'falta (o portal exige)' })}${dlNio()}`;
@@ -3956,6 +4004,7 @@
       const atual = NG.etapaDe(v).id;
       // 15/11 noite (Ricardo: "organize os itens dos 3 pontinhos"): Agir (vem do AGORA e do topo) · Mover para · Ver em · Copiar e conferir
       const menu = `<!--MENU-AG-->${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div>` : ''}
+        ${ehBO() && v.status !== 'saida' ? `<div class="fc-mlab">Titular e portal</div><button type="button" class="fc-mitem" data-f="trocar-titular">Trocar o titular (CPF de parente)</button><button type="button" class="fc-mitem" data-f="gravar-interesse">${v.nio_interesse ? `Interesse do portal · ${esc(v.nio_interesse)}` : 'Gravar o Interesse do portal'}</button><button type="button" class="fc-mitem" data-f="bio-ler">Consultar a biometria no GED360</button>` : ''}
         <div class="fc-mlab">Ver em</div>
         ${d.conversaId ? `<a class="fc-mitem" href="mari.html?conversa=${esc(d.conversaId)}">Tela Mari</a>` : ''}
         <a class="fc-mitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Funil (Quadro)</a>
@@ -3965,6 +4014,7 @@
         ${v.cliente_whatsapp ? '<button type="button" class="fc-mitem" data-f="copiar-tel">Copiar telefone</button>' : ''}${auditarItem()}`;
       const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
+        v.contato_nome ? `contato: ${NG.primeiroNome(v.contato_nome)}${v.contato_relacao ? ` (${v.contato_relacao})` : ''}` : null,
         v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);   // 0186: selo Meta
       cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
         `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>` : ''}`, menu);

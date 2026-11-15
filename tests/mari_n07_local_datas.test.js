@@ -94,8 +94,9 @@ process.exitCode = falhas ? 1 : 0;
   const ok3 = /liberou o seu pedido só no cartão/.test(c3.texto) && c3.upd.dados && c3.upd.dados.credito_cartao_avisado === true;
   console.log((ok3 ? 'ok   ' : 'FALHOU ') + 'C3 · aprovado só no cartão + boleto → avisa (cartão ou outro titular)');
   const c4 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 1 }), 'Manhã');
-  const ok4 = !c4.handoff && /parente ou familiar/.test(c4.texto) && /Poxa, Eli/.test(c4.texto) && c4.upd.dados && c4.upd.dados.credito_negado_avisado === true;
-  console.log((ok4 ? 'ok   ' : 'FALHOU ') + 'C4 · 1º negado → aviso gentil + CPF de parente, sem handoff');
+  const ok4 = c4.handoff && c4.handoff.motivo === 'pedido_humano' && /parente ou familiar/.test(c4.texto) && /biometria/.test(c4.texto) && /Poxa, Eli/.test(c4.texto)
+    && /Trocar o titular/.test(JSON.stringify(c4.handoff)) && c4.upd.dados && c4.upd.dados.credito_negado_avisado === true;
+  console.log((ok4 ? 'ok   ' : 'FALHOU ') + 'C4 · 1º negado → aviso gentil + titular parente e passa para o BKO (15/11)');
   const c5 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado', credito_consultas: 2 }), 'Manhã');
   const ok5 = c5.handoff && c5.handoff.motivo === 'pedido_humano' && /também não aprovou/.test(c5.texto);
   console.log((ok5 ? 'ok   ' : 'FALHOU ') + 'C5 · 2º negado (CPF do parente) → passa para o time');

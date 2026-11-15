@@ -791,7 +791,8 @@
   // 0194 (Ricardo, 14/11): degrau Biometria → o robô do GED360 (n8n) lê o Relatório Detalhado AGORA (~10 s) e grava; o modal mostra
   // a biometria desta venda. Fechar antes não cancela. Resolve com { mudou } (status da biometria mudou → a ficha recarrega).
   const BIO_RES = { 'APROVADO': 'Aprovada', 'APROVADA': 'Aprovada', 'CONCLUIDO': 'Concluída', 'CONCLUÍDO': 'Concluída' };
-  function bioModal(vendaId, nome) {
+  function bioModal(vendaId, nome, opts) {
+    opts = opts || {};   // 15/11: { conversaId } = lead sem venda, lê pelo CPF da conversa
     return new Promise((resolve) => {
       const dlg = document.createElement('dialog');
       dlg.className = 'modal os-modal';
@@ -805,8 +806,8 @@
       dlg.addEventListener('close', () => { aberto = false; dlg.remove(); resolve({ mudou }); });
       corpo.innerHTML = '<div class="os-lendo">Lendo no GED360… leva uns 10 segundos. Pode fechar: a leitura continua.</div>';
       dlg.showModal();
-      const antes = sb.from('vendas').select('biometria_status').eq('id', vendaId).maybeSingle();
-      creditoFn({ acao: 'bio', venda_id: vendaId }).then(async (r) => {
+      const antes = vendaId ? sb.from('vendas').select('biometria_status').eq('id', vendaId).maybeSingle() : Promise.resolve({ data: {} });
+      creditoFn(vendaId ? { acao: 'bio', venda_id: vendaId } : { acao: 'bio', conversa_id: opts.conversaId }).then(async (r) => {
         const a = ((await antes).data || {}).biometria_status;
         const v = r.venda || {};
         mudou = !!(v.biometria_status && v.biometria_status !== a);
@@ -817,9 +818,9 @@
             ${lin('Resultado no GED360', BIO_RES[String(b.resultado || '').toUpperCase()] || b.resultado || 'sem resultado ainda')}
             ${lin('Enviada em', b.data_envio ? fmtDataHora(b.data_envio) : '')}${lin('Conferida em', b.data_conferencia ? fmtDataHora(b.data_conferencia) : '')}
             ${b.alerta ? `<div class="os-fazer warn">${esc(b.alerta)}</div>` : ''}</div>`).join('')
-          : '<div class="os-fazer warn">O GED360 ainda não tem biometria com o CPF desta venda (últimos 15 dias). Se o cliente diz que já fez, peça o print e confira o CPF da venda.</div>';
-        corpo.innerHTML = `${r.erro ? `<div class="os-fazer bad">${esc(r.erro)} · mostrando a última leitura guardada.</div>` : `<div class="os-q"><h4>Lido agora · ${esc(fmtDataHora(new Date().toISOString()))}${r.linhas != null ? ` · ${esc(r.linhas)} biometrias no relatório` : ''}</h4></div>`}
-          ${q}<div class="os-fazer ${v.biometria_status === 'validada' ? '' : 'warn'}">Na venda: <b>${esc(st)}</b>${mudou ? ' — mudou agora' : ''}${v.biometria_status === 'validada' ? '. A Mari segue com o cliente (no cartão, o aviso do cadastro do cartão).' : ''}</div>`;
+          : '<div class="os-fazer warn">O GED360 ainda não tem biometria com este CPF (últimos 15 dias). Se o cliente diz que já fez, peça o print e confira o CPF — se o pedido saiu no CPF de um parente, use ⋯ › Trocar o titular.</div>';
+        corpo.innerHTML = `${r.erro ? `<div class="os-fazer bad">${esc(r.erro)}${/simult/i.test(r.erro) ? ' — alguém está no GED360 com o login do robô: saia do GED360 e tente de novo em 1 minuto' : ''} · mostrando a última leitura guardada.</div>` : `<div class="os-q"><h4>Lido agora · ${esc(fmtDataHora(new Date().toISOString()))}${r.linhas != null ? ` · ${esc(r.linhas)} biometrias no relatório` : ''}</h4></div>`}
+          ${q}${!vendaId ? '<div class="os-fazer">Lido pelo CPF da conversa (ainda sem venda no NIOGEN).</div>' : `<div class="os-fazer ${v.biometria_status === 'validada' ? '' : 'warn'}">Na venda: <b>${esc(st)}</b>${mudou ? ' — mudou agora' : ''}${v.biometria_status === 'validada' ? '. A Mari segue com o cliente (no cartão, o aviso do cadastro do cartão).' : ''}</div>`}`;
       }).catch((err) => { if (aberto) corpo.innerHTML = `<div class="os-fazer bad">${esc(err.naoInstalado ? 'Leitura na hora ainda não instalada — confira no GED360.' : msgErro(err))}</div>`; });
     });
   }

@@ -13,7 +13,7 @@
 //        registrada. O CPF e o nº da OS saem do banco (nunca do navegador) → POST {CREDITO_OP_URL}/credito/os. Só admin/backoffice.
 //   {acao: 'os_status', job_id, venda_id}                   → GET /credito/{job_id}; quando a leitura chega, grava com
 //        os_registrar_leitura (origem operador) e devolve {estado, resultado, leitura, registro}. Leitura igual não regrava.
-//   {acao: 'bio', venda_id}                                  → 14/11 (0194, degrau Biometria da ficha): manda o robô do GED360 (n8n,
+//   {acao: 'bio', venda_id | conversa_id}                                → 14/11 (0194, degrau Biometria da ficha): manda o robô do GED360 (n8n,
 //        mesmo login e mesmo Relatório Detalhado em CSV do agendamento de 15 min) ler AGORA e devolve a biometria desta venda
 //        (protocolo, resultado, datas — nunca o CPF). Secret N8N_GED360_AGORA_URL (caminho secreto do webhook). Só admin/backoffice.
 // A consulta leva ~2 min no portal: a tela faz polling; esta função nunca segura a conexão aberta.
@@ -67,13 +67,24 @@ Deno.serve(async (req) => {
     // Viabilidade (sem CPF) e status (job id de 32 hex) valem para qualquer logado; o crédito do CPF só admin/backoffice.
     if (['iniciar', 'print', 'duplicidade', 'os', 'os_status', 'bio'].includes(acao) && servico !== true && !['admin', 'backoffice'].includes(String(perfil))) { log(`403 perfil ${perfil}`); return json({ error: 'A consulta de crédito é só do backoffice.' }, 403); }
     if (acao === 'bio') {
+      // 15/11 (Ricardo): também para o lead SEM venda — {acao:'bio', conversa_id}: lê pelo CPF que a conversa guardou.
       const vendaId = String(b.venda_id ?? '');
-      if (!/^[0-9a-f-]{36}$/.test(vendaId)) return json({ error: 'venda inválida.' }, 400);
+      const convId = String(b.conversa_id ?? '');
+      if (!/^[0-9a-f-]{36}$/.test(vendaId) && !/^[0-9a-f-]{36}$/.test(convId)) return json({ error: 'venda inválida.' }, 400);
       const gancho = Deno.env.get('N8N_GED360_AGORA_URL') ?? '';
       if (!gancho) { log('503 bio nao_instalado'); return json({ error: 'Leitura na hora do GED360 ainda não instalada.', nao_instalado: true }, 503); }
       const adm = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-      const { data: v } = await adm.from('vendas').select('id, cliente_cpf_cnpj').eq('id', vendaId).maybeSingle();
+      let v: { id: string | null; cliente_cpf_cnpj: string | null } | null = null;
+      if (vendaId) {
+        const { data } = await adm.from('vendas').select('id, cliente_cpf_cnpj').eq('id', vendaId).maybeSingle();
+        v = data;
+      } else {
+        const { data: c } = await adm.from('mari_conversas').select('id, venda_id, dados').eq('id', convId).maybeSingle();
+        if (c) v = { id: c.venda_id ?? null, cliente_cpf_cnpj: String((c.dados ?? {}).cpf ?? '') };
+        if (v && so(v.cliente_cpf_cnpj).length !== 11 && !v.id) { log('400 conversa sem cpf'); return json({ error: 'Esta conversa ainda não tem CPF.' }, 400); }
+      }
       if (!v) { log('404 venda'); return json({ error: 'Venda não encontrada.' }, 404); }
+      const vid = v.id ?? '00000000-0000-0000-0000-000000000000';
       let rodada: Record<string, unknown> | null = null;
       let erro: string | null = null;
       try {
@@ -86,13 +97,13 @@ Deno.serve(async (req) => {
       }
       const doc = so(v.cliente_cpf_cnpj);
       let qb = adm.from('nio_biometria').select('protocolo, resultado, data_envio, data_conferencia, ultima_leitura, alerta, venda_id');
-      qb = doc.length >= 11 ? qb.or(`venda_id.eq.${vendaId},cpf_cnpj.eq.${doc}`) : qb.eq('venda_id', vendaId);
+      qb = doc.length >= 11 ? qb.or(`venda_id.eq.${vid},cpf_cnpj.eq.${doc}`) : qb.eq('venda_id', vid);
       const { data: bs } = await qb.order('data_envio', { ascending: false, nullsFirst: false }).limit(3);
-      const { data: vv } = await adm.from('vendas').select('biometria_status, biometria_validada_em').eq('id', vendaId).maybeSingle();
+      const { data: vv } = v.id ? await adm.from('vendas').select('biometria_status, biometria_validada_em').eq('id', v.id).maybeSingle() : { data: null };
       log(`bio ${erro ? 'erro' : 'ok'} ${(bs ?? []).length}`);
       return json({ estado: erro ? 'erro' : 'pronto', erro, linhas: rodada?.linhas ?? null, mudancas: rodada?.mudancas ?? null,
         biometrias: (bs ?? []).map((x) => ({ protocolo: x.protocolo, resultado: x.resultado, data_envio: x.data_envio,
-          data_conferencia: x.data_conferencia, lido_em: x.ultima_leitura, alerta: x.alerta, casada: x.venda_id === vendaId })),
+          data_conferencia: x.data_conferencia, lido_em: x.ultima_leitura, alerta: x.alerta, casada: !!v.id && x.venda_id === v.id })),
         venda: vv ?? null });
     }
     const opUrl = (Deno.env.get('CREDITO_OP_URL') ?? '').replace(/\/+$/, '');

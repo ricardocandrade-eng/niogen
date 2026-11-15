@@ -601,10 +601,15 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
   if (V7 && !posHandoff && !erro && !handoffYaml && cc.credito_resultado === 'negado' && !((cc.dados || {}).credito_negado_avisado)) {
     const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
     if (Number(cc.credito_consultas || 0) < 2) {
-      // 12/11 ~10h (Ricardo): avisa com gentileza e oferece o CPF de um parente/familiar (vira o titular; o crédito roda de
-      // novo — gatilho 0141 zera o resultado quando o CPF muda). Sem handoff: a Mari segue.
+      // 12/11 ~10h (Ricardo): avisa com gentileza e oferece o CPF de um parente/familiar como titular.
+      // 15/11 (Ricardo, caso Grace): o pedido no CPF de outra pessoa tem passos do portal que o robô não conhece (biometria antes da
+      // OS, "Salvar Interesse") → a Mari avisa e PASSA PARA O BKO, que faz a consulta e o pedido à mão. Sem 2ª consulta automática.
       texto = `Poxa${pn ? `, ${pn}` : ''}, a análise de crédito da Nio não aprovou o pedido neste CPF 😕\n\n`
-        + 'Mas dá pra tentar com o CPF de um parente ou familiar — ele fica como titular do pedido. Se quiser, me manda o nome completo e o CPF dele.';
+        + 'Mas dá pra fazer no CPF de um parente ou familiar — ele fica como titular do pedido e é ele quem faz a biometria (o link chega no celular e no e-mail que ficarem no pedido). '
+        + 'Pode já me mandar o nome completo, o CPF e o parentesco dele: vou passar pro nosso time, que segue com você por aqui.';
+      handoffYaml = { motivo_handoff: 'pedido_humano',
+        briefing_humano: 'Crédito NEGADO no CPF do cliente. A Mari ofereceu um parente como titular e pediu nome completo, CPF e parentesco.' };
+      tags.handoff = handoffYaml;
       delete tags.carrossel; delete tags.botoes;
     } else {
       texto = `Poxa${pn ? `, ${pn}` : ''}, a análise da Nio também não aprovou neste CPF 😕\n\n`
@@ -898,6 +903,7 @@ if (motivo) {
     else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
     else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
     else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
+    else if (cr === 'negado' && nCons < 2) fazer = 'Titular parente: consultar o crédito do CPF do parente; no portal, celular e e-mail DO TITULAR (a biometria vai para ele) → Continuar → Salvar Interesse; na ficha ⋯ › Trocar o titular e Gravar o Interesse. A Live avisa quando a biometria aprovar.';
     else if (!venda) fazer = (sugestao ? sugestao.charAt(0).toUpperCase() + sugestao.slice(1) : '') || {
       pedido_humano: 'Responder o cliente agora e entender o que ele precisa.',
       objecao: 'Responder a objeção com o que o plano entrega — o preço é o da tabela, sem desconto.',
@@ -910,7 +916,7 @@ if (motivo) {
     else if (!cr || cr === 'nao_decidiu') fazer = `Consultar o crédito na ficha (Crédito)${falta.length ? ` — antes, pedir ao cliente o ${falta.join(' e o ')}` : ''}.`;
     else if (cr === 'pendente') fazer = 'Aguardar a resposta da Nio (até 24 h) e avisar o cliente; não abrir o pedido antes.';
     else if (cr === 'negado') fazer = nCons >= 2 ? 'Ver com o cliente outra pessoa da casa como titular; sem saída, encerrar pela Saída.'
-      : 'Oferecer outra pessoa da casa como titular (CPF do parente → 1 nova consulta).';
+      : 'Titular parente: consultar o crédito do CPF do parente, pedido no portal com o contato DO TITULAR, Salvar Interesse; na ficha ⋯ › Trocar o titular.';
     else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
     else if (cr === 'aprovado_parcial' && fpCod && !formasCod.includes(fpCod))
       fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;

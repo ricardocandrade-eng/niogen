@@ -481,7 +481,8 @@ def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Ma
     c.exige(not r.get('handoff'), f'[P28] não seguiu o atendimento depois da resposta: {r.get("handoff")}')
 
 
-def cen_ad(c):   # P29 (12/11 ~10h, Ricardo): crédito negado → aviso gentil + CPF de parente (sem handoff); o CPF novo vira titular
+def cen_ad(c):   # P29 (12/11 ~10h; rev. 15/11, Ricardo — caso Grace): crédito negado → aviso gentil + titular parente e PASSA PARA O BKO
+    #                (o BKO faz o pedido no CPF do parente; a Mari não troca o titular nem roda a 2ª consulta sozinha)
     c.diz('Oi')
     c.diz('36035130')
     r = c.diz('123')
@@ -500,12 +501,13 @@ def cen_ad(c):   # P29 (12/11 ~10h, Ricardo): crédito negado → aviso gentil +
     r = c.diz('Boleto bancário')
     t = fala(r)
     c.exige(re.search(r'parente|familiar', t) and re.search(r'nao aprovou', t), f'[P29] não ofereceu o CPF de parente: «{t[:220]}»')
-    c.exige(not r.get('handoff'), f'[P29] passou para humano no 1º negado: {r.get("handoff")}')
+    c.exige(r.get('handoff'), f'[P29] não passou para o BKO no 1º negado: {r.get("handoff")}')
+    c.exige(re.search(r'biometria', t), f'[P29] não avisou que a biometria é do titular: «{t[:220]}»')
     c.exige(not re.search(r'serasa|score|spc|nome sujo', t), f'[P29] falou de Serasa/score: «{t[:200]}»')
     r = c.diz('Pode ser minha mãe: Maria Teste da Silva, CPF 111.444.777-35')
-    rows = B.sql(f"select dados->>'cpf' cpf, credito_resultado, credito_em from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
-    c.exige(rows and (rows[0].get('cpf') or '').replace('.', '').replace('-', '') == '11144477735' and rows[0].get('credito_resultado') is None,
-            f'[P29] CPF do parente não virou titular / crédito não voltou à fila: {rows}')
+    rows = B.sql(f"select dados->>'cpf' cpf, credito_resultado from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1")
+    c.exige(rows and (rows[0].get('cpf') or '').replace('.', '').replace('-', '') == '52998224725' and rows[0].get('credito_resultado') == 'negado',
+            f'[P29] depois do handoff a Mari trocou o CPF / rodou a 2ª consulta sozinha: {rows}')
 
 
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
