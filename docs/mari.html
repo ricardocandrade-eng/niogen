@@ -997,7 +997,7 @@
     boardEl.className = 'mq2-board';
     boardEl.innerHTML = ESCADA.map(([k, nome], i) => {
       const itens = (por[k] || []).sort(cmpRank);
-      const nAcao = itens.filter(precisaAcao).length;
+      const nAcao = itens.filter((c) => vezCls(c) === 'v-time').length;   // a mesma regra da borda vermelha
       const nMari = itens.filter((c) => vezCls(c) === 'v-mari').length;
       return `<section class="mq2-col d-${k}" data-col="${k}" aria-label="${esc(nome)}">
         <div class="mq2-h"><span class="mq2-n">${i + 1}</span><b>${esc(nome)}</b><span class="fc-sp"></span><span class="mq2-c">${NG.fmtNum(itens.length)}</span></div>
