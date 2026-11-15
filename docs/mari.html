@@ -139,7 +139,7 @@
   NGSidebar.montar();
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
     document.getElementById('sem-acesso').hidden = false;
-    document.querySelectorAll('.cab, #pulso, #funil, .mav-abas-movel, #abas, .barra-filtros, .mav-corpo, #fab').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
+    document.querySelectorAll('.cab, #palco, #abas, .barra-filtros, .mav-corpo, #fab').forEach((e) => { e.hidden = true; e.style.display = 'none'; });
     return;
   }
   const ADMIN = eu.perfil === 'admin';
@@ -820,7 +820,7 @@
     if (!rf.error) renderFeed(rf.data || []);
   }
   feedEl.addEventListener('click', (ev) => { const b = ev.target.closest('[data-abrir]'); if (b) abrir(b.dataset.abrir); });
-  document.querySelector('.mav-abas-movel').addEventListener('click', (ev) => {
+  document.querySelector('.mav-abas-movel')?.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-mav]');
     if (!b) return;
     mainEl.dataset.mav = b.dataset.mav;
