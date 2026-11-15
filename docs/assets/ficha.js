@@ -3641,33 +3641,44 @@
     return { viab, cred, fazer };
   }
   function handoffHtml(cv) {
-    if (!cv || !cv.handoff_briefing || !ehBO()) return '';
-    const br = String(cv.handoff_briefing).trim();
+    // 15/11 (Ricardo: "pode fazer sim"): o quadro aparece em TODO lead com conversa da Mari — com handoff, "HANDOFF DA MARI"
+    // (a nota dela); sem handoff, "RESUMO DA MARI" (viabilidade e crédito do que já foi consultado, e de quem é a vez).
+    if (!cv || !ehBO()) return '';
+    const tem = !!cv.handoff_briefing;
+    const br = String(cv.handoff_briefing || '').trim();
     const linhas = br.split('\n').map((l) => l.trim()).filter(Boolean);
-    const novo = /^(🟢|🟡|⚪)/u.test(linhas[0] || '');
+    const novo = tem && /^(🟢|🟡|⚪)/u.test(linhas[0] || '');
     const venda = cv.handoff_motivo === 'dados_completos';
     const v = d.soConversa ? null : d.v;
     // pedido já aberto (OS ou etapa adiante): o quadro vira registro — o "Fazer agora" de antes já foi feito.
     const passou = !!(v && (v.nio_os || ['2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme', 'saida'].includes(v.status)));
     const L = handoffLinhas(cv);
     const salvo = (re) => (linhas.find((l) => re.test(l)) || '').trim();
-    const titulo = novo ? linhas[0] : `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`;
-    // venda: viabilidade/crédito/fazer de agora; outro motivo: o "Fazer agora" que a Mari escreveu (a sugestão dela)
-    const fazer = venda || !novo ? L.fazer : (salvo(/^👉/).replace(/^👉\s*Fazer agora:\s*/, '') || L.fazer);
+    const dn = donoConversa(cv);
+    const comMari = !tem && dn.tipo === 'mari';
+    const nome = String((v && v.cliente_nome) || (cv.dados && cv.dados.nome) || cv.nome || cv.nome_contato || '').trim().split(/\s+/).slice(0, 2).join(' ');
+    const titulo = novo ? linhas[0] : tem ? `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`
+      : `${comMari ? 'Mari atendendo' : 'Sem handoff da Mari · com o time'}${nome ? ` · ${nome}` : ''}`;
+    // venda (ou sem handoff com o time): viabilidade/crédito/fazer de agora; outro motivo: o "Fazer agora" que a Mari escreveu
+    const fazer = comMari ? 'nada por enquanto — a Mari está conduzindo e passa para o time quando tiver os dados.'
+      : (!tem || venda || !novo) ? L.fazer : (salvo(/^👉/).replace(/^👉\s*Fazer agora:\s*/, '') || L.fazer);
     // nota antiga (antes de 15/11): some o que o quadro já mostra de agora (1º PASSO, COBERTURA, DFV, CRÉDITO)
-    const resto = novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l))
+    const resto = !tem ? [] : novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l))
       : linhas.filter((l) => !/^(1º PASSO|COBERTURA \(consulta|DFV \(pista\)|DFV:|💳 CRÉDITO)/u.test(l));
     const aberto = !!fc.ho;
     const quando = cv.handoff_em ? NG.fmtDataHora(cv.handoff_em) : '';
-    return `<section class="fc2-ho${passou ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="Handoff da Mari">
-      <button type="button" class="fc2-ho-b" data-f="fc2-ho" aria-expanded="${aberto}"><span class="fc2-ho-k">HANDOFF DA MARI</span>
-        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b><small title="${esc(fazer)}">${passou ? `pedido já aberto · passou em ${esc(quando)}` : `👉 ${esc(fazer)}`}</small></span>
+    const rotulo = tem ? 'HANDOFF DA MARI' : 'RESUMO DA MARI';
+    const sub = passou ? `pedido já aberto${quando ? ` · passou em ${quando}` : ''}` : `👉 ${fazer}`;
+    return `<section class="fc2-ho${passou || comMari ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}">
+      <button type="button" class="fc2-ho-b" data-f="fc2-ho" aria-expanded="${aberto}"><span class="fc2-ho-k">${rotulo}</span>
+        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b><small title="${esc(sub)}">${esc(sub)}</small></span>
         <span class="fc2-ho-sx">${aberto ? IC.cima : IC.baixo}</span></button>
       ${aberto ? `<div class="fc2-ho-c">
         <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
         ${passou ? '' : `<div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>`}
         ${resto.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
-        <div class="fc2-ho-src">Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · viabilidade e crédito: como estão agora · a mesma nota foi no Chatwoot</div>
+        <div class="fc2-ho-src">${tem ? `Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · a mesma nota foi no Chatwoot`
+          : 'A Mari ainda não passou esta conversa para o time'} · viabilidade e crédito: como estão agora</div>
       </div>` : ''}</section>`;
   }
   function bandHtml(tom, k, t, s, botao, chip) {
