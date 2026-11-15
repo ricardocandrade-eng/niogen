@@ -2066,6 +2066,9 @@
   // 11/11: uma rodada só (antes eram 3 em fila) e a linha da jornada vem da carga compartilhada.
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
+    // 15/11 noite: a 2ª linha do topo mostra plano · valor · forma também na conversa sem venda (1 leitura por sessão, em paralelo)
+    const plP = planosCache ? null : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco')
+      .then((r) => { if (!r.error) planosCache = r.data || []; }, () => {});
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
       NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
@@ -2079,6 +2082,7 @@
       opcL(NG.sb.from('v_leads').select('*').eq('conversa_id', cid).limit(1)),   // 13/11 (4a): a trilha da escada
       leadCfg(),
     ]);
+    if (plP) await plP;
     if (rc.error || !rc.data) return { erro: rc.error ? NG.msgErro(rc.error) : 'Conversa não encontrada (ou sem permissão).' };
     if (rc.data.venda_id) return { venda: rc.data.venda_id };
     const c = rc.data;
