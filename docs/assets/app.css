@@ -2752,7 +2752,12 @@ select option:disabled { color: var(--muted); }
 .fc2-ho.passou .fc2-ho-t small { color: #7D8793; }
 .fc2-ho-sx { flex: none; color: #7D8793; }
 .fc2-ho-sx .fc-ic { width: 16px; height: 16px; }
-.fc2-ho-c { padding: 2px 18px 10px; display: flex; flex-direction: column; gap: 3px; max-height: 40vh; overflow: auto; }
+/* 15/11: aberto, o conteúdo flutua por cima da ficha (não empurra nada); fecha no X, no título ou clicando fora */
+.fc2-ho-c { position: absolute; top: 100%; left: 12px; right: 12px; max-width: 760px; z-index: 30; padding: 12px 40px 12px 16px; display: flex; flex-direction: column; gap: 4px; max-height: 60vh; overflow: auto; background: #151B22; border: 1px solid #2A333D; border-radius: 10px; box-shadow: 0 14px 36px rgba(0,0,0,.55); }
+.fc2-ho.on { z-index: 30; }
+.fc2-ho-x { position: absolute; top: 6px; right: 8px; background: none; border: 0; color: #7D8793; cursor: pointer; padding: 4px; border-radius: 6px; }
+.fc2-ho-x:hover { background: #1F2630; color: #E9EDF3; }
+.fc2-ho-x .fc-ic { width: 16px; height: 16px; }
 .fc2-ho-l { font-size: 13px; line-height: 1.45; color: #C9D1DA; overflow-wrap: anywhere; }
 .fc2-ho-l.fz { color: #F1F4F8; font-weight: 600; }
 .fc2-ho-l.al { color: #E3B341; }
