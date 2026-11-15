@@ -3099,20 +3099,23 @@
     const podeSair = vS
       ? !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
       : !!(d && d.soConversa && ehBO() && !(d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)));
-    const btSaida = podeSair ? `<button type="button" class="btn fc-saida${formAtivo === 'saida' ? ' on' : ''}" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída</button>` : '';
+    const btSaida = podeSair ? `<button type="button" class="fc-mitem fc-mi-bad" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída…</button>` : '';
     // 13/11 (0189, Ricardo: "não tenho opção de remover o Recusou"): quem está em Saída ganha o Reabrir no mesmo lugar fixo.
     const emSaida = vS ? vS.status === 'saida' : !!(d && d.soConversa && d.lead && d.lead.destino === 'saida');
-    const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="btn fc-reabrir" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
+    const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="fc-mitem fc-mi-ok" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
+    const btNada = naFila || (d.conversaId && ehBO()) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
+    const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
+    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div></div>
+      <!--AGORA-->
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1"${naFila ? '' : ' hidden'} aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
-        ${extra}${btSaida}${btReabrir}<button type="button" class="btn btn-acc" data-f="fc-concluir"${naFila || (d.conversaId && ehBO()) ? '' : ' hidden'} title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">${IC.ok}Nada a responder</button>
-        <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Mais ações">${IC.mais}</button>
-          ${fc.menu ? `<div class="fc-menu" role="menu">${menu}</div>` : ''}</div>
+        <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Ações: Nada a responder, pendência, Saída…" title="Ações: Nada a responder, pendência, Reagendar, Saída…">${IC.mais}</button>
+          ${fc.menu ? `<div class="fc-menu" role="menu">${menuT}</div>` : ''}</div>
       </div></header>`;
   }
   const chipCopia = (rot, val, cls = '') => (val ? `<span class="fc-chip ${cls}"><span>${esc(rot)} ${esc(val)}</span>${btCopiar(NG.soDigitos(val) || val, rot)}</span>` : '');
@@ -3476,7 +3479,7 @@
   }
   // Nunca derruba a ficha: se a leitura falhar, a faixa some e a ficha abre igual.
   function cadPlanoSeguro() { try { return cadPlano(); } catch (e) { console.warn('[ficha] lembretes da Mari', e); return null; } }
-  function cadFaixa(P, solta) {
+  function cadFaixa(P, solta, trilha) {
     if (!P) return '';
     const A = NG.ajuda;
     const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○' };
@@ -3494,7 +3497,15 @@
     }
     // 14/11 (Ricardo: "Lembretes da Mari quebrou em duas linhas e empurrou os cards Cliente e Venda para baixo"): fechado por padrão —
     // só o cabeçalho e o resumo (próximo lembrete); "ver etapas" abre a régua inteira. Tocar num passo também abre.
-    const aberto = fc.cadAberto || !!sel;
+    const aberto = trilha || fc.cadAberto || !!sel;
+    if (trilha) {
+      // 15/11 noite (Ricardo: "antes era uma trilha, com toda a cadência dela, e ao clicar abria um balão com o texto do template"):
+      // no pé da ficha a cadência inteira fica à vista como trilha; o passo clicado abre um balão com o texto que saiu (ou sai).
+      const bal = sel ? `<div class="fc-cb-bal" role="dialog" aria-label="Texto do lembrete">${pe.replace('class="fc-cb-f sel"', 'class="fc-cb-balc"')}</div>` : '';
+      const resumo = `<div class="fc-cb-f t-${P.tom}"><span>${P.linha}</span><span class="fc-sp"></span>${P.acao}${P.anteriores ? `<button type="button" class="fc-link" data-f="fc-cadhist" title="${esc(A.cad_anteriores)}">${P.anteriores} antes</button>` : ''}</div>`;
+      return `<section class="fc-cb fc-cb-tri t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span><span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
+        ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${resumo}${bal}</section>`;
+    }
     const tg = grupos ? `<button type="button" class="fc-link fc-cb-tg" data-f="fc-cadtg" aria-expanded="${aberto}">${aberto ? 'fechar ▴' : 'ver etapas ▾'}</button>` : '';
     return `<section class="fc-cb${solta ? ' solta' : ''}${aberto ? '' : ' fechado'} t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span>${tg}<span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
       ${grupos && aberto ? `<div class="fc-cb-st">${grupos}</div>` : ''}${pe}</section>`;
@@ -3682,9 +3693,26 @@
           : 'A Mari ainda não passou esta conversa para o time'} · viabilidade e crédito: como estão agora</div>
       </div></section>`;
   }
+  // 15/11 noite (Ricardo: "coloque o conteúdo do Agora dentro do bloco que tem o nome do cliente e dê um destaque"): o AGORA
+  // vai para o cabeçalho; clicar nele faz a ação da vez. Os botões (a ação, Abrir pendência, Reagendar…) viram itens do ⋯ (Agir).
   function bandHtml(tom, k, t, s, botao, chip) {
-    return `<section class="fc2-agora ag-${tom}" aria-label="O que fazer agora"><span class="fc2-ag-k">AGORA</span>${k ? `<span class="fc2-ag-pill">${esc(k)}</span>` : ''}
-      <div class="fc2-ag-t"><b title="${esc(t || '')}">${esc(t || '—')}</b>${s ? `<small title="${esc(s)}">${esc(s)}</small>` : ''}</div>${chip || ''}${botao}</section>`;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = `${botao || ''}${chip || ''}`;
+    const at = (el) => [...el.attributes].filter((x) => x.name.startsWith('data-')).map((x) => `${x.name}="${esc(x.value)}"`).join(' ');
+    const rot = (el) => el.textContent.replace(/\s+/g, ' ').trim();
+    const vistos = new Set();   // sem repetir (ex.: "Ações da venda" = a mesma ação) e sem o Reabrir (o ⋯ já tem)
+    const bts = [...tpl.content.querySelectorAll('[data-f], [data-resolver]')].filter((el) => {
+      const kk = at(el);
+      if (el.dataset.f === 'reabrir' || vistos.has(kk)) return false;
+      vistos.add(kk); return true;
+    });
+    const itens = bts.map((el) => `<button type="button" class="fc-mitem" ${at(el)}${el.title ? ` title="${esc(el.title)}"` : ''}>${esc(rot(el))}</button>`).join('');
+    const pr = bts.find((el) => el.closest('.fc-ag-bts') && el.matches('.fc-ag-bt'));
+    const pend = chip && /fc2-ag-pend/.test(chip) ? chip : '';   // pendência aberta / em espera: é estado, fica à vista
+    const sub = [k, s].filter(Boolean).join(' · ');
+    const html = `<div class="fc2-agora fc-hag ag-${tom}"${pr ? ` ${at(pr)} role="button" tabindex="0" title="${esc(`${rot(pr)} — clique para fazer`)}"` : ''} aria-label="O que fazer agora">
+      <span class="fc2-ag-k">AGORA</span><div class="fc2-ag-t"><b title="${esc(t || '')}">${esc(t || '—')}</b><small title="${esc(sub)}">${esc(sub)}</small></div>${pend}${pr ? `<span class="fc-hag-bt" aria-hidden="true">${IC.seta}</span>` : ''}</div>`;
+    return { html, itens };
   }
   // 15/11 noite (Ricardo: "no lugar da faixa do handoff, coloque a escada, em forma de trilha, na largura da tela toda"):
   // a escada do lead (config_lead) volta a ser a trilha do topo, como no layout de 12/11 — degraus feitos em verde, o atual
@@ -3825,12 +3853,15 @@
       const etapa = d.jor ? d.jor.etapa : (NG.etapaDe(v).n || 0);
       document.title = tituloCom(v.cliente_nome);
       const atual = NG.etapaDe(v).id;
-      const menu = `${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div><div class="fc-msep"></div>` : ''}
-        ${v.cliente_whatsapp ? '<button type="button" class="fc-mitem" data-f="copiar-tel">Copiar telefone</button>' : ''}
-        ${d.conversaId ? `<a class="fc-mitem" href="mari.html?conversa=${esc(d.conversaId)}">Ver na tela Mari</a>` : ''}${auditarItem()}
-        <a class="fc-mitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Ver no Funil (Quadro)</a>
-        <a class="fc-mitem" href="venda.html?id=${esc(v.id)}" target="_blank" rel="noopener">Abrir em página cheia ↗</a>
-        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
+      // 15/11 noite (Ricardo: "organize os itens dos 3 pontinhos"): Agir (vem do AGORA e do topo) · Mover para · Ver em · Copiar e conferir
+      const menu = `<!--MENU-AG-->${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div>` : ''}
+        <div class="fc-mlab">Ver em</div>
+        ${d.conversaId ? `<a class="fc-mitem" href="mari.html?conversa=${esc(d.conversaId)}">Tela Mari</a>` : ''}
+        <a class="fc-mitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Funil (Quadro)</a>
+        <a class="fc-mitem" href="venda.html?id=${esc(v.id)}" target="_blank" rel="noopener">Página cheia ↗</a>
+        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}
+        <div class="fc-mlab">Copiar e conferir</div>
+        ${v.cliente_whatsapp ? '<button type="button" class="fc-mitem" data-f="copiar-tel">Copiar telefone</button>' : ''}${auditarItem()}`;
       const ref = v.origem_ref && !/^mari:/i.test(v.origem_ref) ? ` · ${v.origem_ref}` : '';
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
         v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);   // 0186: selo Meta
@@ -3862,8 +3893,9 @@
       const c = P.c;
       const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
       document.title = tituloCom(c.nome);
-      const menu = `${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}<a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Ver na tela Mari</a>${auditarItem()}
-        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Conversa no Chatwoot ↗</a>` : ''}`;
+      const menu = `<!--MENU-AG--><div class="fc-mlab">Ver em</div><a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Tela Mari</a>
+        ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}
+        <div class="fc-mlab">Copiar e conferir</div>${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}${auditarItem()}`;
       cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : null].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>`, menu,
         ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
       trilha = trilhasHtml();
@@ -3902,7 +3934,7 @@
     }
     const etapaNome = (d.lead && d.lead.etapa_nome) || (d.jor ? d.jor.etapa_nome : '');
     const temConv = !!d.conversaId;
-    const cadB = cadFaixa(cadPlanoSeguro());   // 13/11 (4a): Lembretes da Mari, sempre à vista
+    const cadB = cadFaixa(cadPlanoSeguro(), false, true);   // 13/11 (4a): Lembretes da Mari, sempre à vista
     const abaT = (a, rot) => `<button type="button" role="tab" class="${fc.aba === a ? 'on' : ''}" data-f="fc-aba" data-a="${a}" aria-selected="${fc.aba === a}">${rot}</button>`;
     const souLead = !!d.soConversa;
     // 15/11 noite (Ricardo): Conversa | Jornada meio a meio; Dados do cliente recolhido numa faixa na altura toda, que abre
@@ -3913,7 +3945,7 @@
     const dadosOn = !!(fc.dados || fc.edG || fc.hist || /\S/.test(overs));
     const faltaPill = dad && dad.faltam ? `<span class="fc-pill warn">faltam ${dad.faltam}</span>` : '<span class="fc-pill ok">completos</span>';
     raiz.innerHTML = `<div class="fc fc2">
-      ${cab}${band}${escadaTrilha()}
+      ${cab.replace('<!--AGORA-->', band ? band.html : '').replace('<!--AG-ITENS-->', band ? band.itens : '')}${escadaTrilha()}
       <div class="fc-abas fc2-abas" role="tablist" aria-label="O que mostrar">${abaT('conv', 'Conversa')}${abaT('jor', 'Jornada')}${abaT('ficha', 'Dados')}</div>
       <div class="fc2-grid aba-${fc.aba}${dadosOn ? ' dados-on' : ''}">
         <section class="fc-col fc-col-conv" aria-label="Conversa">${handoffHtml(conv ? d.conv : d.convInfo)}${temConv ? '<div class="fc-conv-host"></div>'
@@ -3962,6 +3994,16 @@
         qi.title = `${String(qi.title || '').replace(/ · Clique:.*$/, '')} · Clique: ${cvH.handoff_briefing ? 'handoff' : 'resumo'} da Mari`;
       }
     } else if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
+    const bal = raiz.querySelector('.fc2-regua .fc-cb-bal');
+    const pOn = raiz.querySelector('.fc2-regua .fc-cb-p.on');
+    if (bal && pOn) {
+      const R = raiz.querySelector('.fc2-regua').getBoundingClientRect();
+      const B = pOn.getBoundingClientRect();
+      const w = Math.min(420, R.width - 16);
+      const x = Math.max(8, Math.min(B.left + B.width / 2 - R.left - w / 2, R.width - w - 8));
+      bal.style.width = `${w}px`; bal.style.left = `${x}px`;
+      bal.style.setProperty('--seta', `${Math.max(14, Math.min(w - 14, B.left + B.width / 2 - R.left - x))}px`);
+    }
     ligarDfvSeEditando();
     if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
     const f = raiz.querySelector('[data-form] [autofocus]');
@@ -3991,7 +4033,7 @@
   function cliqueCheia(ev) {
     if (modo !== 'cheia' || !d) return;
     let mudou = false;
-    if (fc.menu && !ev.target.closest('.fc-menuw, .dica-pop')) { fc.menu = false; mudou = true; }
+    if (fc.menu && (!ev.target.closest('.fc-menuw, .dica-pop') || ev.target.closest('.fc-menu .fc-mitem, .fc-menu .fc-mchip'))) { fc.menu = false; mudou = true; }
     if (fc.ho && !ev.target.closest('.fc2-ho, .cvp-quem-ico')) { fc.ho = false; mudou = true; }   // 15/11: o quadro da Mari aberto fecha ao clicar fora   // 14/11: a etapa aberta da Jornada fica aberta
     const rp = ev.target.closest('[data-resolver]');
     if (rp) {

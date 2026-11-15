@@ -3172,3 +3172,56 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc2-tri-l .fc-es { min-width: max-content; }
 .fc2-tri-i { max-width: 28%; text-overflow: ellipsis; }
 .fc2-ho-tt .fc2-ho-k { width: auto; white-space: nowrap; }
+
+/* 15/11 noite, rodada 2: Dados do cliente de cima a baixo (régua só sob a Jornada) · AGORA dentro do cabeçalho, em destaque ·
+   ações do topo no ⋯ (Agir · Mover para · Ver em · Copiar e conferir) · Lembretes da Mari como trilha com balão do texto */
+.fc2-grid > .fc2-dados { grid-row: 1 / span 2; }
+.fc2-grid > .fc2-regua { grid-column: 2; }
+.fc2 .fc-top { height: 64px; gap: 14px; }
+.fc2 .fc-top .fc-tit { flex: 0 1 auto; max-width: 34%; }
+.fc2 .fc-top .fc-hag { flex: 1; min-width: 0; min-height: 0; height: 46px; padding: 0 6px 0 8px; gap: 12px; border: 1px solid #262E38; border-bottom: 1px solid #262E38; border-radius: 12px; background: #11161C; cursor: pointer; z-index: auto; }
+.fc2 .fc-top .fc-hag:hover { filter: brightness(1.15); }
+.fc2 .fc-top .fc-hag:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fc2 .fc-hag .fc2-ag-k { width: auto; flex: none; font-size: 11px; font-weight: 800; letter-spacing: .14em; color: #0B0F14; background: #9AA4B0; border-radius: 8px; padding: 6px 10px; }
+.fc2 .fc-hag.ag-now { background: #1E1214; border-color: #6B2E2E; }
+.fc2 .fc-hag.ag-now .fc2-ag-k { background: #F47067; }
+.fc2 .fc-hag.ag-today { background: #1A160B; border-color: #5C4A1E; }
+.fc2 .fc-hag.ag-today .fc2-ag-k { background: #E3B341; }
+.fc2 .fc-hag.ag-ok { background: #0D1A13; border-color: #1F4A33; }
+.fc2 .fc-hag.ag-ok .fc2-ag-k { background: #57D38C; }
+.fc2 .fc-hag .fc2-ag-t b { font-size: 14.5px; font-weight: 600; color: #F1F4F8; }
+.fc2 .fc-hag .fc2-ag-t small { font-size: 12px; color: #9AA4B0; }
+.fc-hag-bt { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; width: 32px; padding: 0; border-radius: 8px; font-size: 13px; font-weight: 600; color: #E9EDF3; background: rgba(255,255,255,.07); }
+.fc-hag.ag-now .fc-hag-bt { background: #C94A42; color: #fff; }
+.fc-hag.ag-today .fc-hag-bt { background: rgba(227,179,65,.18); color: #F2D98A; }
+.fc-hag-bt .fc-ic { width: 15px; height: 15px; }
+.fc2 .fc-menu { width: 280px; max-height: calc(100dvh - 90px); overflow-y: auto; }
+.fc2 .fc-menu .fc-mlab { padding: 8px 10px 3px; font-size: 10.5px; font-weight: 600; color: #7F8A96; }
+.fc2 .fc-menu .fc-mlab:not(:first-child) { border-top: 1px solid #232A33; margin-top: 4px; padding-top: 10px; }
+.fc2 .fc-menu .fc-mitem { min-height: 34px; font-size: 13.5px; }
+.fc-mitem.fc-mi-bad { color: #F28B82; }
+.fc-mitem.fc-mi-ok { color: #7FD69B; }
+/* Lembretes da Mari: a trilha da cadência */
+.fc2-regua { position: relative; overflow: visible; max-height: none; }
+.fc-cb-tri .fc-cb-st { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; gap: 0 10px; padding-bottom: 4px; }
+.fc-cb-tri .fc-cb-g + .fc-cb-g { padding-left: 10px; }
+.fc-cb-tri .fc-cb-ps { flex-wrap: nowrap; gap: 0; }
+.fc-cb-tri .fc-cb-p { position: relative; min-width: 56px; }
+.fc-cb-tri .fc-cb-p::before, .fc-cb-tri .fc-cb-p::after { content: ''; position: absolute; top: 12px; height: 2px; width: calc(50% - 11px); background: #2A313B; }
+.fc-cb-tri .fc-cb-p::before { left: 0; }
+.fc-cb-tri .fc-cb-p::after { right: 0; }
+.fc-cb-tri .fc-cb-p:first-child::before, .fc-cb-tri .fc-cb-p:last-child::after { display: none; }
+.fc-cb-tri .fc-cb-p.s-ok::before, .fc-cb-tri .fc-cb-p.s-ok::after, .fc-cb-tri .fc-cb-p.s-ok + .fc-cb-p::before { background: #1D5C3B; }
+.fc-cb-tri .fc-cb-p i { position: relative; z-index: 1; background: #0D1116; }
+.fc-cb-tri .fc-cb-p.s-ok i { background: #12291A; }
+.fc-cb-tri .fc-cb-f { min-height: 30px; }
+.fc-cb-bal { position: absolute; bottom: calc(100% + 10px); z-index: 25; background: #1A212A; border: 1px solid #34404D; border-radius: 12px; box-shadow: 0 14px 36px rgba(0,0,0,.55); }
+.fc-cb-bal::after { content: ''; position: absolute; top: 100%; left: var(--seta, 50%); transform: translateX(-50%); border: 8px solid transparent; border-top-color: #34404D; }
+.fc-cb-balc { display: flex; align-items: flex-start; gap: 8px; padding: 10px 8px 10px 14px; font-size: 13px; line-height: 1.45; color: #D6DDE5; max-height: 50vh; overflow-y: auto; }
+.fc-cb-balc q { display: block; margin-top: 6px; white-space: pre-wrap; color: #F1F4F8; quotes: none; }
+@media (max-width: 900px) {
+  .fc2-grid > .fc2-dados { grid-row: auto; }
+  .fc2 .fc-top { height: auto; flex-wrap: wrap; }
+  .fc2 .fc-top .fc-tit { max-width: none; flex: 1 1 60%; }
+  .fc2 .fc-top .fc-hag { order: 5; flex: 1 1 100%; height: auto; min-height: 46px; padding: 6px 8px; }
+}
