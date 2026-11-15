@@ -3283,3 +3283,6 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc-cb-tri .fc-cb-p small { font-size: 10.5px; }
 .fc-cb-tri .fc-cb-p::before, .fc-cb-tri .fc-cb-p::after { width: calc(50% - 10px); }
 .fc-cb-tri .fc-cb-gk { font-size: 10.5px; }
+.fc-cb-tri .fc-cb-st { gap: 2px 6px; padding-left: 8px; padding-right: 6px; }
+.fc-cb-tri .fc-cb-g + .fc-cb-g { padding-left: 6px; }
+.fc-cb-tri .fc-cb-p { min-width: 34px; }

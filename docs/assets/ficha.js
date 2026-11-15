@@ -3446,7 +3446,7 @@
       { rot: 'Retomada', dica: A.cad_retomada, passos: ['D3', 'LIG', 'D7', 'D15', 'FIM'].map(todo) },
       { rot: 'Biometria', dica: A.cad_venda, passos: ['BIO1', 'BIO3'].map(todo) },
       { rot: 'Instalação', dica: A.cad_venda, passos: ['INSTALACAO', 'VESPERA'].map(todo) },
-      { rot: 'Pós-instalação', dica: 'Depois que instala: a Mari agradece, indica o App Nio e pergunta se deu tudo certo; a quem disse que sim, pede uma indicação (R$ 100 no Pix se o indicado instalar) e insiste 1 vez.', passos: posPassos() },
+      { rot: 'Pós-inst.', dica: 'Depois que instala: a Mari agradece, indica o App Nio e pergunta se deu tudo certo; a quem disse que sim, pede uma indicação (R$ 100 no Pix se o indicado instalar) e insiste 1 vez.', passos: posPassos() },
     ];
 
     // Por que está parada (o mesmo texto do banco, na língua de quem atende) — a ordem é a da mari_cadencia_avaliar.
@@ -3521,7 +3521,7 @@
     if (!P) return '';
     const A = NG.ajuda;
     const ic = { ok: '✓', pul: '–', prox: '●', agora: '●', fut: '○', na: '' };
-    const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno', POS: 'Pós', IND: 'Indicação', IND2: 'Insistir' };
+    const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno', POS: 'Pós', IND: 'Indic.', IND2: 'Insist.' };
     const passo = (p) => `<button type="button" class="fc-cb-p s-${p.st}${fc.cadp === p.cod ? ' on' : ''}" data-f="fc-cadp" data-c="${p.cod}" title="${esc(p.tit)}" aria-pressed="${fc.cadp === p.cod}">
         <i aria-hidden="true">${ic[p.st]}</i><b>${esc(trilha ? COD[p.cod] || p.cod : p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
     const grupos = ((trilha && P.todos) || P.grupos).filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
