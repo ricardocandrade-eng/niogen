@@ -2571,6 +2571,13 @@ button.fc-din-l:hover, button.fc-din-l.on { background: #171C23; }
 .fc-cb-p.s-pul i { border-style: dashed; }
 .fc-cb-p.s-pul b, .fc-cb-p.s-fut b { color: #8E98A4; }
 .fc-cb-f { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 8px 4px 16px; border-top: 1px solid #1A2028; font-size: 12.5px; color: #C9D1DA; flex-wrap: wrap; }
+/* 14/11 (Ricardo: "Lembretes da Mari quebrou em duas linhas e empurrou Cliente e Venda"): fechado = cabeçalho + resumo numa linha só */
+.fc-cb.fechado .fc-cb-f { min-height: 30px; padding-top: 2px; padding-bottom: 2px; flex-wrap: nowrap; }
+.fc-cb.fechado .fc-cb-f > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 0; }
+.fc-cb-tg { min-height: 26px; font-size: 12px; }
+/* 14/11: aviso dentro do painel de uma etapa (ex.: o portal consultou outra rua) */
+.fc-aviso { margin: 6px 0; padding: 8px 10px; border-radius: 8px; font-size: 12.5px; line-height: 1.45; color: #E9EDF3; background: #1A1F27; border: 1px solid #2A313B; }
+.fc-aviso.warn { background: rgba(240, 180, 60, .08); border-color: #5C4A1E; }
 .fc-cb-f > span:first-child { min-width: 0; flex: 1 1 260px; }
 .fc-cb-f b { color: #E9EDF3; font-weight: 600; }
 .fc-cb-f.t-warn { background: rgba(227,179,65,.08); color: #F2CC6B; } .fc-cb-f.t-bad { background: rgba(244,112,103,.08); color: #FFA39B; }

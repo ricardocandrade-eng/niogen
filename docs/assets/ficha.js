@@ -2009,7 +2009,7 @@
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2518,7 +2518,7 @@
         globalEl.classList.add('open');
         document.body.classList.add('fc-global-on');
       }
-      if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null; credPreset = null; fc = novoFc();
+      if (idAtual !== id) { idAtual = id; d = null; abertos = null; edicao = null; formAtivo = null; convAberta = false; conv = null; feitoUltimo = null; passoAberto = new Set(); sigDados = ''; convEsperaFechado = false; pendDescPreset = null; credPreset = null; fc = novoFc(); if (cheiaOpts.etapa) { fc.etapa = cheiaOpts.etapa; cheiaOpts.etapa = null; }
         if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
         raiz.innerHTML = '<div class="fc"><div class="fc-carregando">Carregando…</div></div>'; }
       await recarregar({ abrindo: true });
@@ -2617,7 +2617,7 @@
   let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
   let cvCheia = null;      // NGConversa montado na metade esquerda
   let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
-  const novoFc = () => ({ etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
+  const novoFc = () => ({ cadAberto: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
   let fc = novoFc();
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -2691,7 +2691,7 @@
     if (!bo) return '';
     const e = entradaOp(tipo);
     const o = fc.op[tipo];
-    const nome = tipo === 'viab' ? 'Operador de viabilidade' : 'Operador de crédito';
+    const nome = tipo === 'viab' ? 'Consultar no portal da Nio' : 'Operador de crédito';
     let corpo = '';
     if (o && o.estado === 'rodando') {
       const s = o.s || {};
@@ -2704,7 +2704,7 @@
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>
-        <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">Registrar no lead</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
+        <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
       corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(o.erro)}</span></div><div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Tentar de novo</button>${tipo === 'viab' ? '' : ''}</div>`;
@@ -2712,7 +2712,7 @@
       corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(e.falta)}</span><small>complete a ficha para rodar o operador</small></div>`;
     } else {
       corpo = `${tipo === 'cred' ? '<label class="fc-chk"><input type="checkbox" data-fc-autoriza> O titular autorizou a consulta do CPF</label>' : ''}
-        <div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">${IC.play}Rodar operador</button></div>`;
+        <div class="fc-op-bts"><button type="button" class="btn btn-sm${tipo === 'viab' ? ' btn-acc' : ''}" data-f="fc-op" data-t="${tipo}">${IC.play}${tipo === 'viab' ? 'Consultar agora' : 'Rodar operador'}</button>${tipo === 'viab' ? '<small class="apagado">o robô consulta o portal da Nio (20–40 s), só leitura — nada é gravado até você mandar</small>' : ''}</div>`;
     }
     return `<div class="fc-op" data-fc-op="${tipo}"><span class="fc-src op">${esc(nome)}</span>${corpo}</div>`;
   }
@@ -2778,7 +2778,23 @@
     const fonte = (t, op) => `<span class="fc-src${op ? ' op' : ''}">fonte: ${esc(t)}</span>`;
     const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}">Visto</button>`;
     let corpo = '';
-    if (p.k === 'viab') {
+    if (p.k === 'viab' && conv) {   // 14/11 (Ricardo: "o que se abre é confuso") — lead sem venda: endereço, último resultado, aviso, ação
+      const c = d.conv;
+      const r = c.nio_viab_resultado;
+      const dec = c.cobertura_decisao;
+      const rc = c.rua_conferir_em && c.rua_conferir ? c.rua_conferir : null;
+      const DEC = { viavel: ['Viável', 'ok'], elegivel_200m: ['Portal disse não · DFV tem fachada viável perto', 'warn'], sem_cobertura: ['Sem cobertura', 'bad'],
+        unidade_fora_lista: ['Unidade fora da lista do portal', 'warn'], indefinida: ['O portal não decidiu', 'warn'] };
+      const [rot, cls] = DEC[dec] || (r ? [NG.VIAB_NIO[r] || r, r === 'viavel' ? 'ok' : 'warn'] : ['Ainda não consultada', 'mute']);
+      const quando = c.cobertura_em || c.nio_viab_em;
+      const endTxt = [convRua(c), convComp(c) && convComp(c) !== 'sem complemento' ? convComp(c) : '', convCep(c) ? `CEP ${convCep(c)}` : '', c.cidade].filter(Boolean).join(' · ');
+      corpo = `${linhaDet('Endereço', esc(endTxt || '—'))}
+        ${linhaDet('Hoje na ficha', `<span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? ` até ${esc(c.nio_viab_velocidade)}` : ''}${quando ? ` <small class="apagado">· ${esc(NG.fmtDataHora(quando))}</small>` : ''}`)}
+        ${rc ? `<div class="fc-aviso warn"><b>${rc.motivo === 'rua_divergente' ? 'O portal consultou outra rua' : 'O portal disse não, mas o DFV tem esta casa como viável'}</b><br>
+          Cliente: <b>${esc(rc.esperada || convLogr(c) || '?')}</b> · portal: <b>${esc(String(rc.portal || '?').split(',')[0])}</b>. Consulte de novo: o robô agora escolhe a rua do cliente.</div>` : ''}
+        ${dec === 'viavel' && !rc ? '<div class="nota-campo">Nada a fazer: a viabilidade já está gravada.</div>' : ''}
+        ${opPainel('viab')}`;
+    } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
         ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
@@ -2867,6 +2883,9 @@
       const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
       if (e.codigo === 'instalacao' && temOsNio()) {
         return `<button type="button" class="fc-es fc-es-os s-${st}" data-f="fc-os-ler" title="${esc(`${e.ajuda || ''} Clique para consultar esta OS agora na Nio (uns 15 segundos).`.trim())}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}<span class="fc-es-g" aria-hidden="true">⟳</span></button>`;
+      }
+      if (/viab/i.test(e.codigo || '')) {   // 14/11: o degrau Viabilidade abre o painel de viabilidade (antes não fazia nada)
+        return `<button type="button" class="fc-es fc-es-os s-${st}" data-f="fc-etapa" data-k="viab" aria-expanded="${fc.etapa === 'viab'}" title="${esc(`${e.ajuda || ''} Clique para ver e consultar a viabilidade deste endereço.`.trim())}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}<span class="fc-es-g" aria-hidden="true">›</span></button>`;
       }
       return `<span class="fc-es s-${st}" title="${esc(e.ajuda || '')}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}</span>`;
     }).join('') + pagamentoItem();
@@ -3377,8 +3396,12 @@
     } else {
       pe = `<div class="fc-cb-f t-${P.tom}"><span>${P.linha}</span><span class="fc-sp"></span>${P.acao}${P.anteriores ? `<button type="button" class="fc-link" data-f="fc-cadhist" title="${esc(A.cad_anteriores)}">${P.anteriores} antes</button>` : ''}</div>`;
     }
-    return `<section class="fc-cb${solta ? ' solta' : ''} t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span><span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
-      ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${pe}</section>`;
+    // 14/11 (Ricardo: "Lembretes da Mari quebrou em duas linhas e empurrou os cards Cliente e Venda para baixo"): fechado por padrão —
+    // só o cabeçalho e o resumo (próximo lembrete); "ver etapas" abre a régua inteira. Tocar num passo também abre.
+    const aberto = fc.cadAberto || !!sel;
+    const tg = grupos ? `<button type="button" class="fc-link fc-cb-tg" data-f="fc-cadtg" aria-expanded="${aberto}">${aberto ? 'fechar ▴' : 'ver etapas ▾'}</button>` : '';
+    return `<section class="fc-cb${solta ? ' solta' : ''}${aberto ? '' : ' fechado'} t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span>${tg}<span class="fc-pill ${P.pillCls}">${esc(P.pill)}</span></div>
+      ${grupos && aberto ? `<div class="fc-cb-st">${grupos}</div>` : ''}${pe}</section>`;
   }
 
   // ---------- faixa da Mari (acima da caixa da conversa) ----------
@@ -3613,6 +3636,7 @@
     if (a === 'fc-reg') { fc.reg = !fc.reg; fc.cad = false; if (fc.reg) fc.aba = 'conv'; render(); if (fc.reg) { const i = raiz.querySelector('[data-fc-resumo]'); if (i) i.focus(); } return; }
     if (a === 'fc-cad') { fc.cad = !fc.cad; fc.reg = false; render(); return; }
     if (a === 'fc-cadp') { fc.cadp = fc.cadp === b.dataset.c ? null : b.dataset.c; render(); return; }
+    if (a === 'fc-cadtg') { fc.cadAberto = !(fc.cadAberto || fc.cadp); fc.cadp = null; render(); return; }
     if (a === 'fc-cadhist') { fc.hist = true; fc.histF = 'mari'; render(); return; }
     if (a === 'fc-contato') {
       const fd = new FormData();
@@ -3694,6 +3718,9 @@
     cheia, usarCheia, get modo() { return modo === 'cheia' && globalEl && raiz === globalEl ? 'gaveta' : modo; },
     get unica() { return !fichaAntiga(); }, fecharCheia: () => { if (modo === 'cheia' && idAtual) fecharCheia(); },
     set oportunidadeCheia(op) { cheiaOpts.oportunidade = op; },
+    // 14/11 (Ricardo: "quando se clica em Viabilidade, o que se abre é confuso"): quem abre a ficha pode pedir uma etapa aberta
+    // (Live › Conferir "Portal: outra rua" → o painel de viabilidade já aberto).
+    set etapaInicial(k) { cheiaOpts.etapa = k || null; },
     redesenhar() { if (d) render(); },
     // A tela abre a conversa no lugar dela (Live: no espaço da lista). fn({conversaId, nome, aoMudar}); null desliga.
     aoConversa(fn) { hostConversa = fn; },
