@@ -3225,3 +3225,4 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
   .fc2 .fc-top .fc-tit { max-width: none; flex: 1 1 60%; }
   .fc2 .fc-top .fc-hag { order: 5; flex: 1 1 100%; height: auto; min-height: 46px; padding: 6px 8px; }
 }
+.fc2-grid > .fc2-regua { overflow: visible; max-height: none; position: relative; z-index: 13; }
