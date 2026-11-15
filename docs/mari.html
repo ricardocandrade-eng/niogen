@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=151126-5">
+<link rel="stylesheet" href="assets/app.css?v=151126-6">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=151126-1"></script>
@@ -95,15 +95,15 @@
         <table class="tab">
           <thead><tr>
             <th data-ord="acao">Cliente · local</th>
+            <th data-ord="etapa">Degrau</th>
             <th data-ord="vez">O que está acontecendo</th>
-            <th data-ord="termometro" data-dir="desc" title="Dados para o pedido: verde validado, âmbar coletado, cinza falta. Nunca mostra o valor.">Termômetro</th>
-            <th data-ord="etapa">Etapa</th>
+            <th data-ord="termometro" data-dir="desc" title="Dados para o pedido: verde validado, âmbar coletado, cinza falta. Nunca mostra o valor.">Dados</th>
             <th data-ord="ultima" data-dir="desc">Última</th>
           </tr></thead>
           <tbody id="tbody"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
         </table>
       </div>
-      <div class="rodape-lista"><span id="contagem"></span><span>Ordem: precisa de ação agora primeiro · clique na linha para abrir a conversa</span></div>
+      <div class="rodape-lista"><span id="contagem"></span><span>Ordem: precisa de ação agora primeiro · borda vermelha = vez do time, verde = Mari, cinza = esperando o cliente · clique abre a ficha</span></div>
     </section>
     <div class="cartoes" id="cartoes" aria-label="Conversas da Mari"></div>
 
@@ -185,7 +185,7 @@
 
   // 0072: linha da v_mari_quadro por conversa (coluna, vez, termômetro, travas, alertas) + colunas da config.
   let jorConv = {};   // 0090: v_jornada por conversa
-  let qd = {}, colunas = [];
+  let qd = {}, colunas = [], leadDe = {};   // 15/11: leadDe = linha da v_leads (degrau da escada) por conversa
   let semResposta = {};   // 0081: conversa id → minutos sem resposta (v_mari_sem_resposta)
   let convs = [], cad = {}, planos = {}, erros = [], humanoDepois = {}, vendasDe = {}, aguardando = {}, aba = 'todas';
   let templates = {}, enviadosDe = {};
@@ -260,7 +260,7 @@
     // Prompt 28: bolinhas — o que a cadência já mandou (turnos com tags.cadencia) e os textos dos templates.
     const naCadencia = convs.filter((c) => !c.venda_id && (c.status === 'ativo' || (c.cadencia_passo && c.cadencia_passo !== 'nenhum')))
       .map((c) => c.id).slice(0, 300);
-    const [rvv, rag, rcad, tpl, rsr, rj] = await Promise.all([
+    const [rvv, rag, rcad, tpl, rsr, rj, rl] = await Promise.all([
       comVenda.length ? NG.sb.from('vendas').select('id, status, motivo_saida, interesse_futuro_em, nio_pedido').in('id', comVenda.slice(0, 500)) : Promise.resolve({ data: [] }),
       NG.sb.from('v_mari_aguardando_humano').select('id, ult_lead'),
       naCadencia.length ? NG.sb.from('mari_turnos').select('conversa_id, texto, tags, created_at').eq('papel', 'mari')
@@ -268,7 +268,9 @@
       NG.tplCadencia(),
       NG.sb.from('v_mari_sem_resposta').select('id, minutos'),   // 0081: alarme de silêncio
       NG.jornada(),   // 0090: a regra única de "precisa de ação" (a mesma do Live e do menu)
+      NG.sb.from('v_leads').select('conversa_id, etapa, etapa_nome, destino, saida_nome, status_nome, vez, plano, valor_mensal, dono').not('conversa_id', 'is', null).limit(3000),
     ]);
+    leadDe = rl && !rl.error ? Object.fromEntries((rl.data || []).map((l) => [l.conversa_id, l])) : {};
     jorConv = rj && !rj.erro ? rj.porConversa : {};
     // 0107: 🔥 oportunidades (as mesmas do Live: sem as que já pedem ação) — o cartão ganha a borda laranja e "🔥 no Live".
     const ro = await NG.oportunidades(rj && !rj.erro ? rj : null, pOp);
@@ -572,7 +574,7 @@
   const precisaAcao = (c) => !!(jorConv[c.id] && jorConv[c.id].precisa_acao);
   const naAba = (c, a) => (a === 'acao' ? precisaAcao(c) : true);
   const CHAVES = {
-    etapa: (c) => colInfo(colDe(c)).ordem ?? 99,
+    etapa: (c) => { const i = ESCADA.findIndex(([k]) => k === degrauDe(c)); return i < 0 ? 99 : i; },
     vez: (c) => ({ humano: 0, mari: 1, cliente: 2 })[(qd[c.id] || {}).vez] ?? 3,
     termometro: (c) => { const q = qd[c.id]; return q && q.itens_total ? q.itens_validados / q.itens_total : -1; },
     ultima: (c) => new Date(ultimaDe(c)).getTime(),
@@ -736,20 +738,23 @@
     const W = 280; const H = 100; const bw = W / Math.max(1, ds.length);
     const tc = ds.reduce((a, d) => a + Number(d.conversas || 0), 0);
     const tv = ds.reduce((a, d) => a + Number(d.vendas || 0), 0);
+    const tq = ds.reduce((a, d) => a + Number(d.qualificadas || 0), 0);   // 0208: chegaram a Lead qualificado (inclui os que saíram)
     const ti = ds.reduce((a, d) => a + Number(d.instaladas || 0), 0);
     const th = ds.reduce((a, d) => a + Number(d.handoffs || 0), 0);
-    p14El.innerHTML = `<div class="mp-h"><b>Últimos 14 dias</b><span class="fc-sp"></span><span class="mp-leg"><i class="cli"></i>conversas ${NG.fmtNum(tc)}</span><span class="mp-leg"><i class="ven"></i>vendas ${NG.fmtNum(tv)}</span></div>
+    p14El.innerHTML = `<div class="mp-h"><b>Últimos 14 dias</b><span class="fc-sp"></span><span class="mp-leg" title="Conversas novas da Mari no dia (testes fora)."><i class="cli"></i>conversas ${NG.fmtNum(tc)}</span><span class="mp-leg" title="Chegaram a Lead qualificado (viraram registro de venda), inclusive os que depois foram para Saída."><i class="qua"></i>qualificados ${NG.fmtNum(tq)}</span><span class="mp-leg" title="Vendas que seguem: registro de venda que NÃO está em Saída (aguardando instalação, instalada…)."><i class="ven"></i>vendas ${NG.fmtNum(tv)}</span></div>
       <div class="mp-graf"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Conversas e vendas por dia, 14 dias">${ds.map((d, i) => {
         const h = (Number(d.conversas || 0) / mx) * (H - 8);
         const hv = (Number(d.vendas || 0) / mx) * (H - 8);
+        const hq = (Number(d.qualificadas || 0) / mx) * (H - 8);
         const fds = d.dow >= 6;
-        return `<g><title>${esc(`${d.dia.slice(8)}/${d.dia.slice(5, 7)} — ${d.conversas} conversas · ${d.responderam} responderam · ${d.handoffs} passaram ao time · ${d.vendas} vendas · ${d.instaladas} instaladas`)}</title>
+        return `<g><title>${esc(`${d.dia.slice(8)}/${d.dia.slice(5, 7)} — ${d.conversas} conversas · ${d.responderam} responderam · ${d.handoffs} passaram ao time · ${d.qualificadas || 0} qualificados · ${d.vendas} vendas seguem · ${d.instaladas} instaladas`)}</title>
           <rect x="${(i * bw + bw * 0.14).toFixed(1)}" y="${(H - h).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${h.toFixed(1)}" class="cli${fds ? ' fds' : ''}${i === ds.length - 1 ? ' ag' : ''}"/>
+          <rect x="${(i * bw + bw * 0.14).toFixed(1)}" y="${(H - hq).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${hq.toFixed(1)}" class="qua"/>
           <rect x="${(i * bw + bw * 0.14).toFixed(1)}" y="${(H - hv).toFixed(1)}" width="${(bw * 0.72).toFixed(1)}" height="${hv.toFixed(1)}" class="ven"/>
           <rect x="${(i * bw).toFixed(1)}" y="0" width="${bw.toFixed(1)}" height="${H}" class="hit"/></g>`;
       }).join('')}</svg></div>
       <div class="mp-eixo">${ds.map((d, i) => `<span>${i % 2 === 1 || i === ds.length - 1 ? esc(d.dia.slice(8)) : ''}</span>`).join('')}</div>
-      <div class="mp-14-pe"><span><b>${tc ? `${((tv * 100) / tc).toFixed(1).replace('.', ',')}%` : '—'}</b> viram venda</span><span><b>${NG.fmtNum(th)}</b> passaram ao time</span><span><b>${NG.fmtNum(ti)}</b> instaladas</span></div>`;
+      <div class="mp-14-pe"><span title="Das conversas, quantas chegaram a Lead qualificado"><b>${tc ? `${((tq * 100) / tc).toFixed(1).replace('.', ',')}%` : '—'}</b> qualificam</span><span title="Dos qualificados, quantos ainda seguem como venda (sem Saída)"><b>${tq ? `${Math.round((tv * 100) / tq)}%` : '—'}</b> dos qualificados seguem</span><span><b>${NG.fmtNum(th)}</b> ao time</span><span><b>${NG.fmtNum(ti)}</b> instaladas</span></div>`;
     // escada
     const es = p.escada || [];
     const te = es.reduce((a, x) => a + Number(x.n || 0), 0);
@@ -915,70 +920,94 @@
     return ord.chave === 'acao' ? l.sort(cmpRank) : NG.ordenar(l, CHAVES, ord);
   };
 
-  // 0107: cartão de 3 linhas (Quadro e celular). O resto (origem/anúncio, contatos, travas, "falta…", selos) está na gaveta.
-  function cardHtml(c, { arrastavel = false, tag = 'div' } = {}) {
+  // 15/11 (Ricardo: "Essas listas e quadros estão bem ruins"): o Quadro passa a ter as colunas da ESCADA do sistema (a mesma da
+  // ficha, da Leads e do Funil — v_leads), cabendo na largura da tela; Saída fica recolhida embaixo. O cartão diz em 4 linhas:
+  // nome e há quanto tempo · cidade e plano · o que está acontecendo · dados coletados + o selo mais importante. A borda esquerda
+  // é a vez: vermelho = o time precisa agir, verde = Mari, cinza = esperando o cliente. A etapa anda sozinha (não se arrasta).
+  const ESCADA = [['atendimento', 'Atendimento'], ['viabilidade', 'Viabilidade'], ['pre_qualificado', 'Pré-qualificado'], ['qualificado', 'Qualificado'], ['instalacao', 'OS aberta']];
+  function degrauDe(c) {
+    const l = leadDe[c.id];
+    if (!l) return colDe(c) === 'encerrada' ? 'saida' : 'atendimento';
+    if (l.destino === 'saida' || l.destino === 'teste_duplicada') return 'saida';
+    if (l.etapa === 'instalada') return 'instalacao';
+    return ESCADA.some(([k]) => k === l.etapa) ? l.etapa : 'atendimento';
+  }
+  const degrauNome = (c) => { const k = degrauDe(c); return k === 'saida' ? `Saída${leadDe[c.id] && leadDe[c.id].saida_nome ? ` · ${leadDe[c.id].saida_nome}` : ''}` : (ESCADA.find(([x]) => x === k) || [k, k])[1]; };
+  function vezCls(c) {
+    if (degrauDe(c) === 'saida') return 'v-off';
+    if (precisaAcao(c) || semResposta[c.id] != null) return 'v-time';
+    const q = qd[c.id] || {};
+    if (q.vez === 'mari') return 'v-mari';
+    if (q.vez === 'humano') return 'v-time';
+    return 'v-cli';
+  }
+  const VEZ_TXT = { 'v-time': 'vez do time', 'v-mari': 'vez da Mari', 'v-cli': 'esperando o cliente', 'v-off': 'fora da jornada' };
+  function cardHtml(c, { tag = 'div' } = {}) {
     const q = qd[c.id];
-    const enc = colDe(c) === 'encerrada';
+    const fora = degrauDe(c) === 'saida';
     const a = agoraTxt(c);
-    const op = !enc && opDe[c.id];
-    const cls = ['qcard', 'mq', 'mav', a.vivo ? 'digitando' : '', op ? 'op' : '', temTrava(q) && !enc ? 'trava' : '', enc ? 'dim' : '', acesos.has(c.id) ? 'acende' : ''].filter(Boolean).join(' ');
-    return `<${tag} class="${cls}" data-id="${c.id}" ${tag === 'button' ? 'type="button"' : 'role="button" tabindex="0"'} draggable="${arrastavel}" title="Abrir a conversa">
-      <b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}<span class="mq-local">${esc(nomeCurtoLocal(c) ? ` · ${nomeCurtoLocal(c)}` : '')}</span></b>
-      <span class="mav-agora ${a.cls || ''}"${op ? ` title="${esc(op.motivo)}"` : ''}>${esc(a.txt)}</span>
-      ${enc ? '' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}
+    const op = !fora && opDe[c.id];
+    const vc = vezCls(c);
+    const p = plano(c);
+    const v = valorDe(c);
+    const l2 = [c.cidade, p ? `${p.nome_curto || p.nome}${v != null ? ` ${NG.fmtMoeda(v)}` : ''}` : null].filter(Boolean).join(' · ');
+    const cls = ['qcard', 'mq2-card', vc, a.vivo ? 'digitando' : '', op ? 'op' : '', fora ? 'dim' : '', acesos.has(c.id) ? 'acende' : ''].filter(Boolean).join(' ');
+    return `<${tag} class="${cls}" data-id="${c.id}" ${tag === 'button' ? 'type="button"' : 'role="button" tabindex="0"'} title="${esc(`${VEZ_TXT[vc]} — abrir a ficha`)}">
+      <span class="mq2-l1"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(ha(ultimaDe(c)).replace('há ', ''))}</small></span>
+      <small class="mq2-l2">${esc(l2 || '—')}</small>
+      <span class="mav-agora ${a.cls || ''}${a.vivo ? ' digitando' : ''}"${op ? ` title="${esc(op.motivo)}"` : ''}>${esc(a.txt)}</span>
+      ${fora ? '' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}
     </${tag}>`;
   }
 
-  // Lista: as mesmas 3 informações por linha (cliente · local | o que está acontecendo | termômetro + chip) + etapa e última.
+  // Lista: no padrão da Live — cliente · degrau · o que está acontecendo · dados · última. A borda esquerda é a vez.
   function renderLista(lista) {
     tbody.innerHTML = lista.length ? lista.map((c) => {
       const q = qd[c.id];
-      const ci = colInfo(colDe(c));
-      const enc = colDe(c) === 'encerrada';
+      const fora = degrauDe(c) === 'saida';
       const a = agoraTxt(c);
-      const op = !enc && opDe[c.id];
-      return `<tr class="clicavel ${enc ? 'saida' : ''} ${temTrava(q) && !enc ? 'mq-tr-trava' : ''}${op ? ' mav-tr-op' : ''}${acesos.has(c.id) ? ' acende' : ''}" data-id="${c.id}" tabindex="0" title="Abrir a conversa">
-        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc(nomeCurtoLocal(c) || '—')}</small></td>
+      const op = !fora && opDe[c.id];
+      const vc = vezCls(c);
+      const p = plano(c);
+      return `<tr class="clicavel mq2-tr ${vc}${fora ? ' saida' : ''}${op ? ' mav-tr-op' : ''}${acesos.has(c.id) ? ' acende' : ''}" data-id="${c.id}" tabindex="0" title="${esc(`${VEZ_TXT[vc]} — abrir a ficha`)}">
+        <td class="cli"><b>${esc(contatoDe(c))}${ehTeste(c) ? ' <span class="chip">teste</span>' : ''}</b><small>${esc([c.cidade, p ? p.nome_curto || p.nome : null].filter(Boolean).join(' · ') || '—')}</small></td>
+        <td><span class="mq2-deg d-${esc(degrauDe(c))}">${esc(degrauNome(c))}</span></td>
         <td><span class="mav-agora ${a.cls || ''}${a.vivo ? ' digitando' : ''}"${op ? ` title="${esc(op.motivo)}"` : ''}>${esc(a.txt)}</span></td>
-        <td>${enc ? '<span class="apagado">—</span>' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}</td>
-        <td><span class="mq-col ${esc(ci.cor || 'muted')}" title="${esc(ci.descricao || '')}">${esc(ci.nome)}</span></td>
-        <td class="apagado">${esc(ha(ultimaDe(c)))}${q && q.ultima_quem ? `<small>${esc({ cliente: 'cliente', mari: 'Mari', humano: 'humano' }[q.ultima_quem] || '')}</small>` : ''}</td>
+        <td>${fora ? '<span class="apagado">—</span>' : `<span class="mav-l3">${barra(q)}${chipCard(c)}</span>`}</td>
+        <td class="apagado">${esc(ha(ultimaDe(c)))}${q && q.ultima_quem ? `<small>${esc({ cliente: 'cliente', mari: 'Mari', humano: 'time' }[q.ultima_quem] || '')}</small>` : ''}</td>
       </tr>`;
     }).join('') : '<tr><td colspan="5" class="vazio">Nenhuma conversa neste filtro</td></tr>';
     cartoesEl.innerHTML = lista.length ? lista.map((c) => cardHtml(c)).join('') : '<div class="vazio">Nenhuma conversa neste filtro</div>';
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'conversa' : 'conversas'} no filtro`;
   }
 
-  // Quadro: colunas da config (ordem), Encerrada recolhida embaixo. Dentro da coluna, a mesma ordem "precisa de ação".
+  // Quadro: a escada em 5 colunas que cabem na tela (cada uma rola por dentro); Saída recolhida embaixo.
   const boardEl = document.getElementById('board');
   const foraEl = document.querySelector('.quadro-mari .qv-fora');
   const faixaFora = document.getElementById('qv-faixa');
   const foraCorpo = document.getElementById('qv-fora-corpo');
   const movel = window.matchMedia('(max-width: 760px)');
-  // 0102: arrastar entre colunas só para admin (o backoffice opera pelo Live); celular: sem arrastar (abre a conversa).
-  const podeArrastar = () => ADMIN && !movel.matches;
+  const podeArrastar = () => false;   // 15/11: as colunas são a escada (anda sozinha) — assumir e Saída ficam na ficha
   let foraAberto = false;
   movel.addEventListener('change', () => { if (vista === 'quadro') render(); });
 
   function renderQuadro(lista) {
-    const abertas = colunas.filter((k) => !k.recolhida);
-    const recolhidas = colunas.filter((k) => k.recolhida);
     const por = {};
-    lista.forEach((c) => { (por[colDe(c)] = por[colDe(c)] || []).push(c); });
-    boardEl.innerHTML = abertas.map((k) => {
-      const itens = (por[k.codigo] || []).sort(cmpRank);
+    lista.forEach((c) => { (por[degrauDe(c)] = por[degrauDe(c)] || []).push(c); });
+    boardEl.className = 'mq2-board';
+    boardEl.innerHTML = ESCADA.map(([k, nome], i) => {
+      const itens = (por[k] || []).sort(cmpRank);
       const nAcao = itens.filter(precisaAcao).length;
-      // 0107: coluna vazia vira trilho fino vertical com o nome e 0 (continua aceitando o arrastar).
-      if (!itens.length) return `<section class="col qv-col mav-trilho" data-col="${esc(k.codigo)}" aria-label="${esc(k.nome)} (vazia)" title="${esc(k.descricao || '')}"><span>${esc(k.nome)} · 0</span></section>`;
-      return `<section class="col qv-col" data-col="${esc(k.codigo)}" aria-label="${esc(k.nome)}">
-        <div class="col-head" title="${esc(k.descricao || '')}"><span class="mq-c-${esc(k.cor || 'muted')}">${esc(k.nome)}</span><span>${NG.fmtNum(itens.length)}${nAcao ? `<span class="c-acao" title="precisam de ação"> · ${NG.fmtNum(nAcao)}!</span>` : ''}</span></div>
-        <div class="qv-corpo${itens.length > 8 ? ' rola' : ''}">${itens.length ? itens.map((c) => cardHtml(c, { arrastavel: podeArrastar() })).join('') : '<div class="col-vazia">—</div>'}</div>
+      const nMari = itens.filter((c) => vezCls(c) === 'v-mari').length;
+      return `<section class="mq2-col d-${k}" data-col="${k}" aria-label="${esc(nome)}">
+        <div class="mq2-h"><span class="mq2-n">${i + 1}</span><b>${esc(nome)}</b><span class="fc-sp"></span><span class="mq2-c">${NG.fmtNum(itens.length)}</span></div>
+        <div class="mq2-sub">${nAcao ? `<span class="bad-txt">${NG.fmtNum(nAcao)} vez do time</span>` : '<span>nada com o time</span>'}${nMari ? ` · ${NG.fmtNum(nMari)} com a Mari` : ''}</div>
+        <div class="mq2-corpo">${itens.length ? itens.map((c) => cardHtml(c)).join('') : '<div class="mq2-vazia">ninguém aqui</div>'}</div>
       </section>`;
-    }).join('') || '<div class="vazio">Sem colunas configuradas (config_mari_colunas).</div>';
-    const fora = recolhidas.flatMap((k) => por[k.codigo] || []).sort((a, b) => new Date(ultimaDe(b)) - new Date(ultimaDe(a)));
-    const nomeFora = recolhidas.map((k) => k.nome).join(' · ') || 'Encerrada';
-    foraEl.hidden = !recolhidas.length;
-    faixaFora.innerHTML = `<span>${esc(nomeFora)} <b>${NG.fmtNum(fora.length)}</b> <span class="apagado">· no período</span></span><span class="seta" aria-hidden="true">${foraAberto ? '▴' : '▾'}</span>`;
+    }).join('');
+    const fora = (por.saida || []).sort((a, b) => new Date(ultimaDe(b)) - new Date(ultimaDe(a)));
+    foraEl.hidden = false;
+    faixaFora.innerHTML = `<span>Saída <b>${NG.fmtNum(fora.length)}</b> <span class="apagado">· fora da jornada, no período</span></span><span class="seta" aria-hidden="true">${foraAberto ? '▴' : '▾'}</span>`;
     faixaFora.setAttribute('aria-expanded', String(foraAberto));
     foraCorpo.hidden = !foraAberto;
     foraCorpo.innerHTML = foraAberto ? `<div class="qv-grade">${fora.length ? fora.map((c) => cardHtml(c)).join('') : '<div class="col-vazia">—</div>'}</div>` : '';
