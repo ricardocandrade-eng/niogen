@@ -265,7 +265,7 @@
       NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
         : Promise.resolve({ data: [] }),
       NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -2067,7 +2067,7 @@
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2870,16 +2870,20 @@
       const r = c.nio_viab_resultado;
       const dec = c.cobertura_decisao;
       const rc = c.rua_conferir_em && c.rua_conferir ? c.rua_conferir : null;
-      const DEC = { viavel: ['Viável', 'ok'], elegivel_200m: ['Portal: não · DFV: viável perto', 'warn'], sem_cobertura: ['Sem cobertura', 'bad'],
+      const DEC = { viavel: ['Viável', 'ok'], elegivel_200m: ['Portal disse não', 'warn'], sem_cobertura: ['Sem cobertura', 'bad'],
         unidade_fora_lista: ['Unidade fora da lista do portal', 'warn'], indefinida: ['O portal não decidiu', 'warn'] };
       const [rot, cls] = DEC[dec] || (r ? [NG.VIAB_NIO[r] || r, r === 'viavel' ? 'ok' : 'warn'] : ['Ainda não consultada', 'mute']);
       const quando = c.cobertura_em || c.nio_viab_em;
       const endTxt = [convRua(c), convComp(c) && convComp(c) !== 'sem complemento' ? convComp(c) : '', convCep(c) ? `CEP ${convCep(c)}` : '', c.cidade].filter(Boolean).join(' · ');
-      corpo = `${linhaDet('Endereço', esc(endTxt || '—'))}
-        ${linhaDet('Hoje na ficha', `<span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? ` até ${esc(c.nio_viab_velocidade)}` : ''}${quando ? ` <small class="apagado">· ${esc(NG.fmtDataHora(quando))}</small>` : ''}`)}
-        ${rc ? `<div class="fc-aviso warn">Cliente: <b>${esc(rc.esperada || convLogr(c) || '?')}</b> · portal consultou: <b>${esc(String(rc.portal || '?').split(',')[0])}</b></div>` : ''}
-        ${dec === 'viavel' && !rc ? '<div class="nota-campo">Nada a fazer: a viabilidade já está gravada.</div>' : ''}
-        ${dfvBloco()}${opPainel('viab')}`;
+      const fazer = rc ? `O portal consultou <b>${esc(String(rc.portal || '?').split(',')[0])}</b>, não a rua do cliente (<b>${esc(rc.esperada || convLogr(c) || '?')}</b>). Consulte de novo — o robô agora escolhe a rua certa.`
+        : dec === 'viavel' ? 'Nada a fazer: a viabilidade já está gravada.'
+          : dec === 'elegivel_200m' ? 'O portal disse não, mas o mapa da Nio tem casa viável perto. Consulte de novo; se manter, peça a liberação (até 200 m).'
+            : dec === 'unidade_fora_lista' ? 'Confirme a unidade (apto, bloco, casa A/B) com o cliente e consulte de novo.'
+              : !dec ? 'Ainda não consultado no portal.' : 'Consulte de novo no portal.';
+      corpo = `<div class="fc2-v-res"><span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? `<b>até ${esc(c.nio_viab_velocidade)}</b>` : ''}${quando ? `<small class="apagado">${esc(NG.fmtDataHora(quando))}</small>` : ''}</div>
+        <div class="fc2-v-end" title="${esc(endTxt)}">${esc(endTxt || '—')}</div>
+        <div class="fc2-v-fazer ${rc || (dec && dec !== 'viavel') ? 'warn' : ''}">${fazer}</div>
+        ${opPainel('viab')}${dfvBloco()}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
@@ -3561,13 +3565,15 @@
     const x = fc.dfv;
     if (!x || x.estado !== 'pronto' || !x.r || x.r.fonte === 'base_congelada') return null;
     const f = x.r.fachada || null;
-    return { r: x.r, f, nio: f ? Number(f.hcs || 0) : null, livre: f && f.hp_livre != null ? Number(f.hp_livre) : null, total: f && f.hps != null ? Number(f.hps) : null };
+    // a DFV às vezes traz mais clientes que portas (HC 2 · HP 1 · livre -1): porta livre nunca fica negativa
+    return { r: x.r, f, nio: f ? Number(f.hcs || 0) : null, livre: f && f.hp_livre != null ? Math.max(0, Number(f.hp_livre)) : null, total: f && f.hps != null ? Number(f.hps) : null };
   }
+  const nioTxt = (L) => `${L.nio > 0 ? `${L.nio} cliente${L.nio > 1 ? 's' : ''} Nio` : 'nenhum cliente Nio'} · ${L.livre == null ? '?' : L.livre === 0 ? 'sem porta livre' : `${L.livre} porta${L.livre > 1 ? 's' : ''} livre${L.livre > 1 ? 's' : ''}`}`;
   const dfvNioTxt = () => {
     const L = dfvLeitura();
     if (!L) return fc.dfv && fc.dfv.estado === 'rodando' ? 'consultando o mapa da Nio…' : null;
     if (!L.f) return 'número fora da lista de viáveis do CEP';
-    return L.nio > 0 ? `JÁ TEM Nio: ${L.nio} cliente${L.nio > 1 ? 's' : ''} na fachada · ${L.livre ?? '?'} porta${L.livre === 1 ? '' : 's'} livre${L.livre === 1 ? '' : 's'}` : `nenhum cliente Nio · ${L.livre ?? '?'} porta${L.livre === 1 ? '' : 's'} livre${L.livre === 1 ? '' : 's'}`;
+    return L.nio > 0 ? `JÁ TEM Nio: ${nioTxt(L)}` : nioTxt(L);
   };
   const dfvRisco = () => { const L = dfvLeitura(); return !!(L && L.f && L.nio > 0); };
   function dfvBloco() {
@@ -3579,16 +3585,88 @@
     if (r.fonte === 'base_congelada') return '<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)</div><span class="apagado">painel ao vivo fora — só a base congelada de JF</span></div>';
     const L = dfvLeitura();
     const f = L && L.f;
-    const lin = (k, val, cls = '') => `<div class="fc-dr"><span>${esc(k)}</span><b class="${cls}">${val}</b></div>`;
+    const kv = (k, val, cls = '') => `<span>${esc(k)}</span><b class="${cls}" title="${esc(String(val).replace(/<[^>]+>/g, ''))}">${val}</b>`;
+    const tit = (t) => String(t || '').toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase());
     const aviso = f && L.nio > 0
-      ? `<div class="fc-aviso ${L.livre === 0 ? 'bad' : 'warn'}"><b>Já existe cliente Nio neste endereço${L.livre === 0 ? ' e não há porta livre' : ''}.</b> Confira se é o próprio cliente ou alguém da casa: aí é <b>recompra</b> (estorno + multa de R$ 500). Isso também costuma aparecer no portal como "Negado – Critérios Antifraude".</div>` : '';
-    return `<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)<span class="apagado">${r.atualizado_painel ? ` · base de ${esc(r.atualizado_painel)}` : ''}${r.regiao ? ` · ${esc(r.regiao)}` : ''}</span></div>
-      ${lin('Este número', f ? `viável · ${esc(f.logradouro || '')}, ${esc(f.numero || '')}${f.complemento ? ` ${esc(f.complemento)}` : ''}` : `não está entre as ${esc(String(r.total_fachadas_no_cep || 0))} fachadas viáveis do CEP`, f ? 'ok-txt' : 'warn-txt')}
-      ${f ? lin('Clientes Nio aqui', `${L.nio > 0 ? `<b class="bad-txt">${L.nio}</b>` : '0'} de ${L.total ?? '?'} ${L.total === 1 ? 'casa/unidade' : 'unidades'} · portas livres: ${L.livre ?? '?'}`) : ''}
+      ? `<div class="fc-aviso bad"><b>Já tem cliente Nio neste endereço.</b> Se for o próprio cliente ou alguém da casa, é <b>recompra</b> (estorno + multa de R$ 500) — e costuma ser o motivo do "Negado – Critérios Antifraude".</div>` : '';
+    return `<div class="fc2-dfv"><div class="fc2-dfv-h">Mapa da Nio (DFV)<span class="apagado">${r.atualizado_painel ? ` · base de ${esc(r.atualizado_painel)}` : ''}</span></div>
       ${aviso}
-      ${f ? lin('Classificação', esc([f.classificacao, f.celula].filter(Boolean).join(' · ') || '—')) : ''}
-      ${f && f.cd_cdo ? lin('CDO', `<span class="mono">${esc(f.cd_cdo)}</span>`) : ''}
-      ${lin('Crédito no bairro', esc((f && f.faixa_credito) || r.faixa_credito_bairro || '—'))}</div>`;
+      <div class="fc2-kv">
+        ${kv('Este número', f ? `viável <small class="apagado">${esc(tit(f.logradouro))}, ${esc(f.numero || '')}${f.complemento ? ` ${esc(f.complemento)}` : ''}</small>` : `fora da lista (${esc(String(r.total_fachadas_no_cep || 0))} viáveis no CEP)`, f ? 'ok-txt' : 'warn-txt')}
+        ${f ? kv('Clientes Nio', esc(nioTxt(L)), L.nio > 0 ? 'bad-txt' : '') : ''}
+        ${f ? kv('Classificação', esc([f.classificacao, f.celula ? `célula ${String(f.celula).replace(/\s*SECUND[AÁ]RIA/i, '')}` : ''].filter(Boolean).join(' · ') || '—')) : ''}
+        ${f && f.cd_cdo ? kv('CDO', `<span class="mono">${esc(f.cd_cdo)}</span>`) : ''}
+        ${kv('Crédito no bairro', esc((f && f.faixa_credito) || r.faixa_credito_bairro || '—'))}
+      </div></div>`;
+  }
+  // ---------- 15/11 (Ricardo: handoff objetivo, com a viabilidade e o crédito da Mari, gravado na ficha): quadro "Handoff da Mari" ----------
+  // Logo abaixo do AGORA. Fechado: título + "👉 Fazer agora". Aberto: a nota inteira (a mesma do Chatwoot) e a hora.
+  // Viabilidade, crédito e o "Fazer agora" da venda são refeitos com as colunas da conversa de AGORA — o crédito que chegou
+  // depois do handoff já aparece. A tabela do "Fazer agora" é a mesma do n8n/mari/n07_extrair.js e da 0206 (mari_credito_gravar).
+  const HO_FORMA = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito em conta' };
+  function handoffLinhas(cv) {
+    const vel = cv.nio_viab_velocidade ? ` até ${cv.nio_viab_velocidade}` : '';
+    const dec = cv.cobertura_decisao || ({ viavel: 'viavel', sem_viabilidade: 'sem_cobertura', nao_encontrado: 'unidade_fora_lista' }[cv.nio_viab_resultado]) || null;
+    const viab = { viavel: `✅ Viabilidade: VIÁVEL${vel} (portal)`, elegivel_200m: '⚠️ Viabilidade: só pelos 200 m (portal sem viabilidade, DFV com fachada viável)',
+      unidade_fora_lista: '⚠️ Viabilidade: unidade fora da lista do portal', sem_cobertura: '❌ Viabilidade: SEM cobertura (portal e DFV)',
+      indefinida: '❔ Viabilidade: o portal não decidiu' }[dec] || '❔ Viabilidade: não consultada';
+    const fcod = (Array.isArray(cv.credito_formas) ? cv.credito_formas : []).map((f) => String(f).toUpperCase());
+    const formas = fcod.map((f) => HO_FORMA[f] || f.toLowerCase());
+    const cr = cv.credito_resultado || null;
+    const n = Number(cv.credito_consultas || 0);
+    const padrao = cv.credito_endereco === 'padrao' && /^aprovado/.test(cr || '');
+    const CR = { aprovado_todas: 'APROVADO — todas as formas', aprovado_parcial: `APROVADO — ${formas.join(', ') || 'formas: ?'}`, aprovado_cartao: 'APROVADO SÓ NO CARTÃO',
+      pendente: 'PENDENTE (a Nio responde em até 24 h)', negado: n >= 2 ? 'NEGADO nos 2 CPFs (titular e parente)' : 'NEGADO neste CPF',
+      pedido_em_andamento: 'já existe PEDIDO NIO EM ANDAMENTO no CPF', nao_decidiu: 'o portal não decidiu' };
+    const depois = cr && cv.credito_em && cv.handoff_em && new Date(cv.credito_em) > new Date(cv.handoff_em);
+    const cred = cr ? `💳 Crédito: ${CR[cr] || cr}${padrao ? ' · ⚠ lido no endereço PADRÃO, não no do cliente' : ''}${depois ? ` · chegou depois do handoff (${NG.fmtDataHora(cv.credito_em)})` : ''}`
+      : cv.credito_em ? '💳 Crédito: consulta automática em andamento' : dec !== 'viavel' ? '💳 Crédito: não consultado (a Mari só consulta depois de viável)' : '💳 Crédito: não consultado';
+    const fp = cv.forma_pagamento || null;
+    const fpCod = { boleto: 'BOLETO', cartao: 'CREDITO', debito: 'DACC' }[fp] || null;
+    const fpTxt = { boleto: 'boleto', cartao: 'cartão', debito: 'débito em conta' }[fp] || null;
+    let fazer;
+    if (cv.nio_pedido_aberto === 'sim' || cr === 'pedido_em_andamento') fazer = 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).';
+    else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
+    else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
+    else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
+    else if (dec !== 'viavel') fazer = 'Consultar a viabilidade (etapa Viabilidade) antes de tudo.';
+    else if (padrao) fazer = 'Consultar o crédito de novo no endereço do cliente (etapa Crédito) antes de abrir o pedido.';
+    else if (!cr && cv.credito_em) fazer = 'Aguardar o resultado do crédito e então abrir o pedido.';
+    else if (!cr || cr === 'nao_decidiu') fazer = 'Consultar o crédito (etapa Crédito).';
+    else if (cr === 'pendente') fazer = 'Aguardar a resposta da Nio (até 24 h) e avisar o cliente; não abrir o pedido antes.';
+    else if (cr === 'negado') fazer = n >= 2 ? 'Ver com o cliente outra pessoa da casa como titular; sem saída, encerrar pela Saída.' : 'Oferecer outra pessoa da casa como titular (CPF do parente → 1 nova consulta).';
+    else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
+    else if (cr === 'aprovado_parcial' && fpCod && !fcod.includes(fpCod)) fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;
+    else fazer = `Abrir o pedido no portal${fpTxt ? ` no ${fpTxt}` : ''} e avisar o cliente do link da biometria que a Nio manda.`;
+    return { viab, cred, fazer };
+  }
+  function handoffHtml(cv) {
+    if (!cv || !cv.handoff_briefing || !ehBO()) return '';
+    const br = String(cv.handoff_briefing).trim();
+    const linhas = br.split('\n').map((l) => l.trim()).filter(Boolean);
+    const novo = /^(🟢|🟡|⚪)/u.test(linhas[0] || '');
+    const venda = cv.handoff_motivo === 'dados_completos';
+    const v = d.soConversa ? null : d.v;
+    // pedido já aberto (OS ou etapa adiante): o quadro vira registro — o "Fazer agora" de antes já foi feito.
+    const passou = !!(v && (v.nio_os || ['2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme', 'saida'].includes(v.status)));
+    const L = handoffLinhas(cv);
+    const salvo = (re) => (linhas.find((l) => re.test(l)) || '').trim();
+    const titulo = novo ? linhas[0] : `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`;
+    // venda: viabilidade/crédito/fazer de agora; outro motivo: o "Fazer agora" que a Mari escreveu (a sugestão dela)
+    const fazer = venda || !novo ? L.fazer : (salvo(/^👉/).replace(/^👉\s*Fazer agora:\s*/, '') || L.fazer);
+    const resto = novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l)) : linhas;
+    const aberto = !!fc.ho;
+    const quando = cv.handoff_em ? NG.fmtDataHora(cv.handoff_em) : '';
+    return `<section class="fc2-ho${passou ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="Handoff da Mari">
+      <button type="button" class="fc2-ho-b" data-f="fc2-ho" aria-expanded="${aberto}"><span class="fc2-ho-k">HANDOFF DA MARI</span>
+        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b><small title="${esc(fazer)}">${passou ? `pedido já aberto · passou em ${esc(quando)}` : `👉 ${esc(fazer)}`}</small></span>
+        <span class="fc2-ho-sx">${aberto ? IC.cima : IC.baixo}</span></button>
+      ${aberto ? `<div class="fc2-ho-c">
+        <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
+        <div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>
+        ${resto.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
+        <div class="fc2-ho-src">Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · viabilidade e crédito: como estão agora · a mesma nota foi no Chatwoot</div>
+      </div>` : ''}</section>`;
   }
   function bandHtml(tom, k, t, s, botao, chip) {
     return `<section class="fc2-agora ag-${tom}" aria-label="O que fazer agora"><span class="fc2-ag-k">AGORA</span>${k ? `<span class="fc2-ag-pill">${esc(k)}</span>` : ''}
@@ -3790,7 +3868,7 @@
     const abaT = (a, rot) => `<button type="button" role="tab" class="${fc.aba === a ? 'on' : ''}" data-f="fc-aba" data-a="${a}" aria-selected="${fc.aba === a}">${rot}</button>`;
     const souLead = !!d.soConversa;
     raiz.innerHTML = `<div class="fc fc2">
-      ${cab}${band}
+      ${cab}${band}${handoffHtml(conv ? d.conv : d.convInfo)}
       <div class="fc-abas fc2-abas" role="tablist" aria-label="O que mostrar">${abaT('conv', 'Conversa')}${abaT('jor', 'Jornada')}${abaT('ficha', 'Dados')}</div>
       <div class="fc2-grid aba-${fc.aba}">
         <section class="fc-col fc-col-conv" aria-label="Conversa">${temConv ? '<div class="fc-conv-host"></div>'
@@ -3879,6 +3957,7 @@
     if (a === 'fc-concluir') { dispensarAviso(b); return; }
     if (a === 'fc-nav') { if (cheiaOpts.aoNavegar) cheiaOpts.aoNavegar(Number(b.dataset.dir)); return; }
     if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
+    if (a === 'fc2-ho') { fc.ho = !fc.ho; render(); return; }   // 15/11: quadro "Handoff da Mari"
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; fc.etapaX = !fc.etapa; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
     if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
     if (a === 'fc-os-ler') { abrirOsModal(); return; }
