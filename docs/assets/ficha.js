@@ -2868,7 +2868,7 @@
     } else if (p.k === 'cred') {
       const cc = conv ? d.conv : null;
       const padraoC = cc && cc.credito_endereco === 'padrao' && /^aprovado/.test(cc.credito_resultado || '');
-      corpo = conv ? `${linhaDet('Resultado', cc.credito_resultado ? `${esc(NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
+      corpo = conv ? `${linhaDet('Resultado', cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
         ${padraoC ? '<div class="fc-aviso warn"><b>Lido no endereço PADRÃO, não no do cliente.</b> O antifraude da Nio olha o endereço: consulte de novo aqui (com o endereço do cliente) antes do pedido.</div>' : ''}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${opPainel('cred')}`;
