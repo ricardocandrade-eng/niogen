@@ -235,6 +235,9 @@ ok(cr.mesma_rua('Travessa Grão Mogol, 49 - Nossa Senhora Das Graças, Juiz De F
 ok(cr.mesma_rua('Beco Santo Antonio, 1009 - Vera Cruz, Belo Horizonte - MG', 'Rua Desembargador Bráulio') is False,
    'Sérggio (12/11): Beco Santo Antonio × Rua Desembargador Bráulio → outra rua')
 ok(cr.mesma_rua('Av. Rio Branco', 'Avenida Rio Branco') is True, 'Av. × Avenida → mesmo tipo, mesma rua')
+ok(cr.mesma_rua('Rua Corcovado, 192 - Botafogo (Justinópolis), Ribeirão Das Neves - MG', 'Avenida Corcovado') is True,
+   'José Lúcio (14/11): Rua × Avenida Corcovado → mesma (ViaCEP e Nio trocam Rua/Avenida)')
+ok(cr.mesma_rua('Viela Corcovado', 'Rua Corcovado') is False, 'Viela × Rua do mesmo nome → outra rua')
 ok(cr.mesma_rua('Rio Branco', 'Rua Rio Branco') is True, 'sem tipo num dos lados → o tipo não decide')
 ok(cr.mesma_rua('R. Quinze, 23 - Vista Do Sol', 'Rua Quinze') is True, 'Christian (12/11): R. Quinze × Rua Quinze → mesma')
 ok(cr.mesma_rua('Rua São Mateus', 'Rua Santos Dumont') is False, 'São Mateus × Santos Dumont → outra')

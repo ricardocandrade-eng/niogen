@@ -256,7 +256,9 @@ def mesma_rua(a, b):
     (tpa, ta), (tpb, tb) = rua_partes(a), rua_partes(b)
     if not ta or not tb:
         return None
-    if tpa and tpb and tpa != tpb:
+    # Rua × Avenida não decide: o ViaCEP e a base da Nio trocam um pelo outro (14/11: "Avenida Corcovado" no ViaCEP, "Rua Corcovado"
+    # no portal e no DFV, Ribeirão das Neves). Travessa, Beco, Viela, Praça… × Rua continuam sendo outra rua (caso Matheus).
+    if tpa and tpb and tpa != tpb and {tpa, tpb} != {'RUA', 'AVENIDA'}:
         return False
     if ta == tb:
         return True

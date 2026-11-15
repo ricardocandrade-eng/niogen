@@ -2009,7 +2009,7 @@
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2033,13 +2033,21 @@
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
     };
   }
+  // 14/11 (0202, Ricardo: "o NIOGEN não permite corrigir a viabilidade desses clientes"): o endereço do lead vem das COLUNAS da
+  // conversa (cep · numero · complemento · endereco_cep do ViaCEP). dados.cep_origem é de onde veio o CEP ("digitado"), não o CEP,
+  // e dados.numero não existe — a ficha mostrava "digitado" no CEP e o operador dizia "falta CEP"/"falta o número".
+  const convDados = (c) => ((c && c.dados && typeof c.dados === 'object') ? c.dados : {});
+  const convCep = (c) => { const n = NG.soDigitos((c && c.cep) || ''); return n.length === 8 ? NG.fmtCep(n) : null; };
+  const convLogr = (c) => { const x = convDados(c); return x.rua_confirmada || x.rua_informada || ((c && c.endereco_cep) || {}).logradouro || null; };
+  const convRua = (c) => { const r = convLogr(c); const n = String((c && c.numero) || '').trim(); return r ? (n ? `${r}, ${n}` : r) : (n ? `nº ${n}` : null); };
+  const convComp = (c) => { const x = convDados(c); const k = String((c && c.complemento) || '').trim();
+    return k || (x.complemento_ok === true ? 'sem complemento' : typeof x.complemento_ok === 'string' ? x.complemento_ok : null); };
   // 0096 (Ricardo: "não estou vendo opção para ver os demais dados do cliente"): os valores que a Mari coletou, com copiar.
   function dadosConversa(c) {
     const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
-    const rua = x.rua_confirmada || x.rua_informada;
     const L = [
       ['Nome', x.nome || c.nome_contato], ['Telefone', c.telefone || x.telefone], ['CPF', x.cpf], ['E-mail', x.email],
-      ['CEP', x.cep_origem], ['Endereço', rua], ['Complemento', x.complemento_ok === true ? 'sem complemento' : typeof x.complemento_ok === 'string' ? x.complemento_ok : null],
+      ['CEP', convCep(c)], ['Endereço', convRua(c)], ['Complemento', convComp(c)],
       ['Referência', x.referencia], ['Cidade', c.cidade], ['Operadora atual', x.operadora_atual], ['Plano escolhido', c.plano_escolhido],
     ].filter(([, val]) => val != null && String(val).trim() !== '');
     return `<div class="f-lembretes f-dados-conv"><div class="f-lb-cab"><span class="f-rot">DADOS DO CLIENTE (COLETADOS PELA MARI)</span></div>
@@ -2644,10 +2652,13 @@
   function entradaOp(tipo) {
     const v = d.soConversa ? null : d.v;
     const x = d.soConversa ? ((d.conv && d.conv.dados) || {}) : {};
-    const cep = NG.soDigitos(v ? v.cep : (x.cep_origem || (d.conv || {}).cep || ''));
-    const numero = String(v ? v.numero || '' : x.numero || '').trim();
-    const complemento = String(v ? v.complemento || '' : '').trim();
-    const end = { cep, numero, complemento, opcao: '' };
+    const cv = d.conv || {};
+    const cep = NG.soDigitos(v ? v.cep : (cv.cep || ''));   // 14/11: coluna da conversa (dados.cep_origem é "digitado", não o CEP)
+    const numero = String(v ? v.numero || '' : cv.numero || x.numero || '').trim();
+    // lead: só complemento que é unidade (apto, bloco, casa A…) — "Casa" sozinho não vai ao portal (igual à mari_viab_pendentes)
+    const kc = String(v ? v.complemento || '' : cv.complemento || '').trim();
+    const complemento = v ? kc : (/(ap|apto|apartamento|bloco|bl|sala|loja|casa\s+[a-z0-9]\b|fundos|\d)/i.test(kc) && !/^\s*(casa|nenhum|nao|não|sem)\s*$/i.test(kc) ? kc.slice(0, 60) : '');
+    const end = { cep, numero, complemento, opcao: '', logradouro_esperado: String(v ? v.logradouro || '' : convLogr(cv) || '').slice(0, 120) };
     if (cep.length !== 8) return { falta: 'falta CEP' };
     if (!numero) return { falta: 'falta o número' };
     if (tipo === 'viab') return { end };
@@ -3514,7 +3525,7 @@
     const x = (c.dados && typeof c.dados === 'object') ? c.dados : {};
     return [
       ['Nome', x.nome || c.nome_contato], ['WhatsApp', c.telefone ? fmtTel(c.telefone) : x.telefone], ['CPF', x.cpf ? fmtDoc(x.cpf) : null], ['E-mail', x.email],
-      ['CEP', x.cep_origem], ['Endereço', x.rua_confirmada || x.rua_informada], ['Complemento', x.complemento_ok === true ? 'sem complemento' : typeof x.complemento_ok === 'string' ? x.complemento_ok : null],
+      ['CEP', convCep(c)], ['Endereço', convRua(c)], ['Complemento', convComp(c)],
       ['Referência', x.referencia], ['Cidade', c.cidade], ['Operadora atual', x.operadora_atual], ['Plano escolhido', c.plano_escolhido],
     ].filter(([, val]) => val != null && String(val).trim() !== '');
   }
