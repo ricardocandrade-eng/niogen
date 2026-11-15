@@ -2716,3 +2716,96 @@ select option:disabled { color: var(--muted); }
 /* Conversas: três filtros (destino · etapa · atendimento) — quebram linha em tela estreita */
 .cv-funil { flex-wrap: wrap; }
 .cv-funil select { min-width: 110px; }
+
+/* ===================================================================================================================
+   14/11 — FICHA NOVA (protótipo aprovado: claude.ai/artifact/JH89gqH3rPLgGCgnscJCiT). Tela travada: topo · faixa AGORA ·
+   Conversa | Jornada da venda | Dados do cliente. Nada rola no computador (1528×650 cabe); no celular, uma coluna por aba.
+   =================================================================================================================== */
+.fc2 .fc-top { height: 56px; padding: 6px 18px; }
+.fc2-agora { flex: none; display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 6px 18px; border-bottom: 1px solid #1D232B; background: #11161C; position: relative; z-index: 7; }
+.fc2-agora.ag-now { background: #1B1214; border-bottom-color: #5A2B2B; }
+.fc2-agora.ag-today { background: #17140C; border-bottom-color: #4A3B17; }
+.fc2-agora.ag-ok { background: #0E1A14; border-bottom-color: #1F4A33; }
+.fc2-ag-k { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: #AAB4BF; flex: none; }
+.fc2-agora.ag-now .fc2-ag-k { color: #F47067; }
+.fc2-agora.ag-today .fc2-ag-k { color: #E3B341; }
+.fc2-agora.ag-ok .fc2-ag-k { color: #57D38C; }
+.fc2-ag-pill { flex: none; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #C9D1DA; background: rgba(255,255,255,.06); border-radius: 11px; padding: 3px 10px; }
+.fc2-ag-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.fc2-ag-t b { font-size: 15px; font-weight: 600; color: #F1F4F8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2-ag-t small { font-size: 12.5px; color: #9AA4B0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2-ag-pend { flex: none; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12.5px; color: #E59A92; background: none; border: 1px solid #5A2B2B; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.fc2-ag-pend .fc-ic { width: 14px; height: 14px; }
+.fc2-ag-link { flex: none; font: inherit; font-size: 12.5px; color: #9AA4B0; background: none; border: 0; cursor: pointer; padding: 6px 8px; border-radius: 6px; }
+.fc2-ag-link:hover { background: #1A2028; color: #E9EDF3; }
+.fc2 .fc2-agora .btn-acc { background: #2F9E62; border-color: #2F9E62; color: #fff; }
+.fc2 .fc2-agora .btn-acc:hover:not(:disabled) { background: #36B06E; }
+.fc2-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 36fr) minmax(0, 30fr) minmax(0, 34fr); }
+.fc2-col { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #1D232B; position: relative; overflow: hidden; }
+.fc2-col:last-child { border-right: 0; }
+.fc2-colh { flex: none; height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-bottom: 1px solid #1D232B; }
+.fc2-colh h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #9AA4B0; }
+.fc2-cont { font-size: 12px; color: #7F8A96; }
+/* Jornada */
+.fc2-lista { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+.fc2-et { border-radius: 10px; border: 1px solid transparent; }
+.fc2-et.on { background: #141A21; border-color: #262E38; }
+.fc2-et.on.s-warn { border-color: #5C4A1E; background: #17140C; }
+.fc2-et-b { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) 18px; align-items: center; gap: 10px; min-height: 40px; padding: 2px 8px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 10px; }
+.fc2-et-b:hover { background: rgba(255,255,255,.035); }
+.fc2-et-b:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fc2-et-ic { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1.5px solid #3A434E; color: #7F8A96; }
+.fc2-et-ic .fc-ic { width: 12px; height: 12px; }
+.fc2-et.s-done .fc2-et-ic { background: rgba(87,211,140,.15); border-color: #2E7D52; color: #8AE8B2; }
+.fc2-et.s-now .fc2-et-ic { background: rgba(108,182,255,.14); border-color: #3D6FB8; color: #9DC2FF; }
+.fc2-et.s-warn .fc2-et-ic { background: rgba(227,179,65,.15); border-color: #B38422; color: #F2C46B; }
+.fc2-et.s-wait .fc2-et-ic, .fc2-et.s-run .fc2-et-ic { border-color: #5B6573; color: #C9D1DA; }
+.fc2-et-t { display: flex; flex-direction: column; min-width: 0; }
+.fc2-et-t b { font-size: 13.5px; font-weight: 600; color: #E9EDF3; }
+.fc2-et.s-todo .fc2-et-t b { color: #9AA4B0; font-weight: 500; }
+.fc2-et-t small { font-size: 12px; color: #8D97A3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2-et.s-warn .fc2-et-t small { color: #F2C46B; }
+.fc2-et-sx { color: #5B6573; display: flex; }
+.fc2-et-sx .fc-ic { width: 14px; height: 14px; }
+.fc2-det { padding: 2px 12px 12px 44px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.fc2-det .fc-pop { position: static; box-shadow: none; border: 0; border-radius: 0; padding: 0; background: none; min-width: 0; gap: 7px; }
+.fc2-det .fc-pop-h { display: none; }
+.fc2-det .fc-cb.solta { padding: 0; }
+.fc2-det-bts { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Dados */
+.fc2-dl { flex: 1; min-height: 0; overflow-y: auto; padding: 2px 14px 6px; scrollbar-width: thin; }
+.fc2-sec { display: flex; align-items: center; gap: 8px; padding: 7px 0 2px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #7F8A96; }
+.fc2-ed { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 12px; font-weight: 500; letter-spacing: 0; text-transform: none; color: #7FB2FF; background: none; border: 0; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.fc2-ed:hover { background: #17202B; }
+.fc2-ed .fc-ic { width: 13px; height: 13px; }
+.fc2-f { display: grid; grid-template-columns: 104px minmax(0, 1fr) 20px 28px; align-items: center; min-height: 26px; font-size: 13px; border-bottom: 1px solid #161B22; }
+.fc2-fk { color: #8D97A3; font-size: 12.5px; }
+.fc2-fv { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #E9EDF3; }
+.fc2-fv.falta { color: #E3B341; }
+.fc2-fv.mono { font-variant-numeric: tabular-nums; }
+.fc2-tr { color: #6F7A86; display: flex; align-items: center; justify-content: center; }
+.fc2-tr .fc-ic { width: 13px; height: 13px; }
+.fc2-f .fc-cp { opacity: .55; }
+.fc2-f:hover .fc-cp { opacity: 1; }
+.fc2-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px 10px; padding: 8px 10px 10px; margin: 2px 0 6px; border: 1px solid #3D6FB8; border-radius: 10px; background: #111821; }
+.fc2-in { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.fc2-in.full { grid-column: 1 / -1; }
+.fc2-in span { font-size: 11.5px; color: #8D97A3; }
+.fc2-in input, .fc2-in select { height: 30px; border-radius: 7px; border: 1px solid #2A323C; background: #0F1419; color: #E9EDF3; padding: 0 9px; font: inherit; font-size: 13px; min-width: 0; }
+.fc2-in input:focus, .fc2-in select:focus { outline: 2px solid #3D6FB8; outline-offset: -1px; }
+.fc2-nota { grid-column: 1 / -1; font-size: 12px; color: #B6BFCA; line-height: 1.4; }
+.fc2-fbts { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.fc2 .fc2-fbts .btn-acc { background: #2F9E62; border-color: #2F9E62; color: #fff; }
+.fc2-pe { flex: none; display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 12px; border-top: 1px solid #1D232B; font-size: 12px; }
+.fc2-pendw { position: absolute; inset: 0; z-index: 9; }
+.fc2-pendw .fc-pend-over { position: absolute; inset: 0; border-radius: 0; }
+.fc2-dados .fc-cards-over { inset: 0; border-radius: 0; border: 0; border-top: 1px solid #3A434E; }
+.fc2-abas { display: none; }
+@media (max-width: 900px) {
+  .fc2-agora { flex-wrap: wrap; }
+  .fc2-ag-t b, .fc2-ag-t small { white-space: normal; }
+  .fc2-abas { display: grid; grid-template-columns: repeat(3, 1fr); flex: none; }
+  .fc2-grid { grid-template-columns: minmax(0, 1fr); }
+  .fc2-grid > section { display: none; border-right: 0; }
+  .fc2-grid.aba-conv > .fc-col-conv, .fc2-grid.aba-jor > .fc2-jor, .fc2-grid.aba-ficha > .fc2-dados { display: flex; }
+}
