@@ -3412,7 +3412,7 @@
       if (i === iProx) {
         p.st = p.cod === 'BIO3' && k.ligar_sugerido ? 'agora' : 'prox';
         const quando = k.bloqueio === 'fora do horário' ? ms(k.proximo_em) : cadHorario(ms(k.proximo_em));
-        p.em = p.cod === 'BIO3' || p.cod === 'FIM' ? ms(k.proximo_em) : quando;
+        p.em = ['BIO3', 'FIM', 'VESPERA'].includes(p.cod) ? ms(k.proximo_em) : quando;   // 0209: a véspera pode cair no domingo — vale a hora do banco
         p.texto = k.texto || null;
         if (/véspera passou|próxima demais/.test(k.bloqueio || '')) p.st = 'pul';
       } else if (i < Math.max(iProx, iUlt) || (['F1', 'F2', 'F3', 'F4', 'F5'].includes(p.cod) && L && agora >= L + 23 * HMS)) p.st = 'pul';
