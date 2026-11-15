@@ -1,6 +1,6 @@
 -- NIOGEN | supabase/migrations/0219_caixa_unica_do_lead.sql | 15/11/2026 — Claude Code (Opus 5.5)
 -- Pedido do Ricardo (15/11 ~18h30): "Pode fechar as 7 caixas. E se possível faça um backfill para acertar tudo."
--- Base: docs/MAPA_estados_dos_leads_151126_1800.md (115 leads, 22 combinações de estado, 3 sem caixa).
+-- Base: docs/MAPA_estados_dos_leads_151126_1500.md (115 leads, 22 combinações de estado, 3 sem caixa).
 --
 -- A CAIXA é a resposta única para "onde este lead está e quem cuida". Uma só por lead, calculada num lugar só (v_jornada.caixa):
 --   1 Mari conduzindo ............ em andamento, com a Mari, próximo toque marcado
