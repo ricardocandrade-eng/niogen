@@ -160,7 +160,8 @@
   const vez = (j) => !!j.precisa_acao;
   const PRAZO = { agora: 'agora', hoje: 'hoje', espera: 'aguardando', ok: '—', fora: 'saída' };
   const telaCheia = () => vista === 'lista' && !movel.matches;
-  const filtroBase = (l) => l.filter((j) => j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
+  // 15/11 (0214): conversa da Mari com o cliente parado (cliente_parado) também entra — antes caía aqui e nunca chegava ao Acompanhando.
+  const filtroBase = (l) => l.filter((j) => j.precisa_acao || j.cliente_parado || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia);
 
   const LIVE_MAX_MS = 2 * 60000;   // 14/11 (0190): recarga obrigatória da Live mesmo sem gravação no banco
   // fresco=true (padrão): após ação/Atualizar, descarta o cache. Carga inicial e timer usam o que a barra lateral já buscou.
