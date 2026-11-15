@@ -832,63 +832,117 @@ if (motivo) {
     viavel_predio: 'DFV viável (prédio) — conferir a unidade',
     endereco_ocupado: 'DFV indica Nio ativo no endereço — confirmar com o cliente e no portal antes de abrir o pedido',
   }[c.dfv_resultado] || (c.cidade && norm(c.cidade) === 'juiz de fora' ? 'DFV: conferir manualmente antes de abrir o pedido' : 'DFV: sem base para a cidade — conferir manualmente');
-  // v7 (prompt 27 A7): a nota começa pelo PORTAL; o DFV é só pista; Nio/Oi citado vira pista para o backoffice.
+  // 15/11 (Ricardo: "o handoff deve ser objetivo e orientar em poucas linhas o resumo e a orientação para o BKO"):
+  // nota curta — título · viabilidade · crédito (o que a Mari já consultou, com o resultado) · 👉 Fazer agora (calculado
+  // aqui, não pelo modelo) · ⚠️ alertas · Resumo (1–2 frases da Mari). O "1º PASSO: consultar viabilidade" saiu: a Mari já
+  // consulta sozinha. A MESMA tabela do "Fazer agora" está em docs/assets/ficha.js (handoffFazer) e no SQL do crédito que
+  // chega depois (0206) — mudou uma, muda as três.
   let topo = [];
+  let resumoMari = String(hy.briefing_humano || '').trim();
   if (V7) {
     const dd = { ...(c.dados || {}), ...dados };
     const cepF = String(c.cep || '').replace(/\D/g, '').replace(/^(\d{5})(\d{3})$/, '$1-$2') || '?';
     const comp = upd.complemento !== undefined ? upd.complemento : c.complemento;
-    const jf = norm(c.cidade) === 'juiz de fora';
-    const pista = {
-      viavel: 'Viável', viavel_predio: 'Viável prédio (a unidade o portal confirma)',
-      endereco_ocupado: 'indica Nio no endereço — conferir a posse no portal',
-      sem_porta_livre: 'sem porta livre na foto da Nio — o portal decide',
-    }[c.dfv_resultado] || (jf ? 'Não achou o endereço — pode ser sem cobertura ou endereço fora da foto da Nio; o portal decide'
-      : 'sem base do DFV para a cidade — o portal decide');
-    topo = [
-      `1º PASSO: consultar viabilidade no portal PAP — CEP ${cepF} · nº ${upd.numero || c.numero || '?'} · compl. ${comp || '—'} · ref. ${dd.referencia || '— (pedir ao cliente)'}`,
-      `DFV (pista): ${pista}`,
-      dd.rua_informada ? `Rua: o cliente escreveu «${dd.rua_informada}»${dd.rua_confirmada ? ` e confirmou «${dd.rua_confirmada}»` : ''} — conferir no portal` : null,
-      dd.pista_nio ? `PISTA: cliente citou Nio/Oi (${dd.pista_nio}) — conferir posse e recompra no portal (etapa 2)` : null,
-    ].filter(Boolean);
-    // 12/11 (achado 1 da auditoria, 0131): o n8n mari_viabilidade já consultou o portal quando o endereço chegou.
-    // 0133: a decisão do operador (portal decide, DFV resgata — igual à tela Cobertura).
-    const viabAuto = {
-      viavel: `✅ VIÁVEL${c.nio_viab_velocidade ? ` (até ${c.nio_viab_velocidade})` : ''}`,
-      elegivel_200m: '⚠️ ELEGÍVEL PELOS 200 m — portal sem viabilidade, DFV com fachadas viáveis no CEP: conferir a distância no mapa e pedir a liberação (Cobertura) ANTES da biometria',
-      unidade_fora_lista: '⚠️ UNIDADE FORA DA LISTA do portal — escolher a unidade certa ou pedir o cadastro pelo formulário (Cobertura)',
-      sem_cobertura: '❌ SEM COBERTURA — portal sem viabilidade e DFV sem fachada viável no CEP: a Mari avisou o cliente e registrou o interesse',
-      indefinida: '❔ o portal não decidiu — consultar na Cobertura antes da biometria',
-    }[c.cobertura_decisao] || {
-      viavel: '✅ viável', sem_viabilidade: '❌ SEM viabilidade neste número — conferir o endereço e os 200 m (Cobertura)',
-      nao_encontrado: '⚠️ unidade fora da lista do portal (Cobertura)' }[c.nio_viab_resultado];
-    if (viabAuto) topo.splice(1, 0, `COBERTURA (consulta automática): ${viabAuto}`);
-    // 0138: crédito pela Mari (autorizado) — o resultado vai na nota; se chegar depois, vai uma nota no Chatwoot (0140).
-    {
-      const CR = { aprovado_todas: 'APROVADO — todas as formas', aprovado_parcial: `APROVADO — formas: ${(c.credito_formas || []).join(', ') || '?'}`,
-        aprovado_cartao: 'APROVADO SÓ NO CARTÃO (a Mari avisou; sem cartão, outra pessoa da casa como titular)', pendente: 'PENDENTE (a Nio responde em até 24 h)',
-        negado: 'NEGADO neste CPF', pedido_em_andamento: 'pedido Nio em andamento no CPF', nao_decidiu: 'o portal não decidiu — consultar na Cobertura' };
-      const autQuando = c.credito_autorizado_em || (dados.credito_autorizado_em);
-      if (c.credito_resultado) topo.push(`💳 CRÉDITO (consulta automática${Number(c.credito_consultas || 0) >= 2 ? ', 2ª consulta — CPF do parente' : ''}): ${CR[c.credito_resultado] || c.credito_resultado} — grave na ficha`);
-      else if (autQuando) topo.push('💳 CRÉDITO: consulta automática em andamento — o resultado chega como nota');
-      else if (c.credito_recusado_em || dados.credito_recusado_em) topo.push('💳 CRÉDITO: o cliente NÃO autorizou a consulta pela Mari — pedir a autorização antes de consultar');
-    }
-    // 0133: pedido Nio em andamento no CPF (Etapa 3 do portal) — recompra = multa R$ 500.
-    if (c.nio_pedido_aberto === 'sim') {
-      const resp = dados.pedido_aberto_resposta || (c.dados || {}).pedido_aberto_resposta;
-      topo.push(`⚠️ JÁ EXISTE PEDIDO NIO EM ANDAMENTO NO CPF${resp ? ` — o cliente disse: «${resp}»` : ''}. Conferir no portal antes de abrir outro (recompra = multa R$ 500).`);
-    }
-    // 12/11 (achado 2 da auditoria — Edvaldo, Andriene): cliente sem cartão descobria só no fim que o crédito saiu "só no
-    // cartão". Se ele disse que não tem/não usa cartão, o time consulta o crédito ANTES da biometria e já oferece a saída.
+    const ender = `CEP ${cepF} · nº ${upd.numero || c.numero || '?'}${comp ? ` · ${comp}` : ''}`;
+    // briefing do modelo: RESUMO / SUGESTÃO / ATENÇÃO (o antigo "NÃO FAZER" fica de fora).
+    const bh = resumoMari.replace(/\s+/g, ' ');
+    const ROT = '(?:RESUMO|SUGEST[ÃA]O|N[ÃA]O FAZER|ATEN[ÇC][ÃA]O)';
+    const parte = (rot) => { const m = bh.match(new RegExp(`${rot}\\s*:\\s*(.*?)(?=\\s*${ROT}\\s*:|$)`, 'i')); return m ? m[1].trim() : ''; };
+    const temRot = new RegExp(`${ROT}\\s*:`, 'i').test(bh);
+    const resumo = (temRot ? parte('RESUMO') : bh).slice(0, 300);
+    const sugestao = temRot ? parte('SUGEST[ÃA]O').slice(0, 220) : '';
+    const atencaoMari = temRot ? parte('ATEN[ÇC][ÃA]O').slice(0, 220) : '';
+    resumoMari = resumo;
+
+    // viabilidade (operador: portal decide, DFV resgata — 0133)
+    const dec = c.cobertura_decisao || ({ viavel: 'viavel', sem_viabilidade: 'sem_cobertura', nao_encontrado: 'unidade_fora_lista' }[c.nio_viab_resultado]) || null;
+    const vel = c.nio_viab_velocidade ? ` até ${c.nio_viab_velocidade}` : '';
+    const VIAB = {
+      viavel: `✅ Viabilidade: VIÁVEL${vel} (portal) — ${ender}`,
+      elegivel_200m: `⚠️ Viabilidade: só pelos 200 m (portal sem viabilidade, DFV com fachada viável) — ${ender}`,
+      unidade_fora_lista: `⚠️ Viabilidade: unidade fora da lista do portal — ${ender}`,
+      sem_cobertura: `❌ Viabilidade: SEM cobertura (portal e DFV) — ${ender}`,
+      indefinida: `❔ Viabilidade: o portal não decidiu — ${ender}`,
+    };
+    const viabLinha = VIAB[dec] || `❔ Viabilidade: não consultada — ${ender}`;
+
+    // crédito (0138/0141/0205: automático, só com o endereço do cliente e depois de viável)
+    const FORMA = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito em conta' };
+    const formasCod = (Array.isArray(c.credito_formas) ? c.credito_formas : []).map((f) => String(f).toUpperCase());
+    const formas = formasCod.map((f) => FORMA[f] || f.toLowerCase());
+    const cr = c.credito_resultado || null;
+    const nCons = Number(c.credito_consultas || 0);
+    const padrao = c.credito_endereco === 'padrao' && /^aprovado/.test(cr || '');
+    const CRED = {
+      aprovado_todas: 'APROVADO — todas as formas', aprovado_parcial: `APROVADO — ${formas.join(', ') || 'formas: ?'}`,
+      aprovado_cartao: 'APROVADO SÓ NO CARTÃO', pendente: 'PENDENTE (a Nio responde em até 24 h)',
+      negado: nCons >= 2 ? 'NEGADO nos 2 CPFs (titular e parente)' : 'NEGADO neste CPF',
+      pedido_em_andamento: 'já existe PEDIDO NIO EM ANDAMENTO no CPF', nao_decidiu: 'o portal não decidiu',
+    };
+    const cpfOk = String(dd.cpf || '').replace(/\D/g, '').length === 11;
+    const mailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(dd.email || '')) && String(dd.email_confirmado || '') !== 'false';
+    const falta = [!cpfOk ? 'CPF' : null, !mailOk ? 'e-mail confirmado' : null].filter(Boolean);
+    let credLinha;
+    if (cr) credLinha = `💳 Crédito: ${CRED[cr] || cr}${nCons >= 2 && cr !== 'negado' ? ' (2ª consulta — CPF do parente)' : ''}${padrao ? ' · ⚠ lido no endereço PADRÃO, não no do cliente' : ''}`;
+    else if (c.credito_em) credLinha = '💳 Crédito: consulta automática em andamento — o resultado chega como nota';
+    else if (dec !== 'viavel') credLinha = '💳 Crédito: não consultado (a Mari só consulta depois de viável)';
+    else credLinha = `💳 Crédito: não consultado${falta.length ? ` — faltou ${falta.join(' e ')}` : ''}`;
+
+    // 👉 Fazer agora — uma linha: a primeira trava que vale
+    const fp = upd.forma_pagamento || c.forma_pagamento || null;
+    const fpCod = { boleto: 'BOLETO', cartao: 'CREDITO', debito: 'DACC' }[fp] || null;
+    const fpTxt = { boleto: 'boleto', cartao: 'cartão', debito: 'débito em conta' }[fp] || null;
+    const venda = motivo === 'dados_completos';
+    let fazer;
+    if (c.nio_pedido_aberto === 'sim' || cr === 'pedido_em_andamento') fazer = 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).';
+    else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
+    else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
+    else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
+    else if (!venda) fazer = (sugestao ? sugestao.charAt(0).toUpperCase() + sugestao.slice(1) : '') || {
+      pedido_humano: 'Responder o cliente agora e entender o que ele precisa.',
+      objecao: 'Responder a objeção com o que o plano entrega — o preço é o da tabela, sem desconto.',
+      urgencia_alta: 'Responder o cliente agora.',
+      multiplos_decisores: 'Combinar com o cliente quando falar com quem decide.',
+    }[motivo] || 'Responder o cliente e seguir a venda.';
+    else if (dec !== 'viavel') fazer = 'Consultar a viabilidade na ficha (Cobertura) antes de tudo.';
+    else if (padrao) fazer = 'Consultar o crédito de novo no endereço do cliente (ficha › Crédito) antes de abrir o pedido.';
+    else if (!cr && c.credito_em) fazer = 'Aguardar o resultado do crédito (chega como nota) e então abrir o pedido.';
+    else if (!cr || cr === 'nao_decidiu') fazer = `Consultar o crédito na ficha (Crédito)${falta.length ? ` — antes, pedir ao cliente o ${falta.join(' e o ')}` : ''}.`;
+    else if (cr === 'pendente') fazer = 'Aguardar a resposta da Nio (até 24 h) e avisar o cliente; não abrir o pedido antes.';
+    else if (cr === 'negado') fazer = nCons >= 2 ? 'Ver com o cliente outra pessoa da casa como titular; sem saída, encerrar pela Saída.'
+      : 'Oferecer outra pessoa da casa como titular (CPF do parente → 1 nova consulta).';
+    else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
+    else if (cr === 'aprovado_parcial' && fpCod && !formasCod.includes(fpCod))
+      fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;
+    else fazer = `Abrir o pedido no portal${fpTxt ? ` no ${fpTxt}` : ''} e avisar o cliente do link da biometria que a Nio manda.`;
+
+    // alertas: só os que mudam o que o BKO faz
+    const alertas = [];
     const falasCliente = norm([(prep.consolidado || {}).mensagem, ...(Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [])
       .filter((h) => h.papel === 'lead').map((h) => h.texto)].join(' \n '));
-    if (/\bn(ao|um)\b[^.?!\n]{0,25}\b(tenho|uso|possuo|tem)\b[^.?!\n]{0,25}\bcart(ao|oes)\b|\bsem cart(ao|oes)\b/.test(falasCliente)) {
-      topo.push('⚠️ CLIENTE DISSE QUE NÃO TEM/NÃO USA CARTÃO DE CRÉDITO: consultar o crédito ANTES de abrir o pedido e da biometria. '
-        + 'Se aprovar só no cartão, a saída é outra pessoa da casa ser a titular (com autorização dela).');
-    }
+    // 12/11 (Edvaldo, Andriene): sem cartão → crédito antes da biometria; só cartão → outra pessoa da casa titular.
+    if (/\bn(ao|um)\b[^.?!\n]{0,25}\b(tenho|uso|possuo|tem)\b[^.?!\n]{0,25}\bcart(ao|oes)\b|\bsem cart(ao|oes)\b/.test(falasCliente)) alertas.push('cliente disse que não tem/não usa cartão');
+    if (c.nio_pedido_aberto === 'sim' && dd.pedido_aberto_resposta) alertas.push(`sobre o pedido aberto, o cliente disse «${String(dd.pedido_aberto_resposta).slice(0, 120)}»`);
+    if (dd.pista_nio) alertas.push(`cliente citou Nio/Oi (${String(dd.pista_nio).slice(0, 80)}) — conferir posse no portal`);
+    if (dd.rua_informada && dd.rua_confirmada && norm(dd.rua_informada) !== norm(dd.rua_confirmada)) alertas.push(`rua: escreveu «${dd.rua_informada}», confirmou «${dd.rua_confirmada}»`);
+    if (venda && !dd.referencia) alertas.push('sem ponto de referência — pedir ao cliente');
+    if (tags.sinal_urgencia) alertas.push(`urgência: ${String(tags.sinal_urgencia).slice(0, 80)}`);
+    if (atencaoMari) alertas.push(atencaoMari);
+
+    // título
+    const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
+    const nomeT = String(dd.nome || c.nome_contato || '').trim().split(/\s+/).slice(0, 2).join(' ');
+    const NOMEM = { pedido_humano: 'PEDIU ATENDIMENTO', objecao: 'OBJEÇÃO', urgencia_alta: 'URGENTE', recusa_compra: 'RECUSOU',
+      fora_de_area: 'FORA DA ÁREA', sem_cobertura: 'SEM COBERTURA', interesse_caindo: 'ESFRIANDO', multiplos_decisores: 'OUTRO DECIDE', ja_cliente_nio: 'JÁ É CLIENTE NIO' };
+    const titulo = venda
+      ? `🟢 VENDA PRONTA${nomeT ? ` · ${nomeT}` : ''}${pl ? ` · ${pl.nome}` : ''}${fpTxt ? ` · ${fpTxt}` : ''}`
+      : `${['pedido_humano', 'objecao', 'urgencia_alta'].includes(motivo) ? '🟡' : '⚪'} ${NOMEM[motivo] || 'HANDOFF'}${nomeT ? ` · ${nomeT}` : ''}`;
+    topo = [titulo, viabLinha, credLinha, `👉 Fazer agora: ${fazer}`, alertas.length ? `⚠️ ${alertas.slice(0, 3).join(' · ')}` : null].filter(Boolean);
   }
-  const briefing = [...topo, hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
-    tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, V7 ? null : notaDfv].filter(Boolean).join('\n');
+  const briefing = V7
+    ? [...topo, resumoMari ? `Resumo: ${resumoMari}` : null].filter(Boolean).join('\n')
+    : [hy.briefing_humano, hy.resumo_perfil ? `Perfil: ${hy.resumo_perfil}` : null,
+      tags.sinal_urgencia ? `Urgência: ${tags.sinal_urgencia}` : null, notaDfv].filter(Boolean).join('\n');
   handoff = {
     motivo,
     lead: {

@@ -558,6 +558,8 @@ return [{ json: {
       // 0138: crédito pela Mari (autorização do titular gravada → n8n mari_credito)
       credito_autorizado_em: conv.credito_autorizado_em, credito_autorizacao_frase: conv.credito_autorizacao_frase,
       credito_recusado_em: conv.credito_recusado_em, credito_resultado: conv.credito_resultado, credito_formas: conv.credito_formas, credito_consultas: conv.credito_consultas,
+      // 15/11 (handoff curto): o 7 · Extrair escreve na nota se o crédito está em andamento e em que endereço foi lido (0204)
+      credito_em: conv.credito_em, credito_endereco: conv.credito_endereco,
       status: conv.status },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?

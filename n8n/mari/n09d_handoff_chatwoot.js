@@ -54,14 +54,23 @@ const semPagamento = (t) => String(t || '')
 // link da venda que já existe, para o backoffice decidir.
 const naoCriada = motivo === 'dados_completos' && !h.venda_id && h.ok === false;
 const existente = h.venda_existente_id || null;
-const nota = [
-  naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}` : null,
-  naoCriada && existente ? `Venda que já existe: ${NIOGEN}#venda=${existente}` : null,
-  `MARI → BACKOFFICE · ${NOME[motivo] || motivo || 'handoff'}`,
-  semPagamento(briefing) || '(sem briefing gravado — ver a conversa)',
-  // B3: a nota termina com o link da ficha no NIOGEN.
-  vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,
-].filter(Boolean).join('\n\n');
+// 15/11 (handoff curto): o 7 · Extrair já escreve a nota pronta, com título (🟢/🟡/⚪), viabilidade, crédito, "👉 Fazer
+// agora", alertas e resumo — uma linha cada, sem linha em branco no meio. Briefing antigo (sem título) segue o formato de antes.
+const curto = /^(🟢|🟡|⚪)/u.test(briefing);
+const nota = curto
+  ? [
+    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}${existente ? `\nVenda que já existe: ${NIOGEN}#venda=${existente}` : ''}` : null,
+    semPagamento(briefing),
+    vendaId ? `Ficha: ${NIOGEN}#venda=${vendaId}` : null,
+  ].filter(Boolean).join('\n\n')
+  : [
+    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}` : null,
+    naoCriada && existente ? `Venda que já existe: ${NIOGEN}#venda=${existente}` : null,
+    `MARI → BACKOFFICE · ${NOME[motivo] || motivo || 'handoff'}`,
+    semPagamento(briefing) || '(sem briefing gravado — ver a conversa)',
+    // B3: a nota termina com o link da ficha no NIOGEN.
+    vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,
+  ].filter(Boolean).join('\n\n');
 
 // v7 (prompt 27 A9): no handoff de dados completos, o contato do Chatwoot ganha o nome completo — só se o nome atual não
 // parecer nome de pessoa ("Família", emoji, vazio, número…). Nunca troca um nome de pessoa.
