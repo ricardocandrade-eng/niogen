@@ -2952,3 +2952,5 @@ select option:disabled { color: var(--muted); }
   .fc2-agora > .fc2-ag-t { order: 2; }
   .fc2-agora > :not(.fc2-ag-k):not(.fc2-ag-t):not(.fc2-ag-pill) { order: 4; }
 }
+.fc2-esc > .s-now, .fc2-esc > .s-stop { flex: 0 0 auto; padding-left: 8px; padding-right: 8px; }
+.fc2-esc > span { text-overflow: clip; }

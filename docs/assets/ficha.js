@@ -3697,9 +3697,11 @@
     const deg = etapas.map((e, i) => {
       const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
       const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ' — parou aqui (Saída)' : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}`;
-      return `<span class="s-${st}" title="${esc(dica)}">${st === 'done' ? '✓ ' : ''}${esc(e.nome)}</span>`;
+      // nome inteiro só no degrau atual; os outros, curtos (a coluna é estreita) — o nome inteiro fica no title
+      const CURTO = { atendimento: 'Atend.', viabilidade: 'Viab.', pre_qualificado: 'Pré-qual.', qualificado: 'Qualif.', instalacao: 'OS', instalada: 'Instal.' };
+      return `<span class="s-${st}" title="${esc(dica)}">${st === 'done' ? '✓ ' : ''}${esc(st === 'now' || st === 'stop' ? e.nome : (CURTO[e.codigo] || e.nome))}</span>`;
     });
-    deg.push(`<span class="s-${pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo'}" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}">${pg === 'paga' ? '✓ ' : ''}Pagamento</span>`);
+    deg.push(`<span class="s-${pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo'}" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}">${pg === 'paga' ? '✓ ' : ''}Pag.</span>`);
     const sai = fora ? `<em class="fc2-esc-sai" title="${esc(l.saida_nome || 'Saída')}">Saída · ${esc(l.saida_nome || (l.destino === 'teste_duplicada' ? 'teste ou duplicada' : 'sem motivo'))}</em>` : '';
     return `<div class="fc2-esc" aria-label="Escada do lead">${deg.join('')}</div>${sai}`;
   }
