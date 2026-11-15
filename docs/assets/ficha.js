@@ -1315,7 +1315,7 @@
   }
   // Régua de 5 passos numa linha (mesma largura): ícone + nome e, embaixo, o detalhe. Ordem da jornada.
   function regua(passos) {
-    return `<ol class="f-regua" aria-label="Passos da venda">${passos.map((p) => `<li class="f-rp ${p.s}"><span class="f-rp-t"><i aria-hidden="true">${p.s === 'ok' ? '✓' : p.s === 'wa' ? '⚠' : '○'}</i>${esc(p.nome)}</span><small class="f-rp-d${p.azul ? ' azul' : ''}" title="${esc(p.d || '')}">${esc(p.d || '—')}</small></li>`).join('')}</ol>`;
+    return `<ol class="f-regua" aria-label="Passos da venda">${passos.map((p) => `<li class="f-rp ${p.s}"><span class="f-rp-t"><i aria-hidden="true">${p.s === 'ok' ? '✓' : p.s === 'x' ? '✕' : p.s === 'wa' ? '⚠' : '○'}</i>${esc(p.nome)}</span><small class="f-rp-d${p.azul ? ' azul' : ''}" title="${esc(p.d || '')}">${esc(p.d || '—')}</small></li>`).join('')}</ol>`;
   }
   function passosVenda(v) {
     const viab = v.nio_viab_resultado;
@@ -1338,12 +1338,14 @@
     return [
       { nome: 'Viabilidade', ...pViab },
       // 0111: o 2º passo é o crédito (o nº do pedido = a OS, no 4º passo).
-      { nome: 'Crédito', ...(['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
+      // 15/11 (Ricardo, caso Lucas: "o crédito não deveria ficar vermelho?"): venda em Saída mostra em vermelho a etapa onde parou.
+      { nome: 'Crédito', ...(v.status === 'saida' && (v.saida_motivo === 'credito_negado' || v.credito_resultado === 'negado') ? { s: 'x', d: 'negado · saída' }
+        : ['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
         : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' } : v.credito_resultado === 'pendente' ? { s: 'wa', d: 'pendente' }
         : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
       { nome: 'Pedido (OS)', s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' },
-      { nome: 'Biometria', ...pBio },
-      { nome: 'Instalação', ...pInst },
+      { nome: 'Biometria', ...(v.status === 'saida' && v.saida_motivo === 'reprovado_biometria' ? { s: 'x', d: 'reprovada · saída' } : pBio) },
+      { nome: 'Instalação', ...(v.status === 'saida' && v.saida_motivo === 'nio_nao_instalou' ? { s: 'x', d: 'a Nio não instalou · saída' } : pInst) },
     ];
   }
   // Próximo passo: TODO quadro nasce recolhido e com a mesma altura (rótulo + uma linha); clique expande as ações.
@@ -2728,8 +2730,9 @@
   const ETAPAS_K = ['viab', 'cred', 'os', 'bio', 'inst'];   // 0194: a OS vem antes da biometria
   function trilhaPassos(passos) {
     const iAtual = passos.findIndex((p) => p.s !== 'ok');
+    const parou = passos.some((p) => p.s === 'x');
     return passos.map((p, i) => {
-      const st = p.s === 'ok' ? 'done' : p.s === 'wa' ? 'wait' : i === iAtual ? (d.pend ? 'wait' : 'now') : 'todo';
+      const st = p.s === 'ok' ? 'done' : p.s === 'x' ? 'fail' : p.s === 'wa' ? 'wait' : parou ? 'todo' : i === iAtual ? (d.pend ? 'wait' : 'now') : 'todo';
       return { ...p, k: ETAPAS_K[i], st, segDone: p.s === 'ok' && passos[i + 1] && passos[i + 1].s === 'ok' };
     });
   }
@@ -2994,7 +2997,7 @@
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
         ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
-        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${opPainel('cred')}
+        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${v.status === 'saida' ? '<span class="nota-campo">Venda em Saída — para consultar de novo, reabra o lead.</span>' : opPainel('cred')}
         ${v.status !== 'saida' && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
@@ -3923,7 +3926,7 @@
     const L = trilhaPassos(passos);
     const atual = at.st !== 'done' ? 'atend' : ((L.find((x) => x.st !== 'done') || {}).k || null);
     const aberta = fc.etapa || (fc.etapaX ? null : (at.abrir || atual));
-    const icone = (st) => (st === 'done' ? IC.ok : st === 'now' ? '<span class="fc-rdot"></span>' : st === 'wait' ? IC.pausa : st === 'run' ? IC.gira : st === 'warn' ? ICL.alerta : '');
+    const icone = (st) => (st === 'done' ? IC.ok : st === 'now' ? '<span class="fc-rdot"></span>' : st === 'wait' ? IC.pausa : st === 'run' ? IC.gira : st === 'warn' ? ICL.alerta : st === 'fail' ? IC.x : '');
     const linha = (k, nome, sub, st, det) => {
       const on = aberta === k;
       return `<div class="fc2-et s-${st}${on ? ' on' : ''}"><button type="button" class="fc2-et-b" data-f="fc2-et" data-k="${k}" data-on="${on ? 1 : 0}" aria-expanded="${on}">
