@@ -1628,7 +1628,9 @@
         ${sozinho && !form ? `<span class="f-sozinho">O NIOGEN faz sozinho: ${esc(sozinho)}</span>` : ''}
         ${atalhos(v)}`;
     const temAcao = bts.filter(Boolean).length > 0 || !!corpoForm;
-    return { faixaConv, corpoConv, alertaConv: !!(alertaConv && bo), jReal, nivel, texto, corpo, forcar: !!form || conf, feito, nota, sozinho, temAcao,
+    // 15/11 (revisão dos fluxos, F1): "só confirmou" NÃO abre o card sozinho — na ficha nova isso vira a gaveta com véu e prendia a
+    // tela (X e véu reabriam). A dica fica no card; abre no clique.
+    return { faixaConv, corpoConv, alertaConv: !!(alertaConv && bo), jReal, nivel, texto, corpo, forcar: !!form, feito, nota, sozinho, temAcao,
       rotuloAcao: (bts.filter(Boolean)[0] || '').replace(/<[^>]+>/g, '').trim() };
   }
   let formAtivoPadrao = null;
