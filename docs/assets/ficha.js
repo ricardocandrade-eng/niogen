@@ -3108,8 +3108,7 @@
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
-      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div></div>
-      <!--AGORA-->
+      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}</div><!--AGORA--></div>
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
@@ -3966,6 +3965,7 @@
             <span class="fc-sp"></span><button type="button" class="btn btn-sm" data-f="fc-hist" aria-expanded="${fc.hist}">${IC.hist}Histórico</button></div>
           ${overs}${hist}
           </div>
+          ${dadosOn ? '<div class="fc2-veu" data-f="fc2-dados" aria-expanded="true" title="Fechar os dados do cliente"></div>' : ''}
         </section>
         ${cadB ? `<section class="fc2-regua" aria-label="Lembretes da Mari">${cadB}</section>` : ''}
       </div>${over}</div>`;
