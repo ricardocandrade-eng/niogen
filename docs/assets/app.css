@@ -3058,3 +3058,10 @@ select option:disabled { color: var(--muted); }
   .mp-gauge svg { height: 110px; flex: none; }
 }
 @media (prefers-reduced-motion: reduce) { .mp-desce-s { animation: none; } }
+.mp-grid > #pulso { flex-wrap: nowrap; overflow: hidden; }
+.mp-grid > #pulso .it { flex: 1 1 auto; min-width: 0; }
+.mp-grid > #pulso .it > b, .mp-grid > #pulso .it small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-grid > #pulso .it.mp-eu { flex: none; }
+.mp-desce { padding-right: 72px; }
+.mp-mix .mp-bl { font-size: 11px; }
+.mp-mix .mp-h2 { margin-top: 2px; }

@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=151126-4">
+<link rel="stylesheet" href="assets/app.css?v=151126-5">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=151126-1"></script>
@@ -756,7 +756,7 @@
     escadaEl.innerHTML = `<div class="mp-h"><b>Escada agora</b><span class="apagado">${NG.fmtNum(te)} em andamento</span></div>
       <div class="mp-esc">${barrinhas(es, (x) => x.nome, 'esc')}</div><a class="mp-link" href="leads.html">Ver os leads →</a>`;
     // de onde vêm / por que passam ao time
-    const cid = (p.cidades || []).filter((x) => x.cidade !== 'sem cidade').slice(0, 4);
+    const cid = (p.cidades || []).filter((x) => x.cidade !== 'sem cidade').slice(0, 3);
     const sem = (p.cidades || []).find((x) => x.cidade === 'sem cidade');
     const org = p.origens || [];
     const to = Math.max(1, org.reduce((a, x) => a + Number(x.n || 0), 0));
@@ -765,7 +765,7 @@
       <div class="mp-org-l">${org.slice(0, 3).map((x, i) => `<span><i class="o${i % 4}"></i>${esc(ORIGEM[x.origem] || x.origem)} ${Math.round((Number(x.n) * 100) / to)}%</span>`).join('')}</div>
       ${barrinhas(cid, (x) => x.cidade)}${sem ? `<div class="mp-sem apagado">${NG.fmtNum(sem.n)} sem cidade (não chegaram a dizer)</div>` : ''}
       <div class="mp-h mp-h2"><b>Passaram ao time</b><span class="apagado">7 dias</span></div>
-      ${(p.motivos || []).length ? barrinhas((p.motivos || []).slice(0, 4), (x) => MOTIVO[x.motivo] || x.motivo, 'mot') : '<span class="apagado">Nenhum handoff.</span>'}`;
+      ${(p.motivos || []).length ? barrinhas((p.motivos || []).slice(0, 3), (x) => MOTIVO[x.motivo] || x.motivo, 'mot') : '<span class="apagado">Nenhum handoff.</span>'}`;
   }
   let painelEm = 0;
   function carregarRitmo(forcar) {
