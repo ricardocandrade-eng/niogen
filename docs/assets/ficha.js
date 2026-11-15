@@ -3787,7 +3787,7 @@
       : v && v.status === 'saida' ? 'fora da jornada — sem comissão' : `${ehBO() && v && v.comissao_prevista != null ? `${NG.fmtMoeda(v.comissao_prevista)} previstos · ` : ''}nasce na instalação`;
     itens.push(linha('din', 'Pagamento da comissão', dinSub, din ? (din.estado === 'paga' ? 'done' : din.estado === 'estornada' ? 'warn' : 'wait') : 'todo', din ? dinDet() : ''));
     const feitas = L.filter((x) => x.st === 'done').length + (at.st === 'done' ? 1 : 0) + (din && din.estado === 'paga' ? 1 : 0);
-    return { html: `<div class="fc2-lista">${jornadaGrupos(['atend', ...L.map((x) => x.k), 'din'], itens) || itens.join('')}</div>`, feitas, total: L.length + 2 };
+    return { html: `<div class="fc2-lista">${itens.join('')}</div>`, feitas, total: L.length + 2 };
   }
   // Uma linha de dado: rótulo · valor (ou "falta" em amarelo) · cadeado/lápis · copiar.
   const dl = (rot, val, o = {}) => `<div class="fc2-f"><span class="fc2-fk">${esc(rot)}</span><span class="fc2-fv${val ? '' : ' falta'}${o.mono ? ' mono' : ''}" title="${esc(val || o.falta || 'falta')}">${esc(val || o.falta || 'falta')}</span>
@@ -3920,7 +3920,11 @@
       const menu = `<!--MENU-AG--><div class="fc-mlab">Ver em</div><a class="fc-mitem" href="mari.html?conversa=${esc(c.id)}">Tela Mari</a>
         ${d.chatwoot ? `<a class="fc-mitem" href="${esc(d.chatwoot)}" target="_blank" rel="noopener">Chatwoot ↗</a>` : ''}
         <div class="fc-mlab">Copiar e conferir</div>${c.telefone ? `<button type="button" class="fc-mitem" data-copiar="${esc(fmtTel(c.telefone))}">Copiar telefone</button>` : ''}${auditarItem()}`;
-      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[P.q.plano_nome || c.plano_escolhido, c.cidade, c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : null].filter(Boolean).map(esc).join(' · ') || '—'} · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>`, menu,
+      const plC = c.plano_escolhido ? (planosCache || []).find((pl) => pl.codigo === c.plano_escolhido) : null;
+      const precoC = plC ? (['cartao', 'CREDITO'].includes(c.forma_pagamento) && plC.preco_cartao ? plC.preco_cartao : plC.preco) : null;
+      const planoLinha = [plC ? plC.nome_curto || plC.nome : P.q.plano_nome || c.plano_escolhido, precoC != null ? NG.fmtMoeda(precoC) : null,
+        c.forma_pagamento ? FORMA_TXT[c.forma_pagamento] || FORMAS[c.forma_pagamento] || c.forma_pagamento : null].filter(Boolean).join(' · ');
+      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[planoLinha || 'plano: não escolheu', (c.endereco_cep || {}).bairro, c.cidade, c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : null].filter(Boolean).map(esc).join(' · ')} · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>`, menu,
         ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
       trilha = trilhasHtml();
       const E = escadaPartes(false);
