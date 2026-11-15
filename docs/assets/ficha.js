@@ -3613,7 +3613,7 @@
     const COD = { P1: 'P1', F1: 'F1', F2: 'F2', F3: 'F3', F4: 'F4', F5: 'F5', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída', BIO1: 'BIO1', BIO3: 'BIO3', INSTALACAO: 'Instal.', VESPERA: 'Véspera', RETORNO: 'Retorno', POS: 'Pós', IND: 'Indic.', IND2: 'Insist.' };
     const passo = (p) => `<button type="button" class="fc-cb-p s-${p.st}${fc.cadp === p.cod ? ' on' : ''}" data-f="fc-cadp" data-c="${p.cod}" title="${esc(p.tit)}" aria-pressed="${fc.cadp === p.cod}">
         <i aria-hidden="true">${ic[p.st]}</i><b>${esc(trilha ? COD[p.cod] || p.cod : p.rot)}</b><small>${esc(p.sub || ' ')}</small></button>`;
-    const grupos = ((trilha && P.todos) || P.grupos).filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
+    const grupos = ((trilha && P.todos) || P.grupos).filter((g) => g.passos.length).map((g) => `<div class="fc-cb-g"${trilha ? ` style="--n:${g.passos.length}"` : ''}><div class="fc-cb-gk">${esc(g.rot)}${NG.dicaTxt(g.dica)}</div><div class="fc-cb-ps">${g.passos.map(passo).join('')}</div></div>`).join('');
     const sel = fc.cadp && ((trilha && P.todos ? P.todos.flatMap((g) => g.passos) : P.passos).find((p) => p.cod === fc.cadp));
     let pe;
     if (sel) {
@@ -3631,7 +3631,7 @@
       // no pé da ficha a cadência inteira fica à vista como trilha; o passo clicado abre um balão com o texto que saiu (ou sai).
       const bal = sel ? `<div class="fc-cb-bal" role="dialog" aria-label="Texto do lembrete">${pe.replace('class="fc-cb-f sel"', 'class="fc-cb-balc"')}</div>` : '';
       // sem o texto-resumo embaixo (Ricardo, 15/11 noite): o estado fica no selo; a ação (ex.: Devolver para a Mari) sobe para o cabeçalho
-      return `<section class="fc-cb fc-cb-tri t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}${P.sub ? `<span class="fc-cb-sub">${esc(P.sub)}</span>` : ''}<span class="fc-sp"></span>${P.acao}<span class="fc-pill ${P.pillCls}" title="${esc(String(P.linha || '').replace(/<[^>]+>/g, ''))}">${esc(P.pill)}</span></div>
+      return `<section class="fc-cb fc-cb-tri t-${P.tom}" aria-label="Lembretes da Mari"><div class="fc-cb-h"><h3${P.sub ? ` title="${esc(P.sub)}"` : ''}>Lembretes da Mari</h3>${NG.dicaTxt(A.cad_faixa)}<span class="fc-sp"></span>${P.acao}<span class="fc-pill ${P.pillCls}" title="${esc([P.sub, String(P.linha || '').replace(/<[^>]+>/g, '')].filter(Boolean).join(' · '))}">${esc(P.pill)}</span></div>
         ${grupos ? `<div class="fc-cb-st">${grupos}</div>` : ''}${bal}</section>`;
     }
     const tg = grupos ? `<button type="button" class="fc-link fc-cb-tg" data-f="fc-cadtg" aria-expanded="${aberto}">${aberto ? 'fechar ▴' : 'ver etapas ▾'}</button>` : '';
