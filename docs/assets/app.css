@@ -2914,3 +2914,41 @@ select option:disabled { color: var(--muted); }
 .rt-graf rect.ag { fill: var(--accent); }
 .rt-graf line.md { stroke: #E9EDF3; stroke-width: 1; opacity: .45; }
 .lv-sec-mira .lv-prox { font-style: normal; color: #C9D1DA; }
+
+/* 15/11 (Ricardo: "muita informação e os textos desalinhados… cansativo… cores mais escuras… botões no topo fora do padrão"):
+   topo da ficha mais calmo — nome, AGORA e RESUMO DA MARI começam na mesma coluna; textos menos brancos e fundos mais escuros;
+   todos os botões do topo com a mesma altura, borda e peso (Saída e Nada a responder só mudam a cor do texto). */
+.fc2 .fc-l1 h1 { font-size: 18px; font-weight: 600; color: #E3E8EE; }
+.fc2 .fc-meta { color: #7F8A96; font-size: 12.5px; }
+.fc2 .fc-pos { color: #7F8A96; font-size: 12.5px; }
+.fc2 .fc-top .btn, .fc2 .fc2-agora .btn { height: 32px; min-height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; line-height: 1;
+  background: transparent; border: 1px solid #2A323C; color: #C3CAD3; border-radius: 8px; box-shadow: none; display: inline-flex; align-items: center; gap: 6px; }
+.fc2 .fc-top .btn:hover:not(:disabled), .fc2 .fc2-agora .btn:hover:not(:disabled) { background: #161C23; border-color: #3A4450; color: #E9EDF3; }
+.fc2 .fc-top .btn .fc-ic, .fc2 .fc2-agora .btn .fc-ic { width: 15px; height: 15px; }
+.fc2 .fc-top .fc-bi { width: 32px; padding: 0; justify-content: center; }
+.fc2 .fc-top .btn.fc-saida { color: #E8867E; border-color: #2A323C; font-weight: 500; }
+.fc2 .fc-top .btn.fc-saida:hover, .fc2 .fc-top .btn.fc-saida.on { background: rgba(201, 74, 66, .12); border-color: #6B3330; color: #FFB3AC; }
+.fc2 .fc-top .btn.fc-reabrir { color: #7FD69B; border-color: #2A323C; font-weight: 500; }
+.fc2 .fc-top .btn.btn-acc, .fc2 .fc2-agora .btn.btn-acc { background: transparent; border-color: #24543A; color: #7FD69B; font-weight: 500; }
+.fc2 .fc-top .btn.btn-acc:hover:not(:disabled), .fc2 .fc2-agora .btn.btn-acc:hover:not(:disabled) { background: rgba(47, 158, 98, .12); border-color: #2F9E62; color: #A6E8BF; }
+.fc2-agora { background: #0E1217; min-height: 50px; }
+.fc2-agora.ag-now { background: #140E10; border-bottom-color: #3A2124; }
+.fc2-agora.ag-today { background: #12100A; border-bottom-color: #332A14; }
+.fc2-agora.ag-ok { background: #0B130F; border-bottom-color: #183626; }
+.fc2-ag-t b { font-size: 14px; font-weight: 500; color: #D3D9E0; }
+.fc2-ag-t small { font-size: 12px; color: #7F8A96; }
+.fc2-ag-pill { color: #9AA4B0; background: rgba(255,255,255,.04); font-size: 11.5px; }
+.fc2-ho { background: #0C1015; }
+.fc2-ho-t b { font-size: 13px; font-weight: 500; color: #BFC7D0; }
+.fc2-ho-t small { font-size: 12px; color: #8D97A3; }
+.fc2-ho-k { color: #5E93C7; }
+@media (min-width: 901px) {
+  /* uma coluna só: botão Fila com largura fixa (96) + 16 de vão = os rótulos AGORA / RESUMO DA MARI ocupam os mesmos 112 px */
+  .fc2 .fc-top { gap: 16px; }
+  .fc2 .fc-top [data-f="fc-voltar"] { width: 96px; flex: none; justify-content: center; }
+  .fc2-agora, .fc2-ho-b { gap: 12px; }
+  .fc2-ag-k, .fc2-ho-k { width: 100px; flex: none; font-size: 10px; letter-spacing: .1em; line-height: 1.25; white-space: normal; }
+  .fc2-ag-pill { order: 3; }
+  .fc2-agora > .fc2-ag-t { order: 2; }
+  .fc2-agora > :not(.fc2-ag-k):not(.fc2-ag-t):not(.fc2-ag-pill) { order: 4; }
+}
