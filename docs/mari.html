@@ -30,7 +30,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=151126-6">
+<link rel="stylesheet" href="assets/app.css?v=151126-7">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=151126-1"></script>
@@ -917,7 +917,8 @@
   const planoTxt = (c) => { const p = plano(c); return p ? p.nome_curto || p.nome : '—'; };
   const filtradas = () => {
     const l = base().filter((c) => naAba(c, aba));
-    return ord.chave === 'acao' ? l.sort(cmpRank) : NG.ordenar(l, CHAVES, ord);
+    const r = ord.chave === 'acao' ? l.sort(cmpRank) : NG.ordenar(l, CHAVES, ord);
+    return [...r.filter((c) => degrauDe(c) !== 'saida'), ...r.filter((c) => degrauDe(c) === 'saida')];   // 15/11: Saída sempre no fim
   };
 
   // 15/11 (Ricardo: "Essas listas e quadros estão bem ruins"): o Quadro passa a ter as colunas da ESCADA do sistema (a mesma da

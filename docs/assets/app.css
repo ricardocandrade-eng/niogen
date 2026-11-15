@@ -3110,3 +3110,4 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .mq2-deg.d-saida { color: #E8867E; border-color: #5A2B2B; }
 @media (max-width: 1100px) { .mq2-board { grid-template-columns: repeat(5, minmax(190px, 1fr)); overflow-x: auto; } }
 @media (max-width: 760px) { .mq2-board { height: auto; display: flex; flex-direction: column; } .mq2-corpo { max-height: 60vh; } }
+.mav-bar i, .tab .mav-bar i.vazio { padding: 0; display: inline-block; }
