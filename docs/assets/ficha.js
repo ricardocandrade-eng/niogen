@@ -2994,7 +2994,8 @@
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
         ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
-        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${opPainel('cred')}`;
+        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${opPainel('cred')}
+        ${v.status !== 'saida' && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
