@@ -4,24 +4,32 @@
      cliente para falar com ele quando preciso"). À esquerda a lista (v_conversas, 0094: última mensagem, cliente esperando, dono,
      etapa), com busca e filtros; à direita a conversa — o mesmo componente do Live (assets/conversa.js: status, atribuição,
      etiquetas, Responder | Nota privada, respostas rápidas, Enter envia). "Abrir a ficha" abre a ficha em gaveta.
-     Endereço direto: conversas.html#c=<id>. Só admin/backoffice (a tabela da Mari só abre para eles). -->
+     Endereço direto: conversas.html#c=<id>. Só admin/backoffice (a tabela da Mari só abre para eles).
+     15/11 (NIOGEN no celular · protótipo docs/LAYOUT_conversas_mobile_151126_1304.html, aprovado pelo Ricardo): HOME do app
+     instalado. Em tela ≤ 640 px vira o padrão WhatsApp — lista com avatar, nome, última mensagem com o autor (Mari: / Time:),
+     hora, badge de não lidas (v_conversas.nao_lidas, 0215), selo da janela de 24 h e quanto vale (comissão da venda ou o plano
+     por mês); quentes no topo (esperando resposta, depois janela fechando). A conversa abre em TELA CHEIA (NGConversa movel:
+     cabeçalho fixo com voltar, faixa de contexto, Devolver para a Mari, composer no rodapé); o voltar do Android fecha a
+     conversa. Desktop (> 640 px) fica como estava. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0E1116">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
 <title>Conversas · NIOGEN</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=161126-4">
+<link rel="stylesheet" href="assets/app.css?v=161126-8">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=161126-1"></script>
-<script src="assets/sidebar.js?v=141126-2"></script>
-<script src="assets/conversa.js?v=121126-27"></script>
+<script src="assets/app.js?v=161126-8"></script>
+<script src="assets/sidebar.js?v=161126-8"></script>
+<script src="assets/conversa.js?v=161126-8"></script>
 <script src="assets/ficha.js?v=161126-6"></script>
 </head>
 <body class="tela-conversas">
@@ -78,6 +86,17 @@
   let filtro = IDS_FILTRO.includes(FILTRO_URL) ? FILTRO_URL
     : IDS_FILTRO.includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
   let atual = null;     // id da conversa aberta
+  const MQ = window.matchMedia('(max-width: 640px)');   // 15/11: celular = padrão WhatsApp
+  const movel = () => MQ.matches;
+  const COR_AV = ['#22c55e', '#6FA8FF', '#F2B84B', '#C79BFF', '#FF8A65', '#4DD0E1'];
+  const corAv = (id) => COR_AV[[...String(id)].reduce((a, ch) => a + ch.charCodeAt(0), 0) % COR_AV.length];
+  const iniciais = (n) => (String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase();
+  // janela de 24 h (a mesma conta da conversa: 23 h depois da última fala do cliente)
+  const janelaMin = (c) => (c.ult_lead ? (new Date(c.ult_lead).getTime() + 23 * 3600000 - Date.now()) / 60000 : null);
+  const durTxt = (min) => (min < 60 ? `${Math.max(1, Math.round(min))} min` : `${Math.floor(min / 60)} h`);
+  const valeTxt = (c) => (c.comissao != null ? NG.fmtMoeda(c.comissao).replace(/,00$/, '') : c.valor_mes != null ? `${NG.fmtMoeda(c.valor_mes).replace(/,00$/, '')}/mês` : '');
+  // quentes no topo: 0 = cliente esperando (mais antigo primeiro) · 1 = janela fechando em ≤ 4 h · 2 = o resto (mais recente)
+  const calor = (c) => (c.encerrada ? 3 : c.cliente_esperando ? 0 : (janelaMin(c) != null && janelaMin(c) > 0 && janelaMin(c) <= 240) ? 1 : 2);
   let comp = null;      // NGConversa
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
   const NOME_ET = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.nome]));
@@ -149,6 +168,11 @@
       return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${filtro === id}" class="${filtro === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
     }).join('');
     const l = base.filter(fn).sort((a, b) => (filtro === 'esperando' ? (b.esperando_min || 0) - (a.esperando_min || 0) : new Date(b.ultima_em) - new Date(a.ultima_em)));
+    if (movel()) {
+      if (filtro !== 'encerradas') l.sort((a, b) => calor(a) - calor(b) || (calor(a) === 0 ? (b.esperando_min || 0) - (a.esperando_min || 0) : calor(a) === 1 ? janelaMin(a) - janelaMin(b) : 0));
+      itensEl.innerHTML = l.length ? l.map(itemMovel).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
+      return;
+    }
     itensEl.innerHTML = l.length ? l.map((c) => `<button type="button" class="cv-item${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
         <span class="cv-l1"><i class="mv-dot" style="--c:${COR[c.etapa] || '#6E747C'}" title="${esc(NOME_ET[c.etapa] || '')}"></i><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
         <span class="cv-l2">${esc(previa(c))}</span>
@@ -161,8 +185,35 @@
       </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
   }
 
+  // 15/11: linha do celular (padrão WhatsApp)
+  function itemMovel(c) {
+    const quem = c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : '';
+    const txt = NGConversa.textoTurno(c.ultima_txt) || '—';
+    const nl = c.nao_lidas || 0;
+    const jm = janelaMin(c);
+    const selos = [];
+    if (c.cliente_esperando && !c.encerrada && c.esperando_min != null) selos.push(`<span class="cv-tag quente">🔥 esperando ${durTxt(c.esperando_min)}</span>`);
+    if (!c.encerrada && jm != null) selos.push(jm > 0 ? `<span class="cv-tag${jm <= 240 ? ' aviso' : ''}" title="Janela de 24 h do WhatsApp: depois dela, só template aprovado">⏱ 24 h · fecha em ${durTxt(jm)}</span>` : '<span class="cv-tag apagada" title="Janela de 24 h fechada: só template aprovado">janela fechada</span>');
+    const vale = valeTxt(c);
+    if (vale) selos.push(`<span class="cv-tag dinheiro" title="${c.comissao != null ? 'Comissão prevista da venda' : 'Plano escolhido, por mês'}">${esc(vale)}</span>`);
+    selos.push(`<span class="cv-tag dono">${c.dono_tipo === 'mari' ? 'Mari' : c.dono_tipo ? esc(NG.ehMeu(c.dono_nome) ? 'você' : 'humano') : 'sem dono'}</span>`);
+    if ((c.etiquetas || []).includes('suporte-nio')) selos.push('<span class="cv-tag apagada">📵 silenciada</span>');
+    else if (c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino)) selos.push(`<span class="cv-tag apagada">${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>`);
+    if (c.funil_alerta) selos.push(`<span class="cv-tag ruim" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">mexida no Chatwoot</span>`);
+    if (furos.has(c.id)) selos.push('<span class="cv-tag ruim" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>');
+    return `<button type="button" class="cv-item cv-mv${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
+      <span class="cv-av" style="--av:${corAv(c.id)}" aria-hidden="true">${esc(iniciais(c.nome))}</span>
+      <span class="cv-mv-meio">
+        <span class="cv-l1"><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
+        <span class="cv-l2"><span class="cv-prev">${quem ? `<i class="cv-quem">${quem}</i>` : ''}${esc(txt)}</span>${nl ? `<span class="cv-nl" aria-label="${nl} ${nl === 1 ? 'mensagem não lida' : 'mensagens não lidas'}">${nl > 99 ? '99+' : nl}</span>` : ''}</span>
+        <span class="cv-l3">${selos.join('')}</span>
+      </span>
+    </button>`;
+  }
+
   function abrir(id) {
     if (!id) return;
+    if (movel()) { abrirMovel(id); return; }
     atual = id;
     const c = lista.find((x) => x.id === id);
     if (location.hash !== `#c=${id}`) history.replaceState(null, '', `${location.pathname}${location.search}#c=${id}`);
@@ -176,7 +227,27 @@
     comp = NGConversa.montar(direita.querySelector('.cv-host'), { conversaId: id, nome: c ? c.nome : null, aoMudar: () => carregar() });
     render();
   }
+  // 15/11: celular — a conversa em tela cheia; o voltar do Android (history) fecha.
+  function abrirMovel(id) {
+    atual = id;
+    const c = lista.find((x) => x.id === id);
+    if (!(history.state && history.state.mvConversa === id)) history.pushState({ mvConversa: id }, '', `${location.pathname}${location.search}#c=${id}`);
+    document.body.classList.add('mv-thread');
+    trab.classList.add('com-conversa');
+    direita.innerHTML = '<div class="cv-host"></div>';
+    if (comp) comp.destruir();
+    comp = NGConversa.montar(direita.querySelector('.cv-host'), {
+      conversaId: id, nome: c ? c.nome : null, movel: true,
+      aoFechar: () => { if (history.state && history.state.mvConversa) history.back(); else fechar(); },
+      contexto: c ? { cidade: c.cidade, plano: c.plano, vale: valeTxt(c) } : null,
+      aoMudar: () => carregar(),
+    });
+  }
+  window.addEventListener('popstate', () => { if (atual && !(history.state && history.state.mvConversa)) fechar(); });
+  MQ.addEventListener('change', () => { const id = atual; if (id) { fechar(); abrir(id); } else render(); });
+
   function fechar() {
+    document.body.classList.remove('mv-thread');
     atual = null;
     if (comp) { comp.destruir(); comp = null; }
     trab.classList.remove('com-conversa');

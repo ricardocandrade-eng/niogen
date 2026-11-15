@@ -12,6 +12,8 @@
  * 09/11 (0082, prompt fluxo único): "Live" (fila.html) é a 1ª do menu para admin/backoffice.
  * 09/11 (0090, jornada única): Live, Funil e Mari contam pela MESMA regra — v_jornada.precisa_acao.
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
+ * 15/11 (NIOGEN no celular): item "Pulso" (pulso.html, a aba do Pulso) no Backoffice, e carga de assets/movel.js (barra inferior,
+ * instalar, avisos Web Push e sessão do app) — um lugar só, sem tocar no <head> de cada tela.
  */
 (function () {
   'use strict';
@@ -25,6 +27,7 @@
       // 10/11 17h30 (Ricardo): sem o ☰ — a bolinha vermelha ocupa o lugar do ícone, alinhada com os demais.
       { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
+      { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       // 12/11 (Ricardo): Consulta de cobertura veio de Vendas para cá, com nome curto (cabe numa linha). Todos os perfis veem.
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
     ]],
@@ -112,6 +115,7 @@
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
     menuMovel(nav, pagina);
+    appMovel(pagina);
     guiaNovo(nav, pagina);
     balancoBotao();
     setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta
@@ -458,6 +462,16 @@
     nav.addEventListener('click', (ev) => { if (ev.target.closest('a.nav-item')) fechar(); });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && nav.classList.contains('aberto')) { fechar(); btn.focus(); } });
     window.matchMedia('(min-width: 761px)').addEventListener('change', (m) => { if (m.matches) fechar(); });
+  }
+
+  // 15/11: assets/movel.js (barra inferior do celular, instalar, avisos, sessão do app). Carrega uma vez, com o ?v= do CACHE.
+  function appMovel(pagina) {
+    const ir = () => { if (window.NGMovel) window.NGMovel.montar(pagina); };
+    if (window.NGMovel) { ir(); return; }
+    const s = document.createElement('script');
+    s.src = 'assets/movel.js?v=161126-8';
+    s.onload = ir;
+    document.head.appendChild(s);
   }
 
   // 09/11: o botão "Atualizar" das telas (NG.botaoAtualizar) refaz os contadores do menu junto com os dados.

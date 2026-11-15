@@ -1019,6 +1019,8 @@
   async function exigirLogin() {
     const { data } = await sb.auth.getSession();
     if (!data.session) {
+      // 15/11: guarda a tela pedida (aviso do celular, atalho do app) para o login voltar a ela
+      try { const aqui = location.pathname.split('/').pop() + location.search + location.hash; if (/^[a-z]+\.html/i.test(aqui) && !/^index\.html/i.test(aqui)) sessionStorage.setItem('ng.voltar', aqui); } catch (e) { /* */ }
       location.replace('index.html');
       return new Promise(() => {});
     }

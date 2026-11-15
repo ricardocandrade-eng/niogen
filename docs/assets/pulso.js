@@ -4,7 +4,11 @@
  * cinza com "sem leitura há X" — nunca mostra verde velho. Nível nunca só por cor: bolinha (ok), triângulo (atenção), quadrado
  * (parado), anel (sem leitura) + o rótulo em texto. Clique num elo abre o detalhe; o alerta leva a Conversas › Esperando resposta.
  * 14/11: recolhida numa linha (batimento + rótulo de cada elo); o clique abre os dados por cima da lista, sem empurrar a tela.
- * Também entrega os selos do menu (NGSidebar.pintarStatus) — na Live o menu não faz chamada própria. Só leitura; sem dado de cliente. */
+ * Também entrega os selos do menu (NGSidebar.pintarStatus) — na Live o menu não faz chamada própria. Só leitura; sem dado de cliente.
+ * 15/11 (NIOGEN no celular · docs/LAYOUT_conversas_mobile_151126_1304.html): o Pulso virou ABA (pulso.html, NGPulso.montarAba) —
+ * os 4 elos em cartões (sinal, número, linha de detalhe; toque abre o detalhe), o funil de hoje e o alerta com a ação, nos estados
+ * do LAYOUT_pulso_live (ok · atenção · parado · sem leitura). Na Live do celular (≤ 640 px) sobra só a faixa resumida: o toque
+ * leva à aba em vez de abrir por cima. Mesma RPC (pulso_operacao), mesma cadência de 60 s. */
 (function () {
   const ORDEM = ['meta', 'entrada', 'mari', 'fluxos'];
   const NOME = { meta: 'Meta Ads', entrada: 'Entrada', mari: 'Mari', fluxos: 'Fluxos n8n' };
@@ -13,6 +17,8 @@
   const ECG = 'M0 20 H42 L50 20 L56 6 L64 30 L70 14 L76 20 H104 L110 12 L116 24 L121 20 H150';
   const ECG_PARADO = 'M0 20 H42 L50 20 L56 6 L64 30 L70 14 L76 20 H150';
 
+  let modoAba = false;   // 15/11: pulso.html (aba do celular / tela inteira)
+  const CEL = window.matchMedia('(max-width: 640px)');
   let el = null; let dados = null; let recebido = 0; let desvio = 0; let aberto = null; let expandido = false; let falhou = false; let timer = null;
   const esc = (s) => NG.esc(s == null ? '' : String(s));
 
@@ -138,8 +144,42 @@
       <span class="pl-chev" aria-hidden="true">${expandido ? '▴' : '▾'}</span></button>`;
   }
 
+  // 15/11: a aba Pulso — cartão geral com os 4 elos, funil de hoje, alerta e detalhe do elo tocado.
+  function pintarAba() {
+    const cinza = semLeitura();
+    const elos = dados ? ORDEM.filter((k) => dados.elos[k]) : [];
+    const g = dados ? dados.geral : { titulo: 'Sem leitura', nivel: 'sem_leitura' };
+    const nivelG = cinza ? 'sem_leitura' : g.nivel;
+    let sub;
+    if (cinza) sub = recebido ? `última leitura ${ha(new Date(recebido - desvio).toISOString())}` : 'lendo…';
+    else if (g.nivel !== 'ok' && g.desde) sub = `desde ${hm(g.desde)} · ${ha(g.desde).replace('há ', '')}`;
+    else sub = new Date().toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }).replace(',', ' ·').replace('.', '');
+    const linhasElo = elos.map((k) => {
+      const e = dados.elos[k];
+      const n = cinza ? 'sem_leitura' : e.nivel;
+      const v = vivo(k, e);
+      const det = (e.linhas || []).slice(0, 2).map((l, i) => (i === 1 && v.linha2 ? v.linha2 : l)).join(' · ');
+      return `<button type="button" class="pa-elo pl-n-${n}${aberto === k ? ' pl-sel' : ''}" data-elo="${k}" aria-expanded="${aberto === k}" aria-controls="pl-detalhe">
+        <span class="pa-nome">${esc(NOME[k])}</span>
+        <span class="pa-corpo"><span class="pa-l1">${marca(n)}<span class="pa-sinal">${esc(cinza ? 'sem leitura' : e.rotulo)}</span><span class="pa-num">${esc(v.principal || e.principal)}</span></span>
+        <span class="pa-det">${esc(det)}</span></span><span class="pa-chev" aria-hidden="true">›</span></button>`;
+    }).join('');
+    const f = dados && dados.funil;
+    const funilHtml = f ? `<section class="pa-card"><div class="pa-cab"><b>Funil de hoje</b><span>ontem fechou em ${f.ontem.conversas} · ${f.ontem.qualificadas} · ${f.ontem.vendas}</span></div>
+      <div class="pa-funil"><div class="pa-f1"><b>${f.hoje.conversas}</b><span>conversas</span></div><div><b>${f.hoje.qualificadas}</b><span>qualificada${f.hoje.qualificadas === 1 ? '' : 's'}</span></div><div class="pa-fv"><b>${f.hoje.vendas}</b><span>venda${f.hoje.vendas === 1 ? '' : 's'}</span></div></div></section>` : '';
+    el.innerHTML = `<section class="pa-card pa-geral pl-n-${nivelG}" aria-label="Pulso da máquina">
+        <div class="pa-cab">${marca(nivelG)}<b class="pa-tit">${esc(cinza ? 'Sem leitura' : g.titulo)}</b><span>${esc(sub)}</span></div>
+        ${linhasElo || '<p class="pa-vazio">Lendo os elos…</p>'}</section>
+      ${alerta(cinza)}
+      ${aberto ? detalhe(cinza) : ''}
+      ${funilHtml}
+      <p class="pa-rodape">Toque num elo para ver o detalhe. Atualiza sozinho a cada minuto.</p>`;
+    el.hidden = false;
+  }
+
   function pintar() {
     if (!el) return;
+    if (modoAba) { pintarAba(); return; }
     const cinza = semLeitura();
     const elos = dados ? ORDEM.filter((k) => dados.elos[k]) : [];
     const nivelG = cinza ? 'sem_leitura' : (dados ? dados.geral.nivel : 'sem_leitura');
@@ -172,6 +212,8 @@
       const b = ev.target.closest('[data-expandir],[data-elo],[data-ver],[data-fechar],[data-visto]');
       if (!b) return;
       if (b.hasAttribute('data-visto')) NG.sb.rpc('pulso_incidente_visto').then(() => {}, () => {});
+      // 15/11: no celular a faixa da Live é só o resumo — o toque leva à aba Pulso.
+      if (b.hasAttribute('data-expandir') && !modoAba && CEL.matches) { location.href = 'pulso.html'; return; }
       if (b.hasAttribute('data-expandir')) { expandido = !expandido; if (!expandido) aberto = null; pintar(); }
       else if (b.dataset.elo) { aberto = aberto === b.dataset.elo ? null : b.dataset.elo; pintar(); }
       else if (b.dataset.ver) { expandido = true; aberto = b.dataset.ver; pintar(); }
@@ -187,5 +229,7 @@
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - recebido > 30000) ler(); });
   }
 
-  window.NGPulso = { montar, atualizar: ler };
+  function montarAba(alvo) { modoAba = true; aberto = null; montar(alvo); }
+
+  window.NGPulso = { montar, montarAba, atualizar: ler };
 })();

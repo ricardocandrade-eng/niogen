@@ -16,6 +16,11 @@
  *   sem o aviso âmbar da venda (a ficha ao lado já diz o próximo passo), caixa de altura fixa e uma faixa da Mari acima dela
  *   (c.mari(html, registro): lembretes, contatos e "Registrar contato", que abre DENTRO da própria caixa). Os cliques da faixa
  *   são tratados por quem montou (a ficha).
+ * 15/11 (NIOGEN no celular · docs/LAYOUT_conversas_mobile_151126_1304.html): opção movel = padrão WhatsApp em tela cheia —
+ *   cabeçalho fixo (‹ voltar · avatar · nome · "Com a Mari" / "Com humano" · 📞 · ⋮ ficha), faixa de contexto (cidade · plano ·
+ *   quanto vale · janela) e o botão "Devolver para a Mari" FIXO no cabeçalho e no fim da conversa, com confirmação de um toque
+ *   (1º toque arma por 4 s, 2º devolve pela backoffice_conversa → devolver_mari: lembretes e cadência retomam como hoje).
+ *   Envio continua só pelo NIOGEN (o link do Chatwoot não aparece no celular). Desktop: nada muda (sem a opção movel).
  */
 (function () {
   'use strict';
@@ -85,10 +90,13 @@
     const st = { d: null, nota: false, tpl: null, vivo: true, locais: [], seq: 0, fila: Promise.resolve(), sig: {}, nMsgs: 0, foco: true };
 
     el.innerHTML = `<section class="cvp">
+      <div class="cvp-mv-cab" data-mvcab hidden></div>
+      <div class="cvp-ctx" data-ctx hidden></div>
       <div class="cvp-l1" data-cab><b class="cvp-nome">${esc(o.nome || 'Conversa')}</b></div>
       <div class="cvp-l2" data-etq></div>
       <div class="cvp-meio"><div class="cvp-msgs" data-msgs tabindex="0" aria-label="Mensagens" aria-live="polite"><div class="carregando">Carregando a conversa…</div></div>
         <button type="button" class="cvp-novas" data-cv="descer" hidden>↓ novas mensagens</button></div>
+      <div class="cvp-devolver" data-devolver hidden></div>
       <div class="cvp-pe">
         <div class="cvp-venda" data-venda hidden></div>
         <div class="cvp-mari" data-mari hidden></div>
@@ -106,6 +114,8 @@
     const vendaEl = $('[data-venda]');
     const mariEl = $('[data-mari]');
     if (o.cheia) el.classList.add('cheia');
+    if (o.movel) el.classList.add('movel');
+    const mvCab = $('[data-mvcab]'), ctxEl = $('[data-ctx]'), devEl = $('[data-devolver]');
     const quemEl = $('[data-quem]');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
     const secao = $('.cvp');
@@ -188,6 +198,9 @@
     const meuNome = () => ((NG.usuario || {}).nome || '').trim();
     function dono(c) {
       if (c.nao_contatar) return { v: 'parar', txt: 'Não contatar' };
+      // 15/11: logo depois do "Devolver para a Mari" o espelho do Chatwoot ainda pode trazer o agente por alguns segundos —
+      // a tela segue mostrando "Com a Mari" (o que o banco já gravou) por 30 s em vez de piscar de volta para "Com humano".
+      if (st.devolvidoEm && Date.now() - st.devolvidoEm < 30000) return { v: 'mari', txt: 'Sem dono · Mari atende' };
       if (c.chatwoot_agente) return c.chatwoot_agente === meuNome() ? { v: 'eu', txt: 'Você' } : { v: 'outro', txt: c.chatwoot_agente };
       if (c.humano_atribuido) return { v: 'time', txt: 'Time (assumida)' };
       if (c.chatwoot_status === 'resolved') return { v: 'mari', txt: 'Sem dono · Mari atende' };
@@ -246,8 +259,67 @@
       const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
       troca('etq', etqEl, `<span class="cvp-rot">ETIQUETAS</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
         <select class="cvp-pill cvp-mais" data-cv="etiqueta" aria-label="Pôr etiqueta"><option value="">+ etiqueta</option>${ETIQUETAS.filter((x) => !etq.includes(x)).map((x) => `<option>${esc(x)}</option>`).join('')}</select>`);
+      if (o.movel) desenharMovel(c, dn, jn, nome);
       desenharMsgs();
       desenharPe(jn, dn, nome);
+    }
+
+    // ---------- celular (15/11): cabeçalho de WhatsApp, contexto e Devolver para a Mari ----------
+    const COR_AV = ['#22c55e', '#6FA8FF', '#F2B84B', '#C79BFF', '#FF8A65', '#4DD0E1'];
+    function desenharMovel(c, dn, jn, nome) {
+      const ladoTime = dn.v !== 'mari' && dn.v !== 'parar';
+      const ini = (String(nome).trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase();
+      const cor = COR_AV[[...String(c.id)].reduce((a, ch) => a + ch.charCodeAt(0), 0) % COR_AV.length];
+      const sub = c.nao_contatar ? '<small class="parar">Não contatar</small>'
+        : ladoTime ? `<small class="time">Com humano · ${esc(dn.v === 'eu' ? 'você' : dn.v === 'outro' ? dn.txt : 'time backoffice')}</small>`
+        : `<small class="mari${st.devolvidoEm && Date.now() - st.devolvidoEm < 4000 ? ' acabou' : ''}">Com a Mari</small>`;
+      const armadoCab = st.armado === 'cab';
+      const tel = NG.soDigitos(c.telefone || '');
+      const ficha = c.venda_id ? `#venda=${esc(c.venda_id)}` : `#conversa=${esc(c.id)}`;
+      troca('mvcab', mvCab, `<button type="button" class="cvp-mv-voltar" data-cv="fechar" aria-label="Voltar para a lista">‹</button>
+        <span class="cvp-mv-av" style="--av:${cor}" aria-hidden="true">${esc(ini)}</span>
+        <span class="cvp-mv-id"><b title="${esc(nome)}">${esc(nome)}</b>${sub}</span>
+        ${ladoTime && !c.nao_contatar ? `<button type="button" class="cvp-mv-dev${armadoCab ? ' armado' : ''}" data-cv="devolver" data-onde="cab" aria-label="${armadoCab ? 'Toque de novo para devolver a conversa à Mari' : 'Devolver para a Mari'}"${st.trocandoDono ? ' disabled' : ''}>${armadoCab ? 'Confirmar?' : '↩ Devolver'}</button>` : ''}
+        ${tel ? `<a class="cvp-mv-ico" href="tel:+${esc(tel)}" aria-label="Ligar para ${esc(NG.primeiroNome(nome))}">📞</a>` : ''}
+        <a class="cvp-mv-ico" href="${ficha}" aria-label="Abrir a ficha (status, etiquetas, saída)">⋮</a>`);
+      mvCab.hidden = false;
+      const cx = o.contexto || {};
+      const partes = [cx.cidade || c.cidade, cx.plano, cx.vale ? `vale <b>${esc(cx.vale)}</b>` : ''].filter(Boolean)
+        .map((x) => (String(x).includes('<b>') ? x : esc(x)));
+      partes.push(`<span class="${jn.aberta ? '' : 'fechada'}">${esc(jn.txt.replace('Janela 24 h · ', 'janela ').replace('Janela 24 h fechada', 'janela fechada'))}</span>`);
+      troca('ctx', ctxEl, partes.join('<i>·</i>'));
+      ctxEl.hidden = false;
+      const armadoFim = st.armado === 'fim';
+      devEl.hidden = !ladoTime || !!c.nao_contatar;
+      troca('dev', devEl, ladoTime && !c.nao_contatar ? `<span>${dn.v === 'eu' ? 'Você está com este cliente.' : 'Conversa com o time.'} A Mari está calada e os lembretes, parados.</span>
+        <button type="button" class="btn btn-sm cvp-mv-dev-fim${armadoFim ? ' armado' : ''}" data-cv="devolver" data-onde="fim"${st.trocandoDono ? ' disabled' : ''}>${armadoFim ? 'Toque de novo para devolver' : '↩ Devolver para a Mari'}</button>` : '');
+    }
+    function devolver(onde) {
+      if (st.trocandoDono) return;
+      if (st.armado !== onde) {   // 1º toque: arma por 4 s
+        st.armado = onde;
+        clearTimeout(st.tArmado);
+        st.tArmado = setTimeout(() => { st.armado = null; desenhar(); }, 4000);
+        desenhar();
+        return;
+      }
+      clearTimeout(st.tArmado);
+      st.armado = null;
+      st.trocandoDono = true;
+      desenhar();
+      NG.sb.rpc('backoffice_conversa', { p_conversa: o.conversaId, p_acao: 'atribuir', p_valor: 'mari' }).then(({ data, error }) => {
+        st.trocandoDono = false;
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); desenhar(); return; }
+        st.devolvidoEm = Date.now();
+        // retorno visual na hora ("Com humano" → "Com a Mari"); o carregar confirma pelo banco
+        if (st.d) { st.d.c.chatwoot_agente = null; st.d.c.humano_atribuido = false; st.d.c.chatwoot_time = null; }
+        desenhar();
+        NG.toast((data && data.resumo) || 'Com a Mari de novo — lembretes e cadência retomados', 'ok');
+        if (o.aoMudar) o.aoMudar(data);
+        carregar();
+        setTimeout(() => { carregar(); }, 3000);
+        setTimeout(() => desenhar(), 4100);
+      });
     }
 
     function itensMsgs() {
@@ -509,6 +581,7 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'devolver') { devolver(b.dataset.onde || 'cab'); return; }
       if (a === 'foto') { abrirFoto(b.dataset.url); return; }
       if (a === 'emoji') { if (emoEl.hidden) emoAbrir(); else emoFechar(); return; }
       if (a === 'emo-aba') { st.emoAba = Number(b.dataset.i) || 0; emoDesenhar(); return; }
@@ -567,7 +640,7 @@
     carregar();
     return {
       recarregar: () => carregar(),
-      destruir() { st.vivo = false; clearInterval(intervalo); document.removeEventListener('visibilitychange', aoVoltar); document.removeEventListener('mousedown', emoFora); el.remove(); },
+      destruir() { st.vivo = false; clearInterval(intervalo); clearTimeout(st.tArmado); document.removeEventListener('visibilitychange', aoVoltar); document.removeEventListener('mousedown', emoFora); el.remove(); },
       focar() { ta.focus(); },
       // 12/11: faixa da Mari (tela cheia). registro = a faixa ocupa a caixa (Registrar contato / cadência), sem mudar a altura.
       mari(html, registro) {

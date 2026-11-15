@@ -1,0 +1,11 @@
+{
+  "name": "niogen-push",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NIOGEN | push/ | 15/11/2026 — envio de Web Push (VAPID) dos avisos do Live; chamado só pelo n8n (fluxo push_live) pela rede interna renata_web.",
+  "main": "servidor.js",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "web-push": "3.6.7"
+  }
+}

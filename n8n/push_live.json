@@ -1,0 +1,201 @@
+{
+  "name": "push_live",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 2 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "82572ea6-a176-58b4-a323-3ffb7207e241"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://niogen-push:8096/chave",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "name": "2 · Chave pública (niogen-push)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "ca6a751c-5af7-511e-aa51-d964fbbfbc4e",
+      "onError": "continueRegularOutput",
+      "notes": "Só a chave PÚBLICA (vai para config_regras.push). A privada nunca sai da VPS.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/push_pendentes",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_vapid_publica: $json.publica || null }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3 · Supabase avisos a mandar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        0
+      ],
+      "id": "b0457f01-191c-5ba5-b499-ce6e8d0bb9d1",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const itens = $input.all().map((i) => i.json).filter((j) => j && j.id && j.endpoint);\nreturn itens.length ? [{ json: { itens } }] : [];"
+      },
+      "name": "4 · Juntar o lote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        0
+      ],
+      "id": "a930e097-24d9-5cfd-ac13-c8c8855ba05b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://niogen-push:8096/enviar",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ itens: $json.itens }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "5 · Enviar (niogen-push)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "9ef642fb-cea3-5da4-bda1-4a19ce99c99f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/push_resultado",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_itens: $json.itens || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "6 · Supabase resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "2b33fcaa-3f13-5ae9-b371-6997e4692f4d",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1 · A cada 2 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Chave pública (niogen-push)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Chave pública (niogen-push)": {
+      "main": [
+        [
+          {
+            "node": "3 · Supabase avisos a mandar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Supabase avisos a mandar": {
+      "main": [
+        [
+          {
+            "node": "4 · Juntar o lote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Juntar o lote": {
+      "main": [
+        [
+          {
+            "node": "5 · Enviar (niogen-push)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Enviar (niogen-push)": {
+      "main": [
+        [
+          {
+            "node": "6 · Supabase resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}

@@ -3309,3 +3309,155 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
   .fc2-regua .fc-cb-tri .fc-cb-st { gap: 0 10px; padding: 0 10px 3px 8px; }
   .fc2-regua .fc-cb-tri .fc-cb-g + .fc-cb-g { padding-left: 10px; }
 }
+
+/* ===== 15/11 · NIOGEN no celular (protótipo docs/LAYOUT_conversas_mobile_151126_1304.html) =====
+   Barra inferior (Conversas · Live · Pulso · Mais), folha "Mais", cartões de instalar/avisos, Conversas no padrão WhatsApp
+   (lista + conversa em tela cheia com Devolver para a Mari) e a aba Pulso. Tudo só ≤ 640 px, exceto a aba Pulso (.pa-*),
+   que também serve o computador. Desktop das outras telas: nada muda. */
+.mv-tabs, .mv-cartao, .cvp-mv-cab, .cvp-ctx, .cvp-devolver { display: none; }
+
+/* --- aba Pulso (pulso.html) --- */
+.pa { display: flex; flex-direction: column; gap: 12px; max-width: 720px; }
+.pa-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; }
+.pa-cab { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-bottom: 4px; }
+.pa-cab b { font-size: 15px; }
+.pa-cab > span:last-child { margin-left: auto; font-size: 12px; color: var(--muted); text-align: right; }
+.pa-geral.pl-n-atencao { border-color: var(--warn-border); }
+.pa-geral.pl-n-parado { border-color: var(--bad-border); background: linear-gradient(var(--bad-bg), var(--surface) 60%); }
+.pa-elo { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 11px 0; border: 0; border-top: 1px solid var(--border); background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pa-cab + .pa-elo { border-top: 0; }
+.pa-elo.pl-sel { background: var(--surface-2); border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+.pa-nome { flex: 0 0 92px; font-size: 14px; font-weight: 600; padding-top: 1px; }
+.pa-corpo { flex: 1; min-width: 0; }
+.pa-l1 { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.pa-sinal { font-size: 13px; font-weight: 600; color: var(--ok-fg); }
+.pa-elo.pl-n-atencao .pa-sinal { color: var(--warn-fg); }
+.pa-elo.pl-n-parado .pa-sinal { color: var(--bad-fg); }
+.pa-elo.pl-n-sem_leitura .pa-sinal { color: var(--muted); }
+.pa-num { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+.pa-det { display: block; margin-top: 3px; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.pa-chev { color: var(--muted); font-size: 18px; line-height: 1; padding-top: 2px; }
+.pa-funil { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.pa-funil div { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 4px; text-align: center; }
+.pa-funil b { display: block; font: 600 20px var(--mono); }
+.pa-funil span { display: block; margin-top: 2px; font-size: 10.5px; letter-spacing: .03em; text-transform: uppercase; color: var(--muted); }
+.pa-funil .pa-fv { border-color: #2F5A37; background: var(--ok-bg); }
+.pa-funil .pa-fv b { color: var(--ok-fg); }
+.pa-rodape, .pa-vazio { margin: 0; font-size: 12px; color: var(--muted); }
+.pa .pl-alerta, .pa .pl-det { position: static; margin: 0; }
+
+@media (max-width: 640px) {
+  /* --- barra inferior --- */
+  .mv-tabs { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--nav); border-top: 1px solid var(--border); padding: 6px 0 calc(env(safe-area-inset-bottom) + 6px); }
+  .mv-tabs .mv-tab { flex: 1; position: relative; margin: 0; min-height: 0; border-radius: 0; line-height: 1.2; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 3px 0; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; padding: 3px 0; text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .mv-tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .mv-tab.on { color: var(--accent); }
+  .mv-tab-n { position: absolute; top: -3px; left: calc(50% + 6px); min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #06130b; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+  .mv-tab-n.fogo { left: auto; right: calc(50% + 8px); background: #fb923c; color: #fff; }
+  .mv-tab-n.mv-alerta { background: var(--bad-dot); color: #fff; }
+  .mv-tab-n[hidden] { display: none; }
+  body.com-mv-tabs .main { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  body.com-mv-tabs .toasts { bottom: calc(78px + env(safe-area-inset-bottom)); }
+  body.com-mv-tabs .bal-fab, body.com-mv-tabs a.fab { bottom: calc(80px + env(safe-area-inset-bottom)); }
+
+  /* --- folha "Mais" e cartões --- */
+  .mv-folha-veu { position: fixed; inset: 0; z-index: 60; background: rgba(5, 7, 10, .6); }
+  .mv-folha { position: fixed; left: 0; right: 0; bottom: 0; z-index: 61; max-height: 86vh; overflow-y: auto; background: var(--surface); border-top: 1px solid var(--border-strong); border-radius: 18px 18px 0 0; padding: 6px 14px calc(env(safe-area-inset-bottom) + 14px); }
+  .mv-folha-pega { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 4px auto 10px; }
+  .mv-folha-item { display: grid; grid-template-columns: 28px 1fr; align-items: center; column-gap: 10px; width: 100%; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--border); background: none; color: var(--text); font: inherit; font-size: 15px; text-align: left; text-decoration: none; cursor: pointer; }
+  .mv-folha-item span { grid-row: span 2; color: var(--muted); font-size: 18px; text-align: center; }
+  .mv-folha-item small { color: var(--muted); font-size: 12px; }
+  .mv-folha-item.sair { border-bottom: 0; color: var(--muted); }
+  .mv-folha-sec { display: flex; align-items: center; gap: 8px; margin: 14px 4px 4px; font-size: 14px; }
+  .mv-folha-st { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .mv-folha-st.on { color: var(--ok-fg); font-weight: 600; }
+  .mv-folha-obs { margin: 4px 4px 8px; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .mv-folha-bts { display: flex; gap: 8px; margin: 0 4px 10px; }
+  .mv-folha-bts .btn { flex: 1; min-height: 42px; }
+  .mv-cartao { display: flex; flex-direction: column; gap: 8px; margin: 0 0 12px; padding: 11px 12px; border-radius: 14px; background: var(--ok-bg); border: 1px solid #2F5A37; font-size: 13.5px; line-height: 1.45; color: #CFEFD4; }
+  .mv-cartao b { color: var(--ok-fg); }
+  .mv-cartao-bts { display: flex; gap: 8px; align-items: center; }
+  .mv-cartao-bts .btn { min-height: 38px; }
+  .mv-cartao-x { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 17px; padding: 4px 6px; cursor: pointer; }
+
+  /* --- Conversas: lista no padrão WhatsApp --- */
+  body.tela-conversas .main.cv-main { padding: 0 0 calc(84px + env(safe-area-inset-bottom)); }
+  body.tela-conversas .cv-main > .cab { display: none; }
+  body.tela-conversas .mv-cartao { margin: 10px 12px 0; }
+  .cv-trab, .cv-trab.com-conversa { height: auto; display: block; }
+  .cv-lista { border: 0; border-radius: 0; background: none; padding: 0; }
+  .cv-busca { padding: 10px 12px 6px; }
+  .cv-busca input { font-size: 16px; height: 40px; border-radius: 999px; padding: 0 14px; }
+  .cv-filtros { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px 12px 8px; gap: 8px; }
+  .cv-filtros::-webkit-scrollbar { display: none; }
+  .cv-filtros button { flex: 0 0 auto; padding: 7px 12px; font-size: 13px; }
+  .cv-filtros button.on { background: var(--ok-bg); border-color: #2F5A37; color: var(--ok-fg); }
+  .cv-funil { padding: 0 12px 8px; }
+  .cv-itens { overflow: visible; }
+  .cv-item.cv-mv { flex-direction: row; align-items: center; gap: 12px; padding: 11px 12px 11px 14px; }
+  .cv-item.cv-mv.esperando::before { top: 14px; bottom: 14px; }
+  .cv-av { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--av, #22c55e); color: #06130b; font-weight: 700; font-size: 17px; }
+  .cv-mv-meio { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .cv-mv .cv-l1 b { font-size: 16px; font-weight: 600; }
+  .cv-mv .cv-hora { font-size: 12px; }
+  .cv-mv.naolida .cv-hora { color: var(--accent); font-weight: 600; }
+  .cv-mv .cv-l2 { display: flex; align-items: center; gap: 6px; font-size: 14px; white-space: normal; }
+  .cv-prev { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cv-mv.naolida .cv-prev { color: var(--text); }
+  .cv-quem { font-style: normal; color: var(--ok-fg); font-weight: 500; }
+  .cv-nl { flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: #06130b; font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+  .cv-mv .cv-l3 { gap: 5px; margin-top: 3px; }
+  .cv-tag { font-size: 11.5px; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; }
+  .cv-tag.quente { color: #fdba74; border-color: rgba(251, 146, 60, .4); background: rgba(251, 146, 60, .1); }
+  .cv-tag.aviso { color: var(--warn-fg); border-color: var(--warn-border); background: var(--warn-bg); }
+  .cv-tag.dinheiro { color: var(--ok-fg); border-color: #2F5A37; background: rgba(50, 224, 0, .06); font-weight: 600; }
+  .cv-tag.apagada { opacity: .75; }
+  .cv-tag.ruim { color: var(--bad-fg); border-color: var(--bad-border); }
+
+  /* --- Conversas: a conversa em TELA CHEIA --- */
+  body.mv-thread { overflow: hidden; }
+  body.mv-thread .topo-movel, body.mv-thread .mv-tabs, body.mv-thread .bal-fab, body.mv-thread .mv-cartao { display: none !important; }
+  body.mv-thread .cv-trab .cv-direita { display: flex; position: fixed; inset: 0; z-index: 35; height: 100dvh; background: var(--bg); }
+  body.mv-thread .cv-host { flex: 1; min-height: 0; display: flex; }
+  .cvp-raiz.movel .cvp { border: 0; border-radius: 0; background: var(--bg); }
+  .cvp-raiz.movel .cvp-l1, .cvp-raiz.movel .cvp-l2, .cvp-raiz.movel .cvp-venda { display: none !important; }
+  .cvp-raiz.movel .cvp-mv-cab:not([hidden]) { display: flex; align-items: center; gap: 8px; padding: calc(env(safe-area-inset-top) + 8px) 8px 8px 4px; background: var(--nav); border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+  .cvp-mv-voltar { border: 0; background: none; color: var(--text); font-size: 30px; line-height: 1; padding: 0 6px 4px; cursor: pointer; }
+  .cvp-mv-av { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--av, #22c55e); color: #06130b; font-weight: 700; font-size: 15px; }
+  .cvp-mv-id { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .cvp-mv-id b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cvp-mv-id small { font-size: 12px; margin-top: 1px; border-radius: 4px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; align-self: flex-start; }
+  .cvp-mv-id small.mari { color: var(--ok-fg); }
+  .cvp-mv-id small.time { color: var(--warn-fg); }
+  .cvp-mv-id small.parar { color: var(--bad-fg); }
+  .cvp-mv-id small.acabou { animation: cvp-acabou 1.2s ease-out 2; }
+  @keyframes cvp-acabou { 0% { background: rgba(50, 224, 0, .35); } 100% { background: transparent; } }
+  .cvp-mv-dev { flex: 0 0 auto; min-width: 96px; text-align: center; min-height: 34px; padding: 0 10px; border-radius: 999px; border: 1px solid #2F5A37; background: var(--ok-bg); color: var(--ok-fg); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .cvp-mv-dev.armado, .cvp-mv-dev-fim.armado { background: var(--accent); color: #06130b; border-color: var(--accent); }
+  .cvp-mv-ico { flex: 0 0 auto; width: 32px; height: 34px; display: grid; place-items: center; font-size: 18px; color: var(--muted); text-decoration: none; border-radius: 50%; }
+  .cvp-raiz.movel .cvp-ctx:not([hidden]) { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; padding: 8px 14px; overflow-x: auto; scrollbar-width: none; white-space: nowrap; font-size: 12.5px; color: var(--muted); background: rgba(50, 224, 0, .05); border-bottom: 1px solid var(--border); }
+  .cvp-ctx i { font-style: normal; opacity: .6; }
+  .cvp-ctx b { color: var(--ok-fg); }
+  .cvp-ctx .fechada { color: var(--warn-fg); }
+  .cvp-raiz.movel .cvp-meio .cvp-msgs { padding: 12px 10px 8px; }
+  .cvp-raiz.movel .cvp-b { max-width: 84%; font-size: 15px; border-radius: 14px; }
+  .cvp-raiz.movel .cvp-b.cli { background: var(--surface-2); border-color: var(--border); border-top-left-radius: 4px; }
+  .cvp-raiz.movel .cvp-b.mari { background: #12382a; border-color: #1d5a43; border-top-right-radius: 4px; }
+  .cvp-raiz.movel .cvp-b.hum { background: #1d3f63; border-color: #2a5a8a; border-top-right-radius: 4px; }
+  .cvp-raiz.movel .cvp-b.mari .cvp-quem { color: #86efac; }
+  .cvp-raiz.movel .cvp-b.hum .cvp-quem { color: #9CCBFF; }
+  .cvp-raiz.movel .cvp-devolver:not([hidden]) { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; padding: 9px 12px; background: var(--warn-bg); border-top: 1px solid var(--warn-border); font-size: 12.5px; line-height: 1.35; color: var(--warn-fg); }
+  .cvp-devolver span { flex: 1; }
+  .cvp-mv-dev-fim { flex: 0 0 auto; min-height: 38px; font-weight: 600; }
+  .cvp-raiz.movel .cvp-pe { padding: 6px 8px calc(env(safe-area-inset-bottom) + 8px); gap: 4px; background: var(--nav); }
+  .cvp-raiz.movel .cvp-ctl { gap: 6px; flex-wrap: nowrap; }
+  .cvp-raiz.movel .cvp-ctl select { flex: 1; min-width: 0; }
+  .cvp-raiz.movel .cvp-ajuda { display: none; }
+  .cvp-raiz.movel .cvp-caixa textarea { font-size: 16px; border-radius: 22px; padding: 10px 14px; min-height: 44px; }
+  .cvp-raiz.movel .cvp-enviar { min-width: 64px; border-radius: 22px; }
+
+  /* --- aba Pulso no celular --- */
+  body.tela-pulso .main.pa-main { padding: 12px 12px calc(84px + env(safe-area-inset-bottom)); }
+  body.tela-pulso .cab { margin-bottom: 10px; }
+  .pa-nome { flex-basis: 84px; }
+}

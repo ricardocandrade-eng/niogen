@@ -1,0 +1,21 @@
+# NIOGEN | push/docker-compose.yml | 15/11/2026 — Claude Code
+# VPS DO n8n (45.32.161.130), pasta /opt/niogen/push/. Segredos em /opt/niogen/push/.env (chmod 600, fora do repo):
+# VAPID_PUBLICA, VAPID_PRIVADA (gerados na VPS pelo instalar.sh). Sem porta publicada: só a rede renata_web (o n8n chega
+# em http://niogen-push:8096). Mesmo padrão do niogen-dfv.
+services:
+  niogen-push:
+    build: .
+    image: niogen-push:1
+    container_name: niogen-push
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: America/Sao_Paulo
+    networks: [renata_web]
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "2m", max-file: "3" }
+networks:
+  renata_web:
+    external: true
