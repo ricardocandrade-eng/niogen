@@ -2675,7 +2675,7 @@
   let cheiaOpts = {};      // { posicao: () => ({ i, n, prev, next }), aoNavegar(dir), aoConcluir() }
   let cvCheia = null;      // NGConversa montado na metade esquerda
   let credPreset = null;   // resultado do operador de crédito levado ao formulário "Gravar o crédito"
-  const novoFc = () => ({ dfv: undefined, cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
+  const novoFc = () => ({ dfv: undefined, dados: false, cadAberto: false, edG: null, etapaX: false, etapa: null, pend: false, ver: null, conf: false, hist: false, histF: 'tudo', menu: false, reg: false, cad: false, cadp: null, passo: false, op: {}, leituras: [], tr: null, aba: 'ficha', erros: null });
   let fc = novoFc();
   const pausa = (ms) => new Promise((r) => setTimeout(r, ms));
   const SVG = (p, cls = '') => `<svg class="fc-ic ${cls}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
@@ -3669,41 +3669,46 @@
     const quando = cv.handoff_em ? NG.fmtDataHora(cv.handoff_em) : '';
     const rotulo = tem ? 'HANDOFF DA MARI' : 'RESUMO DA MARI';
     const sub = passou ? `pedido já aberto${quando ? ` · passou em ${quando}` : ''}` : `👉 ${fazer}`;
-    return `<section class="fc2-ho${passou || comMari ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}">
-      <button type="button" class="fc2-ho-b" data-f="fc2-ho" aria-expanded="${aberto}"><span class="fc2-ho-k">${rotulo}</span>
-        <span class="fc2-ho-t"><b title="${esc(titulo)}">${esc(titulo)}</b>${aberto && !passou ? '' : `<small title="${esc(sub)}">${esc(sub)}</small>`}</span>
-        <span class="fc2-ho-sx">${aberto ? IC.cima : IC.baixo}</span></button>
-      ${aberto ? `<div class="fc2-ho-c" role="dialog" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}"><button type="button" class="fc2-ho-x" data-f="fc2-ho" aria-label="Fechar">${IC.x}</button>
+    // 15/11 noite (Ricardo): a faixa do topo saiu — o quadro abre pelo ícone robô/pessoa ao lado da caixa da mensagem,
+    // por cima da conversa (fecha no X ou clicando fora).
+    if (!aberto) return '';
+    return `<section class="fc2-ho fc2-ho-pop on${passou || comMari ? ' passou' : ''}" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}">
+      <div class="fc2-ho-c" role="dialog" aria-label="${rotulo === 'HANDOFF DA MARI' ? 'Handoff da Mari' : 'Resumo da Mari'}"><button type="button" class="fc2-ho-x" data-f="fc2-ho" aria-label="Fechar">${IC.x}</button>
+        <div class="fc2-ho-tt"><span class="fc2-ho-k">${rotulo}</span><b>${esc(titulo)}</b>${passou ? `<small>${esc(sub)}</small>` : ''}</div>
         <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
         ${passou ? '' : `<div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>`}
         ${resto.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
         <div class="fc2-ho-src">${tem ? `Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · a mesma nota foi no Chatwoot`
           : 'A Mari ainda não passou esta conversa para o time'} · viabilidade e crédito: como estão agora</div>
-      </div>` : ''}</section>`;
+      </div></section>`;
   }
   function bandHtml(tom, k, t, s, botao, chip) {
     return `<section class="fc2-agora ag-${tom}" aria-label="O que fazer agora"><span class="fc2-ag-k">AGORA</span>${k ? `<span class="fc2-ag-pill">${esc(k)}</span>` : ''}
       <div class="fc2-ag-t"><b title="${esc(t || '')}">${esc(t || '—')}</b>${s ? `<small title="${esc(s)}">${esc(s)}</small>` : ''}</div>${chip || ''}${botao}</section>`;
   }
-  // 15/11 (Ricardo: "não estou vendo mais a escada (funil de vendas) na ficha"): a escada do lead (config_lead) numa faixa só,
-  // no topo da Jornada — degraus feitos em verde, o atual em azul, onde parou em vermelho (Saída), e o Pagamento no fim.
-  function escadaTira() {
+  // 15/11 noite (Ricardo: "no lugar da faixa do handoff, coloque a escada, em forma de trilha, na largura da tela toda"):
+  // a escada do lead (config_lead) volta a ser a trilha do topo, como no layout de 12/11 — degraus feitos em verde, o atual
+  // em amarelo, onde parou em vermelho (Saída), Pagamento no fim. Clicar num degrau abre o conteúdo dele na Jornada; o degrau
+  // Instalação com OS da Nio também consulta a OS no portal (como antes). À direita: status · vez · prazo.
+  const DEG_K = { atendimento: 'atend', pre_qualificado: 'atend', viabilidade: 'viab', qualificado: 'cred', instalacao: 'os', instalada: 'inst' };
+  function escadaTrilha() {
     const l = d && d.lead;
     const etapas = ((d && d.leadCfg) || []).filter((x) => x.tipo === 'etapa');
     if (!l || !etapas.length) return '';
+    const E = escadaPartes(false);
     const fora = l.destino === 'saida' || l.destino === 'teste_duplicada';
     const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
-    const pg = d && !d.soConversa && d.din ? d.din.estado : null;
     const deg = etapas.map((e, i) => {
       const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
-      const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ' — parou aqui (Saída)' : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}`;
-      // nome inteiro só no degrau atual; os outros, curtos (a coluna é estreita) — o nome inteiro fica no title
-      const CURTO = { atendimento: 'Atend.', viabilidade: 'Viab.', pre_qualificado: 'Pré-qual.', qualificado: 'Qualif.', instalacao: 'OS', instalada: 'Instal.' };
-      return `<span class="s-${st}" title="${esc(dica)}">${st === 'done' ? '✓ ' : ''}${esc(st === 'now' || st === 'stop' ? e.nome : (CURTO[e.codigo] || e.nome))}</span>`;
+      const k = DEG_K[e.codigo] || 'atend';
+      const os = e.codigo === 'instalacao' && temOsNio();
+      const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ' — parou aqui (Saída)' : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}${os ? ' Clique: consulta esta OS agora no portal da Nio (uns 15 s).' : ' Clique para ver o conteúdo deste degrau.'}`;
+      return `<button type="button" class="fc-es s-${st}${fc.etapa === k && !fc.etapaX ? ' on' : ''}" data-f="fc2-deg" data-k="${k}"${os ? ' data-os="1"' : ''} title="${esc(dica)}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}${os ? '<span class="fc-es-g" aria-hidden="true">⟳</span>' : ''}</button>`;
     });
-    deg.push(`<span class="s-${pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo'}" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}">${pg === 'paga' ? '✓ ' : ''}Pag.</span>`);
-    const sai = fora ? `<em class="fc2-esc-sai" title="${esc(l.saida_nome || 'Saída')}">Saída · ${esc(l.saida_nome || (l.destino === 'teste_duplicada' ? 'teste ou duplicada' : 'sem motivo'))}</em>` : '';
-    return `<div class="fc2-esc" aria-label="Escada do lead">${deg.join('')}</div>${sai}`;
+    const pg = d && !d.soConversa && d.din ? d.din.estado : null;
+    const stPg = pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo';
+    deg.push(`<button type="button" class="fc-es s-${stPg}${fc.etapa === 'din' ? ' on' : ''}" data-f="fc2-deg" data-k="din" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}"><i>${stPg === 'done' ? IC.ok : stPg === 'stop' ? IC.x : ''}</i>Pagamento</button>`);
+    return `<section class="fc2-trilha" aria-label="Escada do lead"><span class="fc2-tri-k">ESCADA</span><div class="fc2-tri-l">${deg.join('')}</div>${E ? `<div class="fc2-tri-i">${E.info}</div>` : ''}</section>`;
   }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
@@ -3849,7 +3854,7 @@
         : (ehBO() && ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado'].includes(v.status) ? '<button type="button" class="fc2-ag-link" data-f="pend-abrir">⏸ Abrir pendência</button>' : '');
       band = bandHtml(tom, E ? E.curto : k, t, s, botao, chipV);
       jor = jornadaHtml(passosVenda(v), { st: 'done', d: `${E ? E.etapaNome : 'venda'} · conversa com ${dn.tipo === 'mari' ? 'a Mari' : dn.tipo === 'time' ? 'o time' : dn.tipo === 'pessoa' ? 'uma pessoa do time' : '—'}`,
-        det: `${cadFaixa(cadPlanoSeguro(), true)}<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da venda (pendência, devolver, Saída…)</button></div>` });
+        det: `<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da venda (pendência, devolver, Saída…)</button></div>` });
       dad = dadosVendaHtml(v);
       overs = `${verTudo(v)}${passoOver(v, p)}${confOver(v)}${fc.pend ? `<div class="fc2-pendw">${pendOver()}</div>` : ''}`;
     } else {
@@ -3890,7 +3895,7 @@
       const itensH = P.itens.length ? `<div class="f-itens fc-itens-v">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : '';
       jor = jornadaHtml(P.passosConv, { st: P.nivel === 'agora' ? 'now' : 'done', ruaConferir: !!rc, abrir: rc ? 'viab' : null,
         d: `${dn.tipo === 'mari' ? 'Mari atendendo' : dn.tipo === 'time' ? 'com o time' : dn.tipo === 'pessoa' ? 'com uma pessoa do time' : 'conversa'} · dados ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`,
-        det: `${cadFaixa(cadPlanoSeguro(), true)}${itensH}<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da conversa (assumir, espera, Saída…)</button></div>` });
+        det: `${itensH}<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da conversa (assumir, espera, Saída…)</button></div>` });
       dad = dadosLeadHtml(c, P);
       overs = abertoP ? `<div class="fc-cards-over fc-passo" role="dialog" aria-label="Ações"><div class="fc-card-h"><h3>${esc(formAtivo === 'saida' ? TIT_SAIDA : NIVEL_ROT[P.nivel] || 'Próximo passo')}</h3><span class="fc-sp"></span><button type="button" class="fc-x" data-f="fc-passo-x" aria-label="Fechar">${IC.x}</button></div>
           <div class="fc-passo-corpo"><div class="fc-passo-b">${formAtivo === 'saida' ? '' : `<b>${esc(P.j.o_que_fazer || 'Mari atendendo')}</b>`}${P.corpoPasso}</div>${P.feito}</div></div>` : '';
@@ -3900,26 +3905,37 @@
     const cadB = cadFaixa(cadPlanoSeguro());   // 13/11 (4a): Lembretes da Mari, sempre à vista
     const abaT = (a, rot) => `<button type="button" role="tab" class="${fc.aba === a ? 'on' : ''}" data-f="fc-aba" data-a="${a}" aria-selected="${fc.aba === a}">${rot}</button>`;
     const souLead = !!d.soConversa;
+    // 15/11 noite (Ricardo): Conversa | Jornada meio a meio; Dados do cliente recolhido numa faixa na altura toda, que abre
+    // para a esquerda (por cima da Jornada) ao clicar — e abre sozinho quando um formulário, Ver tudo ou o Histórico é dele.
+    // A escada virou a trilha do topo (no lugar da faixa do handoff, que agora abre pelo ícone robô/pessoa da conversa) e
+    // os Lembretes da Mari ficam no pé, na largura da Jornada e dos Dados.
+    const hist = histOver();
+    const dadosOn = !!(fc.dados || fc.edG || fc.hist || /\S/.test(overs));
+    const faltaPill = dad && dad.faltam ? `<span class="fc-pill warn">faltam ${dad.faltam}</span>` : '<span class="fc-pill ok">completos</span>';
     raiz.innerHTML = `<div class="fc fc2">
-      ${cab}${band}${handoffHtml(conv ? d.conv : d.convInfo)}
+      ${cab}${band}${escadaTrilha()}
       <div class="fc-abas fc2-abas" role="tablist" aria-label="O que mostrar">${abaT('conv', 'Conversa')}${abaT('jor', 'Jornada')}${abaT('ficha', 'Dados')}</div>
-      <div class="fc2-grid aba-${fc.aba}">
-        <section class="fc-col fc-col-conv" aria-label="Conversa">${temConv ? '<div class="fc-conv-host"></div>'
+      <div class="fc2-grid aba-${fc.aba}${dadosOn ? ' dados-on' : ''}">
+        <section class="fc-col fc-col-conv" aria-label="Conversa">${handoffHtml(conv ? d.conv : d.convInfo)}${temConv ? '<div class="fc-conv-host"></div>'
           : `<div class="fc-colh"><h2>Conversa</h2></div><div class="fc-semconv"><p>Sem conversa no WhatsApp (venda de rua ou parceiro).</p>
               <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
-          ${escadaTira()}${jor ? jor.html : ''}
+          ${jor ? jor.html : ''}
         </section>
-        <section class="fc2-col fc2-dados" aria-label="Dados do cliente">
-          <div class="fc2-colh"><h2>Dados do cliente</h2><span class="fc-sp"></span>${dad && dad.faltam ? `<span class="fc-pill warn">faltam ${dad.faltam}</span>` : '<span class="fc-pill ok">completos</span>'}</div>
+        <section class="fc2-col fc2-dados${dadosOn ? ' on' : ''}" aria-label="Dados do cliente">
+          <button type="button" class="fc2-rail" data-f="fc2-dados" aria-expanded="${dadosOn}" title="${dadosOn ? 'Recolher os dados do cliente' : 'Abrir os dados do cliente'}"><span class="fc2-rail-sx">${dadosOn ? '›' : '‹'}</span><span class="fc2-rail-t">Dados do cliente</span>${dad && dad.faltam ? `<span class="fc2-rail-n" title="faltam ${dad.faltam}">${dad.faltam}</span>` : '<span class="fc2-rail-ok">✓</span>'}</button>
+          <div class="fc2-pan">
+          <div class="fc2-colh"><h2>Dados do cliente</h2><span class="fc-sp"></span>${faltaPill}<button type="button" class="fc-x fc2-pan-x" data-f="fc2-dados" aria-label="Recolher os dados">${IC.x}</button></div>
           <div class="fc2-dl">${dad ? dad.html : ''}</div>
           <div class="fc2-pe">${souLead ? '<span class="apagado">coletado pela Mari · o lápis corrige</span>'
             : `<button type="button" class="fc-wa" data-f="fc-wa" title="Copia Cliente e Venda prontos para colar no WhatsApp">${IC.copiar}WhatsApp</button><button type="button" class="fc-confb ${conferencias(d.v).filter((x) => x[2] === true).length === 6 ? 'ok' : 'warn'}" data-f="fc-conf">${conferencias(d.v).filter((x) => x[2] === true).length}/6 conferências</button><button type="button" class="fc-link" data-f="fc-ver" data-q="venda">Ver tudo</button>`}
             <span class="fc-sp"></span><button type="button" class="btn btn-sm" data-f="fc-hist" aria-expanded="${fc.hist}">${IC.hist}Histórico</button></div>
-          ${overs}${histOver()}
+          ${overs}${hist}
+          </div>
         </section>
+        ${cadB ? `<section class="fc2-regua" aria-label="Lembretes da Mari">${cadB}</section>` : ''}
       </div>${over}</div>`;
     // A conversa não perde o rascunho nem o cursor: o mesmo nó volta para o lugar.
     const host = raiz.querySelector('.fc-conv-host');
@@ -3935,6 +3951,16 @@
         cheiaOpts.oportunidade = null;
       }
       cvCheia.mari(mariFaixa(), fc.reg || fc.cad);
+      const qi = host.querySelector('[data-quem]');
+      const cvH = conv ? d.conv : d.convInfo;
+      if (qi && cvH && ehBO()) {
+        qi.dataset.f = 'fc2-ho';
+        qi.setAttribute('role', 'button');
+        qi.tabIndex = 0;
+        qi.dataset.ho = cvH.handoff_briefing ? 'handoff' : 'resumo';
+        qi.setAttribute('aria-expanded', String(!!fc.ho));
+        qi.title = `${String(qi.title || '').replace(/ · Clique:.*$/, '')} · Clique: ${cvH.handoff_briefing ? 'handoff' : 'resumo'} da Mari`;
+      }
     } else if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
     ligarDfvSeEditando();
     if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
@@ -3966,7 +3992,7 @@
     if (modo !== 'cheia' || !d) return;
     let mudou = false;
     if (fc.menu && !ev.target.closest('.fc-menuw, .dica-pop')) { fc.menu = false; mudou = true; }
-    if (fc.ho && !ev.target.closest('.fc2-ho')) { fc.ho = false; mudou = true; }   // 15/11: o quadro da Mari aberto fecha ao clicar fora   // 14/11: a etapa aberta da Jornada fica aberta
+    if (fc.ho && !ev.target.closest('.fc2-ho, .cvp-quem-ico')) { fc.ho = false; mudou = true; }   // 15/11: o quadro da Mari aberto fecha ao clicar fora   // 14/11: a etapa aberta da Jornada fica aberta
     const rp = ev.target.closest('[data-resolver]');
     if (rp) {
       const q = rp.dataset.resolver;
@@ -3991,7 +4017,22 @@
     if (a === 'fc-concluir') { dispensarAviso(b); return; }
     if (a === 'fc-nav') { if (cheiaOpts.aoNavegar) cheiaOpts.aoNavegar(Number(b.dataset.dir)); return; }
     if (a === 'fc-menu') { fc.menu = !fc.menu; render(); return; }
-    if (a === 'fc2-ho') { fc.ho = !fc.ho; render(); return; }   // 15/11: quadro "Handoff da Mari"
+    if (a === 'fc2-ho') { fc.ho = !fc.ho; render(); return; }
+    // 15/11 noite: degrau da trilha do topo → abre o conteúdo dele na Jornada; Instalação com OS também consulta a OS no portal
+    if (a === 'fc2-deg') {
+      const k = b.dataset.k;
+      if (b.dataset.os === '1') abrirOsModal();
+      if (fc.etapa === k && !fc.etapaX && b.dataset.os !== '1') { fc.etapa = null; fc.etapaX = true; } else { fc.etapa = k; fc.etapaX = false; }
+      fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; fc.dados = false;
+      if (fc.aba !== 'jor' && window.matchMedia('(max-width: 900px)').matches) fc.aba = 'jor';
+      render(); return;
+    }
+    if (a === 'fc2-dados') {   // 15/11 noite: faixa recolhida dos Dados do cliente — abre para a esquerda / recolhe
+      const aberto = b.getAttribute('aria-expanded') === 'true';
+      fc.dados = !aberto;
+      if (aberto) { fc.passo = false; fc.passoX = true; fc.ver = null; fc.conf = false; fc.pend = false; fc.hist = false; fc.edG = null; formAtivo = null; }
+      render(); return;
+    }   // 15/11: quadro "Handoff da Mari"
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; fc.etapaX = !fc.etapa; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
     if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
     if (a === 'fc-os-ler') { abrirOsModal(); return; }

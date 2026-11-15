@@ -3111,3 +3111,60 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 @media (max-width: 1100px) { .mq2-board { grid-template-columns: repeat(5, minmax(190px, 1fr)); overflow-x: auto; } }
 @media (max-width: 760px) { .mq2-board { height: auto; display: flex; flex-direction: column; } .mq2-corpo { max-height: 60vh; } }
 .mav-bar i, .tab .mav-bar i.vazio { padding: 0; display: inline-block; }
+
+/* 15/11 noite (Ricardo, "último redesenho da noite"): Conversa | Jornada meio a meio · Dados do cliente recolhido numa faixa na
+   altura toda, que abre para a esquerda por cima da Jornada · a escada como trilha no topo, na largura toda (no lugar da faixa
+   do handoff) · o quadro da Mari abre pelo ícone robô/pessoa da caixa da mensagem · Lembretes da Mari no pé (Jornada + Dados). */
+.fc2-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px; grid-template-rows: minmax(0, 1fr) auto; }
+.fc2-grid > .fc-col-conv { grid-column: 1; grid-row: 1 / span 2; }
+.fc2-grid > .fc2-jor { grid-column: 2; grid-row: 1; }
+.fc2-grid > .fc2-dados { grid-column: 3; grid-row: 1; overflow: visible; z-index: 12; border-right: 0; }
+.fc2-grid > .fc2-regua { grid-column: 2 / span 2; grid-row: 2; min-width: 0; border-top: 1px solid #1D232B; background: #0D1116; max-height: 46vh; overflow-y: auto; scrollbar-width: thin; }
+.fc2-regua .fc-cb { border: 0; border-radius: 0; background: none; }
+.fc2-rail { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px 0; background: #0F1318; border: 0; border-left: 1px solid #1D232B; color: #9AA4B0; font: inherit; cursor: pointer; }
+.fc2-rail:hover, .fc2-dados.on .fc2-rail { background: #141A21; color: #E9EDF3; }
+.fc2-rail:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fc2-rail-sx { font-size: 18px; line-height: 1; color: #7FB2FF; }
+.fc2-rail-t { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+.fc2-rail-n { min-width: 20px; height: 20px; border-radius: 10px; background: rgba(227,179,65,.16); color: #F2C46B; font-size: 11.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.fc2-rail-ok { color: #57D38C; font-size: 13px; }
+.fc2-pan { display: none; }
+.fc2-dados.on .fc2-pan { display: flex; flex-direction: column; position: absolute; top: 0; bottom: 0; right: 100%; width: min(480px, 46vw); background: #0F1318; border-left: 1px solid #2A333D; box-shadow: -18px 0 40px rgba(0,0,0,.45); z-index: 12; }
+.fc2-pan-x { margin-left: 4px; }
+/* a trilha do topo */
+.fc2-trilha { flex: none; display: flex; align-items: center; gap: 14px; min-height: 46px; padding: 4px 18px; border-bottom: 1px solid #1D232B; background: #0F1318; position: relative; z-index: 6; min-width: 0; }
+.fc2-tri-k { flex: none; width: 100px; font-size: 10px; font-weight: 700; letter-spacing: .12em; color: #7D8793; }
+.fc2-tri-l { flex: 1; min-width: 0; display: flex; align-items: center; }
+.fc2-tri-l .fc-es { flex: 1 1 0; min-width: 0; font: inherit; font-size: 12.5px; background: none; border: 0; padding: 4px 6px 4px 0; border-radius: 8px; cursor: pointer; color: #7F8A96; overflow: hidden; text-overflow: ellipsis; }
+.fc2-tri-l .fc-es:first-child { flex: none; }
+.fc2-tri-l .fc-es + .fc-es::before { flex: 1 1 auto; width: auto; min-width: 10px; margin: 0 8px; }
+.fc2-tri-l .fc-es:hover, .fc2-tri-l .fc-es:focus-visible { color: #E9EDF3; outline: none; }
+.fc2-tri-l .fc-es.on { color: #fff; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: #3D6FB8; }
+.fc2-tri-l .fc-es.s-done { color: #C9D1DA; }
+.fc2-tri-l .fc-es.s-now { color: #fff; font-weight: 600; }
+.fc2-tri-l .fc-es.s-stop { color: #FFA39B; font-weight: 600; }
+.fc2-tri-l .fc-es .fc-es-g { margin-left: 4px; opacity: .6; }
+.fc2-tri-i { flex: 0 1 auto; min-width: 0; max-width: 34%; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: #9AA4B0; white-space: nowrap; overflow: hidden; }
+.fc2-tri-i b { color: #E1E6EC; }
+/* o quadro da Mari, aberto pelo ícone ao lado da caixa da mensagem */
+.cvp-quem-ico[data-f="fc2-ho"] { cursor: pointer; position: relative; }
+.cvp-quem-ico[data-f="fc2-ho"]:hover { filter: brightness(1.35); box-shadow: inset 0 0 0 1px currentColor; }
+.cvp-quem-ico[data-ho="handoff"]::after { content: ''; position: absolute; top: 6px; right: 5px; width: 7px; height: 7px; border-radius: 50%; background: #6FB1F7; box-shadow: 0 0 0 2px #0F1318; }
+.fc2-ho-pop { position: absolute; left: 10px; right: 10px; bottom: 76px; z-index: 30; border: 0; background: none; }
+.fc2-ho-pop .fc2-ho-c { position: static; max-width: none; max-height: 62vh; }
+.fc2-ho-tt { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.fc2-ho-tt b { font-size: 13.5px; font-weight: 600; color: #E9EDF3; }
+.fc2-ho-tt small { font-size: 12px; color: #8D97A3; }
+@media (max-width: 900px) {
+  .fc2-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .fc2-grid > .fc-col-conv, .fc2-grid > .fc2-jor, .fc2-grid > .fc2-dados, .fc2-grid > .fc2-regua { grid-column: 1; grid-row: auto; }
+  .fc2-grid.aba-jor > .fc2-regua { display: block; max-height: none; }
+  .fc2-rail { display: none; }
+  .fc2-pan, .fc2-dados.on .fc2-pan { display: flex; flex-direction: column; position: static; width: auto; flex: 1; min-height: 0; box-shadow: none; border: 0; }
+  .fc2-pan-x { display: none; }
+  .fc2-trilha { flex-wrap: wrap; padding: 6px 12px; }
+  .fc2-tri-k { width: auto; }
+  .fc2-tri-l { flex: 1 1 100%; overflow-x: auto; }
+  .fc2-tri-l .fc-es { flex: none; }
+  .fc2-tri-i { max-width: none; flex-wrap: wrap; white-space: normal; }
+}
