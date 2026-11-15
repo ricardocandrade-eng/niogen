@@ -338,6 +338,7 @@
     painel_vez: 'Leads em andamento por "de quem é a vez". Vez do nosso time = a próxima ação é nossa. Prazo estourado = alguém (nós, o cliente ou a Nio) passou do prazo. O que fazer: comece pelos atrasados.',
     painel_saidas: 'Saídas do período pela lista única de motivos (a mesma da ficha e da Leads). O que fazer: motivo que cresce é sinal — Fachada, ajuste o anúncio; Recusou, veja o porquê.',
     live_leads: 'Todos os leads, com ou sem venda, na tela Leads: em que degrau está cada um, de quem é a vez e o prazo. A Live mostra só o que pede ação agora.',
+    live_na_mira: 'Na mira (0206): conversas em que o cliente escreveu nos últimos 30 min e o lead está em Viabilidade, Pré-qualificado ou Qualificado — as mais quentes para fechar. A Mari continua atendendo. Acompanhar marca que você está de olho: a linha fica aqui até 3 dias e acende (escreveu) quando o cliente mandar mensagem nova. Não assume a conversa nem muda a cadência.',
     live_funil: 'Funil de vendas: o relatório do período — onde os leads chegam e onde saem.',
     leads_recorte: 'Recorte vindo do Funil de vendas (origem, cidade ou período de entrada). Os outros filtros valem por cima dele. Tirar o recorte volta para todos os leads.',
     cad_anteriores: 'Lembretes de rodadas anteriores: os que saíram antes da última mensagem do cliente. Quando ele responde, a contagem recomeça. Clique para ver todos no Histórico.',

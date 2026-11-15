@@ -30,13 +30,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=141126-13">
+<link rel="stylesheet" href="assets/app.css?v=151126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-8"></script>
+<script src="assets/app.js?v=151126-1"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-23"></script>
+<script src="assets/ficha.js?v=151126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -59,6 +59,7 @@
     </header>
 
     <section class="mav-pulso" id="pulso" aria-label="Pulso da Mari" aria-live="polite"><span class="apagado">Lendo o pulso da Mari…</span></section>
+    <section class="mav-ritmo" id="ritmo" aria-label="Ritmo da Mari" hidden></section>
     <section class="mav-funil" id="funil" aria-label="Funil de resultado de hoje"></section>
     <div class="seg mav-abas-movel" role="group" aria-label="Ver"><button type="button" data-mav="conversas" class="on">Conversas</button><button type="button" data-mav="agora">Agora</button></div>
 
@@ -624,7 +625,55 @@
       return `<div class="mav-ev ${esc(r.nivel || '')}${novos.has(chaveFeed(r)) ? ' novo' : ''}"><span class="t">${esc(NG.fmtHora(r.em))}</span><span>${nome === '<b>—</b>' ? '<b>Sistema</b>' : nome} · ${esc(r.texto)}</span></div>`;
     }).join('') : '<span class="apagado">Nada ainda hoje.</span>';
   }
+  // 0206 (15/11, Ricardo: "um termômetro dos atendimentos da Mari… o ritmo/estresse dela… que de fato o cliente esteja
+  // interagindo num volume bom"): nível (Calmo · Ritmo bom · Pico · Sobrecarga), quem conversa agora, quem espera resposta,
+  // tempo de resposta e as falas do cliente por hora nas últimas 24 h contra a média da mesma hora na semana. 1× por minuto.
+  const ritmoEl = document.getElementById('ritmo');
+  let ritmoEm = 0;
+  const NIVEL = {
+    calmo: ['Calmo', 'off', 'Pouca gente conversando agora. Bom momento para olhar a Auditoria ou ajustar a campanha.'],
+    bom: ['Ritmo bom', 'ok', 'Clientes conversando num volume saudável e a Mari dando conta.'],
+    pico: ['Pico', 'warn', 'Muita gente conversando ao mesmo tempo. Olhe o Na mira da Live: as conversas quentes merecem um olho humano.'],
+    sobrecarga: ['Sobrecarga', 'bad', 'Muitas conversas ao mesmo tempo ou cliente esperando resposta há mais de 6 min. Confira se a Mari está respondendo (pulso acima) e reforce com o time.'],
+  };
+  function renderRitmo(r) {
+    if (!r) { ritmoEl.hidden = true; return; }
+    const [rot, cls, dica] = NIVEL[r.nivel] || NIVEL.calmo;
+    const ordem = ['calmo', 'bom', 'pico', 'sobrecarga'];
+    const iN = Math.max(0, ordem.indexOf(r.nivel));
+    const lim = r.limites || {};
+    const hs = r.horas || [];
+    const max = Math.max(1, ...hs.map((h) => Math.max(Number(h.cliente || 0), Number(h.media7 || 0))));
+    const W = 168; const H = 30; const bw = W / Math.max(1, hs.length);
+    const barras = hs.map((h, i) => {
+      const a = (Number(h.cliente || 0) / max) * (H - 2);
+      const m = H - (Number(h.media7 || 0) / max) * (H - 2);
+      return `<rect x="${(i * bw + 1).toFixed(1)}" y="${(H - a).toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${a.toFixed(1)}" rx="1" class="${i === hs.length - 1 ? 'ag' : ''}"><title>${esc(`${h.hora}h: ${h.cliente} falas do cliente · ${h.mari} da Mari · média da semana ${h.media7}`)}</title></rect>`
+        + `<line x1="${(i * bw + 1).toFixed(1)}" x2="${(i * bw + bw - 1).toFixed(1)}" y1="${m.toFixed(1)}" y2="${m.toFixed(1)}" class="md"></line>`;
+    }).join('');
+    const tot = hs.reduce((a, h) => a + Number(h.cliente || 0), 0);
+    const tot7 = Math.round(hs.reduce((a, h) => a + Number(h.media7 || 0), 0));
+    const esp = Number(r.esperando || 0);
+    const espMax = Number(r.espera_max_min || 0);
+    ritmoEl.hidden = false;
+    ritmoEl.className = `mav-ritmo ${cls}`;
+    ritmoEl.innerHTML = `
+      <div class="it rt-nivel" title="${esc(`${dica} Limites: Ritmo bom a partir de ${lim.bom_conversas ?? 2} conversas ao mesmo tempo, Pico a partir de ${lim.pico_conversas ?? 6}, Sobrecarga a partir de ${lim.sobrecarga_conversas ?? 12} ou alguém esperando resposta há mais de ${2 * (lim.espera_alerta_min ?? 3)} min.`)}">
+        <small>Ritmo da Mari</small><b>${rot}</b><span class="rt-barra" aria-hidden="true">${ordem.map((o, i) => `<i class="${i <= iN ? `on n-${ordem[iN]}` : ''}"></i>`).join('')}</span></div>
+      <div class="it" title="Conversas em que o cliente escreveu nos últimos 15 min."><b>${NG.fmtNum(r.agora || 0)}</b><small>conversando agora</small></div>
+      <div class="it" title="Conversas (últimas 3 h) em que a última fala é do cliente: ainda sem resposta da Mari ou do time."><b class="${espMax >= 2 * (lim.espera_alerta_min ?? 3) ? 'bad-txt' : esp ? 'warn-txt' : ''}">${NG.fmtNum(esp)} esperando</b><small>${esp ? `a maior há ${espMax < 1 ? 'menos de 1' : NG.fmtNum(Math.round(espMax))} min` : 'ninguém esperando resposta'}</small></div>
+      <div class="it" title="Na última hora: da fala do cliente até a próxima resposta (Mari ou time). Típico = metade das respostas sai até esse tempo; lento = 9 em 10."><b>${r.resposta_p50_s ? segTxt(r.resposta_p50_s) : '—'}</b><small>resposta típica${r.resposta_p90_s ? ` · lenta ${segTxt(r.resposta_p90_s)}` : ''}</small></div>
+      <div class="it" title="Conversas com ${lim.quente_falas ?? 3} ou mais mensagens do cliente na última hora — elas estão no Na mira da Live."><b class="${r.quentes ? 'warn-txt' : ''}">${NG.fmtNum(r.quentes || 0)} 🔥</b><small>quentes na última hora</small></div>
+      <div class="it rt-graf" title="Falas do cliente por hora nas últimas 24 h (barras) e a média da mesma hora nos 7 dias anteriores (traço)."><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Falas do cliente por hora, 24 h">${barras}</svg>
+        <small>${NG.fmtNum(tot)} falas do cliente em 24 h · semana ${NG.fmtNum(tot7)}${tot7 ? ` (${tot >= tot7 ? '+' : ''}${Math.round(((tot - tot7) * 100) / tot7)}%)` : ''}</small></div>`;
+  }
+  function carregarRitmo() {
+    if (Date.now() - ritmoEm < 60000) return;
+    ritmoEm = Date.now();
+    NG.sb.rpc('mari_ritmo').then((r) => renderRitmo(r.error ? null : r.data), () => {});
+  }
   async function carregarVivo() {
+    carregarRitmo();
     const [rv, rf] = await Promise.all([NG.sb.rpc('mari_ao_vivo'), NG.sb.from('v_mari_feed').select('*')]);
     if (rv.error) {
       pulsoEl.className = 'mav-pulso bad';

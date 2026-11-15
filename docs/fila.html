@@ -30,13 +30,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=141126-13">
+<link rel="stylesheet" href="assets/app.css?v=151126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=141126-8"></script>
+<script src="assets/app.js?v=151126-1"></script>
 <script src="assets/sidebar.js?v=141126-2"></script>
 <script src="assets/conversa.js?v=121126-27"></script>
-<script src="assets/ficha.js?v=141126-23"></script>
+<script src="assets/ficha.js?v=151126-1"></script>
 <script src="assets/pulso.js?v=141126-1"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -98,6 +98,7 @@
     }
     return ` · <a class="cv-etp" data-leads href="leads.html?aba=todos&amp;etapa=${esc(f.etapa)}" title="${esc(`Degrau da escada: ${f.etapa_nome}${f.status_nome ? ` · ${f.status_nome}` : ''} — clique para ver todos deste degrau na tela Leads`)}">${esc(f.etapa_nome || f.etapa)}</a>`;
   };
+  let mira = [];      // 0206: 👀 Na mira — cliente escrevendo agora em Viabilidade/Pré-qualificado/Qualificado, ou que alguém acompanha
   let conf = [];      // 0153: lista "Conferir" — ação do Chatwoot que falhou, conversa mexida fora do NIOGEN, parada com dono, docs 15 d
   let andPend = [];   // 0105: pedidos do portal sem venda ("casar pedido") e biometrias sem venda (GED360)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
@@ -168,8 +169,9 @@
     const pOpc = NG.oportunidadesCanal();
     const [r, ap, rf, fn, rcf] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
-      null, NG.sb.rpc('live_conferir')]);
+      NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir')]);
     conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
+    mira = fn && !fn.error && Array.isArray(fn.data) ? fn.data : [];
     if (rf && !rf.error) {
       funilMap = {};
       (rf.data || []).forEach((l) => { if (l.conversa_id) funilMap[l.conversa_id] = l; if (l.venda_id) funilMap[`v:${l.venda_id}`] = l; });
@@ -283,6 +285,30 @@
   let confDaLinha = {};
   const confDe = (j) => confDaLinha[chaveFicha(j)] || [];
   const confSelo = (j) => confDe(j).map((c) => `<span class="lv-conf${confUrg(c) ? ' urg' : ''}" title="${esc(`${CONF_SIT[c.tipo] || c.tipo}: ${c.texto || ''}`)}">⚠ ${esc(CONF_SIT[c.tipo] || 'Conferir')}</span>`).join('');
+  // 0206 (15/11, Ricardo: "um humano pode intervir nas negociações… nem que seja só para observar"): conversa quente com a Mari.
+  // A Mari segue atendendo; "Acompanhar" só marca quem está de olho e avisa quando o cliente escrever de novo.
+  const miraLinha = (m) => {
+    const k = `c:${m.conversa_id}`;
+    const quente = (m.falas_1h || 0) >= 3;
+    const quem = m.acompanho ? 'você acompanha' : m.acompanhada ? `${m.acompanhada_nome || 'alguém'} acompanha` : m.vez === 'cliente' ? 'vez do cliente' : 'Mari atendendo';
+    return `<div class="lv-row ${m.novo && m.acompanho ? 'n-agora' : 'n-hoje'} lv-mira${NGFicha.atual === k ? ' sel' : ''}" data-k="${esc(k)}" tabindex="0" role="button">
+      <div class="lv-who"><i class="lv-dot"></i><div><b>${esc(m.nome || 'Contato')}</b><small>${esc([m.cidade, m.plano].filter(Boolean).join(' · ') || '—')} · ${m.ultima_em ? `escreveu há ${esc(haTempo(m.ultima_em))}` : ''}</small></div></div>
+      <div class="lv-sit">${quente ? `<span class="lv-conf urg" title="${esc(`${m.falas_1h} mensagens do cliente na última hora`)}">🔥 ${esc(String(m.falas_1h))}/h</span>` : ''}${esc([m.etapa_nome, m.status_nome].filter(Boolean).join(' · ') || '—')}</div>
+      <div class="lv-prox" title="${esc(m.ultima_fala || '')}">${m.ultima_fala ? `<span class="apagado">cliente:</span> “${esc(m.ultima_fala)}”` : '—'}</div>
+      <div><span class="mv-dono${m.acompanho ? '' : ' apagado'}">${esc(quem)}</span></div>
+      <div><span class="lv-pill">${m.novo && m.acompanhada ? 'escreveu' : m.valor_mensal ? esc(NG.fmtMoeda(m.valor_mensal)) : '—'}</span></div>
+      <div class="lv-act">${m.acompanho
+        ? `<button type="button" class="btn btn-sm btn-ghost" data-mira="${esc(m.conversa_id)}" data-ligar="0" title="Tira esta conversa do seu Na mira (a Mari segue normalmente)">Deixar</button>`
+        : `<button type="button" class="btn btn-sm" data-mira="${esc(m.conversa_id)}" data-ligar="1" title="Marca que você está de olho: a conversa fica no Na mira até 3 dias e acende quando o cliente escrever. Não assume — a Mari segue atendendo.">👀 Acompanhar</button>`}<button type="button" class="btn btn-sm${m.acompanho && m.novo ? ' lv-go' : ''}" data-mira-abrir="${esc(k)}"${m.acompanho ? ' data-visto-mira="1"' : ''}>Abrir${SETA}</button></div>
+    </div>`;
+  };
+  async function acompanhar(b) {
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc('conversa_acompanhar', { p_conversa: b.dataset.mira, p_ligar: b.dataset.ligar === '1' });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    if (data && data.resumo) NG.toast(data.resumo, 'ok');
+    await carregar();
+  }
   function renderLista() {
     const l = filtradas();
     const rol = listaEl.querySelector('.lv-rolar');
@@ -303,6 +329,9 @@
       // 14/11 (Ricardo): "Para fazer" é sempre o primeiro bloco; "Conferir" vem logo depois.
       corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
       if (confSoltos.length && !etapaSel) corpo += secao(`⚠ Conferir · ${confSoltos.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', confSoltos.map(confLinha).join(''));
+      // 0206: o que já está em Para fazer ou Acompanhando não repete aqui
+      const miraL = mira.filter((m) => !naLista[`c:${m.conversa_id}`]);
+      if (miraL.length && !etapaSel) corpo += secao(`<span aria-hidden="true">👀</span> Na mira · ${miraL.length} ${NG.dicaTxt(NG.ajuda.live_na_mira)}`, 'cliente conversando agora com a Mari em Viabilidade, Pré-qualificado ou Qualificado — a Mari segue; acompanhe para não perder', miraL.map(miraLinha).join(''), 'lv-sec-mira');
       corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
       if (opL.length || opsCanal.length) {
         corpo += secao(`<span aria-hidden="true">🔥</span> Oportunidades · ${opL.length + opsCanal.length}`, 'o NIOGEN achou — não é obrigação; a mensagem sai pelo NIOGEN e a conversa volta para a Mari',
@@ -531,6 +560,14 @@
     const od = ev.target.closest('[data-opd]');
     if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
     if (ev.target.closest('.lv-op, .opc-bloco')) return;
+    const mi = ev.target.closest('[data-mira]');
+    if (mi) { ev.stopPropagation(); acompanhar(mi); return; }
+    const ma = ev.target.closest('[data-mira-abrir]');
+    if (ma) {
+      ev.stopPropagation();
+      if (ma.dataset.vistoMira) NG.sb.rpc('conversa_acompanhar_visto', { p_conversa: ma.dataset.miraAbrir.slice(2) }).then(() => {}, () => {});
+      abrirChave(ma.dataset.miraAbrir); return;
+    }
     const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua]');
     if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');
@@ -544,6 +581,7 @@
     const t = ev.target.closest('[data-aba]');
     if (t) { soVez = t.dataset.aba === 'vez'; render(); return; }
     const r = ev.target.closest('.lv-row[data-k], .mv-kc[data-k]');
+    if (r && r.querySelector('[data-visto-mira]')) NG.sb.rpc('conversa_acompanhar_visto', { p_conversa: r.dataset.k.slice(2) }).then(() => {}, () => {});
     if (r) abrirChave(r.dataset.k);
   }
   listaEl.addEventListener('click', clique);

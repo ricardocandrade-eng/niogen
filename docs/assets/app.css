@@ -2881,3 +2881,36 @@ select option:disabled { color: var(--muted); }
 .fc2-kv > b { font-weight: 500; color: #E9EDF3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .fc2-kv > b small { font-weight: 400; margin-left: 4px; }
 .fc2-dfv .fc-aviso { margin: 2px 0; }
+
+/* 15/11 (Ricardo: "não estou vendo mais a escada (funil de vendas) na ficha"): escada do lead no topo da Jornada */
+.fc2-esc { flex: none; display: flex; gap: 3px; padding: 8px 14px 4px; }
+.fc2-esc > span { flex: 1 1 0; min-width: 0; text-align: center; font-size: 10.5px; line-height: 1.2; padding: 5px 3px; border-radius: 4px;
+  background: #161B21; color: #6B7581; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.fc2-esc > .s-done { background: #12291A; color: #7FD69B; }
+.fc2-esc > .s-now { background: #17304F; color: #fff; font-weight: 600; box-shadow: inset 0 0 0 1px #3B82F6; }
+.fc2-esc > .s-stop { background: #351718; color: #F28B82; font-weight: 600; }
+.fc2-esc-sai { flex: none; display: block; padding: 0 14px 4px; font-size: 11.5px; font-style: normal; color: #F28B82; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc2-esc + .fc2-lista, .fc2-esc-sai + .fc2-lista { border-top: 1px solid #1D232B; margin-top: 4px; }
+
+/* 0206 (15/11): termômetro "Ritmo da Mari" (tela Mari) e "👀 Na mira" (Live) */
+.mav-ritmo { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 10px 6px; margin: 0 0 10px; }
+.mav-ritmo .it { display: flex; flex-direction: column; gap: 1px; padding: 0 16px; border-left: 1px solid var(--border); min-width: 0; }
+.mav-ritmo .it:first-child { border-left: 0; }
+.mav-ritmo .it b { font-size: 14.5px; }
+.mav-ritmo .it small { font-size: 11.5px; color: var(--muted); }
+.mav-ritmo .rt-nivel small { text-transform: uppercase; letter-spacing: .08em; font-size: 10.5px; }
+.mav-ritmo.ok .rt-nivel b { color: var(--accent); }
+.mav-ritmo.warn .rt-nivel b { color: var(--warn-fg); }
+.mav-ritmo.bad { border-color: var(--bad-border); }
+.mav-ritmo.bad .rt-nivel b { color: var(--bad-fg); }
+.rt-barra { display: flex; gap: 3px; margin-top: 3px; }
+.rt-barra i { width: 22px; height: 5px; border-radius: 3px; background: var(--border); }
+.rt-barra i.on.n-calmo { background: #6B7581; }
+.rt-barra i.on.n-bom { background: var(--accent); }
+.rt-barra i.on.n-pico { background: var(--warn-fg); }
+.rt-barra i.on.n-sobrecarga { background: var(--bad-fg); }
+.rt-graf svg { display: block; margin-bottom: 2px; }
+.rt-graf rect { fill: #3B6EA8; }
+.rt-graf rect.ag { fill: var(--accent); }
+.rt-graf line.md { stroke: #E9EDF3; stroke-width: 1; opacity: .45; }
+.lv-sec-mira .lv-prox { font-style: normal; color: #C9D1DA; }

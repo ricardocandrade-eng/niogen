@@ -3685,6 +3685,24 @@
     return `<section class="fc2-agora ag-${tom}" aria-label="O que fazer agora"><span class="fc2-ag-k">AGORA</span>${k ? `<span class="fc2-ag-pill">${esc(k)}</span>` : ''}
       <div class="fc2-ag-t"><b title="${esc(t || '')}">${esc(t || '—')}</b>${s ? `<small title="${esc(s)}">${esc(s)}</small>` : ''}</div>${chip || ''}${botao}</section>`;
   }
+  // 15/11 (Ricardo: "não estou vendo mais a escada (funil de vendas) na ficha"): a escada do lead (config_lead) numa faixa só,
+  // no topo da Jornada — degraus feitos em verde, o atual em azul, onde parou em vermelho (Saída), e o Pagamento no fim.
+  function escadaTira() {
+    const l = d && d.lead;
+    const etapas = ((d && d.leadCfg) || []).filter((x) => x.tipo === 'etapa');
+    if (!l || !etapas.length) return '';
+    const fora = l.destino === 'saida' || l.destino === 'teste_duplicada';
+    const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
+    const pg = d && !d.soConversa && d.din ? d.din.estado : null;
+    const deg = etapas.map((e, i) => {
+      const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
+      const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ' — parou aqui (Saída)' : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}`;
+      return `<span class="s-${st}" title="${esc(dica)}">${st === 'done' ? '✓ ' : ''}${esc(e.nome)}</span>`;
+    });
+    deg.push(`<span class="s-${pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo'}" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}">${pg === 'paga' ? '✓ ' : ''}Pagamento</span>`);
+    const sai = fora ? `<em class="fc2-esc-sai" title="${esc(l.saida_nome || 'Saída')}">Saída · ${esc(l.saida_nome || (l.destino === 'teste_duplicada' ? 'teste ou duplicada' : 'sem motivo'))}</em>` : '';
+    return `<div class="fc2-esc" aria-label="Escada do lead">${deg.join('')}</div>${sai}`;
+  }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
     const atual = at.st !== 'done' ? 'atend' : ((L.find((x) => x.st !== 'done') || {}).k || null);
@@ -3890,7 +3908,7 @@
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
-          ${jor ? jor.html : ''}
+          ${escadaTira()}${jor ? jor.html : ''}
         </section>
         <section class="fc2-col fc2-dados" aria-label="Dados do cliente">
           <div class="fc2-colh"><h2>Dados do cliente</h2><span class="fc-sp"></span>${dad && dad.faltam ? `<span class="fc-pill warn">faltam ${dad.faltam}</span>` : '<span class="fc-pill ok">completos</span>'}</div>
