@@ -3654,7 +3654,9 @@
     const titulo = novo ? linhas[0] : `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`;
     // venda: viabilidade/crédito/fazer de agora; outro motivo: o "Fazer agora" que a Mari escreveu (a sugestão dela)
     const fazer = venda || !novo ? L.fazer : (salvo(/^👉/).replace(/^👉\s*Fazer agora:\s*/, '') || L.fazer);
-    const resto = novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l)) : linhas;
+    // nota antiga (antes de 15/11): some o que o quadro já mostra de agora (1º PASSO, COBERTURA, DFV, CRÉDITO)
+    const resto = novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l))
+      : linhas.filter((l) => !/^(1º PASSO|COBERTURA \(consulta|DFV \(pista\)|DFV:|💳 CRÉDITO)/u.test(l));
     const aberto = !!fc.ho;
     const quando = cv.handoff_em ? NG.fmtDataHora(cv.handoff_em) : '';
     return `<section class="fc2-ho${passou ? ' passou' : ''}${aberto ? ' on' : ''}" aria-label="Handoff da Mari">
@@ -3663,7 +3665,7 @@
         <span class="fc2-ho-sx">${aberto ? IC.cima : IC.baixo}</span></button>
       ${aberto ? `<div class="fc2-ho-c">
         <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
-        <div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>
+        ${passou ? '' : `<div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>`}
         ${resto.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
         <div class="fc2-ho-src">Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · viabilidade e crédito: como estão agora · a mesma nota foi no Chatwoot</div>
       </div>` : ''}</section>`;
