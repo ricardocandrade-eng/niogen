@@ -2440,7 +2440,7 @@
       if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'pend-conf') { pendDescPreset = d.ultTime ? `Cliente confirmou: ${d.ultTime}` : null; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; convEsperaFechado = formAtivo == null; passoAberto.add('conversa'); render(); return; }
-      if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || null; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
+      if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || (d.soConversa && d.lead && d.lead.destino === 'saida' ? d.lead.saida_motivo : null) || null; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
       if (acao === 'reabrir') { await reabrirLead(b); return; }
       if (acao === 'virar-venda') { await virarVenda(b); return; }
       if (acao === 'auditar') {
@@ -3261,10 +3261,12 @@
     const minhaV = vS && [vS.vendedor_id, vS.criado_por].includes((NG.usuario || {}).id);
     const podeSair = vS
       ? (ehBO() || minhaV) && !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
-      : !!(d && d.soConversa && ehBO() && !(d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)));
-    const btSaida = podeSair ? `<button type="button" class="fc-mitem fc-mi-bad" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída…</button>` : '';
+      // 16/11 (Ricardo, conversa 128): lead em Saída automática (ex.: sem cobertura) também abre a Saída — para gravar o motivo e o
+      // retorno ("rever em 90 dias"). Antes o botão sumia e o Reabrir recusava (continua sem cobertura): não havia como gravar o retorno.
+      : !!(d && d.soConversa && ehBO() && !(d.lead && ['instalada', 'teste_duplicada'].includes(d.lead.destino)));
     // 13/11 (0189, Ricardo: "não tenho opção de remover o Recusou"): quem está em Saída ganha o Reabrir no mesmo lugar fixo.
     const emSaida = vS ? vS.status === 'saida' : !!(d && d.soConversa && d.lead && d.lead.destino === 'saida');
+    const btSaida = podeSair ? `<button type="button" class="fc-mitem fc-mi-bad" data-f="saida-form" title="${emSaida ? 'Já está em Saída: grave ou ajuste o motivo e a data de retorno' : 'Tirar este cliente da jornada: abre o formulário da Saída, com o motivo'}">${emSaida ? 'Saída… (motivo e retorno)' : 'Saída…'}</button>` : '';
     const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="fc-mitem fc-mi-ok" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
     const btNada = ehBO() && (naFila || d.conversaId) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
     const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
