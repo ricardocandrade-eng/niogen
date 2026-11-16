@@ -532,7 +532,7 @@
       const motivos = (d.leadCfg || []).filter((x) => x.tipo === 'saida' && !(semVenda && SAIDA_SO_VENDA.includes(x.codigo)) && !(!semVenda && x.codigo === 'nao_contatar'));
       const aberto = v && (String(v.nio_pedido || '').trim() || String(v.nio_os || '').trim());
       const amanha = NG.somaDias(NG.diaSP(), 1);
-      return formWrap('saida', 'Saída: encerrar com motivo', `${saidaPreset ? `Motivo sugerido pela pendência: <b>${esc(saidaPreset)}</b>. Confira e registre. ` : ''}O motivo vale para a tela Leads e para as contas do funil. ${NG.dicaTxt(A.saida_form)}`,
+      return formWrap('saida', 'Saída: encerrar com motivo', `${saidaPreset ? `Motivo sugerido: <b>${esc(((d.leadCfg || []).find((x) => x.tipo === 'saida' && x.codigo === (SAIDA_DE_ANTIGO[saidaPreset] || [saidaPreset])[0]) || {}).nome || saidaPreset)}</b>. Confira e registre. ` : ''}O motivo vale para a tela Leads e para as contas do funil. ${NG.dicaTxt(A.saida_form)}`,
         `<label class="campo">Motivo<select name="motivo" data-saida-motivo data-pre-sub="${esc(pre[1] || '')}" required><option value="">Escolher…</option>${motivos.map((x) => `<option value="${esc(x.codigo)}" data-ajuda="${esc(x.ajuda || '')}" data-volta="${esc(x.volta || '')}"${x.codigo === pre[0] ? ' selected' : ''}>${esc(x.nome)}</option>`).join('')}</select></label>
          <span class="nota-campo" data-saida-ajuda hidden></span>
          <div class="campo" data-saida-sub hidden><span>Porquê ${NG.dicaTxt(A.saida_sub)}</span><select name="sub" aria-label="Porquê"></select></div>
@@ -1330,7 +1330,13 @@
       : v.nio_os && v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
       : { s: 'no', d: v.nio_os ? '' : 'depois da OS' };
     const pendNio = v.nio_pendencia_cod || v.nio_pendencia_desc;
-    const pInst = v.instalado_em ? { s: 'ok', d: NG.fmtData(v.instalado_em) }
+    // 15/11 (revisão dos fluxos, F2/F7): o motivo da Saída vem da venda, do lead ou do texto do cancelamento da Nio (OSAB:
+    // "Nio: …" — a venda não passou pela Saída manual e o saida_motivo fica vazio).
+    const saiu = v.status === 'saida';
+    const sm = !saiu ? null : v.saida_motivo || (d.lead && d.lead.saida_motivo) || (/^Nio:/.test(String(v.motivo_saida || '')) ? 'nio_cancelou' : null);
+    const credH = v.credito_resultado === 'pendente' && v.credito_em ? Math.floor((Date.now() - new Date(v.credito_em)) / 3600000) : null;
+    const pInst = v.cancelada_apos_instalar_em ? { s: 'x', d: `cancelada pela Nio depois de instalar · ${NG.fmtData(v.cancelada_apos_instalar_em)}` }
+      : v.instalado_em ? { s: 'ok', d: NG.fmtData(v.instalado_em) }
       : d.lead && d.lead.status === 'aguarda_cartao' ? { s: 'wa', d: 'aguardando o cadastro do cartão' }
       : pendNio ? { s: 'wa', d: `pendência Nio${v.nio_pendencia_cod ? ' ' + v.nio_pendencia_cod : ''}` }
       : v.instalacao_agendada_para ? { s: 'no', d: `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}`, azul: true }
@@ -1339,13 +1345,16 @@
       { nome: 'Viabilidade', ...pViab },
       // 0111: o 2º passo é o crédito (o nº do pedido = a OS, no 4º passo).
       // 15/11 (Ricardo, caso Lucas: "o crédito não deveria ficar vermelho?"): venda em Saída mostra em vermelho a etapa onde parou.
-      { nome: 'Crédito', ...(v.status === 'saida' && (v.saida_motivo === 'credito_negado' || v.credito_resultado === 'negado') ? { s: 'x', d: 'negado · saída' }
+      { nome: 'Crédito', ...(saiu && (sm === 'credito_negado' || v.credito_resultado === 'negado') ? { s: 'x', d: 'negado · saída' }
         : ['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
-        : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' } : v.credito_resultado === 'pendente' ? { s: 'wa', d: 'pendente' }
+        : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' }
+        : v.credito_resultado === 'pendente' ? { s: 'wa', d: credH == null ? 'pendente' : credH >= 24 ? `pendente há ${credH} h · cobrar a Nio` : `pendente há ${credH} h` }
         : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
-      { nome: 'Pedido (OS)', s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' },
-      { nome: 'Biometria', ...(v.status === 'saida' && v.saida_motivo === 'reprovado_biometria' ? { s: 'x', d: 'reprovada · saída' } : pBio) },
-      { nome: 'Instalação', ...(v.status === 'saida' && v.saida_motivo === 'nio_nao_instalou' ? { s: 'x', d: 'a Nio não instalou · saída' } : pInst) },
+      // F7: OS cancelada pela Nio não fica verde
+      { nome: 'Pedido (OS)', ...(saiu && sm === 'nio_cancelou' && v.nio_os ? { s: 'x', d: `nº ${v.nio_os} · cancelada pela Nio` } : { s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' }) },
+      { nome: 'Biometria', ...(saiu && sm === 'reprovado_biometria' ? { s: 'x', d: 'reprovada · saída' } : pBio) },
+      { nome: 'Instalação', ...(saiu && sm === 'nio_nao_instalou' ? { s: 'x', d: 'a Nio não instalou · saída' }
+        : saiu && sm === 'nio_cancelou' && !v.nio_os ? { s: 'x', d: 'cancelada pela Nio · saída' } : pInst) },
     ];
   }
   // Próximo passo: TODO quadro nasce recolhido e com a mesma altura (rótulo + uma linha); clique expande as ações.
@@ -1645,7 +1654,10 @@
     if (bo && temCw && (dono === 'pessoa' || dono === 'time')) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="devolver_mari" title="Tira a atribuição no Chatwoot e deixa nota: a Mari continua com o contexto">Devolver para a Mari</button>');
     if (bo && temCw && !cv.nao_contatar) b.push('<button type="button" class="btn btn-ghost btn-sm" data-momento="parar" title="Etiqueta nao-contatar, nota, resolve a conversa e para tudo">Cliente pediu para parar</button>');
     if (bo && NG.etapaDe(v).n >= 2 && NG.etapaDe(v).n <= 4) b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="trocar-plano" title="Upsell ou troca feita no portal: o valor e a comissão se recalculam">Trocar plano</button>');
-    b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="saida-form">Saída…</button>');
+    // F5/F6: Saída só antes de instalar e só para o time ou o dono da venda (o que o lead_sair aceita)
+    if ((bo || [v.vendedor_id, v.criado_por].includes((NG.usuario || {}).id)) && !v.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) {
+      b.push('<button type="button" class="btn btn-ghost btn-sm" data-f="saida-form">Saída…</button>');
+    }
     return b.length ? `<div class="f-atalhos">${b.join('')}</div>` : '';
   }
 
@@ -2178,9 +2190,21 @@
     const feito = feitoUltimo ? `<div class="f-feito${feitoUltimo.aviso ? ' warn' : ''}" role="status">${esc(feitoUltimo.resumo)}${feitoUltimo.aviso ? `<span>${esc(feitoUltimo.aviso)}</span>` : ''}</div>` : '';
     const k = d.cad.k;
     const viabC = c.nio_viab_resultado;
+    // 15/11 (revisão dos fluxos, F3/F4): lead só de conversa também pinta o crédito (antes sempre neutro) e a etapa onde parou.
+    const smC = d.lead && d.lead.destino === 'saida' ? d.lead.saida_motivo : null;
+    const crC = c.credito_resultado;
+    const crPadrao = c.credito_endereco === 'padrao' && /^aprovado/.test(crC || '');
+    const pCredC = smC === 'credito_negado' ? { s: 'x', d: 'negado · saída' }
+      : crPadrao ? { s: 'wa', d: 'endereço padrão · consultar de novo' }
+      : /^aprovado/.test(crC || '') ? { s: 'ok', d: crC === 'aprovado_cartao' ? 'aprovado só no cartão' : 'aprovado' }
+      : crC === 'negado_antifraude' ? { s: 'wa', d: 'negado · antifraude' }
+      : crC === 'negado' ? { s: 'wa', d: 'negado · outro CPF' }
+      : crC === 'pendente' ? { s: 'wa', d: 'pendente' } : crC === 'pedido_em_andamento' ? { s: 'wa', d: 'já tem pedido em andamento' } : { s: 'no', d: '' };
+    const pViabC = ['fachada_nao_atendida', 'cidade_nao_atendida'].includes(smC) ? { s: 'x', d: smC === 'cidade_nao_atendida' ? 'fora da área · saída' : 'sem cobertura · saída' }
+      : { s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' };
     const passosConv = [
-      { nome: 'Viabilidade', s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' },
-      { nome: 'Crédito', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
+      { nome: 'Viabilidade', ...pViabC },
+      { nome: 'Crédito', ...pCredC }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
     // 0147: destino único + etapa; alerta quando alguém agiu direto no Chatwoot.
@@ -2402,7 +2426,7 @@
       if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'pend-conf') { pendDescPreset = d.ultTime ? `Cliente confirmou: ${d.ultTime}` : null; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; convEsperaFechado = formAtivo == null; passoAberto.add('conversa'); render(); return; }
-      if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' ? null : 'saida'; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
+      if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || null; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
       if (acao === 'reabrir') { await reabrirLead(b); return; }
       if (acao === 'auditar') {
         if (!NG.auditoria || !d.conversaId) { NG.toast('Auditoria indisponível nesta tela.', 'bad'); return; }
@@ -2435,6 +2459,7 @@
         return;
       }
       if (acao === 'fc-op-lead') {   // 0159: grava no lead sem venda o que o operador leu
+        if (b.dataset.mao && b.dataset.r === 'negado' && !window.confirm('Gravar crédito NEGADO neste lead?\n\nA Mari vai oferecer ao cliente o CPF de um parente como titular (1 nova consulta).')) return;
         b.disabled = true;
         const { data, error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: b.dataset.t === 'viab' ? 'viabilidade' : 'credito', p_resultado: b.dataset.r });
         if (error) { NG.toast(NG.msgErro(error), 'bad'); if (b.isConnected) b.disabled = false; return; }
@@ -2733,9 +2758,13 @@
   function trilhaPassos(passos) {
     const iAtual = passos.findIndex((p) => p.s !== 'ok');
     const parou = passos.some((p) => p.s === 'x');
+    // 15/11 (revisão dos fluxos, F4): lead em Saída sem etapa que falhou (recusou, sem resposta, já cliente…) não mostra "agora":
+    // a etapa onde parou fica cinza com "parou aqui · Saída".
+    const fora = !!(d && ((d.lead && d.lead.destino === 'saida') || (!d.soConversa && d.v && d.v.status === 'saida')));
     return passos.map((p, i) => {
-      const st = p.s === 'ok' ? 'done' : p.s === 'x' ? 'fail' : p.s === 'wa' ? 'wait' : parou ? 'todo' : i === iAtual ? (d.pend ? 'wait' : 'now') : 'todo';
-      return { ...p, k: ETAPAS_K[i], st, segDone: p.s === 'ok' && passos[i + 1] && passos[i + 1].s === 'ok' };
+      const st = p.s === 'ok' ? 'done' : p.s === 'x' ? 'fail' : p.s === 'wa' ? 'wait' : parou || fora ? 'todo' : i === iAtual ? (d.pend ? 'wait' : 'now') : 'todo';
+      const dd = fora && !parou && i === iAtual ? `${p.d ? `${p.d} · ` : ''}parou aqui · Saída` : p.d;
+      return { ...p, d: dd, k: ETAPAS_K[i], st, segDone: p.s === 'ok' && passos[i + 1] && passos[i + 1].s === 'ok' };
     });
   }
   const linhaDet = (k, v) => `<div class="fc-dr"><span>${esc(k)}</span><b>${v}</b></div>`;
@@ -2954,12 +2983,24 @@
     atualizarOp(tipo);
   }
 
+  // 15/11 (revisão dos fluxos, F3): lead só de conversa — gravar à mão o que se viu no portal ou na extensão (lead_registrar_consulta).
+  // Sem viabilidade não se grava aqui: é Saída › Fachada não atendida.
+  function regMaoConv(tipo) {
+    if (!ehBO() || silenciadaConv() || !d.conversaId || (d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino))) return '';
+    const bt = (r, rot) => `<button type="button" class="btn btn-sm" data-f="fc-op-lead" data-t="${tipo}" data-r="${r}" data-mao="1">${esc(rot)}</button>`;
+    return tipo === 'viab'
+      ? `<div class="fc-op-bts">${bt('viavel', 'Registrar "viável" à mão')}<span class="nota-campo">viu viável no portal ou na extensão? grave aqui · sem viabilidade: Saída › Fachada não atendida</span></div>`
+      : `<div class="fc-op-bts"><span class="nota-campo">Rodou o crédito no portal ou pela extensão? Grave aqui:</span>${bt('aprovado_todas', 'Aprovado')}${bt('aprovado_cartao', 'Só cartão')}${bt('pendente', 'Pendente')}${bt('negado', 'Negado')}</div>`;
+  }
   // Detalhe de cada etapa (abre por baixo dela, na mesma largura).
   function etapaDetalhe(p) {
     const conv = !!d.soConversa;
     const v = conv ? {} : d.v;
     const a = d.andamento || {};
     const fonte = (t, op) => `<span class="fc-src${op ? ' op' : ''}">fonte: ${esc(t)}</span>`;
+    // F5: venda em Saída ou instalada não ganha operador, GED360 nem registro à mão; com a OS aberta o crédito não se consulta mais.
+    const fimV = !conv && (v.status === 'saida' || !!v.instalado_em);
+    const comOS = !conv && !!String(v.nio_os || '').trim();
     const visto = (origem, chave) => `<button type="button" class="btn btn-sm" data-f="and-visto" data-origem="${origem}" data-chave="${esc(chave)}">Visto</button>`;
     let corpo = '';
     if (p.k === 'viab' && conv) {   // 14/11 (Ricardo: "o que se abre é confuso") — lead sem venda: endereço, último resultado, aviso, ação
@@ -2980,7 +3021,7 @@
       corpo = `<div class="fc2-v-res"><span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? `<b>até ${esc(c.nio_viab_velocidade)}</b>` : ''}${quando ? `<small class="apagado">${esc(NG.fmtDataHora(quando))}</small>` : ''}</div>
         <div class="fc2-v-end" title="${esc(endTxt)}">${esc(endTxt || '—')}</div>
         <div class="fc2-v-fazer ${rc || (dec && dec !== 'viavel') ? 'warn' : ''}">${fazer}</div>
-        ${opPainel('viab')}${dfvBloco()}`;
+        ${opPainel('viab')}${dec === 'viavel' ? '' : regMaoConv('viab')}${dfvBloco()}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
@@ -2988,8 +3029,8 @@
         ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
         ${!conv ? dfvBloco() : ''}
         ${fonte(conv ? 'Mari / portal' : v.nio_viab_origem === 'manual' ? 'registrada à mão (portal PAP)' : v.nio_viab_origem ? `portal PAP · ${v.nio_viab_origem}` : 'portal PAP')}
-        ${opPainel('viab')}
-        ${!conv && v.status !== 'saida' && ehBO() ? `<div class="fc-op-bts"><a class="btn btn-sm" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal">Abrir o portal ↗</a><button type="button" class="btn btn-sm" data-f="viab-form">Registrar resultado à mão</button></div>` : ''}`;
+        ${fimV ? '' : opPainel('viab')}
+        ${!conv && !fimV && ehBO() ? `<div class="fc-op-bts"><a class="btn btn-sm" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal">Abrir o portal ↗</a><button type="button" class="btn btn-sm" data-f="viab-form">Registrar resultado à mão</button></div>` : ''}`;
     } else if (p.k === 'cred') {
       const cc = conv ? d.conv : null;
       const afB = antifraudeBloco();
@@ -2997,10 +3038,11 @@
       corpo = conv ? `${linhaDet('Resultado', padraoC ? '<span class="warn-txt">sem resultado válido para este endereço</span>'
           : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
-        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}`
+        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}${regMaoConv('cred')}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
-        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${v.status === 'saida' ? '<span class="nota-campo">Venda em Saída — para consultar de novo, reabra o lead.</span>' : opPainel('cred')}
-        ${v.status !== 'saida' && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}`;
+        ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${v.status === 'saida' ? '<span class="nota-campo">Venda em Saída — para consultar de novo, reabra o lead.</span>'
+          : comOS ? '<span class="nota-campo">O pedido (OS) já foi aberto: o crédito passou e não se consulta de novo.</span>' : opPainel('cred')}
+        ${!fimV && !comOS && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
@@ -3014,7 +3056,8 @@
         ${a.bio_resultado ? linhaDet('GED360', `${esc(a.bio_rotulo || a.bio_resultado)} · protocolo ${esc(a.bio_protocolo)} · lido ${esc(NG.fmtDataHora(a.bio_lido_em))}`) : ''}
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
         ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
-        ${ehBO() && v.status !== 'saida' ? btBio : ''}`;
+        ${ehBO() && !fimV ? btBio : ''}
+        ${ehBO() && !fimV && v.nio_os && v.biometria_status !== 'validada' ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
     } else if (p.k === 'os') {
       corpo = conv ? linhaDet('Pedido (OS)', 'depois do crédito aprovado') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
@@ -3199,14 +3242,16 @@
     // 13/11 (Ricardo): a Saída ficava escondida (dentro do Próximo passo e do menu ⋯). Agora tem lugar fixo no topo da ficha,
     // com contorno vermelho, sempre que o cliente ainda pode sair: venda antes de instalar ou conversa em andamento.
     const vS = d && !d.soConversa ? d.v : null;
+    // 15/11 (revisão dos fluxos, F6): vendedor só dá Saída da própria venda (é o que o lead_sair aceita) e não vê "Nada a responder".
+    const minhaV = vS && [vS.vendedor_id, vS.criado_por].includes((NG.usuario || {}).id);
     const podeSair = vS
-      ? !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
+      ? (ehBO() || minhaV) && !vS.instalado_em && !['saida', '3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(vS.status)
       : !!(d && d.soConversa && ehBO() && !(d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)));
     const btSaida = podeSair ? `<button type="button" class="fc-mitem fc-mi-bad" data-f="saida-form" title="Tirar este cliente da jornada: abre o formulário da Saída, com o motivo">Saída…</button>` : '';
     // 13/11 (0189, Ricardo: "não tenho opção de remover o Recusou"): quem está em Saída ganha o Reabrir no mesmo lugar fixo.
     const emSaida = vS ? vS.status === 'saida' : !!(d && d.soConversa && d.lead && d.lead.destino === 'saida');
     const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="fc-mitem fc-mi-ok" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
-    const btNada = naFila || (d.conversaId && ehBO()) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
+    const btNada = ehBO() && (naFila || d.conversaId) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
     const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${extraM}${btSaida}`);
     return `<header class="fc-top">
@@ -4055,7 +4100,7 @@
       const atual = NG.etapaDe(v).id;
       // 15/11 noite (Ricardo: "organize os itens dos 3 pontinhos"): Agir (vem do AGORA e do topo) · Mover para · Ver em · Copiar e conferir
       const menu = `<!--MENU-AG-->${ehAdmin ? `<div class="fc-mlab">Mover para</div><div class="fc-mrow">${DESTINOS.filter(([st]) => NG.etapaDe(st).id !== atual).map(([st, n]) => `<button type="button" class="fc-mchip" data-f="mover" data-st="${st}">${esc(n)}</button>`).join('')}</div>` : ''}
-        ${ehBO() && v.status !== 'saida' ? `<div class="fc-mlab">Titular e portal</div><button type="button" class="fc-mitem" data-f="trocar-titular">Trocar o titular (CPF de parente)</button><button type="button" class="fc-mitem" data-f="gravar-interesse">${v.nio_interesse ? `Interesse do portal · ${esc(v.nio_interesse)}` : 'Gravar o Interesse do portal'}</button><button type="button" class="fc-mitem" data-f="bio-ler">Consultar a biometria no GED360</button>` : ''}
+        ${ehBO() && v.status !== 'saida' && !v.instalado_em ? `<div class="fc-mlab">Titular e portal</div><button type="button" class="fc-mitem" data-f="trocar-titular">Trocar o titular (CPF de parente)</button><button type="button" class="fc-mitem" data-f="gravar-interesse">${v.nio_interesse ? `Interesse do portal · ${esc(v.nio_interesse)}` : 'Gravar o Interesse do portal'}</button><button type="button" class="fc-mitem" data-f="bio-ler">Consultar a biometria no GED360</button>` : ''}
         <div class="fc-mlab">Ver em</div>
         ${d.conversaId ? `<a class="fc-mitem" href="mari.html?conversa=${esc(d.conversaId)}">Tela Mari</a>` : ''}
         <a class="fc-mitem" href="vendas.html?vista=quadro&amp;etapa=${esc(atual)}">Funil (Quadro)</a>
