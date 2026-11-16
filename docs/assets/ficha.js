@@ -2086,7 +2086,7 @@
     const plP = planosCache ? null : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco')
       .then((r) => { if (!r.error) planosCache = r.data || []; }, () => {});
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -4021,7 +4021,11 @@
     const x = convDados(c);
     const vc = c.endereco_cep || {};
     const pode = ehBO() && !P.silenciada;
-    const planoNome = P.q.plano_nome || c.plano_escolhido;
+    const plEsc = c.plano_escolhido ? (planosCache || []).find((pl) => pl.codigo === c.plano_escolhido) : null;
+    const cartaoMenor = plEsc && plEsc.preco_cartao != null && Number(plEsc.preco_cartao) < Number(plEsc.preco);
+    const planoNome = plEsc
+      ? `${plEsc.nome_curto || plEsc.nome}${/nfid/.test(plEsc.variante || '') ? ' (sem fidelidade)' : ''} · ${c.forma_pagamento === 'cartao' && cartaoMenor ? `${NG.fmtMoeda(plEsc.preco_cartao)} no cartão` : NG.fmtMoeda(plEsc.preco)}${cartaoMenor && c.forma_pagamento !== 'cartao' ? ` (${NG.fmtMoeda(plEsc.preco_cartao)} no cartão)` : ''}`
+      : (P.q.plano_nome || c.plano_escolhido);
     const forma = c.forma_pagamento ? (FORMAS[c.forma_pagamento] || c.forma_pagamento) : null;
     let n = 0;
     const conta = (v) => { if (!v) n += 1; return v; };
@@ -4038,11 +4042,19 @@
         ${inp('Rua', 'rua', convLogr(c), { full: true, lista: 'fc2-ruas', ph: 'a rua que o cliente confirmou' })}<datalist id="fc2-ruas">${ruas.map((r) => `<option value="${esc(r)}"></option>`).join('')}</datalist>
         ${inp('Complemento', 'complemento', c.complemento, { ph: 'Apto, bloco, casa A…' })}${inp('Referência', 'referencia', x.referencia)}
         <span class="fc2-nota">Salvar refaz a viabilidade sozinho (fila da Mari, até 2 min) e fica no histórico com o seu nome.</span>${formBts('Salvar e consultar')}</form>`);
-    const planos = (planosCache || []).filter((pl) => pl.codigo && (!c.cluster || pl.cluster === c.cluster));
+    // 16/11 (Ricardo, caso Lígia): a lista vinha com Varejo, Empresas e "sem fidelidade" misturados (nomes repetidos) e sem o
+    // valor do cartão. Agora: só o segmento do lead (varejo/empresas), por preço, com fidelidade primeiro e sem fidelidade à parte.
+    const segLead = c.segmento === 'empresas' ? 'empresas' : 'varejo';
+    const planos = (planosCache || []).filter((pl) => pl.codigo && (!c.cluster || pl.cluster === c.cluster) && (!pl.portfolio || pl.portfolio === segLead))
+      .sort((a, b) => Number(a.preco) - Number(b.preco));
+    const semFid = (pl) => /nfid/.test(pl.variante || '');
+    const optPlano = (pl) => `<option value="${esc(pl.codigo)}"${pl.codigo === c.plano_escolhido ? ' selected' : ''}>${esc(pl.nome_curto || pl.nome)} · ${esc(NG.fmtMoeda(pl.preco))}${pl.preco_cartao != null && Number(pl.preco_cartao) < Number(pl.preco) ? ` · ${esc(NG.fmtMoeda(pl.preco_cartao))} no cartão` : ''}</option>`;
+    const grupoPlanos = (rot, lista) => (lista.length ? `<optgroup label="${esc(rot)}">${lista.map(optPlano).join('')}</optgroup>` : '');
+    const opcoesPlano = grupoPlanos('Com fidelidade', planos.filter((pl) => !semFid(pl))) + grupoPlanos('Sem fidelidade (taxa à vista na 1ª fatura)', planos.filter(semFid));
     const oferta = g('oferta', 'O que o cliente quer', dl('Plano', planoNome, { falta: 'não escolheu' }) + dl('Pagamento', conta(forma), { falta: 'falta escolher (boleto, cartão ou débito)', cp: false })
       + dl('Instalação', c.instalacao_preferencia, { falta: 'sem preferência', cp: false }) + dl('Operadora atual', x.operadora_atual, { falta: '—', cp: false }),
       `<form class="fc2-form" data-form="lead_corr" data-g="oferta" novalidate>
-        <label class="fc2-in full"><span>Plano (tabela vigente${c.cluster ? `, faixa ${esc(c.cluster)}` : ''})</span><select name="plano"><option value="">— não escolheu —</option>${planos.map((pl) => `<option value="${esc(pl.codigo)}"${pl.codigo === c.plano_escolhido ? ' selected' : ''}>${esc(pl.nome_curto || pl.nome)} · ${esc(NG.fmtMoeda(pl.preco))}</option>`).join('')}</select></label>
+        <label class="fc2-in full"><span>Plano (tabela vigente${c.cluster ? `, faixa ${esc(c.cluster)}` : ''})</span><select name="plano"><option value="">— não escolheu —</option>${opcoesPlano}</select></label>
         <label class="fc2-in"><span>Pagamento</span><select name="forma"><option value="">— falta escolher —</option>${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === c.forma_pagamento ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label>
         ${inp('Instalação (preferência)', 'instalacao', c.instalacao_preferencia, { ph: 'manhã, tarde…' })}${formBts('Salvar')}</form>`);
     return { html: `${contato}${endereco}${oferta}`, faltam: n };
