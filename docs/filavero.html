@@ -1,0 +1,196 @@
+<!doctype html>
+<!-- NIOGEN | docs/filavero.html | 16/11/2026 — Claude Code / Opus 5.5 (docs/Prompt_fila_vero_disparo_v2_131126_1600.md, migration 0242)
+     Tela Fila Vero — resultado primeiro: base · aptos · enviados hoje/total · cliques e respostas por template e por faixa ·
+     qualificados · pedidos · instaladas e R$ de comissão com origem Fila Vero · qualidade do número · ritmo de hoje, próximo degrau
+     e o motivo · "clicou e não falou com a Mari há 2 h" (para chamar) · Ligar/Pausar (RPC fila_vero_ligar, só admin).
+     Dados numa chamada só: RPC fila_vero_painel() (regra 19). Admin e backoffice; o vendedor não vê. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Fila Vero · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=161126-10">
+<script src="config.js?v=111126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=161126-17"></script>
+<script src="assets/sidebar.js?v=161126-21"></script>
+<style>
+  .fv-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  .fv-kpis .kpi { padding: 12px 14px; border-radius: 12px; min-width: 0; }
+  .fv-kpis .kpi .rot { text-transform: uppercase; letter-spacing: .05em; }
+  .fv-kpis .kpi .val.ok { color: var(--ok-fg); }
+  .fv-bloco { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .fv-bloco > header { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .fv-bloco h2 { margin: 0; font-size: 15px; }
+  .fv-bloco .sub { font-size: 12.5px; color: var(--muted); flex-basis: 100%; }
+  .fv-duas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+  .fv-rola { overflow-x: auto; max-width: 100%; }
+  .fv-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .fv-t th, .fv-t td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .fv-t th:first-child, .fv-t td:first-child { text-align: left; }
+  .fv-t th { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .fv-t td { font-family: var(--mono); }
+  .fv-t td:first-child { font-family: var(--sans); }
+  .fv-t td small { color: var(--muted); font-size: 11px; }
+  .fv-estado { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13.5px; }
+  .fv-pill { display: inline-flex; gap: 6px; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; border: 1px solid var(--border); }
+  .fv-pill.ok { background: var(--ok-bg); color: var(--ok-fg); border-color: transparent; }
+  .fv-pill.warn { background: var(--warn-bg); color: var(--warn-fg); border-color: transparent; }
+  .fv-pill.bad { background: var(--bad-bg); color: var(--bad-fg); border-color: transparent; }
+  .fv-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+  .fv-c { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--warn-border, var(--border)); background: var(--surface-2); min-width: 0; }
+  .fv-c .q { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fv-c .o { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
+  .fv-c a { font-size: 12.5px; white-space: nowrap; }
+  .fv-vazio { font-size: 13px; color: var(--muted); }
+  .fv-hist { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+  @media (max-width: 1300px) { .fv-duas { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1100px) { .fv-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .fv-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fv-duas { grid-template-columns: minmax(0, 1fr); } .fv-t { font-size: 12px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="filavero"></nav>
+  <main class="main">
+    <header class="cab">
+      <div>
+        <h1>Fila Vero</h1>
+        <div class="sub">Clientes antigos da equipe com a fibra Nio no endereço: quanto virou conversa, pedido e instalação — e o ritmo do disparo.</div>
+      </div>
+      <div class="cab-acoes" id="cab-acoes"></div>
+    </header>
+    <section class="fv-kpis" id="kpis" aria-label="Resultado da Fila Vero"></section>
+    <div id="corpo"><div class="fv-vazio">Carregando…</div></div>
+    <div class="apagado" id="rodape" style="font-size:12px"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  const { esc } = NG;
+  const corpo = document.getElementById('corpo');
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    corpo.innerHTML = '<div class="fv-vazio">A Fila Vero é do backoffice.</div>';
+    return;
+  }
+  const ADMIN = eu.perfil === 'admin';
+  const NOME_TPL = { nio_fv_a1: 'A1 · preço travado', nio_fv_a2: 'A2 · quanto você paga', nio_fv_b1: 'B1 · internet não chegou' };
+  const n = (v) => NG.fmtNum(v || 0);
+  const pct = (a, b) => (b ? `${(100 * a / b).toFixed(1).replace('.', ',')}%` : '—');
+  const ST = { novo: 'Novo (sem filtro)', apto: 'Apto', enviado: 'Enviado', respondeu: 'Falou com a Mari', ja_cliente_nio: 'Já cliente Nio',
+               sem_cobertura: 'Sem cobertura', opt_out: 'Saiu (opt-out)', encerrado: 'Encerrado (2 toques)', erro: 'Erro de envio' };
+  const ERRO = { 131026: 'sem WhatsApp', 131049: 'limite de marketing da Meta', 130472: 'experimento da Meta', 131050: 'recusa marketing' };
+
+  async function carregar() {
+    const t0 = performance.now();
+    const { data: p, error } = await NG.sb.rpc('fila_vero_painel');
+    if (error || !p) { corpo.innerHTML = `<div class="fv-vazio">${esc(error ? NG.msgErro(error) : 'Sem dados.')}</div>`; return; }
+    const st = p.por_status || {};
+    const aptos = st.apto || 0;
+    const fx = p.por_faixa || {};
+    const q = p.qualidade || {};
+    const rp = p.rampa || {};
+    const qCls = q.rating === 'GREEN' ? 'ok' : (q.rating === 'YELLOW' ? 'warn' : (q.rating === 'RED' ? 'bad' : ''));
+
+    document.getElementById('kpis').innerHTML = [
+      `<div class="kpi"><span class="rot">Instaladas</span><span class="val ok">${n(p.instaladas)}</span><span class="nota">${NG.fmtMoeda(p.comissao || 0)} de comissão</span></div>`,
+      `<div class="kpi"><span class="rot">Pedidos</span><span class="val">${n(p.pedidos)}</span><span class="nota">${n(p.qualificados)} qualificados</span></div>`,
+      `<div class="kpi"><span class="rot">Na Mari</span><span class="val">${n(p.na_mari)}</span><span class="nota">${pct(p.na_mari, p.entregues)} dos entregues</span></div>`,
+      `<div class="kpi"><span class="rot">Cliques</span><span class="val">${n(p.cliques)}</span><span class="nota">${pct(p.cliques, p.entregues)} dos entregues</span></div>`,
+      `<div class="kpi"><span class="rot">Enviados</span><span class="val">${n(p.enviados)}</span><span class="nota">${n(p.entregues)} entregues · hoje ${n(p.hoje)}/${n(p.ritmo)}</span></div>`,
+      `<div class="kpi"><span class="rot">Opt-out</span><span class="val">${n(p.opt_out)}</span><span class="nota">${pct(p.opt_out, p.entregues)} dos entregues (teto ${Math.round(100 * (rp.max_optout || 0.03))}%)</span></div>`,
+    ].filter(Boolean).join('');
+
+    // ---- estado do disparo
+    const hist = (p.hist || []).slice(0, 5).map((h) => `<span>${h.ativo ? '▶ ligado' : '⏸ pausado'} · ${esc(h.por || '')} · ${esc(NG.fmtDataHora(h.em))} — ${esc(h.motivo || '')}</span>`).join('');
+    const estado = `
+      <section class="fv-bloco">
+        <header><h2>Disparo</h2>
+          <span class="sub">Pelo número +55 32 2888-0150, de 5 em 5 minutos, seg–sex 9h–21h e sáb 10h–16h (nunca domingo nem feriado). 1 contato por dia e 2 no total por cliente.</span></header>
+        <div class="fv-estado">
+          <span class="fv-pill ${p.ativo ? 'ok' : 'warn'}">${p.ativo ? '▶ Ligado' : '⏸ Pausado'}</span>
+          <span class="fv-pill ${qCls}">Qualidade ${esc(q.rating || 'sem leitura')}</span>
+          <span class="fv-pill">Nome: ${esc(q.nome || 'Dharma Telecom')} · ${esc(q.nome_status === 'APPROVED' ? 'aprovado' : 'em análise')}</span>
+          <span class="fv-pill">Ritmo ${n(p.ritmo)}/dia${rp.teto ? ` · teto ${n(rp.teto)}` : ''}</span>
+          <span class="fv-pill">${p.dentro_horario ? 'Dentro do horário' : 'Fora do horário'}</span>
+          ${p.prioridade_b === false ? '<span class="fv-pill warn">Faixa B fora do disparo</span>' : ''}
+          ${ADMIN ? `<button class="btn ${p.ativo ? '' : 'btn-acc'}" id="b-ligar">${p.ativo ? 'Pausar' : 'Ligar o disparo'}</button>` : ''}
+        </div>
+        <div class="fv-hist"><span><b>Rampa:</b> ${esc(rp.motivo || '—')}${rp.avaliado_em ? ` · avaliada ${esc(NG.fmtDataHora(rp.avaliado_em))}` : ''} — sobe ${n(rp.passo || 100)} a cada ${n(rp.dias || 2)} dias com qualidade verde e opt-out abaixo de ${Math.round(100 * (rp.max_optout || 0.03))}%.</span>
+          <span><b>A/B:</b> ${p.ab && p.ab.vencedor ? `vencedor ${esc(NOME_TPL[p.ab.vencedor] || p.ab.vencedor)} (decidido ${esc(NG.fmtDataHora(p.ab.decidido_em))})` : `em teste — A1 e A2 meio a meio até 200 envios; 48 h depois fica o de mais cliques e respostas`}</span>
+          ${hist}</div>
+      </section>`;
+
+    // ---- por template
+    const tp = p.por_template || {};
+    const linhasTpl = Object.keys(NOME_TPL).filter((k) => tp[k]).map((k) => {
+      const x = tp[k];
+      return `<tr><td>${esc(NOME_TPL[k])}</td><td>${n(x.enviados)}</td><td>${n(x.entregues)}</td><td>${n(x.cliques)} <small>${pct(x.cliques, x.entregues)}</small></td>
+        <td>${n(x.na_mari)} <small>${pct(x.na_mari, x.entregues)}</small></td><td>${n(x.qualificados)}</td><td>${n(x.opt_out)} <small>${pct(x.opt_out, x.entregues)}</small></td></tr>`;
+    }).join('');
+    const linhasFx = ['endereco', 'bairro'].filter((k) => fx[k]).map((k) => {
+      const x = fx[k];
+      return `<tr><td>${k === 'endereco' ? 'A · rua e número' : 'B · bairro'}</td><td>${n(x.aptos)}</td><td>${n(x.enviados)}</td><td>${n(x.cliques)} <small>${pct(x.cliques, x.entregues)}</small></td>
+        <td>${n(x.na_mari)}</td><td>${n(x.opt_out)} <small>${pct(x.opt_out, x.entregues)}</small></td></tr>`;
+    }).join('');
+    const tabelas = `
+      <div class="fv-duas">
+        <section class="fv-bloco"><header><h2>Por mensagem</h2><span class="sub">Qual texto traz mais gente para a Mari — e qual faz sair.</span></header>
+          <div class="fv-rola"><table class="fv-t"><thead><tr><th>Template</th><th>Env.</th><th>Entr.</th><th>Cliques</th><th>Mari</th><th>Qualif.</th><th>Opt-out</th></tr></thead>
+          <tbody>${linhasTpl || '<tr><td colspan="7" class="fv-vazio">Nenhum envio ainda.</td></tr>'}</tbody></table></div></section>
+        <section class="fv-bloco"><header><h2>Por faixa</h2><span class="sub">A = cobertura confirmada na rua e no número · B = bairro com cobertura (vai depois da A).</span></header>
+          <div class="fv-rola"><table class="fv-t"><thead><tr><th>Faixa</th><th>Aptos</th><th>Env.</th><th>Cliques</th><th>Mari</th><th>Opt-out</th></tr></thead>
+          <tbody>${linhasFx || '<tr><td colspan="6" class="fv-vazio">Sem faixa ainda.</td></tr>'}</tbody></table></div></section>
+      </div>`;
+
+    // ---- clicou e não falou
+    const cl = p.clicou_sem_mari || [];
+    const clicou = `
+      <section class="fv-bloco"><header><h2>🔥 Clicou na oferta e não falou com a Mari</h2><span class="tot">${n(cl.length)}</span>
+        <span class="sub">Tocou em "Quero ver a oferta" há mais de 2 h e não mandou a mensagem. Chame pelo WhatsApp da equipe: "Vi que você se interessou pela fibra da Nio…"</span></header>
+        ${cl.length ? `<div class="fv-lista">${cl.map((c) => `<div class="fv-c"><span class="q">${esc(c.nome || 'Cliente')}</span>
+          <a href="https://wa.me/${esc(c.telefone)}" target="_blank" rel="noopener">Chamar ↗</a>
+          <span class="o">${esc(NG.fmtFone ? NG.fmtFone(c.telefone) : c.telefone)} · ${esc(NOME_TPL[c.template] || '')} · clicou há ${esc(NG.haQuanto(c.clicou_em))} · ${esc(c.lugar || '')}</span></div>`).join('')}</div>`
+          : '<div class="fv-vazio">Ninguém esperando agora.</div>'}
+      </section>`;
+
+    // ---- base
+    const ordem = ['apto', 'enviado', 'respondeu', 'novo', 'ja_cliente_nio', 'sem_cobertura', 'opt_out', 'encerrado', 'erro'];
+    const falhas = Object.entries(p.falhas || {}).map(([k, v]) => `${n(v)} × ${esc(k)}${ERRO[k] ? ` (${ERRO[k]})` : ''}`).join(' · ');
+    const base = `
+      <section class="fv-bloco"><header><h2>A base</h2><span class="tot">${n(p.base)} telefones</span>
+        <span class="sub">Importada uma vez (sem CPF, RG, mãe, nascimento ou e-mail). "Já cliente Nio" nunca recebe. ${n(p.segundo_toque)} receberam o 2º toque.</span></header>
+        <table class="fv-t"><tbody>${ordem.filter((k) => st[k]).map((k) => `<tr><td>${esc(ST[k] || k)}</td><td>${n(st[k])}</td></tr>`).join('')}</tbody></table>
+        ${falhas ? `<div class="fv-hist"><span><b>Falhas da Meta:</b> ${falhas}</span></div>` : ''}
+      </section>`;
+
+    corpo.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">${estado}${clicou}${tabelas}${base}</div>`;
+    document.getElementById('rodape').textContent = `Atualizado ${NG.fmtDataHora(p.em)} · ${Math.round(performance.now() - t0)} ms · ${aptos} aptos na fila`;
+    const b = document.getElementById('b-ligar');
+    if (b) b.onclick = async () => {
+      const ligar = !p.ativo;
+      const motivo = window.prompt(ligar ? 'Ligar o disparo automático. Motivo (opcional):' : 'Pausar o disparo. Motivo:', ligar ? '' : 'pausa manual');
+      if (motivo === null) return;
+      b.disabled = true;
+      const { error: e } = await NG.sb.rpc('fila_vero_ligar', { p_ligar: ligar, p_motivo: motivo || null });
+      if (e) { NG.toast(NG.msgErro(e), 'bad'); b.disabled = false; return; }
+      NG.toast(ligar ? 'Disparo ligado ✓' : 'Disparo pausado ✓', 'ok');
+      carregar();
+    };
+  }
+  await carregar();
+  setInterval(() => { if (!document.hidden) carregar(); }, 120000);
+})();
+</script>
+</body>
+</html>

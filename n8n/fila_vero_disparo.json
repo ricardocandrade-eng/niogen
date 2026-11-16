@@ -1,0 +1,559 @@
+{
+  "name": "fila_vero_disparo",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "name": "A1 · A cada 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e42e4ec9-48f7-5414-bb32-a3121b8654cd"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_rodada",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_max: 10 }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "A2 · Supabase rodada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        0
+      ],
+      "id": "c543aee3-8075-5eb3-b331-f1e10812b201",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Um item por envio. Template: nome + lugar no corpo, código da linha no botão URL. Texto: auto-resposta com o link da Mari.\nconst r = $input.first().json || {};\nreturn (r.itens || []).map((i) => {\n  const corpo = i.tipo === 'texto'\n    ? { messaging_product: 'whatsapp', to: i.telefone, type: 'text', text: { body: i.texto, preview_url: false } }\n    : { messaging_product: 'whatsapp', to: i.telefone, type: 'template', template: { name: i.template, language: { code: 'pt_BR' },\n        components: [ { type: 'body', parameters: i.params.map((t) => ({ type: 'text', text: String(t) })) },\n                      { type: 'button', sub_type: 'url', index: '0', parameters: [ { type: 'text', text: i.codigo } ] } ] } };\n  return { json: { id: i.id, tipo: i.tipo, template: i.template || null, corpo } };\n});"
+      },
+      "name": "A3 · Montar envios",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        0
+      ],
+      "id": "3bb173f4-8b47-5e42-8a8d-83d3c6e7bf3b"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1124589070738034/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+        "options": {
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 20000
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "A4 · WABA enviar (1 a cada 20 s)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "0841c74c-198c-5618-9510-dbcdb4be1d24",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Número do disparo 2888-0150 — nunca o da Mari.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta a resposta da Meta de cada envio com o item que saiu (mesma ordem).\nconst enviados = $('A3 · Montar envios').all();\nconst itens = $input.all().map((it, k) => {\n  const o = enviados[k] ? enviados[k].json : {};\n  const j = it.json || {};\n  const wamid = j.messages && j.messages[0] ? j.messages[0].id : null;\n  const e = j.error || {};\n  return { id: o.id, tipo: o.tipo, template: o.template, wamid,\n           erro_codigo: wamid ? null : String(e.code || '?'),\n           erro_msg: wamid ? null : String((e.error_data && e.error_data.details) || e.message || '').slice(0, 250) };\n});\nreturn [{ json: { itens } }];"
+      },
+      "name": "A5 · Juntar resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "03c0f447-2f66-5a24-ac12-d4215c563e4d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_resultado",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_itens: $json.itens }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "A6 · Supabase resultado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "44f33b27-3bd8-5b88-b83c-c2f64a346a18",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c58c2fdb-117d-50b6-9fc3-1400574bd8b7",
+              "leftValue": "={{ $json.alerta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "A7 · Pausou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "d43c4835-d6e6-5e4f-8fe4-a5de70b4a90b"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/config_regras?chave=eq.resumo_destino_whatsapp&select=valor",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "A8 · Destino do aviso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        -80
+      ],
+      "id": "24a179b0-45cc-5022-8562-d334a6e20ff2",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('A8 · Destino do aviso').first().json[0] ? String($('A8 · Destino do aviso').first().json[0].valor).replace(/\\D/g, '') : String($('A8 · Destino do aviso').first().json.valor || '').replace(/\\D/g, ''), type: 'template', template: { name: 'alerta_fila_vero', language: { code: 'pt_BR' }, components: [{ type: 'body', parameters: [{ type: 'text', text: String($('A6 · Supabase resultado').first().json.alerta).slice(0, 200) }] }] } }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "A9 · Aviso ao Ricardo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        -80
+      ],
+      "id": "96647432-879b-5bd1-a49c-699b531e9328",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Template alerta_fila_vero só para o Ricardo. Nunca para cliente.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "7 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "B1 · De hora em hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        320
+      ],
+      "id": "f8182798-e20e-564b-bf72-5f64b77888ab"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v21.0/1124589070738034?fields=quality_rating,status,messaging_limit_tier,whatsapp_business_manager_messaging_limit,verified_name,name_status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "B2 · Graph qualidade do número",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        320
+      ],
+      "id": "75cd460c-0c31-54f6-8ea6-40b73b6efdc2",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_guarda",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_leitura: $json }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "B3 · Supabase guarda",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        320
+      ],
+      "id": "a51e97b4-6207-5f45-a50e-85e422300854",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "1c9ed4f9-bcb1-5b15-9403-9e64c6296659",
+              "leftValue": "={{ $json.alerta }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "B4 · Alerta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        320
+      ],
+      "id": "cf0dcbce-58b1-51e5-9934-0910e4d33352"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/config_regras?chave=eq.resumo_destino_whatsapp&select=valor",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "B5 · Destino do aviso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        240
+      ],
+      "id": "11ce4045-9c5b-51fb-8bd4-3e8ad74f76c4",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', to: $('B5 · Destino do aviso').first().json[0] ? String($('B5 · Destino do aviso').first().json[0].valor).replace(/\\D/g, '') : String($('B5 · Destino do aviso').first().json.valor || '').replace(/\\D/g, ''), type: 'template', template: { name: 'alerta_fila_vero', language: { code: 'pt_BR' }, components: [{ type: 'body', parameters: [{ type: 'text', text: String($('B3 · Supabase guarda').first().json.alerta).slice(0, 200) }] }] } }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "B6 · Aviso ao Ricardo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        240
+      ],
+      "id": "0d632f5f-cc05-5d00-807e-1a3fd3127aea",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "Template alerta_fila_vero só para o Ricardo. Nunca para cliente.",
+      "notesInFlow": true
+    }
+  ],
+  "connections": {
+    "A1 · A cada 5 min": {
+      "main": [
+        [
+          {
+            "node": "A2 · Supabase rodada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A2 · Supabase rodada": {
+      "main": [
+        [
+          {
+            "node": "A3 · Montar envios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A3 · Montar envios": {
+      "main": [
+        [
+          {
+            "node": "A4 · WABA enviar (1 a cada 20 s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A4 · WABA enviar (1 a cada 20 s)": {
+      "main": [
+        [
+          {
+            "node": "A5 · Juntar resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A5 · Juntar resultados": {
+      "main": [
+        [
+          {
+            "node": "A6 · Supabase resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A6 · Supabase resultado": {
+      "main": [
+        [
+          {
+            "node": "A7 · Pausou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A8 · Destino do aviso": {
+      "main": [
+        [
+          {
+            "node": "A9 · Aviso ao Ricardo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B1 · De hora em hora": {
+      "main": [
+        [
+          {
+            "node": "B2 · Graph qualidade do número",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B2 · Graph qualidade do número": {
+      "main": [
+        [
+          {
+            "node": "B3 · Supabase guarda",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B3 · Supabase guarda": {
+      "main": [
+        [
+          {
+            "node": "B4 · Alerta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B5 · Destino do aviso": {
+      "main": [
+        [
+          {
+            "node": "B6 · Aviso ao Ricardo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A7 · Pausou?": {
+      "main": [
+        [
+          {
+            "node": "A8 · Destino do aviso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "B4 · Alerta?": {
+      "main": [
+        [
+          {
+            "node": "B5 · Destino do aviso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

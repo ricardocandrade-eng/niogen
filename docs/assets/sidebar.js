@@ -42,7 +42,7 @@
       { id: 'operacoes', ico: '⊞', nome: 'Operações', href: 'operacoes.html', badge: 'agendar' },   // 13/11 (4c): no lugar de Instalações
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
-      { id: 'fila', ico: '☷', nome: 'Fila Vero', breve: true },
+      { id: 'filavero', ico: '☷', nome: 'Fila Vero', href: 'filavero.html', perfis: ['admin', 'backoffice'], esconder: true },   // 16/11 (0242): tela da Fila Vero
     ]],
     ['Mari', [
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
