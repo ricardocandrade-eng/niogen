@@ -310,7 +310,10 @@
           "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 4,
+      "waitBetweenTries": 3000
     }
   ],
   "connections": {

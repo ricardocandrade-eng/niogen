@@ -119,7 +119,10 @@ def build(ids, webhook_path=None):
         'method': 'POST', 'url': f'{dm.SB}/rest/v1/rpc/backoffice_acao_resultado',
         'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
         'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json) }}',
-        'options': {'timeout': 20000}}, 2160, 0, credentials=sb_cred, onError='continueRegularOutput')
+        'options': {'timeout': 20000}}, 2160, 0, credentials=sb_cred, onError='continueRegularOutput',
+        # 15/11 (revisão dos fluxos, M8): o Supabase às vezes responde 503; sem repetir, a ação ficava "executando", voltava à fila
+        # em 10 min e a mensagem saía 2× (Joao 11/11, Michele 13/11). Repete 4× (3 s); o banco (0229) ignora o 2º "feita".
+        retryOnFail=True, maxTries=4, waitBetweenTries=3000)
 
     conns = {}
 
