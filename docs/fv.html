@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- NIOGEN | docs/fv.html | 16/11/2026 — Claude Code (Fila Vero, piloto). Botão "Quero ver a oferta" dos templates nio_fv_*:
+     a Meta não aceita link direto para o WhatsApp no botão (erro 2388081), então o botão abre esta página, que conta o
+     clique (RPC fila_vero_clique, só marca o clique pelo código da linha) e leva o cliente à conversa com a Mari.
+     Nenhum dado do cliente passa por aqui: só o código do template (t) e o código curto da linha (c). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Nio Internet</title>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #0b0f14; color: #e8edf2;
+         display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; }
+  a { color: #25d366; font-weight: 600; font-size: 18px; }
+  p { margin: 12px 20px; }
+</style>
+</head>
+<body>
+<div>
+  <p>Abrindo a conversa no WhatsApp…</p>
+  <p><a id="ir" href="https://wa.me/553128881265">Toque aqui se não abrir</a></p>
+</div>
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var t = (q.get('t') || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+  var c = (q.get('c') || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12);
+  var cod = 'FV' + (t ? '-' + t : '') + (c ? '-' + c : '');
+  var texto = 'Quero ver a oferta Nio com preço congelado até 2030 (' + cod + ')';
+  var url = 'https://wa.me/553128881265?text=' + encodeURIComponent(texto);
+  document.getElementById('ir').href = url;
+  var ir = function () { location.replace(url); };
+  if (!c) { ir(); return; }
+  try {
+    fetch('https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_clique', {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json',
+                 'apikey': 'sb_publishable_OjwINe96J1lVJmC4MKBrUg_MZpLKNZa' },
+      body: JSON.stringify({ p_codigo: c, p_template: t })
+    }).catch(function () {}).finally(ir);
+  } catch (e) { ir(); }
+  setTimeout(ir, 1200);
+})();
+</script>
+</body>
+</html>

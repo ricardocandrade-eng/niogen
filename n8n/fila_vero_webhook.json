@@ -1,0 +1,142 @@
+{
+  "name": "fila_vero_webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "niogen-fila-vero-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "1g · Verificação Meta (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ebc81963-882c-5662-947f-08147acee3d7",
+      "webhookId": "a245b64c-15af-5313-8f66-e364be5ce93d"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.mode'] === 'subscribe' ? ($json.query['hub.challenge'] || '') : '' }}",
+        "options": {}
+      },
+      "name": "2g · Devolver challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        240,
+        0
+      ],
+      "id": "3ca824a9-38a2-5368-97c2-6eadcc3faf8f"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-fila-vero-webhook",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "1p · Webhook Meta (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "b7c1eba9-b5ff-53d4-a508-a0506449d766",
+      "webhookId": "220e1950-6ffa-51fe-af0b-c05e30cde5f9"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Só as mudanças \"messages\" do número do disparo. Vai só o necessário: status (id, status, errors) e mensagens\n// (from, tipo, texto do botão/texto). Nome do perfil do cliente não segue.\nconst corpo = $input.first().json.body || {};\nconst saida = [];\nfor (const e of corpo.entry || []) {\n  for (const c of e.changes || []) {\n    const v = c.value || {};\n    if (c.field !== 'messages') continue;\n    if (String(v.metadata?.phone_number_id || '') !== '1124589070738034') continue;\n    const statuses = (v.statuses || []).map((s) => ({ id: s.id, status: s.status, errors: s.errors || [] }));\n    const messages = (v.messages || []).map((m) => ({ from: m.from, type: m.type, button: m.button,\n      interactive: m.interactive, text: m.text }));\n    if (!statuses.length && !messages.length) continue;\n    saida.push({ json: { value: { metadata: { phone_number_id: v.metadata.phone_number_id }, statuses, messages } } });\n  }\n}\nreturn saida;"
+      },
+      "name": "2p · Extrair status e respostas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        220
+      ],
+      "id": "43f0dc62-b565-544d-b9af-ef27dd64059c"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_webhook",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_value: $json.value }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "3p · Supabase fila_vero_webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        220
+      ],
+      "id": "da9abc73-01f0-5ae7-97f2-ce7dc8afbe35",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 3000
+    }
+  ],
+  "connections": {
+    "1g · Verificação Meta (GET)": {
+      "main": [
+        [
+          {
+            "node": "2g · Devolver challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1p · Webhook Meta (POST)": {
+      "main": [
+        [
+          {
+            "node": "2p · Extrair status e respostas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2p · Extrair status e respostas": {
+      "main": [
+        [
+          {
+            "node": "3p · Supabase fila_vero_webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}
