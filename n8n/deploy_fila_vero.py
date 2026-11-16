@@ -45,7 +45,7 @@ for (const e of corpo.entry || []) {
     if (String(v.metadata?.phone_number_id || '') !== '%PHONE%') continue;
     const statuses = (v.statuses || []).map((s) => ({ id: s.id, status: s.status, errors: s.errors || [] }));
     const messages = (v.messages || []).map((m) => ({ from: m.from, type: m.type, button: m.button,
-      interactive: m.interactive, text: m.text }));
+      interactive: m.interactive, text: m.text, context: m.context ? { id: m.context.id } : undefined }));
     if (!statuses.length && !messages.length) continue;
     saida.push({ json: { value: { metadata: { phone_number_id: v.metadata.phone_number_id }, statuses, messages } } });
   }
