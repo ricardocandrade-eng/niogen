@@ -399,6 +399,23 @@
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
+  // 0.7.3 (16/11, migration 0236): lead conduzido pelo time sem venda → cria a venda (lead_virar_venda, admin/backoffice) e abre.
+  // Só grava no NIOGEN; não clica nem lê nada no portal.
+  async function virarVenda(c) {
+    if (!c || c.venda_id) return;
+    if (!window.confirm('Abrir a venda deste lead?\n\nUse quando o pedido foi (ou vai ser) aberto no portal. A venda nasce em Qualificado e aí você grava a OS e a agenda (etapa 7).')) return;
+    S.ocupado = true; aviso(''); desenha();
+    try {
+      const r = await rpc('lead_virar_venda', { p_conversa: c.id });
+      const vid = r && r.venda_id;
+      if (!vid) throw new Error('A venda não foi criada.');
+      c.venda_id = vid;
+      S.ocupado = false;
+      await abreVenda({ venda_id: vid, cliente_nome: nomeConversa(c) });
+      aviso(r.repetido ? 'Este lead já tinha venda: abri a venda.' : 'Venda aberta no NIOGEN. Grave a OS e a agenda na etapa 7.', 'ok');
+    } catch (e) { aviso(e.message, 'bad'); }
+    S.ocupado = false; desenha();
+  }
   async function abreVenda(item) {
     S.ocupado = true; aviso(''); desenha();
     try {
@@ -1068,8 +1085,11 @@
       linha = ok ? 'Crédito ok → biometria. OS e agenda: na ficha.' : 'Falta registrar o crédito (etapa 3).';
       fim = h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir');
     } else {
-      linha = c && c.venda_id ? 'Já é venda: abra a venda para registrar.' : 'Ainda não é venda: só viabilidade.';
-      fim = c && c.venda_id ? h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda') : null;
+      const virar = c && !c.venda_id && ['admin', 'backoffice'].includes(S.perfil);
+      linha = c && c.venda_id ? 'Já é venda: abra a venda para registrar.'
+        : virar ? 'Ainda não é venda. Pedido aberto (ou indo abrir) no portal? Vire venda para gravar a OS.' : 'Ainda não é venda: só viabilidade.';
+      fim = c && c.venda_id ? h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda')
+        : virar ? h('button', { class: 'btn btn-acc', type: 'button', disabled: S.ocupado, onclick: () => virarVenda(c) }, 'Virar venda') : null;
     }
     const acoes = acoesRodape();
     return h('footer', { class: 'rodape' }, toast(), h('span', { class: 'sub rodape-linha' }, linha),
