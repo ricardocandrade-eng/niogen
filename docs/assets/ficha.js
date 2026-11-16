@@ -460,6 +460,20 @@
     avisarOuvintes(data);
     return true;
   }
+  // 16/11 (0236, caso Lígia): lead conduzido pelo time (crédito pela ficha/extensão) não virava venda e a OS não tinha onde gravar.
+  async function virarVenda(bt) {
+    if (!d || !d.soConversa || !d.conversaId) return false;
+    if (!window.confirm('Abrir a venda deste lead?\n\nUse quando o pedido foi (ou vai ser) aberto no portal. A venda nasce em Qualificado e aí você grava o nº do pedido / OS e a agenda — na ficha ou pela extensão.')) return false;
+    if (bt) bt.disabled = true;
+    const { data, error } = await NG.sb.rpc('lead_virar_venda', { p_conversa: d.conversaId });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); if (bt && bt.isConnected) bt.disabled = false; return false; }
+    NG.toast(data && data.repetido ? 'Este lead já tinha venda: abrindo a ficha da venda' : 'Venda aberta · grave o nº do pedido / OS', 'ok');
+    feitoUltimo = { resumo: '✓ venda aberta' };
+    formAtivo = null;
+    await recarregar();   // a conversa virou venda: recarregar abre a ficha da venda
+    avisarOuvintes(data);
+    return true;
+  }
   async function reabrirLead(bt) {
     if (!window.confirm('Reabrir este lead?\n\nEle sai da Saída (Recusou e Não contatar também) e volta para o degrau onde parou. A conversa reabre no Chatwoot e a Mari volta a responder.')) return false;
     if (bt) bt.disabled = true;
@@ -2428,6 +2442,7 @@
       if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; convEsperaFechado = formAtivo == null; passoAberto.add('conversa'); render(); return; }
       if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || null; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
       if (acao === 'reabrir') { await reabrirLead(b); return; }
+      if (acao === 'virar-venda') { await virarVenda(b); return; }
       if (acao === 'auditar') {
         if (!NG.auditoria || !d.conversaId) { NG.toast('Auditoria indisponível nesta tela.', 'bad'); return; }
         b.disabled = true;
@@ -3059,7 +3074,7 @@
         ${ehBO() && !fimV ? btBio : ''}
         ${ehBO() && !fimV && v.nio_os && v.biometria_status !== 'validada' ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
     } else if (p.k === 'os') {
-      corpo = conv ? linhaDet('Pedido (OS)', 'depois do crédito aprovado') : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
+      corpo = conv ? `${linhaDet('Pedido (OS)', 'depois do crédito aprovado')}${ehBO() && !(d.conv && d.conv.funil_destino && d.conv.funil_destino !== 'em_andamento') ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o pedido / OS">Virar venda</button></div>' : ''}` : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
         ${a.portal_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.portal_alerta)}</span>${visto('portal', a.portal_pedido)}</div>` : ''}
         ${fonte('portal PAP')}`;
@@ -3253,7 +3268,10 @@
     const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="fc-mitem fc-mi-ok" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
     const btNada = ehBO() && (naFila || d.conversaId) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
     const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
-    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${extraM}${btSaida}`);
+    // 16/11 (0236): lead sem venda, em andamento → "Virar venda" (pedido aberto pelo time no portal)
+    const btVirar = d && d.soConversa && ehBO() && !(d.lead && d.lead.destino && d.lead.destino !== 'em_andamento')
+      ? '<button type="button" class="fc-mitem fc-mi-ok" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o nº do pedido / OS e a agenda">Virar venda</button>' : '';
+    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
