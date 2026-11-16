@@ -292,6 +292,7 @@
     conf_tentar: 'Põe a ação de volta na fila: o Chatwoot recebe em até 1 minuto.',
     conf_dispensar: 'Tira a linha sem refazer a ação. Use só se o caso já foi resolvido de outro jeito.',
     conf_visto: 'Tira a linha. A conversa continua como está no Chatwoot.',
+    conf_conferir_unidade: 'Unidade a confirmar (0233). A fibra chega no endereço, mas a unidade que o cliente disse não está igual na lista fechada da Nio (ex.: "Casa 1" × "Casa A"), ou ele disse que não é nenhuma, ou o endereço não tem unidade cadastrada. A Mari mostra a lista ao cliente; se ele não escolher, confirme com ele. Nunca escolha outra unidade para o pedido passar. Não é nenhuma → peça o cadastro à Nio pelo formulário. Depois, "Conferi". Prazo: 4 h.',
     conf_conferir_rua: 'Portal: outra rua (0202). O portal consultou uma rua diferente da do cliente (CEP com mais de uma rua) ou disse "sem viabilidade" com a fachada viável no DFV. O que fazer: abra o cliente, refaça a viabilidade na Cobertura tocando na rua do cliente; se o portal mantiver o "não" na rua certa, peça a liberação. Depois, "Conferi". Prazo: 4 h. A Mari não nega nada ao cliente enquanto isso.',
     // situação da conversa
     sit_andamento: 'Em andamento: a Mari ainda está conversando com o cliente. Nada a fazer — acompanhe pela conversa.',

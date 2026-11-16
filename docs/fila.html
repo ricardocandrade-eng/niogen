@@ -35,7 +35,7 @@
 <link rel="stylesheet" href="assets/app.css?v=161126-10">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=161126-16"></script>
+<script src="assets/app.js?v=161126-17"></script>
 <script src="assets/sidebar.js?v=161126-8"></script>
 <script src="assets/conversa.js?v=161126-16"></script>
 <script src="assets/ficha.js?v=161126-11"></script>
@@ -275,10 +275,10 @@
         <div><span class="mv-dono apagado">GED360</span></div><div><span class="lv-pill">${p.alerta ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
-  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', conferir_rua: 'Portal: outra rua' };
+  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar' };
   // 14/11 (Ricardo): os botões do Conferir ficam na coluna da ação — o texto não empurra a altura da linha (2 linhas, o resto no title).
-  const confBts = (c) => `${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}`;
-  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || (c.tipo === 'conferir_rua' && /VENCIDO/.test(c.texto || ''));
+  const confBts = (c) => `${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}${c.tipo === 'conferir_unidade' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente no painel de Viabilidade: toque na unidade do cliente (a consulta refaz) ou peça o cadastro à Nio">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-unidade="${esc(c.conversa_id)}" title="A unidade foi confirmada com o cliente ou o cadastro foi pedido à Nio: a linha sai do Conferir">Conferi</button>` : ''}`;
+  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || ''));
   const confLinha = (c) => {
     const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
     const urg = confUrg(c);
@@ -547,6 +547,7 @@
       : b.dataset.cfRetentar ? ['chatwoot_acao_retentar', { p_id: Number(b.dataset.cfRetentar) }]
       : b.dataset.cfDispensar ? ['chatwoot_acao_dispensar', { p_id: Number(b.dataset.cfDispensar) }]
       : b.dataset.cfRua ? ['cobertura_rua_conferida', { p_conversa: b.dataset.cfRua }]
+      : b.dataset.cfUnidade ? ['cobertura_unidade_conferida', { p_conversa: b.dataset.cfUnidade }]
         : ['conversa_alerta_visto', { p_conversa: b.dataset.cfVisto }];
     const { data, error } = await NG.sb.rpc(fn, arg);
     if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
@@ -583,7 +584,7 @@
       if (ma.dataset.vistoMira) NG.sb.rpc('conversa_acompanhar_visto', { p_conversa: ma.dataset.miraAbrir.slice(2) }).then(() => {}, () => {});
       abrirChave(ma.dataset.miraAbrir); return;
     }
-    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua]');
+    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua], [data-cf-unidade]');
     if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');
     if (bc) { ev.stopPropagation(); casar(bc); return; }

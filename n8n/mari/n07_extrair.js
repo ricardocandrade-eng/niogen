@@ -98,7 +98,7 @@ bruto = bruto.replace(/\[bot[oõ]es:\s*([^\]]*)\]/gi, (m, x) => {
   // A marca DE VERDADE ([BOTOES:pagamento|resumo|sim_nao]) também casa com este padrão (o /i) e era apagada aqui — o
   // pagamento nunca saía pela marca, só pelas travas. Conversa #5 (07/11 18h53): a Mari respondeu só "[BOTOES:pagamento]",
   // a marca sumiu, o texto ficou vazio e o cliente ficou sem resposta. A marca certa fica para o tag('BOTOES').
-  if (/^\s*(pagamento|resumo|sim_nao|data|turno|credito)\s*$/.test(t)) return m;
+  if (/^\s*(pagamento|resumo|sim_nao|data|turno|credito|unidade)\s*$/.test(t)) return m;
   // Só pagamento e resumo: "Sim / Não" copiado caía em pergunta aberta (complemento + referência) — teste real 06/11.
   imitado.botoes = /cart|boleto|debito/.test(t) ? 'pagamento' : /corrig|esta certo/.test(t) ? 'resumo' : null;
   return '';
@@ -752,6 +752,24 @@ if (tags.endereco) {
   }
 }
 if (prep.p_complemento) dados.complemento_ok = true;
+// 16/11 (0233, Ricardo; caso "CS 1" × "Casa A"): unidade a confirmar. O cliente tocou/escreveu uma unidade da lista da Nio →
+// é ela (o operador consulta de novo com a unidade dele). "Nenhuma dessas" (botão, texto ou [ENDERECO: unidade=nenhuma]) →
+// dados.unidade_fora_lista = 'nenhuma' (o gatilho da 0233 manda o time pedir o cadastro à Nio). Nunca escolhe pelo cliente.
+const UNIDADES = (() => {
+  const det = c.cobertura_detalhe || {};
+  if (!V7 || !det.unidade_a_confirmar || !Array.isArray(det.unidades) || !c.unidade_conferir_em
+    || (c.unidade_conferir || {}).motivo !== 'escolher') return [];
+  return det.unidades.map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
+})();
+if (UNIDADES.length && !posHandoff) {
+  const msgU = String((prep.consolidado || {}).mensagem || '').trim();
+  const kU = (x) => norm(x).replace(/[^a-z0-9]/g, '');
+  const escolhida = UNIDADES.find((u) => kU(u) === kU(msgU));
+  const eU = tags.endereco ? kv(tags.endereco) : {};
+  if (escolhida && upd.complemento === undefined) { upd.complemento = escolhida; dados.complemento_ok = true; }
+  else if (/^(nenhuma|nenhum|nao e nenhuma)( dessas| delas| desses| deles)?$/.test(norm(msgU).replace(/[^a-z ]/g, '').trim())
+    || /^nenhum/.test(norm(eU.unidade || ''))) dados.unidade_fora_lista = 'nenhuma';
+}
 
 const ELEG = ['ok', 'ja_cliente', 'cancelou_30d', 'fora_area'];
 const eleg = norm(tags.elegibilidade || hy.elegibilidade || '').replace(/[^a-z_0-9]/g, '');
@@ -1354,6 +1372,9 @@ if (V7 && !erro && tags.botoes) {
     credito: [{ id: 'cred:sim', title: 'Sim, autorizo' }, { id: 'cred:nao', title: 'Não autorizo' }],
     turno: [{ id: 'turno:manha', title: 'Manhã' }, { id: 'turno:tarde', title: 'Tarde' }, { id: 'turno:qualquer', title: 'Tanto faz' }],
     pagamento: [{ id: 'pg:cartao', title: 'Cartão de crédito' }, { id: 'pg:boleto', title: 'Boleto bancário' }, { id: 'pg:debito', title: 'Débito automático' }],
+    // 16/11 (0233): até 2 unidades da lista da Nio (título do WhatsApp ≤ 20) + "Nenhuma dessas"; mais que isso fica no texto.
+    unidade: UNIDADES.length && UNIDADES.length <= 2 && UNIDADES.every((u) => u.length <= 20)
+      ? [...UNIDADES.map((u, i) => ({ id: `un:${i + 1}`, title: u })), { id: 'un:nenhuma', title: 'Nenhuma dessas' }] : null,
   }[chave];
   if (BOT) {
     let corpo = '';

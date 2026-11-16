@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="assets/app.css?v=161126-10">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=161126-16"></script>
+<script src="assets/app.js?v=161126-17"></script>
 <script src="assets/sidebar.js?v=161126-8"></script>
 <script src="assets/novavenda.js?v=131126-17"></script>
 <style>
@@ -540,7 +540,7 @@
     let lp = 'Portal: consultando…';
     if (portal && portal.estado === 'erro') lp = `Portal: não respondeu (${portal.erro || 'sem resposta'})`;
     else if (portal && portal.estado === 'pronto') {
-      if (s.resultado === 'viavel') lp = `Portal: ✅ viável${s.velocidade ? ` (até ${s.velocidade})` : ''}`;
+      if (s.resultado === 'viavel') lp = `Portal: ✅ viável${s.velocidade ? ` (até ${s.velocidade})` : ''}${s.unidade_a_confirmar ? ` — unidade a confirmar (${predioTxt(s)})` : ''}`;
       else if (s.resultado === 'sem_viabilidade') lp = 'Portal: ❌ sem viabilidade';
       else if (s.resultado === 'complemento_fora_lista') {
         const sit = situacaoUnidade(s);
@@ -635,7 +635,13 @@
 
     const r = s.resultado;
     let html = '';
-    if (p.estado === 'pronto' && r === 'viavel') {
+    if (p.estado === 'pronto' && r === 'viavel' && s.unidade_a_confirmar) {
+      // 16/11 (0233): o operador consultou a FACHADA com outra unidade da lista (a do cliente não bate) — viável no endereço,
+      // mas o pedido só sai com a unidade DO CLIENTE: toque nela abaixo (a consulta refaz) ou confirme com ele.
+      const uac = s.unidade_a_confirmar;
+      html = caixa('Viável no endereço · unidade a confirmar', 'warn', `A fibra chega neste endereço${s.velocidade ? ` (até <b>${esc(s.velocidade)}</b>)` : ''}, mas ${uac.informada ? `"<b>${esc(uac.informada)}</b>" não está` : 'o cliente não disse a unidade, e ela não está'} igual na lista do portal (${predioTxt(s)}). Toque na unidade do cliente — nunca em outra para o pedido passar. Se não for nenhuma, peça o cadastro à Nio pelo formulário.`, carPortal);
+      acoesDec = [BT.cadastro(), BT.credito];
+    } else if (p.estado === 'pronto' && r === 'viavel') {
       html = caixa('Viável no portal', 'ok', `Endereço com viabilidade oficial da Nio${s.velocidade ? ` · até <b>${esc(s.velocidade)}</b>` : ''}.${s.endereco && s.endereco.viabilidade ? ` <span class="muted">${esc(s.endereco.viabilidade)}</span>` : ''}`, carPortal);
       acoesDec = [BT.pedido, BT.credito];
     } else if (p.estado === 'pronto' && r === 'sem_viabilidade') {

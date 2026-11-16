@@ -256,6 +256,17 @@ ok(cr.opcao_da_rua(OPS[:1], 'Rua Álvaro Cruz', '99') is None, 'lista só com a 
 ok(cr.opcao_da_rua(OPS, 'Rua Álvaro Cruz', '7') is None, 'rua certa sem o número → nenhuma (não chuta outro número)')
 ok('rua_divergente' in cr.RESULTADOS, 'rua_divergente é resultado conhecido')
 
+# 7. 16/11 — consulta da FACHADA (unidade fora da lista): só o operador, só consulta, só com o endereço do cliente
+ok(cr.pode_fachada('viabilidade', {'origem_endereco': 'cliente'}), 'fachada: viabilidade com o endereço do cliente → pode')
+ok(cr.pode_fachada('credito', {'origem_endereco': 'cliente'}), 'fachada: crédito com o endereço do cliente → pode (consulta, larga o rascunho)')
+ok(not cr.pode_fachada('credito', {'origem_endereco': 'padrao'}), 'fachada: endereço padrão → não')
+ok(not cr.pode_fachada('duplicidade', {'origem_endereco': 'cliente'}), 'fachada: duplicidade → não')
+ok(not cr.pode_fachada('os', {'origem_endereco': 'cliente'}), 'fachada: operador de OS → não')
+ok(not cr.pode_fachada('viabilidade', {'origem_endereco': 'cliente', 'fachada': False}), 'fachada: desligada por quem chamou → não')
+ok(cr.unidade_fachada(['', 'Casa A', 'Casa B']) == 'Casa A', 'fachada: empresta a 1ª unidade não vazia')
+ok(cr.unidade_fachada([]) is None, 'fachada: lista vazia → nenhuma (segue parando)')
+ok(cr.escolher_opcao(['Casa A'], 'Casa 1') is None, 'caso 16/11: "Casa 1" nunca vira "Casa A" sozinho (só a fachada empresta)')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')

@@ -569,7 +569,8 @@
       precos: [...new Set((r || []).map((p) => Number(cartao && p.preco_cartao != null ? p.preco_cartao : p.preco)).filter((x) => !Number.isNaN(x)))],
     };
   }
-  async function conduzir() {
+  // 16/11 (0233): unidade = a que o HUMANO tocou na lista do portal (confirmada com o cliente) — vale só para esta condução.
+  async function conduzir(unidade) {
     if (!podeConduzir() || (S.cond && S.cond.rodando)) return;
     const falta = faltasConduzir();
     if (falta.length) { aviso(`Falta: ${falta.join(', ')}.`, 'bad'); desenha(); return; }
@@ -582,7 +583,9 @@
       condLog(`Travas de rede ligadas nesta aba. Modo: ${S.modoConduzir === 'passo' ? 'Passo a passo' : 'Direto'}.`);
       desenha();
       const d = S.dados;
-      const venda = { modo: S.modoConduzir, pdv: d.pdv, matricula: MATRICULA_PAP, viabilidade: d.viabilidade, cliente: d.cliente, contato: d.contato,
+      const viab = typeof unidade === 'string' && unidade ? { ...d.viabilidade, complemento: unidade } : d.viabilidade;
+      if (viab !== d.viabilidade) condLog(`Unidade escolhida por você: ${unidade}.`);
+      const venda = { modo: S.modoConduzir, pdv: d.pdv, matricula: MATRICULA_PAP, viabilidade: viab, cliente: d.cliente, contato: d.contato,
         oferta: d.oferta, planoPortal: await planoPortal() };
       r = await mandar({ tipo: 'conduzir', venda });
     } catch (e) { r = { ok: false, motivo: 'popup', texto: e.message, etapa: null }; }
@@ -679,6 +682,11 @@
           ? h('div', {}, `Confira e clique você${finais.length ? ` em "${finais[finais.length - 1]}"` : ' no botão final'}. Eu não clico em nada no Resumo.`)
           : h('div', {}, fim.texto || ''),
         // 0.6.2: o texto do portal fica recolhido; "travas desligadas" só aparece se NÃO estiverem (é o normal)
+        // 16/11 (0233): unidade fora da lista → as unidades do portal em botões; o toque refaz a condução com a escolhida
+        fim.extra && fim.extra.tipo === 'unidade' && (fim.extra.lista || []).length ? h('div', { class: 'sub' },
+          h('div', {}, h('b', {}, 'Qual é a unidade do cliente?'), ' Confirme com ele — nunca escolha outra para o pedido passar. Não é nenhuma? Peça o cadastro à Nio e marque na Live.'),
+          h('div', { class: 'seg' }, fim.extra.lista.slice(0, 24).map((u) => h('button', { type: 'button', class: 'btn btn-sm', disabled: S.ocupado,
+            onclick: () => conduzir(u) }, u)))) : null,
         fim.extra && (fim.extra.popup || fim.extra.lista) ? h('details', { class: 'sub cond-det' }, h('summary', {}, 'O que o portal disse'),
           fim.extra.popup ? h('div', {}, fim.extra.popup) : null,
           fim.extra.lista ? h('div', {}, `Opções: ${fim.extra.lista.join(' · ')}`) : null) : null,

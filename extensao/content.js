@@ -606,7 +606,7 @@
     if (sel) {
       const ops = [...sel.options].map((o) => o.textContent.trim()).filter(Boolean);
       const r = T.alvoComplemento(ops, valor);
-      if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada — escolha você.`, { lista: ops.slice(0, 40) });
+      if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada: toque no painel na unidade DO CLIENTE (confirme com ele).`, { lista: ops.slice(0, 40), tipo: 'unidade' });
       sel.value = [...sel.options].find((o) => o.textContent.trim() === r.alvo).value;
       sel.dispatchEvent(new Event('change', { bubbles: true }));
       return;
@@ -624,7 +624,7 @@
       return;   // campo sem lista: se o portal exigir, o Avançar não habilita e a condução para
     }
     const r = T.alvoComplemento(ops, valor);
-    if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada — escolha você.`, { lista: ops.slice(0, 40) });
+    if (!r.ok) throw new Parada('popup', `Complemento: ${r.motivo}. Unidade fora da lista nunca é trocada: toque no painel na unidade DO CLIENTE (confirme com ele).`, { lista: ops.slice(0, 40), tipo: 'unidade' });
     await conduzirClique(lis.find((l) => (l.innerText || '').trim() === r.alvo), 'opcao', { texto: r.alvo });
     await espera(600);
   }

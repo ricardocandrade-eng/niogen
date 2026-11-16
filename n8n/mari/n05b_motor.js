@@ -243,6 +243,16 @@ if (V4) {
     L.push(`cobertura_decisao (uso interno, nunca citar portal/sistema/consulta): ${cd}`
       + (unid.length ? ` | unidades_cadastradas: ${unid.join('; ')}` : '')
       + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
+    // 16/11 (0233, Ricardo; caso "CS 1" × "Casa A"): viável no endereço, mas a unidade do cliente não está IGUAL na lista
+    // fechada da Nio (ou ele não disse). A Mari mostra as opções e o cliente escolhe — nunca escolhe por ele.
+    const uc = conv.unidade_conferir || {};
+    if (det.unidade_a_confirmar && Array.isArray(det.unidades) && conv.unidade_conferir_em) {
+      const ul = det.unidades.slice(0, 12).map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
+      L.push(uc.motivo === 'nenhuma'
+        ? 'unidade_a_confirmar: o cliente JÁ disse que a unidade dele não é nenhuma da lista — o nosso time está pedindo o cadastro à Nio. NÃO pergunte de novo; siga a venda normalmente.'
+        : `unidade_a_confirmar: SIM — a fibra chega no endereço, mas a unidade que o cliente deu («${conv.complemento || 'nenhuma'}») não está igual no cadastro da Nio`
+          + ` | unidades_cadastradas: ${ul.join('; ')}${ul.length <= 2 && ul.every((u) => u.length <= 20) ? ' | use [BOTOES:unidade]' : ''}`);
+    }
     // 13/11 (0167, Ricardo; conversa #86, portão P30): a Mari avisou "não chega", convidou a mandar o CEP certo e o cliente voltou.
     const scAv = (conv.dados || {}).sem_cobertura_avisado;
     if (cd === 'sem_cobertura' && scAv != null && conv.cobertura_em && Number(scAv) === Math.floor(new Date(conv.cobertura_em).getTime() / 1000)) {
@@ -346,11 +356,12 @@ if (v3) {
 if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cliente mandou várias mensagens seguidas — responda tudo numa resposta só)`);
 // 08/11 (abertura B2): a saudação com botões já saiu pelo sistema e o cliente respondeu em TEXTO (sem tocar) — o Claude
 // segue sem repetir a saudação; pede só o CEP (ou rua e bairro) e o número depois da cidade.
+const tx0 = inter.textos || {};
 if (V7 && (conv.dados || {}).abertura && !conv.cep) {
   // 13/11 (0188): no formato 'texto' a 1ª mensagem já pediu o CEP e o número — o Claude não repete a saudação.
   const comBotoes = String((inter.textos || {}).abertura_formato || 'texto').trim() === 'botoes';
   L.push(`abertura_b2: a 1ª mensagem (${comBotoes
-    ? 'saudação + botões "Ver minha rua / Ver os planos / Falar com alguém"'
+    ? `saudação + botões "${String(tx0.abertura_botoes || 'rua,planos,humano')}"`
     : 'saudação + pedido do CEP e do número da casa'}) JÁ FOI ENVIADA pelo sistema — `
     + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
 }
@@ -447,13 +458,20 @@ const FORMATO = String(tx.abertura_formato || 'texto').trim() === 'botoes' ? 'bo
 const nrm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const semEmoji = (s) => nrm(s).replace(/\p{Extended_Pictographic}|️|‍/gu, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
-  const BOT_AB = [
+  // 16/11 (Ricardo, 0234): o menu é a lista 'abertura_botoes' (chaves na ordem; padrão = o de antes). Quem tocava "Falar com
+  // alguém" era cliente Nio pedindo suporte e caía no backoffice → "🏠 Sou cliente Nio" (resposta fixa, sem time). "Ver os
+  // planos" não mostrava plano nenhum (sem a cidade) → "🔒 Preço até 2030". Todos seguem reconhecidos (menu antigo na tela).
+  const BOT_TODOS = [
     { id: 'ab:rua', chave: 'rua', title: tx.abertura_botao_rua || '📍 Ver minha rua' },
     { id: 'ab:planos', chave: 'planos', title: tx.abertura_botao_planos || '💰 Ver os planos' },
     { id: 'ab:humano', chave: 'humano', title: tx.abertura_botao_humano || '💬 Falar com alguém' },
+    { id: 'ab:cliente', chave: 'cliente', title: tx.abertura_botao_cliente || '🏠 Sou cliente Nio' },
+    { id: 'ab:2030', chave: 'trava2030', title: tx.abertura_botao_2030 || '🔒 Preço até 2030' },
   ];
+  const BOT_AB = String(tx.abertura_botoes || 'rua,planos,humano').split(',').map((k) => BOT_TODOS.find((b) => b.chave === k.trim()))
+    .filter(Boolean).slice(0, 3);
   const msgAb = String(cons.mensagem || '').trim();
-  const tocado = BOT_AB.find((b) => semEmoji(b.title) === semEmoji(msgAb));
+  const tocado = BOT_TODOS.find((b) => semEmoji(b.title) === semEmoji(msgAb));
   const jaTemMari = historico.some((h) => h.papel === 'mari' || h.papel === 'humano');
   const dadosAb = conv.dados || {};
   if (tocado && tocado.chave === 'humano') {
@@ -466,11 +484,22 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
         + (conv.cep ? '' : ' Ainda sem CEP/endereço.') } },
       modelo: 'abertura_b2',
     };
+  } else if (tocado && tocado.chave === 'cliente') {
+    // "🏠 Sou cliente Nio": esta é a central de VENDAS — suporte é com a Nio. Sem time, sem handoff. O gatilho
+    // mari_conversas_abertura_cliente (0234) dá a Saída "Já é cliente Nio" (para a cadência); se ele escrever de novo, a Mari responde.
+    textoFixo = {
+      texto: tx.abertura_resp_cliente || 'Que bom ter você com a gente! 💚\n\nAqui é a central de vendas da Nio, então não consigo ver sua conta nem resolver suporte por aqui. Pra fatura, 2ª via, suporte técnico ou mudança de plano, o caminho mais rápido é o App Nio ou o 0800 001 1000.\n\nSe quiser levar a Nio pra outro endereço (da família, do trabalho), é comigo: me manda o CEP 😉',
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'cliente' },
+      upd: { dados: { abertura_botao: 'cliente' } },
+      modelo: 'abertura_b2',
+    };
   } else if (tocado && !cluster) {
     // "📍 Ver minha rua" / "💰 Ver os planos": a cidade ainda não é conhecida → pede só o CEP (ou rua e bairro), sem preço.
     // Cidade já conhecida → o toque segue para o Claude (mostra os planos da cidade).
     textoFixo = {
-      texto: tocado.chave === 'rua'
+      texto: tocado.chave === 'trava2030'
+        ? (tx.abertura_resp_2030 || 'Isso mesmo! 🔒 Fechando agora, o valor do seu plano fica travado até janeiro de 2030, sem reajuste.\n\nMe manda seu CEP (ou a rua e o bairro) que eu confiro se a fibra chega aí e já te mostro o preço certinho da sua cidade 👇')
+        : tocado.chave === 'rua'
         ? (tx.abertura_resp_rua || 'Oba! 🥰 Me manda só o seu CEP que eu já confiro pra você.\n\nSe não lembrar, tudo bem: pode mandar o nome da rua e o bairro 😉')
         : (tx.abertura_resp_planos || 'Claro! 😊 Os planos vão de 600 Mega a 1 Giga, com preço fixo até 2030.\n\nO valor muda um pouquinho de cidade pra cidade. Me manda seu CEP (ou a rua e o bairro) que eu te mostro os planos e preços certinhos daí 👇'),
       tags: { abertura: dadosAb.abertura || B2, abertura_botao: tocado.chave },
@@ -560,6 +589,7 @@ return [{ json: {
       nome_contato: conv.nome_contato, telefone: conv.telefone, mei: conv.mei,
       // 12/11 (0133): decisão do operador e pedido Nio em andamento — o 7 · Extrair decide/anota com eles (portão P27/P28)
       cobertura_decisao: conv.cobertura_decisao, cobertura_em: conv.cobertura_em, cobertura_detalhe: conv.cobertura_detalhe, nio_pedido_aberto: conv.nio_pedido_aberto,
+      unidade_conferir: conv.unidade_conferir, unidade_conferir_em: conv.unidade_conferir_em,   // 16/11 (0233): unidade a confirmar
       nome_confiavel: conv.nome_confiavel,
       // 0138: crédito pela Mari (autorização do titular gravada → n8n mari_credito)
       credito_autorizado_em: conv.credito_autorizado_em, credito_autorizacao_frase: conv.credito_autorizacao_frase,

@@ -21,6 +21,13 @@
 # "Pedido encontrado" → 'pedido_em_andamento'; Etapa 4 aberta → 'sem_pedido_em_andamento'. Nunca digita contato, nunca
 # chega à Etapa 4 nem à análise de crédito (sem Serasa). Travas: etapa4() recusa fora do modo crédito; rodar() para depois da 3.
 #
+# 16/11/2026 — CONSULTA DA FACHADA (Ricardo, 16/11; caso Rua Rafael Merula 67: o cliente disse "CS 1"/"Casa 1" e o portal só
+# tem "Casa A"). A viabilidade é da fachada, não da unidade: quando a unidade do cliente não bate com a lista (ou não foi
+# dita), o OPERADOR (que só consulta e larga o rascunho) segue com a 1ª unidade da lista SÓ para ler o resultado e marca
+# out['unidade_a_confirmar'] (lista, unidade usada, a informada). Só vale 'viavel' (e o crédito): sem viabilidade com a
+# unidade emprestada volta a ser complemento_fora_lista, como antes. A EXTENSÃO (que grava o pedido) nunca faz isso —
+# lá a unidade é sempre a do cliente (extensao/travas.js). Travas: pode_fachada() + testar_travas.py, seção 7.
+#
 # Este módulo NÃO importa o Playwright no topo: o teste das travas roda sem navegador.
 
 import datetime
@@ -328,6 +335,21 @@ def escolher_opcao(opcoes, valor):
         return num[0] if len(num) == 1 else None
     contem = [o for o in opcoes if v in n(o)]
     return contem[0] if len(contem) == 1 else None
+
+
+MODOS_FACHADA = ('viabilidade', 'credito')   # operador da VPS: só consulta. Duplicidade usa o endereço padrão (não precisa).
+
+
+def pode_fachada(modo, params):
+    """16/11: o operador pode emprestar uma unidade da lista só para ler a viabilidade/crédito? Só nos modos de consulta,
+    só com o endereço do cliente e só se quem chamou não desligou (params['fachada'] = False)."""
+    p = params or {}
+    return modo in MODOS_FACHADA and p.get('origem_endereco') == 'cliente' and p.get('fachada', True) is not False
+
+
+def unidade_fachada(opcoes):
+    """A unidade emprestada para a consulta da fachada: a 1ª opção não vazia da lista (None se não houver)."""
+    return next((o for o in opcoes or [] if str(o or '').strip()), None)
 
 
 def classificar_formas(formas):
@@ -1013,6 +1035,20 @@ class Consulta:
         raise Parar('complemento_fora_lista', motivo=motivo,
                     opcoes={'tipo': 'complemento', 'lista': ops[:400], 'situacao': situacao, 'batem': batem[:100]})
 
+    def alvo_ou_fachada(self, ops, valor):
+        """alvo_complemento(); se ele parar e o modo permitir (pode_fachada), devolve a unidade emprestada e marca
+        out['unidade_a_confirmar'] — o resultado depois diz 'viável no endereço, unidade a confirmar'."""
+        try:
+            return self.alvo_complemento(ops, valor)
+        except Parar as p:
+            usada = unidade_fachada(ops)
+            if not usada or not pode_fachada(self.modo, self.p):
+                raise
+            self.out['unidade_a_confirmar'] = {'informada': valor or None, 'usada': usada, 'motivo': p.extra.get('motivo'),
+                                               'opcoes': p.extra.get('opcoes')}
+            self.log(f'complemento: unidade a confirmar ({(p.extra.get("opcoes") or {}).get("situacao")}) — consulta da fachada')
+            return usada
+
     def complemento(self, valor):
         """Complemento do portal = lista FECHADA das unidades cadastradas no endereço ("Apartamento 101", "CASA A"…), que só
         abre com o clique; texto solto não vale e o Avançar não habilita (11/11). Escolhe a opção que bate com o informado
@@ -1022,7 +1058,7 @@ class Consulta:
         sel = pg.locator('select[name*="omplement" i]')
         if self.visivel(sel):
             ops = [o.strip() for o in sel.first.locator('option').all_inner_texts() if o.strip()]
-            alvo = self.alvo_complemento(ops, valor)
+            alvo = self.alvo_ou_fachada(ops, valor)
             sel.first.select_option(label=alvo)
             return
         # 11/11 ~23h (36016-130/170): o portal recria o campo — um input com name="complemento" aparece e some, e o que
@@ -1042,7 +1078,7 @@ class Consulta:
             self.comp_sem_lista = True      # campo sem lista: segue (se o portal exigir, o Avançar dirá)
             return
         try:
-            alvo = self.alvo_complemento(ops, valor)
+            alvo = self.alvo_ou_fachada(ops, valor)
         except Parar:
             pg.keyboard.press('Escape')
             raise
@@ -1203,6 +1239,11 @@ class Consulta:
         except Exception as e:  # noqa: BLE001
             resultado, extra = 'erro', {'motivo': f'{type(e).__name__}: {sem_pii(e)}'}
         finally:
+            uac = self.out.get('unidade_a_confirmar')
+            if uac and self.modo == 'viabilidade' and resultado == 'sem_viabilidade':
+                # 16/11: com a unidade emprestada só o "viável" vale; o "não" volta a ser a unidade fora da lista, como antes
+                resultado, extra = 'complemento_fora_lista', {'motivo': uac.get('motivo'), 'opcoes': uac.get('opcoes')}
+                self.out.pop('unidade_a_confirmar', None)
             if self.trava and resultado != 'erro':
                 resultado, extra = 'erro', {'motivo': f'trava acionada: {self.trava}', 'trava': True}
             self.ler_pedido_seguro()
@@ -1218,6 +1259,8 @@ class Consulta:
             out['motivo'] = sem_pii(extra['motivo'])
         if extra.get('texto_tela'):
             out['texto_tela'] = extra['texto_tela']
+        if not extra.get('opcoes') and (out.get('unidade_a_confirmar') or {}).get('opcoes'):
+            extra['opcoes'] = out['unidade_a_confirmar']['opcoes']   # 16/11: a tela mostra a lista para escolher a unidade
         if extra.get('opcoes'):
             out['opcoes'] = extra['opcoes']       # a tela mostra como botões; tocar refaz a consulta com a escolhida
         if extra.get('trava'):
