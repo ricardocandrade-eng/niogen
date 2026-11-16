@@ -27,9 +27,9 @@
 <link rel="stylesheet" href="assets/app.css?v=161126-10">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=161126-8"></script>
+<script src="assets/app.js?v=161126-16"></script>
 <script src="assets/sidebar.js?v=161126-8"></script>
-<script src="assets/conversa.js?v=161126-8"></script>
+<script src="assets/conversa.js?v=161126-16"></script>
 <script src="assets/ficha.js?v=161126-11"></script>
 </head>
 <body class="tela-conversas">
@@ -129,7 +129,7 @@
   async function carregar() {
     const { data, error } = await NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
     if (error) { itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
-    lista = data || [];
+    lista = (data || []).map((c) => ({ ...c, nome: NG.nomeLegivel(c.nome, c.telefone) }));   // 16/11: nome legível (conversa 119)
     const [fu, fn] = await Promise.all([NG.furosJornada(), NG.funilNomes()]);
     furos = fu.ids || new Set();
     fnome = fn;

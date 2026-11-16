@@ -142,7 +142,11 @@
     if (r && !r.error) { try { localStorage.setItem(k, JSON.stringify({ t: Date.now(), data: r.data })); } catch (e) { /* ok */ } }
     return r;
   }
-  const jornadaMonta = (data) => ({
+  const jornadaMonta = (dados) => {
+    const data = (dados || []).map((j) => (j.nome ? { ...j, nome: nomeLegivel(j.nome, j.telefone) } : j));   // 16/11: nome legível
+    return jornadaMonta2(data);
+  };
+  const jornadaMonta2 = (data) => ({
     lista: (data || []).filter((j) => j.etapa > 0), todas: data || [],
     porVenda: Object.fromEntries((data || []).filter((j) => j.venda_id).map((j) => [j.venda_id, j])),
     porConversa: Object.fromEntries((data || []).filter((j) => j.conversa_id).map((j) => [j.conversa_id, j])),
@@ -457,6 +461,24 @@
   const diasEntre = (a, b) => Math.floor((dt(b) - dt(a)) / 86400000);
   // Janela de instalação: o horário gravado indica o período (antes do meio-dia = manhã).
   const janela = (v) => (v ? (Number(parts(dt(v), { hour: '2-digit', hour12: false })) < 12 ? '8–12h' : '13–17h') : '');
+  // 16/11 (conversa 119, nome "♞🇩̳̿͟͞🇦̳̿͟͞🇳̳̿͟͞ ♜" virou quadradinhos no Live e o Ricardo não achou o cliente): nome do WhatsApp
+  // com letra "enfeitada" vira letra comum — letras de bandeira (🇩🇦🇳 → DAN), negrito/itálico/círculo matemáticos (NFKC),
+  // traços e sublinhados empilhados (marcas que sobram depois do NFC; acento de nome de verdade já vem junto da letra) e
+  // símbolos/emoji. Sem letra nenhuma no fim → o telefone. Só a exibição muda; o banco guarda o nome como veio.
+  const fmtFone = (t) => {
+    const d = String(t || '').replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '');
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return d;
+  };
+  function nomeLegivel(nome, telefone) {
+    const orig = String(nome || '').trim();
+    let s = orig.replace(/[\u{1F1E6}-\u{1F1FF}]/gu, (ch) => String.fromCharCode(65 + ch.codePointAt(0) - 0x1F1E6));
+    try { s = s.normalize('NFKC').normalize('NFC'); } catch (e) { /* navegador antigo: segue */ }
+    s = s.replace(/\p{M}/gu, '').replace(/[^\p{L}\p{N}\s.'’-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    if (!/\p{L}/u.test(s)) return fmtFone(telefone) || orig || '—';
+    return s;
+  }
   const primeiroNome = (nome) => {
     const p = String(nome || '').trim().split(/\s+/);
     return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : p[0] || '—';
@@ -1716,7 +1738,7 @@
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
-    esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome,
+    esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome, nomeLegivel, fmtFone,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel

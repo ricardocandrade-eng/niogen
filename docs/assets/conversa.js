@@ -228,7 +228,7 @@
       const c = st.d.c;
       const dn = dono(c);
       const jn = janela();
-      const nome = (c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente';
+      const nome = NG.nomeLegivel((c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente', c.telefone);   // 16/11: nome legível
       const link = NG.linkChatwoot(c.chatwoot_conversation_id);
       // 14/11 (Ricardo: "não precisamos das opções Ricardo, Time backoffice e Mari… um botão de interruptor entre os dois"):
       // o seletor de dono virou interruptor de 2 posições — Mari ⇄ Time backoffice. Conversa com uma pessoa (agente no
