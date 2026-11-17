@@ -517,3 +517,27 @@ $$ select telefone from sim.cw where conv = sim._conv(p_conversa) $$;
 create or replace function sim.hora(p_hhmm text) returns timestamptz language sql stable as
 $$ select (date_trunc('day', now() at time zone 'America/Sao_Paulo') + p_hhmm::time) at time zone 'America/Sao_Paulo' $$;
 grant execute on all functions in schema sim to public;
+
+-- venda pronta para agendar: crédito aprovado e biometria validada (como backoffice). Devolve a conversa.
+create or replace function sim.venda_pronta(p_nome text, p_assumir boolean default false) returns uuid language plpgsql as $$
+declare c uuid := sim.lead_com_venda(p_nome);
+begin
+  perform sim.como('backoffice');
+  if p_assumir then perform public.backoffice_momento(sim.venda(c), 'assumir'); perform sim.fila_rodar(); perform sim.como('backoffice'); end if;
+  perform public.backoffice_momento(sim.venda(c), 'credito', '{"resultado":"aprovado"}');
+  perform public.backoffice_momento(sim.venda(c), 'biometria', '{"resultado":"validada"}');
+  perform sim.fila_rodar();
+  perform sim.como('servico');
+  return c;
+end $$;
+-- a Consulta OS / OSAB leu "Instalada" (o que o operador grava na venda)
+create or replace function sim.instalou(p_conversa uuid) returns void language plpgsql as $$
+begin
+  perform sim._servico();
+  update public.vendas set status = '3_instalado', instalado_em = now() where id = sim.venda(p_conversa);
+  perform sim.diz('Nio (Consulta OS)', 'instalada');
+end $$;
+-- quantas mensagens um passo da cadência mandou nesta conversa
+create or replace function sim.envios_de(p_conversa uuid, p_por text) returns int language sql stable as
+$$ select count(*)::int from sim.envios where conversa = p_conversa and por = p_por $$;
+grant execute on all functions in schema sim to public;
