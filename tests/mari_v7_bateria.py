@@ -242,12 +242,12 @@ def cen_e(c):   # DFV não encontrado → fala igual
     c.exige(rows and rows[0].get('dfv_resultado'), f'(e) DFV não consultado na hora do endereço: {rows}')
 
 
-def cen_g(c):   # Nio ativa nesta unidade → humano com time
+def cen_g(c):   # Nio ativa nesta unidade → já é cliente Nio: despedida com os canais oficiais (17/11, Ricardo: somos revenda)
     r = ate_planos(c, '36036-233', '175', 'Uso a Nio')
     c.exige('ativa' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(g) não perguntou se a Nio está ativa')
     r = c.diz('Sim, tá ativa aqui no meu nome')
-    c.exige((r.get('handoff') or {}).get('motivo') == 'pedido_humano', f'(g) sem handoff pedido_humano: {r.get("handoff")}')
-    c.exige('melhor forma de te atender' in norm(r.get('resposta')), '(g) sem a fala "ver a melhor forma de te atender"')
+    c.exige((r.get('handoff') or {}).get('motivo') == 'ja_cliente_nio', f'(g) sem handoff ja_cliente_nio: {r.get("handoff")}')
+    c.exige(re.search(r'app nio|0800', norm(r.get('resposta'))), '(g) não indicou os canais oficiais da Nio')
 
 
 def cen_h(c):   # "tinha Oi" → segue com a pista

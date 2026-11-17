@@ -541,6 +541,15 @@ def cen_ad(c):   # P29 (12/11 ~10h; rev. 15/11, Ricardo — caso Grace): crédit
             f'[P29] depois do handoff a Mari trocou o CPF / rodou a 2ª consulta sozinha: {rows}')
 
 
+def cen_al(c):   # P38 (17/11, Ricardo): cliente que já é Nio, irritado → canais oficiais + despedida, nunca uma pessoa (somos revenda)
+    c.diz('Oi')
+    r = c.diz('Sou cliente Nio e minha internet tá caindo toda hora, ninguém da Nio resolve, tô revoltado! Quero falar com alguém agora')
+    t = fala(r)
+    c.exige((r.get('handoff') or {}).get('motivo') == 'ja_cliente_nio', f'[P38] cliente Nio não foi encerrado como ja_cliente_nio: {r.get("handoff")}')
+    c.exige(re.search(r'app nio|0800', t), f'[P38] não indicou os canais oficiais da Nio: «{t[:220]}»')
+    c.exige(not re.search(r'consultor|vou te passar|nosso time (vai|te)|em ate 2 horas', t), f'[P38] prometeu atendimento nosso: «{t[:220]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -566,6 +575,8 @@ PORTAO = {
     'ah': (41, cen_ah, 'P33'), 'ai': (42, cen_ai, 'P34'),
     # 16/11 — caso Queroly (conversa 138): unidade depois dos planos, e-mail repetido, forma já dita
     'aj': (43, cen_aj, 'P35'), 'ak': (44, cen_ak, 'P36 P37'),
+    # 17/11 — cliente que já é Nio: encerra com os canais oficiais, em qualquer tom (somos revenda)
+    'al': (45, cen_al, 'P38'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

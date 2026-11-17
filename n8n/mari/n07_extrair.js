@@ -856,8 +856,8 @@ let motivo = null;
 if (handoffYaml) {
   motivo = norm(hy.motivo_handoff || '').replace(/[^a-z_]/g, '');
   if (!MOTIVOS.includes(motivo)) motivo = 'pedido_humano';
-  // v7 (A10): a Mari NUNCA encerra por "já é cliente" — Nio ativa nesta unidade vira humano (com time).
-  if (V7 && motivo === 'ja_cliente_nio') motivo = 'pedido_humano';
+  // 17/11 (Ricardo): cliente que já é Nio, em qualquer situação, é encerrado com os canais oficiais — somos revenda.
+  // (Antes, v7/A10: ja_cliente_nio virava pedido_humano.)
 }
 // v7: "já tem Nio" deixa de ser trava (é pista); a elegibilidade fica ok e a conversa segue.
 if (V7 && ['ja_cliente', 'cancelou_30d'].includes(upd.elegibilidade)) upd.elegibilidade = 'ok';
@@ -1016,7 +1016,7 @@ if (motivo) {
         : `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
       recusa_compra: 'Sem problema! Se mudar de ideia, é só me chamar aqui. Foi um prazer conversar com você 😊',
       fora_de_area: 'Por enquanto a gente atende só algumas cidades de Minas 😕 Obrigada pelo contato!',
-      ja_cliente_nio: 'Como o endereço já tem Nio, é direto com eles: App Nio ou 0800 001 1000 😊',
+      ja_cliente_nio: 'Entendi! Como você já é cliente Nio, quem te atende é a própria Nio — pelo App Nio ou no 0800 001 1000 eles resolvem bem mais rápido. Nós somos uma revenda e só cuidamos de contratação nova, tá? Obrigada pelo contato 😊',
     }[motivo] || `Vou te passar pra um dos nossos consultores, que te chama aqui mesmo ${prazo} 😊`;
   }
 }

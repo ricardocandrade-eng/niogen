@@ -28,7 +28,7 @@ const SAIDA = ['recusa_compra', 'fora_de_area', 'sem_cobertura', 'interesse_cain
 let tipo;
 if (VENDA.includes(motivo)) tipo = 'venda';
 else if (HUMANO.includes(motivo)) tipo = 'humano';
-else if (motivo === 'ja_cliente_nio') tipo = /reclam/i.test(briefing) ? 'humano' : 'saida';   // cliente Nio reclamando = humano agora
+else if (motivo === 'ja_cliente_nio') tipo = 'saida';   // 17/11 (Ricardo): cliente Nio é de ninguém, em qualquer tom — somos revenda
 else if (SAIDA.includes(motivo)) tipo = 'saida';
 else tipo = 'humano';                                                                      // motivo desconhecido: na dúvida, gente
 
