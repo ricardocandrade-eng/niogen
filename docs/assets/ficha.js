@@ -3089,19 +3089,30 @@
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
         ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
         ${ehBO() && !fimV ? btBio : ''}
+        ${ehBO() && !fimV && v.biometria_status !== 'validada' && (String(v.nio_pedido || '').trim() || ['aprovado', 'so_cartao'].includes(v.credito_resultado))
+          // 17/11 (Ricardo, caso Lucas: "Não consigo gravar a biometria como concluída"): o registro à mão fica no próprio cartão,
+          // como no Crédito — antes só existia em ⋯ › Ações da venda (e sumia atrás do "Cliente escreveu").
+          ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-momento="biometria" data-r="validada">✓ Biometria validada</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="risco">Com risco</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="dispensada">Nio dispensou</button><span class="nota-campo">o GED360 mostra Concluído/Aprovado ou o portal liberou? grave aqui</span></div>` : ''}
         ${ehBO() && !fimV && ['pendente', 'com_risco'].includes(v.biometria_status) ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
     } else if (p.k === 'os') {
       corpo = conv ? `${linhaDet('Pedido (OS)', 'depois do crédito aprovado')}${ehBO() && !(d.conv && d.conv.funil_destino && d.conv.funil_destino !== 'em_andamento') ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o pedido / OS">Virar venda</button></div>' : ''}` : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}
         ${a.portal_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.portal_alerta)}</span>${visto('portal', a.portal_pedido)}</div>` : ''}
-        ${fonte('portal PAP')}`;
+        ${fonte('portal PAP')}
+        ${ehBO() && v.status === '0_qualificado' ? (v.biometria_status === 'validada'
+          // 17/11 (Ricardo): gravar a OS e o agendamento pela ficha, no próprio cartão. Mesma porta do "Gravar venda" (os / os_agendar).
+          ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="fc-form" data-form="os" data-agenda="1">Gravar a OS e o agendamento</button><span class="nota-campo">nº da OS do portal; o dia e o período, se a Consulta OS ainda não trouxe</span></div>'
+          : '<span class="nota-campo">A OS só se grava com a biometria aprovada: grave a biometria no cartão acima.</span>') : ''}`;
     } else {
       corpo = conv ? linhaDet('Instalação', 'depois do pedido') : `${linhaDet('Agendada', esc(v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '—'))}
         ${linhaDet('Instalada', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}
         ${linhaDet('OSAB', esc(v.nio_situacao || '—'))}
         ${v.nio_pendencia_cod || v.nio_pendencia_desc ? linhaDet('Pendência Nio', `<span class="warn-txt">${esc([v.nio_pendencia_cod, v.nio_pendencia_desc].filter(Boolean).join(' · '))}</span>`) : ''}
         ${linhaDet('Documentos', esc(v.docs_dispensados_em ? 'dispensados (venda remota)' : v.docs_entregues_em ? `entregues ${NG.fmtData(v.docs_entregues_em)}` : v.docs_prazo_em ? `até ${NG.fmtData(v.docs_prazo_em)} (15 dias)` : '—'))}
-        ${fonte('portal PAP · OSAB da Nio')}`;
+        ${fonte('portal PAP · OSAB da Nio')}
+        ${ehBO() && ['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalado_em
+          // 17/11 (Ricardo): agendar ou reagendar pela ficha, no próprio cartão (mesma porta do "Agendar"/"Reagendar").
+          ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm${v.instalacao_agendada_para ? '' : ' btn-acc'}" data-f="fc-form" data-form="agendar">${v.instalacao_agendada_para ? 'Reagendar a instalação' : 'Gravar o agendamento'}</button><span class="nota-campo">${v.instalacao_agendada_para ? 'só se a Nio ou o cliente mudou a data' : 'o dia e o período que o portal agendou'}</span></div>` : ''}`;
     }
     return `<div class="fc-pop" role="dialog" aria-label="${esc(p.nome)}"><div class="fc-pop-h"><b>${esc(p.nome)}</b><small>${esc(p.d || '')}</small>
       <button type="button" class="fc-x" data-f="fc-etapa" data-k="${p.k}" aria-label="Fechar">${IC.x}</button></div>${corpo}</div>`;
@@ -4393,6 +4404,11 @@
     }
     if (a === 'fc-pend') { fc.pend = !fc.pend; render(); return; }
     if (a === 'fc-passo') { fc.passo = true; fc.passoX = false; fc.ver = null; fc.pend = false; fc.etapa = null; render(); return; }
+    if (a === 'fc-form' && FORMS[b.dataset.form]) {   // 17/11: botão do cartão da jornada abre o formulário no painel de ações
+      formAtivo = b.dataset.form; fc.passo = true; fc.passoX = false; fc.ver = null; fc.pend = false; fc.etapa = null; render();
+      if (b.dataset.agenda) { const det = raiz.querySelector(`[data-form="${formAtivo}"] .f-agenda-mao`); if (det) det.open = true; }
+      return;
+    }
     if (a === 'fc-passo-x') { fc.passo = false; fc.passoX = true; if (formAtivo === 'conv_espera') convEsperaFechado = true; formAtivo = null; passoAberto = new Set(); render(); return; }
     if (a === 'fc-ver') { fc.ver = b.dataset.q; fc.passo = false; fc.conf = false; fc.etapa = null; render(); return; }
     if (a === 'fc-ver-x') { fc.ver = null; edicao = null; render(); return; }
