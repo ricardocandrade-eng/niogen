@@ -177,3 +177,5 @@ main.venda .toast { bottom: 104px; z-index: 6; }
 .cond-det summary { cursor: pointer; }
 .cond-det div { margin-top: 2px; }
 .conduzir .aviso { padding: 6px 8px; }
+/* 0.8.0 (passo 6, 0269): o "vai acontecer" que vem da porta do banco, antes do clique */
+.sub.efeito { color: #8FE39A; }

@@ -2048,6 +2048,97 @@
     desenhar();
     const fs = raiz && raiz.querySelector('[data-form="saida"]');
     if (fs) ajustarSaida(fs, true);
+    aplicarPorta();
+  }
+
+  // Card Agora (passo 6, Ricardo 17/11): os botões de ação do passo da vez, tirados do painel de ações, à vista e do mesmo
+  // tamanho (até 4). Só botões que viram evento na porta ou consultas; formulários e o resto continuam em "Ações".
+  const F_CARD = ['bio-ler', 'os-ler', 'consultar-portal', 'viab-rapido', 'reabrir', 'virar-venda', 'conv-espera', 'pend-abrir'];
+  function botoesDoPasso(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html || '';
+    const vistos = new Set();
+    return [...tpl.content.querySelectorAll('button[data-momento], button[data-csaida], button[data-f]')]
+      .filter((b) => !b.closest('form, [hidden], details') && (b.dataset.momento || b.dataset.csaida || F_CARD.includes(b.dataset.f)))
+      .filter((b) => { const k = b.textContent.trim(); if (vistos.has(k)) return false; vistos.add(k); return true; })
+      .slice(0, 4)
+      .map((b) => { b.className = `btn${b.classList.contains('btn-acc') ? ' btn-acc' : ''}`; return b.outerHTML; }).join('');
+  }
+
+  // ---------- passo 6 (0269): os botões vêm da porta ----------
+  // Regra de ouro 3: "Botão só existe se o banco aceita aquele evento naquela situação — e mostra, antes do clique, o que vai
+  // desencadear." d.porta = porta_botoes(conversa, venda). A ficha continua decidindo QUAL é o próximo passo; a porta decide se
+  // ele vale agora: o recusado sai da tela e vai para "Não vale agora" com a frase do banco; o aceito ganha o "vai acontecer".
+  const EV_F = { reabrir: 'reabrir', 'virar-venda': 'virar_venda', 'trocar-titular': 'trocar_titular', mover: 'mover_admin:*',
+    'saida-form': 'saida:*', 'conv-espera': 'aguardar', 'fc-concluir': 'dispensar', 'af-dec': 'antifraude:*' };
+  function eventoDe(el) {
+    const ds = el.dataset || {};
+    if (ds.momento) return `momento:${ds.momento}${ds.r && ['viabilidade', 'credito', 'biometria'].includes(ds.momento) ? `:${ds.r}` : ''}`;
+    if (ds.csaida) return `silenciar:${ds.csaida}`;
+    return (ds.f && EV_F[ds.f]) || null;
+  }
+  const semDepois = (t) => String(t || '').replace(/\s*Depois:.*$/, '');
+  function portaResp(ev) {
+    const E = d && d.porta && d.porta.eventos;
+    if (!E || !ev) return null;
+    if (E[ev]) return E[ev];
+    if (ev.endsWith(':*')) {   // família (Saída…): vale se algum motivo dela vale
+      const ks = Object.keys(E).filter((k) => k.startsWith(ev.slice(0, -1)));
+      if (!ks.length) return null;
+      const ok = ks.find((k) => E[k].ok);
+      return ok ? { ok: true, efeito: semDepois(E[ok].efeito) } : { ok: false, frase: E[ks[0]].frase };
+    }
+    const p = ev.split(':');
+    for (let k = p.length - 1; k >= 1; k -= 1) { const f = `${p.slice(0, k).join(':')}:*`; if (E[f]) return E[f]; }
+    return null;
+  }
+  function aplicarPorta() {
+    if (!raiz || !d || !d.porta || !d.porta.eventos) return;
+    const fora = new Map();
+    raiz.querySelectorAll('button[data-momento], button[data-csaida], button[data-f], [role="menuitem"][data-f]').forEach((el) => {
+      const p = portaResp(eventoDe(el));
+      if (!p) return;
+      const rot = el.textContent.replace(/\s+/g, ' ').trim();
+      if (!p.ok) { if (rot && p.frase) fora.set(rot, p.frase); el.remove(); return; }
+      if (p.efeito) {
+        el.dataset.efeito = p.efeito;
+        if (!el.dataset.tituloAntes) el.dataset.tituloAntes = el.title || '';
+        el.title = `${el.dataset.tituloAntes ? `${el.dataset.tituloAntes}\n\n` : ''}Vai acontecer: ${p.efeito}`;
+      }
+    });
+    // Saída: só os motivos que a porta aceita nesta situação
+    raiz.querySelectorAll('select[data-saida-motivo] option').forEach((o) => {
+      if (!o.value || o.selected) return;
+      const p = portaResp(`saida:${o.value}`);
+      if (p && !p.ok) o.remove();
+    });
+    raiz.querySelectorAll('[data-porta-fora]').forEach((x) => x.remove());
+    raiz.querySelectorAll('.fc-passo-corpo').forEach((b) => b.insertAdjacentHTML('beforeend', '<p class="fc-efeito" hidden data-porta-fora></p>'));
+    // no card Agora, o efeito do 1º botão já fica à vista; passar o mouse em outro troca o texto
+    const card = raiz.querySelector('.fc2-agcard');
+    const prim = card && card.querySelector('.fc2-agb [data-efeito]');
+    const linhaC = card && card.querySelector('.fc-efeito');
+    if (prim && linhaC) { linhaC.textContent = efeitoTxt(prim); linhaC.hidden = false; }
+    const alvo = raiz.querySelector('.fc2-agcard') || raiz.querySelector('.fc-passo-corpo');
+    if (fora.size && alvo) {
+      alvo.insertAdjacentHTML('beforeend', `<details class="fc-naovale" data-porta-fora><summary>Não vale agora (${fora.size})</summary><ul>${
+        [...fora].map(([r, f]) => `<li><b>${esc(r)}</b> — ${esc(f)}</li>`).join('')}</ul></details>`);
+    }
+  }
+  // "Vai acontecer" à vista (não só no title, que o celular não mostra): passar o mouse ou o foco num botão mostra o efeito
+  // na linha do card Agora ou do painel de ações.
+  function efeitoTxt(b) {   // "Reabrir — Reabrir: sai da Saída…" vira "Reabrir: sai da Saída…"
+    const rot = b.textContent.replace(/\s+/g, ' ').trim();
+    const ef = b.dataset.efeito || '';
+    return ef.toLowerCase().startsWith(rot.toLowerCase().replace(/[^a-zà-ú ]/g, '').trim().split(' ')[0]) ? ef : `${rot} — ${ef}`;
+  }
+  function mostrarEfeito(ev) {
+    const b = ev.target && ev.target.closest ? ev.target.closest('[data-efeito]') : null;
+    const box = b && b.closest('.fc2-agcard, .fc-passo-corpo');
+    const linha = box && box.querySelector('.fc-efeito');
+    if (!linha) return;
+    linha.textContent = efeitoTxt(b);
+    linha.hidden = false;
   }
   function desenhar() {
     if (!raiz || !d) return;
@@ -2309,7 +2400,12 @@
     const id = idAtual;
     const ehConv = String(id).startsWith('c:');
     const fresco = !quieto && !(op && op.abrindo);   // depois de ação: dado fresco; ao abrir ou no eco, o que já está em memória
+    // Passo 6 (0269, regra de ouro 3): os botões que valem nesta situação e o que cada um faz — na mesma rodada, em paralelo.
+    // Sem resposta (função fora do ar ou ainda não publicada): a ficha desenha como antes, sem esconder nada.
+    const pPorta = NG.sb.rpc('porta_botoes', ehConv ? { p_conversa: id.slice(2) } : { p_venda: id })
+      .then((x) => (x.error ? null : x.data), () => null);
     const r = ehConv ? await carregarConversa(id.slice(2), fresco) : await carregar(id, fresco);
+    if (r && !r.erro && !r.venda) r.porta = await pPorta;
     if (id !== idAtual) return;   // trocou de venda no meio
     let sig = '';
     try { sig = JSON.stringify(r); } catch (e) { sig = String(Date.now()); }
@@ -2332,6 +2428,8 @@
     raiz && raiz.querySelectorAll('[data-f="menu"]').forEach((b) => b.setAttribute('aria-expanded', 'false'));
   }
   function ligar(el) {
+    el.addEventListener('mouseover', mostrarEfeito);
+    el.addEventListener('focusin', mostrarEfeito);
     el.addEventListener('click', async (ev) => {
       const cp = ev.target.closest('[data-copiar]');
       if (cp) { copiar(cp.dataset.copiar, 'Copiado.'); return; }
@@ -3304,7 +3402,7 @@
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
-      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${chips}</div><div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
+      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1></div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
@@ -4150,6 +4248,7 @@
     const ehAdmin = (NG.usuario || {}).perfil === 'admin';
     let cab, trilha, agora, cards, over = '';
     let band = '', jor = null, dad = null, overs = '';   // ficha nova (14/11)
+    let agBts = '';   // 17/11 (passo 6): os botões do passo, à vista no card Agora
     if (!conv) {
       const v = d.v;
       const pr = NG.proximoPasso(v, (d.contatos[0] || {}).em);
@@ -4172,8 +4271,13 @@
       const meta = [[d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? NG.fmtMoeda(v.valor_mensal) : null, v.forma_pagamento ? FORMA_TXT[v.forma_pagamento] || v.forma_pagamento : null].filter(Boolean).join(' · '),
         v.contato_nome ? `contato: ${NG.primeiroNome(v.contato_nome)}${v.contato_relacao ? ` (${v.contato_relacao})` : ''}` : null,
         v.bairro, v.cidade, NG.origemTxt(v) + ref].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);   // 0186: selo Meta
-      cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}`,
-        `${meta}${cv && cv.chatwoot_conversation_id ? ` · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>` : ''}`, menu);
+      // 17/11 (passo 6, Ricardo): cabeçalho em 3 linhas — nome grande · CPF e OS (copiar) e origem · plano, valor e cidade-UF.
+      // O AGORA saiu do topo: virou o card no alto da Jornada. "Conversa com" fica na Jornada (degrau Atendimento) e no card.
+      void meta;
+      const l3V = [d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? `${NG.fmtMoeda(v.valor_mensal)}/mês` : null,
+        [v.cidade, v.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);
+      cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}<span class="fc-orig">Origem: <b>${esc(NG.origemTxt(v) + ref)}</b></span>`,
+        l3V || 'plano: não escolheu', menu);
       trilha = trilhasHtml();
       const E = escadaPartes(true);
       const tom = p.alertaConv ? 'now' : TOM[p.nivel] || 'mute';
@@ -4187,6 +4291,7 @@
         ${responder ? '<button type="button" class="fc-link" data-f="fc-passo" title="Próximo passo da venda e atalhos (pendência, devolver para a Mari, saída…)">Ações da venda</button>' : ''}${E ? E.reabrir : ''}</div>`;
       agora = `<div class="fc-agora-w">${agoraHtml(tom, k, t, s, botao, pendLinha(v), E ? E.info : '')}${pendOver()}</div>`;
       cards = `<div class="fc-cards">${cardsVenda(v)}${verTudo(v)}${passoOver(v, p)}${etapaOver(passosVenda(v))}</div>`;
+      agBts = botoesDoPasso(`${E && E.reabrir ? E.reabrir : ''}${p.alertaConv ? p.corpoConv || '' : ''}${p.corpo || ''}`);   // em Saída, Reabrir vem 1º
       const pe = d.pend;
       const chipV = pe ? `<button type="button" class="fc2-ag-pend" data-f="fc-pend" title="${esc([pe.nome, pe.descricao].filter(Boolean).join(' · '))}">${IC.pausa}pendência · revisar ${esc(pe.diaTxt)}</button>`
         : (ehBO() && ['0_qualificado', '1_vendido', '2_aguardando_instalacao', '3_instalado'].includes(v.status) ? '<button type="button" class="fc2-ag-link" data-f="pend-abrir">⏸ Abrir pendência</button>' : '');
@@ -4207,7 +4312,8 @@
       const precoC = plC ? (['cartao', 'CREDITO'].includes(c.forma_pagamento) && plC.preco_cartao ? plC.preco_cartao : plC.preco) : null;
       const planoLinha = [plC ? plC.nome_curto || plC.nome : P.q.plano_nome || c.plano_escolhido, precoC != null ? NG.fmtMoeda(precoC) : null,
         c.forma_pagamento ? FORMA_TXT[c.forma_pagamento] || FORMAS[c.forma_pagamento] || c.forma_pagamento : null].filter(Boolean).join(' · ');
-      cab = cabCheia(c.nome, chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : ''), `${[planoLinha || 'plano: não escolheu', (c.endereco_cep || {}).bairro, c.cidade, c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : null].filter(Boolean).map(esc).join(' · ')} · <span class="fc-dono-k">conversa com</span> <span class="fc-dono">${dn.html}</span>`, menu,
+      cab = cabCheia(c.nome, `${chipCopia('CPF', x.cpf ? fmtDoc(x.cpf) : '')}<span class="fc-orig">Origem: <b>${esc(c.origem && c.origem !== 'mari' ? (NG.ORIGENS[c.origem] || c.origem) : 'Mari (direto)')}</b></span>`,
+        [planoLinha || 'plano: não escolheu', [c.cidade, c.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · '), menu,
         ehBO() && !P.silenciada && !c.nao_contatar ? '<button type="button" class="btn" data-csaida="suporte_nio" title="Cliente só perturbando ou pedindo suporte da Nio: não é venda. A Mari cala e ele não volta para o Live (desfaz por Reativar).">📵 Silenciar</button>' : '');
       trilha = trilhasHtml();
       const E = escadaPartes(false);
@@ -4216,6 +4322,7 @@
       const pendH = P.emEspera ? `<div class="fc-ag-pend"><span class="fc-pill pend">${IC.pausa}em espera</span><span class="fc-pt">até ${esc(NG.fmtData(c.espera_ate))} · ${esc(c.espera_motivo || '')}</span></div>` : '<div class="fc-ag-pend none"><span>Sem pendência</span></div>';
       agora = `<div class="fc-agora-w">${agoraHtml(tom, `${P.silenciada ? 'Silenciada' : NIVEL_K[P.nivel] || 'Conversa'} · conversa sem venda`, P.silenciada ? 'Cliente Nio · suporte — fora do Live' : (P.j.o_que_fazer || 'Mari atendendo'),
         feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`, botao, pendH, E ? E.info : '')}</div>`;
+      agBts = botoesDoPasso(`${E && E.reabrir ? E.reabrir : ''}${P.corpoPasso || ''}`);
       const L = dadosConversaLista(c);
       const travas = P.travasC;
       const abertoP = fc.passo || formAtivo === 'conv_espera' || formAtivo === 'saida';
@@ -4256,7 +4363,7 @@
     const dadosOn = !!(fc.dados || fc.edG || fc.hist || /\S/.test(overs));
     const faltaPill = dad && dad.faltam ? `<span class="fc-pill warn">faltam ${dad.faltam}</span>` : '<span class="fc-pill ok">completos</span>';
     raiz.innerHTML = `<div class="fc fc2">
-      ${cab.replace('<!--AGORA-->', band ? band.html : '').replace('<!--AG-ITENS-->', band ? band.itens : '')}${escadaTrilha()}
+      ${cab.replace('<!--AGORA-->', '').replace('<!--AG-ITENS-->', band ? band.itens : '')}${escadaTrilha()}
       <div class="fc-abas fc2-abas" role="tablist" aria-label="O que mostrar">${abaT('conv', 'Conversa')}${abaT('jor', 'Jornada')}${abaT('ficha', 'Dados')}</div>
       <div class="fc2-grid aba-${fc.aba}${dadosOn ? ' dados-on' : ''}">
         <section class="fc-col fc-col-conv" aria-label="Conversa">${handoffHtml(conv ? d.conv : d.convInfo)}${temConv ? '<div class="fc-conv-host"></div>'
@@ -4264,6 +4371,7 @@
               <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
+          ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${agBts ? `<div class="fc2-agb">${agBts}</div>` : ''}<p class="fc-efeito" hidden></p></div>` : ''}
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
           ${jor ? jor.html : ''}
         </section>

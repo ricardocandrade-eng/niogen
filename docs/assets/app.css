@@ -3471,3 +3471,28 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc2-et.s-fail .fc2-et-ic { background: rgba(240,96,96,.15); border-color: #B23B3B; color: #FF8A8A; }
 .fc2-et.s-fail .fc2-et-t small { color: #FF8A8A; }
 .f-rp.x i, .f-rp.x .f-rp-d { color: #FF8A8A; }
+
+/* 17/11 (passo 6, 0269 — Ricardo): cabeçalho da ficha em 3 linhas (nome grande · CPF, OS e origem · plano, valor e cidade-UF)
+   e o AGORA como card no alto da Jornada, com os botões do passo do mesmo tamanho e o "vai acontecer" do banco. */
+.fc2 .fc-top { min-height: 84px; align-items: flex-start; padding-top: 10px; padding-bottom: 10px; }
+.fc2 .fc-top .fc-tit { gap: 4px; }
+.fc2 .fc-l1 h1 { font-size: 22px; font-weight: 700; color: #E9EDF3; max-width: 100%; }
+.fc2 .fc-l2 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.fc2 .fc-orig { font-size: 12.5px; color: #8D97A3; white-space: nowrap; }
+.fc2 .fc-orig b { color: #C9D0DB; font-weight: 500; }
+.fc2 .fc-meta { font-size: 13px; color: #A6AFBE; }
+.fc2-agcard { flex: none; margin: 10px 10px 4px; padding: 10px 12px; border: 1px solid #262E38; border-radius: 12px; background: #11161C; display: flex; flex-direction: column; gap: 10px; }
+.fc2-agcard .fc2-agora { min-height: 0; padding: 0; border: 0; background: none; z-index: auto; cursor: pointer; }
+.fc2-agcard .fc2-ag-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.fc2-agcard .fc2-ag-t b { font-size: 14px; font-weight: 600; color: #E9EDF3; white-space: normal; }
+.fc2-agcard .fc2-ag-t small { font-size: 12px; color: #A6AFBE; white-space: normal; }
+.fc2-agb { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.fc2-agb .btn { width: 100%; min-width: 0; height: 34px; padding: 0 8px; font-size: 13px; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fc-efeito { margin: 0; padding: 8px 10px; border-radius: 8px; background: #102016; color: #8FE39A; font-size: 12.5px; line-height: 1.45; }
+.fc-naovale { font-size: 12.5px; color: #A6AFBE; }
+.fc-naovale summary { cursor: pointer; }
+.fc-naovale ul { margin: 6px 0 0; padding-left: 18px; line-height: 1.5; }
+.fc-naovale b { color: #C9D0DB; font-weight: 600; }
+@media (max-width: 760px) {
+  .fc2-agb { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

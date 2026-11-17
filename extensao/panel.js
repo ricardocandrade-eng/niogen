@@ -144,6 +144,22 @@
     return txt ? JSON.parse(txt) : null;
   }
   const rpc = (nome, args) => api(`/rest/v1/rpc/${nome}`, { method: 'POST', body: args || {} });
+  // 0.8.0 (passo 6, 0269 — regra de ouro 8: extensão = ficha): os botões que gravam no NIOGEN só aparecem se a porta do banco
+  // aceita o evento na situação do lead, e dizem antes do clique o que vai acontecer. Sem resposta da porta: desenha como antes.
+  async function carregaPorta() {
+    const args = S.dados && S.dados.venda_id ? { p_venda: S.dados.venda_id } : S.conversa && S.conversa.id ? { p_conversa: S.conversa.id } : null;
+    S.porta = null;
+    if (!args) return;
+    try { S.porta = await rpc('porta_botoes', args); } catch (e) { S.porta = null; }
+  }
+  function porta(ev) {
+    const E = S.porta && S.porta.eventos;
+    if (!E || !ev) return null;
+    if (E[ev]) return E[ev];
+    const p = ev.split(':');
+    for (let k = p.length - 1; k >= 1; k -= 1) { const f = `${p.slice(0, k).join(':')}:*`; if (E[f]) return E[f]; }
+    return null;
+  }
 
   async function entrar(email, senha) {
     const res = await fetch(`${CFG.supabaseUrl}/auth/v1/token?grant_type=password`, {
@@ -377,6 +393,7 @@
           throw new Error('Essa conversa não está mais disponível.');
         }
         if (S.conversa && (S.orelha === 'conversa' || S.turnos != null)) await carregaTurnos();
+        await carregaPorta();
         aviso('Dados atualizados.', 'ok');
       } else {
         await Promise.all([carregaFila(), carregaConversas()]);
@@ -392,7 +409,7 @@
       const plano = await planoDaConversa(c);
       S.venda = null; S.conversa = c; S.dados = dadosDaConversa(c, plano);
       S.matricula = ''; S.pedido = ''; S.os = ''; S.orelha = orelha || 'portal'; S.turnos = null; S.turnosErro = '';
-      await carregaJornada();
+      await Promise.all([carregaJornada(), carregaPorta()]);
       window.scrollTo(0, 0);
       if (S.orelha === 'conversa') carregaTurnos();
       try { await mandar({ tipo: 'estado?' }); } catch (e) { /* aviso aparece ao preencher */ }
@@ -422,7 +439,7 @@
       const d = await rpc('dados_portal', { p_venda_id: item.venda_id });
       if (!d) throw new Error('Não achei essa venda (ou você não tem acesso).');
       S.venda = item; S.dados = d; S.matricula = ''; S.pedido = ''; S.os = '';
-      await carregaJornada();
+      await Promise.all([carregaJornada(), carregaPorta()]);
       // 0102 (trava B1): avisos de possível duplicado (⚠️ ↩️ 🏠 📱) da ficha única — com aviso, o Gravar pede a conferência.
       S.selos = []; S.conferiRecompra = false;
       try { const av = await rpc('ficha_avisos', { p_venda: item.venda_id }); S.selos = ((av && av.selos) || []).filter((x) => x.venda_id !== item.venda_id); } catch (e) { S.selos = []; }
@@ -520,6 +537,7 @@
       const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
       S.registro = { ...(S.registro || {}), [qual]: resultado };
       S.feitas[qual === 'viabilidade' ? 2 : 3] = true; salvaJornada();
+      await carregaPorta();
       aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
@@ -941,11 +959,21 @@
   function registroNiogen(n) {
     if (!S.venda || !S.dados || !S.dados.venda_id || (n !== 2 && n !== 3)) return null;
     const feito = (S.registro || {})[n === 2 ? 'viabilidade' : 'credito'];
-    const B = (qual, res, rot, forte) => h('button', { class: `btn btn-sm ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, onclick: () => registra(qual, res) }, rot);
+    const fora = [];
+    let efeito = '';
+    const B = (qual, res, rot, forte) => {
+      const p = porta(`momento:${qual}:${res}`);
+      if (p && !p.ok) { fora.push(`${rot} — ${p.frase || 'não vale nesta situação'}`); return null; }
+      if (p && p.efeito && !efeito) efeito = `${rot}: ${p.efeito}`;
+      return h('button', { class: `btn btn-sm ${forte ? 'btn-acc' : ''}`, type: 'button', disabled: S.ocupado, title: p && p.efeito ? `Vai acontecer: ${p.efeito}` : null, onclick: () => registra(qual, res) }, rot);
+    };
+    const bts = n === 2 ? [B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado')]
+      : [B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')];
     return h('div', { class: 'registro' },
       h('span', { class: 'sub' }, n === 2 ? 'Viabilidade no NIOGEN:' : 'Crédito no NIOGEN:'),
-      n === 2 ? h('div', { class: 'acoes' }, B('viabilidade', 'viavel', 'Viável', true), B('viabilidade', 'sem_viabilidade', 'Sem viabilidade'), B('viabilidade', 'nao_encontrado', 'Não encontrado'))
-        : h('div', { class: 'acoes' }, B('credito', 'aprovado', 'Aprovado', true), B('credito', 'so_cartao', 'Só cartão'), B('credito', 'pendente', 'Pendente'), B('credito', 'negado', 'Negado')),
+      bts.some(Boolean) ? h('div', { class: 'acoes' }, ...bts.filter(Boolean)) : null,
+      efeito ? h('span', { class: 'sub efeito' }, `Vai acontecer · ${efeito}`) : null,
+      fora.length ? h('span', { class: 'sub' }, `Não vale agora: ${fora.join(' · ')}`) : null,
       n === 3 && (S.selos || []).length ? h('div', { class: 'aviso bad' },
         h('span', {}, `${S.selos.map((x) => ({ duplicado: '⚠️', saida: '↩️', dfv: '🏠', telefone: '📱' })[x.tipo] || '⚠️').join(' ')} ${S.selos.map((x) => x.texto).join(' · ')}`),
         h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!S.conferiRecompra, onchange: (ev) => { S.conferiRecompra = ev.target.checked; desenha(); } }),
@@ -961,6 +989,8 @@
     const f = S.osForm = S.osForm || { os: '', dia: '', periodo: '08:00', forma: (S.dados.oferta || {}).forma_pagamento || '', semAviso: false };
     const feito = (S.registro || {}).os_agendar;
     if (feito) return h('div', { class: 'registro' }, h('span', { class: 'sub ok' }, `✓ ${feito}`), linkFicha);
+    const pOs = porta('momento:os_agendar');
+    if (pOs && !pOs.ok) return h('div', { class: 'registro' }, h('span', { class: 'sub' }, `Gravar a OS não vale agora: ${pOs.frase || 'não vale nesta situação'}`), linkFicha);
     const inp = (k, attrs) => h('input', { ...attrs, value: f[k] || '', oninput: (ev) => { f[k] = ev.target.value; } });
     const sel = (k, opts) => h('select', { onchange: (ev) => { f[k] = ev.target.value; } },
       opts.map(([v, t]) => h('option', { value: v, selected: f[k] === v }, t)));
@@ -972,7 +1002,8 @@
       h('label', { class: 'sub' }, 'Forma de pagamento escolhida', sel('forma', [['', 'Escolher…'], ...Object.entries(FORMAS).map(([k, x]) => [k, x[0]])])),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!f.semAviso, onchange: (ev) => { f.semAviso = ev.target.checked; } }),
         ' Já avisei o cliente da biometria (o NIOGEN não manda o aviso)'),
-      h('div', { class: 'acoes' }, h('button', { class: 'btn btn-sm btn-acc', type: 'button', disabled: S.ocupado, onclick: gravaOS }, 'Gravar OS e agenda → vira Venda'), linkFicha),
+      h('div', { class: 'acoes' }, h('button', { class: 'btn btn-sm btn-acc', type: 'button', disabled: S.ocupado, title: pOs && pOs.efeito ? `Vai acontecer: ${pOs.efeito}` : null, onclick: gravaOS }, 'Gravar OS e agenda → vira Venda'), linkFicha),
+      pOs && pOs.efeito ? h('span', { class: 'sub efeito' }, `Vai acontecer · ${pOs.efeito}`) : null,
       h('span', { class: 'sub' }, f.forma === 'cartao' ? 'Cartão: depois da biometria a Nio manda o link do cadastro do cartão; a Mari avisa o cliente.' : 'A Nio manda o link da biometria; o NIOGEN avisa o cliente e lembra no D+1.'));
   }
   async function gravaOS() {
@@ -987,6 +1018,7 @@
         p_dados: { os, dia: f.dia, periodo: f.periodo || '08:00', forma: f.forma, origem: 'extensao', sem_aviso: !!f.semAviso } });
       S.registro = { ...(S.registro || {}), os_agendar: (r && r.resumo) || 'OS gravada' };
       S.feitas[7] = true; salvaJornada();
+      await carregaPorta();
       aviso(`${(r && r.resumo) || 'OS gravada no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
@@ -1085,11 +1117,13 @@
       linha = ok ? 'Crédito ok → biometria. OS e agenda: na ficha.' : 'Falta registrar o crédito (etapa 3).';
       fim = h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: concluiVenda }, 'Concluir');
     } else {
-      const virar = c && !c.venda_id && ['admin', 'backoffice'].includes(S.perfil);
+      const pV = porta('virar_venda');
+      const virar = c && !c.venda_id && ['admin', 'backoffice'].includes(S.perfil) && !(pV && !pV.ok);
       linha = c && c.venda_id ? 'Já é venda: abra a venda para registrar.'
         : virar ? 'Ainda não é venda. Pedido aberto (ou indo abrir) no portal? Vire venda para gravar a OS.' : 'Ainda não é venda: só viabilidade.';
       fim = c && c.venda_id ? h('button', { class: 'btn', type: 'button', disabled: S.ocupado, onclick: () => abreVenda({ venda_id: c.venda_id, cliente_nome: nomeConversa(c) }) }, 'Abrir a venda')
-        : virar ? h('button', { class: 'btn btn-acc', type: 'button', disabled: S.ocupado, onclick: () => virarVenda(c) }, 'Virar venda') : null;
+        : virar ? h('button', { class: 'btn btn-acc', type: 'button', disabled: S.ocupado, title: pV && pV.efeito ? `Vai acontecer: ${pV.efeito}` : null, onclick: () => virarVenda(c) }, 'Virar venda') : null;
+      if (c && !c.venda_id && pV && !pV.ok) linha = `Virar venda não vale agora: ${pV.frase || 'não vale nesta situação'}`;
     }
     const acoes = acoesRodape();
     return h('footer', { class: 'rodape' }, toast(), h('span', { class: 'sub rodape-linha' }, linha),
