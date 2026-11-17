@@ -397,6 +397,11 @@ begin
   return coalesce(p_ok, false);
 end $$;
 
+-- Os eventos em que a porta já manda (passo 5): grupo 1 = Saída e Reabrir (0265). Grupo novo que virar a chave entra aqui.
+create or replace function sim.porta_manda(p_evento text, p_antes text) returns boolean language sql immutable as $$
+  select p_evento ~ '^(saida:|silenciar:|reabrir$|nao_contatar$)'
+      or (p_evento = 'cliente_escreveu' and p_antes in ('saida_pode_voltar', 'saida_definitiva', 'nao_contatar', 'cliente_nio')) $$;
+
 -- As regras que valem em QUALQUER cenário, conferidas no estado final. Cada uma tem um código fixo (R1…): o relatório
 -- soma por código, para mostrar qual regra mais quebra.
 create or replace function sim.invariantes(p_conversa uuid) returns void language plpgsql as $$
@@ -445,10 +450,17 @@ begin
   if to_regclass('public.porta_sombra') is not null then
     execute 'select count(*), string_agg(evento || '' ('' || coalesce(antes, ''?'') || '' → '' || coalesce(depois, ''?'') || ''): ''
                  || case when aceito is null then ''sem regra'' when aceito then ''previa '' || array_to_string(para, ''/'') else ''recusaria'' end, '' · '' order by id)
-               from public.porta_sombra where conversa_id = $1 and concorda is distinct from true'
+               from public.porta_sombra where conversa_id = $1 and concorda is distinct from true and not sim.porta_manda(evento, antes)'
       into n_sit, v_sit using p_conversa;
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('R10', 'A porta em sombra concorda com o sistema (cada evento foi para onde a tabela manda)', n_sit = 0, v_sit);
+    -- R12 (BLOQUEIO, 0265 — passo 5): nos eventos em que a porta já manda (Saída e Reabrir), tabela e sistema concordam sempre
+    execute 'select count(*), string_agg(evento || '' ('' || coalesce(antes, ''?'') || '' → '' || coalesce(depois, ''?'') || ''): ''
+                 || case when aceito is null then ''sem regra'' when aceito then ''previa '' || array_to_string(para, ''/'') else ''recusaria'' end, '' · '' order by id)
+               from public.porta_sombra where conversa_id = $1 and concorda is distinct from true and sim.porta_manda(evento, antes)'
+      into n_sit, v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R12', 'Saída e Reabrir: a porta manda e o sistema fez o que a tabela diz', n_sit = 0, v_sit);
     execute 'select string_agg(distinct e.funcao, '', '') from public.config_evento e
                where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                                   where n.nspname = ''public'' and p.proname = e.funcao and p.prosrc like ''%_porta_anotar%'')'
