@@ -87,6 +87,64 @@
       },
       "notes": "Só grava a leitura. O alarme (não GREEN) aparece no Painel do NIOGEN; não trava envio.",
       "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v21.0/1419511943295487/message_templates?fields=name,status,id&limit=200",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "4 · Graph templates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        200
+      ],
+      "id": "57568abe-2ebd-5d63-ac40-90ef66dc8b70",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/waba_templates_status_sync",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_lista: $json.data || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "5 · Supabase status dos templates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        200
+      ],
+      "id": "6ac42bef-d5f9-5c76-95a4-d02f67d76d89",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "notes": "O status da nossa tabela passa a ser o da Meta (DISABLED nosso fica). Mudanças em waba_templates_leituras.",
+      "notesInFlow": true
     }
   ],
   "connections": {
@@ -95,6 +153,11 @@
         [
           {
             "node": "2 · Graph quality_rating",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "4 · Graph templates",
             "type": "main",
             "index": 0
           }
@@ -106,6 +169,17 @@
         [
           {
             "node": "3 · Supabase gravar leitura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Graph templates": {
+      "main": [
+        [
+          {
+            "node": "5 · Supabase status dos templates",
             "type": "main",
             "index": 0
           }

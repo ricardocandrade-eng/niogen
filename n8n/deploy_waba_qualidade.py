@@ -4,6 +4,7 @@
 # (1342993658907403) e grava uma linha em public.waba_qualidade (migration 0102). O Painel do NIOGEN mostra um alarme quando a
 # última leitura não é GREEN (ou quando não há leitura há mais de 2 dias). É alarme, não trava: nada deixa de sair por isso.
 # Por quê: o teto 2/dia · 15/mês acabou (Ricardo, 10/11 10h29) — a qualidade do número passa a ser vigiada.
+# 17/11 (0264): no mesmo horário lê a lista de templates da WABA Nio e passa o status da Meta para config_templates_waba.
 #
 # Credenciais (só IDs/nomes, nunca valores): "Supabase Nio (service role)", "WABA Nio (Nio_API)". Chave da API do n8n: N8N_API_KEY_NIO.
 #
@@ -29,6 +30,7 @@ EXPORT = os.path.join(AQUI, 'waba_qualidade.json')
 WF_NOME = 'waba_qualidade'
 ID_KEY = 'waba_qualidade_workflow_id'
 PHONE_ID = '1342993658907403'   # número da WABA Nio (o mesmo do resumo_diario)
+WABA_ID = '1419511943295487'    # a WABA Nio (lista de templates) — nunca a da Vero
 
 
 def build(ids):
@@ -61,7 +63,23 @@ def build(ids):
         'options': {'timeout': 20000}}, 480, 0, credentials=sb_cred,
         notes='Só grava a leitura. O alarme (não GREEN) aparece no Painel do NIOGEN; não trava envio.', notesInFlow=True)
 
-    ligacoes = [('1 · 8h e 14h', '2 · Graph quality_rating'), ('2 · Graph quality_rating', '3 · Supabase gravar leitura')]
+    # 17/11 (migration 0264): o status dos templates passa a vir da Meta — o nio_cartao_cadastro ficou PENDING aqui 3 dias
+    # depois de aprovado lá, e a cadência só usa template APPROVED.
+    add('4 · Graph templates', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET',
+        'url': f'https://graph.facebook.com/v21.0/{WABA_ID}/message_templates?fields=name,status,id&limit=200',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'options': {'timeout': 20000}}, 240, 200, credentials=wa_cred, retryOnFail=True, maxTries=2, waitBetweenTries=5000)
+    add('5 · Supabase status dos templates', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{dm.SB}/rest/v1/rpc/waba_templates_status_sync',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ p_lista: $json.data || [] }) }}',
+        'options': {'timeout': 20000}}, 480, 200, credentials=sb_cred,
+        notes='O status da nossa tabela passa a ser o da Meta (DISABLED nosso fica). Mudanças em waba_templates_leituras.',
+        notesInFlow=True)
+
+    ligacoes = [('1 · 8h e 14h', '2 · Graph quality_rating'), ('2 · Graph quality_rating', '3 · Supabase gravar leitura'),
+                ('1 · 8h e 14h', '4 · Graph templates'), ('4 · Graph templates', '5 · Supabase status dos templates')]
     conns = {}
     for o, d in ligacoes:
         conns.setdefault(o, {'main': [[]]})['main'][0].append({'node': d, 'type': 'main', 'index': 0})

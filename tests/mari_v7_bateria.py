@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import unicodedata
 import urllib.request
@@ -46,7 +47,18 @@ norm = lambda s: unicodedata.normalize('NFD', str(s or '').lower()).encode('asci
 
 def sql(q, escrita=False):
     args = [NPX, 'supabase', 'db', 'query', '--remote', '-o', 'json'] + (['--yes'] if escrita else ['--read-only'])
-    p = subprocess.run(args + [' '.join(q.split())], cwd=REPO, capture_output=True, text=True, encoding='utf-8')
+    q = ' '.join(q.split())
+    if len(q) <= 8000:
+        p = subprocess.run(args + [q], cwd=REPO, capture_output=True, text=True, encoding='utf-8')
+    else:
+        # 17/11: a linha de comando do Windows tem teto (~32 mil caracteres — WinError 206). Consulta longa (o resultado do
+        # portão da Mari com muitas falhas) vai por arquivo temporário, apagado logo depois.
+        with tempfile.NamedTemporaryFile('w', suffix='.sql', delete=False, encoding='utf-8') as fh:
+            fh.write(q)
+        try:
+            p = subprocess.run(args + ['--file', fh.name], cwd=REPO, capture_output=True, text=True, encoding='utf-8')
+        finally:
+            os.unlink(fh.name)
     out = p.stdout.strip()
     if p.returncode != 0:
         raise RuntimeError(p.stderr[-300:] + out[-300:])

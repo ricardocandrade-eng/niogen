@@ -440,6 +440,22 @@ begin
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('R9', 'A situação (porta única em sombra) concorda com o Chatwoot', n_sit = 0, v_sit);
   end if;
+  -- R10 (aviso, 0263): cada evento deste lead, a tabela situação × evento previu o que o sistema fez?
+  -- R11 (bloqueio, 0263): as cascas da porta estão no lugar (uma migration que reescrever a função pelo nome antigo apaga a sombra)
+  if to_regclass('public.porta_sombra') is not null then
+    execute 'select count(*), string_agg(evento || '' ('' || coalesce(antes, ''?'') || '' → '' || coalesce(depois, ''?'') || ''): ''
+                 || case when aceito is null then ''sem regra'' when aceito then ''previa '' || array_to_string(para, ''/'') else ''recusaria'' end, '' · '' order by id)
+               from public.porta_sombra where conversa_id = $1 and concorda is distinct from true'
+      into n_sit, v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R10', 'A porta em sombra concorda com o sistema (cada evento foi para onde a tabela manda)', n_sit = 0, v_sit);
+    execute 'select string_agg(distinct e.funcao, '', '') from public.config_evento e
+               where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+                                  where n.nspname = ''public'' and p.proname = e.funcao and p.prosrc like ''%_porta_anotar%'')'
+      into v_sit;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R11', 'A porta em sombra está ligada em todas as funções que mudam um lead', v_sit is null, 'sem a casca: ' || v_sit);
+  end if;
   if saida then
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('S1', 'Saída: conversa resolvida no Chatwoot', cw ->> 'status' in ('resolved', 'snoozed'), 'Chatwoot: ' || (cw ->> 'status')),
