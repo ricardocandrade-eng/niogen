@@ -59,6 +59,8 @@ end $$;
 create or replace function sim._automacoes(p_conv text, p_evento text) returns void language plpgsql as $$
 declare w sim.cw;
 begin
+  -- G-3 (0266): desligadas na conta quando config_regras.chatwoot_automacoes = 'desligadas'
+  if exists (select 1 from public.config_regras where chave = 'chatwoot_automacoes' and valor #>> '{}' = 'desligadas') then return; end if;
   select * into w from sim.cw where conv = p_conv;
   if w.time_nome is null and w.etiquetas && array['handoff-venda', 'handoff-humano'] then
     update sim.cw set time_nome = 'backoffice' where conv = p_conv;
@@ -397,10 +399,12 @@ begin
   return coalesce(p_ok, false);
 end $$;
 
--- Os eventos em que a porta já manda (passo 5): grupo 1 = Saída e Reabrir (0265). Grupo novo que virar a chave entra aqui.
+-- Os eventos em que a porta já manda (passo 5): grupo 1 = Saída e Reabrir (0265) · grupo 2 = dono e Chatwoot (0266).
+-- Grupo novo que virar a chave entra aqui.
 create or replace function sim.porta_manda(p_evento text, p_antes text) returns boolean language sql immutable as $$
-  select p_evento ~ '^(saida:|silenciar:|reabrir$|nao_contatar$)'
-      or (p_evento = 'cliente_escreveu' and p_antes in ('saida_pode_voltar', 'saida_definitiva', 'nao_contatar', 'cliente_nio')) $$;
+  select p_evento ~ '^(saida:|silenciar:|reabrir$|nao_contatar$|prazo:|time_respondeu$|mari_passou:(interesse_caindo|multiplos_decisores)$)'
+      or (p_evento = 'cliente_escreveu' and p_antes in ('saida_pode_voltar', 'saida_definitiva', 'nao_contatar', 'cliente_nio',
+                                                       'em_espera', 'time_esperando')) $$;
 
 -- As regras que valem em QUALQUER cenário, conferidas no estado final. Cada uma tem um código fixo (R1…): o relatório
 -- soma por código, para mostrar qual regra mais quebra.
@@ -460,7 +464,7 @@ begin
                from public.porta_sombra where conversa_id = $1 and concorda is distinct from true and sim.porta_manda(evento, antes)'
       into n_sit, v_sit using p_conversa;
     insert into sim.checagens (tipo, nome, ok, detalhe) values
-    ('R12', 'Saída e Reabrir: a porta manda e o sistema fez o que a tabela diz', n_sit = 0, v_sit);
+    ('R12', 'Onde a porta já manda (Saída e Reabrir · dono e Chatwoot), o sistema fez o que a tabela diz', n_sit = 0, v_sit);
     execute 'select string_agg(distinct e.funcao, '', '') from public.config_evento e
                where not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
                                   where n.nspname = ''public'' and p.proname = e.funcao and p.prosrc like ''%_porta_anotar%'')'

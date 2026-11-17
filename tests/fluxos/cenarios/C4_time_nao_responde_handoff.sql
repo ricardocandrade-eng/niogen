@@ -1,6 +1,6 @@
 -- id: C4
 -- titulo: Handoff e o time não responde: em 24 h úteis volta para a Mari
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Edu C4') as c \gset
 select sim.cliente_escreve(:'c', 'quero falar com uma pessoa');
 select sim.mari_handoff(:'c', 'pedido_humano', '{}'::jsonb);

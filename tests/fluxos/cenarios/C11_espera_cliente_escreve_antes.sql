@@ -1,6 +1,6 @@
 -- id: C11
 -- titulo: Em espera com data e o cliente escreve antes
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Nina C11') as c \gset
 select sim.mari_handoff(:'c', 'pedido_humano');
 select sim.fila_rodar();

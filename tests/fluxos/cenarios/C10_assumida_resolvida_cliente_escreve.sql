@@ -1,6 +1,6 @@
 -- id: C10
 -- titulo: Com o time, esperando o cliente: fecha sozinha, ele escreve e volta para o mesmo dono
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_com_venda('Marcos C10') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'assumir');

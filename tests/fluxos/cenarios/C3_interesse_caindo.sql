@@ -1,6 +1,6 @@
 -- id: C3
 -- titulo: Handoff "interesse caindo" não passa para o time: fica com a Mari
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Hugo C3') as c \gset
 select sim.mari_handoff(:'c', 'interesse_caindo');
 select sim.fila_rodar();

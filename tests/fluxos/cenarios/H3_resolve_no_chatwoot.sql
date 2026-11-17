@@ -1,6 +1,6 @@
 -- id: H3
 -- titulo: Alguém resolve direto no Chatwoot um lead em andamento com a Mari
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Tiago H3') as c \gset
 select sim.time_no_chatwoot(:'c', '{"status":"resolved"}');
 select sim.espera(:'c', '20 minutes');
