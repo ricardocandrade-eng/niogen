@@ -29,7 +29,7 @@ BASE, TESTE, CEN, PORTA = 'niogen_sim', 'niogen_teste', 'niogen_cenario', '54329
 PORTAO_HORAS = 6
 # Regras gerais que o desenho de hoje quebra de propósito (a conversa de quem saiu fica "ativa" para a Mari responder se ele
 # voltar). Aparecem no relatório, mas não deixam o cenário vermelho — viram bloqueio quando a situação única existir.
-AVISOS = {'S4'}
+AVISOS = {'S4', 'R9'}   # R9: divergência da sombra (passo 4) — vira bloqueio quando a situação mandar (passo 5)
 PSQL = [str(BIN / 'psql.exe'), '-h', '127.0.0.1', '-p', PORTA, '-U', 'postgres', '-X', '-q', '-At']
 
 # No fim de todo cenário: 20 minutos sem ninguém fazer nada (para as ordens agendadas e as varreduras rodarem) e as regras gerais.

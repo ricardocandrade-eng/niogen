@@ -433,6 +433,13 @@ begin
     ('R8', 'Todo lead tem exatamente uma situação da lista (porta única em sombra)', n_sit = 1 and v_sit is not null,
        'linhas: ' || n_sit || ' · situação: ' || coalesce(v_sit, 'nenhuma') || ' · escada: ' || coalesce(l::text, 'sem linha'));
   end if;
+  -- R9 (aviso, 0258): a situação em sombra concorda com o Chatwoot? (vira bloqueio no passo 5, quando a situação mandar)
+  if to_regclass('public.v_lead_situacao_divergencias') is not null then
+    execute 'select count(*), string_agg(item || '': esperado '' || esperado || '', está '' || de_fato, '' · '') from public.v_lead_situacao_divergencias where conversa_id = $1'
+      into n_sit, v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R9', 'A situação (porta única em sombra) concorda com o Chatwoot', n_sit = 0, v_sit);
+  end if;
   if saida then
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('S1', 'Saída: conversa resolvida no Chatwoot', cw ->> 'status' in ('resolved', 'snoozed'), 'Chatwoot: ' || (cw ->> 'status')),

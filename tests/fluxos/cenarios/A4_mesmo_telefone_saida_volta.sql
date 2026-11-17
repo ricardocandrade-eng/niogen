@@ -14,3 +14,5 @@ select sim.confere('reabriu: em andamento', sim.lead_de(:'c') ->> 'destino' = 'e
 select sim.confere('a Mari respondeu na conversa nova',
   (select count(*) from sim.envios where conversa = :'c' and por = 'mari') = 2,
   (select count(*) || ' falas da Mari' from sim.envios where conversa = :'c' and por = 'mari'));
+select sim.confere('o NIOGEN passa a mandar na conversa nova do Chatwoot', (select chatwoot_conversation_id from public.mari_conversas where id = :'c') = '990002',
+  'NIOGEN aponta para a conversa ' || (select chatwoot_conversation_id from public.mari_conversas where id = :'c') || ' (a nova é 990002)');
