@@ -119,6 +119,7 @@
           <span class="sub">Pelo número +55 32 2888-0150, de 5 em 5 minutos, seg–sex 9h–21h e sáb 10h–16h (nunca domingo nem feriado). 1 contato por dia e 2 no total por cliente.</span></header>
         <div class="fv-estado">
           <span class="fv-pill ${p.ativo ? 'ok' : 'warn'}">${p.ativo ? '▶ Ligado' : '⏸ Pausado'}</span>
+          <span class="fv-pill ok"><b>Hoje ${n(p.hoje)} de ${n(p.ritmo)}</b></span>
           <span class="fv-pill ${qCls}">Qualidade ${esc(q.rating || 'sem leitura')}</span>
           <span class="fv-pill">Nome: ${esc(q.nome || 'Dharma Telecom')} · ${esc(q.nome_status === 'APPROVED' ? 'aprovado' : 'em análise')}</span>
           <span class="fv-pill">Ritmo ${n(p.ritmo)}/dia${rp.teto ? ` · teto ${n(rp.teto)}` : ''}</span>
