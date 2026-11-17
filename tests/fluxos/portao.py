@@ -51,7 +51,8 @@ def psql(db, sql=None, arquivo=None, parar=True):
         cmd += ['-f', str(arquivo)]
     else:
         cmd += ['-c', sql]
-    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace')
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='replace',
+                       env={**os.environ, 'PGCLIENTENCODING': 'UTF8'})   # sem isto o Windows lê os .sql como WIN1252
     return r.returncode, r.stdout, r.stderr
 
 

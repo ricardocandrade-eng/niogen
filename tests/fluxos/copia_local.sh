@@ -18,6 +18,7 @@ BIN="${PG_SERVER_BIN:-$HOME/tools/pgsql17_server/pgsql/bin}"
 SIM="${NIOGEN_SIM_DIR:-$HOME/niogen_sim}"
 PORTA=54329
 BANCO=niogen_sim
+export PGCLIENTENCODING=UTF8   # sem isto o Windows lê os .sql como WIN1252
 PSQL=("$BIN/psql.exe" -h 127.0.0.1 -p "$PORTA" -U postgres -X -q)
 
 case "$SIM" in *"Meu Drive"*|*GitHub*) echo "ERRO: a cópia não pode ficar no Drive nem no repo." >&2; exit 1;; esac

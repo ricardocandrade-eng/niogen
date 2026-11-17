@@ -12,4 +12,10 @@ select sim.cliente_escreve(:'c', 'oi, e agora?') as r \gset
 select sim.fila_rodar();
 select sim.confere('a Mari respondeu', :'r' = 'respondeu', :'r');
 select sim.confere('o time não voltou sozinho depois da mensagem do cliente', sim.cw_de(:'c') ->> 'time' is null, sim.cw_de(:'c')::text);
-select sim.confere('a vez é da Mari', sim.lead_de(:'c') ->> 'vez' = 'mari', sim.lead_de(:'c')::text);
+-- Decisão do Ricardo (17/11): "vez" é de quem tem a próxima tarefa. Devolver passa só a CONVERSA para a Mari; rodar o
+-- crédito continua sendo do time, então a escada segue cobrando o time.
+select sim.confere('a conversa é da Mari: sem dono no NIOGEN', not (sim.foto(:'c') ->> 'humano')::boolean
+  and not (sim.foto(:'c') ->> 'time')::boolean, sim.foto(:'c')::text);
+select sim.confere('a tarefa da venda (rodar crédito) segue com o time, com prazo',
+  sim.lead_de(:'c') ->> 'vez' = 'time' and sim.lead_de(:'c') ->> 'status' = 'rodar_credito' and sim.lead_de(:'c') ->> 'prazo' is not null,
+  sim.lead_de(:'c')::text);
