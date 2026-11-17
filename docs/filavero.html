@@ -153,6 +153,19 @@
           <tbody>${linhasFx || '<tr><td colspan="6" class="fv-vazio">Sem faixa ainda.</td></tr>'}</tbody></table></div></section>
       </div>`;
 
+    // ---- falaram com a Mari (0243)
+    const ETAPA = { respondeu: 'respondeu', cep: 'mandou o CEP', area_ok: 'área ok', viavel: 'viável', viu_planos: 'viu os planos',
+                    qualificada: 'qualificado', pedido: 'pedido', biometria: 'biometria', agendada: 'agendada', instalada: 'instalada' };
+    const nm = p.na_mari_lista || [];
+    const naMari = `
+      <section class="fv-bloco"><header><h2>Falaram com a Mari</h2><span class="tot">${n(nm.length)}</span>
+        <span class="sub">Quem tocou em "Quero ver a oferta" e mandou a mensagem. A Mari atende como qualquer lead; o Live só mostra quando pedir ação do time.</span></header>
+        ${nm.length ? `<div class="fv-lista">${nm.map((c) => `<div class="fv-c" style="border-color:var(--border)"><span class="q">${esc(c.nome || 'Cliente')}</span>
+          <a href="conversas.html#c=${esc(c.conversa_id)}">Abrir ↗</a>
+          <span class="o">${esc(NOME_TPL[c.template] || '')} · ${esc(c.destino && c.destino !== 'em_andamento' ? c.destino.replace(/_/g, ' ') : (ETAPA[c.etapa] || c.etapa || ''))} · há ${esc(NG.haQuanto(c.em))}${c.chatwoot ? ` · Chatwoot #${esc(c.chatwoot)}` : ''}</span></div>`).join('')}</div>`
+          : '<div class="fv-vazio">Ninguém ainda.</div>'}
+      </section>`;
+
     // ---- clicou e não falou
     const cl = p.clicou_sem_mari || [];
     const clicou = `
@@ -174,7 +187,7 @@
         ${falhas ? `<div class="fv-hist"><span><b>Falhas da Meta:</b> ${falhas}</span></div>` : ''}
       </section>`;
 
-    corpo.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">${estado}${clicou}${tabelas}${base}</div>`;
+    corpo.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px">${estado}${naMari}${clicou}${tabelas}${base}</div>`;
     document.getElementById('rodape').textContent = `Atualizado ${NG.fmtDataHora(p.em)} · ${Math.round(performance.now() - t0)} ms · ${aptos} aptos na fila`;
     const b = document.getElementById('b-ligar');
     if (b) b.onclick = async () => {
