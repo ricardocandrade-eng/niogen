@@ -1,6 +1,6 @@
 -- id: E3
 -- titulo: Cliente pede para remarcar: vez do time, 4 h, e a Mari não promete data
--- tipo: regra_nova
+-- tipo: atual
 select sim.venda_pronta('Caco E3') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'os_agendar', jsonb_build_object('os', '85' || sim._conv(:'c'), 'dia', (current_date + 4)::text, 'periodo', '08:00', 'forma', 'boleto'));

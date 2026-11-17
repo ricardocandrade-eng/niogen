@@ -1,6 +1,6 @@
 -- id: D4
 -- titulo: Crédito aprovado só no cartão: a OS no boleto é recusada
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_com_venda('Yan D4') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'credito', '{"resultado":"so_cartao"}') as r \gset

@@ -1,6 +1,6 @@
 -- id: D16
 -- titulo: Trocar o titular depois da OS é recusado (é Saída e venda nova)
--- tipo: regra_nova
+-- tipo: atual
 select sim.venda_pronta('Bia D16') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'os_agendar', jsonb_build_object('os', '86' || sim._conv(:'c'), 'dia', (current_date + 4)::text, 'periodo', '08:00', 'forma', 'boleto'));

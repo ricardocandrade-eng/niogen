@@ -1,6 +1,6 @@
 -- id: C2
 -- titulo: Cliente pede humano: vai para o time e a Mari se cala
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Gil C2') as c \gset
 select sim.mari_handoff(:'c', 'pedido_humano');
 select sim.fila_rodar();

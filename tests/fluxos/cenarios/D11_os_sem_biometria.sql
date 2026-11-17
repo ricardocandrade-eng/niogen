@@ -1,6 +1,6 @@
 -- id: D11
 -- titulo: Gravar OS sem biometria aprovada é recusado
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_com_venda('Vera D11') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'credito', '{"resultado":"aprovado"}');
