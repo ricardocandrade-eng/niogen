@@ -523,9 +523,14 @@
       `${botoesPortal}<label class="campo">Análise de crédito<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, credPreset || (['aprovado', 'so_cartao', 'pendente', 'negado'].includes(v.credito_resultado) ? v.credito_resultado : ''), 'Escolher o resultado…')}</select>${credPreset ? '<span class="nota-campo">Resultado trazido do operador de crédito — confira e grave.</span>' : ''}</label>
        ${checkRecompra()}`, 'Gravar o crédito'),
     // 0096 / 0111: etapa 3 → 4 (VENDA). O nº do pedido = a OS (o único ID da Nio); agendar é o passo seguinte.
-    os: (v) => formWrap('os', 'Abrir a OS = VENDA',
-      'Grave aqui o nº da OS que o portal mostrou (é o ID da venda na Nio para instalação e comissão). Com isso a venda conta (no cartão, quando o cliente cadastrar o cartão) e a Nio manda o link da biometria. Prefira o "Gravar OS e agenda", com a data.',
-      `${botoesPortal}<div class="grade2"><label class="campo">Nº do pedido (OS)<input type="text" name="os" value="${esc(v.nio_os || v.nio_pedido || '')}" autocomplete="off" autofocus></label></div>`, 'Gravar o pedido (OS) → vira Venda'),
+    // 0247 (Ricardo, 16/11: "a biometria aprovada é uma etapa anterior à criação da OS"): um passo só — o nº da OS.
+    // A agenda vem sozinha da Consulta OS (operador); o dia só se preenche se ela não chegar.
+    os: (v) => formWrap('os', 'Gravar venda',
+      'Biometria aprovada → no portal: forma de pagamento → agenda → OS. Grave aqui <b>só o nº da OS</b>. A venda conta (no cartão, quando o cliente cadastrar o cartão) e <b>a agenda chega sozinha</b> pela Consulta OS em instantes.',
+      `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || v.nio_pedido || '')}" inputmode="numeric" autocomplete="off" autofocus required></label>
+       <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === (v.forma_pagamento || '') ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label></div>
+       <details class="f-agenda-mao" style="margin-top:8px"><summary>A agenda não chegou? Gravar o dia à mão</summary><div class="grade2">${campoData('Dia da instalação', 'dia', '', `min="${hojeISO()}"`)}
+       ${campoPeriodo('periodo', '13:00')}</div></details>`, 'Gravar venda'),
     // 0089 (mantido): OS + dia + período num formulário só.
     // 0194 (Ricardo, 14/11): no portal a ordem é forma de pagamento + plano → agenda → nº da OS → a Nio manda o link da biometria.
     os_agendar: (v) => formWrap('os_agendar', 'Gravar OS e agenda = VENDA',
@@ -881,7 +886,10 @@
     async os(fd) {
       const os = String(fd.get('os') || '').trim();
       if (!os) { NG.toast('Informe o nº do pedido (OS).', 'bad'); return false; }
-      return !!(await rodarMomento('os', { os }));
+      // 0247: "Gravar venda" = só a OS (e a forma do portal). Com o dia preenchido (a Consulta OS não leu), grava a agenda junto.
+      const forma = fd.get('forma') || null;
+      if (fd.get('dia')) return !!(await rodarMomento('os_agendar', { os, dia: fd.get('dia'), periodo: fd.get('periodo'), forma, sem_aviso: true }));
+      return !!(await rodarMomento('os', { os, forma }));
     },
     async os_agendar(fd) {
       const os = String(fd.get('os') || '').trim();
@@ -1341,8 +1349,8 @@
     const pBio = bio === 'validada' && v.biometria_dispensada_em ? { s: 'ok', d: `dispensada pela Nio ${NG.fmtData(v.biometria_dispensada_em)}` }
       : bio === 'validada' ? { s: 'ok', d: v.biometria_validada_em ? `validada ${NG.fmtData(v.biometria_validada_em)}` : 'validada' }
       : bio === 'com_risco' ? { s: 'wa', d: 'com risco' }
-      : v.nio_os && v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
-      : { s: 'no', d: v.nio_os ? '' : 'depois da OS' };
+      : bio === 'pendente' && v.biometria_link_enviado_em ? { s: 'no', d: `link da Nio ${NG.fmtData(v.biometria_link_enviado_em)}` }
+      : { s: 'no', d: ['aprovado', 'so_cartao'].includes(v.credito_resultado) ? '' : 'depois do crédito' };   // 0247: a biometria vem antes da OS
     const pendNio = v.nio_pendencia_cod || v.nio_pendencia_desc;
     // 15/11 (revisão dos fluxos, F2/F7): o motivo da Saída vem da venda, do lead ou do texto do cancelamento da Nio (OSAB:
     // "Nio: …" — a venda não passou pela Saída manual e o saida_motivo fica vazio).
@@ -1364,9 +1372,10 @@
         : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' }
         : v.credito_resultado === 'pendente' ? { s: 'wa', d: credH == null ? 'pendente' : credH >= 24 ? `pendente há ${credH} h · cobrar a Nio` : `pendente há ${credH} h` }
         : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
+      // 0247 (Ricardo, 16/11): a biometria aprovada vem ANTES da OS.
+      { nome: 'Biometria', ...(saiu && sm === 'reprovado_biometria' ? { s: 'x', d: 'reprovada · saída' } : pBio) },
       // F7: OS cancelada pela Nio não fica verde
       { nome: 'Pedido (OS)', ...(saiu && sm === 'nio_cancelou' && v.nio_os ? { s: 'x', d: `nº ${v.nio_os} · cancelada pela Nio` } : { s: v.nio_os ? 'ok' : 'no', d: v.nio_os ? `nº ${v.nio_os}` : '' }) },
-      { nome: 'Biometria', ...(saiu && sm === 'reprovado_biometria' ? { s: 'x', d: 'reprovada · saída' } : pBio) },
       { nome: 'Instalação', ...(saiu && sm === 'nio_nao_instalou' ? { s: 'x', d: 'a Nio não instalou · saída' }
         : saiu && sm === 'nio_cancelou' && !v.nio_os ? { s: 'x', d: 'cancelada pela Nio · saída' } : pInst) },
     ];
@@ -1537,8 +1546,8 @@
     viabilidade: 'nota no Chatwoot. Sem viabilidade: tente variações de CEP/rua/nº ou abra a pendência "Nio confirma".',
     pedido: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria.',
     credito: 'nota no Chatwoot. Aprovado: o próximo passo é gravar a OS e a agenda do portal. Negado: pede outro CPF ao cliente e abre a pendência.',
-    biometria: 'Validada: tira a etiqueta biometria-pendente; a Mari confirma a instalação ao cliente (no cartão, avisa do cadastro do cartão e lembra em 24 h).',
-    os: 'etiqueta biometria-pendente · nota · avisa o cliente do link da biometria. Com a OS a venda conta.',
+    biometria: 'Validada (pelo GED360 ou aqui): tira a etiqueta biometria-pendente e deixa nota; o próximo passo é a OS no portal.',
+    os: 'nota no Chatwoot · a venda conta · o robô lê a agenda na Consulta OS e grava sozinho · no cartão, a Mari avisa do cadastro do cartão.',
     agendar: 'etiqueta instalacao-agendada · nota · confirma o dia ao cliente · resolve a conversa (sem dono; a Mari volta se ele escrever).',
     os_agendar: 'etiquetas biometria-pendente e instalacao-agendada · nota · avisa o cliente do link da biometria com a data pré-agendada · lembra no D+1 · resolve a conversa (a Mari volta se ele escrever).',
     cartao: 'a Mari avisou do cadastro do cartão e lembra em 24 h; quando a Consulta OS deixar de mostrar "Aguardando Pagamento", segue sozinho para a confirmação da instalação.',
@@ -1601,10 +1610,18 @@
         if (!form) { formAtivoPadrao = 'credito'; }
         sozinho = SOZINHO.credito;
       }
+    } else if (etapa === 3 && v.biometria_status !== 'validada') {
+      // 0247 (Ricardo, 16/11): crédito aprovado → a Nio manda o link da biometria → aprovada → só então pagamento, agenda e OS.
+      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
+        B('data-momento="biometria" data-r="risco"', 'Com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Nio dispensou a biometria', false));
+      nota = ['pendente', 'com_risco'].includes(v.biometria_status)
+        ? 'A Nio mandou o link da biometria ao cliente. O GED360 é lido sozinho; aprovada, o NIOGEN marca e o passo vira "Gravar venda". "Consultar agora" lê na hora (uns 10 s).'
+        : 'Crédito aprovado: no portal, envie a biometria (a Nio manda o link ao cliente por WhatsApp e e-mail). Aprovada, siga para forma de pagamento, agenda e OS.';
+      sozinho = SOZINHO.biometria;
     } else if (etapa === 3) {
-      // 0194: crédito aprovado → no portal forma de pagamento, agenda e OS → grava tudo de uma vez (a venda conta).
-      if (!form) formAtivoPadrao = 'os_agendar';
-      sozinho = SOZINHO.os_agendar;
+      // 0247: biometria aprovada → no portal forma de pagamento, agenda e OS → "Gravar venda" (só o nº da OS; a agenda vem sozinha).
+      if (!form) formAtivoPadrao = 'os';
+      sozinho = SOZINHO.os;
     } else if (etapa === 4 && ['pendente', 'com_risco'].includes(v.biometria_status)) {
       // 0194: a biometria vem DEPOIS da OS.
       bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
@@ -2218,7 +2235,7 @@
       : { s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' };
     const passosConv = [
       { nome: 'Viabilidade', ...pViabC },
-      { nome: 'Crédito', ...pCredC }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
+      { nome: 'Crédito', ...pCredC }, { nome: 'Biometria', s: 'no', d: '' }, { nome: 'Pedido (OS)', s: 'no', d: '' }, { nome: 'Instalação', s: 'no', d: '' },
     ];
     const travasC = [q.trava_cliente_nio === 'bloqueia' && 'já é cliente Nio', q.trava_endereco_nio === 'bloqueia' && 'endereço com Nio', q.trava_viabilidade === 'bloqueia' && 'sem viabilidade'].filter(Boolean);
     // 0147: destino único + etapa; alerta quando alguém agiu direto no Chatwoot.
@@ -2769,7 +2786,7 @@
   const NIVEL_K = { agora: 'Agora', hoje: 'Hoje', espera: 'Aguardando', ok: 'Nada a fazer agora', fora: 'Fora da jornada' };
 
   // ---------- trilha das etapas ----------
-  const ETAPAS_K = ['viab', 'cred', 'os', 'bio', 'inst'];   // 0194: a OS vem antes da biometria
+  const ETAPAS_K = ['viab', 'cred', 'bio', 'os', 'inst'];   // 0247: a biometria aprovada vem antes da OS
   function trilhaPassos(passos) {
     const iAtual = passos.findIndex((p) => p.s !== 'ok');
     const parou = passos.some((p) => p.s === 'x');
@@ -3061,7 +3078,7 @@
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
-      corpo = conv ? `${linhaDet('Biometria', cpfConversa() ? 'sem venda ainda — dá para consultar o GED360 pelo CPF da conversa' : 'depois da OS')}${cpfConversa() && ehBO() ? btBio : ''}`
+      corpo = conv ? `${linhaDet('Biometria', cpfConversa() ? 'sem venda ainda — dá para consultar o GED360 pelo CPF da conversa' : 'depois do crédito')}${cpfConversa() && ehBO() ? btBio : ''}`
         : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
         ${v.contato_nome ? linhaDet('Quem faz', `<b>${esc(v.cliente_nome)}</b> (titular) — o link chegou no contato de ${esc(NG.primeiroNome(v.contato_nome))}${v.contato_relacao ? ` (${esc(v.contato_relacao)})` : ''}`) : ''}
         ${v.nio_interesse && !v.nio_pedido ? linhaDet('Interesse no portal', `<span class="mono">${esc(v.nio_interesse)}</span> · aprovada a biometria, abrir em Histórico de Pedidos › Interesse e gerar a OS`) : ''}
@@ -3072,7 +3089,7 @@
         ${a.bio_alerta ? `<div class="fc-op-bts"><span class="fc-pill warn">${esc(a.bio_alerta)}</span>${visto('ged360', a.bio_protocolo)}</div>` : ''}
         ${fonte(a.bio_resultado ? 'GED360' : 'portal PAP (Consulta OS)')}
         ${ehBO() && !fimV ? btBio : ''}
-        ${ehBO() && !fimV && v.nio_os && v.biometria_status !== 'validada' ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
+        ${ehBO() && !fimV && ['pendente', 'com_risco'].includes(v.biometria_status) ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
     } else if (p.k === 'os') {
       corpo = conv ? `${linhaDet('Pedido (OS)', 'depois do crédito aprovado')}${ehBO() && !(d.conv && d.conv.funil_destino && d.conv.funil_destino !== 'em_andamento') ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o pedido / OS">Virar venda</button></div>' : ''}` : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
         ${a.portal_status ? linhaDet('Portal', `${esc(a.portal_rotulo || a.portal_status)} · desde ${esc(NG.fmtDataHora(a.portal_desde))} · lido ${esc(NG.fmtDataHora(a.portal_lido_em))}`) : ''}

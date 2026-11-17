@@ -1478,8 +1478,12 @@
     switch (v.status) {
       case '0_qualificado': {
         if (!naBiometria(v)) return { id: 'qualificado', desde: v.criado_em };
-        // 0194: crédito aprovado → a próxima é a OS com a agenda (a biometria vem depois dela).
-        const desde = v.credito_em || v.nio_pedido_em || v.criado_em;
+        // 0247: crédito aprovado → biometria (link da Nio) → aprovada → OS. Biometria pendente conta do link (72 h).
+        if (['pendente', 'com_risco'].includes(v.biometria_status)) {
+          const dBio = v.biometria_link_enviado_em || v.credito_em || v.criado_em;
+          return { id: 'biometria', desde: dBio, atrasada: horas(dBio) > 72, prazo: '72 h' };
+        }
+        const desde = v.biometria_validada_em || v.credito_em || v.nio_pedido_em || v.criado_em;
         return { id: 'agendamento', desde, atrasada: horas(desde) > 2, prazo: '2 h' };
       }
       case '1_vendido':
