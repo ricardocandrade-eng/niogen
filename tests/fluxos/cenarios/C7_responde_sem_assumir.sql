@@ -1,6 +1,6 @@
 -- id: C7
 -- titulo: Quem responde vira dono
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Katia C7') as c \gset
 select sim.como('backoffice');
 select public.backoffice_responder(:'c', 'Olá! Aqui é do time da Dharma, posso te ajudar?');

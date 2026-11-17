@@ -8,6 +8,10 @@
 #       python tests/fluxos/portao.py A1 C8      # só esses
 #       python tests/fluxos/portao.py --trilha C8   # mostra o passo a passo do cenário
 #       python tests/fluxos/portao.py --manter C8   # deixa o banco do cenário (niogen_cenario) de pé para investigar
+#       python tests/fluxos/portao.py supabase/migrations/0250_x.sql   # roda tudo COM a migration aplicada por cima da cópia
+# A TRAVA (regra de ouro 9): scripts/aplicar_migration.py só sobe uma migration na produção se houver aqui uma rodada completa,
+# com aquela migration (mesmo sha256), sem nenhum cenário "atual" vermelho, nas últimas PORTAO_HORAS horas.
+# Cenário "regra_nova" vermelho não barra (é decisão ainda não construída); ao ficar verde, troque o tipo para "atual".
 # Saída: tabela no terminal + ~/niogen_sim/resultados/portao_<data>.json (fora do repo e do Drive).
 #
 # Cada cenário é um .sql com cabeçalho:
@@ -16,12 +20,13 @@
 #   -- tipo: atual | regra_nova      (atual = já deveria funcionar hoje · regra_nova = decisão de 17/11 ainda não construída)
 # e passos que chamam sim.* e as funções de verdade. No fim o portão confere as regras gerais (sim.invariantes) em toda
 # conversa do cenário.
-import json, os, re, subprocess, sys, datetime, pathlib
+import hashlib, json, os, re, subprocess, sys, datetime, pathlib
 
 AQUI = pathlib.Path(__file__).resolve().parent
 BIN = pathlib.Path(os.environ.get('PG_SERVER_BIN', pathlib.Path.home() / 'tools/pgsql17_server/pgsql/bin'))
 SIM = pathlib.Path(os.environ.get('NIOGEN_SIM_DIR', pathlib.Path.home() / 'niogen_sim'))
-BASE, CEN, PORTA = 'niogen_sim', 'niogen_cenario', '54329'
+BASE, TESTE, CEN, PORTA = 'niogen_sim', 'niogen_teste', 'niogen_cenario', '54329'
+PORTAO_HORAS = 6
 # Regras gerais que o desenho de hoje quebra de propósito (a conversa de quem saiu fica "ativa" para a Mari responder se ele
 # voltar). Aparecem no relatório, mas não deixam o cenário vermelho — viram bloqueio quando a situação única existir.
 AVISOS = {'S4'}
@@ -59,11 +64,15 @@ def cabecalho(texto):
     return d
 
 
-def rodar(arq):
+def sha(arq):
+    return hashlib.sha256(pathlib.Path(arq).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
+def rodar(arq, modelo):
     texto = arq.read_text(encoding='utf-8')
     cab = cabecalho(texto)
     psql('postgres', f'drop database if exists {CEN} with (force)')
-    rc, _, err = psql('postgres', f'create database {CEN} template {BASE} strategy file_copy')
+    rc, _, err = psql('postgres', f'create database {CEN} template {modelo} strategy file_copy')
     if rc:
         sys.exit('Não consegui clonar a cópia local: ' + err.strip() + '\nRode antes: tests/fluxos/copia_local.sh')
     tmp = SIM / 'cenario_atual.sql'
@@ -84,19 +93,34 @@ def rodar(arq):
 
 def main():
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    args = [a for a in sys.argv[1:] if not a.startswith('--') and not a.endswith('.sql')]
+    migs = [pathlib.Path(a).resolve() for a in sys.argv[1:] if a.endswith('.sql')]
     trilha = '--trilha' in sys.argv
     if not (SIM / 'pgdata').exists():
         sys.exit('Cópia local não existe. Rode antes: tests/fluxos/copia_local.sh')
     rc, _, err = psql(BASE, arquivo=AQUI / 'sim.sql')
     if rc:
         sys.exit('Erro ao instalar o simulador na cópia local:\n' + err)
+    modelo = BASE
+    if migs:
+        # a cópia-base fica intacta: as migrations entram num clone, e cada cenário clona esse clone
+        psql('postgres', f'drop database if exists {TESTE} with (force)')
+        rc, _, err = psql('postgres', f'create database {TESTE} template {BASE} strategy file_copy')
+        if rc:
+            sys.exit('Não consegui clonar a cópia local: ' + err.strip())
+        for m in migs:
+            rc, _, err = psql(TESTE, arquivo=m)
+            if rc:
+                sys.exit(f'A migration {m.name} falhou na cópia local (nada rodou):\n' + err.strip()[-1500:])
+            print(f'migration aplicada na cópia: {m.name}')
+        modelo = TESTE
     arqs = sorted((AQUI / 'cenarios').glob('*.sql'), key=lambda p: (p.stem[0], int(re.sub(r'\D', '', p.stem.split('_')[0]) or 0)))
     if args:
         arqs = [a for a in arqs if a.stem.split('_')[0] in args]
-    res = [rodar(a) for a in arqs]
+    res = [rodar(a, modelo) for a in arqs]
     if '--manter' not in sys.argv:
         psql('postgres', f'drop database if exists {CEN} with (force)')
+        psql('postgres', f'drop database if exists {TESTE} with (force)')
 
     verdes = 0
     por_regra = {}
@@ -127,13 +151,24 @@ def main():
                 print('             ' + t)
     print()
     print(f'{verdes} de {len(res)} cenários verdes')
+    atuais_vermelhos = [r['id'] for r in res if r['tipo'] != 'regra_nova' and not r['verde']]
+    completa = not args
+    aprovado = completa and not atuais_vermelhos
+    if aprovado:
+        print(f'PORTÃO ABERTO por {PORTAO_HORAS} h' + (f" para: {', '.join(m.name for m in migs)}" if migs else ' (sem migration)'))
+    else:
+        print('PORTÃO FECHADO — ' + ('rodada parcial (só alguns cenários)' if not completa else
+                                     'cenários atuais vermelhos: ' + ', '.join(atuais_vermelhos)))
     print('\nRegras gerais (conferidas no fim de todo cenário):')
     for k in sorted(por_regra):
         t = por_regra[k]
         print(f"  {k:<3} {t['ok']:>2} ok · {t['falha']:>2} falha  {t['nome']}" + (f"   → {', '.join(t['onde'])}" if t['onde'] else ''))
     (SIM / 'resultados').mkdir(exist_ok=True)
-    saida = SIM / 'resultados' / f"portao_{datetime.datetime.now():%d%m%y_%H%M}.json"
-    saida.write_text(json.dumps({'quando': datetime.datetime.now().isoformat(timespec='minutes'), 'verdes': verdes, 'total': len(res),
+    saida = SIM / 'resultados' / f"portao_{datetime.datetime.now():%d%m%y_%H%M%S}.json"
+    origem = (SIM / 'pacote_origem.txt').read_text().strip() if (SIM / 'pacote_origem.txt').exists() else None
+    saida.write_text(json.dumps({'quando': datetime.datetime.now().isoformat(timespec='seconds'), 'verdes': verdes, 'total': len(res),
+                                 'completa': completa, 'aprovado': aprovado, 'atuais_vermelhos': atuais_vermelhos,
+                                 'copia_de': origem, 'migrations': {m.name: sha(m) for m in migs},
                                  'regras': por_regra, 'cenarios': res}, ensure_ascii=False, indent=1), encoding='utf-8')
     print(f'\nDetalhe: {saida}')
     sys.exit(0 if verdes == len(res) else 1)

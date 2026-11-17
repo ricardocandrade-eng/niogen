@@ -38,6 +38,7 @@ if ! "$BIN/pg_isready.exe" -h 127.0.0.1 -p "$PORTA" >/dev/null 2>&1; then
 fi
 
 rm -rf "$SIM/pacote"; mkdir -p "$SIM/pacote"; tar xzf "$PACOTE" -C "$SIM/pacote"
+basename "$PACOTE" > "$SIM/pacote_origem.txt"   # o portão grava de que backup a cópia veio
 
 "${PSQL[@]}" -d postgres -c "drop database if exists $BANCO with (force)" -c "create database $BANCO"
 

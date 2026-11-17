@@ -1,6 +1,6 @@
 -- id: C6
 -- titulo: Atribuir-se direto no Chatwoot vale como Assumir
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_novo('Joao C6') as c \gset
 select sim.time_no_chatwoot(:'c', '{"agente":"Atendente"}');
 select sim.fila_rodar();

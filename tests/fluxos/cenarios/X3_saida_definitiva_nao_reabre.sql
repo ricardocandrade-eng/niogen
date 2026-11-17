@@ -1,6 +1,6 @@
 -- id: X3
 -- titulo: Saída definitiva (crédito negado): cliente escreve e não reabre
--- tipo: regra_nova
+-- tipo: atual
 select sim.lead_com_venda('Rita X3') as c \gset
 select sim.como('backoffice');
 select public.lead_sair(:'c', sim.venda(:'c'), 'credito_negado');
