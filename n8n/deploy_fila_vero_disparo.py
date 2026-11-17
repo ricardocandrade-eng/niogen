@@ -4,7 +4,7 @@
 #   A) a cada 5 min: fila_vero_rodada(10) (saídas automáticas, auto-respostas, cota do dia espalhada, só com fila_vero_ativo e na
 #      janela seg–sex 9–21 · sáb 10–16, nunca domingo/feriado) → envia pelo número do disparo (1124589070738034), 1 a cada 20 s →
 #      fila_vero_resultado (registra envio/falha; código de política/limite pausa o disparo) → aviso ao Ricardo se pausou.
-#   B) de hora em hora (:07): lê a qualidade do número na Graph → fila_vero_guarda (YELLOW/RED/fora do ar pausa; às 8h roda a
+#   B) de hora em hora (:07): lê a qualidade do número e a nota dos templates nio_fv_* (0267) na Graph → fila_vero_guarda (YELLOW/RED/fora do ar pausa; às 8h roda a
 #      rampa, o A/B e a trava da faixa B) → aviso ao Ricardo se houver alerta.
 # Aviso: template alerta_fila_vero (UTILITY, WABA Nio, pelo número da Mari) para config_regras.resumo_destino_whatsapp.
 # Desligar o disparo sem mexer no n8n: tela Fila Vero › Pausar (fila_vero_ligar) ou config_regras.fila_vero_ativo = false.
@@ -27,6 +27,7 @@ WF_NOME = 'fila_vero_disparo'
 ID_KEY = 'fila_vero_disparo_workflow_id'
 PHONE_FILA = '1124589070738034'
 PHONE_MARI = '1342993658907403'
+WABA_FILA = '974428375341104'
 GRAPH = 'https://graph.facebook.com/v21.0'
 
 MONTAR = r"""
@@ -130,7 +131,14 @@ def build(ids):
                                 'whatsapp_business_manager_messaging_limit,verified_name,name_status',
         'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
         'options': {'timeout': 20000}}, 220, 320, credentials=wa_cred, retryOnFail=True, maxTries=3, waitBetweenTries=5000)
-    rpc('B3 · Supabase guarda', 'fila_vero_guarda', '={{ JSON.stringify({ p_leitura: $json }) }}', 440, 320)
+    add('B2b · Graph nota dos templates', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': f'{GRAPH}/{WABA_FILA}/message_templates?fields=name,status,quality_score&limit=100',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'options': {'timeout': 20000, 'response': {'response': {'neverError': True}}}}, 330, 440, credentials=wa_cred,
+        onError='continueRegularOutput', notes='0267: nota dos nio_fv_* — template rebaixado sai do disparo.', notesInFlow=True)
+    rpc('B3 · Supabase guarda', 'fila_vero_guarda',
+        "={{ JSON.stringify({ p_leitura: Object.assign({}, $('B2 · Graph qualidade do número').first().json, "
+        "{ templates: Array.isArray($json.data) ? $json.data : null }) }) }}", 440, 320)
     se_alerta('B4 · Alerta?', 660, 320)
     destino('B5 · Destino do aviso', 880, 240)
     aviso('B6 · Aviso ao Ricardo', 'B5 · Destino do aviso', 'B3 · Supabase guarda', 1100, 240)
@@ -139,7 +147,8 @@ def build(ids):
                 ('A3 · Montar envios', 'A4 · WABA enviar (1 a cada 20 s)'), ('A4 · WABA enviar (1 a cada 20 s)', 'A5 · Juntar resultados'),
                 ('A5 · Juntar resultados', 'A6 · Supabase resultado'), ('A6 · Supabase resultado', 'A7 · Pausou?'),
                 ('A8 · Destino do aviso', 'A9 · Aviso ao Ricardo'),
-                ('B1 · De hora em hora', 'B2 · Graph qualidade do número'), ('B2 · Graph qualidade do número', 'B3 · Supabase guarda'),
+                ('B1 · De hora em hora', 'B2 · Graph qualidade do número'), ('B2 · Graph qualidade do número', 'B2b · Graph nota dos templates'),
+                ('B2b · Graph nota dos templates', 'B3 · Supabase guarda'),
                 ('B3 · Supabase guarda', 'B4 · Alerta?'), ('B5 · Destino do aviso', 'B6 · Aviso ao Ricardo')]
     conns = {}
     for o, d in ligacoes:

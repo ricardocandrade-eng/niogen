@@ -284,13 +284,46 @@
     },
     {
       "parameters": {
+        "method": "GET",
+        "url": "https://graph.facebook.com/v21.0/974428375341104/message_templates?fields=name,status,quality_score&limit=100",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 20000,
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "B2b · Graph nota dos templates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        330,
+        440
+      ],
+      "id": "68daf9ed-4a3d-5aad-93af-a279340cf51e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "0267: nota dos nio_fv_* — template rebaixado sai do disparo.",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/fila_vero_guarda",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ p_leitura: $json }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_leitura: Object.assign({}, $('B2 · Graph qualidade do número').first().json, { templates: Array.isArray($json.data) ? $json.data : null }) }) }}",
         "options": {
           "timeout": 30000
         }
@@ -490,6 +523,17 @@
       ]
     },
     "B2 · Graph qualidade do número": {
+      "main": [
+        [
+          {
+            "node": "B2b · Graph nota dos templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "B2b · Graph nota dos templates": {
       "main": [
         [
           {
