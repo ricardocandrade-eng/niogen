@@ -460,6 +460,37 @@ def cen_ai(c):   # P34 (13/11, Ricardo; conversa #88): "esse atendimento eu disp
     c.exige('?' in bruto, f'[P34] não terminou com pergunta: «{t[:200]}»')
 
 
+def cen_aj(c):   # P35 (16/11, caso Queroly, conversa 138): unidade a confirmar que chega DEPOIS dos planos → a Mari pergunta mesmo assim
+    # A viabilidade do portal saiu 6 min depois do carrossel (fila do operador); a regra mandava perguntar a unidade só "na resposta
+    # do viável", que já tinha passado — o pedido foi aberto sem o cliente escolher entre Casa A/B/C.
+    ate_planos_jf(c)
+    c.diz('Quero o plano Nio Essencial')
+    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(),
+                 cobertura_detalhe = '{{"portal": "viavel", "unidade_a_confirmar": true, "unidades": ["Apartamento 401", "Apartamento 402", "Apartamento 404"]}}'::jsonb,
+                 unidade_conferir = '{{"motivo": "escolher", "lista": ["Apartamento 401", "Apartamento 402", "Apartamento 404"], "informada": "Apto 403", "usada": "Apartamento 401", "autor": "portao"}}'::jsonb,
+                 unidade_conferir_em = now()
+           where id = (select id from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1)""", escrita=True)
+    r = c.diz('Ana Teste da Silva, CPF 529.982.247-25')
+    t = fala(r)
+    c.exige(re.search(r'40[124]', t), f'[P35] não mostrou as unidades do cadastro da Nio depois dos planos: «{t[:220]}»')
+    c.exige(not re.search(r'apartamento 401[^?]{0,40}(certo|confirmad)', t), f'[P35] escolheu a unidade pelo cliente: «{t[:220]}»')
+
+
+def cen_ak(c):   # P36 + P37 (16/11, caso Queroly): e-mail já confirmado não se pede de novo; a forma dita junto com o plano não se pergunta
+    ate_planos_jf(c)
+    c.diz('Quero o plano Nio Essencial')
+    c.diz('Ana Teste da Silva, CPF 529.982.247-25')
+    c.diz('anateste@gmail.com')
+    c.diz('Sim')
+    r = c.diz('Quero 800 mega 125 no cartão')
+    t = fala(r)
+    c.exige(not re.search(r'e-?mail', t) or 'anateste@gmail.com' in t and not re.search(r'me passa|qual (e )?(o )?seu|pode mandar', t),
+            f'[P36] pediu de novo o e-mail já confirmado: «{t[:220]}»')
+    c.exige((r.get('interativo') or {}).get('chave') != 'pagamento', f'[P37] perguntou a forma que o cliente acabou de dizer (cartão): «{t[:200]}»')
+    row = conv_row(c, 'forma_pagamento')
+    c.exige(row.get('forma_pagamento') == 'cartao', f'[P37] não gravou cartão: {row}')
+
+
 def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Mari pergunta se procede, anota e segue
     c.diz('Oi')
     c.diz('36035130')
@@ -533,6 +564,8 @@ PORTAO = {
     'ag': (40, cen_ag, 'P32'),
     # 13/11 — conversa #88: recusa com motivo fora da lista de objeções (concorrente, confiança) virava despedida na 1ª vez
     'ah': (41, cen_ah, 'P33'), 'ai': (42, cen_ai, 'P34'),
+    # 16/11 — caso Queroly (conversa 138): unidade depois dos planos, e-mail repetido, forma já dita
+    'aj': (43, cen_aj, 'P35'), 'ak': (44, cen_ak, 'P36 P37'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

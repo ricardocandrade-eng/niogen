@@ -248,10 +248,16 @@ if (V4) {
     const uc = conv.unidade_conferir || {};
     if (det.unidade_a_confirmar && Array.isArray(det.unidades) && conv.unidade_conferir_em) {
       const ul = det.unidades.slice(0, 12).map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
+      // 16/11 (caso Queroly, conversa 138): a viabilidade pode chegar DEPOIS dos planos (fila do operador). O sistema diz se a
+      // Mari já mostrou as unidades; se não mostrou, ela pergunta NESTA resposta, em qualquer etapa (antes do próximo dado).
+      const nu = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const jaPerguntou = historico.some((h) => h.papel === 'mari' && ul.some((u) => u && nu(h.texto).includes(nu(u))));
       L.push(uc.motivo === 'nenhuma'
         ? 'unidade_a_confirmar: o cliente JÁ disse que a unidade dele não é nenhuma da lista — o nosso time está pedindo o cadastro à Nio. NÃO pergunte de novo; siga a venda normalmente.'
         : `unidade_a_confirmar: SIM — a fibra chega no endereço, mas a unidade que o cliente deu («${conv.complemento || 'nenhuma'}») não está igual no cadastro da Nio`
-          + ` | unidades_cadastradas: ${ul.join('; ')}${ul.length <= 2 && ul.every((u) => u.length <= 20) ? ' | use [BOTOES:unidade]' : ''}`);
+          + ` | unidades_cadastradas: ${ul.join('; ')}${ul.length <= 2 && ul.every((u) => u.length <= 20) ? ' | use [BOTOES:unidade]' : ''}`
+          + (jaPerguntou ? ' | ja_perguntou: SIM — não pergunte de novo; se ele não escolheu, siga (o nosso time confirma)'
+            : ' | ja_perguntou: NAO — pergunte NESTA resposta, seja qual for a etapa (mesmo depois dos planos ou no meio dos dados): registre o que o cliente mandou agora e, na mesma resposta, mostre as unidades e pergunte qual é a dele'));
     }
     // 13/11 (0167, Ricardo; conversa #86, portão P30): a Mari avisou "não chega", convidou a mandar o CEP certo e o cliente voltou.
     const scAv = (conv.dados || {}).sem_cobertura_avisado;
@@ -296,9 +302,15 @@ if (planoSel && conv.forma_pagamento) {
   L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
 }
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
-L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || (dados.instalacao_data ? `data ${dados.instalacao_data} escolhida — falta o período (o sistema manda Manhã/Tarde)` : '—')}` : `visita=${conv.visita_preferencia || '—'}`}`
+L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}${dados.email && dados.email_confirmado === true ? ' (CONFIRMADO pelo cliente — nunca peça nem confirme de novo)' : ''}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || (dados.instalacao_data ? `data ${dados.instalacao_data} escolhida — falta o período (o sistema manda Manhã/Tarde)` : '—')}` : `visita=${conv.visita_preferencia || '—'}`}`
   + (V7 ? `; referencia=${dados.referencia || '—'}; operadora_atual=${dados.operadora_atual || '—'}` : ''));
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);
+// 16/11 (caso Queroly): "Quero 800 mega 125 no cartão" já diz a forma — a Mari pedia o e-mail de novo e mandava os botões do pagamento.
+if (!conv.forma_pagamento) {
+  const mc = String(cons.mensagem || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const fDita = /\b(cartao|credito)\b/.test(mc) ? 'cartao' : /\bboleto\b/.test(mc) ? 'boleto' : /\b(debito automatico|dacc)\b/.test(mc) ? 'debito' : null;
+  if (fDita) L.push(`forma_dita_agora: ${fDita} — o cliente disse a forma de pagamento nesta mensagem: emita [DADOS_COLETADOS: …; pagamento=${fDita}] e NÃO mande [BOTOES:pagamento]; siga para o próximo dado que falta.`);
+}
 // 10/11 (rodada única): e-mail repetido para o cliente confirmar (Valdo, 09/11: e-mail errado travou o portal).
 if (V7 && dados.email && dados.email_confirmado === false) {
   L.push(`email_a_confirmar: SIM — o cliente mandou «${dados.email}» e ainda não confirmou: repita o e-mail e pergunte se está certinho; não siga para o pagamento antes do "sim" (se ele corrigir, repita o novo).`);
