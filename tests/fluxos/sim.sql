@@ -190,14 +190,16 @@ end $$;
 
 -- cliente manda mensagem. Devolve o que a Mari fez: 'respondeu' | 'calada: <motivo>'
 -- p_depois: quanto tempo depois do último acontecimento o cliente escreve (padrão 3 min; '0' = na mesma hora, para testar corrida)
-create or replace function sim.cliente_escreve(p_conversa uuid, p_texto text, p_mari_responde boolean default true, p_depois interval default '3 minutes')
+-- p_midia: anexo (áudio, imagem, figurinha) no formato que o n8n manda: [{"tipo":"image",...}]
+create or replace function sim.cliente_escreve(p_conversa uuid, p_texto text, p_mari_responde boolean default true, p_depois interval default '3 minutes',
+                                              p_midia jsonb default null)
 returns text language plpgsql as $$
 declare v_conv text := sim._conv(p_conversa); w sim.cw; motivo text; r jsonb;
 begin
   if p_depois > interval '0' then perform sim.espera(p_conversa, p_depois); end if;
   select * into w from sim.cw where conv = v_conv;
   if not found then raise exception 'sim.cliente_escreve: conversa fora do simulador'; end if;
-  perform sim.diz('cliente', '"' || p_texto || '"');
+  perform sim.diz('cliente', '"' || p_texto || '"' || case when p_midia is not null then ' + anexo' else '' end);
   if w.status in ('resolved', 'snoozed') then
     perform sim.cw_mudar(v_conv, '{"status":"open"}', 'cliente');          -- S4
   else
@@ -212,11 +214,11 @@ begin
                  when w.status = 'resolved' then 'conversa resolvida' end;
   perform sim._servico();
   if motivo is not null then
-    perform public.mari_registrar_turno(w.telefone, w.nome, p_texto, 'lead', 'whatsapp', v_conv);   -- 2r
+    perform public.mari_registrar_turno(w.telefone, w.nome, p_texto, 'lead', 'whatsapp', v_conv, p_midia);   -- 2r
     perform sim.diz('Mari', 'calada pelo guard do n8n: ' || motivo);
     return 'calada: ' || motivo;
   end if;
-  r := public.mari_entrada(w.telefone, w.nome, p_texto, 'whatsapp', null, v_conv);                 -- 3a
+  r := public.mari_entrada(w.telefone, w.nome, p_texto, 'whatsapp', null, v_conv, p_midia);        -- 3a
   if (r ->> 'silencio')::boolean then
     perform sim.diz('Mari', 'calada pelo banco (status ' || (r ->> 'status') ||
       case when (r ->> 'optout')::boolean then ', cliente pediu para parar' when (r ->> 'pos_venda')::boolean then ', pós-venda' else '' end || ')');
@@ -248,12 +250,14 @@ begin
 end $$;
 
 -- lead novo: cria a conversa no Chatwoot de mentira e manda a 1ª mensagem. Devolve o id da conversa no NIOGEN.
-create or replace function sim.lead_novo(p_nome text default 'Cliente Simulado', p_texto text default 'Oi, vi o anúncio e quero saber da internet')
+-- p_tel: telefone de uma conversa anterior (o mesmo cliente abrindo conversa NOVA no Chatwoot)
+create or replace function sim.lead_novo(p_nome text default 'Cliente Simulado', p_texto text default 'Oi, vi o anúncio e quero saber da internet',
+                                         p_tel text default null)
 returns uuid language plpgsql as $$
 declare v_conv text; v_tel text; w sim.cw; r jsonb;
 begin
   v_conv := (990000 + (select count(*) from sim.cw) + 1)::text;
-  v_tel := '55319' || lpad((80000000 + floor(random() * 9999999))::bigint::text, 8, '0');
+  v_tel := coalesce(p_tel, '55319' || lpad((80000000 + floor(random() * 9999999))::bigint::text, 8, '0'));
   insert into sim.cw (conv, telefone, nome) values (v_conv, v_tel, p_nome);
   perform sim.diz('cliente', 'lead novo "' || p_nome || '": "' || p_texto || '"');
   perform sim._webhook(v_conv, 'atualizada');
@@ -504,4 +508,12 @@ begin
   execute p_sql; return null;
 exception when others then return sqlerrm;
 end $$;
+grant execute on all functions in schema sim to public;
+
+-- telefone da conversa (para o mesmo cliente abrir conversa nova)
+create or replace function sim.tel(p_conversa uuid) returns text language sql stable as
+$$ select telefone from sim.cw where conv = sim._conv(p_conversa) $$;
+-- um instante de hoje no horário de Brasília (ex.: sim.hora('03:00'))
+create or replace function sim.hora(p_hhmm text) returns timestamptz language sql stable as
+$$ select (date_trunc('day', now() at time zone 'America/Sao_Paulo') + p_hhmm::time) at time zone 'America/Sao_Paulo' $$;
 grant execute on all functions in schema sim to public;
