@@ -400,7 +400,7 @@ end $$;
 -- As regras que valem em QUALQUER cenário, conferidas no estado final. Cada uma tem um código fixo (R1…): o relatório
 -- soma por código, para mostrar qual regra mais quebra.
 create or replace function sim.invariantes(p_conversa uuid) returns void language plpgsql as $$
-declare f jsonb := sim.foto(p_conversa); cw jsonb; esp jsonb; l jsonb; saida boolean; n_lead int;
+declare f jsonb := sim.foto(p_conversa); cw jsonb; esp jsonb; l jsonb; saida boolean; n_lead int; n_sit int; v_sit text;
 begin
   cw := f -> 'cw'; esp := f -> 'espelho'; l := f -> 'lead' -> 0; n_lead := coalesce(jsonb_array_length(f -> 'lead'), 0);
   saida := coalesce(l ->> 'destino', f ->> 'destino') not in ('em_andamento', 'instalada') or coalesce(f -> 'venda' ->> 'status', '') = 'saida';
@@ -426,6 +426,13 @@ begin
   ('R7', 'Nenhuma mensagem saiu duas vezes',
      not exists (select 1 from sim.envios e where e.conversa = p_conversa and e.texto not like '[%simulada%' group by e.texto having count(*) > 1),
      (select string_agg(x, ' | ') from (select count(*) || '× "' || left(e.texto, 50) || '"' x from sim.envios e where e.conversa = p_conversa and e.texto not like '[%simulada%' group by e.texto having count(*) > 1) q));
+  -- R8 (passo 4, porta única em sombra — 0257): todo lead cai em exatamente uma das 15 situações
+  if to_regclass('public.v_lead_situacao') is not null then
+    execute 'select count(*), max(situacao) from public.v_lead_situacao where conversa_id = $1' into n_sit, v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R8', 'Todo lead tem exatamente uma situação da lista (porta única em sombra)', n_sit = 1 and v_sit is not null,
+       'linhas: ' || n_sit || ' · situação: ' || coalesce(v_sit, 'nenhuma') || ' · escada: ' || coalesce(l::text, 'sem linha'));
+  end if;
   if saida then
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('S1', 'Saída: conversa resolvida no Chatwoot', cw ->> 'status' in ('resolved', 'snoozed'), 'Chatwoot: ' || (cw ->> 'status')),
