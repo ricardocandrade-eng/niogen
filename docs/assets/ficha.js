@@ -2094,7 +2094,10 @@
   function gedLinha() {
     const a = d && !d.soConversa && d.andamento;
     if (!a || !a.bio_resultado || (d.v && d.v.instalado_em)) return '';
-    const cls = a.bio_acao === 'aprovada' ? 'ok' : a.bio_alerta ? 'bad' : 'wait';
+    // 18/11 (Ricardo: "GED360 só se der risco" no card Agora): aprovada ou aguardando a Nio não aparece aqui — o status segue
+    // no degrau Biometria e no detalhe da ficha. Fica só quando o GED360 dá risco ou levanta alerta.
+    if (a.bio_acao !== 'risco' && !a.bio_alerta) return '';
+    const cls = 'bad';
     return `<div class="fc2-ged ${cls}" title="Biometria lida no GED360 da Nio · protocolo ${esc(a.bio_protocolo || '—')}"><b>GED360:</b> ${esc(a.bio_rotulo || a.bio_resultado)}${a.bio_lido_em ? ` · lido há ${esc(haGed(a.bio_lido_em))}` : ''}</div>`;
   }
   // Card Agora (passo 6, Ricardo 17/11): os botões de ação do passo da vez, tirados do painel de ações, à vista e do mesmo
