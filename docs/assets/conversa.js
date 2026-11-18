@@ -257,8 +257,9 @@
         ${htmlSw}
         <span class="cvp-pill fixo${jn.aberta ? '' : ' warn'}">${esc(jn.txt)}</span></div>`);
       const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
-      troca('etq', etqEl, `<span class="cvp-rot">ETIQUETAS</span>${etq.length ? etq.map((x) => `<span class="cvp-tg">${esc(x)}<button type="button" data-cv="tirar" data-tg="${esc(x)}" aria-label="Tirar a etiqueta ${esc(x)}" title="Tirar">×</button></span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}
-        <select class="cvp-pill cvp-mais" data-cv="etiqueta" aria-label="Pôr etiqueta"><option value="">+ etiqueta</option>${ETIQUETAS.filter((x) => !etq.includes(x)).map((x) => `<option>${esc(x)}</option>`).join('')}</select>`);
+      // 17/11 (passo 6, Ricardo: "Deixe as etiquetas também só leitura" — regra de ouro 4): a etiqueta sai da situação do lead
+      // (projetor da porta); aqui só se vê. Não contatar é o botão "Cliente pediu para parar"; Saída/Silenciar, os da ficha.
+      troca('etq', etqEl, `<span class="cvp-rot">ETIQUETAS</span>${etq.length ? etq.map((x) => `<span class="cvp-tg" title="Só leitura: a etiqueta vem da situação do cliente">${esc(x)}</span>`).join('') : '<span class="cvp-tg vazia">nenhuma</span>'}`);
       if (o.movel) desenharMovel(c, dn, jn, nome);
       desenharMsgs();
       desenharPe(jn, dn, nome);

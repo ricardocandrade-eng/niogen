@@ -32,13 +32,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=171126-2">
+<link rel="stylesheet" href="assets/app.css?v=171126-3">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=161126-23"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
-<script src="assets/conversa.js?v=171126-1"></script>
-<script src="assets/ficha.js?v=171126-2"></script>
+<script src="assets/conversa.js?v=171126-2"></script>
+<script src="assets/ficha.js?v=171126-3"></script>
 <script src="assets/pulso.js?v=161126-8"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -253,7 +253,7 @@
   const situacao = (j) => [j.etapa_nome, j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
   const linha = (j, paraFazer) => `<div class="lv-row n-${esc(j.nivel || 'ok')}${NGFicha.atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
       <div class="lv-who"><i class="lv-dot" aria-hidden="true"></i><div><b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')} · há ${esc(haTempo(j.desde))}${funilHtml(j)}</small></div></div>
-      <div class="lv-sit">${confSelo(j)}${esc(situacao(j) || '—')}</div>
+      <div class="lv-sit">${confSelo(j)}${esc(situacao(j) || '—')}${j.biometria_ged ? ` <span class="lv-ged" title="Biometria no GED360 da Nio">GED360: ${esc(String(j.biometria_ged).toLowerCase())}</span>` : ''}</div>
       <div class="lv-prox" title="${esc(j.o_que_fazer || '')}">${esc(j.o_que_fazer || '—')}</div>
       <div>${donoHtml(j)}</div>
       <div><span class="lv-pill">${esc(PRAZO[j.nivel] || '—')}</span></div>

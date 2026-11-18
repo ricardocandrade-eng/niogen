@@ -3529,3 +3529,16 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .lv2-board > .mv-col { flex: 1 1 0; min-width: 0; width: auto; max-width: none; }
 .lv2-kbts .btn { min-width: 0; flex: 1 1 0; justify-content: center; }
 .lv2-kc .mv-oque { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+/* 17/11 (0273, caso Geraldo): botão liberado só para o admin (o GED360 diz outra coisa) e o efeito com aviso */
+.fc2 .btn.so-admin { border-color: #5C4A1E; color: #F8D58C; }
+.fc-efeito.aviso { background: #2D2616; color: #F8D58C; }
+/* 17/11 (caso Geraldo): o "se você clicar" não é verde — verde parece "já feito" */
+.fc-efeito { background: #182233; color: #9CCBFF; }
+/* 17/11 (caso Geraldo): o status do GED360 à vista para todos — no card Agora e na linha da Live */
+.fc2-ged { font-size: 13px; padding: 6px 10px; border-radius: 8px; background: #1D222B; color: #C9D0DB; }
+.fc2-ged b { font-weight: 700; }
+.fc2-ged.wait { background: #2D2616; color: #F8D58C; }
+.fc2-ged.ok { background: #1E3A24; color: #8FE39A; }
+.fc2-ged.bad { background: #2B1D1D; color: #FFB3B3; }
+.lv-ged { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 11px; background: #2D2616; color: #F8D58C; white-space: nowrap; }
+.fc2-agb .btn { white-space: normal; height: auto; min-height: 34px; line-height: 1.2; padding: 6px 8px; text-overflow: clip; text-align: center; }

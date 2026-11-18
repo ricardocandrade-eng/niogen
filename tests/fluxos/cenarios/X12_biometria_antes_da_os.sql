@@ -25,6 +25,13 @@ select sim.confere('"Nio dispensou" continua valendo', (:'b'::jsonb #>> '{evento
 select coalesce(sim.recusa(format($q$select public.backoffice_momento(%L, 'biometria', '{"resultado":"validada"}')$q$, sim.venda(:'c'))), '') as rec \gset
 select sim.confere('a porta recusa a biometria à mão com a leitura do GED360', :'rec' like '%GED360%', coalesce(nullif(:'rec', ''), 'aceitou'));
 
+-- o admin ainda vê o botão, mas marcado: a tela diz que é só dele e o que o GED360 diz (0273, caso Geraldo)
+select sim.como('admin');
+select public.porta_botoes(:'c', sim.venda(:'c')) as ba \gset
+select sim.confere('admin: o botão aparece com o aviso "Só o admin" e o status do GED360',
+  (:'ba'::jsonb #>> '{eventos,momento:biometria:validada,ok}')::boolean and coalesce(:'ba'::jsonb #>> '{eventos,momento:biometria:validada,frase}', '') like 'Só o admin%GED360: LINK ENVIADO%',
+  :'ba'::jsonb #>> '{eventos,momento:biometria:validada}');
+
 -- 3 h depois sem leitura nova: a mão volta a valer
 select sim.passa(:'c', '3 hours');
 select sim.como('backoffice');

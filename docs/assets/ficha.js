@@ -1612,8 +1612,8 @@
       }
     } else if (etapa === 3 && v.biometria_status !== 'validada') {
       // 0247 (Ricardo, 16/11): crédito aprovado → a Nio manda o link da biometria → aprovada → só então pagamento, agenda e OS.
-      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
-        B('data-momento="biometria" data-r="risco"', 'Com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Nio dispensou a biometria', false));
+      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', 'Marcar como validada', false),
+        B('data-momento="biometria" data-r="risco"', 'Marcar com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Marcar: Nio dispensou', false));
       nota = ['pendente', 'com_risco'].includes(v.biometria_status)
         ? 'A Nio mandou o link da biometria ao cliente. O GED360 é lido sozinho; aprovada, o NIOGEN marca e o passo vira "Gravar venda". "Consultar agora" lê na hora (uns 10 s).'
         : 'Crédito aprovado: no portal, envie a biometria (a Nio manda o link ao cliente por WhatsApp e e-mail). Aprovada, siga para forma de pagamento, agenda e OS.';
@@ -1624,8 +1624,8 @@
       sozinho = SOZINHO.os;
     } else if (etapa === 4 && ['pendente', 'com_risco'].includes(v.biometria_status)) {
       // 0194: a biometria vem DEPOIS da OS.
-      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', '✓ Biometria validada', false),
-        B('data-momento="biometria" data-r="risco"', 'Com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Nio dispensou a biometria', false));
+      bts.push(B('data-f="bio-ler"', '⟳ Consultar a biometria agora', true), B('data-momento="biometria" data-r="validada"', 'Marcar como validada', false),
+        B('data-momento="biometria" data-r="risco"', 'Marcar com risco', false), B('data-momento="biometria" data-r="dispensada"', 'Marcar: Nio dispensou', false));
       nota = 'A Nio mandou o link da biometria quando a OS foi aberta. "Consultar agora" lê o GED360 na hora (uns 10 s); aprovada, o NIOGEN marca sozinho. Sistema de biometria da Nio fora do ar? Peça à Nio a dispensa e toque "Nio dispensou a biometria".';
       sozinho = SOZINHO.biometria;
     } else if (etapa === 4 && d.lead && d.lead.status === 'aguarda_cartao') {
@@ -2051,6 +2051,15 @@
     aplicarPorta();
   }
 
+  // 17/11 (caso Geraldo, Ricardo: "O status do GED precisa ficar claro, para todos os usuários"): o que o GED360 diz da biometria
+  // fica no card Agora, para qualquer perfil — a biometria é fato da Nio; o NIOGEN só mostra e só o robô (ou o admin) grava.
+  const haGed = (iso) => { const m = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000)); return m < 60 ? `${m} min` : m < 2880 ? `${Math.floor(m / 60)} h` : `${Math.floor(m / 1440)} d`; };
+  function gedLinha() {
+    const a = d && !d.soConversa && d.andamento;
+    if (!a || !a.bio_resultado || (d.v && d.v.instalado_em)) return '';
+    const cls = a.bio_acao === 'aprovada' ? 'ok' : a.bio_alerta ? 'bad' : 'wait';
+    return `<div class="fc2-ged ${cls}" title="Biometria lida no GED360 da Nio · protocolo ${esc(a.bio_protocolo || '—')}"><b>GED360:</b> ${esc(a.bio_rotulo || a.bio_resultado)}${a.bio_lido_em ? ` · lido há ${esc(haGed(a.bio_lido_em))}` : ''}</div>`;
+  }
   // Card Agora (passo 6, Ricardo 17/11): os botões de ação do passo da vez, tirados do painel de ações, à vista e do mesmo
   // tamanho (até 4). Só botões que viram evento na porta ou consultas; formulários e o resto continuam em "Ações".
   const F_CARD = ['bio-ler', 'os-ler', 'consultar-portal', 'viab-rapido', 'reabrir', 'virar-venda', 'conv-espera', 'pend-abrir'];
@@ -2100,10 +2109,11 @@
       if (!p) return;
       const rot = el.textContent.replace(/\s+/g, ' ').trim();
       if (!p.ok) { if (rot && p.frase) fora.set(rot, p.frase); el.remove(); return; }
+      if (p.ok && p.frase) { el.classList.add('so-admin'); el.dataset.aviso = p.frase; }   // 0273: liberado só para o admin
       if (p.efeito) {
         el.dataset.efeito = p.efeito;
         if (!el.dataset.tituloAntes) el.dataset.tituloAntes = el.title || '';
-        el.title = `${el.dataset.tituloAntes ? `${el.dataset.tituloAntes}\n\n` : ''}Vai acontecer: ${p.efeito}`;
+        el.title = `${el.dataset.tituloAntes ? `${el.dataset.tituloAntes}\n\n` : ''}${p.ok && p.frase ? `⚠ ${p.frase}\n\n` : ''}Se você clicar: ${p.efeito}`;
       }
     });
     // Saída: só os motivos que a porta aceita nesta situação
@@ -2116,9 +2126,10 @@
     raiz.querySelectorAll('.fc-passo-corpo').forEach((b) => b.insertAdjacentHTML('beforeend', '<p class="fc-efeito" hidden data-porta-fora></p>'));
     // no card Agora, o efeito do 1º botão já fica à vista; passar o mouse em outro troca o texto
     const card = raiz.querySelector('.fc2-agcard');
-    const prim = card && card.querySelector('.fc2-agb [data-efeito]');
+    // 17/11 (caso Geraldo): só o 1º botão do card mostra o efeito sozinho — e só se ele for uma ação (Consultar não muda nada)
+    const prim = card && card.querySelector('.fc2-agb > :first-child');
     const linhaC = card && card.querySelector('.fc-efeito');
-    if (prim && linhaC) { linhaC.textContent = efeitoTxt(prim); linhaC.hidden = false; }
+    if (prim && prim.dataset.efeito && linhaC) { linhaC.textContent = efeitoTxt(prim); linhaC.classList.toggle('aviso', !!prim.dataset.aviso); linhaC.hidden = false; }
     const alvo = raiz.querySelector('.fc2-agcard') || raiz.querySelector('.fc-passo-corpo');
     if (fora.size && alvo) {
       alvo.insertAdjacentHTML('beforeend', `<details class="fc-naovale" data-porta-fora><summary>Não vale agora (${fora.size})</summary><ul>${
@@ -2127,10 +2138,9 @@
   }
   // "Vai acontecer" à vista (não só no title, que o celular não mostra): passar o mouse ou o foco num botão mostra o efeito
   // na linha do card Agora ou do painel de ações.
-  function efeitoTxt(b) {   // "Reabrir — Reabrir: sai da Saída…" vira "Reabrir: sai da Saída…"
-    const rot = b.textContent.replace(/\s+/g, ' ').trim();
-    const ef = b.dataset.efeito || '';
-    return ef.toLowerCase().startsWith(rot.toLowerCase().replace(/[^a-zà-ú ]/g, '').trim().split(' ')[0]) ? ef : `${rot} — ${ef}`;
+  function efeitoTxt(b) {   // 17/11: "Ao clicar em “X”: …" — para não parecer que a ação já foi feita
+    const rot = b.textContent.replace(/\s+/g, ' ').replace(/^[✓✔]\s*/, '').trim();
+    return `${b.dataset.aviso ? `⚠ ${b.dataset.aviso} · ` : ''}Se você clicar em “${rot}”: ${b.dataset.efeito || ''}`;
   }
   function mostrarEfeito(ev) {
     const b = ev.target && ev.target.closest ? ev.target.closest('[data-efeito]') : null;
@@ -2138,6 +2148,7 @@
     const linha = box && box.querySelector('.fc-efeito');
     if (!linha) return;
     linha.textContent = efeitoTxt(b);
+    linha.classList.toggle('aviso', !!b.dataset.aviso);
     linha.hidden = false;
   }
   function desenhar() {
@@ -3190,7 +3201,7 @@
         ${ehBO() && !fimV && v.biometria_status !== 'validada' && (String(v.nio_pedido || '').trim() || ['aprovado', 'so_cartao'].includes(v.credito_resultado))
           // 17/11 (Ricardo, caso Lucas: "Não consigo gravar a biometria como concluída"): o registro à mão fica no próprio cartão,
           // como no Crédito — antes só existia em ⋯ › Ações da venda (e sumia atrás do "Cliente escreveu").
-          ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-momento="biometria" data-r="validada">✓ Biometria validada</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="risco">Com risco</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="dispensada">Nio dispensou</button><span class="nota-campo">o GED360 mostra Concluído/Aprovado ou o portal liberou? grave aqui</span></div>` : ''}
+          ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-momento="biometria" data-r="validada">Marcar como validada</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="risco">Marcar com risco</button><button type="button" class="btn btn-sm" data-momento="biometria" data-r="dispensada">Marcar: Nio dispensou</button><span class="nota-campo">o GED360 mostra Concluído/Aprovado ou o portal liberou? grave aqui</span></div>` : ''}
         ${ehBO() && !fimV && ['pendente', 'com_risco'].includes(v.biometria_status) ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="reprovado_biometria">Biometria reprovada → registrar a Saída</button><span class="nota-campo">a Nio reprovou de vez? abre a Saída já com o motivo</span></div>' : ''}`;
     } else if (p.k === 'os') {
       corpo = conv ? `${linhaDet('Pedido (OS)', 'depois do crédito aprovado')}${ehBO() && !(d.conv && d.conv.funil_destino && d.conv.funil_destino !== 'em_andamento') ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o pedido / OS">Virar venda</button></div>' : ''}` : `${linhaDet('Nº do pedido (OS)', `<span class="mono">${esc(v.nio_os || v.nio_pedido || '—')}</span>${v.nio_os_em ? ` · ${esc(NG.fmtDataHora(v.nio_os_em))}` : ''}`)}
@@ -4371,7 +4382,7 @@
               <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
-          ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${agBts ? `<div class="fc2-agb">${agBts}</div>` : ''}<p class="fc-efeito" hidden></p></div>` : ''}
+          ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${gedLinha()}${agBts ? `<div class="fc2-agb">${agBts}</div>` : ''}<p class="fc-efeito" hidden></p></div>` : ''}
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
           ${jor ? jor.html : ''}
         </section>
