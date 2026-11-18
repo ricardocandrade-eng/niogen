@@ -61,17 +61,16 @@
     const w = extra.waba;
     const num = extra.fila_vero && extra.fila_vero.numero;
     if (w || num) {
-      // Mari e disparo da Fila Vero saem do MESMO número (1342993658907403). Duas leituras dele: waba_qualidade (8h e 14h) e a
-      // guarda da Fila Vero (de hora em hora) — vale a mais nova.
-      const lw = w && w.quality_rating ? { r: w.quality_rating, em: w.lida_em, tier: w.messaging_limit_tier } : null;
+      // 18/11 (Ricardo): são DOIS números. A barra mostra a nota do número do DISPARO da Fila Vero (guarda de hora em hora,
+      // config fila_vero_qualidade); a da Mari (waba_qualidade, 8h e 14h) aparece só no cartão aberto, numa linha à parte.
       const ln = num && num.rating ? { r: num.rating, em: num.em, tier: num.tier } : null;
-      const l = !lw ? ln : !ln ? lw : (new Date(ln.em || 0) > new Date(lw.em || 0) ? { ...ln, tier: ln.tier || lw.tier } : lw);
-      const r = l && l.r;
+      const lm = w && w.quality_rating ? { r: w.quality_rating, em: w.lida_em } : null;
+      const r = ln && ln.r;
       const n = cinza || !r ? 'sem_leitura' : (NIVEL_WABA[r] || 'atencao');
-      const linhas = ['número da Nio (Mari e Fila Vero)'];
-      if (l && l.em) linhas.push(`lido ${ha(l.em) || '—'}`);
-      const tier = l && l.tier ? `${String(l.tier).replace('TIER_', '').toLowerCase()}/dia` : '—';
-      out.push({ k: 'waba', nome: 'WABA', n, rotulo: r || 'sem leitura', principal: tier, linhas, href: 'metaads.html' });
+      const linhas = [ln && ln.em ? `número do disparo · lido ${ha(ln.em) || '—'}` : 'número do disparo · sem leitura'];
+      linhas.push(lm ? `Mari: ${lm.r}${lm.r === 'GREEN' ? '' : ' ⚠'} · lido ${ha(lm.em) || '—'}` : 'Mari: sem leitura');
+      const tier = ln && ln.tier ? `${String(ln.tier).replace('TIER_', '').toLowerCase()}/dia` : '—';
+      out.push({ k: 'waba', nome: 'WABA disparo', n, rotulo: r || 'sem leitura', principal: tier, linhas, href: 'filavero.html' });
     }
     const f = extra.fila_vero;
     if (f) {
@@ -238,7 +237,7 @@
     // 18/11: barra e cartões abertos na mesma grade (--pl-n = partes entre o batimento e a seta) — cada cartão embaixo do seu.
     const ext = extras(cinza);
     // Peso de cada coluna pelo tamanho do texto da barra (Fila Vero "enviando 214/500" é a mais larga; WABA "GREEN" a mais curta).
-    const PESO = { meta: 1, entrada: 1, mari: 1.1, fluxos: 1.2, waba: 1, filavero: 1.45, funil: 1.15 };
+    const PESO = { meta: 1, entrada: 1, mari: 1.1, fluxos: 1.2, waba: 1.3, filavero: 1.45, funil: 1.15 };
     const cols = [...elos, ...ext.map((x) => x.k), ...(dados && dados.funil ? ['funil'] : [])].map((k) => `minmax(0, ${PESO[k] || 1}fr)`);
     el.style.setProperty('--pl-cols', `140px ${cols.join(' ')} 30px`);
     el.classList.toggle('pl-aberto', expandido);
