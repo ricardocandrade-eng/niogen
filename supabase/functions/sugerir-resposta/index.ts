@@ -42,6 +42,8 @@ COMO ESCREVER (voz de pessoa, não da Mari):
   mostrou planos, NENHUMA das opções mostra plano ou preço — a próxima mensagem pede o CEP e o número da casa (Passo 2 da Mari).
   Vale também com urgência: acolha a pressa em meia frase, sem prometer data, e peça o CEP e o número.
 - Sem markdown, sem asterisco, sem lista. No máximo ~60 palavras por opção. Não use o nome do cliente em toda frase.
+- Parágrafos curtos (1 ou 2 frases cada), separados por UMA LINHA EM BRANCO (\\n\\n), como mensagem de WhatsApp. A pergunta final
+  que diz o próximo passo do cliente fica no seu próprio parágrafo.
 - Responda primeiro o que o cliente perguntou por último. Toda mensagem deixa claro o próximo passo do cliente.
 - As 2 opções devem ser caminhos diferentes (ex.: "Pedir o CEP" e "Tirar a dúvida do preço"), cada uma com um rótulo de 2 a 4 palavras do que ela faz.
 
@@ -114,7 +116,8 @@ function problema(o: Opcao, precos: Set<string>): string | null {
 }
 const limpa = (o: Opcao): Opcao => ({
   rotulo: String(o.rotulo ?? '').replace(/[*_#`"]/g, '').trim().split(/\s+/).slice(0, 5).join(' ') || 'Sugestão',
-  texto: String(o.texto ?? '').replace(/\*\*/g, '').trim(),
+  // 18/11 (Ricardo: "um espaço em branco (enter) entre os parágrafos"): toda quebra vira uma linha em branco
+  texto: String(o.texto ?? '').replace(/\*\*/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n\s*\n*/g, '\n\n').trim(),
 });
 
 function montarPedido(ctx: Ctx, nomeUsuario: string): string {

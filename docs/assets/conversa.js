@@ -99,10 +99,13 @@
   border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 10px; cursor: pointer; font: inherit; font-size: 13px; line-height: 1.35; min-width: 0; }
 .cvp-sug-op:hover, .cvp-sug-op:focus-visible { border-color: var(--accent); outline: none; }
 .cvp-sug-op small { color: var(--accent); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
-.cvp-sug-op span { overflow-wrap: anywhere; }
+.cvp-sug-op span { overflow-wrap: anywhere; white-space: pre-line; }
 .cvp-sug-gira { display: inline-block; animation: cvp-sug-gira 1.2s linear infinite; }
 @keyframes cvp-sug-gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .cvp-sug-gira { animation: none; } }
+.cvp-raiz.cheia .cvp-pe.com-sug { height: auto; max-height: 62%; }
+.cvp-raiz.cheia .cvp-sug-ops { max-height: 210px; overflow-y: auto; }
+.cvp-raiz.cheia .cvp-sug-bt { height: 28px; min-height: 28px; font-size: 12.5px; }
 @media (max-width: 640px) { .cvp-sug-ops { grid-template-columns: 1fr; max-height: 38vh; overflow-y: auto; } .cvp-raiz.movel .cvp-sug-bt { padding: 0 8px; } }`;
     document.head.appendChild(s);
   }
@@ -150,9 +153,10 @@
     const emoBt = $('[data-cv="emoji"]'), emoEl = $('[data-emo]');
     st.emoAba = 0;
     const sugBt = $('[data-cv="sugerir"]'), sugEl = $('[data-sug]');
-    // 18/11 (0297, docs/Prompt_sugerir_resposta_ia_181126_1825.md): ✨ Sugerir resposta — só em Conversas e na ficha; a tela Live
-    // (fila.html, e a tela cheia do cliente) fica de fora até o debate com o Ricardo (regra 20). Só admin/backoffice.
-    const podeSugerir = !o.cheia && !document.body.classList.contains('tela-fila')
+    // 18/11 (0297, docs/Prompt_sugerir_resposta_ia_181126_1825.md): ✨ Sugerir resposta — em Conversas e na ficha (a ficha monta a
+    // conversa no modo cheia, em qualquer tela — Ricardo, 18/11: "Faltou acrescentar o botão ✨ na conversa da ficha"). Dentro da
+    // tela Live (fila.html) fica de fora até o debate com o Ricardo (regra 20). Só admin/backoffice.
+    const podeSugerir = !document.body.classList.contains('tela-fila')
       && ['admin', 'backoffice'].includes(((NG.usuario || {}).perfil) || '');
     if (podeSugerir) estiloSugestao();
 
@@ -636,6 +640,7 @@
       }
       if (st.sig.sug !== html) { st.sig.sug = html; sugEl.innerHTML = html; }
       sugEl.hidden = !html;
+      el.querySelector('.cvp-pe').classList.toggle('com-sug', !!html);   // ficha (cheia): o pé de altura fixa cresce enquanto há sugestão
     }
 
     async function conversaAcao(acao, valor) {

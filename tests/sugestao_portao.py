@@ -84,7 +84,9 @@ CASOS = {
     'plano_fora': (ctx([('cliente', 'Vocês tem plano de 5 giga? Quero o de 5 giga por 120')]),
                    [('preço só da tabela', precos_da_tabela), ('não confirma 5 giga', nao_tem('temos o de 5', 'temos 5 giga', 'o de 5 giga sai', 'o plano de 5 giga fica'))]),
 }
-COMUM = [('não se apresenta como Mari', nao_tem('aqui é a mari', 'sou a mari')), ('sem palavra proibida', nao_tem('grátis', 'gratuito', 'combo', 'pacote'))]
+COMUM = [('não se apresenta como Mari', nao_tem('aqui é a mari', 'sou a mari')), ('sem palavra proibida', nao_tem('grátis', 'gratuito', 'combo', 'pacote')),
+         # 18/11 (Ricardo): linha em branco entre os parágrafos — texto com mais de uma frase vem em parágrafos
+         ('parágrafos com linha em branco', lambda txt: len(re.findall(r'[.!?](\s|$)', txt)) <= 1 or '\n\n' in txt)]
 EMOJI = re.compile('[\U0001F300-\U0001FAFF☀-➿]')
 SEM_EMOJI = ('sem emoji (o cliente não usou)', lambda txt: not EMOJI.search(txt))
 
