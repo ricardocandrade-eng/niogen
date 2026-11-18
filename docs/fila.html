@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=181126-1">
+<link rel="stylesheet" href="assets/app.css?v=181126-fv">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=161126-23"></script>
@@ -328,6 +328,7 @@
     { id: 'mira', nome: 'Na mira', cor: '#F2B84B' },
     { id: 'acomp', nome: 'Acompanhando', cor: '#8D97A3' },
     { id: 'op', nome: 'Oportunidades', cor: '#FF9F43' },
+    { id: 'fv', nome: 'Fila Vero', cor: '#B98CFF' },   // 18/11 (0284, Ricardo: "Quero enxergar esses leads entrando na fila da Mari")
     { id: 'and', nome: 'Andamento na Nio', cor: '#57D38C' },
   ];
   const NOME_BLOCO = Object.fromEntries(BLOCOS.map((b) => [b.id, b.nome]));
@@ -335,6 +336,8 @@
   let acompAberto = false;
   const RANK = { agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 };
   // Todos os itens da Live num formato só: { bloco, k (ficha), nome, sub, oque, prazo, urg, rank, t, row (linha da Lista), bts (botões do card) }
+  // 18/11 (0284): selo "Fila Vero" em toda linha de lead que veio da oferta aos clientes antigos (v_jornada.origem = 'fila_vero').
+  const fvSelo = (j) => (j && j.origem === 'fila_vero' ? ' <span class="lv-fv" title="Veio da oferta por WhatsApp aos clientes antigos da equipe (Fila Vero)">Fila Vero</span>' : '');
   function itens() {
     const fazer = soVez ? filtradas(true) : filtradas(false).filter(vez);
     const ac = soVez ? acompanhando() : filtradas(false).filter((j) => !vez(j));
@@ -348,13 +351,15 @@
       return false;
     });
     const L = [];
+    const jPorConv = {};
+    (jor.todas || []).forEach((j) => { if (j.conversa_id) jPorConv[j.conversa_id] = j; });
     // 18/11 (Ricardo: "Colunas 1 e 5 parecem iguais · coluna 4 pode tirar a cor · colunas 3 e 4 são confusas"): cada linha tem
     // tipo · cliente · O QUE ESTÁ ACONTECENDO (título curto e claro + a explicação, sem cor) · COM QUEM (a vez) · prazo · botões.
     const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
     const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
       sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
-      oque: j.o_que_fazer || '', selo: confSelo(j) + (j.biometria_ged ? ` <span class="lv-ged" title="Biometria no GED360 da Nio">GED360: ${esc(String(j.biometria_ged).toLowerCase())}</span>` : ''),
+      oque: j.o_que_fazer || '', selo: fvSelo(j) + confSelo(j) + (j.biometria_ged ? ` <span class="lv-ged" title="Biometria no GED360 da Nio">GED360: ${esc(String(j.biometria_ged).toLowerCase())}</span>` : ''),
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
       row: linha(j, b === 'fazer'),
       bts: b === 'fazer' ? `<button type="button" class="btn btn-sm lv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : '' });
@@ -370,7 +375,7 @@
       });
       mira.filter((m) => !naLista[`c:${m.conversa_id}`]).forEach((m) => L.push({ bloco: 'mira', k: `c:${m.conversa_id}`, nome: m.nome || 'Contato',
         sub: [m.cidade, m.plano, m.ultima_em ? `escreveu ${haTxt(m.ultima_em)}` : ''].filter(Boolean).join(' · '),
-        sit: `Conversando com a Mari${m.etapa_nome ? ` · ${m.etapa_nome}` : ''}`, oque: m.ultima_fala ? `Cliente: “${m.ultima_fala}”` : 'A Mari segue; acompanhe para não perder',
+        sit: `Conversando com a Mari${m.etapa_nome ? ` · ${m.etapa_nome}` : ''}`, selo: fvSelo(jPorConv[m.conversa_id]), oque: m.ultima_fala ? `Cliente: “${m.ultima_fala}”` : 'A Mari segue; acompanhe para não perder',
         vez: vezTxt(m.acompanho ? 'você acompanha' : 'Mari'), prazo: 'agora',
         urg: !!(m.novo && m.acompanho), rank: m.novo && m.acompanho ? 0 : 1, t: m.ultima_em, row: miraLinha(m),
         bts: `<button type="button" class="btn btn-sm" data-mira-abrir="c:${esc(m.conversa_id)}">Abrir</button>` }));
@@ -388,13 +393,20 @@
         const partes = String(o.motivo || '').split(' · ');
         const vale = valeDe(o);
         L.push({ bloco: 'op', k: `c:${o.conversa_id}`, nome: o.nome || 'Contato', sub: [o.cidade, o.plano, haTxt(o.parado_desde)].filter(Boolean).join(' · '),
-          sit: partes[0] || 'Oportunidade', oque: [partes.slice(1).join(' · '), o.canal === 'ligar' ? `Ligue para ${telFmt(o.telefone)} — sem mensagem` : ''].filter(Boolean).join(' · '),
+          sit: partes[0] || 'Oportunidade', selo: fvSelo(jPorConv[o.conversa_id]), oque: [partes.slice(1).join(' · '), o.canal === 'ligar' ? `Ligue para ${telFmt(o.telefone)} — sem mensagem` : ''].filter(Boolean).join(' · '),
           vez: vezTxt(vale.txt !== '—' ? `vale ${vale.txt}` : 'Mari', vale.txt !== '—' ? 'vale' : ''),
           prazo: jan > 0 && jan <= 240 ? 'hoje' : '—', urg: false, rank: jan > 0 && jan <= 240 ? 1 : 2, t: o.parado_desde, row: opLinha(o),
           bts: o.canal === 'ligar' ? '' : `<button type="button" class="btn btn-sm lv-go" data-ope="${esc(o.conversa_id)}">Enviar</button>` });
       });
     }
     ac.forEach((j) => L.push({ ...jItem(j, 'acomp'), rank: 5 }));
+    // 18/11 (0284): leads da Fila Vero com a Mari conduzindo (caixa 1) não saem do radar — o Ricardo quer vê-los entrando.
+    if (!etapaSel || etapaSel === 1) {
+      const jaTem = new Set(L.map((x) => x.k).filter(Boolean));
+      (jor.todas || []).filter((j) => j.origem === 'fila_vero' && j.caixa === 1 && !jaTem.has(chaveFicha(j)) && !(j.conversa_id && jaTem.has(`c:${j.conversa_id}`)))
+        .forEach((j) => L.push({ ...jItem(j, 'fv'), sit: `Com a Mari${j.etapa_nome ? ` · ${j.etapa_nome}` : ''}`,
+          oque: j.o_que_fazer || 'A Mari está conduzindo; sobe para Para fazer se precisar de você', vez: vezTxt('Mari'), prazo: '—', urg: false, rank: 4 }));
+    }
     const tms = (x) => new Date(x || 0).getTime() || 0;
     return L.sort((a, b) => a.rank - b.rank || tms(a.t) - tms(b.t));
   }

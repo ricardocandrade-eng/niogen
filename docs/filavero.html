@@ -17,7 +17,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=181126-1">
+<link rel="stylesheet" href="assets/app.css?v=181126-fv">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=161126-23"></script>
@@ -50,6 +50,9 @@
   .fv-c .q { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .fv-c .o { grid-column: 1 / -1; font-size: 12.5px; color: var(--muted); }
   .fv-c a { font-size: 12.5px; white-space: nowrap; }
+  .fv-trat { grid-column: 1 / -1; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .fv-trat.ok { color: var(--ok-fg); }
+  .fv-trat.ruim { color: var(--bad-fg); }
   .fv-vazio { font-size: 13px; color: var(--muted); }
   .fv-hist { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
   @media (max-width: 1300px) { .fv-duas { grid-template-columns: minmax(0, 1fr); } }
@@ -160,21 +163,31 @@
     const nm = p.na_mari_lista || [];
     const naMari = `
       <section class="fv-bloco"><header><h2>Falaram com a Mari</h2><span class="tot">${n(nm.length)}</span>
-        <span class="sub">Quem tocou em "Quero ver a oferta" e mandou a mensagem. A Mari atende como qualquer lead; o Live só mostra quando pedir ação do time.</span></header>
+        <span class="sub">Quem conversou com a Mari: mandou a mensagem do botão ou respondeu a Mari depois do clique. Aparecem na Live com o selo <b>Fila Vero</b>.</span></header>
         ${nm.length ? `<div class="fv-lista">${nm.map((c) => `<div class="fv-c" style="border-color:var(--border)"><span class="q">${esc(c.nome || 'Cliente')}</span>
           <a href="conversas.html#c=${esc(c.conversa_id)}">Abrir ↗</a>
-          <span class="o">${esc(NOME_TPL[c.template] || '')} · ${esc(c.destino && c.destino !== 'em_andamento' ? c.destino.replace(/_/g, ' ') : (ETAPA[c.etapa] || c.etapa || ''))} · há ${esc(NG.haQuanto(c.em))}${c.chatwoot ? ` · Chatwoot #${esc(c.chatwoot)}` : ''}</span></div>`).join('')}</div>`
+          <span class="fv-trat ok">✓ ${esc(c.pelo_clique ? 'respondeu a Mari' : 'falou com a Mari')}</span><span class="o">${esc(NOME_TPL[c.template] || '')} · ${esc(c.destino && c.destino !== 'em_andamento' ? c.destino.replace(/_/g, ' ') : (ETAPA[c.etapa] || c.etapa || ''))} · há ${esc(NG.haQuanto(c.em))}${c.chatwoot ? ` · Chatwoot #${esc(c.chatwoot)}` : ''}</span></div>`).join('')}</div>`
           : '<div class="fv-vazio">Ninguém ainda.</div>'}
       </section>`;
 
-    // ---- clicou e não falou
+    // ---- clicou e não falou (0284: a Mari chama sozinha 1 min depois do clique; cada linha diz como foi tratada)
     const cl = p.clicou_sem_mari || [];
+    const ca = p.clique_auto || {};
+    const tpl = ca.template === 'APPROVED';
+    const trat = (c) => {
+      if (c.mari_em) return `<span class="fv-trat ok">✓ Mari chamou há ${esc(NG.haQuanto(c.mari_em))} · esperando resposta</span>`;
+      if (c.erro && (c.tentativas || 0) >= 3) return `<span class="fv-trat ruim">✕ não consegui abrir a conversa — chame pelo WhatsApp</span>`;
+      if (!ca.ligado) return '<span class="fv-trat">automático desligado — chame pelo WhatsApp</span>';
+      if (!tpl) return `<span class="fv-trat">aguardando a Meta aprovar a mensagem da Mari${ca.template ? ` (${esc(ca.template)})` : ''}</span>`;
+      if (Date.now() - new Date(c.clicou_em).getTime() > 24 * 3600e3) return '<span class="fv-trat">clicou há mais de 24 h — chame pelo WhatsApp</span>';
+      return '<span class="fv-trat">⏳ a Mari chama em até 2 min (no horário dela)</span>';
+    };
     const clicou = `
       <section class="fv-bloco"><header><h2>🔥 Clicou na oferta e não falou com a Mari</h2><span class="tot">${n(cl.length)}</span>
-        <span class="sub">Tocou em "Quero ver a oferta" há mais de 2 h e não mandou a mensagem. Chame pelo WhatsApp da equipe: "Vi que você se interessou pela fibra da Nio…"</span></header>
+        <span class="sub">Tocou em "Quero ver a oferta" e não mandou a mensagem. A Mari chama sozinha pelo WhatsApp dela 1 min depois do clique (1 vez) e a conversa entra na Live com o selo Fila Vero. Respondeu, sai daqui e vai para "Falaram com a Mari".</span></header>
         ${cl.length ? `<div class="fv-lista">${cl.map((c) => `<div class="fv-c"><span class="q">${esc(c.nome || 'Cliente')}</span>
-          <a href="https://wa.me/${esc(c.telefone)}" target="_blank" rel="noopener">Chamar ↗</a>
-          <span class="o">${esc(NG.fmtFone ? NG.fmtFone(c.telefone) : c.telefone)} · ${esc(NOME_TPL[c.template] || '')} · clicou há ${esc(NG.haQuanto(c.clicou_em))} · ${esc(c.lugar || '')}</span></div>`).join('')}</div>`
+          ${c.conversa_id ? `<a href="conversas.html#c=${esc(c.conversa_id)}">Abrir ↗</a>` : `<a href="https://wa.me/${esc(c.telefone)}" target="_blank" rel="noopener">Chamar ↗</a>`}
+          ${trat(c)}<span class="o">${esc(NG.fmtFone ? NG.fmtFone(c.telefone) : c.telefone)} · ${esc(NOME_TPL[c.template] || '')} · clicou há ${esc(NG.haQuanto(c.clicou_em))} · ${esc(c.lugar || '')}</span></div>`).join('')}</div>`
           : '<div class="fv-vazio">Ninguém esperando agora.</div>'}
       </section>`;
 

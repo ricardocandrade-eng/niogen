@@ -3541,6 +3541,7 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc2-ged.ok { background: #1E3A24; color: #8FE39A; }
 .fc2-ged.bad { background: #2B1D1D; color: #FFB3B3; }
 .lv-ged { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 11px; background: #2D2616; color: #F8D58C; white-space: nowrap; }
+.lv-fv { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 600; background: #2E2340; color: #D7BCFF; white-space: nowrap; }
 .fc2-agb .btn { white-space: normal; height: auto; min-height: 34px; line-height: 1.2; padding: 6px 8px; text-overflow: clip; text-align: center; }
 
 /* 18/11 (Ricardo: linhas da Live mais claras) — tipo · cliente · o que está acontecendo · com quem · prazo · botões */
