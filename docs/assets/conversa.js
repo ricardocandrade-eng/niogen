@@ -156,10 +156,9 @@
     st.emoAba = 0;
     const sugBt = $('[data-cv="sugerir"]'), sugEl = $('[data-sug]');
     // 18/11 (0297, docs/Prompt_sugerir_resposta_ia_181126_1825.md): ✨ Sugerir resposta — em Conversas e na ficha (a ficha monta a
-    // conversa no modo cheia, em qualquer tela — Ricardo, 18/11: "Faltou acrescentar o botão ✨ na conversa da ficha"). Dentro da
-    // tela Live (fila.html) fica de fora até o debate com o Ricardo (regra 20). Só admin/backoffice.
-    const podeSugerir = !document.body.classList.contains('tela-fila')
-      && ['admin', 'backoffice'].includes(((NG.usuario || {}).perfil) || '');
+    // conversa no modo cheia, em qualquer tela — Ricardo, 18/11: "Faltou acrescentar o botão ✨ na conversa da ficha") e, desde
+    // 18/11 ~20h10, também na tela Live (Ricardo: "Mas dá pra colocar aqui tbem" — regra 20 atendida: pedido dele). Só admin/backoffice.
+    const podeSugerir = ['admin', 'backoffice'].includes(((NG.usuario || {}).perfil) || '');
     if (podeSugerir) estiloSugestao();
 
     // ---------- dados ----------
