@@ -118,7 +118,7 @@
     const el = document.createElement('div');
     el.className = 'cvp-raiz';
     host.appendChild(el);
-    const st = { d: null, nota: false, tpl: null, vivo: true, locais: [], seq: 0, fila: Promise.resolve(), sig: {}, nMsgs: 0, foco: true };
+    const st = { d: null, nota: false, sopro: false, tpl: null, vivo: true, locais: [], seq: 0, fila: Promise.resolve(), sig: {}, nMsgs: 0, foco: true };
 
     el.innerHTML = `<section class="cvp">
       <div class="cvp-mv-cab" data-mvcab hidden></div>
@@ -132,7 +132,7 @@
         <div class="cvp-venda" data-venda hidden></div>
         <div class="cvp-mari" data-mari hidden></div>
         <div class="cvp-ctl">
-          <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button></div>
+          <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button><button type="button" data-cv="modo" data-m="sopro" hidden title="O cliente recebe como fala da Mari; a Mari segue com a conversa (ninguém assume)">Pela Mari</button></div>
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
           <button type="button" class="btn btn-sm cvp-sug-bt" data-cv="sugerir" hidden>✨ Sugerir resposta</button>
           <span class="cvp-ajuda" data-ajuda></span>
@@ -160,6 +160,9 @@
     // 18/11 ~20h10, também na tela Live (Ricardo: "Mas dá pra colocar aqui tbem" — regra 20 atendida: pedido dele). Só admin/backoffice.
     const podeSugerir = ['admin', 'backoffice'].includes(((NG.usuario || {}).perfil) || '');
     if (podeSugerir) estiloSugestao();
+    // 18/11 (0299, Ricardo: "Faz só o soprar pra Mari agora" — ponderação 3 de 16/11): "Pela Mari" = o time escreve, o cliente recebe
+    // como fala da Mari e ela segue dona e com o contexto (ninguém assume nem devolve). Só admin/backoffice; o banco confere tudo.
+    if (podeSugerir) $('[data-m="sopro"]').hidden = false;
 
     // ---------- dados ----------
     const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
@@ -371,7 +374,7 @@
         if (!txt) return;
         if (t.papel === 'sistema') { its.push({ em: t.created_at, tipo: 'sis', txt: txt.replace(/^\[|\]$/g, '') }); return; }
         its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: t.papel === 'lead' && Array.isArray(t.midia) ? t.midia : null,
-          quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
+          quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice === 'sopro' ? 'Mari · soprada pelo time' : t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
       });
       (d.envios || []).forEach((e) => {
         const passo = e.passo ? ` · ${e.passo}` : '';
@@ -390,10 +393,11 @@
         if (a.status === 'feita' && turnosOut.some((t) => normal(t.texto) === normal(txt) && new Date(t.created_at) >= new Date(new Date(a.criada_em).getTime() - 15000))) return;
         if (a.status === 'cancelada') return;
         const falhou = ['bloqueada', 'erro'].includes(a.status);
-        its.push({ em: a.criada_em, tipo: 'hum', txt, quem: (a.payload || {}).como === 'humano' ? 'Você' : 'NIOGEN',
+        const sop = a.momento === 'sopro';
+        its.push({ em: a.criada_em, tipo: sop ? 'mari' : 'hum', txt, quem: (a.payload || {}).como === 'humano' ? 'Você' : sop ? 'Mari · soprada pelo time' : 'NIOGEN',
           tick: a.status === 'feita' ? '✓' : falhou ? '⚠' : '🕓', erro: falhou ? (a.erro || 'não saiu') : '', reenviar: falhou && (a.payload || {}).como === 'humano' ? txt : '' });
       });
-      st.locais.forEach((l) => its.push({ em: l.em, tipo: l.nota ? 'nota' : 'hum', txt: l.texto, quem: l.nota ? 'Nota privada' : 'Você',
+      st.locais.forEach((l) => its.push({ em: l.em, tipo: l.nota ? 'nota' : l.sopro ? 'mari' : 'hum', txt: l.texto, quem: l.nota ? 'Nota privada' : l.sopro ? 'Mari · soprada pelo time' : 'Você',
         tick: l.estado === 'erro' ? '⚠' : '🕓', erro: l.estado === 'erro' ? l.erro : '', reenviar: l.estado === 'erro' ? l.texto : '', local: l.id }));
       its.sort((a, b) => new Date(a.em) - new Date(b.em));
       return its;
@@ -490,20 +494,27 @@
     }
     function desenharPe(jn, dn, nome) {
       secao.classList.toggle('nota', st.nota);
-      el.querySelectorAll('[data-cv="modo"]').forEach((b) => b.classList.toggle('on', (b.dataset.m === 'nota') === st.nota));
-      const usaTpl = !st.nota && !jn.aberta;
-      ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
-      ta.readOnly = !!st.tpl || (usaTpl && !st.tpl);
+      secao.classList.toggle('sopro', st.sopro);
+      const modo = st.nota ? 'nota' : st.sopro ? 'sopro' : 'resp';
+      el.querySelectorAll('[data-cv="modo"]').forEach((b) => b.classList.toggle('on', b.dataset.m === modo));
+      const usaTpl = !st.nota && !st.sopro && !jn.aberta;
+      // 0299: o banco recusa o sopro com dono, fora da janela e em Não contatar — a tela desliga antes e diz por quê (regra de ouro 3)
+      const semSopro = !st.sopro ? '' : st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
+        : dn.v !== 'mari' ? 'A conversa está com o time: responda direto (Pela Mari é para quando a Mari atende).'
+        : !jn.aberta ? 'Janela de 24 h fechada: a Mari não pode falar texto livre. Use Responder com um template.' : '';
+      ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.sopro ? (semSopro || `Pela Mari: ${NG.primeiroNome(nome)} recebe como fala da Mari…`) : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
+      ta.readOnly = !!st.tpl || (usaTpl && !st.tpl) || !!semSopro;
       emoBt.disabled = ta.readOnly;
       if (ta.readOnly && !emoEl.hidden) emoFechar();
-      btEnviar.textContent = st.nota ? 'Salvar nota' : 'Enviar';
-      btEnviar.disabled = !!st.d.c.nao_contatar && !st.nota;
+      btEnviar.textContent = st.nota ? 'Salvar nota' : st.sopro ? 'Soprar' : 'Enviar';
+      btEnviar.disabled = (!!st.d.c.nao_contatar && !st.nota) || !!semSopro;
       const opRap = `<option value="">Respostas rápidas…</option>${usaTpl ? '' : st.d.rapidas.map((r, i) => `<option value="r:${i}">${esc(r.rot)}</option>`).join('')}
-        ${!st.nota && st.d.tpls.length ? `<optgroup label="Templates aprovados">${st.d.tpls.map((t) => `<option value="t:${esc(t.nome)}">${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}`;
+        ${!st.nota && !st.sopro && st.d.tpls.length ? `<optgroup label="Templates aprovados">${st.d.tpls.map((t) => `<option value="t:${esc(t.nome)}">${esc(t.nome.replace(/^nio_/, '').replace(/_/g, ' '))}</option>`).join('')}</optgroup>` : ''}`;
       if (st.sig.rap !== opRap && document.activeElement !== selRap) { st.sig.rap = opRap; selRap.innerHTML = opRap; }
-      const op = o.oportunidade && !st.nota;
+      const op = o.oportunidade && !st.nota && !st.sopro;
       const aj = st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
         : st.nota ? 'Nota privada: só o time vê.'
+        : st.sopro ? (semSopro || 'Pela Mari: sai como fala da Mari · ela segue dona e com o contexto · ninguém assume')
         : op ? `🔥 Oportunidade · ${o.oportunidade.assumir ? 'você assume a conversa (a Mari cala)' : 'a Mari segue a conversa depois (sem dono)'} · nunca desconto nem data de instalação`
         : st.tpl ? 'Template escolhido · Esc cancela'
         : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
@@ -538,8 +549,8 @@
       if (!st.d) return;
       const txt = ta.value.trim();
       if (!st.tpl && !txt) { ta.focus(); return; }
-      const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, tpl: st.nota ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando',
-        op: !st.nota && o.oportunidade ? o.oportunidade : null };
+      const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, sopro: st.sopro && !st.nota, tpl: st.nota || st.sopro ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando',
+        op: !st.nota && !st.sopro && o.oportunidade ? o.oportunidade : null };
       if (item.op) o.oportunidade = null;   // só a 1ª mensagem é a da oportunidade
       // ✨ a mensagem saiu de uma sugestão: amarra o envio a ela (medição: % que saiu de sugestão e quanto foi editada)
       if (st.sug && st.sug.escolhida && !item.nota && !item.tpl) { item.sug = { id: st.sug.id, escolhida: st.sug.escolhida }; sugFechar(false); }
@@ -553,10 +564,12 @@
       st.fila = st.fila.then(() => enviarUm(item));
     }
     async function enviarUm(item) {
-      const { data, error } = item.op
+      const { data, error } = item.sopro
+        ? await NG.sb.rpc('mari_soprar', { p_conversa: o.conversaId, p_texto: item.texto })   // 0299: Pela Mari (a porta confere)
+        : item.op
         ? await NG.sb.rpc('oportunidade_enviar', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_assumir: !!item.op.assumir, p_template: item.tpl })
         : await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_nota: item.nota, p_template: item.tpl });
-      if (item.op && !error) NG.toast(data && data.resumo ? data.resumo : 'Mensagem enviada', 'ok');
+      if ((item.op || item.sopro) && !error) NG.toast(data && data.resumo ? data.resumo : 'Mensagem enviada', 'ok');
       if (!st.vivo) return;
       if (error) {
         if (item.op && !o.oportunidade) o.oportunidade = item.op;   // não saiu: o reenvio volta pela oportunidade
@@ -715,7 +728,7 @@
       if (a === 'emo-aba') { st.emoAba = Number(b.dataset.i) || 0; emoDesenhar(); return; }
       if (a === 'emo-x') { emoInserir(b.dataset.e); return; }
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
-      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
+      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.sopro = b.dataset.m === 'sopro'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
       if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
       if (a === 'dono-sw') {
         if (b.disabled || st.trocandoDono) return;

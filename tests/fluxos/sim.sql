@@ -403,7 +403,7 @@ end $$;
 -- grupo 3 = botões da ficha (0268). Os robôs da Nio (nio:*, funil:*) só são anotados: ficam na R10 (aviso).
 -- Grupo novo que virar a chave entra aqui.
 create or replace function sim.porta_manda(p_evento text, p_antes text) returns boolean language sql immutable as $$
-  select p_evento ~ '^(saida:|silenciar:|reabrir$|nao_contatar$|prazo:|time_respondeu$|mari_passou:(interesse_caindo|multiplos_decisores)$|momento:|virar_venda$|trocar_titular$|mover_admin:|antifraude:)'
+  select p_evento ~ '^(saida:|silenciar:|reabrir$|nao_contatar$|prazo:|time_respondeu$|soprar$|mari_passou:(interesse_caindo|multiplos_decisores)$|momento:|virar_venda$|trocar_titular$|mover_admin:|antifraude:)'
       or (p_evento = 'cliente_escreveu' and p_antes in ('saida_pode_voltar', 'saida_definitiva', 'nao_contatar', 'cliente_nio',
                                                        'em_espera', 'time_esperando')) $$;
 
