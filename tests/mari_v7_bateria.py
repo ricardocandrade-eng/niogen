@@ -169,8 +169,8 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     c.exige('complemento' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) não pediu o complemento')
     c.exige('referencia' not in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) pediu a referência antes dos planos (P39)')
     r = c.diz('Não tem complemento. Referência: perto da escola estadual')
-    c.exige('operadora' in norm(r.get('resposta')), '(a) não perguntou a operadora atual')
-    r = c.diz('Uso a Claro, cai toda hora')
+    # 18/11 (Ricardo): a operadora não se pergunta mais — do complemento direto aos planos.
+    c.exige('operadora' not in norm(r.get('resposta')), '(a) perguntou a operadora (removida em 18/11)')
     it = r.get('interativo') or {}
     c.exige(it.get('tipo') == 'carrossel', '(a) não mandou o carrossel (Varejo Regular)')
     c.exige('disponibilidade exata' in norm(r.get('resposta')), '(a) sem a frase "a disponibilidade exata na sua rua o nosso time confirma"')
@@ -235,13 +235,13 @@ def cen_n(c):   # 07/11: a Mari nunca diz que já mandou planos que o cliente n�
     c.exige(not re.search(r'r\$\s*\d', txt), f'(n) citou preço sem CEP: «{txt[:200]}»')
 
 
-def ate_planos(c, cep, num, operadora='Uso a Vivo'):
+def ate_planos(c, cep, num, operadora=None):
     c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
     r = c.diz(f'{cep}, número {num}')
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         r = c.diz('Sim')
     r = c.diz('Não tem complemento. Referência: em frente à padaria')
-    return c.diz(operadora)
+    return c.diz(operadora) if operadora else r   # 18/11: sem pergunta de operadora; o complemento já traz os planos
 
 
 def cen_d(c):   # DFV viável → fala igual (sem promessa)
@@ -256,20 +256,20 @@ def cen_e(c):   # DFV não encontrado → fala igual
     c.exige(rows and rows[0].get('dfv_resultado'), f'(e) DFV não consultado na hora do endereço: {rows}')
 
 
-def cen_g(c):   # Nio ativa nesta unidade → já é cliente Nio: despedida com os canais oficiais (17/11, Ricardo: somos revenda)
-    r = ate_planos(c, '36036-233', '175', 'Uso a Nio')
-    c.exige('ativa' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(g) não perguntou se a Nio está ativa')
-    r = c.diz('Sim, tá ativa aqui no meu nome')
+def cen_g(c):   # cliente conta sozinho que já tem Nio e quer mudar o plano → canais oficiais (17/11; 18/11 sem a pergunta)
+    ate_planos(c, '36036-233', '175')
+    r = c.diz('Na verdade eu já tenho a Nio aqui em casa no meu nome, queria mudar o plano')
     c.exige((r.get('handoff') or {}).get('motivo') == 'ja_cliente_nio', f'(g) sem handoff ja_cliente_nio: {r.get("handoff")}')
     c.exige(re.search(r'app nio|0800', norm(r.get('resposta'))), '(g) não indicou os canais oficiais da Nio')
 
 
-def cen_h(c):   # "tinha Oi" → segue com a pista
-    r = ate_planos(c, '36036-233', '155', 'Tinha Oi Fibra, cancelei faz tempo')
-    if 'ativa' in norm(r.get('resposta')):
-        r = c.diz('Não, cancelei faz uns 2 anos')
+def cen_h(c):   # 18/11: do complemento direto aos planos; "tinha Oi" dito sozinho → segue com a pista, sem perguntar se está ativa
+    r = ate_planos(c, '36036-233', '155')
+    c.exige((r.get('interativo') or {}).get('tipo') == 'carrossel' or re.search(r'(?m)^\s*1\)', r.get('resposta') or ''), '(h) não foi do complemento aos planos')
+    c.exige('operadora' not in norm(r.get('resposta')), '(h) perguntou a operadora (removida em 18/11)')
+    r = c.diz('Tinha Oi Fibra, cancelei faz tempo')
     c.exige(not r.get('handoff'), '(h) encerrou a conversa')
-    c.exige((r.get('interativo') or {}).get('tipo') == 'carrossel' or re.search(r'(?m)^\s*1\)', r.get('resposta') or ''), '(h) não seguiu para os planos')
+    c.exige('ativa' not in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(h) perguntou se a Nio está ativa')
 
 
 def cen_i(c):   # botão "Detalhes Fibra" → texto fixo, sem Claude
@@ -284,7 +284,6 @@ def cen_j(c):   # cidade BTU → lista em texto
     if '?' in (r.get('resposta') or ''):
         r = c.diz('Sim')
     r = c.diz('Não tem complemento. Referência: perto da praça')
-    r = c.diz('Uso a Claro')
     c.exige(not r.get('interativo'), '(j) mandou carrossel em cidade BTU')
     c.exige(re.search(r'(?m)^\s*1\)', r.get('resposta') or ''), '(j) sem a lista em texto')
 
@@ -328,12 +327,10 @@ def cen_o(c):   # teste real 07/11 23h08 (conversa #1): 👋💚, "Anotado", rua
     alvo = norm((r.get('resposta') or '') + ((r.get('interativo') or {}).get('corpo') or ''))
     c.exige('encontrei aqui' not in alvo and '·' not in alvo, f'(o) rua única em formato de lista: «{alvo[:120]}»')
     r = c.diz('Sim')
-    r = c.diz('Apto 403')
-    r = c.diz('Perto da igreja')
+    r = c.diz('Apto 403, perto da igreja')
     sem_anotado(r, 'referência')
-    r = c.diz('Vero')
     c.exige('atende o seu endereco' not in norm(r.get('resposta')), '(o) prometeu cobertura sem o portal')
-    c.exige('pode deixar' not in norm(r.get('resposta')), f'(o) comentou a operadora: «{(r.get("resposta") or "")[:80]}»')
+    c.exige('operadora' not in norm(r.get('resposta')), f'(o) perguntou a operadora (removida em 18/11): «{(r.get("resposta") or "")[:80]}»')
     r = c.diz('Quero o Super')
     t = norm(r.get('resposta'))
     c.exige('as condicoes do seu plano' in t and ('nome completo' not in t or t.index('as condicoes do seu plano') < t.index('nome completo')),
@@ -373,10 +370,6 @@ def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         r = c.diz('Sim')
     c.diz('403')
-    r = c.diz('Igreja')
-    if 'operadora' not in norm(r.get('resposta')):
-        r = c.diz('Não tem ponto de referência melhor, é perto da igreja')
-    c.diz('Claro')
     r = c.diz('Quero o Essencial')
     t = norm(r.get('resposta'))
     c.exige(not re.search(r'\bdobro\b|duas vezes|\btriplo\b|\bmetade\b', t), f'(p) upsell com comparação: «{(r.get("resposta") or "")[:200]}»')

@@ -263,14 +263,13 @@ RX_RS_P31 = re.compile(r'r\$\s*\d')   # P31: nenhum preço na abertura (a cidade
 
 
 def ate_planos_jf(c):
-    """Varejo em Juiz de Fora até a escolha do plano (CEP 36035-130, nº 123, apto 403, referência, operadora)."""
+    """Varejo em Juiz de Fora até os planos (CEP 36035-130, nº 123, apto 403, referência; sem operadora desde 18/11)."""
     c.diz('Oi')
     c.diz('36035130')
     r = c.diz('123')
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         c.diz('Sim')
-    c.diz('Apto 403, perto da igreja')
-    return c.diz('Claro')
+    return c.diz('Apto 403, perto da igreja')
 
 
 def fala(r):
@@ -356,7 +355,7 @@ def cen_ab(c):   # P27 (12/11, Ricardo): operador decidiu sem_cobertura (portal 
     c.diz('Não tem complemento, perto da padaria')
     B.sql(f"update mari_conversas set cobertura_decisao = 'sem_cobertura', nio_viab_em = now(), nio_viab_resultado = 'sem_viabilidade', "
           f"cobertura_em = now() where telefone = '{c.tel}'", escrita=True)
-    r = c.diz('Uso a Vivo')
+    r = c.diz('Quero o Fibra')
     t = fala(r)
     c.exige((r.get('handoff') or {}).get('motivo') == 'sem_cobertura', f'[P27] sem handoff sem_cobertura: {r.get("handoff")} «{t[:200]}»')
     c.exige(re.search(r'nao chega|ainda nao chegou|nao atende', t), f'[P27] não avisou que a fibra não chega: «{t[:200]}»')
@@ -498,7 +497,6 @@ def cen_ac(c):   # P28 (12/11, Ricardo): pedido Nio em andamento no CPF → a Ma
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         c.diz('Sim')
     c.diz('Não tem complemento, perto da padaria')
-    c.diz('Uso a Claro')
     c.diz('Quero o Fibra')
     B.sql(f"update mari_conversas set nio_pedido_aberto = 'sim', nio_pedido_aberto_em = now(), dup_consultas = 1 where telefone = '{c.tel}'", escrita=True)
     r = c.diz('Ana Teste da Silva, CPF 529.982.247-25')
@@ -520,7 +518,6 @@ def cen_ad(c):   # P29 (12/11 ~10h; rev. 15/11, Ricardo — caso Grace): crédit
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         c.diz('Sim')
     c.diz('Não tem complemento, perto da padaria')
-    c.diz('Uso a Claro')
     c.diz('Quero o Fibra')
     c.diz('Bia Teste da Silva, CPF 529.982.247-25')
     r = c.diz('bia.teste@exemplo.com')
@@ -551,15 +548,13 @@ def cen_al(c):   # P38 (17/11, Ricardo): cliente que já é Nio, irritado → ca
 
 
 def ate_dados_sem_referencia(c):
-    """JF até a escolha do plano SEM dar ponto de referência; devolve (fala do complemento, fala da operadora)."""
+    """JF até os planos SEM dar ponto de referência; devolve a fala depois do complemento (já com os planos, desde 18/11)."""
     c.diz('Oi')
     c.diz('36035130')
     r = c.diz('123')
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
         c.diz('Sim')
-    r_comp = c.diz('Apto 403')
-    r_oper = c.diz('Claro')
-    return r_comp, r_oper
+    return c.diz('Apto 403')
 
 
 def ate_pedir_referencia(c, max_falas=7):
@@ -578,13 +573,13 @@ def ate_pedir_referencia(c, max_falas=7):
 
 
 def cen_am(c):   # P39 (18/11, auditoria do funil): 6 de 8 leads parados em Viabilidade travaram no pedido de referência ANTES dos planos
-    r_comp, r_oper = ate_dados_sem_referencia(c)
+    r_comp = ate_dados_sem_referencia(c)
     t = fala(r_comp)
     c.exige(not re.search(r'referencia', t), f'[P39] pediu ponto de referência antes dos planos: «{t[:220]}»')
-    c.exige(re.search(r'operadora', t), f'[P39] depois do complemento não seguiu para a operadora: «{t[:220]}»')
-    t2 = fala(r_oper)
-    mostrou = (r_oper.get('interativo') or {}).get('tipo') == 'carrossel' or re.search(r'(?m)^\s*1\)', r_oper.get('resposta') or '')
-    c.exige(mostrou, f'[P39] não mostrou os planos depois da operadora: «{t2[:220]}»')
+    # 18/11 (Ricardo): sem pergunta de operadora — do complemento direto aos planos.
+    c.exige(not re.search(r'operadora', t), f'[P39] perguntou a operadora (removida em 18/11): «{t[:220]}»')
+    mostrou = (r_comp.get('interativo') or {}).get('tipo') == 'carrossel' or re.search(r'(?m)^\s*1\)', r_comp.get('resposta') or '')
+    c.exige(mostrou, f'[P39] não mostrou os planos depois do complemento: «{t[:220]}»')
     pediu, resumo_sem_ref, ult = ate_pedir_referencia(c)
     c.exige(not resumo_sem_ref, f'[P39] mandou o resumo sem pedir a referência: «{fala(ult)[:220]}»')
     c.exige(pediu, f'[P39] não pediu a referência antes do resumo (Passo 4, item 7): «{fala(ult)[:220]}»')
@@ -609,7 +604,7 @@ def cen_an(c):   # P40 (18/11, conversas reais 5308592e, 70afef39, b85cfce7): re
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
-    'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'regressão operadora'), 'i': (7, B.cen_i, 'regressão botão'),
+    'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'sem pergunta de operadora (18/11)'), 'i': (7, B.cen_i, 'regressão botão'),
     'j': (8, cen_j_portao, 'regressão BTU + P18'), 'k': (9, cen_k_portao, 'P1 P2 P4'), 'l': (10, B.cen_l, 'P3'),
     'm': (11, B.cen_m, 'regressão rua longa'), 'n': (12, B.cen_n, 'P3'), 'o': (13, cen_o_portao, 'P5 P7 P8 P9 P11 P13 P14 P16'),
     'p': (14, cen_p_portao, 'P9 P10 P19'), 'q': (15, cen_q, 'P15'),

@@ -839,6 +839,12 @@ if (Object.keys(dados).length) upd.dados = dados;
 
 // ── etapa (determinística, a partir do estado + atualizações) ──
 const m = { ...c, ...upd, dados: { ...(c.dados || {}), ...dados } };
+// 18/11 (Ricardo: "Remove da Mari a pergunta de qual operadora… Está travando venda"): a operadora não é mais perguntada.
+// Endereço completo e dentro da área → elegibilidade ok sem depender da tag do modelo; a etapa nunca para em "elegibilidade".
+if (V7 && !m.elegibilidade && m.cep && m.numero && (m.complemento || m.dados.complemento_ok) && ctx.dentroArea !== false) {
+  upd.elegibilidade = 'ok';
+  m.elegibilidade = 'ok';
+}
 const cpfOk = (v) => { const x = String(v || '').replace(/\D/g, ''); if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); };
 const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento
   && (V4 ? m.instalacao_preferencia : m.visita_preferencia);
