@@ -179,7 +179,7 @@
       if (c.erro && (c.tentativas || 0) >= 3) return `<span class="fv-trat ruim">✕ não consegui abrir a conversa — chame pelo WhatsApp</span>`;
       if (!ca.ligado) return '<span class="fv-trat">automático desligado — chame pelo WhatsApp</span>';
       if (!tpl) return `<span class="fv-trat">aguardando a Meta aprovar a mensagem da Mari${ca.template ? ` (${esc(ca.template)})` : ''}</span>`;
-      if (Date.now() - new Date(c.clicou_em).getTime() > 24 * 3600e3) return '<span class="fv-trat">clicou há mais de 24 h — chame pelo WhatsApp</span>';
+      if (!c.liberado && Date.now() - new Date(c.clicou_em).getTime() > 24 * 3600e3) return '<span class="fv-trat">clicou há mais de 24 h — chame pelo WhatsApp</span>';
       return '<span class="fv-trat">⏳ a Mari chama em até 2 min (no horário dela)</span>';
     };
     const clicou = `

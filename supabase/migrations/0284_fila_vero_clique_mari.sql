@@ -11,6 +11,8 @@
 --   · resposta nessa conversa marca a linha como respondeu (gatilho mari_turnos_fila_vero_clique — a mensagem não traz o código);
 --   · fila_vero_painel(): "na Mari" passa a ser quem RESPONDEU (antes: quem tinha conversa); 🔥 mostra quem clicou e não falou,
 --     com o tratamento de cada um (Mari mandou às hh:mm · aguardando · fora do horário · não deu).
+-- Os 4 que clicaram antes da 0284 (Marianne, Cleunice, Diego, Paula — ids na config "liberados") também recebem, fora da
+-- janela de 24 h (Ricardo, 18/11: "Libera também para os 4 que clicaram antes").
 -- Desligar: config_regras.fila_vero_clique → "ligado": false.
 begin;
 
@@ -20,7 +22,7 @@ alter table public.fila_vero add column if not exists clique_tentativas int not 
 alter table public.fila_vero add column if not exists clique_tentativa_em timestamptz;
 
 insert into public.config_regras (chave, valor, descricao) values
-  ('fila_vero_clique', '{"ligado": true, "espera_s": 60, "janela_h": 24}',
+  ('fila_vero_clique', '{"ligado": true, "espera_s": 60, "janela_h": 24, "liberados": [1894, 1960, 3246, 1878]}',
    'Fila Vero: quem clicou em "Quero ver a oferta" e não escreveu recebe 1 template da Mari (nio_fv_clique) depois de espera_s segundos')
 on conflict (chave) do nothing;
 
@@ -46,7 +48,8 @@ begin
   for r in select fv.* from public.fila_vero fv
             where fv.clicou_em is not null and fv.respondeu_em is null and fv.conversa_id is null and fv.clique_msg_em is null
               and fv.clicou_em <= now() - make_interval(secs => coalesce((cfg ->> 'espera_s')::int, 60))
-              and fv.clicou_em >= now() - make_interval(hours => coalesce((cfg ->> 'janela_h')::int, 24))
+              and (fv.clicou_em >= now() - make_interval(hours => coalesce((cfg ->> 'janela_h')::int, 24))
+                   or coalesce(cfg -> 'liberados', '[]'::jsonb) @> to_jsonb(fv.id))   -- os 4 que clicaram antes (Ricardo, 18/11)
               and fv.status not in ('opt_out', 'ja_cliente_nio', 'sem_cobertura')
               and fv.clique_tentativas < 3
               and (fv.clique_tentativa_em is null or fv.clique_tentativa_em < now() - interval '10 minutes')
@@ -180,7 +183,8 @@ AS $function$
     'clicou_sem_mari', (select coalesce(jsonb_agg(x order by x ->> 'clicou_em' desc), '[]'::jsonb) from (
         select jsonb_build_object('id', id, 'nome', initcap(lower(split_part(btrim(coalesce(nome, '')), ' ', 1))), 'telefone', telefone,
                                   'template', template1, 'clicou_em', clicou_em, 'lugar', lugar, 'conversa_id', conversa_id,
-                                  'mari_em', clique_msg_em, 'erro', clique_msg_erro, 'tentativas', clique_tentativas) x
+                                  'mari_em', clique_msg_em, 'erro', clique_msg_erro, 'tentativas', clique_tentativas,
+                                  'liberado', coalesce(public._fv_cfg('fila_vero_clique') -> 'liberados', '[]'::jsonb) @> to_jsonb(id)) x
           from f where clicou_em is not null and respondeu_em is null and clicou_em > now() - interval '7 days'
            and status not in ('opt_out', 'ja_cliente_nio') order by clicou_em desc limit 30) c),
     'na_mari_lista', (select coalesce(jsonb_agg(x order by x ->> 'em' desc), '[]'::jsonb) from (
