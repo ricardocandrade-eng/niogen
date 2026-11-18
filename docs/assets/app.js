@@ -1222,10 +1222,11 @@
       toast(`${primeiroNome(venda.cliente_nome)} ${(data && data.resumo) || '→ Saída'}`, 'ok');
       return true;
     }
-    const { error } = await sb.from('vendas').update(campos).eq('id', venda.id);
-    if (error) { toast(msgErro(error), 'bad'); return false; }
-    toast(`${primeiroNome(venda.cliente_nome)} → ${STATUS_MAP[destino].curto}`, 'ok');
-    return true;
+    // 18/11 (0295, fase 2 passo 3): a etapa não é mais gravada direto pela tela (o banco recusa). O Quadro não arrasta desde a 0089;
+    // quem chegar aqui é mandado para a ficha, onde cada passo tem o seu botão (e o admin, ⋯ › Mover para, com o motivo).
+    void campos;
+    toast('A etapa só anda pelos botões da ficha (ou, para o admin, ⋯ › Mover para, com o motivo).', 'bad');
+    return false;
   }
 
   // ---------- dados comuns ----------

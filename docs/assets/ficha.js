@@ -836,9 +836,9 @@
       const v = d.v;
       const pedido = String(fd.get('pedido') || '').trim();
       const biometria = fd.get('biometria') || null;
-      // biometria_em / biometria_validada_em / biometria_link_enviado_em: carimbo do banco (trigger vendas_antes_biometria).
-      return gravar({ status: '1_vendido', nio_pedido: pedido || null, biometria_status: biometria },
-        `${NG.primeiroNome(v.cliente_nome)} → ${STATUS_MAP['1_vendido'].curto}`);
+      // 0295: pelo passo Pedido da porta (a etapa anda com a OS, no passo OS — a tela não grava a etapa direto)
+      void v; void biometria;
+      return !!(await rodarMomento('pedido', { pedido }));
     },
     async portal(fd) {
       const v = d.v;
@@ -977,7 +977,8 @@
     },
     async mover_aguardando(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
-      return gravar({ status: '2_aguardando_instalacao', instalacao_agendada_para: quandoDe(fd), instalacao_turno: turnoDe(fd) }, `${NG.primeiroNome(d.v.cliente_nome)} → ${STATUS_MAP['2_aguardando_instalacao'].curto}`);
+      // 0295: pelo passo Agendar da porta (mesmo efeito e mesmas regras da faixa do próximo passo)
+      return !!(await rodarMomento('agendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }));
     },
     // ----- edição por bloco -----
     async ed_plano(fd) {
@@ -1025,8 +1026,13 @@
         const novo = quandoDe(fd);
         const atual = v.instalacao_agendada_para;
         if (!atual || new Date(novo).getTime() !== new Date(atual).getTime()) {
-          Object.assign(campos, { instalacao_agendada_para: novo, instalacao_turno: turnoDe(fd), nio_pendencia_cod: null, nio_pendencia_desc: null });
-          if (v.status === '1_vendido') campos.status = '2_aguardando_instalacao';
+          if (v.status === '1_vendido') {
+            // 0295 (fase 2, passo 3): pôr a data numa venda "Vendida" é o passo Agendar — pela porta (anda a etapa, limpa a pendência
+            // da Nio e avisa o cliente como o botão Agendar). A tela não grava a etapa direto.
+            if (!(await rodarMomento('agendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }))) return false;
+          } else {
+            Object.assign(campos, { instalacao_agendada_para: novo, instalacao_turno: turnoDe(fd), nio_pendencia_cod: null, nio_pendencia_desc: null });
+          }
         }
       }
       const docs = fd.get('docs');
@@ -2756,13 +2762,8 @@
     if (destino === '2_aguardando_instalacao') { formAtivo = 'mover_aguardando'; render(); return; }
     if (destino === 'saida') { formAtivo = 'saida'; render(); return; }
     formAtivo = null;
-    // 0179 (etapa 6e): o caminho natural grava como sempre; voltar ou pular degrau é pela função do admin, com o motivo.
-    const NATURAL = { '0_qualificado': ['1_vendido', '2_aguardando_instalacao'], '1_vendido': ['2_aguardando_instalacao', '3_instalado'],
-      '2_aguardando_instalacao': ['3_instalado'], '3_instalado': ['4_ativo_provisorio'], '4_ativo_provisorio': ['5_comissao_firme'] };
-    if ((NATURAL[v.status] || []).includes(destino)) {
-      await gravar({ status: destino }, `${NG.primeiroNome(v.cliente_nome)} → ${STATUS_MAP[destino].curto}`);
-      return;
-    }
+    // 18/11 (0295, fase 2 passo 3): a tela não grava mais a etapa direto. Fora OS, agendamento e Saída (que têm o seu botão),
+    // todo "Mover para" do admin vai pela porta (venda_mover_admin), com o motivo — inclusive o caminho natural (E7: instalada à mão).
     const fd = await NG.modal(`<h3>Mover ${esc(NG.primeiroNome(v.cliente_nome))} para ${esc(STATUS_MAP[destino].curto)}</h3>
       <p>Você está voltando ou pulando um degrau (hoje: ${esc(STATUS_MAP[v.status].curto)}). Isso fica registrado no histórico da venda, com o seu nome.</p>
       <label class="campo">Por quê?<textarea name="motivo" rows="3" required minlength="5" placeholder="ex.: marcada como instalada por engano"></textarea></label>`);

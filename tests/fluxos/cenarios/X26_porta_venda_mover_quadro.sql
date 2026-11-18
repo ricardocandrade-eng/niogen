@@ -6,7 +6,7 @@ select sim.lead_com_venda('Edu X26') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'assumir');
 select sim.fila_rodar();
-select sim._servico();
+select sim.como('servico');   -- 0295: o robô da Nio entra com a chave de serviço (sim._servico() só valia na própria transação)
 select set_config('niogen.transicao_ok', 'robo', false);
 update public.vendas set status = 'saida', motivo_saida = 'Biometria reprovada' where id = sim.venda(:'c');
 select set_config('niogen.transicao_ok', '', false);
