@@ -132,7 +132,7 @@
         <div class="cvp-venda" data-venda hidden></div>
         <div class="cvp-mari" data-mari hidden></div>
         <div class="cvp-ctl">
-          <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button><button type="button" data-cv="modo" data-m="sopro" hidden title="O cliente recebe como fala da Mari; a Mari segue com a conversa (ninguém assume)">Pela Mari</button></div>
+          <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button><button type="button" data-cv="modo" data-m="sopro" hidden title="Soprar: o cliente recebe como fala da Mari; a Mari segue com a conversa (ninguém assume)">🌬️ Soprar</button></div>
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
           <button type="button" class="btn btn-sm cvp-sug-bt" data-cv="sugerir" hidden>✨ Sugerir resposta</button>
           <span class="cvp-ajuda" data-ajuda></span>
@@ -500,9 +500,9 @@
       const usaTpl = !st.nota && !st.sopro && !jn.aberta;
       // 0299: o banco recusa o sopro com dono, fora da janela e em Não contatar — a tela desliga antes e diz por quê (regra de ouro 3)
       const semSopro = !st.sopro ? '' : st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
-        : dn.v !== 'mari' ? 'A conversa está com o time: responda direto (Pela Mari é para quando a Mari atende).'
+        : dn.v !== 'mari' ? 'A conversa está com o time: responda direto (soprar é para quando a Mari atende).'
         : !jn.aberta ? 'Janela de 24 h fechada: a Mari não pode falar texto livre. Use Responder com um template.' : '';
-      ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.sopro ? (semSopro || `Pela Mari: ${NG.primeiroNome(nome)} recebe como fala da Mari…`) : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
+      ta.placeholder = st.nota ? 'Escrever nota privada (só o time vê)…' : st.sopro ? (semSopro || `🌬️ Soprar: ${NG.primeiroNome(nome)} recebe como fala da Mari…`) : st.tpl ? 'Template escolhido — sai o texto aprovado' : usaTpl ? 'Janela de 24 h fechada: escolha um template em Respostas rápidas' : `Mensagem para ${NG.primeiroNome(nome)}`;
       ta.readOnly = !!st.tpl || (usaTpl && !st.tpl) || !!semSopro;
       emoBt.disabled = ta.readOnly;
       if (ta.readOnly && !emoEl.hidden) emoFechar();
@@ -514,7 +514,7 @@
       const op = o.oportunidade && !st.nota && !st.sopro;
       const aj = st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
         : st.nota ? 'Nota privada: só o time vê.'
-        : st.sopro ? (semSopro || 'Pela Mari: sai como fala da Mari · ela segue dona e com o contexto · ninguém assume')
+        : st.sopro ? (semSopro || '🌬️ Soprar: sai como fala da Mari · ela segue dona e com o contexto · ninguém assume')
         : op ? `🔥 Oportunidade · ${o.oportunidade.assumir ? 'você assume a conversa (a Mari cala)' : 'a Mari segue a conversa depois (sem dono)'} · nunca desconto nem data de instalação`
         : st.tpl ? 'Template escolhido · Esc cancela'
         : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
@@ -565,7 +565,7 @@
     }
     async function enviarUm(item) {
       const { data, error } = item.sopro
-        ? await NG.sb.rpc('mari_soprar', { p_conversa: o.conversaId, p_texto: item.texto })   // 0299: Pela Mari (a porta confere)
+        ? await NG.sb.rpc('mari_soprar', { p_conversa: o.conversaId, p_texto: item.texto })   // 0299: 🌬️ Soprar (a porta confere)
         : item.op
         ? await NG.sb.rpc('oportunidade_enviar', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_assumir: !!item.op.assumir, p_template: item.tpl })
         : await NG.sb.rpc('backoffice_responder', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_nota: item.nota, p_template: item.tpl });

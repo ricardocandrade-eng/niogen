@@ -1974,7 +1974,8 @@ dialog.bal-modal:not([open]) { display: none; }
   .lv-fila .lv-lista { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
   .lv-fila .lv-rolar { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
   .lv-fila.away { transform: translateX(-8%); opacity: .2; pointer-events: none; }
-  .lv-cliente { position: absolute; inset: 0; background: var(--bg); transform: translateX(100%); visibility: hidden; transition: transform .45s cubic-bezier(.2,.8,.2,1), visibility 0s linear .45s; box-shadow: -30px 0 60px rgba(0,0,0,.5); z-index: 5; }
+  /* 18/11 (Ricardo: "quando se abre a Ficha pela Live, faça com que ela abra na tela toda… igual pela tela Conversa"): por cima do menu, como a .fc-global */
+  .lv-cliente { position: fixed; inset: 0; background: var(--bg); transform: translateX(100%); visibility: hidden; transition: transform .45s cubic-bezier(.2,.8,.2,1), visibility 0s linear .45s; box-shadow: -30px 0 60px rgba(0,0,0,.5); z-index: 45; }
   .lv-cliente.open { transform: none; visibility: visible; transition: transform .45s cubic-bezier(.2,.8,.2,1), visibility 0s; }
 }
 @media (max-width: 900px) {
