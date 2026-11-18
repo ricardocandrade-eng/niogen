@@ -2448,6 +2448,13 @@
       if (mo && d) {
         const qual = mo.dataset.momento;
         const res = mo.dataset.r || null;
+        // 18/11 (Ricardo, caso Geraldo: "Cliquei sem querer no botão de validar a biometria"): marcar à mão sempre confirma,
+        // dizendo o que o GED360 mostra agora — e não tem desfazer.
+        if (qual === 'biometria' && ['validada', 'risco'].includes(res)) {
+          const a = (d && d.andamento) || {};
+          const ged = a.bio_resultado ? `\n\nO GED360 mostra agora: ${a.bio_rotulo || a.bio_resultado}.` : '';
+          if (!window.confirm(`Marcar a biometria como ${res === 'validada' ? 'VALIDADA' : 'COM RISCO'} à mão?${ged}\n\nSó faça isso se o GED360 ou o portal mostram esse resultado. Não tem desfazer.`)) return;
+        }
         if (qual === 'parar' && !window.confirm('O cliente pediu para parar?\n\nA conversa ganha a etiqueta nao-contatar, uma nota, é resolvida e ninguém mais chama esse cliente.')) return;
         if (res === 'dispensada' && !window.confirm('A Nio liberou esta venda da biometria (sistema de biometria fora do ar)?\n\nVale como biometria aprovada: a venda segue para a instalação, a comissão é normal e, no cartão, a Mari avisa do cadastro do cartão. Fica registrado quem marcou.')) return;
         if (res === 'negado' && !window.confirm('Crédito negado no CPF do cliente?\n\nO sistema manda ao cliente o pedido de outro CPF e abre a pendência "aguardando outro CPF".')) return;

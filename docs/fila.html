@@ -32,13 +32,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=171126-3">
+<link rel="stylesheet" href="assets/app.css?v=181126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=161126-23"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/conversa.js?v=171126-2"></script>
-<script src="assets/ficha.js?v=171126-3"></script>
+<script src="assets/ficha.js?v=181126-1"></script>
 <script src="assets/pulso.js?v=161126-8"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -348,31 +348,48 @@
       return false;
     });
     const L = [];
-    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), nome: j.nome || 'Contato', sub: [j.cidade, j.plano].filter(Boolean).join(' · '), oque: j.o_que_fazer || '',
-      prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
+    // 18/11 (Ricardo: "Colunas 1 e 5 parecem iguais · coluna 4 pode tirar a cor · colunas 3 e 4 são confusas"): cada linha tem
+    // tipo · cliente · O QUE ESTÁ ACONTECENDO (título curto e claro + a explicação, sem cor) · COM QUEM (a vez) · prazo · botões.
+    const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
+    const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
+    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
+      sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
+      oque: j.o_que_fazer || '', selo: confSelo(j) + (j.biometria_ged ? ` <span class="lv-ged" title="Biometria no GED360 da Nio">GED360: ${esc(String(j.biometria_ged).toLowerCase())}</span>` : ''),
+      vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
       row: linha(j, b === 'fazer'),
       bts: b === 'fazer' ? `<button type="button" class="btn btn-sm lv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : '' });
     fazer.forEach((j) => L.push(jItem(j, 'fazer')));
     if (!etapaSel) {
       confSoltos.forEach((c) => {
         const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : null;
-        L.push({ bloco: 'conf', k, nome: c.nome || 'Cliente', sub: CONF_SIT[c.tipo] || c.tipo, oque: c.texto || '', prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
+        const txt = String(c.texto || '');
+        const corte = txt.indexOf(' — ');
+        L.push({ bloco: 'conf', k, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
+          vez: vezTxt('time'), prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
           rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
       });
       mira.filter((m) => !naLista[`c:${m.conversa_id}`]).forEach((m) => L.push({ bloco: 'mira', k: `c:${m.conversa_id}`, nome: m.nome || 'Contato',
-        sub: [m.etapa_nome, m.status_nome].filter(Boolean).join(' · '), oque: m.ultima_fala ? `cliente: “${m.ultima_fala}”` : 'conversando com a Mari', prazo: 'agora',
+        sub: [m.cidade, m.plano, m.ultima_em ? `escreveu ${haTxt(m.ultima_em)}` : ''].filter(Boolean).join(' · '),
+        sit: `Conversando com a Mari${m.etapa_nome ? ` · ${m.etapa_nome}` : ''}`, oque: m.ultima_fala ? `Cliente: “${m.ultima_fala}”` : 'A Mari segue; acompanhe para não perder',
+        vez: vezTxt(m.acompanho ? 'você acompanha' : 'Mari'), prazo: 'agora',
         urg: !!(m.novo && m.acompanho), rank: m.novo && m.acompanho ? 0 : 1, t: m.ultima_em, row: miraLinha(m),
         bts: `<button type="button" class="btn btn-sm" data-mira-abrir="c:${esc(m.conversa_id)}">Abrir</button>` }));
       andPend.forEach((p) => L.push({ bloco: 'and', k: null, nome: p.tipo === 'casar_pedido' ? (p.nome || 'Cliente') : `Protocolo ${p.chave}`,
-        sub: p.tipo === 'casar_pedido' ? `portal: ${p.rotulo} · nº ${p.chave}` : `GED360: ${p.rotulo}`, oque: p.tipo === 'casar_pedido' ? 'O nº do portal não bate com nenhuma venda' : (p.alerta || 'Biometria sem venda no NIOGEN'),
-        prazo: p.alerta ? 'agora' : 'hoje', urg: !!p.alerta, rank: p.alerta ? 0 : 1, t: p.desde, row: andLinha(p),
+        sub: p.tipo === 'casar_pedido' ? `portal: ${p.rotulo} · nº ${p.chave}` : `GED360: ${p.rotulo}`,
+        sit: p.tipo === 'casar_pedido' ? 'Pedido do portal sem venda' : 'Biometria sem venda',
+        oque: p.tipo === 'casar_pedido' ? 'O nº do portal não bate com nenhuma venda — escolha a venda certa' : (p.alerta || 'O CPF desta biometria não tem venda aberta no NIOGEN'),
+        vez: vezTxt('time'), prazo: p.alerta ? 'agora' : 'hoje', urg: !!p.alerta, rank: p.alerta ? 0 : 1, t: p.desde, row: andLinha(p),
         bts: p.tipo === 'casar_pedido' ? (p.sugestoes || []).slice(0, 1).map((x) => `<button type="button" class="btn btn-sm" data-casar="${esc(p.chave)}" data-venda="${esc(x.venda_id)}" data-nome="${esc(x.nome)}">Casar</button>`).join('')
           : `<button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button>` }));
     }
     if (!etapaSel || etapaSel === 1) {
       ops.forEach((o) => {
         const jan = o.janela_fecha_em ? (new Date(o.janela_fecha_em) - Date.now()) / 60000 : -1;
-        L.push({ bloco: 'op', k: `c:${o.conversa_id}`, nome: o.nome || 'Contato', sub: [o.cidade, o.plano].filter(Boolean).join(' · '), oque: o.motivo || '',
+        const partes = String(o.motivo || '').split(' · ');
+        const vale = valeDe(o);
+        L.push({ bloco: 'op', k: `c:${o.conversa_id}`, nome: o.nome || 'Contato', sub: [o.cidade, o.plano, haTxt(o.parado_desde)].filter(Boolean).join(' · '),
+          sit: partes[0] || 'Oportunidade', oque: [partes.slice(1).join(' · '), o.canal === 'ligar' ? `Ligue para ${telFmt(o.telefone)} — sem mensagem` : ''].filter(Boolean).join(' · '),
+          vez: vezTxt(vale.txt !== '—' ? `vale ${vale.txt}` : 'Mari', vale.txt !== '—' ? 'vale' : ''),
           prazo: jan > 0 && jan <= 240 ? 'hoje' : '—', urg: false, rank: jan > 0 && jan <= 240 ? 1 : 2, t: o.parado_desde, row: opLinha(o),
           bts: o.canal === 'ligar' ? '' : `<button type="button" class="btn btn-sm lv-go" data-ope="${esc(o.conversa_id)}">Enviar</button>` });
       });
@@ -381,8 +398,18 @@
     const tms = (x) => new Date(x || 0).getTime() || 0;
     return L.sort((a, b) => a.rank - b.rank || tms(a.t) - tms(b.t));
   }
+  const confSit = (tipo) => CONF_SIT[tipo] || String(tipo || 'Conferir').replace(/_/g, ' ').replace(/^./, (x) => x.toUpperCase());
   const tagHtml = (b) => `<span class="lv2-tag" style="--c:${(BLOCOS.find((x) => x.id === b) || {}).cor}">${esc(NOME_BLOCO[b])}</span>`;
-  const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}">${tagHtml(it.bloco)}${it.row}</div>`;
+  // os botões da linha são os mesmos de antes (tirados da linha antiga): Abrir/Conferi, Enviar/Ligar/Dispensar, Casar, Acompanhar…
+  const acoesDe = (html) => { const tp = document.createElement('template'); tp.innerHTML = html || ''; const a = tp.content.querySelector('.lv-act'); return a ? a.innerHTML : ''; };
+  const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}${it.k && NGFicha.atual === it.k ? ' sel' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
+      ${tagHtml(it.bloco)}
+      <div class="lv2-who"><b>${esc(it.nome)}</b><small>${esc(it.sub || '—')}</small></div>
+      <div class="lv2-oque"><b>${esc(it.sit || '')}${it.selo || ''}</b><span title="${esc(it.oque || '')}">${esc(it.oque || '')}</span></div>
+      <div>${it.vez || ''}</div>
+      <div><span class="lv-pill n-${it.prazo === 'agora' ? 'agora' : it.prazo === 'hoje' ? 'hoje' : 'espera'}">${esc(it.prazo || '—')}</span></div>
+      <div class="lv-act">${acoesDe(it.row)}</div>
+    </div>`;
   function filtros(todos) {
     const n = (b) => todos.filter((x) => x.bloco === b).length;
     return `<div class="lv2-filtros" role="group" aria-label="Mostrar só">
@@ -621,7 +648,7 @@
     if (olg) { ev.stopPropagation(); ligarOp(olg.dataset.oplig); return; }   // o link tel: segue e abre o discador
     const od = ev.target.closest('[data-opd]');
     if (od) { ev.stopPropagation(); od.disabled = true; dispensarOp(od.dataset.opd, od.dataset.motivo); return; }
-    if (ev.target.closest('.lv-op, .opc-bloco')) return;
+    if (ev.target.closest('.lv-op, .opc-bloco, .lv2-it.b-op .lv-act')) return;
     const mi = ev.target.closest('[data-mira]');
     if (mi) { ev.stopPropagation(); acompanhar(mi); return; }
     const ma = ev.target.closest('[data-mira-abrir]');
@@ -645,7 +672,7 @@
     if (b) { ev.stopPropagation(); botao(b); return; }
     const t = ev.target.closest('[data-aba]');
     if (t) { soVez = t.dataset.aba === 'vez'; render(); return; }
-    const r = ev.target.closest('.lv-row[data-k], .mv-kc[data-k]');
+    const r = ev.target.closest('.lv-row[data-k], .mv-kc[data-k], .lv2-it[data-k]');
     if (r && r.querySelector('[data-visto-mira]')) NG.sb.rpc('conversa_acompanhar_visto', { p_conversa: r.dataset.k.slice(2) }).then(() => {}, () => {});
     if (r) abrirChave(r.dataset.k);
   }
@@ -653,7 +680,7 @@
   NG.ligarOpCanal(listaEl, () => carregar());   // 0117: Mandar mensagem / Agora não do canal parceiro
   quadroEl.addEventListener('click', clique);
   [listaEl, quadroEl].forEach((el) => el.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' && ev.target.matches('.lv-row[data-k], .mv-kc[data-k]')) abrirChave(ev.target.dataset.k);
+    if (ev.key === 'Enter' && ev.target.matches('.lv-row[data-k], .mv-kc[data-k], .lv2-it[data-k]')) abrirChave(ev.target.dataset.k);
   }));
   funilEl.addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-etapa]');

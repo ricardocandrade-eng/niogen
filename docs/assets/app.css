@@ -3542,3 +3542,17 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .fc2-ged.bad { background: #2B1D1D; color: #FFB3B3; }
 .lv-ged { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; font-size: 11px; background: #2D2616; color: #F8D58C; white-space: nowrap; }
 .fc2-agb .btn { white-space: normal; height: auto; min-height: 34px; line-height: 1.2; padding: 6px 8px; text-overflow: clip; text-align: center; }
+
+/* 18/11 (Ricardo: linhas da Live mais claras) — tipo · cliente · o que está acontecendo · com quem · prazo · botões */
+.lv2-it { grid-template-columns: 112px minmax(170px, 1.2fr) minmax(260px, 2.6fr) 120px 84px 236px; gap: 14px; align-items: center; min-height: 58px; padding: 6px 12px 6px 0; cursor: pointer; }
+.lv2-it:hover, .lv2-it.sel { background: #171C24; }
+.lv2-who { display: flex; flex-direction: column; min-width: 0; }
+.lv2-who b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv2-who small { font-size: 12px; color: #8D97A3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lv2-oque { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lv2-oque b { font-size: 13.5px; font-weight: 600; color: #E9EDF3; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lv2-oque span { font-size: 12.5px; color: #A6AFBE; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lv2-vez { font-size: 12.5px; color: #C9D0DB; }
+.lv2-vez.vale { color: #8FE39A; font-weight: 600; }
+.lv2-it .lv-act { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
+@media (max-width: 900px) { .lv2-it { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 12px; } }
