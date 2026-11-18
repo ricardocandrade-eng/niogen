@@ -258,38 +258,43 @@
     ]);
     const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
     const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
+    // 18/11 (0283, regra 19: ≤ 25 chamadas): as 13 leituras que só dependem da venda vêm numa chamada (ficha_venda). Sem a RPC
+    // (não aplicada ou erro), cada parte cai na leitura de antes. Mesmo formato de resposta ({ data, error }).
+    const fv = Promise.resolve(NG.sb.rpc('ficha_venda', { p_venda: id })).then((x) => (x.error || !x.data ? null : x.data), () => null);
+    const daVenda = (k, velho) => fv.then((d) => (d ? { data: d[k] === undefined ? null : d[k], error: d[k + '_erro'] ? { message: String(d[k + '_erro']) } : null } : velho()));
+    const daVendaLinha = (k, velho) => fv.then((d) => (d ? (d[k] === undefined ? null : d[k]) : velho()));
     const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow] = await Promise.all([
-      NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle(),
-      NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em'),
-      NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle(),
-      NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id'),
+      daVenda('v', () => NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle()),
+      daVenda('eventos', () => NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em')),
+      daVenda('lim', () => NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle()),
+      daVenda('adics', () => NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id')),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1)
+        ? daVenda('conv', () => NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1))
         : Promise.resolve({ data: [] }),
-      NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30),
+      daVenda('contatos', () => NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30)),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle(),
+      daVenda('extra', () => NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle()),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
-      NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false }),
+      daVenda('pend', () => NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false })),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
-      NG.sb.rpc('ficha_avisos', { p_venda: id }),
+      daVenda('avisos', () => NG.sb.rpc('ficha_avisos', { p_venda: id })),
       NG.jornadaLinha({ venda: id }),   // 0090: etapa, próximo passo, precisa de ação
       planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
       linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
       // 0105: andamento na Nio — status do portal PAP (extensão 0.4) e biometria do GED360 (robô n8n). Só admin/backoffice.
-      bo ? opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle()) : null,
+      bo ? daVendaLinha('andamento', () => opc(NG.sb.from('v_venda_andamento').select('*').eq('venda_id', id).maybeSingle())) : null,
       bo ? (cicloCache !== undefined ? cicloCache : opc(NG.sb.from('config_regras').select('valor').eq('chave', 'comissao_ciclo_regra').maybeSingle())) : null,
       NG.tetoContato(),   // 0102: nulo = sem teto (Ricardo, 10/11)
       NG.funilNomes(),    // 0147: nomes de etapa e destino (cache da página)
       // 13/11 (4a): as trilhas do topo — a escada (v_leads) e o dinheiro (v_dinheiro: só existe depois de instalar). Mesma rodada.
-      opcL(NG.sb.from('v_leads').select('*').eq('venda_id', id).limit(1)),
-      opcL(NG.sb.from('v_dinheiro').select('*').eq('venda_id', id).limit(1)),
+      daVendaLinha('lead', () => opcL(NG.sb.from('v_leads').select('*').eq('venda_id', id).limit(1))),
+      daVendaLinha('din', () => opcL(NG.sb.from('v_dinheiro').select('*').eq('venda_id', id).limit(1))),
       leadCfg(),
       // 0186: o selo Meta da venda (✓ enviado · ✗ erro · — não veio de anúncio) e o anúncio de origem.
-      bo ? opc(NG.sb.from('v_venda_meta').select('*').eq('venda_id', id).maybeSingle()) : null,
+      bo ? daVendaLinha('meta', () => opc(NG.sb.from('v_venda_meta').select('*').eq('venda_id', id).maybeSingle())) : null,
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
