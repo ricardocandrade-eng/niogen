@@ -106,6 +106,7 @@
   // 18/11 (Ricardo: "na Live, quando for uma instalação… botão de consultar a OS… inline"): última leitura guardada por venda
   // (selo "Nio: …"), a leitura de agora (faixa embaixo da linha) e quem está sendo lido.
   let osa = {};
+  let osNum = {};     // venda → nº da OS/pedido (a v_jornada não traz; vem da v_vendas, só as vendas em Ativação/Agenda)
   const osLidas = {};
   const osLendo = {};
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
@@ -178,10 +179,12 @@
     NG.mudou('live', LIVE_MAX_MS);   // 14/11 (0190): marca o carimbo desta carga — o timer só refaz se o banco mudar depois
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap, rf, fn, rcf, rosa] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+    const [r, ap, rf, fn, rcf, rosa, rosn] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
       NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir'),
-      NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null)]);
+      NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null),
+      NG.sb.from('v_vendas').select('id, nio_os, nio_pedido').in('status', ['1_vendido', '2_aguardando_instalacao'])]);
+    if (rosn && !rosn.error) { osNum = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); }); }
     if (rosa && !rosa.error) { osa = {}; (rosa.data || []).forEach((o) => { const a = osa[o.venda_id]; if (!a || String(o.mudou_em) > String(a.mudou_em)) osa[o.venda_id] = o; }); }
     conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
     mira = fn && !fn.error && Array.isArray(fn.data) ? fn.data : [];
@@ -369,7 +372,7 @@
   // do portal (~15 s, NG.osConsultar) e o resultado aparece numa faixa embaixo da linha, sem janela. O selo "Nio: …" mostra a
   // última leitura guardada (v_os_andamento) sem clicar.
   const ehBO = () => ['admin', 'backoffice'].includes((NG.usuario || {}).perfil);
-  const temOs = (j) => !!(j && j.venda_id && j.etapa === 4 && ehBO() && /\d{8}/.test(String(j.nio_os || j.nio_pedido || '')));
+  const temOs = (j) => !!(j && j.venda_id && j.etapa === 4 && ehBO() && /\d{8}/.test(osNum[j.venda_id] || ''));
   const osBt = (j) => (temOs(j) ? `<button type="button" class="btn btn-sm lv-osb" data-os-ler="${esc(j.venda_id)}"${osLendo[j.venda_id] ? ' disabled' : ''} title="${esc(NG.ajuda.ops_os_agora || 'Consultar esta OS agora no portal da Nio (uns 15 s)')}">${osLendo[j.venda_id] ? 'lendo…' : '⟳ OS'}</button>` : '');
   const dataBR = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}` : ''; };
   const osSelo = (j) => {
