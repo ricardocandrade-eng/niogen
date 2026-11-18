@@ -95,8 +95,6 @@
   const janelaMin = (c) => (c.ult_lead ? (new Date(c.ult_lead).getTime() + 23 * 3600000 - Date.now()) / 60000 : null);
   const durTxt = (min) => (min < 60 ? `${Math.max(1, Math.round(min))} min` : `${Math.floor(min / 60)} h`);
   const valeTxt = (c) => (c.comissao != null ? NG.fmtMoeda(c.comissao).replace(/,00$/, '') : c.valor_mes != null ? `${NG.fmtMoeda(c.valor_mes).replace(/,00$/, '')}/mês` : '');
-  // quentes no topo: 0 = cliente esperando (mais antigo primeiro) · 1 = janela fechando em ≤ 4 h · 2 = o resto (mais recente)
-  const calor = (c) => (c.encerrada ? 3 : c.cliente_esperando ? 0 : (janelaMin(c) != null && janelaMin(c) > 0 && janelaMin(c) <= 240) ? 1 : 2);
   let comp = null;      // NGConversa
   const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
   const NOME_ET = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.nome]));
@@ -169,7 +167,8 @@
     }).join('');
     const l = base.filter(fn).sort((a, b) => (filtro === 'esperando' ? (b.esperando_min || 0) - (a.esperando_min || 0) : new Date(b.ultima_em) - new Date(a.ultima_em)));
     if (movel()) {
-      if (filtro !== 'encerradas') l.sort((a, b) => calor(a) - calor(b) || (calor(a) === 0 ? (b.esperando_min || 0) - (a.esperando_min || 0) : calor(a) === 1 ? janelaMin(a) - janelaMin(b) : 0));
+      // 18/11 (Ricardo: "as mensagens mais recentes não estão subindo para o topo"): o celular segue a mesma ordem do
+      // computador e do WhatsApp — última mensagem no topo. A urgência fica nos selos (🔥 esperando, ⏱ janela) e na aba Esperando.
       itensEl.innerHTML = l.length ? l.map(itemMovel).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
       return;
     }
