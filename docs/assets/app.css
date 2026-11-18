@@ -3496,3 +3496,36 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 @media (max-width: 760px) {
   .fc2-agb { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* 17/11 (passo 6 — Live "radar", protótipo claude.ai/artifact/Jm85a2vNmDdugxkinkBYKt): uma fila só; o tipo (bloco de antes) é a
+   etiqueta colorida à esquerda e o filtro do topo; botões da linha do mesmo tamanho; quadro com as 6 colunas dos blocos. */
+.lv2-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0 10px; }
+.lv2-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid #2A3140; background: transparent; color: #A6AFBE; font: 500 13px var(--sans); cursor: pointer; }
+.lv2-chip i { width: 8px; height: 8px; border-radius: 4px; background: var(--c, #8D97A3); }
+.lv2-chip b { color: #E9EDF3; font-weight: 600; }
+.lv2-chip.on { background: #1D222B; border-color: #3A4458; color: #E9EDF3; }
+.lv2-ordem { margin-left: auto; font-size: 12px; }
+.lv2-it { display: grid; grid-template-columns: 118px minmax(0, 1fr); align-items: stretch; border-left: 3px solid var(--c); border-bottom: 1px solid #1D232B; }
+.lv2-it.urg { background: rgba(255, 122, 122, .05); }
+.lv2-it > .lv-row { border-bottom: 0; }
+.lv2-tag { align-self: center; justify-self: start; margin-left: 10px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); white-space: nowrap; }
+.lv2 .lv-act { justify-content: flex-end; }
+.lv2 .lv-act .btn, .lv2-kbts .btn { min-width: 112px; justify-content: center; }
+.lv2-acomp { display: flex; width: 100%; align-items: center; gap: 8px; padding: 12px 10px; margin-top: 4px; background: transparent; border: 0; border-bottom: 1px solid #1D232B; color: #A6AFBE; font: 500 13px var(--sans); text-align: left; cursor: pointer; }
+.lv2-board > .mv-col { flex: 1 1 210px; min-width: 210px; }
+.lv2-col .lv2-pt { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--c); margin-right: 6px; }
+.lv2-kc { border-top: 3px solid var(--c, #2A3140); }
+.lv2-kc.urg { box-shadow: inset 0 0 0 1px rgba(255, 122, 122, .45); }
+.lv2-kbts { display: flex; gap: 6px; margin-top: 6px; }
+@media (max-width: 900px) {
+  .lv2-it { grid-template-columns: minmax(0, 1fr); }
+  .lv2-tag { margin: 8px 0 0 10px; }
+  .lv2-ordem { display: none; }
+}
+.lv2-it { grid-template-columns: 104px minmax(0, 1fr); }
+.lv2 .lv-row { grid-template-columns: minmax(140px, 1.3fr) minmax(110px, 1fr) minmax(140px, 1.5fr) 84px 76px 236px; gap: 12px; padding: 0 12px 0 4px; }
+.lv2 .lv-row.lv-op { grid-template-columns: minmax(140px, 1.3fr) minmax(200px, 2.6fr) 84px 236px; }
+@media (max-width: 900px) { .lv2 .lv-row, .lv2 .lv-row.lv-op { grid-template-columns: minmax(0, 1fr); } }
+.lv2-board > .mv-col { flex: 1 1 0; min-width: 0; width: auto; max-width: none; }
+.lv2-kbts .btn { min-width: 0; flex: 1 1 0; justify-content: center; }
+.lv2-kc .mv-oque { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

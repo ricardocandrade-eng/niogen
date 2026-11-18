@@ -473,6 +473,25 @@ begin
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('R11', 'A porta em sombra está ligada em todas as funções que mudam um lead', v_sit is null, 'sem a casca: ' || v_sit);
   end if;
+  -- R13 (BLOQUEIO, 0272 — passo 6, caso Geraldo): o botão que a Live sugere (v_jornada.botao) é uma ação que a porta aceita
+  -- na situação do lead. Ex.: "OS e agenda" com a biometria pendente era sugerido e a porta recusava (OS só com biometria aprovada).
+  -- Só os botões que viram evento entram; "abrir", "biometria" (consultar o GED360), "pendencia"… só abrem a ficha.
+  if to_regclass('public.v_jornada') is not null and to_regprocedure('public.porta_prever(text,text)') is not null then
+    execute $q$
+      select string_agg(j.botao || ' → ' || ev || ' em ' || coalesce(ls.situacao, '?') || ': ' || coalesce(p.frase, 'recusado'), ' · ')
+        from public.v_jornada j
+        join public.v_lead_situacao ls on (ls.conversa_id = j.conversa_id) or (j.venda_id is not null and ls.venda_id = j.venda_id)
+        cross join lateral (select case j.botao when 'os' then 'momento:os_agendar' when 'os_agendar' then 'momento:os_agendar'
+                                   when 'agendar' then 'momento:agendar' when 'reagendar' then 'momento:reagendar' when 'pedido' then 'momento:pedido'
+                                   when 'assumir' then 'momento:assumir' when 'responder' then 'time_respondeu'
+                                   when 'viabilidade' then 'momento:viabilidade:viavel' when 'credito' then 'momento:credito:aprovado' end as ev) e
+        cross join lateral public.porta_prever(ls.situacao, e.ev) p
+       where (j.conversa_id = $1 or j.venda_id = (select c.venda_id from public.mari_conversas c where c.id = $1))
+         and e.ev is not null and p.aceito is false $q$
+      into v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R13', 'O botão que a Live sugere é uma ação que a porta aceita nesta situação', v_sit is null, v_sit);
+  end if;
   if saida then
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('S1', 'Saída: conversa resolvida no Chatwoot', cw ->> 'status' in ('resolved', 'snoozed'), 'Chatwoot: ' || (cw ->> 'status')),

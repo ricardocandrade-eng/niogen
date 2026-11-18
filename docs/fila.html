@@ -32,12 +32,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=171126-1">
+<link rel="stylesheet" href="assets/app.css?v=171126-2">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=161126-23"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
-<script src="assets/conversa.js?v=161126-16"></script>
+<script src="assets/conversa.js?v=171126-1"></script>
 <script src="assets/ficha.js?v=171126-2"></script>
 <script src="assets/pulso.js?v=161126-8"></script>
 </head>
@@ -278,7 +278,8 @@
   const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar' };
   // 14/11 (Ricardo): os botões do Conferir ficam na coluna da ação — o texto não empurra a altura da linha (2 linhas, o resto no title).
   const confBts = (c) => `${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}${c.tipo === 'conferir_unidade' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente no painel de Viabilidade: toque na unidade do cliente (a consulta refaz) ou peça o cadastro à Nio">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-unidade="${esc(c.conversa_id)}" title="A unidade foi confirmada com o cliente ou o cadastro foi pedido à Nio: a linha sai do Conferir">Conferi</button>` : ''}`;
-  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || ''));
+  // 0271: "Cancelar na Nio" com 24 h úteis vencidas (texto começa com VENCIDO) também acende.
+  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'cancelar_nio' && /^VENCIDO/.test(c.texto || '')) || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || ''));
   const confLinha = (c) => {
     const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
     const urg = confUrg(c);
@@ -317,48 +318,93 @@
     if (data && data.resumo) NG.toast(data.resumo, 'ok');
     await carregar();
   }
+  // ---------- 17/11 (passo 6, Ricardo: "a Live precisa ser o coração… um radar… limpa, funcional e intuitiva… lista e quadro";
+  // protótipo claude.ai/artifact/Jm85a2vNmDdugxkinkBYKt): UMA fila só, na ordem do que vence primeiro. Os blocos de antes
+  // (Para fazer · Conferir · Na mira · Acompanhando · 🔥 Oportunidades · Andamento na Nio) viraram o TIPO de cada linha
+  // (etiqueta colorida à esquerda) e os filtros do topo; no Quadro são as 6 colunas. Acompanhando fica recolhido no pé.
+  const BLOCOS = [
+    { id: 'fazer', nome: 'Para fazer', cor: '#6FB1F7' },
+    { id: 'conf', nome: 'Conferir', cor: '#E58BF0' },
+    { id: 'mira', nome: 'Na mira', cor: '#F2B84B' },
+    { id: 'acomp', nome: 'Acompanhando', cor: '#8D97A3' },
+    { id: 'op', nome: 'Oportunidades', cor: '#FF9F43' },
+    { id: 'and', nome: 'Andamento na Nio', cor: '#57D38C' },
+  ];
+  const NOME_BLOCO = Object.fromEntries(BLOCOS.map((b) => [b.id, b.nome]));
+  let bloco = BLOCOS.some((b) => b.id === ls.ler('niogen.fila.bloco')) ? ls.ler('niogen.fila.bloco') : null;
+  let acompAberto = false;
+  const RANK = { agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 };
+  // Todos os itens da Live num formato só: { bloco, k (ficha), nome, sub, oque, prazo, urg, rank, t, row (linha da Lista), bts (botões do card) }
+  function itens() {
+    const fazer = soVez ? filtradas(true) : filtradas(false).filter(vez);
+    const ac = soVez ? acompanhando() : filtradas(false).filter((j) => !vez(j));
+    const naLista = {};
+    [...fazer, ...ac].forEach((j) => { naLista[chaveFicha(j)] = j; if (j.conversa_id) naLista[`c:${j.conversa_id}`] = j; });
+    confDaLinha = {};
+    const confSoltos = conf.filter((c) => {
+      const j = (c.venda_id && naLista[c.venda_id]) || (c.conversa_id && naLista[`c:${c.conversa_id}`]);
+      if (!j) return true;
+      (confDaLinha[chaveFicha(j)] = confDaLinha[chaveFicha(j)] || []).push(c);
+      return false;
+    });
+    const L = [];
+    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), nome: j.nome || 'Contato', sub: [j.cidade, j.plano].filter(Boolean).join(' · '), oque: j.o_que_fazer || '',
+      prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
+      row: linha(j, b === 'fazer'),
+      bts: b === 'fazer' ? `<button type="button" class="btn btn-sm lv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : '' });
+    fazer.forEach((j) => L.push(jItem(j, 'fazer')));
+    if (!etapaSel) {
+      confSoltos.forEach((c) => {
+        const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : null;
+        L.push({ bloco: 'conf', k, nome: c.nome || 'Cliente', sub: CONF_SIT[c.tipo] || c.tipo, oque: c.texto || '', prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
+          rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
+      });
+      mira.filter((m) => !naLista[`c:${m.conversa_id}`]).forEach((m) => L.push({ bloco: 'mira', k: `c:${m.conversa_id}`, nome: m.nome || 'Contato',
+        sub: [m.etapa_nome, m.status_nome].filter(Boolean).join(' · '), oque: m.ultima_fala ? `cliente: “${m.ultima_fala}”` : 'conversando com a Mari', prazo: 'agora',
+        urg: !!(m.novo && m.acompanho), rank: m.novo && m.acompanho ? 0 : 1, t: m.ultima_em, row: miraLinha(m),
+        bts: `<button type="button" class="btn btn-sm" data-mira-abrir="c:${esc(m.conversa_id)}">Abrir</button>` }));
+      andPend.forEach((p) => L.push({ bloco: 'and', k: null, nome: p.tipo === 'casar_pedido' ? (p.nome || 'Cliente') : `Protocolo ${p.chave}`,
+        sub: p.tipo === 'casar_pedido' ? `portal: ${p.rotulo} · nº ${p.chave}` : `GED360: ${p.rotulo}`, oque: p.tipo === 'casar_pedido' ? 'O nº do portal não bate com nenhuma venda' : (p.alerta || 'Biometria sem venda no NIOGEN'),
+        prazo: p.alerta ? 'agora' : 'hoje', urg: !!p.alerta, rank: p.alerta ? 0 : 1, t: p.desde, row: andLinha(p),
+        bts: p.tipo === 'casar_pedido' ? (p.sugestoes || []).slice(0, 1).map((x) => `<button type="button" class="btn btn-sm" data-casar="${esc(p.chave)}" data-venda="${esc(x.venda_id)}" data-nome="${esc(x.nome)}">Casar</button>`).join('')
+          : `<button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button>` }));
+    }
+    if (!etapaSel || etapaSel === 1) {
+      ops.forEach((o) => {
+        const jan = o.janela_fecha_em ? (new Date(o.janela_fecha_em) - Date.now()) / 60000 : -1;
+        L.push({ bloco: 'op', k: `c:${o.conversa_id}`, nome: o.nome || 'Contato', sub: [o.cidade, o.plano].filter(Boolean).join(' · '), oque: o.motivo || '',
+          prazo: jan > 0 && jan <= 240 ? 'hoje' : '—', urg: false, rank: jan > 0 && jan <= 240 ? 1 : 2, t: o.parado_desde, row: opLinha(o),
+          bts: o.canal === 'ligar' ? '' : `<button type="button" class="btn btn-sm lv-go" data-ope="${esc(o.conversa_id)}">Enviar</button>` });
+      });
+    }
+    ac.forEach((j) => L.push({ ...jItem(j, 'acomp'), rank: 5 }));
+    const tms = (x) => new Date(x || 0).getTime() || 0;
+    return L.sort((a, b) => a.rank - b.rank || tms(a.t) - tms(b.t));
+  }
+  const tagHtml = (b) => `<span class="lv2-tag" style="--c:${(BLOCOS.find((x) => x.id === b) || {}).cor}">${esc(NOME_BLOCO[b])}</span>`;
+  const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}">${tagHtml(it.bloco)}${it.row}</div>`;
+  function filtros(todos) {
+    const n = (b) => todos.filter((x) => x.bloco === b).length;
+    return `<div class="lv2-filtros" role="group" aria-label="Mostrar só">
+      <button type="button" class="lv2-chip${bloco ? '' : ' on'}" data-bloco="">Tudo <b>${todos.length}</b></button>
+      ${BLOCOS.map((b) => `<button type="button" class="lv2-chip${bloco === b.id ? ' on' : ''}" data-bloco="${b.id}" style="--c:${b.cor}"><i aria-hidden="true"></i>${esc(b.nome)} <b>${n(b.id)}</b></button>`).join('')}
+      <span class="lv2-ordem apagado">o que vence primeiro fica em cima</span></div>`;
+  }
   function renderLista() {
-    const l = filtradas();
     const rol = listaEl.querySelector('.lv-rolar');
     const pos = rol ? rol.scrollTop : 0;
-    let corpo = '';
-    if (soVez) {
-      const ac = acompanhando();
-      const opL = ops.filter((o) => !etapaSel || etapaSel === 1);
-      const naLista = {};
-      [...l, ...ac].forEach((j) => { naLista[chaveFicha(j)] = j; if (j.conversa_id) naLista[`c:${j.conversa_id}`] = j; });
-      confDaLinha = {};
-      const confSoltos = conf.filter((c) => {
-        const j = (c.venda_id && naLista[c.venda_id]) || (c.conversa_id && naLista[`c:${c.conversa_id}`]);
-        if (!j) return true;
-        (confDaLinha[chaveFicha(j)] = confDaLinha[chaveFicha(j)] || []).push(c);
-        return false;
-      });
-      // 14/11 (Ricardo): "Para fazer" é sempre o primeiro bloco; "Conferir" vem logo depois.
-      corpo += secao(`Para fazer · ${l.length}`, 'ordem de urgência — pegue de cima para baixo', l.length ? cabTab + l.map((j) => linha(j, true)).join('') : '<div class="lv-vazio">Nada para fazer agora ✅ — acompanhe as vendas abaixo.</div>');
-      if (confSoltos.length && !etapaSel) corpo += secao(`⚠ Conferir · ${confSoltos.length} ${NG.dicaTxt(NG.ajuda.conf_secao)}`, 'o que ficou parado ou saiu do trilho — resolva ou dispense', confSoltos.map(confLinha).join(''));
-      // 0206: o que já está em Para fazer ou Acompanhando não repete aqui
-      const miraL = mira.filter((m) => !naLista[`c:${m.conversa_id}`]);
-      if (miraL.length && !etapaSel) corpo += secao(`<span aria-hidden="true">👀</span> Na mira · ${miraL.length} ${NG.dicaTxt(NG.ajuda.live_na_mira)}`, 'cliente conversando agora com a Mari em Viabilidade, Pré-qualificado ou Qualificado — a Mari segue; acompanhe para não perder', miraL.map(miraLinha).join(''), 'lv-sec-mira');
-      corpo += secao(`Acompanhando · ${ac.length}`, 'esperando o cliente ou a Nio — volta para "Para fazer" sozinho na data', ac.length ? ac.map((j) => linha(j, false)).join('') : '<div class="lv-vazio">Nada sendo acompanhado.</div>');
-      // 0219: caixa 1 (Mari conduzindo) não ocupa linhas — uma linha de radar; quem tiver sinal de dinheiro já aparece em 👀 Na mira e 🔥 Oportunidades.
-      const mariC = (jor.todas || []).filter((j) => j.caixa === 1 && (!etapaSel || j.etapa === etapaSel));
-      if (mariC.length) {
-        const prox = mariC.map((j) => j.proximo_toque_em).filter(Boolean).sort()[0];
-        const proxTxt = prox ? new Date(prox).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
-        corpo += `<div class="lv-radar apagado" style="padding:10px 4px;font-size:13px"><span aria-hidden="true">🤖</span> <b>Mari conduzindo · ${mariC.length}</b> — cadência com próximo toque marcado${proxTxt ? ` (o próximo sai ${esc(proxTxt)})` : ''}. Sobe para cá sozinho se precisar de você · <a href="leads.html" data-leads>ver em Todos os leads →</a></div>`;
-      }
-      if (opL.length || opsCanal.length) {
-        corpo += secao(`<span aria-hidden="true">🔥</span> Oportunidades · ${opL.length + opsCanal.length}`, 'o NIOGEN achou — não é obrigação; a mensagem sai pelo NIOGEN e a conversa volta para a Mari',
-          `${opL.length ? `<div class="lv-thead lv-op"><span>Cliente</span><span>Por que agora · mensagem sugerida</span><span>Vale</span><span></span></div>${opL.map(opLinha).join('')}` : ''}${opsCanal.length ? `<div class="opc-bloco">${opsCanal.map((o) => NG.opCanalLinha(o)).join('')}</div>` : ''}`, 'lv-sec-op');
-      }
-      if (andPend.length) corpo += secao(`Andamento na Nio · ${andPend.length}`, 'pedido do portal ou biometria do GED360 sem venda no NIOGEN', andPend.map(andLinha).join(''));
-    } else {
-      confDaLinha = {};
-      corpo = secao(`Todas · ${l.length}`, '', l.length ? cabTab + l.map((j) => linha(j, vez(j))).join('') : '<div class="lv-vazio">Nenhuma linha.</div>');
-    }
-    listaEl.innerHTML = `${abas()}<div class="lv-rolar">${corpo}
-      <div class="lv-legend"><span><span class="lv-pill n-agora">agora</span> cliente esperando ou prazo de 4 h</span><span><span class="lv-pill n-hoje">hoje</span> vence hoje</span><span><span class="lv-pill n-espera">aguardando</span> esperando terceiro, fora da sua vez até a data</span><span>a lista se atualiza a cada minuto</span></div></div>`;
+    const todos = itens();
+    const vis = todos.filter((x) => !bloco || x.bloco === bloco);
+    const ativos = vis.filter((x) => x.bloco !== 'acomp');
+    const acomp = vis.filter((x) => x.bloco === 'acomp');
+    const abreAc = acompAberto || bloco === 'acomp';
+    const corpo = `${ativos.length ? ativos.map(itemLista).join('') : (bloco === 'acomp' ? '' : '<div class="lv-vazio">Nada para fazer agora ✅</div>')}
+      ${acomp.length ? `${bloco === 'acomp' ? '' : `<button type="button" class="lv2-acomp" data-acomp aria-expanded="${abreAc}"><span aria-hidden="true">${abreAc ? '▾' : '▸'}</span> Acompanhando · ${acomp.length} — esperando o cliente ou a Nio; sobem sozinhos quando o prazo chega ou o cliente escreve</button>`}
+        ${abreAc ? acomp.map(itemLista).join('') : ''}` : ''}`;
+    const mariC = (jor.todas || []).filter((j) => j.caixa === 1 && (!etapaSel || j.etapa === etapaSel));
+    listaEl.innerHTML = `${abas()}${filtros(todos)}<div class="lv-rolar lv2">${corpo}
+      ${mariC.length && !bloco ? `<div class="lv-radar apagado" style="padding:10px 4px;font-size:13px"><span aria-hidden="true">🤖</span> <b>Mari conduzindo · ${mariC.length}</b> — sobe para cá sozinho se precisar de você · <a href="leads.html" data-leads>ver em Todos os leads →</a></div>` : ''}
+      ${opsCanal.length && (!bloco || bloco === 'op') ? `<div class="opc-bloco">${opsCanal.map((o) => NG.opCanalLinha(o)).join('')}</div>` : ''}</div>`;
     const novo = listaEl.querySelector('.lv-rolar');
     if (novo) novo.scrollTop = pos;   // a recarga de 1 min não joga a lista para o topo
   }
@@ -433,29 +479,29 @@
     render();
   }
 
-  // ---------- quadro (sem mudança nesta rodada: a ficha abre na gaveta) ----------
+  // ---------- quadro (17/11, passo 6): as 6 colunas são os blocos da Lista; dentro da coluna, quem vence primeiro fica em cima.
+  // O card só muda de coluna pelo que acontece com o lead (o botão abre a ficha ou faz a ação da linha) — sem arrastar.
   function renderQuadro() {
     const atual = NGFicha.atual;
-    const cols = NG.JORNADA.filter((e) => !etapaSel || e.n === etapaSel).map((e) => {
-      const L = jor.lista.filter((j) => j.etapa === e.n && (!soVez || vez(j) || acompanha(j))).sort(NG.ordemJornada);
-      const nv = jor.lista.filter((j) => j.etapa === e.n && vez(j)).length;
-      return `<section class="mv-col"><div class="mv-colh"><b>${dot(e.n)}${e.n} · ${esc(e.nome)}</b><span class="${nv ? 'mv-vz' : 'apagado'}">${L.length}${nv ? ` · ${nv} sua vez` : ''}</span></div>
-        <div class="mv-cards">${L.map((j) => `<div class="mv-kc ${j.nivel}${vez(j) ? '' : ' acomp'}${atual === chaveFicha(j) ? ' sel' : ''}" data-k="${esc(chaveFicha(j))}" tabindex="0" role="button">
-          <b>${esc(j.nome || 'Contato')}</b><small>${esc([j.cidade, j.plano].filter(Boolean).join(' · ') || '—')}</small>
-          <span class="mv-oque">${esc(j.o_que_fazer || '')}${j.portal_status ? ` <span class="chip dim" title="Status no portal PAP (Histórico de Pedidos)">portal: ${esc(j.portal_status.toLowerCase())}</span>` : ''}${j.biometria_ged ? ` <span class="chip dim" title="Biometria no GED360">bio: ${esc(j.biometria_ged.toLowerCase())}</span>` : ''}</span>
-          <span class="mv-meta">${donoHtml(j)}<span class="apagado">há ${esc(haTempo(j.desde))}</span></span>
-          ${vez(j) ? `<button type="button" class="btn btn-sm mv-go" data-bt="${esc(j.botao || 'abrir')}" data-k="${esc(chaveFicha(j))}">${esc(BOTAO[j.botao] || 'Abrir')}</button>` : ''}
+    const todos = itens();
+    const cols = BLOCOS.filter((b) => !bloco || b.id === bloco).map((b) => {
+      const L = todos.filter((x) => x.bloco === b.id);
+      return `<section class="mv-col lv2-col" style="--c:${b.cor}"><div class="mv-colh"><b><i class="lv2-pt" aria-hidden="true"></i>${esc(b.nome)}</b><span class="apagado">${L.length}</span></div>
+        <div class="mv-cards">${L.map((it) => `<div class="mv-kc lv2-kc${it.urg ? ' urg' : ''}${it.k && atual === it.k ? ' sel' : ''}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
+          <b>${esc(it.nome)}</b><small>${esc(it.sub || '—')}</small>
+          <span class="mv-oque" title="${esc(it.oque)}">${esc(it.oque)}</span>
+          <span class="mv-meta"><span class="lv-pill">${esc(it.prazo)}</span></span>
+          ${it.bts ? `<div class="lv2-kbts">${it.bts}</div>` : ''}
         </div>`).join('') || '<span class="apagado mv-col-vazia">—</span>'}</div></section>`;
     }).join('');
-    const sai = (jor.todas || []).filter((j) => j.etapa === 0);
-    quadroEl.innerHTML = `${abas()}<div class="mv-board">${cols}</div>
-      <div class="mv-saida apagado">Fora da jornada · <b>Saída ${sai.length}</b>${sai.length ? `: ${sai.slice(0, 8).map((j) => `${esc(NG.primeiroNome(j.nome))} (${esc(j.o_que_fazer)})`).join(' · ')}` : ''} · o card só muda de coluna pelo botão da ficha</div>`;
+    quadroEl.innerHTML = `${abas()}${filtros(todos)}<div class="mv-board lv2-board">${cols}</div>`;
   }
 
   function render() {
     document.querySelectorAll('[data-vista]').forEach((b) => b.classList.toggle('on', b.dataset.vista === vista));
-    renderIntro();
-    renderFunil();
+    // 17/11 (passo 6): sem o "Como usar" e sem a faixa das etapas — os filtros por tipo ficam junto da fila.
+    document.getElementById('intro').innerHTML = '';
+    funilEl.hidden = true;
     listaEl.hidden = vista !== 'lista';
     quadroEl.hidden = vista !== 'quadro';
     if (vista === 'lista') renderLista(); else renderQuadro();
@@ -590,6 +636,9 @@
     if (bc) { ev.stopPropagation(); casar(bc); return; }
     const bv = ev.target.closest('[data-visto]');
     if (bv) { ev.stopPropagation(); vistoBio(bv); return; }
+    const fb = ev.target.closest('[data-bloco]');
+    if (fb) { bloco = fb.dataset.bloco || null; ls.gravar('niogen.fila.bloco', bloco || ''); render(); return; }
+    if (ev.target.closest('[data-acomp]')) { acompAberto = !acompAberto; render(); return; }
     if (ev.target.closest('[data-semdono-x]')) { ls.gravar('niogen.fila.semdono_visto', chaveSemDono(semDono())); render(); return; }
     if (ev.target.closest('[data-tirar-etapa]')) { etapaSel = null; render(); return; }
     const b = ev.target.closest('[data-bt]');

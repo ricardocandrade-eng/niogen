@@ -253,7 +253,7 @@
         ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Áudio e foto aparecem aqui na conversa. O Chatwoot fica para vídeo e documento — responda por aqui">Chatwoot ↗</a>` : ''}
         ${o.aoConcluir ? '<button type="button" class="btn btn-acc btn-sm" data-cv="concluir" title="Terminou com este cliente? Fecha o caso e abre o próximo da fila. Até apertar aqui, a conversa fica aberta.">✓ Concluir</button>' : ''}</div>
         <div class="cvp-chips">
-        <select class="cvp-pill" data-cv="status" aria-label="Status da conversa" title="Status da conversa"${c.nao_contatar ? ' disabled' : ''}><option value="open"${c.chatwoot_status === 'resolved' ? '' : ' selected'}>Aberta</option><option value="resolved"${c.chatwoot_status === 'resolved' ? ' selected' : ''}>Resolvida</option></select>
+        <span class="cvp-pill fixo" title="Só leitura (17/11, passo 6 — regra de ouro 4): quem abre e fecha a conversa é a situação do lead. Responder, Assumir, Devolver, Em espera e Saída fazem isso sozinhos.">${c.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span>
         ${htmlSw}
         <span class="cvp-pill fixo${jn.aberta ? '' : ' warn'}">${esc(jn.txt)}</span></div>`);
       const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
