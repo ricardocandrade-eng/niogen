@@ -9,6 +9,7 @@ select coalesce(sim.recusa(format($q$select public.lead_reabrir(%L, null)$q$, :'
 select sim.confere('o backoffice recebe a recusa com a frase', :'rec' like '%admin%', coalesce(nullif(:'rec', ''), 'aceitou'));
 select sim.confere('continua em Saída definitiva', sim.lead_de(:'c') ->> 'destino' = 'saida' and sim.foto(:'c') -> 'venda' ->> 'status' = 'saida', sim.lead_de(:'c')::text);
 select sim.como('admin');
+select public.porta_motivo_preparar('teste do X4: nova consulta de crédito aprovada');   -- 0298: ação de admin pede o motivo
 select public.lead_reabrir(:'c', null);
 select sim.fila_rodar();
 select sim.como('servico');

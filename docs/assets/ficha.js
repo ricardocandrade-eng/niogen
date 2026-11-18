@@ -3470,8 +3470,10 @@
   function notaCab() {
     if (!ehBO()) return '';
     const t = d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : '';
-    return t ? `<button type="button" class="fc-nota" data-f="fc-nota" title="Post-it do lead — clique para editar">📝 ${esc(t)}</button>`
-      : '<button type="button" class="fc-nota fc-nota-vazia" data-f="fc-nota" title="Anotação livre sobre este cliente (não muda nada no fluxo)">📝 Nota</button>';
+    // 18/11 (Ricardo: "o ícone da nota pode ficar só ícone, em algum canto"): ao lado do ⋯; amarelo quando há nota, o texto no balão
+    return t ? `<button type="button" class="btn fc-bi fc-nota-ic tem" data-f="fc-nota" aria-label="Post-it do lead" title="📝 ${esc(t)}
+(clique para editar)">📝</button>`
+      : '<button type="button" class="btn fc-bi fc-nota-ic" data-f="fc-nota" aria-label="Escrever um post-it" title="Post-it: anotação livre sobre este cliente (não muda nada no fluxo)">📝</button>';
   }
   function cabCheia(nome, chips, meta, menu, extra = '') {
     const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
@@ -3498,12 +3500,12 @@
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
-      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${idsCab()}</div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div>${notaCab()}<!--AGORA--></div>
+      <div class="fc-tit fc-tit-linha"><div class="fc-l1"><h1>${esc(nome)}</h1>${idsCab()}</div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="1"${naFila ? '' : ' hidden'} aria-label="Próximo cliente da fila"${pos && pos.next ? '' : ' disabled'}>${IC.baixo}</button>
-        <div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Ações: Nada a responder, pendência, Saída…" title="Ações: Nada a responder, pendência, Reagendar, Saída…">${IC.mais}</button>
+        ${notaCab()}<div class="fc-menuw"><button type="button" class="btn fc-bi" data-f="fc-menu" aria-expanded="${fc.menu}" aria-label="Ações: Nada a responder, pendência, Saída…" title="Ações: Nada a responder, pendência, Reagendar, Saída…">${IC.mais}</button>
           ${fc.menu ? `<div class="fc-menu" role="menu">${menuT}</div>` : ''}</div>
       </div></header>`;
   }

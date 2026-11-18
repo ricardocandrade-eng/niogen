@@ -20,6 +20,36 @@
     auth: { persistSession: true, autoRefreshToken: true },
   });
 
+  // 18/11 (0298, fase 2 passo 6 — "só admin, com motivo"): ação só do admin sem motivo → a porta responde "MOTIVO_ADMIN: …".
+  // A tela pergunta o motivo, prepara (porta_motivo_preparar) e repete a MESMA chamada — vale para todo botão de toda tela.
+  const rpcBruto = sb.rpc.bind(sb);
+  const ehMotivoAdmin = (r) => !!(r && r.error && /^MOTIVO_ADMIN:/.test(String(r.error.message || '')));
+  const ENCADEIA = ['select', 'eq', 'neq', 'in', 'is', 'order', 'limit', 'single', 'maybeSingle', 'abortSignal', 'returns'];
+  function rpcComMotivo(fn, args, opts, cadeia = []) {
+    const montar = () => cadeia.reduce((bld, [k, a]) => bld[k](...a), rpcBruto(fn, args, opts));
+    const alvo = montar();
+    return new Proxy(alvo, {
+      get(t, k) {
+        if (k === 'then') {
+          return (ok, ko) => t.then(async (r) => {
+            if (!ehMotivoAdmin(r) || fn === 'porta_motivo_preparar') return r;
+            const frase = String(r.error.message).replace(/^MOTIVO_ADMIN:\s*/, '');
+            const fd = await modal(`<h3>Motivo da ação do admin</h3><p>${esc(frase)}</p>
+              <label class="campo">Por quê?<textarea name="motivo" rows="3" required minlength="5" maxlength="500" placeholder="ex.: cliente aprovado em nova consulta de crédito"></textarea></label>`);
+            if (!fd) return { data: null, error: { message: 'Ação cancelada: o admin precisa dizer o motivo.' } };
+            const pr = await rpcBruto('porta_motivo_preparar', { p_motivo: String(fd.get('motivo') || '').trim() });
+            if (pr.error) return { data: null, error: pr.error };
+            return montar();   // a mesma chamada, agora com o motivo preparado
+          }).then(ok, ko);
+        }
+        const val = Reflect.get(t, k);
+        if (typeof val === 'function' && ENCADEIA.includes(k)) return (...a) => rpcComMotivo(fn, args, opts, [...cadeia, [k, a]]);
+        return typeof val === 'function' ? val.bind(t) : val;
+      },
+    });
+  }
+  sb.rpc = rpcComMotivo;
+
   const TZ = 'America/Sao_Paulo';
 
   const STATUS = [

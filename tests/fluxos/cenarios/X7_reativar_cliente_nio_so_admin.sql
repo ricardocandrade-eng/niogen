@@ -8,6 +8,7 @@ select sim.fila_rodar();
 select coalesce(sim.recusa(format($q$select public.backoffice_conversa_saida(%L, 'reativar')$q$, :'c')), '') as rec \gset
 select sim.confere('o backoffice recebe a recusa com a frase', :'rec' like '%admin%', coalesce(nullif(:'rec', ''), 'aceitou'));
 select sim.como('admin');
+select public.porta_motivo_preparar('teste do X7: não é cliente Nio, quer contratar');   -- 0298: ação de admin pede o motivo
 select public.backoffice_conversa_saida(:'c', 'reativar');
 select sim.fila_rodar();
 select sim.como('servico');

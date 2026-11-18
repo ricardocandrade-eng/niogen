@@ -26,8 +26,8 @@ select sim.confere('o histórico guarda a OS antiga',
   exists (select 1 from public.eventos_venda e where e.venda_id = sim.venda(:'c') and e.tipo = 'os_reemitida'
            and e.detalhe ->> 'os_antiga' = '86' || sim._conv(:'c') and e.detalhe ->> 'forma_antiga' = 'cartao'), '');
 
--- gravar de novo a mesma OS não faz nada (recusa)
-select coalesce(sim.recusa(format($q$select public.backoffice_momento(%L::uuid, 'os', jsonb_build_object('os', %L))$q$, sim.venda(:'c'), '87' || sim._conv(:'c'))), '') as rec2 \gset
+-- gravar de novo a mesma OS não faz nada (recusa) — 0298: com o motivo, a recusa é a do passo
+select coalesce(sim.recusa(format($q$select public.backoffice_momento(%L::uuid, 'os', jsonb_build_object('os', %L, 'motivo', 'teste do X20: mesma OS'))$q$, sim.venda(:'c'), '87' || sim._conv(:'c'))), '') as rec2 \gset
 select sim.confere('a mesma OS de novo é recusada', :'rec2' ilike '%já foi gravada%', :'rec2');
 
 -- a agenda nova chega e a venda segue
