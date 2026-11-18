@@ -8,7 +8,11 @@
  * 15/11 (NIOGEN no celular · docs/LAYOUT_conversas_mobile_151126_1304.html): o Pulso virou ABA (pulso.html, NGPulso.montarAba) —
  * os 4 elos em cartões (sinal, número, linha de detalhe; toque abre o detalhe), o funil de hoje e o alerta com a ação, nos estados
  * do LAYOUT_pulso_live (ok · atenção · parado · sem leitura). Na Live do celular (≤ 640 px) sobra só a faixa resumida: o toque
- * leva à aba em vez de abrir por cima. Mesma RPC (pulso_operacao), mesma cadência de 60 s. */
+ * leva à aba em vez de abrir por cima. Mesma RPC (pulso_operacao), mesma cadência de 60 s.
+ * 18/11 (Ricardo: "inclua a qualidade da Waba (green) e, com o disparo da Fila Vero em andamento, a bolinha pulsando"): duas partes
+ * novas — WABA (quality_rating da última leitura) e Fila Vero (enviados hoje / ritmo; bolinha pulsa só enquanto envia). Vêm da
+ * pulso_extra() (0294), chamada em paralelo com a pulso_operacao(); se ela falhar, as duas somem e o resto segue. Aberto, os cartões
+ * ficam na mesma grade da barra (cada um embaixo do seu) e o resto da tela escurece; clique no escuro fecha. */
 (function () {
   const ORDEM = ['meta', 'entrada', 'mari', 'fluxos'];
   const NOME = { meta: 'Meta Ads', entrada: 'Entrada', mari: 'Mari', fluxos: 'Fluxos n8n' };
@@ -19,6 +23,7 @@
 
   let modoAba = false;   // 15/11: pulso.html (aba do celular / tela inteira)
   const CEL = window.matchMedia('(max-width: 640px)');
+  let extra = null;   // 0294: pulso_extra() — WABA e Fila Vero
   let el = null; let dados = null; let recebido = 0; let desvio = 0; let aberto = null; let expandido = false; let falhou = false; let timer = null;
   const esc = (s) => NG.esc(s == null ? '' : String(s));
 
@@ -45,6 +50,48 @@
     if (k === 'meta') return { linha2: `lido ${ha(e.lido_em) || '—'}` };
     if (k === 'fluxos' && e.nivel === 'ok' && e.lido_em) return { principal: ha(e.lido_em) };
     return {};
+  }
+
+  // 0294: WABA e Fila Vero. Nível só da bolinha da própria parte — não mexe no "Saúde do ecossistema" (alarme, não trava).
+  const NIVEL_WABA = { GREEN: 'ok', YELLOW: 'atencao', RED: 'parado' };
+  const nfmt = (n) => Number(n || 0).toLocaleString('pt-BR');
+  function extras(cinza) {
+    if (!extra) return [];
+    const out = [];
+    const w = extra.waba;
+    const num = extra.fila_vero && extra.fila_vero.numero;
+    if (w || num) {
+      // Mari e disparo da Fila Vero saem do MESMO número (1342993658907403). Duas leituras dele: waba_qualidade (8h e 14h) e a
+      // guarda da Fila Vero (de hora em hora) — vale a mais nova.
+      const lw = w && w.quality_rating ? { r: w.quality_rating, em: w.lida_em, tier: w.messaging_limit_tier } : null;
+      const ln = num && num.rating ? { r: num.rating, em: num.em, tier: num.tier } : null;
+      const l = !lw ? ln : !ln ? lw : (new Date(ln.em || 0) > new Date(lw.em || 0) ? { ...ln, tier: ln.tier || lw.tier } : lw);
+      const r = l && l.r;
+      const n = cinza || !r ? 'sem_leitura' : (NIVEL_WABA[r] || 'atencao');
+      const linhas = ['número da Nio (Mari e Fila Vero)'];
+      if (l && l.em) linhas.push(`lido ${ha(l.em) || '—'}`);
+      const tier = l && l.tier ? `${String(l.tier).replace('TIER_', '').toLowerCase()}/dia` : '—';
+      out.push({ k: 'waba', nome: 'WABA', n, rotulo: r || 'sem leitura', principal: tier, linhas, href: 'metaads.html' });
+    }
+    const f = extra.fila_vero;
+    if (f) {
+      let n; let rotulo;
+      if (cinza) { n = 'sem_leitura'; rotulo = 'sem leitura'; }
+      else if (f.enviando) { n = 'envio'; rotulo = 'enviando'; }
+      else if (!f.ativo) { n = 'quieto'; rotulo = 'pausada'; }
+      else if (!f.dentro_horario) { n = 'quieto'; rotulo = 'fora do horário'; }
+      else if (f.hoje >= f.ritmo) { n = 'quieto'; rotulo = 'cota do dia'; }
+      else { n = 'quieto'; rotulo = 'ligada · sem envio'; }
+      const linhas = [`${nfmt(f.hoje)} de ${nfmt(f.ritmo)} enviados hoje`, f.ultimo_envio_em ? `último envio ${ha(f.ultimo_envio_em)}` : 'nenhum envio ainda'];
+      out.push({ k: 'filavero', nome: 'Fila Vero', n, rotulo, principal: `${nfmt(f.hoje)}/${nfmt(f.ritmo)}`, linhas, href: 'filavero.html' });
+    }
+    return out;
+  }
+  function celulaExtra(x) {
+    return `<a class="pl-elo pl-n-${x.n}" href="${x.href}" aria-label="${esc(x.nome)}: ${esc(x.rotulo)}. Abrir ${esc(x.nome)}">
+      <span class="pl-cab">${marca(x.n)}<span class="pl-nome">${esc(x.nome)}</span><span class="pl-rot">${esc(x.rotulo)}</span></span>
+      <span class="pl-princ">${esc(x.principal)}</span>
+      <span class="pl-linhas">${x.linhas.slice(0, 3).map(esc).join('<br>')}</span></a>`;
   }
 
   function celula(k, e, cinza) {
@@ -135,7 +182,7 @@
       const e = dados.elos[k];
       const n = cinza ? 'sem_leitura' : e.nivel;
       return `<span class="pl-mini pl-n-${n}">${marca(n)}<span class="pl-nome">${esc(NOME[k])}</span><span class="pl-rot">${esc(cinza ? 'sem leitura' : e.rotulo)}</span></span>`;
-    }).join('');
+    }).join('') + extras(cinza).map((x) => `<span class="pl-mini pl-n-${x.n}">${marca(x.n)}<span class="pl-nome">${esc(x.nome)}</span><span class="pl-rot">${esc(x.k === 'filavero' && x.n === 'envio' ? `enviando ${x.principal}` : x.rotulo)}</span></span>`).join('');
     return `<button type="button" class="pl-barra pl-n-${nivelG}" data-expandir aria-expanded="${expandido}" aria-controls="pl-pop"
         aria-label="${esc(cinza ? 'Sem leitura' : g.titulo)}. ${expandido ? 'Recolher' : 'Ver os dados'}" title="${expandido ? 'Recolher' : 'Ver os dados de cada elo'}">
       <span class="pl-mini pl-mgeral pl-n-${nivelG}"><svg class="pl-ecg" aria-hidden="true" viewBox="0 0 150 34"><path class="${nivelG === 'ok' ? 'pl-traco' : ''}" d="${nivelG === 'parado' ? ECG_PARADO : ECG}"/></svg>${nivelG === 'ok' ? '' : `<span class="pl-gtit">${esc(cinza ? 'Sem leitura' : g.titulo)}</span>`}</span>
@@ -163,7 +210,10 @@
         <span class="pa-nome">${esc(NOME[k])}</span>
         <span class="pa-corpo"><span class="pa-l1">${marca(n)}<span class="pa-sinal">${esc(cinza ? 'sem leitura' : e.rotulo)}</span><span class="pa-num">${esc(v.principal || e.principal)}</span></span>
         <span class="pa-det">${esc(det)}</span></span><span class="pa-chev" aria-hidden="true">›</span></button>`;
-    }).join('');
+    }).join('') + extras(cinza).map((x) => `<a class="pa-elo pl-n-${x.n}" href="${x.href}">
+        <span class="pa-nome">${esc(x.nome)}</span>
+        <span class="pa-corpo"><span class="pa-l1">${marca(x.n)}<span class="pa-sinal">${esc(x.rotulo)}</span><span class="pa-num">${esc(x.principal)}</span></span>
+        <span class="pa-det">${esc(x.linhas.join(' · '))}</span></span><span class="pa-chev" aria-hidden="true">›</span></a>`).join('');
     const f = dados && dados.funil;
     const funilHtml = f ? `<section class="pa-card"><div class="pa-cab"><b>Funil de hoje</b><span>ontem fechou em ${f.ontem.conversas} · ${f.ontem.qualificadas} · ${f.ontem.vendas}</span></div>
       <div class="pa-funil"><div class="pa-f1"><b>${f.hoje.conversas}</b><span>conversas</span></div><div><b>${f.hoje.qualificadas}</b><span>qualificada${f.hoje.qualificadas === 1 ? '' : 's'}</span></div><div class="pa-fv"><b>${f.hoje.vendas}</b><span>venda${f.hoje.vendas === 1 ? '' : 's'}</span></div></div></section>` : '';
@@ -185,8 +235,15 @@
     const nivelG = cinza ? 'sem_leitura' : (dados ? dados.geral.nivel : 'sem_leitura');
     const pop = el.querySelector('.pl-pop');
     const pos = pop ? pop.scrollTop : 0;
-    el.innerHTML = `${barra(cinza, elos, nivelG)}
-      ${expandido ? `<div class="pl-pop" id="pl-pop"><section class="pl-faixa pl-n-${nivelG}" aria-label="Pulso da máquina">${geral(cinza)}${elos.map((k) => celula(k, dados.elos[k], cinza)).join('')}${funil()}</section>${detalhe(cinza)}</div>` : ''}
+    // 18/11: barra e cartões abertos na mesma grade (--pl-n = partes entre o batimento e a seta) — cada cartão embaixo do seu.
+    const ext = extras(cinza);
+    // Peso de cada coluna pelo tamanho do texto da barra (Fila Vero "enviando 214/500" é a mais larga; WABA "GREEN" a mais curta).
+    const PESO = { meta: 1, entrada: 1, mari: 1.1, fluxos: 1.2, waba: 1, filavero: 1.45, funil: 1.15 };
+    const cols = [...elos, ...ext.map((x) => x.k), ...(dados && dados.funil ? ['funil'] : [])].map((k) => `minmax(0, ${PESO[k] || 1}fr)`);
+    el.style.setProperty('--pl-cols', `140px ${cols.join(' ')} 30px`);
+    el.classList.toggle('pl-aberto', expandido);
+    el.innerHTML = `${expandido ? '<div class="pl-fundo" data-fundo aria-hidden="true"></div>' : ''}${barra(cinza, elos, nivelG)}
+      ${expandido ? `<div class="pl-pop" id="pl-pop"><section class="pl-faixa pl-n-${nivelG}" aria-label="Pulso da máquina">${geral(cinza)}${elos.map((k) => celula(k, dados.elos[k], cinza)).join('')}${ext.map(celulaExtra).join('')}${funil()}</section>${detalhe(cinza)}</div>` : ''}
       ${alerta(cinza)}`;
     const novo = el.querySelector('.pl-pop');
     if (novo) novo.scrollTop = pos;
@@ -195,7 +252,8 @@
 
   async function ler() {
     try {
-      const { data, error } = await NG.sb.rpc('pulso_operacao');
+      const [{ data, error }, ex] = await Promise.all([NG.sb.rpc('pulso_operacao'), NG.sb.rpc('pulso_extra').then((r) => r, () => ({}))]);
+      extra = ex && !ex.error && ex.data ? ex.data : null;   // 0294: falhou → WABA e Fila Vero somem; o resto segue
       if (error || !data) throw error || new Error('vazio');
       dados = data; recebido = Date.now(); falhou = false;
       desvio = Date.now() - new Date(data.gerado_em).getTime();
@@ -209,8 +267,9 @@
     el = alvo;
     if (!el) return;
     el.addEventListener('click', (ev) => {
-      const b = ev.target.closest('[data-expandir],[data-elo],[data-ver],[data-fechar],[data-visto]');
+      const b = ev.target.closest('[data-expandir],[data-elo],[data-ver],[data-fechar],[data-visto],[data-fundo]');
       if (!b) return;
+      if (b.hasAttribute('data-fundo')) { expandido = false; aberto = null; pintar(); return; }
       if (b.hasAttribute('data-visto')) NG.sb.rpc('pulso_incidente_visto').then(() => {}, () => {});
       // 15/11: no celular a faixa da Live é só o resumo — o toque leva à aba Pulso.
       if (b.hasAttribute('data-expandir') && !modoAba && CEL.matches) { location.href = 'pulso.html'; return; }

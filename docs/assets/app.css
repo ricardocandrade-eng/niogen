@@ -3557,3 +3557,28 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .lv2-vez.vale { color: #8FE39A; font-weight: 600; }
 .lv2-it .lv-act { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: nowrap; overflow: hidden; }
 @media (max-width: 900px) { .lv2-it { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 12px; } }
+
+/* ===== 18/11 (Ricardo: "inclua a qualidade da Waba e, com o disparo da Fila Vero em andamento, a bolinha pulsando; alinhe os cards
+   quando os dados são expandidos e escureça o restante da tela") — assets/pulso.js · RPC pulso_extra (0294) ===== */
+/* Fila Vero: a bolinha pulsa só enquanto envia (mais forte que o "ok" comum); parada = bolinha apagada, sem pulso */
+.pl-marca.pl-envio { border-radius: 50%; background: var(--accent); animation: pl-envio 1.1s ease-out infinite; }
+.pl-marca.pl-quieto { border-radius: 50%; background: var(--muted); opacity: .7; }
+@keyframes pl-envio { 0% { box-shadow: 0 0 0 0 rgba(50,224,0,.75); transform: scale(1); } 50% { transform: scale(1.25); } 70% { box-shadow: 0 0 0 8px rgba(50,224,0,0); } 100% { box-shadow: 0 0 0 0 rgba(50,224,0,0); transform: scale(1); } }
+.pl-mini.pl-n-envio .pl-rot { color: var(--accent); font-weight: 600; }
+.pl-mini.pl-n-quieto .pl-rot, .pl-elo.pl-n-quieto .pl-rot { color: var(--muted); }
+a.pl-elo, a.pa-elo { text-decoration: none; color: var(--text); }
+/* aberto: o resto da tela escurece; a faixa sobe por cima de tudo (menos o menu do celular) */
+.pl.pl-aberto { z-index: 40; }
+.pl-fundo { position: fixed; inset: 0; z-index: -1; background: rgba(5, 7, 10, .74); backdrop-filter: blur(1.5px); cursor: default; animation: pl-fundo .15s ease-out; }
+@keyframes pl-fundo { from { opacity: 0; } to { opacity: 1; } }
+/* computador: barra e cartões na MESMA grade (--pl-cols, montada no pulso.js com o peso de cada parte) — batimento · partes · seta;
+   o funil aberto ocupa a coluna da seta também */
+@media (min-width: 901px) {
+  .pl-barra { display: grid; grid-template-columns: var(--pl-cols); }
+  .pl-mini { padding: 0 10px; gap: 6px; }
+  .pl-mgeral { padding: 0 8px; }
+  .pl-chev { justify-content: center; padding: 0; }
+  .pl-faixa { display: grid; grid-template-columns: var(--pl-cols); }
+  .pl-geral, .pl-elo, .pl-funil { padding: 11px 10px; }
+  .pl-funil { grid-column: span 2; }
+}
