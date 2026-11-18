@@ -2620,7 +2620,19 @@
         return;
       }
       if (acao === 'fc-op-lead') {   // 0159: grava no lead sem venda o que o operador leu
-        if (b.dataset.mao && b.dataset.r === 'negado' && !window.confirm('Gravar crédito NEGADO neste lead?\n\nA Mari vai oferecer ao cliente o CPF de um parente como titular (1 nova consulta).')) return;
+        // 18/11 (caso Lucia Helena): o aviso dizia "a Mari vai oferecer o CPF de um parente", mas este botão só grava o resultado no
+        // lead — não manda nada ao cliente. E o crédito já negado (operador/Mari) não precisa ser gravado de novo.
+        if (b.dataset.mao && b.dataset.t !== 'viab') {
+          const cv = d.conv || {};
+          if (cv.credito_resultado && cv.credito_resultado === b.dataset.r) {
+            NG.toast(`Este resultado já está gravado${cv.credito_em ? ` (${NG.fmtDataHora(cv.credito_em)})` : ''}: nada a fazer aqui.${b.dataset.r === 'negado' ? ' Próximo: pedir ao cliente o CPF de outra pessoa da casa como titular.' : ''}`, 'ok');
+            return;
+          }
+          const comTime = cv.humano_atribuido || cv.time_atribuido || cv.chatwoot_agente || cv.status === 'handoff_realizado';
+          if (b.dataset.r === 'negado' && !window.confirm(`Gravar crédito NEGADO neste lead?\n\n${comTime
+            ? 'A conversa está com o time: VOCÊ pede ao cliente o CPF de outra pessoa da casa (um parente) como titular. Nenhuma mensagem automática sai.'
+            : 'Só grava o resultado no lead (nenhuma mensagem sai agora). Peça ao cliente o CPF de outra pessoa da casa como titular.'}`)) return;
+        }
         b.disabled = true;
         const { data, error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: b.dataset.t === 'viab' ? 'viabilidade' : 'credito', p_resultado: b.dataset.r });
         if (error) { NG.toast(NG.msgErro(error), 'bad'); if (b.isConnected) b.disabled = false; return; }
