@@ -426,11 +426,12 @@
 
   // 13/11 (4a): saída única. O porquê (sub-motivo) é texto livre no banco; a tela oferece a lista da decisão D4.
   const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'pedido Nio em andamento', 'suporte'],
-    nio_nao_instalou: ['inviabilidade', 'pendência sem solução', 'outro'] };
+    nio_nao_instalou: ['inviabilidade', 'pendência sem solução', 'outro'],
+    credito_negado: ['sem aprovação', 'só cartão, sem cartão'] };   // 18/11 (caso Maria Fernanda): aprovado só no cartão e o cliente não tem cartão
   const SAIDA_SO_VENDA = ['reprovado_biometria', 'nio_nao_instalou', 'venda_indevida_fraude'];
   // Nomes antigos (NG.MOTIVOS_SAIDA, saída sugerida pela pendência) → motivo e porquê da lista única.
   const SAIDA_DE_ANTIGO = { 'Sem cobertura': ['fachada_nao_atendida'], 'Já é cliente Nio': ['ja_cliente_nio'], Concorrente: ['recusou', 'concorrente'], 'Preço': ['recusou', 'preço'],
-    'Sem contato (cadência esgotada)': ['sem_resposta'], Desistiu: ['recusou', 'desistiu'], 'Reprovado na biometria': ['reprovado_biometria'], 'Crédito negado': ['credito_negado'],
+    'Sem contato (cadência esgotada)': ['sem_resposta'], Desistiu: ['recusou', 'desistiu'], 'Reprovado na biometria': ['reprovado_biometria'], 'Crédito negado': ['credito_negado'], 'Só cartão, sem cartão': ['credito_negado', 'só cartão, sem cartão'],
     'Fora da área': ['cidade_nao_atendida'], 'Interesse futuro (com data)': ['recusou', 'momento'] };
   function ajustarSaida(form, inicial) {
     const sel = form.querySelector('[data-saida-motivo]');
@@ -448,6 +449,14 @@
     const volta = form.querySelector('[name="volta"]');
     if (cod === 'fachada_nao_atendida' && !volta.value) { volta.value = NG.somaDias(NG.diaSP(), 90); volta.dataset.auto = '1'; }   // a rede cresce: rever em 90 dias
     else if (cod !== 'fachada_nao_atendida' && volta.dataset.auto) { volta.value = ''; delete volta.dataset.auto; }
+  }
+  // 18/11 (caso Maria Fernanda): aprovado só no cartão e o cliente não tem cartão → antes, o CPF de outra pessoa da casa; sem ninguém,
+  // Saída "Crédito negado · só cartão, sem cartão" (o formulário já abre com o motivo e o porquê escolhidos).
+  function semCartaoBt(res) {
+    if (!ehBO() || !['aprovado_cartao', 'so_cartao'].includes(res || '')) return '';
+    if ((d.lead && d.lead.destino === 'saida') || (d.v && d.v.status === 'saida')) return '';
+    return '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="saida-form" data-pre="Só cartão, sem cartão">Cliente não tem cartão → Saída</button>'
+      + '<span class="nota-campo">antes, ofereça o CPF de outra pessoa da casa (que tenha cartão ou seja aprovada no boleto) — 1 nova consulta; sem ninguém, registre a Saída</span></div>';
   }
   async function sairLead(motivo, sub, volta, obs, cancelou) {
     const { data, error } = await NG.sb.rpc('lead_sair', { p_conversa: d.soConversa ? d.conversaId : null, p_venda: d.soConversa ? null : d.v.id,
@@ -3211,11 +3220,11 @@
       corpo = conv ? `${linhaDet('Resultado', padraoC ? '<span class="warn-txt">sem resultado válido para este endereço</span>'
           : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
-        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}${regMaoConv('cred')}`
+        ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}${regMaoConv('cred')}${semCartaoBt(cc && cc.credito_resultado)}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${v.status === 'saida' ? '<span class="nota-campo">Venda em Saída — para consultar de novo, reabra o lead.</span>'
           : comOS ? '<span class="nota-campo">O pedido (OS) já foi aberto: o crédito passou e não se consulta de novo.</span>' : opPainel('cred')}
-        ${!fimV && !comOS && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}`;
+        ${!fimV && !comOS && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}${!fimV && !comOS ? semCartaoBt(v.credito_resultado) : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
