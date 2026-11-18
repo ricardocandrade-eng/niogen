@@ -81,6 +81,32 @@
     return `${NG.fmtDiaSemana(iso)} ${NG.fmtData(iso)}`;
   };
 
+  // 18/11 (0297): estilo do ✨ Sugerir resposta, injetado uma vez (mesmos tokens do app.css; modo escuro e 390 px sem rolagem lateral).
+  function estiloSugestao() {
+    if (document.getElementById('cvp-sug-css')) return;
+    const s = document.createElement('style');
+    s.id = 'cvp-sug-css';
+    s.textContent = `
+.cvp-sug-bt { min-height: 30px; white-space: nowrap; }
+.cvp-sug { margin: 6px 0 4px; font-size: 12.5px; }
+.cvp-sug .link { background: none; border: 0; color: var(--link); cursor: pointer; font: inherit; padding: 0 4px; margin-left: auto; }
+.cvp-sug-linha, .cvp-sug-faixa, .cvp-sug-cab { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); }
+.cvp-sug-linha.erro { color: var(--warn-fg); }
+.cvp-sug-faixa { background: var(--info-bg); color: var(--info-fg); border-radius: 8px; padding: 4px 8px; }
+.cvp-sug-cab .aviso { color: var(--warn-fg); }
+.cvp-sug-ops { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; margin-top: 6px; }
+.cvp-sug-op { display: flex; flex-direction: column; gap: 3px; text-align: left; background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 10px; padding: 8px 10px; cursor: pointer; font: inherit; font-size: 13px; line-height: 1.35; min-width: 0; }
+.cvp-sug-op:hover, .cvp-sug-op:focus-visible { border-color: var(--accent); outline: none; }
+.cvp-sug-op small { color: var(--accent); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+.cvp-sug-op span { overflow-wrap: anywhere; }
+.cvp-sug-gira { display: inline-block; animation: cvp-sug-gira 1.2s linear infinite; }
+@keyframes cvp-sug-gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cvp-sug-gira { animation: none; } }
+@media (max-width: 640px) { .cvp-sug-ops { grid-template-columns: 1fr; max-height: 38vh; overflow-y: auto; } .cvp-raiz.movel .cvp-sug-bt { padding: 0 8px; } }`;
+    document.head.appendChild(s);
+  }
+
   function montar(host, opts) {
     const o = { rotuloFechar: '← Lista', ...opts };
     host.innerHTML = '';
@@ -103,8 +129,10 @@
         <div class="cvp-ctl">
           <div class="seg cvp-seg" role="group" aria-label="Tipo"><button type="button" data-cv="modo" data-m="resp" class="on">Responder</button><button type="button" data-cv="modo" data-m="nota">Nota privada</button></div>
           <select data-cv="rapida" aria-label="Respostas rápidas"><option value="">Respostas rápidas…</option></select>
+          <button type="button" class="btn btn-sm cvp-sug-bt" data-cv="sugerir" hidden>✨ Sugerir resposta</button>
           <span class="cvp-ajuda" data-ajuda></span>
         </div>
+        <div class="cvp-sug" data-sug hidden aria-live="polite"></div>
         <div class="cvp-caixa"><span class="cvp-quem-ico" data-quem hidden></span><button type="button" class="cvp-emo-bt" data-cv="emoji" aria-label="Emojis" aria-expanded="false" title="Emojis">😊</button><div class="cvp-emo" data-emo hidden></div><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
           <button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
       </div>
@@ -121,6 +149,12 @@
     const secao = $('.cvp');
     const emoBt = $('[data-cv="emoji"]'), emoEl = $('[data-emo]');
     st.emoAba = 0;
+    const sugBt = $('[data-cv="sugerir"]'), sugEl = $('[data-sug]');
+    // 18/11 (0297, docs/Prompt_sugerir_resposta_ia_181126_1825.md): ✨ Sugerir resposta — só em Conversas e na ficha; a tela Live
+    // (fila.html, e a tela cheia do cliente) fica de fora até o debate com o Ricardo (regra 20). Só admin/backoffice.
+    const podeSugerir = !o.cheia && !document.body.classList.contains('tela-fila')
+      && ['admin', 'backoffice'].includes(((NG.usuario || {}).perfil) || '');
+    if (podeSugerir) estiloSugestao();
 
     // ---------- dados ----------
     const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
@@ -470,6 +504,16 @@
         : usaTpl ? 'Janela de 24 h fechada (regra do WhatsApp): só template aprovado.'
         : dn.v === 'eu' ? 'Você é o dono · a Mari está calada.' : 'Enviar assume a conversa (a Mari cala).';
       ajudaEl.textContent = `${aj} · Enter envia · Shift+Enter pula linha`;
+      // ✨ Sugerir resposta: some na nota privada; desabilitado (com o motivo) em não contatar e janela fechada (regra de ouro 3)
+      sugBt.hidden = !podeSugerir || st.nota;
+      if (podeSugerir) {
+        const motivo = st.d.c.nao_contatar ? 'O cliente pediu para não ser contatado.'
+          : usaTpl ? 'Janela de 24 h fechada: só template aprovado (Respostas rápidas › Templates).' : '';
+        sugBt.disabled = !!motivo || !!(st.sug && st.sug.carregando);
+        sugBt.title = motivo || 'Lê a conversa e propõe 2 respostas para você conferir, editar e enviar. A IA nunca envia sozinha.';
+        if (st.nota && st.sug && !st.sug.carregando) sugFechar(true);
+        desenharSug();
+      }
       // 12/11 (Ricardo): na tela cheia, ícone ao lado da caixa — robô = a Mari atende · pessoa = nós (o time).
       if (o.cheia) {
         const mari = dn.v === 'mari';
@@ -492,6 +536,8 @@
       const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, tpl: st.nota ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando',
         op: !st.nota && o.oportunidade ? o.oportunidade : null };
       if (item.op) o.oportunidade = null;   // só a 1ª mensagem é a da oportunidade
+      // ✨ a mensagem saiu de uma sugestão: amarra o envio a ela (medição: % que saiu de sugestão e quanto foi editada)
+      if (st.sug && st.sug.escolhida && !item.nota && !item.tpl) { item.sug = { id: st.sug.id, escolhida: st.sug.escolhida }; sugFechar(false); }
       st.locais.push(item);
       ta.value = '';
       st.tpl = null;
@@ -514,11 +560,82 @@
         NG.toast(item.erro, 'bad');
       } else {
         item.acao_id = data.acao_id;
+        if (item.sug && data.acao_id) {
+          NG.sb.rpc('sugestao_resultado', { p_id: item.sug.id, p_escolhida: item.sug.escolhida, p_texto: item.texto, p_acao_id: data.acao_id })
+            .then(({ error: e2 }) => { if (e2) console.warn('sugestao_resultado', e2.message); });
+        }
         if (data.assumiu) NG.toast('Conversa assumida: a Mari calou', 'ok');
         if (o.aoMudar) o.aoMudar(data);
       }
       desenharMsgs();
       setTimeout(() => carregar(), 1200);
+    }
+
+    // ---------- ✨ Sugerir resposta (0297): só no clique — nada na abertura da conversa (regra 19) ----------
+    async function sugerir() {
+      if (!podeSugerir || !st.d || (st.sug && st.sug.carregando)) return;
+      if (st.sug && st.sug.id && !st.sug.escolhida) sugRegistrar(st.sug.id, 0);   // pediu outra: a anterior foi dispensada
+      const conv = o.conversaId;
+      st.sug = { carregando: true };
+      desenhar();
+      let r = null, msg = '';
+      try {
+        const { data, error } = await NG.sb.functions.invoke('sugerir-resposta', { body: { conversa_id: conv } });
+        if (error) {
+          msg = error.message;
+          try { const c = await error.context.json(); if (c && c.error) msg = c.error; } catch (_) { /* corpo não-JSON */ }
+        } else r = data;
+      } catch (e) { msg = e.message || String(e); }
+      if (!st.vivo || o.conversaId !== conv) return;
+      if (r && r.bloqueio) st.sug = { msg: r.mensagem || 'Sem sugestão agora.' };
+      else if (r && Array.isArray(r.opcoes) && r.opcoes.length) st.sug = { id: r.sugestao_id, opcoes: r.opcoes, aviso: r.aviso || '', escolhida: 0 };
+      else st.sug = { msg: msg || 'A IA não respondeu agora. Tente de novo ou use as Respostas rápidas.', erro: true };
+      desenhar();
+    }
+    function sugRegistrar(id, escolhida) {
+      if (!id) return;
+      NG.sb.rpc('sugestao_resultado', { p_id: id, p_escolhida: escolhida }).then(({ error }) => { if (error) console.warn('sugestao_resultado', error.message); });
+    }
+    function sugEscolher(i) {
+      const s = st.sug;
+      const op = s && s.opcoes && s.opcoes[i - 1];
+      if (!op) return;
+      if (st.tpl) st.tpl = null;
+      ta.readOnly = false;
+      ta.value = op.texto;
+      s.escolhida = i;
+      s.base = op.texto;
+      sugRegistrar(s.id, i);
+      desenhar();
+      ajusta();
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }
+    // dispensar = true: a pessoa fechou sem usar (registra "nenhuma"); false: só limpa (enviou, ou trocou de modo)
+    function sugFechar(dispensar) {
+      const s = st.sug;
+      st.sug = null;
+      if (dispensar && s && s.id && !s.escolhida) sugRegistrar(s.id, 0);
+      if (dispensar && s && s.escolhida && ta.value === s.base) { ta.value = ''; ajusta(); }
+      desenharSug();
+    }
+    function desenharSug() {
+      const s = st.sug;
+      let html = '';
+      if (s && s.carregando) html = '<div class="cvp-sug-linha"><span class="cvp-sug-gira" aria-hidden="true">✨</span> lendo a conversa…</div>';
+      else if (s && s.msg) html = `<div class="cvp-sug-linha${s.erro ? ' erro' : ''}">${esc(s.msg)}<button type="button" class="link" data-cv="sug-fechar" aria-label="Fechar">✕</button></div>`;
+      else if (s && s.escolhida) {
+        html = ta.value === s.base
+          ? `<div class="cvp-sug-faixa">✨ sugerida pelo NIOGEN — confira antes de enviar${s.aviso ? ` · ${esc(s.aviso)}` : ''}<button type="button" class="link" data-cv="sug-fechar" aria-label="Descartar a sugestão">✕</button></div>`
+          : '';
+      } else if (s && s.opcoes) {
+        html = `<div class="cvp-sug-cab"><b>✨ Sugestões</b> · escolha uma para editar na caixa${s.aviso ? ` · <span class="aviso">${esc(s.aviso)}</span>` : ''}
+          <button type="button" class="link" data-cv="sug-fechar" title="Dispensar as duas">Dispensar ✕</button></div>
+          <div class="cvp-sug-ops">${s.opcoes.map((op, i) => `<button type="button" class="cvp-sug-op" data-cv="sug-op" data-i="${i + 1}">
+            <small>${esc(op.rotulo)}</small><span>${esc(op.texto)}</span></button>`).join('')}</div>`;
+      }
+      if (st.sig.sug !== html) { st.sig.sug = html; sugEl.innerHTML = html; }
+      sugEl.hidden = !html;
     }
 
     async function conversaAcao(acao, valor) {
@@ -566,6 +683,7 @@
 
     const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, o.cheia ? 66 : 150)}px`; };
     ta.addEventListener('input', ajusta);
+    ta.addEventListener('input', () => { if (st.sug && st.sug.escolhida) desenharSug(); });   // editou: a faixa "confira" sai
     // Enter envia; Shift+Enter pula linha. No meio de um acento (IME) não envia. Esc cancela o template.
     ta.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing && ev.keyCode !== 229) { ev.preventDefault(); ev.stopPropagation(); enviar(); return; }
@@ -582,6 +700,9 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'sugerir') { sugerir(); return; }
+      if (a === 'sug-op') { sugEscolher(Number(b.dataset.i) || 0); return; }
+      if (a === 'sug-fechar') { sugFechar(true); return; }
       if (a === 'devolver') { devolver(b.dataset.onde || 'cab'); return; }
       if (a === 'foto') { abrirFoto(b.dataset.url); return; }
       if (a === 'emoji') { if (emoEl.hidden) emoAbrir(); else emoFechar(); return; }
@@ -641,7 +762,7 @@
     carregar();
     return {
       recarregar: () => carregar(),
-      destruir() { st.vivo = false; clearInterval(intervalo); clearTimeout(st.tArmado); document.removeEventListener('visibilitychange', aoVoltar); document.removeEventListener('mousedown', emoFora); el.remove(); },
+      destruir() { if (st.sug && st.sug.id && !st.sug.escolhida) sugRegistrar(st.sug.id, 0); st.vivo = false; clearInterval(intervalo); clearTimeout(st.tArmado); document.removeEventListener('visibilitychange', aoVoltar); document.removeEventListener('mousedown', emoFora); el.remove(); },
       focar() { ta.focus(); },
       // 12/11: faixa da Mari (tela cheia). registro = a faixa ocupa a caixa (Registrar contato / cadência), sem mudar a altura.
       mari(html, registro) {
