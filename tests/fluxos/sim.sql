@@ -492,6 +492,19 @@ begin
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('R13', 'O botão que a Live sugere é uma ação que a porta aceita nesta situação', v_sit is null, v_sit);
   end if;
+  -- R14 (AVISO, 0293 — fase 2, passo 2): a situação GRAVADA pela porta (lead_estado, gravada no fim de cada transação com evento
+  -- da porta) é a situação calculada agora (v_lead_situacao). Diferença = algo mudou o lead sem passar pela porta.
+  if to_regclass('public.lead_estado') is not null then
+    execute $q$
+      select string_agg(coalesce(e.situacao, '(nada gravado)') || ' gravada × ' || ls.situacao || ' calculada', ' · ')
+        from public.v_lead_situacao ls
+        left join public.lead_estado e on e.lead_id = ls.lead_id
+       where (ls.conversa_id = $1 or ls.venda_id = (select c.venda_id from public.mari_conversas c where c.id = $1))
+         and e.situacao is distinct from ls.situacao $q$
+      into v_sit using p_conversa;
+    insert into sim.checagens (tipo, nome, ok, detalhe) values
+    ('R14', 'A situação gravada pela porta é a situação de agora (nada mudou por fora da porta)', v_sit is null, v_sit);
+  end if;
   if saida then
     insert into sim.checagens (tipo, nome, ok, detalhe) values
     ('S1', 'Saída: conversa resolvida no Chatwoot', cw ->> 'status' in ('resolved', 'snoozed'), 'Chatwoot: ' || (cw ->> 'status')),
