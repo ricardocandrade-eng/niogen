@@ -103,8 +103,10 @@
 .cvp-sug-gira { display: inline-block; animation: cvp-sug-gira 1.2s linear infinite; }
 @keyframes cvp-sug-gira { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .cvp-sug-gira { animation: none; } }
-.cvp-raiz.cheia .cvp-pe.com-sug { height: auto; max-height: 62%; }
-.cvp-raiz.cheia .cvp-sug-ops { max-height: 210px; overflow-y: auto; }
+.cvp-raiz.cheia .cvp-pe.com-sug { height: auto; max-height: 72%; min-height: 196px; }
+.cvp-raiz.cheia .cvp-pe.com-sug > :not(.cvp-sug) { flex: none; }
+.cvp-raiz.cheia .cvp-pe.com-sug .cvp-sug { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; }
+.cvp-raiz.cheia .cvp-sug-cab { position: sticky; top: 0; z-index: 1; background: var(--bg); padding: 2px 0 4px; }
 .cvp-raiz.cheia .cvp-sug-bt { height: 28px; min-height: 28px; font-size: 12.5px; }
 @media (max-width: 640px) { .cvp-sug-ops { grid-template-columns: 1fr; max-height: 38vh; overflow-y: auto; } .cvp-raiz.movel .cvp-sug-bt { padding: 0 8px; } }`;
     document.head.appendChild(s);
