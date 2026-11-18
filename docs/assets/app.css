@@ -3582,3 +3582,12 @@ a.pl-elo, a.pa-elo { text-decoration: none; color: var(--text); }
   .pl-geral, .pl-elo, .pl-funil { padding: 11px 10px; }
   .pl-funil { grid-column: span 2; }
 }
+
+/* 18/11 (0296): nº do lead (L-n) e nº da conversa do Chatwoot ao lado do nome; post-it do lead */
+.fc-ids { display: inline-flex; gap: 6px; flex: 0 0 auto; }
+.fc-id { font: 600 11px/1.6 inherit; color: var(--muted); background: transparent; border: 1px solid var(--line, rgba(127,127,127,.35)); border-radius: 6px; padding: 0 6px; cursor: default; }
+button.fc-id { cursor: copy; }
+button.fc-id:hover { color: inherit; }
+.fc-nota { display: block; max-width: 100%; margin-top: 4px; text-align: left; font-size: 12.5px; line-height: 1.4; color: var(--warn-fg); background: var(--warn-bg);
+  border: 1px solid var(--warn-border); border-radius: 6px; padding: 2px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.fc-nota.fc-nota-vazia { display: inline-block; width: auto; color: var(--muted); background: transparent; border-style: dashed; }

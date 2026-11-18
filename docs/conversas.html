@@ -24,13 +24,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=181126-pl">
+<link rel="stylesheet" href="assets/app.css?v=181126-pl2">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=181126-1"></script>
+<script src="assets/app.js?v=181126-2"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/conversa.js?v=171126-2"></script>
-<script src="assets/ficha.js?v=181126-3"></script>
+<script src="assets/ficha.js?v=181126-4"></script>
 </head>
 <body class="tela-conversas">
 <div class="app">
@@ -45,7 +45,7 @@
     </header>
     <div class="cv-trab" id="trab">
       <section class="cv-lista" aria-label="Lista de conversas">
-        <div class="cv-busca"><input type="search" id="busca" placeholder="Buscar nome, telefone ou cidade" autocomplete="off" aria-label="Buscar conversa"></div>
+        <div class="cv-busca"><input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou L-142" autocomplete="off" aria-label="Buscar conversa"></div>
         <div class="cv-filtros" id="filtros" role="tablist"></div>
         <div class="cv-funil"><select id="f-destino" aria-label="Filtrar por destino"></select><select id="f-etapa" aria-label="Filtrar por etapa"></select><select id="f-dono" aria-label="Filtrar por quem atende"></select></div>
         <div class="cv-itens" id="itens"><div class="carregando">Carregando…</div></div>
@@ -262,6 +262,8 @@
     filtro = b.dataset.filtro; ls.gravar('niogen.conversas.filtro', filtro); render();
   });
   document.getElementById('busca').addEventListener('input', render);
+  // 0296: "L-142" + Enter abre a ficha do lead
+  document.getElementById('busca').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
   // Destino ou etapa escolhido: a aba vai para Todas (senão "Abertas" esconderia as saídas).
   document.getElementById('f-dono').addEventListener('change', (ev) => { fDono = ev.target.value; ls.gravar('niogen.conversas.dono', fDono); render(); });
   ['f-destino', 'f-etapa'].forEach((idSel) => document.getElementById(idSel).addEventListener('change', (ev) => {

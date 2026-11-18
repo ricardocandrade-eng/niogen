@@ -1741,6 +1741,22 @@
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 
+  // 18/11 (0296, ponderação 7): "L-142" na busca abre a ficha do lead (conversa ou venda sem conversa). Devolve true se achou.
+  async function abrirLeadNumero(texto) {
+    const m = String(texto || '').match(/^\s*L\s*-?\s*(\d{1,9})\s*$/i);
+    if (!m) return false;
+    const n = Number(m[1]);
+    const rc = await sb.from('mari_conversas').select('id, venda_id').eq('lead_numero', n).maybeSingle();
+    let alvo = rc && !rc.error && rc.data ? (rc.data.venda_id ? `#venda=${rc.data.venda_id}` : `#conversa=${rc.data.id}`) : null;
+    if (!alvo) {
+      const rv = await sb.from('vendas').select('id').eq('lead_numero', n).limit(1).maybeSingle();
+      if (rv && !rv.error && rv.data) alvo = `#venda=${rv.data.id}`;
+    }
+    if (!alvo) { toast(`Não achei o lead L-${n}.`, 'bad'); return true; }
+    location.hash = alvo;
+    return true;
+  }
+
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
@@ -1756,6 +1772,7 @@
     dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     mudou,   // 14/11 (0190): timer só refaz a leitura pesada se o banco foi gravado
+    abrirLeadNumero,   // 0296: busca por L-n
     moverStatus,   // arrastar no Quadro (modais); na ficha, os mesmos campos em formulário dentro dela
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência

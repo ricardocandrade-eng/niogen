@@ -263,6 +263,8 @@
     const fv = Promise.resolve(NG.sb.rpc('ficha_venda', { p_venda: id })).then((x) => (x.error || !x.data ? null : x.data), () => null);
     const daVenda = (k, velho) => fv.then((d) => (d ? { data: d[k] === undefined ? null : d[k], error: d[k + '_erro'] ? { message: String(d[k + '_erro']) } : null } : velho()));
     const daVendaLinha = (k, velho) => fv.then((d) => (d ? (d[k] === undefined ? null : d[k]) : velho()));
+    // 18/11 (0296): o post-it vem na ficha_venda (sem chamada nova); sem a RPC, fica sem post-it nesta abertura
+    const notaP = daVendaLinha('nota', () => null);
     const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow] = await Promise.all([
       daVenda('v', () => NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle()),
       daVenda('eventos', () => NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em')),
@@ -270,13 +272,13 @@
       daVenda('adics', () => NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id')),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? daVenda('conv', () => NG.sb.from('mari_conversas').select('id, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1))
+        ? daVenda('conv', () => NG.sb.from('mari_conversas').select('id, lead_numero, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1))
         : Promise.resolve({ data: [] }),
       daVenda('contatos', () => NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30)),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      daVenda('extra', () => NG.sb.from('vendas').select('nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle()),
+      daVenda('extra', () => NG.sb.from('vendas').select('lead_numero, nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle()),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
       daVenda('pend', () => NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false })),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
@@ -379,6 +381,8 @@
       contatos: rk.data || [],
       usuarios: ru,
       meta: metaRow || null,   // 0186: selo Meta ✓/✗/— da venda (opc devolve o data direto)
+      nota: await notaP,       // 0296: post-it do lead
+      leadNum: (((rc.data || [])[0] || {}).lead_numero) || (rx27.data || {}).lead_numero || null,   // 0296: L-n
       nomeCurto,
     };
   }
@@ -2251,8 +2255,11 @@
     // 15/11 noite: a 2ª linha do topo mostra plano · valor · forma também na conversa sem venda (1 leitura por sessão, em paralelo)
     const plP = planosCache ? null : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco')
       .then((r) => { if (!r.error) planosCache = r.data || []; }, () => {});
+    // 18/11 (0296): post-it do lead, em paralelo (1 leitura)
+    const notaP = Promise.resolve(NG.sb.from('lead_nota').select('texto, atualizado_em').eq('conversa_id', cid).maybeSingle())
+      .then((r) => (r && !r.error && r.data ? { texto: r.data.texto, em: r.data.atualizado_em } : null), () => null);
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2275,6 +2282,7 @@
       cad: { k: rk.error ? null : rk.data, enviados: NG.cadEnviados(rt.data), lista: rt.data || [] },
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
+      nota: await notaP, leadNum: c.lead_numero || null,   // 0296
     };
   }
   // 14/11 (0202, Ricardo: "o NIOGEN não permite corrigir a viabilidade desses clientes"): o endereço do lead vem das COLUNAS da
@@ -2585,6 +2593,18 @@
       }
       if (acao === 'copiar-tudo') {
         if (await copiar(textoPortal(d.v), 'Dados copiados — cole no portal campo a campo')) registrarCopia('tudo');
+        return;
+      }
+      if (acao === 'fc-nota') {
+        const atual = d && d.nota && d.nota.texto ? String(d.nota.texto) : '';
+        const fd = await NG.modal(`<h3>Post-it do lead</h3><p>Anotação livre para o time. Não muda nada no fluxo (situação, vez, Chatwoot, Mari).</p>
+          <label class="campo">Nota<textarea name="texto" rows="4" maxlength="2000" placeholder="ex.: prefere que liguem depois das 18h">${esc(atual)}</textarea></label>`);
+        if (!fd) return;
+        const conv = d.soConversa ? d.conversaId : null;
+        const { error } = await NG.sb.rpc('lead_nota_gravar', { p_conversa: conv, p_venda: d.soConversa ? null : d.v.id, p_texto: String(fd.get('texto') || '') });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+        NG.toast('Post-it gravado', 'ok');
+        await recarregar();
         return;
       }
       if (acao === 'copiar-tel') {
@@ -3438,6 +3458,21 @@
   // ---------- cabeçalho ----------
   // 12/11 (Ricardo): o "Concluir" virou "✓ Nada a responder" — dispensa o aviso "Cliente escreveu · responder" quando foi só
   // despedida (0143: volta sozinho se o cliente escrever de novo) e abre o próximo. Ao lado, "📵 Silenciar" (conversa sem venda).
+  // 18/11 (0296, ponderações 6 e 7): nº do lead (L-n, para citar um caso) e nº da conversa no Chatwoot, discretos ao lado do nome
+  function idsCab() {
+    const n = d && d.leadNum;
+    const cw = d && d.convInfo && d.convInfo.chatwoot_conversation_id;
+    const p = [n ? `<button type="button" class="fc-id" data-copiar="L-${esc(String(n))}" title="Número do lead (clique copia)">L-${esc(String(n))}</button>` : '',
+      cw ? `<span class="fc-id" title="Conversa nº ${esc(String(cw))} no Chatwoot">#${esc(String(cw))}</span>` : ''].filter(Boolean);
+    return p.length ? `<span class="fc-ids">${p.join('')}</span>` : '';
+  }
+  // 18/11 (0296, ponderação 5): post-it — anotação livre do lead. Não é estado: não mexe em situação, vez, Chatwoot nem cadência.
+  function notaCab() {
+    if (!ehBO()) return '';
+    const t = d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : '';
+    return t ? `<button type="button" class="fc-nota" data-f="fc-nota" title="Post-it do lead — clique para editar">📝 ${esc(t)}</button>`
+      : '<button type="button" class="fc-nota fc-nota-vazia" data-f="fc-nota" title="Anotação livre sobre este cliente (não muda nada no fluxo)">📝 Nota</button>';
+  }
   function cabCheia(nome, chips, meta, menu, extra = '') {
     const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
     const naFila = !!cheiaOpts.posicao;   // fora da Live não há fila: só Voltar
@@ -3463,7 +3498,7 @@
     const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
-      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1></div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
+      <div class="fc-tit"><div class="fc-l1"><h1>${esc(nome)}</h1>${idsCab()}</div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div>${notaCab()}<!--AGORA--></div>
       <div class="fc-nav">
         ${pos && pos.n ? `<span class="fc-pos">${pos.i ? `${pos.i} de ${pos.n} na sua vez` : `${pos.n} na sua vez`}</span>` : ''}
         <button type="button" class="btn fc-bi" data-f="fc-nav" data-dir="-1"${naFila ? '' : ' hidden'} aria-label="Cliente anterior da fila"${pos && pos.prev ? '' : ' disabled'}>${IC.cima}</button>

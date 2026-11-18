@@ -19,13 +19,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=181126-pl">
+<link rel="stylesheet" href="assets/app.css?v=181126-pl2">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=181126-1"></script>
+<script src="assets/app.js?v=181126-2"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/conversa.js?v=171126-2"></script>
-<script src="assets/ficha.js?v=181126-3"></script>
+<script src="assets/ficha.js?v=181126-4"></script>
 <style>
   .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
   .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
@@ -63,7 +63,7 @@
     <section class="ld-escada" id="escada" aria-label="Escada: quantos chegaram até cada degrau"></section>
     <div class="abas" id="abas" role="tablist"></div>
     <div class="ld-filtros">
-      <input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou nº do pedido" autocomplete="off" aria-label="Buscar lead">
+      <input type="search" id="busca" placeholder="Buscar nome, telefone, cidade, nº do pedido ou L-142" autocomplete="off" aria-label="Buscar lead">
       <select id="f-status" aria-label="Filtrar por status"></select>
       <select id="f-vez" aria-label="Filtrar por de quem é a vez"></select>
       <select id="f-saida" aria-label="Filtrar por motivo de saída"></select>
@@ -203,6 +203,8 @@
   document.getElementById('escada').addEventListener('click', (ev) => { const b = ev.target.closest('[data-etapa]'); if (!b) return; f.etapa = f.etapa === b.dataset.etapa ? '' : b.dataset.etapa; if (f.etapa && f.aba === 'andamento') f.aba = 'todos'; render(); });
   document.getElementById('abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (!b) return; f.aba = b.dataset.aba; render(); });
   document.getElementById('busca').addEventListener('input', (ev) => { f.q = ev.target.value; const p = ev.target.selectionStart; render(); ev.target.setSelectionRange(p, p); });
+  // 0296: "L-142" + Enter abre a ficha do lead
+  document.getElementById('busca').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
   [['f-status', 'status'], ['f-vez', 'vez'], ['f-saida', 'saida']].forEach(([id, k]) => document.getElementById(id).addEventListener('change', (ev) => {
     f[k] = ev.target.value;
     if (k === 'saida' && f.saida) f.aba = 'saidas';
