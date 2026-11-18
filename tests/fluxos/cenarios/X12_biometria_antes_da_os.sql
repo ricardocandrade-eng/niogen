@@ -21,7 +21,9 @@ select public.porta_botoes(:'c', sim.venda(:'c')) as b \gset
 select sim.confere('com leitura do GED360: "Biometria validada" à mão não aparece e diz por quê',
   not (:'b'::jsonb #>> '{eventos,momento:biometria:validada,ok}')::boolean and coalesce(:'b'::jsonb #>> '{eventos,momento:biometria:validada,frase}', '') like '%GED360: LINK ENVIADO%',
   :'b'::jsonb #>> '{eventos,momento:biometria:validada}');
-select sim.confere('"Nio dispensou" continua valendo', (:'b'::jsonb #>> '{eventos,momento:biometria:dispensada,ok}')::boolean, :'b'::jsonb #>> '{eventos,momento:biometria:dispensada}');
+-- 0275 (mapa situação × botão, Ricardo 18/11): "Nio dispensou" pula a biometria — passou a ser só do admin
+select sim.confere('"Nio dispensou" continua existindo, só para o admin', not (:'b'::jsonb #>> '{eventos,momento:biometria:dispensada,ok}')::boolean
+  and (:'b'::jsonb #>> '{eventos,momento:biometria:dispensada,exige}') = 'admin', :'b'::jsonb #>> '{eventos,momento:biometria:dispensada}');
 select coalesce(sim.recusa(format($q$select public.backoffice_momento(%L, 'biometria', '{"resultado":"validada"}')$q$, sim.venda(:'c'))), '') as rec \gset
 select sim.confere('a porta recusa a biometria à mão com a leitura do GED360', :'rec' like '%GED360%', coalesce(nullif(:'rec', ''), 'aceitou'));
 
