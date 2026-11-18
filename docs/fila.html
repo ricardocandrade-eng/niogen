@@ -334,6 +334,7 @@
   const NOME_BLOCO = Object.fromEntries(BLOCOS.map((b) => [b.id, b.nome]));
   let bloco = BLOCOS.some((b) => b.id === ls.ler('niogen.fila.bloco')) ? ls.ler('niogen.fila.bloco') : null;
   let acompAberto = false;
+  let fvAberto = false;   // 18/11 (Ricardo): os da Fila Vero com a Mari ficam recolhidos, como o Acompanhando
   const RANK = { agora: 0, hoje: 1, espera: 2, ok: 3, fora: 4 };
   // Todos os itens da Live num formato só: { bloco, k (ficha), nome, sub, oque, prazo, urg, rank, t, row (linha da Lista), bts (botões do card) }
   // 18/11 (0284): selo "Fila Vero" em toda linha de lead que veio da oferta aos clientes antigos (v_jornada.origem = 'fila_vero').
@@ -434,10 +435,14 @@
     const pos = rol ? rol.scrollTop : 0;
     const todos = itens();
     const vis = todos.filter((x) => !bloco || x.bloco === bloco);
-    const ativos = vis.filter((x) => x.bloco !== 'acomp');
+    const ativos = vis.filter((x) => x.bloco !== 'acomp' && x.bloco !== 'fv');
+    const fvs = vis.filter((x) => x.bloco === 'fv');
+    const abreFv = fvAberto || bloco === 'fv';
     const acomp = vis.filter((x) => x.bloco === 'acomp');
     const abreAc = acompAberto || bloco === 'acomp';
-    const corpo = `${ativos.length ? ativos.map(itemLista).join('') : (bloco === 'acomp' ? '' : '<div class="lv-vazio">Nada para fazer agora ✅</div>')}
+    const corpo = `${ativos.length ? ativos.map(itemLista).join('') : (bloco === 'acomp' || bloco === 'fv' ? '' : '<div class="lv-vazio">Nada para fazer agora ✅</div>')}
+      ${fvs.length ? `${bloco === 'fv' ? '' : `<button type="button" class="lv2-acomp" data-fvgrp aria-expanded="${abreFv}"><span aria-hidden="true">${abreFv ? '▾' : '▸'}</span> Fila Vero · ${fvs.length} — com a Mari; sobem para cá se precisarem de você, saem sozinhos em 2 dias sem resposta</button>`}
+        ${abreFv ? fvs.map(itemLista).join('') : ''}` : ''}
       ${acomp.length ? `${bloco === 'acomp' ? '' : `<button type="button" class="lv2-acomp" data-acomp aria-expanded="${abreAc}"><span aria-hidden="true">${abreAc ? '▾' : '▸'}</span> Acompanhando · ${acomp.length} — esperando o cliente ou a Nio; sobem sozinhos quando o prazo chega ou o cliente escreve</button>`}
         ${abreAc ? acomp.map(itemLista).join('') : ''}` : ''}`;
     const mariC = (jor.todas || []).filter((j) => j.caixa === 1 && (!etapaSel || j.etapa === etapaSel));
@@ -678,6 +683,7 @@
     const fb = ev.target.closest('[data-bloco]');
     if (fb) { bloco = fb.dataset.bloco || null; ls.gravar('niogen.fila.bloco', bloco || ''); render(); return; }
     if (ev.target.closest('[data-acomp]')) { acompAberto = !acompAberto; render(); return; }
+    if (ev.target.closest('[data-fvgrp]')) { fvAberto = !fvAberto; render(); return; }
     if (ev.target.closest('[data-semdono-x]')) { ls.gravar('niogen.fila.semdono_visto', chaveSemDono(semDono())); render(); return; }
     if (ev.target.closest('[data-tirar-etapa]')) { etapaSel = null; render(); return; }
     const b = ev.target.closest('[data-bt]');
