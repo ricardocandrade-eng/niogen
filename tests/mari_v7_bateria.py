@@ -163,9 +163,11 @@ def cen_a(c):   # conversa do Edson (rua divergente, referência, operadora, car
     r = c.diz('É essa mesma do CEP, número 2')
     # a Mari confirma o endereço ("Seu endereço é…?", "…, nº 2, Barreira do Triunfo. Confere certinho?") → "Sim"
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or 'endereco e' in norm(r.get('resposta')) \
-            or ('?' in (r.get('resposta') or '') and 'referencia' not in norm(r.get('resposta'))):
+            or ('?' in (r.get('resposta') or '') and 'complemento' not in norm(r.get('resposta'))):
         r = c.diz('Sim')
-    c.exige('referencia' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) não pediu o ponto de referência')
+    # 18/11 (P39): no Passo 2 só o complemento; a referência fica para o Passo 4. O cliente que a der sozinho é anotado.
+    c.exige('complemento' in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) não pediu o complemento')
+    c.exige('referencia' not in norm(r.get('resposta')) + norm((r.get('interativo') or {}).get('corpo')), '(a) pediu a referência antes dos planos (P39)')
     r = c.diz('Não tem complemento. Referência: perto da escola estadual')
     c.exige('operadora' in norm(r.get('resposta')), '(a) não perguntou a operadora atual')
     r = c.diz('Uso a Claro, cai toda hora')

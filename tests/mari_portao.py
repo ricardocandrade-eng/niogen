@@ -550,6 +550,62 @@ def cen_al(c):   # P38 (17/11, Ricardo): cliente que já é Nio, irritado → ca
     c.exige(not re.search(r'consultor|vou te passar|nosso time (vai|te)|em ate 2 horas', t), f'[P38] prometeu atendimento nosso: «{t[:220]}»')
 
 
+def ate_dados_sem_referencia(c):
+    """JF até a escolha do plano SEM dar ponto de referência; devolve (fala do complemento, fala da operadora)."""
+    c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        c.diz('Sim')
+    r_comp = c.diz('Apto 403')
+    r_oper = c.diz('Claro')
+    return r_comp, r_oper
+
+
+def ate_pedir_referencia(c, max_falas=7):
+    """Do plano escolhido até a Mari pedir a referência (ou mandar o resumo). Devolve (pediu, resumo_sem_ref, ultima)."""
+    falas = ['Quero o plano Nio Essencial', 'Ana Teste da Silva, CPF 529.982.247-25', 'anateste@gmail.com', 'Sim',
+             'Boleto bancário', 'Qualquer dia, de tarde', 'Tarde']
+    r = {}
+    for f in falas[:max_falas]:
+        r = c.diz(f)
+        t = fala(r)
+        if re.search(r'referencia', t):
+            return True, False, r
+        if (r.get('interativo') or {}).get('chave') == 'resumo' or re.search(r'confere os dados', t):
+            return False, True, r
+    return False, False, r
+
+
+def cen_am(c):   # P39 (18/11, auditoria do funil): 6 de 8 leads parados em Viabilidade travaram no pedido de referência ANTES dos planos
+    r_comp, r_oper = ate_dados_sem_referencia(c)
+    t = fala(r_comp)
+    c.exige(not re.search(r'referencia', t), f'[P39] pediu ponto de referência antes dos planos: «{t[:220]}»')
+    c.exige(re.search(r'operadora', t), f'[P39] depois do complemento não seguiu para a operadora: «{t[:220]}»')
+    t2 = fala(r_oper)
+    mostrou = (r_oper.get('interativo') or {}).get('tipo') == 'carrossel' or re.search(r'(?m)^\s*1\)', r_oper.get('resposta') or '')
+    c.exige(mostrou, f'[P39] não mostrou os planos depois da operadora: «{t2[:220]}»')
+    pediu, resumo_sem_ref, ult = ate_pedir_referencia(c)
+    c.exige(not resumo_sem_ref, f'[P39] mandou o resumo sem pedir a referência: «{fala(ult)[:220]}»')
+    c.exige(pediu, f'[P39] não pediu a referência antes do resumo (Passo 4, item 7): «{fala(ult)[:220]}»')
+    if pediu:
+        r = c.diz('Não tem')
+        t = fala(r)
+        c.exige(not re.search(r'referencia', t), f'[P39] insistiu na referência depois do "não tem": «{t[:220]}»')
+
+
+def cen_an(c):   # P40 (18/11, conversas reais 5308592e, 70afef39, b85cfce7): referência que cita outra rua NÃO vira "rua divergente"
+    ate_dados_sem_referencia(c)
+    pediu, _, ult = ate_pedir_referencia(c)
+    c.exige(pediu, f'[P40] não chegou à pergunta da referência: «{fala(ult)[:220]}»')
+    r = c.diz('Perto da Avenida Rio Branco, atrás da farmácia')
+    t = fala(r)
+    c.exige(not re.search(r'(sua rua e essa|essa mesma ou e|e a avenida rio branco)', t),
+            f'[P40] tratou a referência como rua do cliente: «{t[:220]}»')
+    row = conv_row(c, "dados->>'referencia' as referencia")
+    c.exige('rio branco' in norm(row.get('referencia') or ''), f'[P40] referência não gravada: {row}')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -577,6 +633,8 @@ PORTAO = {
     'aj': (43, cen_aj, 'P35'), 'ak': (44, cen_ak, 'P36 P37'),
     # 17/11 — cliente que já é Nio: encerra com os canais oficiais, em qualquer tom (somos revenda)
     'al': (45, cen_al, 'P38'),
+    # 18/11 — auditoria do funil: ponto de referência só depois dos planos; referência com outra rua não é a rua do cliente
+    'am': (46, cen_am, 'P39'), 'an': (47, cen_an, 'P40'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

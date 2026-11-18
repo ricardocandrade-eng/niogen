@@ -59,8 +59,26 @@ function numeroJuntoDaRua(textos) {
   return null;
 }
 const leadsRecentes = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'lead').slice(-6).reverse().map((h) => h.texto);
+// 18/11 (auditoria do funil, P40): ponto de referência que cita outra rua ("Atrás do banco da Avenida Bandeirantes",
+// "Próximo ao Expominas, Avenida Delta") virava "a rua do cliente" e a Mari perguntava "a sua rua é essa ou é a Avenida…?"
+// (3 conversas reais). A rua do cliente sai só do trecho ANTES da referência ("Rua das Flores 12, perto da Avenida X" → Rua das
+// Flores); texto igual à referência já gravada não conta.
+const REF_RE = /(?:^|[\s,;.(-])(perto|pr[oó]xim[oa]s?|atr[aá]s|em frente|de frente|ao lado|do lado|esquina|depois d[oa]|antes d[oa]|refer[eê]ncia|na altura|ao fundo|fundos d[oa])(?=[\s,:]|$)/i;
+const refGravada = String(((conv && conv.dados) || {}).referencia || '').trim().toLowerCase();
+const semReferencia = (t) => {
+  const s = String(t || '');
+  if (refGravada && s.trim().toLowerCase() === refGravada) return '';
+  const m = s.match(REF_RE);
+  return m ? s.slice(0, m.index) : s;
+};
+// A resposta à pergunta da referência ("Rua da praça") também não é a rua do cliente.
+const ultimaMari = (Array.isArray(r.historico) ? r.historico : []).filter((h) => h.papel === 'mari').slice(-1).map((h) => String(h.texto || ''))[0] || '';
+const respondeReferencia = /refer[eê]ncia/i.test(ultimaMari);
 function ruaDoCliente() {
-  for (const t of [msg, ...leadsRecentes]) { const x = ruaDe(t); if (x) return x; }
+  for (const t of [msg, ...leadsRecentes]) {
+    if (t === msg && respondeReferencia) continue;
+    const x = ruaDe(semReferencia(t)); if (x) return x;
+  }
   return null;
 }
 const lev1 = (a, b) => {   // distância ≤ 1 (erro de digitação)
