@@ -540,6 +540,13 @@
        ${campoData('Dia da instalação', 'dia', amanhaISO(), `min="${hojeISO()}" required`)}
        ${campoPeriodo('periodo', '08:00')}</div>
        <label class="check"><input type="checkbox" name="sem_aviso"> Já avisei o cliente da biometria (o NIOGEN não manda o aviso)</label>`, 'Gravar OS e agenda → vira Venda'),
+    // 0277 (18/11, troca da forma de pagamento): a Nio não troca o pagamento numa OS aberta — cancela a OS no portal e reemite o pedido.
+    // Mesma porta do "Gravar venda" (momento 'os' com um nº diferente = reemitir); só o admin (0275).
+    reemitir: (v) => formWrap('reemitir', 'Reemitir pedido (OS nova)',
+      `A OS <b>${esc(v.nio_os || '')}</b> foi cancelada no portal (troca da forma de pagamento, por exemplo) e o pedido foi emitido de novo? Grave aqui <b>o nº da OS nova</b> e a forma de pagamento. A biometria aprovada continua valendo; a agenda antiga sai e a nova chega pela Consulta OS (ou grave o dia depois). A OS antiga fica no histórico. Só o admin.`,
+      `<div class="grade2"><label class="campo">Nº da OS nova<input type="text" name="os" value="" inputmode="numeric" autocomplete="off" autofocus required></label>
+       <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === (v.forma_pagamento || '') ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label></div>
+       <label class="campo">Motivo<input type="text" name="motivo" value="cliente trocou a forma de pagamento" autocomplete="off"></label>`, 'Gravar a OS nova'),
     docs: () => formWrap('docs', 'Documentos entregues à Nio', 'Contrato: termos assinados e documentação em até 15 dias após a habilitação.',
       campoData('Entregues em', 'dia', hojeISO(), 'required'), 'Registrar'),
     // 13/11 (4a): a saída única (lead_sair, 0157) — vale para venda e para conversa sem venda. Motivos da config_lead.
@@ -896,6 +903,12 @@
       if (!os) { NG.toast('Informe o nº do pedido (OS).', 'bad'); return false; }
       if (!fd.get('dia')) { NG.toast('Informe o dia da instalação.', 'bad'); return false; }
       return !!(await rodarMomento('os_agendar', { os, dia: fd.get('dia'), periodo: fd.get('periodo'), forma: fd.get('forma') || null, sem_aviso: !!fd.get('sem_aviso') }));
+    },
+    async reemitir(fd) {
+      const os = String(fd.get('os') || '').trim();
+      if (!os) { NG.toast('Informe o nº da OS nova.', 'bad'); return false; }
+      if (os === String(d.v.nio_os || '').trim()) { NG.toast('Essa é a OS atual: informe o nº da OS nova.', 'bad'); return false; }
+      return !!(await rodarMomento('os', { os, forma: fd.get('forma') || null, motivo: String(fd.get('motivo') || '').trim() || null }));
     },
     async docs(fd) {
       if (!fd.get('dia')) { NG.toast('Informe a data.', 'bad'); return false; }
@@ -3218,7 +3231,10 @@
         ${ehBO() && v.status === '0_qualificado' ? (v.biometria_status === 'validada'
           // 17/11 (Ricardo): gravar a OS e o agendamento pela ficha, no próprio cartão. Mesma porta do "Gravar venda" (os / os_agendar).
           ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="fc-form" data-form="os" data-agenda="1">Gravar a OS e o agendamento</button><span class="nota-campo">nº da OS do portal; o dia e o período, se a Consulta OS ainda não trouxe</span></div>'
-          : '<span class="nota-campo">A OS só se grava com a biometria aprovada: grave a biometria no cartão acima.</span>') : ''}`;
+          : '<span class="nota-campo">A OS só se grava com a biometria aprovada: grave a biometria no cartão acima.</span>') : ''}
+        ${(NG.usuario || {}).perfil === 'admin' && ['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalado_em && String(v.nio_os || '').trim()
+          // 0277 (18/11): OS cancelada no portal e pedido reemitido (troca da forma de pagamento) → grava a OS nova, a biometria fica.
+          ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-form" data-form="reemitir">Reemitir pedido (OS nova)</button><span class="nota-campo">a OS foi cancelada no portal e o pedido emitido de novo? só o admin</span></div>' : ''}`;
     } else {
       corpo = conv ? linhaDet('Instalação', 'depois do pedido') : `${linhaDet('Agendada', esc(v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '—'))}
         ${linhaDet('Instalada', esc(v.instalado_em ? NG.fmtDataHora(v.instalado_em) : '—'))}
