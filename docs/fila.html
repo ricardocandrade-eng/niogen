@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-1">
+<link rel="stylesheet" href="assets/app.css?v=191126-3">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=191126-5"></script>
@@ -109,6 +109,7 @@
   let osNum = {};     // venda → nº da OS/pedido (a v_jornada não traz; vem da v_vendas, só as vendas em Ativação/Agenda)
   const osLidas = {};
   const osLendo = {};
+  let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
   let opAberta = null;     // conversa_id da linha com "Dispensar" aberto (motivo em 1 clique)
@@ -179,11 +180,13 @@
     NG.mudou('live', LIVE_MAX_MS);   // 14/11 (0190): marca o carimbo desta carga — o timer só refaz se o banco mudar depois
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap, rf, fn, rcf, rosa, rosn] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+    const [r, ap, rf, fn, rcf, rosa, rosn, rfeitos] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
       NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir'),
       NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null),
-      NG.sb.from('v_vendas').select('id, nio_os, nio_pedido').in('status', ['1_vendido', '2_aguardando_instalacao'])]);
+      NG.sb.from('v_vendas').select('id, nio_os, nio_pedido').in('status', ['1_vendido', '2_aguardando_instalacao']),
+      NG.sb.from('porta_sombra').select('id', { count: 'exact', head: true }).eq('por', eu.id).gte('em', `${NG.diaSP()}T00:00:00-03:00`)]);
+    if (rfeitos && !rfeitos.error) feitosHoje = rfeitos.count || 0;
     if (rosn && !rosn.error) { osNum = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); }); }
     if (rosa && !rosa.error) { osa = {}; (rosa.data || []).forEach((o) => { const a = osa[o.venda_id]; if (!a || String(o.mudou_em) > String(a.mudou_em)) osa[o.venda_id] = o; }); }
     conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
@@ -298,8 +301,16 @@
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
   const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar', retomada_ligar: 'Retomada · ligar' };
+  // 19/11 (0315, Ricardo: "fico com a impressão que o trabalho nunca acaba e eles ficam ali parados há dias"): a "Retomada · ligar"
+  // só saía escrevendo na conversa ou no D7. Agora: 📞 Ligar (discador) · Atendeu (registra e abre o cliente) · Não atendeu · Pular
+  // (motivo). Os três passam pela porta (retomada_ligacao) e tiram a linha; o D7 segue na data se o cliente não responder.
+  const telDe = (txt) => { const m = String(txt || '').match(/ligue para \+?(\d{10,13})/i); return m ? (m[1].length <= 11 ? `55${m[1]}` : m[1]) : ''; };
+  const rlBts = (c) => {
+    const cid = esc(c.conversa_id), k = esc(c.venda_id || `c:${c.conversa_id}`), t = telDe(c.texto);
+    return `${t ? `<a class="btn btn-sm lv-rl" href="tel:+${esc(t)}" title="Abre o discador do celular ou do computador">📞 Ligar</a>` : ''}<button type="button" class="btn btn-sm lv-rl" data-rl="${cid}" data-rl-res="atendeu" data-rl-k="${k}" title="Registra que o cliente atendeu e abre a conversa para você anotar. A linha sai do Conferir.">Atendeu</button><button type="button" class="btn btn-sm lv-rl" data-rl="${cid}" data-rl-res="nao_atendeu" title="Registra a tentativa (nota no Chatwoot). A linha sai do Conferir; o D7 sai na data se ele não responder.">Não atendeu</button><button type="button" class="btn btn-sm btn-ghost lv-rl" data-rl="${cid}" data-rl-res="pular" title="Não vai ligar (com motivo). A linha sai do Conferir; a Mari segue com o D7.">Pular</button>`;
+  };
   // 14/11 (Ricardo): os botões do Conferir ficam na coluna da ação — o texto não empurra a altura da linha (2 linhas, o resto no title).
-  const confBts = (c) => `${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}${c.tipo === 'conferir_unidade' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente no painel de Viabilidade: toque na unidade do cliente (a consulta refaz) ou peça o cadastro à Nio">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-unidade="${esc(c.conversa_id)}" title="A unidade foi confirmada com o cliente ou o cadastro foi pedido à Nio: a linha sai do Conferir">Conferi</button>` : ''}`;
+  const confBts = (c) => `${c.tipo === 'retomada_ligar' && c.conversa_id ? rlBts(c) : ''}${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}${c.tipo === 'conferir_unidade' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente no painel de Viabilidade: toque na unidade do cliente (a consulta refaz) ou peça o cadastro à Nio">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-unidade="${esc(c.conversa_id)}" title="A unidade foi confirmada com o cliente ou o cadastro foi pedido à Nio: a linha sai do Conferir">Conferi</button>` : ''}`;
   // 0271: "Cancelar na Nio" com 24 h úteis vencidas (texto começa com VENCIDO) também acende.
   const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'cancelar_nio' && /^VENCIDO/.test(c.texto || '')) || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || ''));
   const confLinha = (c) => {
@@ -498,12 +509,23 @@
       <div><span class="lv-pill n-${it.prazo === 'agora' ? 'agora' : it.prazo === 'hoje' ? 'hoje' : 'espera'}">${esc(it.prazo || '—')}</span></div>
       <div class="lv-act">${acoesDe(it.row)}</div>${osFaixa(it.vid)}
     </div>`;
+  // 19/11 (0315, Ricardo: "nem sempre vejo uma forma de limpar a tela"): placar do dia. "Faltam" conta só o que é obrigação do time
+  // (Para fazer · Conferir · Andamento na Nio); Na mira, 🔥 Oportunidades, Fila Vero e Acompanhando são radar e não entram (regra 18).
+  const OBRIGA = ['fazer', 'conf', 'and'];
+  const placar = (todos) => {
+    const falta = todos.filter((x) => OBRIGA.includes(x.bloco)).length;
+    const fz = feitosHoje == null ? '' : `${feitosHoje} ${feitosHoje === 1 ? 'feita' : 'feitas'} hoje · `;
+    const dica = 'Feitas hoje: as suas ações que passaram pela porta do NIOGEN (Responder, Nada a responder, botões da ficha, Saída, ligação da Retomada…). Faltam: Para fazer + Conferir + Andamento na Nio — o resto é radar.';
+    return falta
+      ? `<span class="lv2-placar" title="${esc(dica)}">${esc(fz)}<b>faltam ${falta}</b></span>`
+      : `<span class="lv2-placar ok" title="${esc(dica)}">${esc(fz)}<b>Fila limpa ✅</b> o resto está com a Mari ou esperando o cliente</span>`;
+  };
   function filtros(todos) {
     const n = (b) => todos.filter((x) => x.bloco === b).length;
     return `<div class="lv2-filtros" role="group" aria-label="Mostrar só">
       <button type="button" class="lv2-chip${bloco ? '' : ' on'}" data-bloco="">Tudo <b>${todos.length}</b></button>
       ${BLOCOS.map((b) => `<button type="button" class="lv2-chip${bloco === b.id ? ' on' : ''}" data-bloco="${b.id}" style="--c:${b.cor}"><i aria-hidden="true"></i>${esc(b.nome)} <b>${n(b.id)}</b></button>`).join('')}
-      <span class="lv2-ordem apagado">o que vence primeiro fica em cima</span></div>`;
+      ${placar(todos)}<span class="lv2-ordem apagado">o que vence primeiro fica em cima</span></div>`;
   }
   function renderLista() {
     const rol = listaEl.querySelector('.lv-rolar');
@@ -720,6 +742,23 @@
     if (data && data.resumo) NG.toast(data.resumo, 'ok');
     await carregar();
   }
+  async function retomadaLigacao(b) {
+    const res = b.dataset.rlRes;
+    let motivo = null;
+    if (res === 'pular') {
+      const fd = await NG.modal(`<h3>Pular a ligação da Retomada</h3>
+        <p>A linha sai do Conferir. A Mari segue: se o cliente não responder, o D7 sai na data.</p>
+        <label class="campo">Por quê?<select name="motivo" required><option value="">Escolha…</option><option>Telefone inválido</option><option>Já falei por mensagem</option><option>Não vale ligar</option><option>Outro</option></select></label>`);
+      if (!fd) return;
+      motivo = String(fd.get('motivo') || '') || null;
+    }
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc('retomada_ligacao', { p_conversa: b.dataset.rl, p_resultado: res, p_motivo: motivo });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    NG.toast((data && data.resumo) || 'Ligação registrada', 'ok');
+    await carregar();
+    if (res === 'atendeu' && b.dataset.rlK) abrirChave(b.dataset.rlK);
+  }
   async function vistoBio(b) {
     b.disabled = true;
     const { error } = await NG.sb.rpc('andamento_alerta_visto', { p_origem: 'ged360', p_chave: b.dataset.visto });
@@ -755,6 +794,9 @@
     const osx = ev.target.closest('[data-os-x]');
     if (osx) { ev.stopPropagation(); delete osLidas[osx.dataset.osX]; render(); return; }
     if (ev.target.closest('.lv2-os')) return;   // a faixa da leitura da OS não abre a ficha
+    if (ev.target.closest('a.lv-rl[href^="tel:"]')) { ev.stopPropagation(); return; }   // 0315: o link segue e abre o discador
+    const rl = ev.target.closest('[data-rl]');
+    if (rl) { ev.stopPropagation(); retomadaLigacao(rl); return; }
     const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua], [data-cf-unidade], [data-cf-descartar]');
     if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');

@@ -13,6 +13,8 @@ select sim.fila_rodar();
 select sim.passa(:'c', '61 days');
 
 select sim.como('servico');
+-- 19/11: a premissa é posta aqui — a Meta já aprovou o nio_indicacao_base no ar, e a cópia vem de lá (sem isto o cenário mentia)
+update public.config_templates_waba set status = 'PENDING' where nome = 'nio_indicacao_base';
 select count(*) as antes from public.chatwoot_acoes a where a.conversa_id = :'c' and a.payload ->> 'template' = 'nio_indicacao_base' \gset
 -- template ainda não aprovado: nada sai
 select count(*) from public.indicacao_tick(sim.hora('10:00'));

@@ -3628,3 +3628,14 @@ button.fc-id:hover { color: inherit; }
 .fc-top .fc-tit-linha .fc-l2 { margin: 0; flex: 0 0 auto; }
 .fc-top .fc-tit-linha .fc-meta { margin: 0; flex: 0 1 auto; min-width: 0; }
 .fc-top:has(.fc-tit-linha) { height: auto; min-height: 56px; }
+
+/* 19/11 (0315, Ricardo: "nem sempre vejo uma forma de limpar a tela"): placar do dia ao lado dos filtros da Live e os botões da
+   ligação da Retomada (📞 Ligar · Atendeu · Não atendeu · Pular) compactos, para caberem na coluna da ação. */
+.lv2-placar { margin-left: auto; font-size: 13px; color: #A6AFBE; white-space: nowrap; }
+.lv2-placar b { color: #E9EDF3; font-weight: 600; }
+.lv2-placar.ok b { color: #57D38C; margin-right: 4px; }
+.lv2-placar + .lv2-ordem { margin-left: 14px; }
+.lv2 .lv-act .btn.lv-rl, .lv2-kbts .btn.lv-rl { min-width: 0; padding-left: 10px; padding-right: 10px; }
+@media (max-width: 900px) {
+  .lv2-placar { margin-left: 0; white-space: normal; }
+}
