@@ -185,7 +185,8 @@ RE_CONTATO = re.compile(r'repeti[cç][õo]es de mesmo n[úu]mero|telefone de con
 # (dispara a biometria): só ler e parar.
 RE_APROVADO = re.compile(r'cr[eé]dito aprovado', re.I)
 RE_TODAS = re.compile(r'todas as formas', re.I)
-RE_SO_CARTAO = re.compile(r'eleg[ií]vel (somente |apenas |só |so )?(para|no|ao) cart[aã]o|somente cart[aã]o|apenas cart[aã]o', re.I)
+# 19/11 (L-203): o portal também escreve "Elegível apenas para a forma de pagamento: Cartão de Crédito".
+RE_SO_CARTAO = re.compile(r'eleg[ií]vel (somente |apenas |só |so )?(para|no|ao) (a )?(forma de pagamento:?\s*)?cart[aã]o|somente cart[aã]o|apenas cart[aã]o', re.I)
 RE_EMAIL = re.compile(r'e-?mail inv[aá]lido|preencha um e-?mail v[aá]lido', re.I)
 
 

@@ -3025,13 +3025,16 @@
     let rot = CRED_ROT[s.resultado] || s.resultado || '—';
     if (s.resultado === 'aprovado_parcial' && formas.length) rot = `Aprovado — ${formas.map((f) => FORMA_OP[f] || f).join(', ')}`;
     const so = s.resultado === 'aprovado_cartao' || (s.resultado === 'aprovado_parcial' && formas.length === 1 && formas[0] === 'CREDITO');
-    const reg = so ? 'so_cartao' : /^aprovado/.test(s.resultado || '') ? 'aprovado' : s.resultado === 'negado' ? 'negado' : s.resultado === 'pendente' ? 'pendente' : null;
+    // 19/11 (L-203): "aprovado parcial" sem a lista de formas não se grava como "aprovado" — a tela do portal vai junto e o BKO grava à mão o que leu.
+    const parcialCego = s.resultado === 'aprovado_parcial' && !formas.length;
+    if (parcialCego) rot = 'Aprovado — formas não lidas: confira o texto do portal';
+    const reg = parcialCego ? null : so ? 'so_cartao' : /^aprovado/.test(s.resultado || '') ? 'aprovado' : s.resultado === 'negado' ? 'negado' : s.resultado === 'pendente' ? 'pendente' : null;
     const padrao = s.endereco && s.endereco.origem === 'padrao';
     if (padrao && /^aprovado/.test(s.resultado || '')) rot = `${rot} · NO ENDEREÇO PADRÃO`;
     const avisosTela = !s.popup && s.texto_tela ? (String(s.texto_tela).split('\n').find((l) => /^Avisos:/.test(l)) || '').replace(/^Avisos:\s*/, '') : '';
     const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? '' : avisosTela ? `o portal mostrou: "${avisosTela}"` : (s.motivo || '')}`.replace(/ · $/, '');
     return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
-      cls: padrao ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : ['negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? 'bad' : 'warn', registrar: padrao ? null : reg };
+      cls: padrao || parcialCego ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : ['negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? 'bad' : 'warn', registrar: padrao ? null : reg };
   }
   // 15/11 (Ricardo: "retirar essa msg 2x"): o texto do portal uma vez, sem linhas repetidas nem os nomes dos botões do popup.
   function telaPortal(s) {
@@ -3081,7 +3084,7 @@
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
         : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
-      const telaP = !['viavel'].includes(o.s.resultado) && !/^aprovado/.test(o.s.resultado || '') && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
+      const telaP = !['viavel'].includes(o.s.resultado) && (!/^aprovado/.test(o.s.resultado || '') || (o.s.resultado === 'aprovado_parcial' && !(o.s.formas_liberadas || []).length)) && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
         ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
       corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>${telaP}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}

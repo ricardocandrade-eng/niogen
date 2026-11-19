@@ -126,6 +126,8 @@ ok(cr.classificar_popup('Atenção!', 'E-mail inválido. Por favor preencha um e
 ok(cr.classificar_popup('Resultado da análise de crédito', 'Resultado da análise de crédito Crédito aprovado Elegível para todas as formas de pagamento Clique em Continuar para enviar ao cliente o link para Biometria, ou em Consultar outro CPF/CNPJ. Continuar Consultar outro CPF/CNPJ', 4)
    == 'aprovado_todas', 'popup "Crédito aprovado · todas as formas" → aprovado_todas')
 ok(cr.classificar_popup('Resultado da análise de crédito', 'Crédito aprovado Elegível somente para cartão de crédito', 4) == 'aprovado_cartao', 'aprovado só cartão → aprovado_cartao')
+# 19/11 (L-203): texto novo do portal — "Elegível apenas para a forma de pagamento: Cartão de Crédito" caía em aprovado_parcial sem formas
+ok(cr.classificar_popup('Resultado da análise de crédito', 'Resultado da análise de crédito\nCrédito aprovado\n\nElegível apenas para a forma de pagamento: Cartão de Crédito\nClique em Continuar para enviar ao cliente o link para Biometria, ou em Consultar outro CPF/CNPJ.\n\nContinuar\nConsultar outro CPF/CNPJ', 4) == 'aprovado_cartao', 'aprovado "apenas para a forma de pagamento: Cartão de Crédito" → aprovado_cartao')
 ok(cr.classificar_popup('Resultado da análise de crédito', 'Crédito não aprovado', 4) == 'negado', '"Crédito não aprovado" continua negado')
 ok(cr.classificar_popup('Resultado da análise de crédito', 'Crédito negado Negado - Critérios Antifraude Consultar outro CPF/CNPJ Salvar interesse', 4)
    == 'negado_antifraude', 'popup "Negado - Critérios Antifraude" → negado_antifraude (não é o negado comum)')
