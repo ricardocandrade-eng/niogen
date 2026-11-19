@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=181126-os1">
+<link rel="stylesheet" href="assets/app.css?v=181126-os2">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=181126-3"></script>
@@ -393,9 +393,12 @@
     const r = NG.osResumo(s);
     if (s.resultado !== 'lida') return `<div class="lv2-os ${r.cls}"><span>${esc(r.txt)}</span>${x}</div>`;
     const l = s.leitura || {}, g = s.registro || {};
+    const guard = osa[vid] || {};
+    const faz = g.excecao && g.acao ? g.acao : (g.mudou === false && guard.excecao && guard.acao ? guard.acao : '');   // nada mudou: vale o "o que fazer" guardado
     const it = (k, v) => (v ? `<span><i>${esc(k)}</i> ${esc(v)}</span>` : '');
     const quando = `${s.cache ? 'leitura de' : 'lido agora ·'} ${s.consultado_em ? NG.fmtDataHora(s.consultado_em) : ''}`;
-    return `<div class="lv2-os ${g.excecao || g.ok === false ? 'bad' : 'ok'}">${it('Status na Nio', l.status_ordem || '—')}${it('Situação do agendamento', l.status_agendamento)}${it('Agendamento', l.agendamento)}${it('Pendência', l.pendencia)}${it('Caso', l.caso)}${it('Cancelamento', l.motivo_cancelamento)}${g.excecao && g.acao ? `<span class="faz"><i>O que fazer</i> ${esc(g.acao)}</span>` : ''}<small>${esc(quando)}</small>${x}</div>`;
+    const efeito = g.ok === false ? g.erro : g.efeito ? `mudou: ${g.efeito}` : g.mudou === false ? 'nada mudou desde a última leitura' : '';
+    return `<div class="lv2-os ${faz || g.ok === false ? 'bad' : 'ok'}">${it('Status na Nio', l.status_ordem || '—')}${it('Situação do agendamento', l.status_agendamento)}${it('Agendamento', l.agendamento)}${it('Pendência', l.pendencia)}${it('Caso', l.caso)}${it('Cancelamento', l.motivo_cancelamento)}${faz ? `<span class="faz"><i>O que fazer</i> ${esc(faz)}</span>` : ''}<small>${esc([quando, efeito].filter(Boolean).join(' · '))}</small>${x}</div>`;
   };
   async function lerOs(vid) {
     if (osLendo[vid]) return;
