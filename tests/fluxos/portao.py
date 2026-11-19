@@ -14,13 +14,22 @@
 # Cenário "regra_nova" vermelho não barra (é decisão ainda não construída); ao ficar verde, troque o tipo para "atual".
 # Saída: tabela no terminal + ~/niogen_sim/resultados/portao_<data>.json (fora do repo e do Drive).
 #
+# A TRAVA DA CÓPIA (19/11/2026): só UMA rodada por vez nesta máquina. Todas usam os mesmos bancos (niogen_sim, niogen_teste,
+# niogen_cenario, porta 54329) — duas ao mesmo tempo apagam o banco uma da outra ("template database niogen_teste does not
+# exist", "duplicate key … pg_database_datname_index"). Ao começar, o portão cria ~/niogen_sim/portao.lock (criação atômica,
+# com PID, hora e comando). Se ela já existe e o PID está vivo, ele ESPERA, avisando "esperando a rodada de <pid>, começada
+# às HH:MM", até PORTAO_ESPERA_MIN minutos (padrão 60; depois desiste com erro). Trava de PID que não existe mais (rodada
+# morta à força) é apagada sozinha. A trava some ao terminar, com erro ou com Ctrl+C. tests/fluxos/copia_local.sh usa a
+# MESMA trava (não remonta a cópia no meio de uma rodada, e o portão espera a cópia ficar pronta). Cópia deste script em
+# scratchpad (ex.: portao_r.py) feita antes de 19/11 NÃO respeita a trava: recopie, ou rode este.
+#
 # Cada cenário é um .sql com cabeçalho:
 #   -- id: C8
 #   -- titulo: Time devolve para a Mari
 #   -- tipo: atual | regra_nova      (atual = já deveria funcionar hoje · regra_nova = decisão de 17/11 ainda não construída)
 # e passos que chamam sim.* e as funções de verdade. No fim o portão confere as regras gerais (sim.invariantes) em toda
 # conversa do cenário.
-import hashlib, json, os, re, subprocess, sys, datetime, pathlib
+import atexit, ctypes, hashlib, json, os, re, socket, subprocess, sys, datetime, pathlib, time
 
 AQUI = pathlib.Path(__file__).resolve().parent
 BIN = pathlib.Path(os.environ.get('PG_SERVER_BIN', pathlib.Path.home() / 'tools/pgsql17_server/pgsql/bin'))
@@ -93,11 +102,120 @@ def rodar(arq, modelo):
             'erro': erro, 'checagens': d['checagens'], 'trilha': d['trilha']}
 
 
+TRAVA = SIM / 'portao.lock'
+ESPERA_MIN = float(os.environ.get('PORTAO_ESPERA_MIN', '60'))
+
+
+def pid_vivo(pid):
+    """No Windows os.kill(pid, 0) MATA o processo — por isso OpenProcess + GetExitCodeProcess."""
+    if pid <= 0:
+        return False
+    if os.name != 'nt':
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+    k = ctypes.windll.kernel32
+    h = k.OpenProcess(0x1000, False, pid)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return k.GetLastError() == 5         # acesso negado = o processo existe
+    try:
+        codigo = ctypes.c_ulong()
+        return bool(k.GetExitCodeProcess(h, ctypes.byref(codigo))) and codigo.value == 259   # STILL_ACTIVE
+    finally:
+        k.CloseHandle(h)
+
+
+def ler_trava():
+    try:
+        d = dict(l.split('=', 1) for l in TRAVA.read_text(encoding='utf-8').splitlines() if '=' in l)
+        d['pid'] = int(d.get('pid', '0'))
+        return d
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return {'pid': 0}   # ilegível (meio escrita ou estragada): vira velha se continuar assim por 10 s
+
+
+def pegar_trava():
+    """Cria a trava (atômico: O_EXCL) ou espera a rodada que está com ela. Ver o cabeçalho."""
+    SIM.mkdir(parents=True, exist_ok=True)
+    conteudo = (f"pid={os.getpid()}\nhost={socket.gethostname()}\ninicio={datetime.datetime.now().isoformat(timespec='seconds')}\n"
+                f"quem=portao.py {' '.join(sys.argv[1:])}\n")
+    limite = time.monotonic() + ESPERA_MIN * 60
+    avisado, avisado_em, ilegivel_desde = None, 0.0, None
+    while True:
+        try:
+            fd = os.open(TRAVA, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            d = ler_trava()
+            if d is None:
+                continue                                               # sumiu entre o open e a leitura: tenta de novo
+            if 'inicio' not in d:
+                ilegivel_desde = ilegivel_desde or time.monotonic()
+                velha = time.monotonic() - ilegivel_desde > 10         # 10 s para quem está escrevendo terminar
+            else:
+                ilegivel_desde = None
+                velha = d.get('host', socket.gethostname()) == socket.gethostname() and not pid_vivo(d['pid'])
+            if velha:
+                # tira a trava velha por rename (atômico: se dois veem a mesma trava morta, só um tira) e confere que tirou
+                # a mesma que leu; se pegou a trava nova de outro no meio do caminho, devolve
+                fora = TRAVA.with_name(f'portao.lock.velha.{os.getpid()}')
+                try:
+                    os.replace(TRAVA, fora)
+                except FileNotFoundError:
+                    continue
+                try:
+                    texto = fora.read_text(encoding='utf-8')
+                except Exception:
+                    texto = ''
+                if 'inicio' not in d or f"pid={d['pid']}\n" in texto:
+                    print(f"(trava velha da rodada {d['pid'] or '?'}, começada {d.get('inicio', '?')}, que não existe mais: apagada)",
+                          flush=True)
+                    fora.unlink(missing_ok=True)
+                else:
+                    try:
+                        os.rename(fora, TRAVA)
+                    except FileExistsError:
+                        fora.unlink(missing_ok=True)
+                continue
+            if time.monotonic() > limite:
+                sys.exit(f"Desisti: a rodada {d['pid']} ({d.get('quem', '?')}), começada {d.get('inicio', '?')}, ainda está "
+                         f"ativa depois de {ESPERA_MIN:g} min de espera. Trava: {TRAVA}")
+            if avisado != d['pid'] or time.monotonic() - avisado_em > 300:
+                print(f"esperando a rodada de {d['pid']}, começada às {d.get('inicio', '?')[11:16] or '?'} "
+                      f"({d.get('quem', '?')}) — espero até {ESPERA_MIN:g} min", flush=True)
+                avisado, avisado_em = d['pid'], time.monotonic()
+            time.sleep(3)
+            continue
+        with os.fdopen(fd, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(conteudo)
+        atexit.register(soltar_trava)
+        return
+
+
+def soltar_trava():
+    d = ler_trava()
+    if d and d['pid'] == os.getpid():
+        TRAVA.unlink(missing_ok=True)
+
+
 def main():
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     args = [a for a in sys.argv[1:] if not a.startswith('--') and not a.endswith('.sql')]
     migs = [pathlib.Path(a).resolve() for a in sys.argv[1:] if a.endswith('.sql')]
     trilha = '--trilha' in sys.argv
+    pegar_trava()
+    try:
+        rodada(args, migs, trilha)
+    finally:
+        soltar_trava()
+
+
+def rodada(args, migs, trilha):
     if not (SIM / 'pgdata').exists():
         sys.exit('Cópia local não existe. Rode antes: tests/fluxos/copia_local.sh')
     rc, _, err = psql(BASE, arquivo=AQUI / 'sim.sql')

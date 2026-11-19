@@ -10,6 +10,8 @@
 #
 # A cópia tem DADO DE CLIENTE DA NIO: fica em ~/niogen_sim, fora do Drive e do repo. Não copiar para lugar nenhum.
 #
+# Trava (19/11/2026): usa a mesma ~/niogen_sim/portao.lock do portão — espera a rodada em curso terminar antes de remontar.
+#
 # Uso (Git Bash):  tests/fluxos/copia_local.sh            # restaura o pacote mais recente
 # Variáveis: PG_SERVER_BIN (padrão ~/tools/pgsql17_server/pgsql/bin) · NIOGEN_SIM_DIR (padrão ~/niogen_sim)
 set -Eeuo pipefail
@@ -23,6 +25,33 @@ PSQL=("$BIN/psql.exe" -h 127.0.0.1 -p "$PORTA" -U postgres -X -q)
 
 case "$SIM" in *"Meu Drive"*|*GitHub*) echo "ERRO: a cópia não pode ficar no Drive nem no repo." >&2; exit 1;; esac
 [ -x "$BIN/postgres.exe" ] || { echo "ERRO: servidor PostgreSQL não achado em $BIN" >&2; exit 1; }
+
+# ---- trava da cópia (a mesma do portão, ver o cabeçalho de tests/fluxos/portao.py): não remonta a cópia no meio de uma
+# rodada do portão, e o portão espera esta montagem terminar. Espera até PORTAO_ESPERA_MIN minutos (padrão 60).
+mkdir -p "$SIM"
+TRAVA="$SIM/portao.lock"
+MEU_PID="$(cat /proc/$$/winpid 2>/dev/null || echo $$)"   # PID do Windows: é o que o portão confere
+pid_vivo() { local t; t="$(tasklist //FI "PID eq $1" //NH //FO CSV 2>/dev/null || true)"; [[ "$t" == *"\"$1\""* ]]; }
+ESPERA="${PORTAO_ESPERA_MIN:-60}"; ESPERA="${ESPERA%.*}"   # aqui só minutos inteiros
+limite=$(( $(date +%s) + ${ESPERA:-0} * 60 )); avisado=""
+until ( set -o noclobber; printf 'pid=%s\nhost=%s\ninicio=%s\nquem=copia_local.sh\n' "$MEU_PID" "$(hostname)" \
+          "$(date +%Y-%m-%dT%H:%M:%S)" > "$TRAVA" ) 2>/dev/null; do
+  dono="$(sed -n 's/^pid=//p' "$TRAVA" 2>/dev/null | tr -d '\r' || true)"; inicio="$(sed -n 's/^inicio=//p' "$TRAVA" 2>/dev/null | tr -d '\r' || true)"
+  [ "$(date +%s)" -gt "$limite" ] && { echo "ERRO: a rodada ${dono:-?} (começada ${inicio:-?}) segue com a trava $TRAVA depois de ${ESPERA} min." >&2; exit 1; }
+  [ -n "$dono" ] || { sleep 1; continue; }   # trava sumindo ou meio escrita
+  if [ -n "$dono" ] && ! pid_vivo "$dono"; then
+    # trava velha: tira por mv (atômico) e confere que tirou a mesma
+    if mv "$TRAVA" "$TRAVA.velha.$MEU_PID" 2>/dev/null; then
+      if grep -q "^pid=$dono\$" <(tr -d '\r' < "$TRAVA.velha.$MEU_PID"); then
+        echo "(trava velha da rodada $dono, começada $inicio, que não existe mais: apagada)"; rm -f "$TRAVA.velha.$MEU_PID"
+      else mv -n "$TRAVA.velha.$MEU_PID" "$TRAVA" 2>/dev/null; rm -f "$TRAVA.velha.$MEU_PID"; fi
+    fi
+    continue
+  fi
+  [ "$avisado" = "$dono" ] || { echo "esperando a rodada de $dono, começada às ${inicio:11:5} — espero até ${ESPERA} min"; avisado="$dono"; }
+  sleep 3
+done
+trap '[ "$(sed -n "s/^pid=//p" "$TRAVA" 2>/dev/null | tr -d "\r")" = "$MEU_PID" ] && rm -f "$TRAVA" || true' EXIT
 
 PACOTE="$(ls -1t "$HOME"/backups/niogen/niogen_backup_*.tar.gz 2>/dev/null | head -1)"
 [ -n "$PACOTE" ] || { echo "ERRO: nenhum pacote em ~/backups/niogen" >&2; exit 1; }
