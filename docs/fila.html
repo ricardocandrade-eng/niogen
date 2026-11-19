@@ -120,7 +120,7 @@
     return v.txt !== '—' && !/mês/.test(v.txt) ? v : null;
   };
   // a jornada pode ainda dizer "Conversa" de um lead que a escada (v_leads) já pôs em Lead qualificado (caso Gabriel Vinicius, 19/11)
-  const quaseVenda = (j) => !!(j && ((j.venda_id && (j.etapa === 2 || j.etapa === 3)) || ((funilDe(j) || {}).etapa === 'qualificado')));
+  const quaseVenda = (j) => !!(j && ((j.venda_id && (j.etapa === 2 || j.etapa === 3)) || ((funilDe(j) || {}).etapa === 'qualificado' && (funilDe(j) || {}).destino === 'em_andamento')));
   let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
