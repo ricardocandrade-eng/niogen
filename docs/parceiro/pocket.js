@@ -81,7 +81,7 @@
   // ================================================================ telas públicas
   async function telaEntrar(msg) {
     await carregarContato();
-    render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio Internet e receba a cada 15 dias.</h1><p class="sub" style="margin-top:6px">Pagamento quinzenal, sempre numa sexta, direto no seu Pix.</p></div>
+    render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio Internet e ganhe por cada cliente instalado.</h1><p class="sub" style="margin-top:6px">Você indica quem quer internet boa. A gente cuida do resto.</p></div>
       ${msg ? faixa('amarelo', msg.titulo, msg.texto) : ''}
       <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo nosso WhatsApp${CONTATO ? `, <b>${esc(fmtTel(CONTATO))}</b>` : ''}. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
       <div class="acoes"><a class="bt" href="#seja">Quero ser parceiro</a></div>`, null);
@@ -108,8 +108,8 @@
     ];
     return `<div class="cartao heroi" style="gap:10px">
         <div class="rot">Programa Parceiro · revenda autorizada Nio</div>
-        <h1 style="font-size:30px">Venda Nio Internet e receba a cada 15 dias.</h1>
-        <p style="color:var(--suave);font-size:16px">Você indica quem quer internet boa. A gente cuida do resto. O pagamento é quinzenal, sempre numa sexta.</p>
+        <h1 style="font-size:30px">Venda Nio Internet e ganhe por cada cliente instalado.</h1>
+        <p style="color:var(--suave);font-size:16px">Você indica quem quer internet boa. A gente cuida do resto.</p>
         <a class="bt" href="#cadastro" data-ir-cadastro style="margin-top:6px">Quero ser parceiro</a></div>
       <div class="cartao" style="gap:10px">
         <div class="rot">Quem é a Nio</div>
