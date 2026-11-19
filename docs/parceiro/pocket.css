@@ -188,3 +188,16 @@ details.gaveta > div { padding: 0 16px 16px; display: flex; flex-direction: colu
 .resumo-num div { background: var(--nio-escuro); border: 1px solid var(--borda); border-radius: 14px; padding: 10px 10px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .resumo-num b { font-size: clamp(14px, 4.4vw, 19px); font-weight: 900; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .resumo-num span { font-size: 12px; color: var(--apagado); }
+
+/* #seja: apresentação da Nio */
+.vant { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.vant-item { display: flex; gap: 14px; align-items: flex-start; background: linear-gradient(180deg, var(--cartao-2), var(--cartao)); border: 1px solid var(--borda); border-radius: 16px; padding: 14px 16px; }
+.vant-item b { font-size: 16px; font-weight: 800; letter-spacing: -0.01em; }
+.vant-item p { font-size: 14px; color: var(--apagado); margin-top: 2px; line-height: 1.4; }
+.vant-ico { width: 40px; height: 40px; border-radius: 12px; background: var(--verde-fundo); border: 1px solid var(--verde-borda); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.vant-ico svg { width: 22px; height: 22px; fill: none; stroke: var(--verde); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.passos-nio { margin: 0; padding: 0; list-style: none; counter-reset: p; display: flex; flex-direction: column; gap: 12px; }
+.passos-nio li { counter-increment: p; display: flex; gap: 12px; align-items: flex-start; font-size: 15px; line-height: 1.45; color: var(--suave); }
+.passos-nio li::before { content: counter(p); width: 28px; height: 28px; border-radius: 50%; background: var(--verde); color: var(--nio-escuro); font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
+.passos-nio b { color: var(--texto); }
+@media (min-width: 420px) { .vant { grid-template-columns: 1fr 1fr; } .vant-item { flex-direction: column; gap: 10px; } }

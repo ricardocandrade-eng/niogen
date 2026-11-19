@@ -87,13 +87,53 @@
       <div class="acoes"><a class="bt" href="#seja">Quero ser parceiro</a></div>`, null);
   }
 
+  // Apresentação da Nio para quem chega pelo link de cadastro. Fatos só da base aprovada da Mari (prompt v7, Bloco 4b);
+  // sem as palavras proibidas pela Nio ("grátis", "combo", "pacote", "Nio 5G", "chip da Nio"…) e sem preço (muda por cidade).
+  const ICO_NIO = {
+    cadeado: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+    fibra: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12c4-6 14-6 18 0M6 15c3-4 9-4 12 0"/><circle cx="12" cy="18" r="1.6"/></svg>',
+    raio: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+    cel: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>',
+    fone: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13a8 8 0 0 1 16 0v4a2 2 0 0 1-2 2h-1v-6h3M4 13v4a2 2 0 0 0 2 2h1v-6H4"/></svg>',
+    casa: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9H3z"/><path d="M10 20v-5h4v5"/></svg>',
+  };
+  function blocoNio() {
+    const vant = [
+      ['cadeado', 'Preço fixo até janeiro de 2030', 'Sem reajuste todo ano. É o argumento que mais fecha venda.'],
+      ['fibra', '100% fibra óptica', 'A fibra chega até dentro da casa do cliente.'],
+      ['raio', 'De 600 Mega a 1 Giga', 'Wi-Fi 6 a partir do Essencial. O Ultra ainda traz um ponto extra Mesh.'],
+      ['cel', 'Internet 5G com chamadas ilimitadas', 'Já vem nos planos Essencial, Super e Ultra.'],
+      ['fone', 'Suporte técnico 24 horas', 'E tudo pelo App Nio: fatura, chip e suporte.'],
+      ['casa', 'Sem sair de casa', 'O pedido é feito pelo WhatsApp e a biometria pelo celular. O técnico da Nio vai só para instalar.'],
+    ];
+    return `<div class="cartao heroi" style="gap:10px">
+        <div class="rot">Programa Parceiro · revenda autorizada Nio</div>
+        <h1 style="font-size:30px">Venda Nio Internet e receba toda sexta.</h1>
+        <p style="color:var(--suave);font-size:16px">Você indica quem quer internet boa. A gente cuida do resto.</p>
+        <a class="bt" href="#cadastro" data-ir-cadastro style="margin-top:6px">Quero ser parceiro</a></div>
+      <div class="cartao" style="gap:10px">
+        <div class="rot">Quem é a Nio</div>
+        <p style="font-size:16px;line-height:1.5">A <b>Nio Internet</b> é uma empresa nova de internet por fibra óptica que já nasceu com <b style="color:var(--verde)">mais de 4 milhões de clientes</b>.
+          Rede 100% fibra, suporte 24 horas e tudo resolvido pelo App Nio.</p></div>
+      <div class="lista"><div class="rot">Por que o cliente fecha com a Nio</div>
+        <div class="vant">${vant.map(([i, t, d]) => `<div class="vant-item"><span class="vant-ico">${ICO_NIO[i]}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}</div></div>
+      <div class="cartao" style="gap:12px">
+        <div class="rot">Como funciona para você</div>
+        <ol class="passos-nio">
+          <li><span><b>Você indica.</b> Manda pelo app o nome, o endereço e o WhatsApp do cliente.</span></li>
+          <li><span><b>A gente liga para o cliente,</b> faz o pedido na Nio e agenda a instalação.</span></li>
+          <li><span><b>Instalou, você recebe na sexta,</b> direto no seu Pix.</span></li></ol>
+        <p class="sub">Depois que o cadastro for aprovado, o app mostra quanto você ganha em cada plano.</p></div>`;
+  }
+
   async function telaSeja() {
     render('<div class="carregando">Carregando…</div>', null);
     let termo = null;
     try { termo = await rpc('parceiro_termo_vigente'); } catch (e) { termo = null; }
     const md = termo && termo.texto && window.NGMarkdown ? window.NGMarkdown.render(termo.texto).html : esc((termo && termo.texto) || '');
     render(`${voltar('Seja parceiro', 'entrar')}
-      <p class="sub">Você indica, a gente liga para o cliente, faz o pedido e agenda a instalação. Instalou, você recebe na sexta.</p>
+      ${blocoNio()}
+      <h2 id="cadastro" style="margin-top:8px">Faça o seu cadastro</h2>
       <form id="f-seja" class="lista" novalidate style="gap:14px">
         <div class="campo"><label for="s-nome">Nome completo</label><input id="s-nome" name="nome" autocomplete="name" required></div>
         <div class="campo"><label for="s-cpf">CPF</label><input id="s-cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required></div>
@@ -105,6 +145,8 @@
         <div class="erro" id="s-erro" role="alert"></div>
         <button type="submit" class="bt">Quero ser parceiro</button>
       </form>`, null);
+    const irCad = $tela.querySelector('[data-ir-cadastro]');
+    if (irCad) irCad.addEventListener('click', (ev) => { ev.preventDefault(); document.getElementById('cadastro').scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(() => document.getElementById('s-nome').focus({ preventScroll: true }), 400); });
     const f = document.getElementById('f-seja');
     f.cpf.addEventListener('input', () => { const s = dig(f.cpf.value).slice(0, 11); f.cpf.value = s.length > 9 ? `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6, 9)}-${s.slice(9)}` : s.length > 6 ? `${s.slice(0, 3)}.${s.slice(3, 6)}.${s.slice(6)}` : s.length > 3 ? `${s.slice(0, 3)}.${s.slice(3)}` : s; });
     f.addEventListener('submit', async (ev) => {
