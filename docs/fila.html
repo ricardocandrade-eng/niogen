@@ -114,13 +114,13 @@
   // linha de venda mostra quanto vale (vendas.comissao_prevista; sem ela, a comissão do plano na tabela).
   let comVenda = {};
   const valeVenda = (vid, plano) => {
-    if (!vid) return null;
-    const c = Number(comVenda[vid]);
+    const c = vid ? Number(comVenda[vid]) : 0;
     if (c > 0) return { txt: NG.fmtMoeda(c), tit: 'comissão prevista desta venda' };
     const v = valeDe({ plano });
     return v.txt !== '—' && !/mês/.test(v.txt) ? v : null;
   };
-  const quaseVenda = (j) => !!(j && j.venda_id && (j.etapa === 2 || j.etapa === 3));
+  // a jornada pode ainda dizer "Conversa" de um lead que a escada (v_leads) já pôs em Lead qualificado (caso Gabriel Vinicius, 19/11)
+  const quaseVenda = (j) => !!(j && ((j.venda_id && (j.etapa === 2 || j.etapa === 3)) || ((funilDe(j) || {}).etapa === 'qualificado')));
   let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -479,7 +479,7 @@
     // tipo · cliente · O QUE ESTÁ ACONTECENDO (título curto e claro + a explicação, sem cor) · COM QUEM (a vez) · prazo · botões.
     const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
-    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), quali: quaseVenda(j), vale: valeVenda(j.venda_id, j.plano), nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
+    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), quali: quaseVenda(j), vale: (j.venda_id || quaseVenda(j)) ? valeVenda(j.venda_id, j.plano) : null, nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
       sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
       oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
@@ -492,7 +492,7 @@
         const txt = String(c.texto || '');
         const corte = txt.indexOf(' — ');
         const jv = c.venda_id ? jPorVenda[c.venda_id] : (c.conversa_id ? jPorConv[c.conversa_id] : null);
-        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
+        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv && (jv.venda_id || quaseVenda(jv)) ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
           vez: vezTxt('time'), prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
           rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
       });
