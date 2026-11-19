@@ -20,11 +20,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-1">
+<link rel="stylesheet" href="assets/app.css?v=191126-com">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=191126-5"></script>
+<script src="assets/app.js?v=191126-com"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
@@ -660,7 +660,7 @@ Guardar?`)) return;
     const [rc, rcom, rpl, rt, rcal] = await Promise.all([
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_comissao').select('*').is('parceiro_id', null),
-      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, familia, velocidade, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('termos_programa').select('*').order('vigente_desde', { ascending: false }),
       NG.sb.from('parceiro_calendario').select('*').order('instalacoes_de', { ascending: false }),
     ]);
@@ -734,12 +734,21 @@ Guardar?`)) return;
           <div class="cfg-acoes"><button type="submit" class="btn">Cadastrar ciclo</button></div></form>` : ''}</div>
 
       <div class="cfg-bloco" id="bloco-comissao"><h3>Comissão padrão por plano</h3>
-        <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (Parceiros › gaveta dele › Comissão por plano). A venda sem fidelidade paga o valor do mesmo plano com fidelidade. Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
-        <div id="lista-comissao">${PC.planos.map((pl) => {
-          const l = PC.comissao.find((x) => x.plano_id === pl.id);
-          return `<div class="cfg-linha"><div>${esc(pl.nome_curto || pl.nome)}<small>${esc(pl.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(pl.cluster || '')} · cliente paga ${esc(NG.fmtMoeda(pl.preco))}</small></div>
-            <input type="number" step="0.01" min="0" data-plano="${pl.id}" value="${l ? l.valor : ''}" aria-label="Comissão padrão de ${esc(pl.nome_curto || pl.nome)}" ${dis}></div>`;
-        }).join('') || '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
+        <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (Parceiros › gaveta dele › Comissão por plano). Cada campo vale para pessoa física e Empresas do mesmo plano, com ou sem fidelidade. Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
+        <div id="lista-comissao">${(() => {
+          const val = (id) => { const l = PC.comissao.find((x) => x.plano_id === id); return l ? Number(l.valor) : null; };
+          const cel = (c, col, f) => {
+            if (!c) return '<div class="com-cel vazio">—</div>';
+            const v = val(c.pf.id);
+            const dif = c.emp.some((e) => val(e.id) !== v);
+            return `<div class="com-cel"><input type="number" step="0.01" min="0" inputmode="decimal" data-planos="${c.ids.join(',')}" value="${v ?? ''}" aria-label="Comissão padrão: ${esc(f.familia)} ${col}" ${dis}>
+              <small>cliente paga ${esc(NG.fmtMoeda(c.pf.preco))}</small>${dif ? `<small class="dif">Empresas hoje ${esc(c.emp.map((e) => NG.fmtMoeda(val(e.id))).join(' / '))}: salvar iguala</small>` : ''}</div>`;
+          };
+          const g = NG.gradeComissao(PC.planos);
+          return g.length ? `<div class="com-grade"><div class="com-h">Plano</div><div class="com-h">Regular</div><div class="com-h">BTU</div>
+            ${g.map((f) => `<div class="com-plano"><b>${esc(f.familia)}</b><small>${esc(f.velocidade)}</small></div>${cel(f.regular, 'Regular', f)}${cel(f.btu, 'BTU', f)}`).join('')}</div>`
+            : '<span class="nota-campo">Nenhum plano vigente.</span>';
+        })()}</div>
         ${ehAdmin ? '<div class="cfg-acoes"><button type="button" class="btn btn-acc" data-pc="salvar-comissao">Salvar comissão padrão</button></div>' : ''}</div>
 
       <div class="cfg-bloco" id="bloco-termo"><h3>Termo do programa</h3>
@@ -796,14 +805,16 @@ Guardar?`)) return;
   async function salvarComissaoPadrao(botao) {
     if (!ehAdmin) return;
     const ops = [];
-    for (const inp of document.querySelectorAll('#lista-comissao input[data-plano]')) {
-      const planoId = Number(inp.dataset.plano);
+    for (const inp of document.querySelectorAll('#lista-comissao input[data-planos]')) {
       const v = numOuNull(inp.value);
       if (Number.isNaN(v) || (v != null && v < 0)) { NG.toast('Há um valor de comissão inválido.', 'bad'); return; }
-      const atual = PC.comissao.find((x) => x.plano_id === planoId);
-      if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
-      else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: null, plano_id: planoId, valor: v }));
-      else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+      // o mesmo valor em todos os planos da célula (pessoa física e Empresas)
+      for (const planoId of inp.dataset.planos.split(',').map(Number)) {
+        const atual = PC.comissao.find((x) => x.plano_id === planoId);
+        if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
+        else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: null, plano_id: planoId, valor: v }));
+        else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+      }
     }
     if (!ops.length) { NG.toast('Nada mudou.', 'ok'); return; }
     botao.disabled = true;

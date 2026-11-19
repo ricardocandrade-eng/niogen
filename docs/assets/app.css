@@ -3645,3 +3645,16 @@ button.fc-id:hover { color: inherit; }
 .lv2-div:first-child { padding-top: 4px; }
 .lv2-div b { font-weight: 700; letter-spacing: .01em; }
 .lv2-div span { color: #8D97A3; font-size: 12px; }
+
+/* 19/11: comissão do parceiro em grade — plano × Regular / BTU (parceiros.html e Configurações › Programa Parceiro) */
+.com-grade { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px 12px; align-items: start; margin-top: 8px; }
+.com-grade .com-h { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.com-grade .com-plano { padding-top: 8px; }
+.com-grade .com-plano b { display: block; font-size: 14px; }
+.com-grade .com-plano small { color: var(--muted); font-size: 11px; }
+.com-grade .com-cel { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.com-grade .com-cel input { width: 100%; }
+.com-grade .com-cel small { font-size: 11px; color: var(--muted); line-height: 1.3; }
+.com-grade .com-cel small.dif { color: #F5B84B; }
+.com-grade .com-cel.vazio { color: var(--muted); padding-top: 10px; font-size: 13px; }
+.com-grade .com-cel b.val { font-size: 15px; padding-top: 8px; }

@@ -1807,6 +1807,24 @@
     carregarUsuarios, preencherSelect,
     tplCadencia, renderTpl, nomeCadencia, cadEnviados, cadBolinhas,   // prompt 28: bolinhas da cadência
     LIMITE_M10, N_FATURAS, faturaEstado, faturasBolas, faturaDica, faturasBolinhas,   // 10/11: faturas do M-10 (Adimplência + ficha)
+    gradeComissao,   // 19/11: comissão do parceiro em grade (Fibra/Essencial/Super/Ultra × Regular/BTU)
     get usuario() { return usuarioAtual; },
   };
+
+  // 19/11 (Ricardo: "separe em duas colunas Regular e BTU" · "empresarial pode ser o mesmo valor de pessoa física"):
+  // cada célula junta os planos da mesma família e do mesmo cluster — Varejo e Empresas (a venda sem fidelidade já paga o do
+  // irmão com fidelidade, 0317). O campo grava o MESMO valor em todos os ids da célula. Planos já sem as variantes nfid.
+  function gradeComissao(planos) {
+    return ['Fibra', 'Essencial', 'Super', 'Ultra'].map((f) => {
+      const cel = (cl) => {
+        const ps = (planos || []).filter((p) => p.familia === f && p.cluster === cl);
+        if (!ps.length) return null;
+        const pf = ps.find((p) => p.portfolio !== 'empresas') || ps[0];
+        return { ids: ps.map((p) => p.id), pf, emp: ps.filter((p) => p.portfolio === 'empresas' && p.id !== pf.id) };
+      };
+      const regular = cel('regular'), btu = cel('btu');
+      const ref = (regular && regular.pf) || (btu && btu.pf);
+      return ref ? { familia: f, velocidade: ref.velocidade || '', regular, btu } : null;
+    }).filter(Boolean);
+  }
 })();

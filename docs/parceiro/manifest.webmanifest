@@ -1,7 +1,7 @@
 {
   "name": "Parceiro PAP · Nio",
   "short_name": "Parceiro",
-  "description": "Pocket do Parceiro PAP: envie vendas Nio e acompanhe quanto recebe na sexta.",
+  "description": "Pocket do Parceiro PAP: envie vendas Nio e acompanhe quanto recebe a cada 15 dias.",
   "lang": "pt-BR",
   "start_url": "./#inicio",
   "scope": "./",

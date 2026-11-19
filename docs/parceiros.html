@@ -23,10 +23,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-1">
+<link rel="stylesheet" href="assets/app.css?v=191126-com">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=191126-5"></script>
+<script src="assets/app.js?v=191126-com"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/conversa.js?v=181126-sp2"></script>
 <script src="assets/ficha.js?v=191126-5"></script>
@@ -143,7 +143,7 @@
       NG.sb.from('v_parceiro_a_pagar').select('*'),
       NG.sb.from('vendas').select('id, parceiro_id, status, criado_em, cliente_nome, cidade, plano_id, conferencia_status, conferencia_prazo_ate, nio_situacao, nio_venda_valida, instalado_em, parceiro_indevida').not('parceiro_id', 'is', null).order('criado_em', { ascending: false }).limit(5000),
       NG.sb.from('parceiro_comissao').select('*'),
-      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, familia, velocidade, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_pagamentos').select('id, parceiro_id, tipo, venda_id, competencia, status, valor, vence_em, pago_em, comprovante_path').order('vence_em', { ascending: false }).limit(5000),
       NG.carregarUsuarios(),
@@ -472,15 +472,21 @@
 
   // ----- Comissão por plano -----
   function blocoComissao(p) {
-    const linhas = PLANOS.map((pl) => {
-      const meu = COM.find((x) => x.parceiro_id === p.id && x.plano_id === pl.id);
-      const pad = COM.find((x) => x.parceiro_id === null && x.plano_id === pl.id);
-      return `<div class="cfg-linha tres"><div>${esc(pl.nome_curto || pl.nome)}<small>${esc(pl.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(pl.cluster || '')} · ${esc(moeda(pl.preco))}</small></div>
-        <span class="nota-campo">${pad ? 'padrão ' + esc(moeda(pad.valor)) : 'sem padrão'}</span>
-        ${ehAdmin ? `<input type="number" step="0.01" min="0" data-plano="${pl.id}" value="${meu ? meu.valor : ''}" aria-label="Comissão deste parceiro para ${esc(pl.nome_curto || pl.nome)}" placeholder="padrão">` : `<b>${meu ? esc(moeda(meu.valor)) : '—'}</b>`}</div>`;
-    }).join('');
-    return `<span class="nota-campo">Valor fixo por plano, só deste parceiro, sem estorno. A venda sem fidelidade paga o valor do mesmo plano. Vazio = vale o padrão (Configurações › Programa Parceiro). Sem nenhum dos dois, a instalação confirmada não gera pagamento e deixa o aviso "instalada sem comissão".</span>
-      <div data-form-comissao>${linhas || '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
+    const valor = (pid, id) => { const x = COM.find((c) => c.parceiro_id === pid && c.plano_id === id); return x ? Number(x.valor) : null; };
+    const celula = (c, col, f) => {
+      if (!c) return '<div class="com-cel vazio">—</div>';
+      const meu = valor(p.id, c.pf.id), pad = valor(null, c.pf.id);
+      const dif = meu != null && c.emp.some((e) => valor(p.id, e.id) !== meu);
+      const nota = `cliente paga ${esc(moeda(c.pf.preco))}`;
+      if (!ehAdmin) return `<div class="com-cel"><b class="val">${meu != null ? esc(moeda(meu)) : `padrão ${esc(moeda(pad))}`}</b><small>${nota}</small></div>`;
+      return `<div class="com-cel"><input type="number" step="0.01" min="0" inputmode="decimal" data-planos="${c.ids.join(',')}" value="${meu ?? ''}"
+          placeholder="${pad != null ? 'padrão ' + esc(moeda(pad)) : 'sem padrão'}" aria-label="Comissão deste parceiro: ${esc(f.familia)} ${col}">
+        <small>${nota}</small>${dif ? '<small class="dif">Empresas está diferente: salvar iguala</small>' : ''}</div>`;
+    };
+    const grade = NG.gradeComissao(PLANOS);
+    const linhas = grade.map((f) => `<div class="com-plano"><b>${esc(f.familia)}</b><small>${esc(f.velocidade)}</small></div>${celula(f.regular, 'Regular', f)}${celula(f.btu, 'BTU', f)}`).join('');
+    return `<span class="nota-campo">Valor fixo por venda instalada, só deste parceiro, sem estorno. Cada campo vale para pessoa física e Empresas do mesmo plano, com ou sem fidelidade. Vazio = vale o padrão, que aparece dentro do campo (Configurações › Programa Parceiro).</span>
+      <div data-form-comissao>${linhas ? `<div class="com-grade"><div class="com-h">Plano</div><div class="com-h">Regular</div><div class="com-h">BTU</div>${linhas}</div>` : '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
       ${ehAdmin ? '<div class="f-form-acoes"><button type="button" class="btn btn-acc" data-p="salvar-comissao">Salvar comissões deste parceiro</button></div>' : ''}`;
   }
 
@@ -621,21 +627,26 @@
 
   // Comissão por plano do parceiro: compara com o que existe e faz insert / update / delete (índice único parcial não aceita upsert).
   async function salvarComissao(p) {
-    const inputs = [...raiz.querySelectorAll('[data-form-comissao] input[data-plano]')];
+    const inputs = [...raiz.querySelectorAll('[data-form-comissao] input[data-planos]')];
     const ops = [];
+    let mudou = 0;
     for (const inp of inputs) {
-      const planoId = Number(inp.dataset.plano);
       const v = numOuNull(inp.value);
       if (Number.isNaN(v) || (v != null && v < 0)) { NG.toast('Há um valor de comissão inválido.', 'bad'); return; }
-      const atual = COM.find((x) => x.parceiro_id === p.id && x.plano_id === planoId);
-      if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
-      else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: p.id, plano_id: planoId, valor: v }));
-      else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+      const antes = ops.length;
+      // o mesmo valor em todos os planos da célula (pessoa física e Empresas)
+      for (const planoId of inp.dataset.planos.split(',').map(Number)) {
+        const atual = COM.find((x) => x.parceiro_id === p.id && x.plano_id === planoId);
+        if (v == null && atual) ops.push(NG.sb.from('parceiro_comissao').delete().eq('id', atual.id));
+        else if (v != null && !atual) ops.push(NG.sb.from('parceiro_comissao').insert({ parceiro_id: p.id, plano_id: planoId, valor: v }));
+        else if (v != null && atual && Number(atual.valor) !== v) ops.push(NG.sb.from('parceiro_comissao').update({ valor: v }).eq('id', atual.id));
+      }
+      if (ops.length > antes) mudou++;
     }
     if (!ops.length) { NG.toast('Nada mudou.', 'ok'); return; }
     const rs = await Promise.all(ops);
     const e = rs.find((r) => r.error);
-    if (e) { NG.toast(NG.msgErro(e.error), 'bad'); } else NG.toast(`${ops.length} comissão(ões) salva(s)`, 'ok');
+    if (e) { NG.toast(NG.msgErro(e.error), 'bad'); } else NG.toast(`${mudou} valor(es) salvo(s)`, 'ok');
     await recarregarTudo();
   }
 

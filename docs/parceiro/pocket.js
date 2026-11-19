@@ -81,7 +81,7 @@
   // ================================================================ telas públicas
   async function telaEntrar(msg) {
     await carregarContato();
-    render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio e receba toda sexta.</h1></div>
+    render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio Internet e receba a cada 15 dias.</h1><p class="sub" style="margin-top:6px">Pagamento quinzenal, sempre numa sexta, direto no seu Pix.</p></div>
       ${msg ? faixa('amarelo', msg.titulo, msg.texto) : ''}
       <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo nosso WhatsApp${CONTATO ? `, <b>${esc(fmtTel(CONTATO))}</b>` : ''}. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
       <div class="acoes"><a class="bt" href="#seja">Quero ser parceiro</a></div>`, null);
@@ -108,8 +108,8 @@
     ];
     return `<div class="cartao heroi" style="gap:10px">
         <div class="rot">Programa Parceiro · revenda autorizada Nio</div>
-        <h1 style="font-size:30px">Venda Nio Internet e receba toda sexta.</h1>
-        <p style="color:var(--suave);font-size:16px">Você indica quem quer internet boa. A gente cuida do resto.</p>
+        <h1 style="font-size:30px">Venda Nio Internet e receba a cada 15 dias.</h1>
+        <p style="color:var(--suave);font-size:16px">Você indica quem quer internet boa. A gente cuida do resto. O pagamento é quinzenal, sempre numa sexta.</p>
         <a class="bt" href="#cadastro" data-ir-cadastro style="margin-top:6px">Quero ser parceiro</a></div>
       <div class="cartao" style="gap:10px">
         <div class="rot">Quem é a Nio</div>
@@ -122,7 +122,7 @@
         <ol class="passos-nio">
           <li><span><b>Você indica.</b> Manda pelo app o nome, o endereço e o WhatsApp do cliente.</span></li>
           <li><span><b>A gente liga para o cliente,</b> faz o pedido na Nio e agenda a instalação.</span></li>
-          <li><span><b>Instalou, você recebe na sexta,</b> direto no seu Pix.</span></li></ol>
+          <li><span><b>Instalou, você recebe no pagamento da quinzena,</b> sempre numa sexta, direto no seu Pix.</span></li></ol>
         <p class="sub">Depois que o cadastro for aprovado, o app mostra quanto você ganha em cada plano.</p></div>`;
   }
 
@@ -232,7 +232,7 @@
           <div style="font-size:14px;color:var(--suave)">${numero(pr.vendas)} ${Number(pr.vendas) === 1 ? 'venda instalada' : 'vendas instaladas'}${pr.instalacoes_de ? ` de ${ddmm(pr.instalacoes_de)} a ${ddmm(pr.instalacoes_ate)}` : ''}</div></div>`
       : Number(RES.a_confirmar && RES.a_confirmar.valor) > 0
         ? `<div class="cartao heroi"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A gente avisa a sexta.</div></div>`
-        : `<div class="cartao heroi"><div class="rot">Toda sexta você recebe</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
+        : `<div class="cartao heroi"><div class="rot">Você recebe a cada 15 dias</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
     const mesAtual = hojeSP().slice(0, 7);
     const garantia = pts && pts.garantia_ate && String(pts.garantia_ate).slice(0, 7) >= mesAtual
       ? `<div class="faixa verde" style="font-size:14px"><div>Garantia ativa: ${moeda(pts.garantia_piso)} por mês até ${esc(nomeMes(pts.garantia_ate).toLowerCase())}, fazendo ${numero(pts.garantia_min_pontos)} pontos.</div></div>` : '';
@@ -443,7 +443,7 @@
     const montar = () => {
       $tela.innerHTML = html();
       const sel = lista.find((p) => String(p.plano_id) === String(envio.plano) && (p.formas || []).includes(envio.forma));
-      document.getElementById('p-ganha').innerHTML = sel && sel.comissao != null ? faixa('verde', `Você ganha ${moeda(sel.comissao)} nesta venda`, 'Quando a instalação for feita. Recebe na sexta do ciclo.') : '';
+      document.getElementById('p-ganha').innerHTML = sel && sel.comissao != null ? faixa('verde', `Você ganha ${moeda(sel.comissao)} nesta venda`, 'Quando a instalação for feita. Recebe no pagamento da quinzena, numa sexta.') : '';
       document.getElementById('p-enviar').disabled = !sel || envio.enviando;
       $tela.querySelectorAll('input[name=forma]').forEach((i) => i.addEventListener('change', () => { envio.forma = i.value; guardar(); montar(); }));
       $tela.querySelectorAll('input[name=plano]').forEach((i) => i.addEventListener('change', () => { envio.plano = i.value; guardar(); montar(); }));
@@ -507,7 +507,7 @@
     const ext = (PAGS || []).slice(0, 60).map((g) => `<div class="d-l"><span>${esc(g.tipo_texto)}${g.venda_primeiro_nome ? ` · ${esc(g.venda_primeiro_nome)}` : ''}<br><small>${g.status === 'pago' ? `pago ${ddmm(g.pago_em || g.vence_em)}` : g.vence_em ? `sexta ${ddmm(g.vence_em)}` : 'data a confirmar'}</small></span>
         <b class="${Number(g.valor) < 0 ? 'neg' : ''}">${moeda(g.valor)}${g.tem_comprovante && g.comprovante_path ? `<br><button type="button" class="link-bt" data-comp="${esc(g.comprovante_path)}">Comprovante</button>` : ''}</b></div>`).join('');
     if (!VENDAS) { try { await carregarVendas(); } catch (e) { VENDAS = []; } }
-    render(`<h1>Pagamentos</h1><p class="sub">Você recebe na sexta depois que a Nio paga as instalações do ciclo.</p>
+    render(`<h1>Pagamentos</h1><p class="sub">O pagamento é a cada 15 dias, sempre numa sexta: na sexta seguinte ao dia em que a Nio paga as instalações da quinzena.</p>
       ${cartaoGanhos(false)}
       <div class="lista"><div class="rot">Próximas sextas</div>${prox || '<div class="vazio">O calendário das próximas sextas ainda não saiu.</div>'}
         ${aConf.length ? `<div class="cartao pequeno"><div class="linha"><b>Data a confirmar</b><span class="num" style="font-size:18px">${moeda(soma(aConf))}</span></div><div class="sub">A gente avisa a sexta assim que a Nio divulgar o ciclo.</div></div>` : ''}</div>
