@@ -1,5 +1,5 @@
 -- id: X13
--- titulo: Casos Janaina e Greiciele (0274): "Sem resposta" dado pelo time liga a Retomada da Mari (D3 → Ligar → D7 → D15); só no fim a Saída fica
+-- titulo: Casos Janaina e Greiciele (0274 · 0305): "Sem resposta" dado pelo time liga a Retomada da Mari (D3 → Ligar → D7 → D15); só no fim a Saída fica
 -- tipo: atual
 select sim.lead_com_venda('Jana X13') as c \gset
 select sim.como('backoffice');
@@ -15,10 +15,15 @@ select sim.confere('a Saída avisa que a Mari faz a Retomada', :'r' like '%Retom
 select sim.confere('a Retomada começou', (select retomada_desde is not null and retomada_fim_em is null from public.mari_conversas where id = :'c'),
   (select row(retomada_desde, retomada_origem, retomada_fim)::text from public.mari_conversas where id = :'c'));
 
--- D3: sai pela fila do NIOGEN, em template (a janela de 24 h fechou). O relógio anda 1 dia para o meio-dia de hoje já ter passado da Saída.
+-- D3 (0305): na Saída manual ele conta 3 dias da última fala do cliente (aqui, 2 dias antes da Saída), não sai na hora.
 select sim.como('servico');
 select sim.fila_rodar();
-select sim.passa(:'c', '1 day');
+select public._retomada_tick(now());
+select sim.fila_rodar();
+select sim.confere('logo depois da Saída o D3 ainda não saiu', not exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c'
+  and a.momento = 'retomada' and a.tipo = 'mensagem'), 'saiu na hora');
+-- sai pela fila do NIOGEN, em template (a janela de 24 h fechou). O relógio anda 2 dias: já passaram 3 dias da última fala.
+select sim.passa(:'c', '2 days');
 select sim.fila_rodar();
 select public._retomada_tick(sim.meio_dia());
 select sim.fila_rodar();
