@@ -70,10 +70,18 @@ Regras (todas obrigatórias):
 - Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.
 - Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).
 Responda SÓ com o texto da mensagem, sem aspas.`;
+// 0314: lembrete que vai com a arte fixa (F2) — o texto é a legenda dela e tem de falar do mesmo assunto.
+const legenda = String(ctx.imagem_junto || '').trim();
+const comImagem = legenda ? `
+
+ESTA cutucada vai como LEGENDA de uma imagem enviada junto. ${legenda}
+O texto TEM de conversar com a imagem: o argumento desta vez é a qualidade da internet da Nio (a mais estável do Brasil,
+segundo o Opensignal) — pode emendar o preço congelado até 2030. Não descreva a imagem ("veja a imagem") nem invente
+prêmio, número ou velocidade que não estão nela. Continue terminando com a pergunta do que FALTA.` : '';
 const pedido = {
   model: 'claude-sonnet-5-5', max_tokens: 400,
   output_config: { effort: 'low' },
-  system: sistema,
+  system: sistema + comImagem,
   messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\n' + JSON.stringify(ctx) }],
 };
 return [{ json: { pedido } }];
