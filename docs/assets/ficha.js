@@ -3338,7 +3338,7 @@
       ? `<button type="button" class="fc-es fc-es-pg pg-${cor}" data-f="fc-etapa" data-k="din" title="${esc(dica)}"><i>${ic}</i>Pagamento</button>`
       : `<span class="fc-es fc-es-pg pg-off" title="${esc(dica)}"><i></i>Pagamento</span>`;
   }
-  function escadaPartes(semNome) {
+  function escadaPartes(semNome, naTrilha) {   // naTrilha (19/11): o motivo e o "parou em" já estão no degrau vermelho
     const l = d.lead;
     const A = NG.ajuda;
     const etapas = (d.leadCfg || []).filter((x) => x.tipo === 'etapa');
@@ -3365,7 +3365,9 @@
       const nome = l.saida_nome || (l.destino === 'teste_duplicada' ? 'Teste ou duplicada' : 'sem motivo');
       const sub = l.saida_sub && !String(l.saida_sub).toLowerCase().startsWith(nome.toLowerCase()) ? l.saida_sub : '';
       curto = `Saída · ${nome}`;
-      info = `${semNome ? '' : `<span>Saída: <b>${esc(nome)}</b>${sub ? ` · ${esc(sub)}` : ''}</span>`}${l.saida_ajuda ? NG.dicaTxt(l.saida_ajuda) : ''}${parou ? `<span>${semNome ? '' : '· '}parou em ${esc(parou)}</span>` : ''}${l.volta_em ? `<span>· volta ${esc(NG.fmtDiaISO(l.volta_em))}</span>` : ''}`;
+      info = naTrilha
+        ? `${l.saida_ajuda ? `<span>Sobre a Saída</span>${NG.dicaTxt(l.saida_ajuda)}` : ''}${l.volta_em ? `<span>${l.saida_ajuda ? '· ' : ''}volta ${esc(NG.fmtDiaISO(l.volta_em))}</span>` : ''}`
+        : `${semNome ? '' : `<span>Saída: <b>${esc(nome)}</b>${sub ? ` · ${esc(sub)}` : ''}</span>`}${l.saida_ajuda ? NG.dicaTxt(l.saida_ajuda) : ''}${parou ? `<span>${semNome ? '' : '· '}parou em ${esc(parou)}</span>` : ''}${l.volta_em ? `<span>· volta ${esc(NG.fmtDiaISO(l.volta_em))}</span>` : ''}`;
       if (ehBO() && !silenciadaConv()) reabrir = `<span class="fc-reab"><button type="button" class="btn btn-sm" data-f="reabrir">Reabrir</button>${NG.dicaTxt(A.saida_reabrir)}</span>`;
     } else if (l.destino === 'instalada') {
       const canc = d.din && d.din.cancelada_apos_instalar_em;
@@ -4212,20 +4214,26 @@
     const l = d && d.lead;
     const etapas = ((d && d.leadCfg) || []).filter((x) => x.tipo === 'etapa');
     if (!l || !etapas.length) return '';
-    const E = escadaPartes(false);
     const fora = l.destino === 'saida' || l.destino === 'teste_duplicada';
+    // 19/11 (Ricardo: "Faz a escada mostrar o motivo da Saída"): o degrau vermelho dizia só o nome do degrau, e "✕ Viabilidade"
+    // parecia "sem viabilidade" (Julia e Julio tinham viabilidade e saíram por outro motivo). Agora o motivo vai colado no degrau
+    // onde parou ("✕ Viabilidade · Saída: Recusou"); à direita fica só o resto (volta, alerta), sem repetir o motivo.
+    const E = escadaPartes(false, fora);
+    const sNome = fora ? (l.saida_nome || (l.destino === 'teste_duplicada' ? 'Teste ou duplicada' : 'sem motivo')) : '';
+    const sSub = fora && l.saida_sub && !String(l.saida_sub).toLowerCase().startsWith(sNome.toLowerCase()) ? l.saida_sub : '';
     const iAt = etapas.findIndex((e) => e.codigo === (fora ? l.etapa_parou || l.etapa : l.etapa));
     const deg = etapas.map((e, i) => {
       const st = l.destino === 'instalada' || i < iAt ? 'done' : i === iAt ? (fora ? 'stop' : 'now') : 'todo';
       const k = DEG_K[e.codigo] || 'atend';
       const os = e.codigo === 'instalacao' && temOsNio();
-      const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ' — parou aqui (Saída)' : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}${os ? ' Clique: consulta esta OS agora no portal da Nio (uns 15 s).' : ' Clique para ver o conteúdo deste degrau.'}`;
-      return `<button type="button" class="fc-es s-${st}${fc.etapa === k && !fc.etapaX ? ' on' : ''}" data-f="fc2-deg" data-k="${k}"${os ? ' data-os="1"' : ''} title="${esc(dica)}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}${os ? '<span class="fc-es-g" aria-hidden="true">⟳</span>' : ''}</button>`;
+      const motivo = st === 'stop' ? `Saída: ${sNome}${sSub ? ` · ${sSub}` : ''}` : '';
+      const dica = `${e.nome}${st === 'now' ? ' — o lead está aqui' : st === 'stop' ? ` — parou aqui. ${motivo}` : st === 'done' ? ' — feito' : ''}${e.ajuda ? `. ${e.ajuda}` : ''}${os ? ' Clique: consulta esta OS agora no portal da Nio (uns 15 s).' : ' Clique para ver o conteúdo deste degrau.'}`;
+      return `<button type="button" class="fc-es s-${st}${fc.etapa === k && !fc.etapaX ? ' on' : ''}" data-f="fc2-deg" data-k="${k}"${os ? ' data-os="1"' : ''} title="${esc(dica)}"><i>${st === 'done' ? IC.ok : st === 'stop' ? IC.x : ''}</i>${esc(e.nome)}${motivo ? `<em class="fc-es-sai">${esc(motivo)}</em>` : ''}${os ? '<span class="fc-es-g" aria-hidden="true">⟳</span>' : ''}</button>`;
     });
     const pg = d && !d.soConversa && d.din ? d.din.estado : null;
     const stPg = pg === 'paga' ? 'done' : pg === 'estornada' ? 'stop' : pg ? 'now' : 'todo';
     deg.push(`<button type="button" class="fc-es s-${stPg}${fc.etapa === 'din' ? ' on' : ''}" data-f="fc2-deg" data-k="din" title="${esc(`Pagamento da comissão: ${pg ? (PG_TXT[pg] || pg) : 'nasce quando a Nio instala'}`)}"><i>${stPg === 'done' ? IC.ok : stPg === 'stop' ? IC.x : ''}</i>Pagamento</button>`);
-    return `<section class="fc2-trilha" aria-label="Escada do lead"><span class="fc2-tri-k">ESCADA</span><div class="fc2-tri-l">${deg.join('')}</div>${E ? `<div class="fc2-tri-i">${E.info}</div>` : ''}</section>`;
+    return `<section class="fc2-trilha" aria-label="Escada do lead"><span class="fc2-tri-k">ESCADA</span><div class="fc2-tri-l">${deg.join('')}</div>${E && E.info.trim() ? `<div class="fc2-tri-i">${E.info}</div>` : ''}</section>`;
   }
   // 15/11 noite (Ricardo: "A Escada e a Jornada são o mesmo conteúdo?" → "Sim"): a Escada (topo) diz ONDE o lead está; a Jornada
   // mostra O QUE foi feito, agrupada pelos degraus da Escada — cada grupo traz os passos que pertencem àquele degrau
