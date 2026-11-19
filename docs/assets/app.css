@@ -3639,3 +3639,9 @@ button.fc-id:hover { color: inherit; }
 @media (max-width: 900px) {
   .lv2-placar { margin-left: 0; white-space: normal; }
 }
+
+/* 19/11 (Ricardo: "Separar trabalho e radar"): divisores da lista da Live — Sua fila · 🔥 Oportunidades · Radar. */
+.lv2-div { display: flex; align-items: baseline; gap: 10px; padding: 14px 10px 6px; border-bottom: 1px solid #2A3140; color: #E9EDF3; font-size: 13px; }
+.lv2-div:first-child { padding-top: 4px; }
+.lv2-div b { font-weight: 700; letter-spacing: .01em; }
+.lv2-div span { color: #8D97A3; font-size: 12px; }
