@@ -56,6 +56,8 @@
     <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
     <!-- 0107: 🔥 oportunidades (só admin/backoffice) — mostradas · enviadas · responderam · qualificaram · pedidos (7 dias no mouse) -->
     <a class="painel-op" id="op-linha" href="fila.html" hidden></a>
+    <!-- 0302: medidor de canais (só admin/backoffice) — custo por venda de cada canal nos últimos 7 dias -->
+    <section class="painel" id="canais-7d" aria-labelledby="t-canais" hidden></section>
 
     <section class="painel" aria-labelledby="t-acao">
       <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=acao" id="ver-acao">ver todas →</a></div>
@@ -128,7 +130,7 @@
     el.hidden = false;
   }
   async function carregarExtras() {
-    if (veMari) { carregarAlarmes(); carregarOportunidades(); }
+    if (veMari) { carregarAlarmes(); carregarOportunidades(); carregarCanais(); }
     const [rz, rmari, rp, rres] = await Promise.all([
       NG.guardado('dfv_resumo_jf', 6 * 3600000, () => NG.sb.from('v_dfv_resumo').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA').maybeSingle()),   // 13/11: a base muda 1×/semana
       veMari ? carregarMari() : Promise.resolve(null),
@@ -140,6 +142,30 @@
     portal = rp && !rp.error ? rp.data : null;
     resumo = !rres ? null : rres.error ? { erro: NG.msgErro(rres.error) } : rres.data;
     render();
+  }
+
+  // 0302: "Canais · 7 dias" — uma linha por canal ativo (ou com conversa na janela), ordenada pelo custo por venda (canais_resumo).
+  // Sem venda: mostra o custo por conversa; sem gasto: "—". Clique abre a Leads filtrada pela origem.
+  async function carregarCanais() {
+    const el = document.getElementById('canais-7d');
+    const { data, error } = await NG.sb.from('v_canais_7d').select('*');
+    if (error || !data) { el.hidden = true; return; }
+    const linhas = data.filter((k) => k.ativo || k.conversas || k.vendas || k.gasto);
+    if (!linhas.length) { el.hidden = true; return; }
+    const R = (x) => (x == null ? '—' : NG.fmtMoeda(Number(x)));
+    const n = (x) => NG.fmtNum(Number(x || 0));
+    const tot = linhas.reduce((s, k) => ({ c: s.c + (k.conversas || 0), v: s.v + (k.vendas || 0), i: s.i + (k.instaladas || 0), g: s.g + Number(k.gasto || 0) }), { c: 0, v: 0, i: 0, g: 0 });
+    const desc = linhas.find((k) => k.canal === 'desconhecida');
+    const pct = tot.c && desc ? Math.round((desc.conversas / tot.c) * 100) : 0;
+    const custo = (k) => (k.custo_venda_instalada != null ? `${R(k.custo_venda_instalada)} <small>/instalada</small>`
+      : k.custo_venda != null ? `${R(k.custo_venda)} <small>/venda</small>`
+      : k.custo_conversa != null ? `${R(k.custo_conversa)} <small>/conversa</small>` : '—');
+    el.innerHTML = `<div class="q-linha"><h2 id="t-canais">Canais · 7 dias</h2><small>${n(tot.c)} conversas · ${n(tot.v)} vendas · ${n(tot.i)} instaladas · ${R(tot.g)} gastos${pct ? ` · <b>${pct}% sem origem</b>` : ''} · <a class="muted" href="configuracoes.html#canais">custos e origens →</a></small></div>
+      <div class="rolagem"><table class="tab"><thead><tr><th>Canal</th><th class="num">Conversas</th><th class="num">Qualificados</th><th class="num">Vendas</th><th class="num">Instaladas</th><th class="num">Gasto</th><th class="num">Custo por venda</th><th class="num col-media">Comissão prevista</th></tr></thead>
+      <tbody>${linhas.map((k) => `<tr><td><a href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a></td>
+        <td class="num mono">${n(k.conversas)}</td><td class="num mono">${n(k.qualificados)}</td><td class="num mono">${n(k.vendas)}</td><td class="num mono">${n(k.instaladas)}</td>
+        <td class="num mono">${k.gasto == null ? '—' : R(k.gasto)}</td><td class="num mono">${custo(k)}</td><td class="num mono col-media">${Number(k.comissao_prevista) ? R(k.comissao_prevista) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+    el.hidden = false;
   }
 
   // 0102: alarmes que não travam nada — fala do time digitada direto no Chatwoot (gatilho em mari_turnos → mari_erros

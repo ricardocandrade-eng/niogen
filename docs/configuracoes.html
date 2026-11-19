@@ -96,6 +96,34 @@
     </section>
 
     <!-- Tabela vigente -->
+    <!-- 0302: canais de captação — custo por dia (à mão, admin) e origem a conferir (backoffice) -->
+    <section id="canais" class="secao" hidden>
+      <div class="faixa cinza">O custo da <b>Meta Ads</b> entra sozinho (coleta de 15 em 15 min). Aqui só o que não tem importador: Google, TikTok, Kwai, SMS, influenciador… O card <b>Canais · 7 dias</b> do Painel junta tudo.</div>
+      <h2 class="secao-tit">Origem a conferir (7 dias)</h2>
+      <p class="nota-campo">Conversas que chegaram sem marca no texto e sem clique de anúncio. Pergunte ao cliente por onde ele achou a gente e corrija — é isso que diz quanto cada canal vende.</p>
+      <section class="lista padrao" aria-label="Origem a conferir"><div class="rolagem"><table class="tab">
+        <thead><tr><th>Quando</th><th>Cliente</th><th>Por onde chegou</th><th></th></tr></thead>
+        <tbody id="cn-origem"><tr><td colspan="4" class="vazio">Carregando…</td></tr></tbody></table></div></section>
+      <h2 class="secao-tit">Custo por dia</h2>
+      <form id="cn-form" class="secao" novalidate hidden>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <label>Canal<br><select class="sel" id="cn-canal"></select></label>
+          <label>Dia<br><input type="date" id="cn-dia"></label>
+          <label>Valor (R$)<br><input type="number" id="cn-valor" min="0" step="0.01" inputmode="decimal" style="width:120px"></label>
+          <label>Obs.<br><input type="text" id="cn-obs" maxlength="120" placeholder="opcional"></label>
+          <button type="submit" class="btn btn-acc">Gravar custo</button>
+        </div>
+        <span class="nota-campo">Mesmo canal e dia = substitui. Valor vazio = apaga o dia.</span>
+      </form>
+      <section class="lista padrao" aria-label="Custos por canal"><div class="rolagem"><table class="tab">
+        <thead><tr><th>Dia</th><th>Canal</th><th class="num">Valor</th><th>De onde</th></tr></thead>
+        <tbody id="cn-custos"><tr><td colspan="4" class="vazio">Carregando…</td></tr></tbody></table></div></section>
+      <h2 class="secao-tit">Canais</h2>
+      <section class="lista padrao" aria-label="Canais"><div class="rolagem"><table class="tab">
+        <thead><tr><th>Canal</th><th>Tipo</th><th>No ar</th><th>Nota</th></tr></thead>
+        <tbody id="cn-lista"></tbody></table></div></section>
+    </section>
+
     <section id="tabela" class="secao" hidden>
       <div class="barra-filtros">
         <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="t-busca" aria-label="Buscar na tabela" placeholder="Buscar plano, código, serviço ou cidade"></label>
@@ -922,9 +950,69 @@ Guardar?`)) return;
     carregarEquipe();
   });
 
-  // ---------------------------------------------------------- abas (Importação · Tabela vigente · Programa Parceiro · Equipe)
-  const HASH_ABA = { tabela: '#tabela', parceiro: '#parceiro', equipe: '#equipe' };
-  let aba = location.hash === '#tabela' ? 'tabela' : location.hash === '#parceiro' ? 'parceiro'
+  // ---------------------------------------------------------- 0302: Canais (custo por dia à mão · origem a conferir)
+  let CN = null;
+  const TIPO_CANAL = { midia_paga: 'Mídia paga', organico: 'Orgânico', base_propria: 'Base própria', indicacao: 'Indicação', parceiro: 'Parceiro', outbound: 'Ativo (outbound)', sem_pista: 'Sem pista', interno: 'Interno' };
+  async function carregarCanais() {
+    const desde = new Date(Date.now() - 7 * 86400000).toISOString();
+    const [rk, rc, ro] = await Promise.all([
+      NG.sb.from('config_canais').select('*').order('ordem'),
+      NG.sb.from('v_canal_custo_dia').select('*').order('dia', { ascending: false }).limit(60),
+      NG.sb.from('mari_conversas').select('id, nome_contato, dados, telefone, created_at').eq('origem', 'desconhecida').eq('canal', 'whatsapp')
+        .gte('created_at', desde).order('created_at', { ascending: false }).limit(100),
+    ]);
+    if (rk.error) { document.getElementById('cn-lista').innerHTML = `<tr><td colspan="4" class="vazio">${esc(NG.msgErro(rk.error))}</td></tr>`; return; }
+    CN = { canais: rk.data || [], custos: rc.error ? [] : (rc.data || []), origem: ro.error ? [] : (ro.data || []) };
+    const nome = Object.fromEntries(CN.canais.map((k) => [k.canal, k.nome]));
+    const escolher = CN.canais.filter((k) => k.tipo !== 'interno' && !['desconhecida', 'parceiro_pap'].includes(k.canal));
+    document.getElementById('cn-lista').innerHTML = CN.canais.map((k) => `<tr><td><b>${esc(k.nome)}</b> <span class="mono apagado">${esc(k.canal)}</span></td><td>${esc(TIPO_CANAL[k.tipo] || k.tipo)}</td>
+      <td>${k.ativo ? `sim${k.subiu_em ? ` · desde ${esc(NG.fmtDiaISO(k.subiu_em))}` : ''}` : '<span class="apagado">ainda não</span>'}</td><td class="apagado">${esc(k.nota || '')}</td></tr>`).join('');
+    document.getElementById('cn-custos').innerHTML = CN.custos.length ? CN.custos.map((c) => `<tr><td>${esc(NG.fmtDiaISO(c.dia))}</td><td>${esc(nome[c.canal] || c.canal)}</td>
+      <td class="num mono">${NG.fmtMoeda(Number(c.valor))}</td><td class="apagado">${c.origem_do_dado === 'meta_ads_diario' ? 'coleta da Meta' : 'digitado'}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="vazio">Nenhum custo ainda.</td></tr>';
+    document.getElementById('cn-origem').innerHTML = CN.origem.length ? CN.origem.map((c) => `<tr><td>${esc(NG.fmtDataHora(c.created_at))}</td>
+      <td>${esc((c.dados && c.dados.nome) || c.nome_contato || 'sem nome')} <span class="mono apagado">${esc(c.telefone || '')}</span></td>
+      <td><select class="sel" data-cn-sel="${esc(c.id)}"><option value="">escolha…</option>${escolher.map((k) => `<option value="${esc(k.canal)}">${esc(k.nome)}</option>`).join('')}</select></td>
+      <td><button type="button" class="btn btn-sm" data-cn-corrigir="${esc(c.id)}">Corrigir</button></td></tr>`).join('')
+      : '<tr><td colspan="4" class="vazio">Nenhuma conversa sem origem nos últimos 7 dias. ✓</td></tr>';
+    const f = document.getElementById('cn-form');
+    f.hidden = !ehAdmin;
+    if (ehAdmin) {
+      const sel = document.getElementById('cn-canal');
+      if (!sel.options.length) sel.innerHTML = CN.canais.filter((k) => k.canal !== 'meta_ads' && !['interno', 'sem_pista'].includes(k.tipo))
+        .map((k) => `<option value="${esc(k.canal)}">${esc(k.nome)}</option>`).join('');
+      const dia = document.getElementById('cn-dia');
+      if (!dia.value) { dia.value = NG.diaSP(); dia.max = NG.diaSP(); }
+    }
+    renderAbas();
+  }
+  document.getElementById('canais').addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-cn-corrigir]');
+    if (!b) return;
+    const id = b.dataset.cnCorrigir;
+    const sel = document.querySelector(`[data-cn-sel="${CSS.escape(id)}"]`);
+    if (!sel || !sel.value) { NG.toast('Escolha por onde o cliente chegou.', 'bad'); return; }
+    b.disabled = true;
+    const { error } = await NG.sb.rpc('conversa_origem_corrigir', { p_conversa: id, p_origem: sel.value });
+    b.disabled = false;
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Origem corrigida', 'ok');
+    carregarCanais();
+  });
+  document.getElementById('cn-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const v = document.getElementById('cn-valor').value.trim();
+    const { error } = await NG.sb.rpc('canal_custo_gravar', { p_canal: document.getElementById('cn-canal').value, p_dia: document.getElementById('cn-dia').value,
+      p_valor: v === '' ? null : Number(v.replace(',', '.')), p_obs: document.getElementById('cn-obs').value });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(v === '' ? 'Dia apagado' : 'Custo gravado', 'ok');
+    document.getElementById('cn-valor').value = ''; document.getElementById('cn-obs').value = '';
+    carregarCanais();
+  });
+
+  // ---------------------------------------------------------- abas (Importação · Tabela vigente · Programa Parceiro · Equipe · Canais)
+  const HASH_ABA = { tabela: '#tabela', parceiro: '#parceiro', equipe: '#equipe', canais: '#canais' };
+  let aba = location.hash === '#tabela' ? 'tabela' : location.hash === '#parceiro' ? 'parceiro' : location.hash === '#canais' ? 'canais'
     : (location.hash === '#equipe' && ehAdmin) ? 'equipe' : 'conteudo';
   function renderAbas() {
     NG.abasPilulas(document.getElementById('abas'), [
@@ -932,6 +1020,7 @@ Guardar?`)) return;
       { id: 'tabela', nome: 'Tabela vigente', n: T ? T.planos.filter((p) => p.ativo).length : 0 },
       { id: 'parceiro', nome: 'Programa Parceiro', n: PC ? PC.comissao.length : 0 },
       ...(ehAdmin ? [{ id: 'equipe', nome: 'Equipe', n: EQ ? EQ.length : 0 }] : []),
+      { id: 'canais', nome: 'Canais', n: CN ? CN.origem.length : 0 },
     ], aba, (id) => { aba = id; history.replaceState(null, '', HASH_ABA[id] || location.pathname); mostrarAba(); });
   }
   function mostrarAba() {
@@ -940,6 +1029,8 @@ Guardar?`)) return;
     document.getElementById('tabela').hidden = aba !== 'tabela';
     document.getElementById('parceiro').hidden = aba !== 'parceiro';
     document.getElementById('equipe').hidden = aba !== 'equipe';
+    document.getElementById('canais').hidden = aba !== 'canais';
+    if (aba === 'canais' && !CN) carregarCanais();
     if (aba === 'tabela' && !tabelaCarregada) carregarTabela();
     if (aba === 'parceiro' && !PC) carregarParceiro();
     if (aba === 'equipe' && !EQ) carregarEquipe();

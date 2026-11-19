@@ -180,10 +180,12 @@
     document.getElementById('f-saida').innerHTML = '<option value="">Saída: qualquer motivo</option>' + cfg.saida.filter((s) => s.codigo !== 'teste_duplicada').map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)}</option>`).join('');
   }
   async function carregar() {
-    const [rl, rc] = await Promise.all([
+    const [rl, rc, rk] = await Promise.all([
       NG.sb.from('v_leads').select('*').order('ultima_em', { ascending: false }).limit(2000),
       NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
+      NG.sb.from('config_canais').select('canal, nome'),   // 0302: os nomes dos canais vêm do banco
     ]);
+    if (rk && !rk.error) (rk.data || []).forEach((k) => { if (!ORIGEM[k.canal]) ORIGEM[k.canal] = k.nome; });
     if (rl.error) { tbody.innerHTML = `<tr><td colspan="10" class="vazio">${esc(NG.msgErro(rl.error))}</td></tr>`; return; }
     leads = rl.data || [];
     if (!rc.error) { cfg = { etapa: [], status: [], saida: [] }; (rc.data || []).forEach((k) => cfg[k.tipo] && cfg[k.tipo].push(k)); }
