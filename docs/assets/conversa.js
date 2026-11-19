@@ -369,9 +369,19 @@
       const d = st.d;
       const its = [];
       const turnosOut = d.turnos.filter((t) => t.papel === 'humano' || t.papel === 'mari');
+      // 19/11 (caso Arilton): cutucada que saiu como voz/imagem também fica gravada como turno de texto — o cliente recebeu SÓ a
+      // mídia; o turno não vira um 2º balão (a mídia já mostra o texto/transcrição).
+      const midiaCad = (d.envios || []).filter((e) => e.origem === 'cadencia' && e.passo)
+        .map((e) => ({ passo: e.passo, em: new Date(e.created_at).getTime() }));
+      const virouMidia = (t) => {
+        const p = t.papel === 'mari' && t.tags && t.tags.cadencia;
+        if (!p) return false;
+        const em = new Date(t.created_at).getTime();
+        return midiaCad.some((e) => e.passo === p && Math.abs(e.em - em) < 120000);
+      };
       d.turnos.forEach((t) => {
         const txt = textoTurno(t.texto);
-        if (!txt) return;
+        if (!txt || virouMidia(t)) return;
         if (t.papel === 'sistema') { its.push({ em: t.created_at, tipo: 'sis', txt: txt.replace(/^\[|\]$/g, '') }); return; }
         its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: t.papel === 'lead' && Array.isArray(t.midia) ? t.midia : null,
           quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice === 'sopro' ? 'Mari · soprada pelo time' : t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
