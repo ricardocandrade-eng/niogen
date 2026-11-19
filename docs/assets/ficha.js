@@ -3783,17 +3783,22 @@
     }
     // 18/11: a Retomada da 0274 (Saída Sem resposta / Recusou / cliente parou com o time) sai pela fila do NIOGEN
     // — turno com tags.backoffice = retomada, não tags.cadencia. Enquanto ela está no ar (retomada_desde sem retomada_fim_em), a
-    // ficha mostra os passos dela no lugar da escada antiga, com o mesmo relógio da _retomada_tick: D3 na abertura, D7 = +4 dias,
-    // D15 = +12 dias, Saída 48 h depois do D15; o NIOGEN pede para ligar 1 dia depois do D3.
+    // ficha mostra os passos dela no lugar da escada antiga, com o mesmo relógio da _retomada_tick (_retomada_quando, 0305): conta da
+    // base (retomada_base = a última fala; na Retomada pelo time, abertura − 3 dias): D3 = base + 3 dias, D7 = base + 7 (≥ D3 + 4),
+    // D15 = base + 15 (≥ D7 + 8), Saída 48 h depois do D15; o NIOGEN pede para ligar 1 dia depois do D3.
     const retAtiva = !!(c.retomada_desde && !c.retomada_fim_em);
     if (retAtiva) {
       const R0 = ms(c.retomada_desde);
+      const DIA = 24 * HMS;
+      const B = c.retomada_base ? ms(c.retomada_base) : R0 - 3 * DIA;
       const feitos = ((d.cad && d.cad.lista) || []).filter((t) => t.tags && t.tags.backoffice === 'retomada' && ms(t.created_at) >= R0 - 60000);
       const ordem = ['D3', 'D7', 'D15'];
       const iPasso = ordem.indexOf(c.retomada_passo || '');
-      const emD3 = iPasso >= 0 ? ms((feitos[0] || {}).created_at) || (iPasso === 0 ? ms(c.retomada_passo_em) : null) : null;
-      const rp = [mk('D3', { prev: R0, ret: true }), mk('LIG', { prev: (emD3 || R0) + 24 * HMS, ret: true }), mk('D7', { prev: R0 + 4 * 24 * HMS, ret: true }),
-        mk('D15', { prev: R0 + 12 * 24 * HMS, ret: true }), mk('FIM', { prev: (iPasso === 2 ? ms(c.retomada_passo_em) : R0 + 12 * 24 * HMS) + 48 * HMS, ret: true })];
+      const feito = (i) => (iPasso >= i ? ms((feitos[i] || {}).created_at) || (iPasso === i ? ms(c.retomada_passo_em) : null) : null);
+      const emD3 = feito(0), emD7 = feito(1);
+      const pD3 = Math.max(B + 3 * DIA, R0), pD7 = Math.max(B + 7 * DIA, (emD3 || pD3) + 4 * DIA), pD15 = Math.max(B + 15 * DIA, (emD7 || pD7) + 8 * DIA);
+      const rp = [mk('D3', { prev: pD3, ret: true }), mk('LIG', { prev: (emD3 || pD3) + DIA, ate: pD7, ret: true }), mk('D7', { prev: pD7, ret: true }),
+        mk('D15', { prev: pD15, ret: true }), mk('FIM', { prev: (iPasso === 2 ? ms(c.retomada_passo_em) : pD15) + 48 * HMS, ret: true })];
       let proxMarcado = false;
       rp.forEach((p) => {
         if (p.cod === 'LIG') return;
@@ -3840,7 +3845,7 @@
       const ligou = (d.contatos || []).find((x) => x.canal === 'ligacao' && ms(x.em) > lig.prev - 24 * HMS);
       const d3R = lig.ret && seq.find((p) => p.ret && p.cod === 'D3' && p.st === 'ok');
       if (ligou) { lig.st = 'ok'; lig.em = ms(ligou.em); } else if (k && k.ligar_sugerido) lig.st = 'agora';
-      else if (lig.ret) lig.st = d3R && agora >= lig.prev ? (agora < ms(c.retomada_desde) + 4 * 24 * HMS ? 'agora' : 'pul') : 'fut';   // Retomada: liga entre D3 + 1 dia e o D7
+      else if (lig.ret) lig.st = d3R && agora >= lig.prev ? (agora < (lig.ate || ms(c.retomada_desde) + 4 * 24 * HMS) ? 'agora' : 'pul') : 'fut';   // Retomada: liga entre D3 + 1 dia e o D7
       else if (agora > lig.prev + 2 * 24 * HMS) lig.st = 'pul';
     }
     seq.forEach((p) => {
