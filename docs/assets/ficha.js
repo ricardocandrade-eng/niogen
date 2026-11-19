@@ -434,7 +434,7 @@
       <h3>${esc(titulo)}</h3>${texto ? `<p>${texto}</p>` : ''}${corpo}${acoesForm(rotulo || 'Salvar')}</form>`;
 
   // 13/11 (4a): saída única. O porquê (sub-motivo) é texto livre no banco; a tela oferece a lista da decisão D4.
-  const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'pedido Nio em andamento', 'suporte'],
+  const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'suporte'],
     nio_nao_instalou: ['inviabilidade', 'pendência sem solução', 'outro'],
     credito_negado: ['sem aprovação', 'só cartão, sem cartão'] };   // 18/11 (caso Maria Fernanda): aprovado só no cartão e o cliente não tem cartão
   const SAIDA_SO_VENDA = ['reprovado_biometria', 'nio_nao_instalou', 'venda_indevida_fraude'];

@@ -1172,7 +1172,7 @@
 
   // 13/11 (etapa 4a): uma lista só de motivos de saída — a da config_lead (0156), a mesma da ficha, da tela Leads e das contas do
   // funil. O porquê (sub-motivo) segue a decisão D4. Quem grava é a lead_sair (0157), nunca a tela.
-  const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'pedido Nio em andamento', 'suporte'],
+  const SAIDA_SUBS = { recusou: ['preço', 'concorrente', 'momento', 'desistiu', 'outro'], ja_cliente_nio: ['cliente ativo', 'suporte'],
     nio_nao_instalou: ['inviabilidade', 'pendência sem solução', 'outro'],
     credito_negado: ['sem aprovação', 'só cartão, sem cartão'] };   // 18/11 (caso Maria Fernanda)
   const SAIDA_SO_VENDA = ['reprovado_biometria', 'nio_nao_instalou', 'venda_indevida_fraude'];
