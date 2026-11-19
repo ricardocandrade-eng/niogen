@@ -178,19 +178,19 @@
 
   async function telaInicio() {
     render('<div class="carregando">Carregando…</div>', 'inicio');
-    try { await Promise.all([carregarResumo(), carregarVendas()]); } catch (e) { return erroCarga(e); }
+    try { await Promise.all([carregarResumo(), carregarVendas(), carregarPags().catch(() => { PAGS = []; })]); } catch (e) { return erroCarga(e); }
     if (RES.status !== 'ativo') return telaStatus();
     if (RES.termo && RES.termo.precisa_aceitar) return telaTermo();
     const pts = RES.pontos;
     const pr = RES.proximo;
     const nivel = pts && pts.degrau_atual ? pts.degrau_atual.nome : 'Começando';
     const receber = pr
-      ? `<div class="cartao"><div class="rot">${esc(diaSemana(pr.recebe_em))}, ${ddmm(pr.recebe_em)} você recebe</div>
+      ? `<div class="cartao heroi"><div class="rot">${esc(diaSemana(pr.recebe_em))}, ${ddmm(pr.recebe_em)} você recebe</div>
           <div class="grande">${moeda(pr.valor)}</div>
           <div style="font-size:14px;color:var(--suave)">${numero(pr.vendas)} ${Number(pr.vendas) === 1 ? 'venda instalada' : 'vendas instaladas'}${pr.instalacoes_de ? ` de ${ddmm(pr.instalacoes_de)} a ${ddmm(pr.instalacoes_ate)}` : ''}</div></div>`
       : Number(RES.a_confirmar && RES.a_confirmar.valor) > 0
-        ? `<div class="cartao"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A gente avisa a sexta.</div></div>`
-        : `<div class="cartao"><div class="rot">Toda sexta você recebe</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
+        ? `<div class="cartao heroi"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A gente avisa a sexta.</div></div>`
+        : `<div class="cartao heroi"><div class="rot">Toda sexta você recebe</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
     const mesAtual = hojeSP().slice(0, 7);
     const garantia = pts && pts.garantia_ate && String(pts.garantia_ate).slice(0, 7) >= mesAtual
       ? `<div class="faixa verde" style="font-size:14px"><div>Garantia ativa: ${moeda(pts.garantia_piso)} por mês até ${esc(nomeMes(pts.garantia_ate).toLowerCase())}, fazendo ${numero(pts.garantia_min_pontos)} pontos.</div></div>` : '';
@@ -198,9 +198,34 @@
       ? `<div class="faixa cinza" style="font-size:14px"><div>Largada: faltam ${moeda(RES.largada.saldo)} para abater (${moeda(RES.largada.por_venda)} por venda instalada).</div></div>` : '';
     const precisa = (VENDAS || []).filter((v) => v.precisa_de_voce);
     render(`<div class="topo"><div><div class="ola">Olá,</div><div class="nome">${esc(RES.primeiro_nome)}</div></div><div class="selo">${esc(nivel)}</div></div>
-      ${receber}${termometro(pts)}${garantia}${largada}
+      ${receber}
       <a class="bt" href="#enviar">${ICO.mais}Enviar venda</a>
+      ${cartaoGanhos(true)}${termometro(pts)}${garantia}${largada}
       ${precisa.length ? `<div class="lista"><div class="rot">Precisa de você</div>${precisa.map((v) => `<a class="aviso-link" href="#vendas"><span><b>${esc(v.primeiro_nome)}</b>${v.bairro ? ` · ${esc(v.bairro)}` : ''} — ${esc(v.detalhe || v.status_texto)}</span><span>Ver</span></a>`).join('')}</div>` : ''}`, 'inicio');
+    desenharGanhos();
+  }
+
+  // ================================================================ gráfico de ganhos (graficos.js)
+  // Os números vêm de parceiro_meus_pagamentos (PAGS) e parceiro_minhas_vendas (VENDAS): nada é calculado fora do que o banco já devolve.
+  function cartaoGanhos(noInicio) {
+    if (!window.PG || !(PAGS || []).length) return '';
+    const meses = window.PG.ganhosPorMes(PAGS, hojeSP(), 6);
+    const atual = meses.find((m) => m.atual) || { pago: 0, previsto: 0 };
+    const recebido = (PAGS || []).filter((g) => g.status === 'pago' && Number(g.valor) > 0).reduce((s, g) => s + Number(g.valor), 0);
+    const aReceber = (PAGS || []).filter((g) => g.status === 'previsto' && Number(g.valor) > 0).reduce((s, g) => s + Number(g.valor), 0);
+    const instaladas = (VENDAS || []).filter((v) => ['instalada', 'paga'].includes(v.situacao)).length;
+    const nums = noInicio
+      ? `<div><b>${moeda(atual.pago + atual.previsto)}</b><span>este mês</span></div><div><b>${moeda(recebido)}</b><span>já recebido</span></div><div><b>${numero(instaladas)}</b><span>${instaladas === 1 ? 'instalada' : 'instaladas'}</span></div>`
+      : `<div><b>${moeda(recebido)}</b><span>já recebido</span></div><div><b>${moeda(aReceber)}</b><span>a receber</span></div><div><b>${moeda(atual.pago + atual.previsto)}</b><span>este mês</span></div>`;
+    return `<div class="cartao grafico">
+      <div class="linha"><div class="rot">${noInicio ? 'Seus ganhos' : 'Recebido e a receber'} · 6 meses</div>${noInicio ? '<a href="#pagamentos">Ver tudo</a>' : ''}</div>
+      <div class="resumo-num">${nums}</div>
+      <div data-grafico></div>
+      <div class="sub">Toque na barra para ver o valor do mês. Abatimento da largada não entra.</div></div>`;
+  }
+  function desenharGanhos() {
+    const el = $tela.querySelector('[data-grafico]');
+    if (el && window.PG) window.PG.barras(el, window.PG.ganhosPorMes(PAGS, hojeSP(), 6), { titulo: 'Ganhos por mês, últimos 6 meses' });
   }
 
   // ================================================================ Minhas vendas
@@ -439,11 +464,14 @@
     const pagos = Object.entries(porDia).filter(([k, l]) => k !== 'confirmar' && l.some((g) => g.status === 'pago')).sort((a, b) => (a[0] < b[0] ? 1 : -1));
     const ext = (PAGS || []).slice(0, 60).map((g) => `<div class="d-l"><span>${esc(g.tipo_texto)}${g.venda_primeiro_nome ? ` · ${esc(g.venda_primeiro_nome)}` : ''}<br><small>${g.status === 'pago' ? `pago ${ddmm(g.pago_em || g.vence_em)}` : g.vence_em ? `sexta ${ddmm(g.vence_em)}` : 'data a confirmar'}</small></span>
         <b class="${Number(g.valor) < 0 ? 'neg' : ''}">${moeda(g.valor)}${g.tem_comprovante && g.comprovante_path ? `<br><button type="button" class="link-bt" data-comp="${esc(g.comprovante_path)}">Comprovante</button>` : ''}</b></div>`).join('');
+    if (!VENDAS) { try { await carregarVendas(); } catch (e) { VENDAS = []; } }
     render(`<h1>Pagamentos</h1><p class="sub">Você recebe na sexta depois que a Nio paga as instalações do ciclo.</p>
+      ${cartaoGanhos(false)}
       <div class="lista"><div class="rot">Próximas sextas</div>${prox || '<div class="vazio">O calendário das próximas sextas ainda não saiu.</div>'}
         ${aConf.length ? `<div class="cartao pequeno"><div class="linha"><b>Data a confirmar</b><span class="num" style="font-size:18px">${moeda(soma(aConf))}</span></div><div class="sub">A gente avisa a sexta assim que a Nio divulgar o ciclo.</div></div>` : ''}</div>
       ${pagos.length ? `<div class="lista"><div class="rot">Já pagas</div>${pagos.map(([k, l]) => `<div class="cartao pequeno"><div class="linha"><b>${ddmm(k)}</b><span class="num" style="font-size:18px">${moeda(soma(l.filter((g) => g.status === 'pago')))}</span></div></div>`).join('')}</div>` : ''}
       <details class="gaveta extrato"${ext ? '' : ' hidden'}><summary>Extrato</summary><div>${ext}</div></details>`, 'pagamentos');
+    desenharGanhos();
     $tela.querySelectorAll('[data-comp]').forEach((b) => b.addEventListener('click', async () => {
       b.disabled = true;
       const { data, error } = await sb.storage.from('comprovantes_parceiros').createSignedUrl(b.dataset.comp, 60);
