@@ -175,6 +175,8 @@ Deno.serve(async (req) => {
       if (so(e.cep).length !== 8) return json({ error: 'CEP com 8 dígitos.' }, 400);
       const corpo = {
         origem: `niogen:${perfil}`,
+        // 19/11 (L-203): consulta pedida por pessoa logada abre o portal de novo (o cache de 6 h escondia a fachada recém-cadastrada); a Mari segue no cache.
+        forcar: servico !== true,
         endereco: {
           cep: so(e.cep), numero: String(e.numero ?? '').trim().slice(0, 20),
           complemento: String(e.complemento ?? '').trim().slice(0, 60), referencia: String(e.referencia ?? '').trim().slice(0, 80),

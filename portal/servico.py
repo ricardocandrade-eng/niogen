@@ -15,7 +15,8 @@
 #                                         (12/11, Mari): pedido_em_andamento | sem_pedido_em_andamento. Sem contato, sem crédito.
 #   POST /credito/viabilidade {endereco} → 202 {job_id, ...} — SÓ Etapas 0–2, sem CPF/contato (11/11 ~21h, consulta
 #                                         unificada). Resultado viavel | sem_viabilidade | complemento_fora_lista | ...
-#                                         Cache 6 h por endereço; limite VIAB_LIMITE_HORA (60). Mesma fila do navegador.
+#                                         Cache 6 h por endereço ({forcar: true} = pedido de pessoa, ignora o cache);
+#                                         limite VIAB_LIMITE_HORA (60). Mesma fila do navegador.
 #   POST /os {cpf, os, criada_em?}      → 202 {job_id, ...} — OPERADOR DE OS (13/11, etapa 3): lê o andamento da OS na
 #                                         Consulta OS (consulta_os.py: só "Filtros" e "Filtrar"; rede em lista branca).
 #                                         Resultado lida {leitura} | nao_encontrada | erro. Crédito e viabilidade primeiro:
@@ -513,7 +514,10 @@ def novo_job_viabilidade(b):
         job_id = uuid.uuid4().hex
         base = {'id': job_id, 'criado': time.time(), 'cpf_mascara': None, 'modo': 'viabilidade',
                 'origem': str(b.get('origem') or '')[:40] or None}
-        hit = CACHE.get(chave)
+        # 19/11 (L-203, Chatwoot 185): a Nio cadastrou a fachada depois do "sem viabilidade" e a reconsulta pela tela
+        # devolvia o cache de 6 h. Pedido de pessoa (forcar, mandado pela edge function) abre o portal de novo;
+        # a Mari (n8n) segue no cache. O resultado novo substitui o guardado.
+        hit = None if b.get('forcar') is True else CACHE.get(chave)
         if hit and time.time() - hit[0] < VIAB_TTL:
             res = dict(hit[1], cache=True)
             JOBS[job_id] = {**base, 'estado': 'pronto', 'resultado': res, 'etapa_atual': res.get('etapa_parada')}
