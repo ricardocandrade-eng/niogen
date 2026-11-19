@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 # NIOGEN | n8n/deploy_os_leitura.py | 13/11/2026 — Claude Code (docs/Prompt_operador_os_etapa3_131126_0300.md, etapa 3d)
-# Workflow n8n "os_leitura": a ROTINA do Operador de OS. A cada 30 min (7h–20h30) pergunta ao Supabase quais OS ler agora
+# Workflow n8n "os_leitura": a ROTINA do Operador de OS. A cada 15 min (7h–20h30) pergunta ao Supabase quais OS ler agora
 # (RPC os_fila), pede UMA POR VEZ a leitura ao operador do portal (POST /os pelo túnel, dentro da rede do n8n) e grava no
 # NIOGEN só a leitura que veio (RPC os_registrar_leitura — leitura igual à anterior não grava nada).
 #
 #   Qual volta lê o quê (hora de Brasília):
 #     07:00            → 'instaladas'  (instaladas há menos de 30 dias — pega cancelamento)        1× ao dia
 #     08:00 13:00 18:00 → 'abertas'     (toda OS em andamento)                                       3× ao dia
-#     as outras voltas → 'hoje'        (só OS com instalação marcada para hoje)                    a cada 30 min
+#     as outras voltas → 'hoje'        (só OS com instalação marcada para hoje)                    a cada 15 min
+# 19/11 (0323, Ricardo: "15 min no dia"): a Situação do agendamento (Atribuído → Em deslocamento → Em execução) muda em
+# menos de 30 min; a volta passou de 30 para 15 min (o 'hoje' só lê as OS do dia).
 #
 # 13/11 (0173) — VARREDURA PEDIDA PELA TELA: um segundo gatilho, de 1 em 1 min (7h–21h), pergunta os_varredura_proxima(). Sem
 # pedido, a execução acaba ali (uma leitura no banco, nenhuma gravação). Com pedido, roda a volta 'abertas' com teto de 40 OS
@@ -61,7 +63,7 @@ let tipo = varredura ? 'abertas' : (['hoje', 'abertas', 'instaladas'].includes(b
 if (!tipo) {
   const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
   const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);
-  tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';
+  tipo = (h === 7 && m < 15) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 15) ? 'abertas' : 'hoje';
 }
 return [{ json: { tipo, varredura, limite: varredura ? __LIMITE_VARREDURA__ : __LIMITE__ } }];
 """
@@ -159,8 +161,8 @@ def build(ids):
                                            'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}],
                            'combinator': 'and'}, 'options': {}}, x, y)
 
-    add('1 · a cada 30 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
-        {'rule': {'interval': [{'field': 'cronExpression', 'expression': '0,30 7-20 * * *'}]}}, 0, 0)
+    add('1 · a cada 15 min', 'n8n-nodes-base.scheduleTrigger', 1.2,
+        {'rule': {'interval': [{'field': 'cronExpression', 'expression': '0,15,30,45 7-20 * * *'}]}}, 0, 0)
     add('1t · rota de teste', 'n8n-nodes-base.webhook', 2,
         {'httpMethod': 'POST', 'path': ROTA_TESTE, 'authentication': 'headerAuth', 'responseMode': 'lastNode', 'options': {}},
         0, 200, credentials=te_cred, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/os_leitura/webhook')))
@@ -204,7 +206,7 @@ def build(ids):
         return {'main': [[{'node': a, 'type': 'main', 'index': 0}] if a else [] for a in alvos]}
 
     conns = {
-        '1 · a cada 30 min': liga('2 · Qual volta'),
+        '1 · a cada 15 min': liga('2 · Qual volta'),
         '1t · rota de teste': liga('2 · Qual volta'),
         '1v · a cada 1 min': liga('2v · Supabase varredura'),
         '2v · Supabase varredura': liga('2w · Tem varredura?'),

@@ -38,7 +38,7 @@
 <script src="assets/app.js?v=191126-5"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/conversa.js?v=181126-sp2"></script>
-<script src="assets/ficha.js?v=191126-7"></script>
+<script src="assets/ficha.js?v=191126-8"></script>
 <script src="assets/pulso.js?v=181126-2"></script>
 </head>
 <body class="tela-fila lv-tela">
@@ -312,7 +312,7 @@
         <div><span class="mv-dono apagado">GED360</span></div><div><span class="lv-pill">${p.alerta ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
-  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar', retomada_ligar: 'Retomada · ligar', conta_nao_fecha: 'A conta não fecha' };
+  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', os_agenda: 'Agenda da Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar', retomada_ligar: 'Retomada · ligar', conta_nao_fecha: 'A conta não fecha' };
   // 19/11 (0315, Ricardo: "fico com a impressão que o trabalho nunca acaba e eles ficam ali parados há dias"): a "Retomada · ligar"
   // só saía escrevendo na conversa ou no D7. Agora: 📞 Ligar (discador) · Atendeu (registra e abre o cliente) · Não atendeu · Pular
   // (motivo). Os três passam pela porta (retomada_ligacao) e tiram a linha; o D7 segue na data se o cliente não responder.
@@ -325,6 +325,7 @@
   const kDe = (c) => c.venda_id || (c.conversa_id ? `c:${c.conversa_id}` : '');
   const abrirCf = (c) => (kDe(c) ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(kDe(c))}">Abrir</button>` : '');
   const bt = (attrs, txt, dica, ghost = true) => `<button type="button" class="btn btn-sm${ghost ? ' btn-ghost' : ''} lv-rl" ${attrs} title="${esc(dica)}">${txt}</button>`;
+  const cienteBt = (c) => bt(`data-cf-osciente="${esc(c.chave)}"`, 'Ciente', 'A linha some enquanto a Situação do agendamento continuar igual na Nio; se mudar, volta.', false);
   const saidaBts = (c) => {
     const conv = esc(c.conversa_id || ''), vd = esc(c.venda_id || '');
     if ((c.tipo === 'dono_parado' || c.tipo === 'handoff_parado') && c.conversa_id)
@@ -337,6 +338,10 @@
       return bt(`data-cf-reabrir="${conv}" data-venda="${vd}"`, 'Reabrir', 'Tira da Saída e volta para o time retomar o contato.', false) + bt(`data-cf-adiar="${conv}" data-venda="${vd}"`, '+7 dias', 'Empurra a data de volta para daqui a 7 dias (nota no histórico). A linha sai até lá.');
     if (c.tipo === 'os_excecao')
       return (c.venda_id && c._solto ? bt(`data-os-ler="${vd}"`, '⟳ OS', 'Lê esta OS agora no portal da Nio (uns 15 s)', false) : '') + bt(`data-cf-osvisto="${esc(c.chave)}"`, 'Visto', 'A linha some enquanto a OS continuar igual na Nio; se mudar, volta.');
+    // 0323 (Ricardo, 19/11, caso Queroly): Situação do agendamento do dia (técnico definido, a caminho, instalando, cancelada,
+    // sem técnico) — Ciente esconde até a Nio mudar a Situação.
+    if (c.tipo === 'os_agenda')
+      return (c.venda_id && c._solto ? bt(`data-os-ler="${vd}"`, '⟳ OS', 'Lê esta OS agora no portal da Nio (uns 15 s)', false) : '') + cienteBt(c);
     if (c.tipo === 'conta_nao_fecha')
       return bt(`data-cf-contavisto="${esc(c.chave)}"`, 'Visto hoje', 'A linha some hoje. A conferência roda de novo amanhã e, se ainda falhar, ela volta.');
     if (c.tipo === 'docs_prazo' && c.venda_id)
@@ -346,7 +351,7 @@
   // 14/11 (Ricardo): os botões do Conferir ficam na coluna da ação — o texto não empurra a altura da linha (2 linhas, o resto no title).
   const confBts = (c) => `${c.tipo === 'retomada_ligar' && c.conversa_id ? rlBts(c) : ''}${saidaBts(c)}${c.tipo === 'acao_falhou' ? `<button type="button" class="btn btn-sm" data-cf-retentar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_tentar)}">Repetir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-dispensar="${esc(c.chave)}" title="${esc(NG.ajuda.conf_dispensar)}">Dispensar</button>` : ''}${c.tipo === 'cancelar_nio' ? `<button type="button" class="btn btn-sm" data-cf-cancelei="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_cancelei)}">Cancelei no portal</button>` : ''}${c.tipo === 'silencio_qualificado' && c.venda_id ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-semresp="${esc(c.venda_id)}" title="${esc(NG.ajuda.conf_semresp)}">Saída · Sem resposta</button>` : ''}${c.tipo === 'fora_niogen' ? `<button type="button" class="btn btn-sm btn-ghost" data-cf-visto="${esc(c.conversa_id)}" title="${esc(NG.ajuda.conf_visto)}">Visto</button>` : ''}${c.tipo === 'conferir_rua' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente já no painel de Viabilidade: Consultar agora e, se der viável, Gravar na ficha">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-rua="${esc(c.conversa_id)}" title="A rua foi conferida no portal (consulta refeita com a rua certa ou liberação pedida): a linha sai do Conferir">Conferi</button>` : ''}${c.tipo === 'conferir_unidade' ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(c.venda_id || `c:${c.conversa_id}`)}" data-cf-etapa="viab" title="Abre o cliente no painel de Viabilidade: toque na unidade do cliente (a consulta refaz) ou peça o cadastro à Nio">Abrir</button><button type="button" class="btn btn-sm btn-ghost" data-cf-unidade="${esc(c.conversa_id)}" title="A unidade foi confirmada com o cliente ou o cadastro foi pedido à Nio: a linha sai do Conferir">Conferi</button>` : ''}`;
   // 0271: "Cancelar na Nio" com 24 h úteis vencidas (texto começa com VENCIDO) também acende.
-  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'cancelar_nio' && /^VENCIDO/.test(c.texto || '')) || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || ''));
+  const confUrg = (c) => c.tipo === 'acao_falhou' || (c.tipo === 'cancelar_nio' && /^VENCIDO/.test(c.texto || '')) || (c.tipo === 'docs_prazo' && /ATRASADOS/.test(c.texto || '')) || ((c.tipo === 'conferir_rua' || c.tipo === 'conferir_unidade') && /VENCIDO/.test(c.texto || '')) || (c.tipo === 'os_agenda' && /cancelou|sem técnico/i.test(c.texto || ''));
   const confLinha = (c) => {
     const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : '';
     const urg = confUrg(c);
@@ -423,7 +428,8 @@
     const dica = [`Na Nio: ${o.status_ordem || 'sem status'}`, o.status_agendamento ? `agendamento: ${o.status_agendamento}` : '',
       o.agendamento_data ? `data: ${dataBR(o.agendamento_data)}${o.janela ? ` · ${o.janela}` : ''}` : '', o.pendencia ? `pendência: ${o.pendencia}` : '',
       o.excecao && o.acao ? `o que fazer: ${o.acao}` : '', `última leitura ${NG.fmtDataHora(o.mudou_em)} — ⟳ OS lê agora`].filter(Boolean).join(' · ');
-    return ` <span class="lv-os ${cls}" title="${esc(dica)}">Nio: ${esc(o.estado_nome || o.status_ordem || '—')}</span>`;
+    const doDia = o.status_agendamento && String(o.agendamento_data || '').slice(0, 10) === NG.diaSP() ? ` · ${o.status_agendamento}` : '';   // 0323
+    return ` <span class="lv-os ${cls}" title="${esc(dica)}">Nio: ${esc((o.estado_nome || o.status_ordem || '—') + doDia)}</span>`;
   };
   const osFaixa = (vid) => {
     if (!vid || (!osLendo[vid] && !osLidas[vid])) return '';
@@ -484,7 +490,7 @@
       oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
       row: linha(j, b === 'fazer'),
-      bts: osBt(j) + (b === 'fazer' ? descBt(j) + botaoLinha(j, true, false) : '') });
+      bts: osBt(j) + confDe(j).filter((c) => c.tipo === 'os_agenda').map(cienteBt).join('') + (b === 'fazer' ? descBt(j) + botaoLinha(j, true, false) : '') });
     fazer.forEach((j) => L.push(jItem(j, 'fazer')));
     if (!etapaSel) {
       confSoltos.forEach((c) => {
@@ -492,7 +498,7 @@
         const txt = String(c.texto || '');
         const corte = txt.indexOf(' — ');
         const jv = c.venda_id ? jPorVenda[c.venda_id] : (c.conversa_id ? jPorConv[c.conversa_id] : null);
-        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv && (jv.venda_id || quaseVenda(jv)) ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
+        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv && (jv.venda_id || quaseVenda(jv)) ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' || c.tipo === 'os_agenda' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
           vez: vezTxt('time'), prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
           rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
       });
@@ -797,6 +803,7 @@
       : b.dataset.cfReabrir !== undefined ? ['lead_reabrir', { p_conversa: b.dataset.venda ? null : vOuNulo(b.dataset.cfReabrir), p_venda: vOuNulo(b.dataset.venda) }]
       : b.dataset.cfAdiar !== undefined ? ['lead_volta_adiar', { p_conversa: vOuNulo(b.dataset.cfAdiar), p_venda: vOuNulo(b.dataset.venda), p_dias: 7 }]
       : b.dataset.cfOsvisto ? ['os_excecao_visto', { p_pedido: b.dataset.cfOsvisto }]
+      : b.dataset.cfOsciente ? ['os_agenda_ciente', { p_pedido: b.dataset.cfOsciente }]
       : b.dataset.cfContavisto ? ['conferencia_visto', { p_codigo: b.dataset.cfContavisto }]
       : b.dataset.cfDocs ? ['venda_docs_entregues', { p_venda: b.dataset.cfDocs }]
       : b.dataset.cfCancelei ? ['venda_cancelada_no_portal', { p_venda: b.dataset.cfCancelei }]
@@ -867,7 +874,7 @@
     if (ev.target.closest('a.lv-rl[href^="tel:"]')) { ev.stopPropagation(); return; }   // 0315: o link segue e abre o discador
     const rl = ev.target.closest('[data-rl]');
     if (rl) { ev.stopPropagation(); retomadaLigacao(rl); return; }
-    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua], [data-cf-unidade], [data-cf-descartar], [data-cf-devolver], [data-cf-nada], [data-cf-reabrir], [data-cf-adiar], [data-cf-osvisto], [data-cf-contavisto], [data-cf-docs]');
+    const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua], [data-cf-unidade], [data-cf-descartar], [data-cf-devolver], [data-cf-nada], [data-cf-reabrir], [data-cf-adiar], [data-cf-osvisto], [data-cf-osciente], [data-cf-contavisto], [data-cf-docs]');
     if (cf) { ev.stopPropagation(); conferir(cf); return; }
     const bc = ev.target.closest('[data-casar]');
     if (bc) { ev.stopPropagation(); casar(bc); return; }

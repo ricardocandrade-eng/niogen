@@ -265,7 +265,7 @@
     const daVendaLinha = (k, velho) => fv.then((d) => (d ? (d[k] === undefined ? null : d[k]) : velho()));
     // 18/11 (0296): o post-it vem na ficha_venda (sem chamada nova); sem a RPC, fica sem post-it nesta abertura
     const notaP = daVendaLinha('nota', () => null);
-    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow] = await Promise.all([
+    const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow, osTri] = await Promise.all([
       daVenda('v', () => NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle()),
       daVenda('eventos', () => NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em')),
       daVenda('lim', () => NG.sb.from('v_contatos_limite').select('*').eq('venda_id', id).maybeSingle()),
@@ -297,6 +297,9 @@
       leadCfg(),
       // 0186: o selo Meta da venda (✓ enviado · ✗ erro · — não veio de anúncio) e o anúncio de origem.
       bo ? daVendaLinha('meta', () => opc(NG.sb.from('v_venda_meta').select('*').eq('venda_id', id).maybeSingle())) : null,
+      // 0323 (Ricardo, 19/11, caso Queroly): a Situação do agendamento lida na Consulta OS, na ordem — a trilha do dia da visita.
+      bo ? opc(NG.sb.from('os_leituras').select('lido_em, status_agendamento, agendamento_data, janela').eq('venda_id', id)
+        .not('status_agendamento', 'is', null).order('lido_em', { ascending: false }).limit(30)) : null,
     ]);
     if (rv.error || !rv.data) return { erro: rv.error ? NG.msgErro(rv.error) : 'Venda não encontrada (ou sem permissão para vê-la).' };
     usuariosCache = ru;
@@ -357,6 +360,7 @@
       jor: jo || null,
       lead, din, leadCfg: lcfg || [],
       andamento: andRow || null,
+      osTrilha: osTri && Array.isArray(osTri.data) ? osTri.data : (Array.isArray(osTri) ? osTri : []),
       faturas: fatRow && Array.isArray(fatRow.faturas) ? fatRow.faturas : null,
       concil: concRow || null,
       cicloRegra: cicloRow && cicloRow.valor && typeof cicloRow.valor === 'object' ? cicloRow.valor : null,
@@ -1360,6 +1364,34 @@
   const ICO_CAL = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>';
   const periodoTxt = (v) => (v.instalacao_turno === 'tarde' || (v.instalacao_turno !== 'manha' && periodoDe(v.instalacao_agendada_para) === '13:00') ? 'tarde' : 'manhã');
   const dataCurta = (x) => `${NG.fmtDiaSemana(x)} ${NG.fmtData(x)}`.toLowerCase();
+  // 0323 (Ricardo, 19/11, caso Queroly): Situação do agendamento da Nio no dia da visita — Sem técnico → Técnico definido → A caminho
+  // → Instalando → Concluída, com a hora em que cada uma foi vista (o operador lê a cada 15 min). Cancelada fica vermelha.
+  const AGENDA_PASSOS = [['Não atribuído', 'Sem técnico'], ['Atribuído', 'Técnico definido'], ['Em deslocamento', 'A caminho'], ['Em execução', 'Instalando'], ['Concluído com sucesso', 'Concluída']];
+  function agendaDoDia(v) {
+    const tri = (d.osTrilha || []).filter((l) => l.status_agendamento);
+    if (!tri.length) return null;
+    const dia = String(tri[0].agendamento_data || '').slice(0, 10);
+    return { dia, linhas: tri.filter((l) => String(l.agendamento_data || '').slice(0, 10) === dia).slice().reverse(), atual: tri[0].status_agendamento, janela: tri[0].janela };
+  }
+  function trilhaAgenda(v) {
+    const a = agendaDoDia(v);
+    if (!a || v.instalado_em) return '';
+    const norm = (s) => String(s || '').trim().toLowerCase();
+    const viu = {};
+    a.linhas.forEach((l) => { const k = norm(l.status_agendamento); if (!viu[k]) viu[k] = l.lido_em; });
+    const hojeTxt = a.dia === NG.diaSP() ? 'hoje' : NG.fmtData(`${a.dia}T12:00:00-03:00`);
+    if (norm(a.atual) === 'agendamento cancelado') {
+      return linha('Agenda na Nio', `<span class="bad-txt">⚠ visita de ${esc(hojeTxt)} cancelada pela Nio · vista às ${esc(NG.fmtHora(viu['agendamento cancelado']))} — ligar e remarcar</span>`);
+    }
+    const iAtual = AGENDA_PASSOS.findIndex(([t]) => norm(t) === norm(a.atual));
+    const passos = AGENDA_PASSOS.map(([t, nome], i) => {
+      const h = viu[norm(t)];
+      const cls = i === iAtual ? 'warn-txt' : h ? 'ok-txt' : '';
+      return `<span class="${cls}">${i === iAtual ? '● ' : h ? '✓ ' : '○ '}${esc(nome)}${h ? ` ${esc(NG.fmtHora(h))}` : ''}</span>`;
+    }).join(' → ');
+    const outro = iAtual < 0 ? ` · <span class="warn-txt">${esc(a.atual)}</span>` : '';
+    return linha(`Agenda na Nio · ${hojeTxt}${a.janela ? ` · ${a.janela}` : ''}`, passos + outro);
+  }
   // Data logo de cara: agendada (azul) ou instalada (verde). Sem data, nada.
   function seloData(v) {
     if (v.instalado_em) return `<span class="f-data ok">${ICO_CAL}Instalada em ${esc(NG.fmtData(v.instalado_em))}</span>`;
@@ -1393,11 +1425,15 @@
     // "Nio: …" — a venda não passou pela Saída manual e o saida_motivo fica vazio).
     const saiu = v.status === 'saida';
     const sm = !saiu ? null : v.saida_motivo || (d.lead && d.lead.saida_motivo) || (/^Nio:/.test(String(v.motivo_saida || '')) ? 'nio_cancelou' : null);
+    const agH = !v.instalado_em ? agendaDoDia(v) : null;
+    const agHoje = agH && agH.dia === NG.diaSP() ? agH : null;   // 0323
     const credH = v.credito_resultado === 'pendente' && v.credito_em ? Math.floor((Date.now() - new Date(v.credito_em)) / 3600000) : null;
     const pInst = v.cancelada_apos_instalar_em ? { s: 'x', d: `cancelada pela Nio depois de instalar · ${NG.fmtData(v.cancelada_apos_instalar_em)}` }
       : v.instalado_em ? { s: 'ok', d: NG.fmtData(v.instalado_em) }
       : d.lead && d.lead.status === 'aguarda_cartao' ? { s: 'wa', d: 'aguardando o cadastro do cartão' }
       : pendNio ? { s: 'wa', d: `pendência Nio${v.nio_pendencia_cod ? ' ' + v.nio_pendencia_cod : ''}` }
+      : agHoje && /cancelado/i.test(agHoje.atual) ? { s: 'wa', d: 'visita cancelada pela Nio' }
+      : agHoje ? { s: 'no', d: `hoje · ${(AGENDA_PASSOS.find(([t]) => t.toLowerCase() === String(agHoje.atual).trim().toLowerCase()) || [0, agHoje.atual])[1].toLowerCase()}`, azul: true }
       : v.instalacao_agendada_para ? { s: 'no', d: `${dataCurta(v.instalacao_agendada_para)} · ${periodoTxt(v)}`, azul: true }
       : { s: 'no', d: '' };
     return [
@@ -2038,6 +2074,7 @@
           return `${linha('Agendada para', esc(v.instalacao_agendada_para ? `${diaSemanaData(v.instalacao_agendada_para)} · ${NG.janela(v.instalacao_agendada_para)}` : '—'))}
             ${v.biometria_validada_em ? linha('Biometria validada', esc(NG.fmtDataHora(v.biometria_validada_em))) : ''}
             ${linha('Agendamento', h != null ? `${esc(NG.fmtHoras(h))} depois da venda · ${h <= 4 ? '<span class="ok-txt">dentro das 4 h</span>' : '<span class="warn-txt">fora das 4 h</span>'}` : v.status === '1_vendido' && v.horas_sem_agendamento != null ? `<span class="${Number(v.horas_sem_agendamento) > 4 ? 'bad-txt' : 'warn-txt'}">sem agendamento há ${esc(NG.fmtHoras(v.horas_sem_agendamento))}</span>` : '—')}
+            ${trilhaAgenda(v)}
             ${avisosMari(['INSTALACAO', 'VESPERA'])}
             ${linha('Preferência do cliente', esc(v.instalacao_preferencia || '—'))}
             ${v.instalacao_turno ? linha('Turno agendado no portal', esc(TURNO[v.instalacao_turno] || v.instalacao_turno)) : ''}

@@ -7,19 +7,19 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0,30 7-20 * * *"
+              "expression": "0,15,30,45 7-20 * * *"
             }
           ]
         }
       },
-      "name": "1 · a cada 30 min",
+      "name": "1 · a cada 15 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
         0,
         0
       ],
-      "id": "82b53c2e-8ca3-5880-92d8-02b5cfdd517d"
+      "id": "ddc9e47c-f31f-5360-ba15-59575e4a3d46"
     },
     {
       "parameters": {
@@ -131,7 +131,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Varredura pedida pela tela (vem do \"2v\"): { id } → todas as abertas. Rota de teste: { \"tipo\": \"hoje\" | \"abertas\" |\n// \"instaladas\" }. Agendado: decide pela hora de Brasília.\nconst varredura = $json.id ? Number($json.id) : null;\nconst b = ($json.body && typeof $json.body === 'object') ? $json.body : {};\nlet tipo = varredura ? 'abertas' : (['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null);\nif (!tipo) {\n  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());\n  const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);\n  tipo = (h === 7 && m < 30) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 30) ? 'abertas' : 'hoje';\n}\nreturn [{ json: { tipo, varredura, limite: varredura ? 40 : 12 } }];"
+        "jsCode": "// Varredura pedida pela tela (vem do \"2v\"): { id } → todas as abertas. Rota de teste: { \"tipo\": \"hoje\" | \"abertas\" |\n// \"instaladas\" }. Agendado: decide pela hora de Brasília.\nconst varredura = $json.id ? Number($json.id) : null;\nconst b = ($json.body && typeof $json.body === 'object') ? $json.body : {};\nlet tipo = varredura ? 'abertas' : (['hoje', 'abertas', 'instaladas'].includes(b.tipo) ? b.tipo : null);\nif (!tipo) {\n  const p = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());\n  const h = Number(p.find((x) => x.type === 'hour').value), m = Number(p.find((x) => x.type === 'minute').value);\n  tipo = (h === 7 && m < 15) ? 'instaladas' : ([8, 13, 18].includes(h) && m < 15) ? 'abertas' : 'hoje';\n}\nreturn [{ json: { tipo, varredura, limite: varredura ? 40 : 12 } }];"
       },
       "name": "2 · Qual volta",
       "type": "n8n-nodes-base.code",
@@ -484,7 +484,7 @@
     }
   ],
   "connections": {
-    "1 · a cada 30 min": {
+    "1 · a cada 15 min": {
       "main": [
         [
           {
