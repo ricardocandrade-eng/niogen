@@ -249,7 +249,7 @@
       Promise.all([
         NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
         NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari')
-          .not('tags->>cadencia', 'is', null).order('created_at'),
+          .or('tags->>cadencia.not.is.null,tags->>backoffice.eq.retomada').order('created_at'),   // 18/11: + Retomada (0274)
         NG.tplCadencia(),
       ]),
       NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', cid).in('papel', ['lead', 'mari', 'humano']),
@@ -272,7 +272,7 @@
       daVenda('adics', () => NG.sb.from('venda_adicionais').select('qtd, comissao_prevista, config_adicionais(nome, preco)').eq('venda_id', id).order('id')),
       // Conversa da Mari que gerou a venda (a tabela só abre para admin/backoffice; para os outros vem vazia).
       ['admin', 'backoffice'].includes(perfil)
-        ? daVenda('conv', () => NG.sb.from('mari_conversas').select('id, lead_numero, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em').eq('venda_id', id).order('created_at', { ascending: false }).limit(1))
+        ? daVenda('conv', () => NG.sb.from('mari_conversas').select('id, lead_numero, chatwoot_conversation_id, chatwoot_agente, chatwoot_time, chatwoot_status, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, handoff_briefing, handoff_em, handoff_motivo, cobertura_decisao, nio_viab_resultado, nio_viab_velocidade, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, forma_pagamento, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, funil_etapa, funil_destino, funil_detalhe, funil_alerta, status, origem, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, venda_id, bio_lembrete_em, instalacao_avisada_para, instalacao_avisada_em, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('venda_id', id).order('created_at', { ascending: false }).limit(1))
         : Promise.resolve({ data: [] }),
       daVenda('contatos', () => NG.sb.from('contatos_cliente').select('id, canal, direcao, por, em, resumo, toque').eq('venda_id', id).order('em', { ascending: false }).limit(30)),
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
@@ -2262,12 +2262,12 @@
     const notaP = Promise.resolve(NG.sb.from('lead_nota').select('texto, atualizado_em').eq('conversa_id', cid).maybeSingle())
       .then((r) => (r && !r.error && r.data ? { texto: r.data.texto, em: r.data.atualizado_em } : null), () => null);
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
       NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', cid).in('papel', ['lead', 'mari', 'humano']),
-      NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari').not('tags->>cadencia', 'is', null).order('created_at'),
+      NG.sb.from('mari_turnos').select('texto, tags, created_at').eq('conversa_id', cid).eq('papel', 'mari').or('tags->>cadencia.not.is.null,tags->>backoffice.eq.retomada').order('created_at'),
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
       ultimaFalaTime(cid),   // 0103 (só usada se o cliente apenas confirmou)
       NG.funilNomes(),       // 0147: nomes de etapa e destino (cache da página)
@@ -3695,16 +3695,15 @@
     IND: 'a quem respondeu "tudo certo": pede o nome e o WhatsApp de alguém — R$ 100 no Pix se o indicado instalar', IND2: 'sem indicação, a Mari insiste 1 vez (vizinho, parente, colega)' };
   const CAD_ACAO = { texto: 'mensagem livre (janela aberta)', template: 'template', ligar: 'ligação do time', encerrar: 'vai para Saída · Sem resposta' };
   const HMS = 3600000;
-  // Horário do contrato para toque automático: seg–sex 9–21, sáb 10–16, nunca domingo. Brasília = UTC−3 fixo. Feriado o banco
-  // resolve na hora; aqui é só a estimativa do "quando".
+  // Horário do contrato para toque automático (0304, Ricardo 18/11: "9–21 seg–dom"): 9–21 todo dia. Brasília = UTC−3 fixo.
+  // Aqui é só a estimativa do "quando"; o banco (mari_horario_toques) decide na hora.
   function cadHorario(ms) {
     let t = ms;
     for (let i = 0; i < 10; i++) {
       const l = new Date(t - 3 * HMS);
-      const dow = l.getUTCDay();
       const min = l.getUTCHours() * 60 + l.getUTCMinutes();
       const dia0 = Date.UTC(l.getUTCFullYear(), l.getUTCMonth(), l.getUTCDate()) + 3 * HMS;
-      const [ab, fe] = dow === 0 ? [null, null] : dow === 6 ? [600, 960] : [540, 1260];
+      const [ab, fe] = [540, 1260];
       if (ab != null && min < ab) return dia0 + ab * 60000;
       if (ab != null && min < fe) return t;
       t = dia0 + 24 * HMS;
@@ -3780,6 +3779,31 @@
         if (c.agendamento_retorno && ms(c.agendamento_retorno) > L) P.grupos.unshift({ rot: 'Combinado', dica: A.cad_retomada, passos: [mk('RETORNO', { prev: ms(c.agendamento_retorno) })] });
       }
     }
+    // 18/11: a Retomada da 0274 (Saída Sem resposta / Recusou / cliente parou com o time) sai pela fila do NIOGEN
+    // — turno com tags.backoffice = retomada, não tags.cadencia. Enquanto ela está no ar (retomada_desde sem retomada_fim_em), a
+    // ficha mostra os passos dela no lugar da escada antiga, com o mesmo relógio da _retomada_tick: D3 na abertura, D7 = +4 dias,
+    // D15 = +12 dias, Saída 48 h depois do D15; o NIOGEN pede para ligar 1 dia depois do D3.
+    const retAtiva = !!(c.retomada_desde && !c.retomada_fim_em);
+    if (retAtiva) {
+      const R0 = ms(c.retomada_desde);
+      const feitos = ((d.cad && d.cad.lista) || []).filter((t) => t.tags && t.tags.backoffice === 'retomada' && ms(t.created_at) >= R0 - 60000);
+      const ordem = ['D3', 'D7', 'D15'];
+      const iPasso = ordem.indexOf(c.retomada_passo || '');
+      const emD3 = iPasso >= 0 ? ms((feitos[0] || {}).created_at) || (iPasso === 0 ? ms(c.retomada_passo_em) : null) : null;
+      const rp = [mk('D3', { prev: R0, ret: true }), mk('LIG', { prev: (emD3 || R0) + 24 * HMS, ret: true }), mk('D7', { prev: R0 + 4 * 24 * HMS, ret: true }),
+        mk('D15', { prev: R0 + 12 * 24 * HMS, ret: true }), mk('FIM', { prev: (iPasso === 2 ? ms(c.retomada_passo_em) : R0 + 12 * 24 * HMS) + 48 * HMS, ret: true })];
+      let proxMarcado = false;
+      rp.forEach((p) => {
+        if (p.cod === 'LIG') return;
+        const i = ordem.indexOf(p.cod);
+        if (i >= 0 && i <= iPasso) {
+          const t = feitos[i];
+          p.st = 'ok'; p.em = ms(t && t.created_at) || (i === iPasso ? ms(c.retomada_passo_em) : null); p.texto = t ? t.texto : null;
+        } else if (!proxMarcado) { p.st = 'prox'; p.em = p.cod === 'FIM' ? p.prev : cadHorario(Math.max(p.prev, agora)); proxMarcado = true; }
+      });
+      P.grupos = P.grupos.filter((g) => g.rot !== 'Retomada');
+      P.grupos.push({ rot: 'Retomada', dica: A.cad_retomada, passos: rp });
+    }
 
     // O que saiu nesta rodada (depois da última mensagem do cliente; L15 = a cutucada de 15 min da abertura) e o que ficou para trás.
     const daRodada = lista.filter((t) => ms(t.created_at) > corte);
@@ -3789,6 +3813,7 @@
     const iProx = seq.findIndex((p) => p.cod === proxCod);
     let iUlt = -1;
     seq.forEach((p, i) => {
+      if (p.ret) return;   // Retomada (0274): estado já montado acima
       const t = saiu(p.cod);
       if (t) { p.st = 'ok'; p.em = ms(t.created_at); p.texto = t.texto; p.simulado = !!t.tags.simulado; iUlt = i; }
     });
@@ -3799,7 +3824,7 @@
       if (p.cod === 'BIO1' && v && c.bio_lembrete_em && ms(c.bio_lembrete_em) >= ms(v.biometria_link_enviado_em)) { p.st = 'ok'; p.em = ms(c.bio_lembrete_em); }
     });
     seq.forEach((p, i) => {
-      if (p.st === 'ok' || p.cod === 'LIG') return;
+      if (p.st === 'ok' || p.cod === 'LIG' || p.ret) return;
       if (i === iProx) {
         p.st = p.cod === 'BIO3' && k.ligar_sugerido ? 'agora' : 'prox';
         const quando = k.bloqueio === 'fora do horário' ? ms(k.proximo_em) : cadHorario(ms(k.proximo_em));
@@ -3811,7 +3836,9 @@
     const lig = seq.find((p) => p.cod === 'LIG');
     if (lig) {
       const ligou = (d.contatos || []).find((x) => x.canal === 'ligacao' && ms(x.em) > lig.prev - 24 * HMS);
+      const d3R = lig.ret && seq.find((p) => p.ret && p.cod === 'D3' && p.st === 'ok');
       if (ligou) { lig.st = 'ok'; lig.em = ms(ligou.em); } else if (k && k.ligar_sugerido) lig.st = 'agora';
+      else if (lig.ret) lig.st = d3R && agora >= lig.prev ? (agora < ms(c.retomada_desde) + 4 * 24 * HMS ? 'agora' : 'pul') : 'fut';   // Retomada: liga entre D3 + 1 dia e o D7
       else if (agora > lig.prev + 2 * 24 * HMS) lig.st = 'pul';
     }
     seq.forEach((p) => {
@@ -3850,7 +3877,15 @@
     const proxTxt = prox ? `Próximo: <b>${esc(prox.rot)} · ${esc(cadQuando(prox.em))}</b>${k.acao && CAD_ACAO[k.acao] ? ` · ${esc(CAD_ACAO[k.acao])}` : ''}` : '';
     const verTexto = prox && prox.texto ? `<button type="button" class="fc-link" data-f="fc-cadp" data-c="${prox.cod}">Ver o texto</button>` : '';
     const emSaida = (v && v.status === 'saida') || lead.destino === 'saida' || lead.destino === 'teste_duplicada';
-    if (emSaida) {
+    const ligR = retAtiva && lig && lig.ret && lig.st === 'agora';
+    const proxR = retAtiva ? seq.find((p) => p.ret && p.st === 'prox') : null;
+    if (retAtiva && !c.nao_contatar) {
+      // 18/11: a Retomada continua mandando mensagem mesmo com o lead em Saída — a ficha não pode dizer "encerrada".
+      const ondeSaida = emSaida ? ` O lead está em Saída${lead.saida_nome ? ` · ${esc(lead.saida_nome)}` : ''}, mas a Retomada segue.` : '';
+      const proxRTxt = proxR ? `Próximo: <b>${esc(proxR.rot)} · ${esc(proxR.cod === 'FIM' ? cadDia(proxR.em) : cadQuando(proxR.em))}</b>.` : '';
+      if (ligR) set('warn', 'ligar', `Retomada: hora de ligar — o D3 saiu e o cliente não respondeu. A Mari não liga.${ondeSaida} ${proxRTxt}`, v ? '<button type="button" class="btn btn-sm" data-f="fc-reg">Registrar a ligação</button>' : '');
+      else set('ok', 'retomada', `Retomada no ar (D3 → Ligar → D7 → D15).${ondeSaida} ${proxRTxt} Se o cliente responder, a Mari atende.`);
+    } else if (emSaida) {
       const sr = lead.saida_motivo === 'sem_resposta';
       set('fim', 'encerrada', sr ? 'Terminou: o cliente não respondeu à cadência e o lead foi para Saída · Sem resposta. Se ele escrever, a conversa reabre.'
         : `Encerrada: o lead está em Saída${lead.saida_nome ? ` · ${esc(lead.saida_nome)}` : ''}. A Mari não manda lembrete.`);
@@ -3888,7 +3923,8 @@
     if (P.tom !== 'ok') seq.forEach((p) => { if (p.st === 'fut') p.sub = ''; });
     // Resumo de uma linha (faixa acima da caixa da conversa).
     const nOk = seq.filter((p) => p.st === 'ok').length;
-    P.resumo = P.tom === 'ok' && prox ? `Lembretes${nOk ? ` · ${nOk} enviado${nOk > 1 ? 's' : ''}` : ''} · próximo ${prox.rot} ${cadQuando(prox.em)}`
+    const prR = prox || proxR;
+    P.resumo = P.tom === 'ok' && prR ? `Lembretes${nOk ? ` · ${nOk} enviado${nOk > 1 ? 's' : ''}` : ''} · próximo ${prR.rot} ${prR.cod === 'FIM' ? cadDia(prR.em) : cadQuando(prR.em)}`
       : `Lembretes · ${P.pill}${P.tom === 'warn' && /com /.test(P.linha) && comPessoa ? `: com ${quem}` : ''}`;
     return P;
   }
