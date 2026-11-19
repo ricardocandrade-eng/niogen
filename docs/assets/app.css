@@ -3513,6 +3513,7 @@ tr.mq2-tr.v-off td:first-child { box-shadow: none; }
 .lv2-tag { align-self: center; justify-self: start; margin-left: 10px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); white-space: nowrap; }
 .lv2 .lv-act { justify-content: flex-end; }
 .lv2 .lv-act .btn, .lv2-kbts .btn { min-width: 112px; justify-content: center; }
+.lv2 .lv-act .btn[data-operador], .lv2-kbts .btn[data-operador] { min-width: 40px; padding-left: 10px; padding-right: 10px; }   /* 18/11: o ⌖ é só ícone — cabe com Descartar e o botão da linha */
 .lv2-acomp { display: flex; width: 100%; align-items: center; gap: 8px; padding: 12px 10px; margin-top: 4px; background: transparent; border: 0; border-bottom: 1px solid #1D232B; color: #A6AFBE; font: 500 13px var(--sans); text-align: left; cursor: pointer; }
 .lv2-board > .mv-col { flex: 1 1 210px; min-width: 210px; }
 .lv2-col .lv2-pt { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: var(--c); margin-right: 6px; }
