@@ -324,7 +324,7 @@
     if (c.tipo === 'volta_hoje' && (c.conversa_id || c.venda_id))
       return bt(`data-cf-reabrir="${conv}" data-venda="${vd}"`, 'Reabrir', 'Tira da Saída e volta para o time retomar o contato.', false) + bt(`data-cf-adiar="${conv}" data-venda="${vd}"`, '+7 dias', 'Empurra a data de volta para daqui a 7 dias (nota no histórico). A linha sai até lá.');
     if (c.tipo === 'os_excecao')
-      return (c.venda_id ? bt(`data-os-ler="${vd}"`, '⟳ OS', 'Lê esta OS agora no portal da Nio (uns 15 s)', false) : '') + bt(`data-cf-osvisto="${esc(c.chave)}"`, 'Visto', 'A linha some enquanto a OS continuar igual na Nio; se mudar, volta.');
+      return (c.venda_id && c._solto ? bt(`data-os-ler="${vd}"`, '⟳ OS', 'Lê esta OS agora no portal da Nio (uns 15 s)', false) : '') + bt(`data-cf-osvisto="${esc(c.chave)}"`, 'Visto', 'A linha some enquanto a OS continuar igual na Nio; se mudar, volta.');
     if (c.tipo === 'conta_nao_fecha')
       return bt(`data-cf-contavisto="${esc(c.chave)}"`, 'Visto hoje', 'A linha some hoje. A conferência roda de novo amanhã e, se ainda falhar, ela volta.');
     if (c.tipo === 'docs_prazo' && c.venda_id)
@@ -454,7 +454,8 @@
     confDaLinha = {};
     const confSoltos = conf.filter((c) => {
       const j = (c.venda_id && naLista[c.venda_id]) || (c.conversa_id && naLista[`c:${c.conversa_id}`]);
-      if (!j) return true;
+      if (!j) { c._solto = true; return true; }   // 0318: aviso sem linha do cliente — o ⟳ OS vai no próprio aviso
+      c._solto = false;
       (confDaLinha[chaveFicha(j)] = confDaLinha[chaveFicha(j)] || []).push(c);
       return false;
     });
