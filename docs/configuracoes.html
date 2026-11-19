@@ -20,11 +20,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-com">
+<link rel="stylesheet" href="assets/app.css?v=191126-inc">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=191126-com"></script>
+<script src="assets/app.js?v=191126-inc"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
@@ -691,7 +691,17 @@ Guardar?`)) return;
     const c = PC.cfg;
     const campo = (rot, nome, val, extra = '', dica = '') => `<label class="campo">${esc(rot)}${dica ? ` <span class="nota-campo">${esc(dica)}</span>` : ''}<input type="number" name="${nome}" value="${val ?? ''}" ${extra} ${dis}></label>`;
     const vigente = c.termo_versao_vigente;
+    // 0319 (Ricardo, 19/11): chave única para degraus, garantia e largada. Sem a coluna (migration não subiu) = desligado.
+    const incOn = c.incentivos_ativos === true;
+    const temChave = Object.prototype.hasOwnProperty.call(c, 'incentivos_ativos');
     document.getElementById('parc-conteudo').innerHTML = `
+      <div class="cfg-bloco inc-chave ${incOn ? 'on' : 'off'}"><div class="inc-linha">
+        <div><h3 style="margin:0">Incentivos: degraus, garantia e largada</h3>
+          <p style="margin:4px 0 0">${incOn
+            ? '<b>Ligados.</b> O parceiro vê os degraus de pontos, a Garantia Bronze e a largada no app e na tela de cadastro, e "Apurar prêmios" gera a ajuda de custo do mês.'
+            : '<b>Desligados.</b> O parceiro só vê e só recebe a comissão por plano. Degraus, garantia e largada ficam escondidos no app e no cadastro, e "Apurar prêmios" não gera ajuda de custo (o mês fica fechado sem prêmio). Os valores abaixo ficam guardados para quando você ligar.'}
+            ${temChave ? '' : '<br><span class="nota-campo">A chave ainda não existe no banco (migration 0319 não aplicada): por enquanto, tudo desligado.</span>'}</p></div>
+        ${ehAdmin ? `<button type="button" class="btn ${incOn ? '' : 'btn-acc'}" data-pc="incentivos" ${temChave ? '' : 'disabled'}>${incOn ? 'Desligar incentivos' : 'Ligar incentivos'}</button>` : `<span class="chip ${incOn ? 'ok' : ''}">${incOn ? 'ligados' : 'desligados'}</span>`}</div></div>
       <form id="form-cfg" class="secao" novalidate>
         <div class="cfg-bloco"><h3>Degraus de pontos do mês · ajuda de custo</h3>
           <p>1 real contratado = 1 ponto, no mês da instalação confirmada. Vale só o maior degrau atingido; a ajuda de custo é apurada no dia da apuração do mês seguinte e paga na 1ª sexta do calendário depois dele. Mês com venda indevida: sem ajuda de custo.</p>
@@ -834,6 +844,18 @@ Guardar?`)) return;
       degraus = l;
       document.getElementById('degraus').innerHTML = degrausHtml();
     } else if (a === 'salvar-comissao') await salvarComissaoPadrao(b);
+    else if (a === 'incentivos') {
+      const ligar = PC.cfg.incentivos_ativos !== true;
+      if (!confirm(ligar
+        ? 'Ligar os incentivos? Os parceiros passam a ver degraus, Garantia Bronze e largada, e a apuração do mês volta a gerar ajuda de custo.'
+        : 'Desligar os incentivos? Os parceiros deixam de ver degraus, garantia e largada, e a apuração não gera ajuda de custo enquanto estiver desligado.')) return;
+      b.disabled = true;
+      const { error } = await NG.sb.from('config_parceiros').update({ incentivos_ativos: ligar }).eq('id', true);
+      b.disabled = false;
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+      NG.toast(ligar ? 'Incentivos ligados' : 'Incentivos desligados', 'ok');
+      await carregarParceiro();
+    }
     else if (a === 'nio-pagou') {
       const c = PC.cal.find((x) => String(x.id) === b.dataset.id);
       if (!c) return;

@@ -3658,3 +3658,9 @@ button.fc-id:hover { color: inherit; }
 .com-grade .com-cel small.dif { color: #F5B84B; }
 .com-grade .com-cel.vazio { color: var(--muted); padding-top: 10px; font-size: 13px; }
 .com-grade .com-cel b.val { font-size: 15px; padding-top: 8px; }
+
+/* 0319: chave dos incentivos do Programa Parceiro (Configurações › Programa Parceiro) */
+.inc-chave .inc-linha { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.inc-chave .inc-linha > div { flex: 1 1 320px; }
+.inc-chave.on { border-color: var(--accent); }
+.inc-chave.off { border-style: dashed; }

@@ -126,13 +126,34 @@
         <p class="sub">Depois que o cadastro for aprovado, o app mostra quanto você ganha em cada plano.</p></div>`;
   }
 
+  // Regras de ganho (0319): parceiro_programa() é pública. Incentivos desligados (ou a função ainda não existe) = só comissão.
+  async function carregarPrograma() { try { return (await rpc('parceiro_programa')) || { incentivos: false }; } catch (e) { return { incentivos: false }; } }
+  function comoGanha(prog, noApp) {
+    const inc = prog && prog.incentivos === true;
+    const itens = [`<div class="ganha-item"><b>Comissão por cliente instalado</b><p>Um valor fixo por plano, pago quando a instalação é confirmada. ${noApp ? 'Veja os valores em "Quanto você ganha por plano", aqui embaixo.' : 'Os valores de cada plano aparecem no app assim que o seu cadastro for aprovado.'}</p></div>`];
+    if (inc && (prog.degraus || []).length) {
+      itens.push(`<div class="ganha-item"><b>Ajuda de custo por pontos no mês</b><p>Cada R$ 1 de plano instalado vale 1 ponto. Quanto mais pontos no mês, maior a ajuda (vale o maior degrau):</p>
+        <div class="degraus-lista">${prog.degraus.map((d) => `<div><span>${esc(d.nome || 'Degrau')}</span><span>${numero(d.pontos)} pontos</span><b>${moeda(d.premio)}</b></div>`).join('')}</div></div>`);
+    }
+    if (inc && prog.garantia) {
+      const g = prog.garantia;
+      itens.push(`<div class="ganha-item"><b>Garantia Bronze</b><p>Fez ${numero(g.gatilho)} pontos num mês? Nos ${numero(g.meses)} meses seguintes você recebe pelo menos <b>${moeda(g.piso)}</b> de ajuda, fazendo no mínimo ${numero(g.minimo)} pontos no mês.</p></div>`);
+    }
+    if (inc && prog.largada) {
+      itens.push(`<div class="ganha-item"><b>Largada</b><p>Para começar, a gente pode adiantar até <b>${moeda(prog.largada.valor)}</b>. Ela é abatida em ${moeda(prog.largada.abatimento)} por venda instalada.</p></div>`);
+    }
+    return `<div class="cartao" style="gap:12px"><div class="rot">Como você ganha</div>${itens.join('')}</div>`;
+  }
+
   async function telaSeja() {
     render('<div class="carregando">Carregando…</div>', null);
     let termo = null;
-    try { termo = await rpc('parceiro_termo_vigente'); } catch (e) { termo = null; }
+    const [t, prog] = await Promise.all([rpc('parceiro_termo_vigente').catch(() => null), carregarPrograma()]);
+    termo = t;
     const md = termo && termo.texto && window.NGMarkdown ? window.NGMarkdown.render(termo.texto).html : esc((termo && termo.texto) || '');
     render(`${voltar('Seja parceiro', 'entrar')}
       ${blocoNio()}
+      ${comoGanha(prog, false)}
       <h2 id="cadastro" style="margin-top:8px">Faça o seu cadastro</h2>
       <form id="f-seja" class="lista" novalidate style="gap:14px">
         <div class="campo"><label for="s-nome">Nome completo</label><input id="s-nome" name="nome" autocomplete="name" required></div>
@@ -234,15 +255,16 @@
         ? `<div class="cartao heroi"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A gente avisa a sexta.</div></div>`
         : `<div class="cartao heroi"><div class="rot">Você recebe a cada 15 dias</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
     const mesAtual = hojeSP().slice(0, 7);
-    const garantia = pts && pts.garantia_ate && String(pts.garantia_ate).slice(0, 7) >= mesAtual
+    const inc = RES.incentivos === true;   // 0319: desligado (ou ainda sem a chave) = só comissão
+    const garantia = inc && pts && pts.garantia_ate && String(pts.garantia_ate).slice(0, 7) >= mesAtual
       ? `<div class="faixa verde" style="font-size:14px"><div>Garantia ativa: ${moeda(pts.garantia_piso)} por mês até ${esc(nomeMes(pts.garantia_ate).toLowerCase())}, fazendo ${numero(pts.garantia_min_pontos)} pontos.</div></div>` : '';
-    const largada = RES.largada && RES.largada.paga_em && Number(RES.largada.saldo) > 0
+    const largada = inc && RES.largada && RES.largada.paga_em && Number(RES.largada.saldo) > 0
       ? `<div class="faixa cinza" style="font-size:14px"><div>Largada: faltam ${moeda(RES.largada.saldo)} para abater (${moeda(RES.largada.por_venda)} por venda instalada).</div></div>` : '';
     const precisa = (VENDAS || []).filter((v) => v.precisa_de_voce);
-    render(`<div class="topo"><div><div class="ola">Olá,</div><div class="nome">${esc(RES.primeiro_nome)}</div></div><div class="selo">${esc(nivel)}</div></div>
+    render(`<div class="topo"><div><div class="ola">Olá,</div><div class="nome">${esc(RES.primeiro_nome)}</div></div>${inc ? `<div class="selo">${esc(nivel)}</div>` : ''}</div>
       ${receber}
       <a class="bt" href="#enviar">${ICO.mais}Enviar venda</a>
-      ${cartaoGanhos(true)}${termometro(pts)}${garantia}${largada}
+      ${cartaoGanhos(true)}${inc ? termometro(pts) : ''}${garantia}${largada}
       ${precisa.length ? `<div class="lista"><div class="rot">Precisa de você</div>${precisa.map((v) => `<a class="aviso-link" href="#vendas"><span><b>${esc(v.primeiro_nome)}</b>${v.bairro ? ` · ${esc(v.bairro)}` : ''} — ${esc(v.detalhe || v.status_texto)}</span><span>Ver</span></a>`).join('')}</div>` : ''}`, 'inicio');
     desenharGanhos();
   }
@@ -527,11 +549,12 @@
   async function telaEu() {
     render('<div class="carregando">Carregando…</div>', 'eu');
     try { await carregarResumo(); } catch (e) { return erroCarga(e); }
-    let planos = [], material = [];
+    let planos = [], material = [], prog = { incentivos: false };
     try {
-      [planos, material] = await Promise.all([
+      [planos, material, prog] = await Promise.all([
         RES.status === 'ativo' && RES.cidade ? rpc('parceiro_planos', { p_cidade: RES.cidade, p_uf: 'MG', p_bairro: null }) : Promise.resolve([]),
         rpc('parceiro_material'),
+        carregarPrograma(),
       ]);
     } catch (e) { /* mostra o resto */ }
     const zap = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro PAP.`);
@@ -547,6 +570,7 @@
         ${zapPix ? `<a class="link-bt" href="${esc(zapPix)}" target="_blank" rel="noopener">Trocar a chave Pix (a gente confere o titular)</a>` : ''}
         <div class="d-l"><span>Termo aceito</span><b>${t.aceito ? `versão ${esc(t.aceito)} · ${ddmm(t.aceito_em)}` : '—'}</b></div>
       </div></details>
+      <details class="gaveta"><summary>Como você ganha</summary><div>${comoGanha(prog, true).replace('<div class="cartao" style="gap:12px"><div class="rot">Como você ganha</div>', '<div class="ganha-gaveta">')}</div></details>
       ${planos.length ? `<details class="gaveta"><summary>Quanto você ganha por plano</summary><div>
         ${planos.map((p) => `<div class="d-l"><span>${esc(p.nome_curto)}<br><small>${moeda(p.preco)} por mês</small></span><b style="color:var(--verde)">${p.comissao == null ? '—' : moeda(p.comissao)}</b></div>`).join('')}
         <div class="sub">Tabela de ${esc(RES.cidade)}. Em outra cidade o valor pode mudar: o app mostra antes de enviar.</div></div></details>` : ''}

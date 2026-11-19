@@ -201,3 +201,15 @@ details.gaveta > div { padding: 0 16px 16px; display: flex; flex-direction: colu
 .passos-nio li::before { content: counter(p); width: 28px; height: 28px; border-radius: 50%; background: var(--verde); color: var(--nio-escuro); font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 14px; }
 .passos-nio b { color: var(--texto); }
 @media (min-width: 420px) { .vant { grid-template-columns: 1fr 1fr; } .vant-item { flex-direction: column; gap: 10px; } }
+
+/* 0319: "Como você ganha" (cadastro e app) */
+.ganha-item { display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--borda); }
+.ganha-item:last-child { border-bottom: 0; padding-bottom: 0; }
+.ganha-item > b { font-size: 16px; font-weight: 800; color: var(--texto); }
+.ganha-item p { font-size: 14px; color: var(--suave); line-height: 1.45; }
+.ganha-gaveta { display: flex; flex-direction: column; gap: 12px; }
+.degraus-lista { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.degraus-lista div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: baseline; background: var(--nio-escuro); border: 1px solid var(--borda); border-radius: 12px; padding: 8px 12px; font-size: 14px; }
+.degraus-lista span:first-child { font-weight: 800; color: var(--texto); }
+.degraus-lista span:nth-child(2) { color: var(--apagado); font-variant-numeric: tabular-nums; }
+.degraus-lista b { color: var(--verde); font-weight: 900; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
