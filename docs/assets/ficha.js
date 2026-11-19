@@ -2096,9 +2096,15 @@
     if (!a || !a.bio_resultado || (d.v && d.v.instalado_em)) return '';
     // 18/11 (Ricardo: "GED360 só se der risco" no card Agora): aprovada ou aguardando a Nio não aparece aqui — o status segue
     // no degrau Biometria e no detalhe da ficha. Fica só quando o GED360 dá risco ou levanta alerta.
-    if (a.bio_acao !== 'risco' && !a.bio_alerta) return '';
-    const cls = 'bad';
-    return `<div class="fc2-ged ${cls}" title="Biometria lida no GED360 da Nio · protocolo ${esc(a.bio_protocolo || '—')}"><b>GED360:</b> ${esc(a.bio_rotulo || a.bio_resultado)}${a.bio_lido_em ? ` · lido há ${esc(haGed(a.bio_lido_em))}` : ''}</div>`;
+    // 19/11 (L-203, Ricardo: "Sinaliza de forma clara o status do GED"): enquanto a vez é da biometria (link enviado, aguardando
+    // o cliente), o card Agora mostra o que o GED360 diz — envio, protocolo e quando foi lido. Depois dessa etapa, só risco/alerta.
+    const naBio = d.porta && d.porta.situacao && d.porta.situacao.codigo === 'qualificado_biometria';
+    if (a.bio_acao !== 'risco' && !a.bio_alerta && !naBio) return '';
+    const cls = a.bio_acao === 'risco' || a.bio_alerta ? 'bad' : a.bio_acao === 'aprovada' ? 'ok' : 'wait';
+    const extra = naBio && cls === 'wait'
+      ? `${a.bio_envio ? ` · link enviado ${esc(NG.fmtDataHora(a.bio_envio))}` : ''} · protocolo ${esc(a.bio_protocolo || '—')} · aguardando o cliente fazer`
+      : '';
+    return `<div class="fc2-ged ${cls}" title="Biometria lida no GED360 da Nio · protocolo ${esc(a.bio_protocolo || '—')}"><b>GED360:</b> ${esc(a.bio_rotulo || a.bio_resultado)}${extra}${a.bio_lido_em ? ` · lido há ${esc(haGed(a.bio_lido_em))}` : ''}</div>`;
   }
   // Card Agora (passo 6, Ricardo 17/11): os botões de ação do passo da vez, tirados do painel de ações, à vista e do mesmo
   // tamanho (até 4). Só botões que viram evento na porta ou consultas; formulários e o resto continuam em "Ações".
