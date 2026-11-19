@@ -1,0 +1,1327 @@
+{
+ "name": "mari_cadencia (RASCUNHO passo 4 — não subir sem o portão da Mari)",
+ "nodes": [
+  {
+   "parameters": {
+    "rule": {
+     "interval": [
+      {
+       "field": "minutes",
+       "minutesInterval": 5
+      }
+     ]
+    }
+   },
+   "name": "1 · A cada 5 min",
+   "type": "n8n-nodes-base.scheduleTrigger",
+   "typeVersion": 1.2,
+   "position": [
+    0,
+    0
+   ],
+   "id": "0d7aad65-7407-5965-8062-fbb7cde553ea"
+  },
+  {
+   "parameters": {
+    "httpMethod": "POST",
+    "path": "mari-cadencia-admin",
+    "authentication": "headerAuth",
+    "responseMode": "responseNode",
+    "options": {}
+   },
+   "name": "1w · Admin cadência",
+   "type": "n8n-nodes-base.webhook",
+   "typeVersion": 2,
+   "position": [
+    0,
+    300
+   ],
+   "id": "5af6363f-1895-5ff0-b771-0c85066d750a",
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "uDwozyxJcB1mghWw",
+     "name": "MARI_TESTE_SECRET"
+    }
+   },
+   "webhookId": "629145c5-1555-58ee-a412-9a81a6d4914f"
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c02_interruptor.js — nó \"2 · Interruptor\" do mari_cadencia (04/11/2026)\n// Kill switch e modo da cadência (staticData). Padrão: DESLIGADA e em modo 'teste'.\n//   _cadenciaAtiva  false | true      → false = a rodada para aqui (nada é lido nem enviado)\n//   _modoCadencia   'teste' | 'chatwoot'\n//       teste    → só conversas canal 'teste' (rota /webhook/mari-teste); envio SIMULADO (grava turno + toque)\n//       chatwoot → só conversas canal 'whatsapp'; envio real pela API do Chatwoot (nós 6g/7 hoje desligados)\n// Comandos pela rota admin (header X-Mari-Secret): ligar | desligar | modo teste | modo chatwoot | status\n// Sem texto de negócio e sem segredo.\n\nconst sd = $getWorkflowStaticData('global');\nif (sd._cadenciaAtiva === undefined) sd._cadenciaAtiva = false;\nif (!sd._modoCadencia) sd._modoCadencia = 'teste';\n\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst estado = () => ({ ativa: sd._cadenciaAtiva, modo: sd._modoCadencia, ultima_rodada: sd._ultimaRodada || null });\n\nif (ex('1w · Admin cadência')) {\n  const body = $('1w · Admin cadência').first().json.body || {};\n  const cmd = String(body.admin || '').toLowerCase().trim();\n  if (cmd === 'ligar') sd._cadenciaAtiva = true;\n  else if (cmd === 'desligar') sd._cadenciaAtiva = false;\n  else if (cmd === 'modo teste' || cmd === 'modo chatwoot') sd._modoCadencia = cmd.split(' ')[1];\n  else if (cmd !== 'status') return [{ json: { admin: true, resposta: { erro: 'use: ligar | desligar | modo teste | modo chatwoot | status' } } }];\n  return [{ json: { admin: true, resposta: { admin: true, ...estado() } } }];\n}\n\nif (!sd._cadenciaAtiva) return [];   // kill switch: nada roda\n\nsd._ultimaRodada = new Date().toISOString();\nreturn [{ json: {\n  admin: false,\n  modo: sd._modoCadencia,\n  canal: sd._modoCadencia === 'chatwoot' ? 'whatsapp' : 'teste',\n  agora: sd._ultimaRodada,\n  limite: 30,\n} }];\n"
+   },
+   "name": "2 · Interruptor",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    220,
+    100
+   ],
+   "id": "24f3b826-afec-5f08-ae96-192456980c4c"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "efb4002d-6e31-51e9-b6c4-6601217550cf",
+       "leftValue": "={{ $json.admin === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "2a · Admin?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    440,
+    100
+   ],
+   "id": "90ff0673-6268-50e2-af95-d85147eaec94"
+  },
+  {
+   "parameters": {
+    "respondWith": "json",
+    "responseBody": "={{ JSON.stringify($json.resposta) }}",
+    "options": {}
+   },
+   "name": "2r · Responder admin",
+   "type": "n8n-nodes-base.respondToWebhook",
+   "typeVersion": 1.1,
+   "position": [
+    660,
+    0
+   ],
+   "id": "d9214932-2d39-57af-8ecd-2ab18a487f4b"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_cadencia_candidatos",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_agora: $json.agora, p_canal: $json.canal, p_limite: $json.limite }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "3 · Supabase candidatos",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    660,
+    200
+   ],
+   "id": "a219a9cf-50a5-5b84-ab18-c5e9baa89672",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c03_itens.js — nó \"3b · Itens\" do mari_cadencia (04/11/2026)\n// A RPC mari_cadencia_candidatos devolve um array de objetos (cada um já com a decisão do banco:\n// passo, ação, texto, template, params). Aqui só vira um item por conversa — sem decisão nenhuma.\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const lista = Array.isArray(j) ? j : (j && j.conversa_id ? [j] : []);\n  for (const c of lista) {\n    const v = (c && c.mari_cadencia_candidatos) || c;   // PostgREST pode embrulhar setof jsonb no nome da função\n    if (v && v.conversa_id && v.pode_enviar === true) out.push({ json: v });\n  }\n}\nreturn out.slice(0, 30);   // teto por rodada (o banco já limita; aqui é cinto + suspensório)\n"
+   },
+   "name": "3b · Itens",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    880,
+    200
+   ],
+   "id": "9ed098d6-42b1-5fc3-9d90-63cb2c59a0c8"
+  },
+  {
+   "parameters": {
+    "batchSize": 1,
+    "options": {}
+   },
+   "name": "4 · Um por vez",
+   "type": "n8n-nodes-base.splitInBatches",
+   "typeVersion": 3,
+   "position": [
+    1100,
+    200
+   ],
+   "id": "eb847de1-417b-50f6-9419-66e290f5662e"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "1c8f04b4-f44f-595b-b055-7dcba187fb8d",
+       "leftValue": "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) && $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "4a · Escrever cutucada?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    1210,
+    120
+   ],
+   "id": "2730fcec-23d0-5235-bdec-f19bfbdfb3bb"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_cutucada_contexto",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversa_id, p_passo: $json.proximo_passo }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "4b · Supabase contexto",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1430,
+    40
+   ],
+   "id": "de007cee-8f0b-5aec-90fa-063e537f1d25",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "jsCode": "\n\n// 0142: pedido ao Claude para a Mari escrever a cutucada (só texto; o filtro fica no 4e).\n\nconst c = $('4 · Um por vez').first().json;\n\nconst ctx = $input.first().json || {};\n\nconst sistema = `Você é a Mari, vendedora da Nio Internet (fibra) no WhatsApp. O cliente parou de responder e você vai mandar uma\n\nCUTUCADA para trazê-lo de volta — curta, simpática e persuasiva, como uma boa vendedora que quer muito fechar com ele.\n\nRegras (todas obrigatórias):\n\n- No máximo 2 frases e 180 caracteres. Português do Brasil, natural, sem formalidade. No máximo 1 emoji.\n\n- Termine com UMA pergunta fácil de responder, que puxe o próximo passo do que FALTA (CEP, número, operadora, escolher o plano, nome/CPF, e-mail, forma de pagamento, conferir os dados).\n\n- Use o primeiro nome do cliente se vier no contexto. Pode citar a cidade e o plano escolhido.\n\n- Um argumento por vez, só do que é verdade: preço fixo até 2030; roteador Wi-Fi incluído; atendimento rápido por aqui; é rapidinho (1–2 minutos).\n\n- NUNCA: desconto, brinde, promoção, \"última chance\", \"só hoje\", prazo ou data de instalação, valor em R$, \"cobertura confirmada\", asterisco, nome de empresa que não seja Nio.\n\n- Não repita nenhuma cutucada já enviada (lista no contexto) nem comece igual a elas. Não peça desculpa por insistir.\n\n- Cutucada 5 é a última da janela: leve, sem pressão (ex.: deixar o atendimento separado e perguntar se quer seguir).\n\nResponda SÓ com o texto da mensagem, sem aspas.`;\n\nconst pedido = {\n\n  model: 'claude-sonnet-5-5', max_tokens: 400,\n\n  output_config: { effort: 'low' },\n\n  system: sistema,\n\n  messages: [{ role: 'user', content: 'Contexto da conversa (JSON):\\n' + JSON.stringify(ctx) }],\n\n};\n\nreturn [{ json: { pedido } }];\n\n"
+   },
+   "name": "4c · Montar pedido",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1650,
+    40
+   ],
+   "id": "716224a3-dde2-54f0-a1a6-ad282f594b35"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://api.anthropic.com/v1/messages",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "anthropicApi",
+    "sendHeaders": true,
+    "headerParameters": {
+     "parameters": [
+      {
+       "name": "anthropic-version",
+       "value": "2023-06-01"
+      }
+     ]
+    },
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.pedido) }}",
+    "options": {
+     "timeout": 45000,
+     "response": {
+      "response": {
+       "neverError": true
+      }
+     }
+    }
+   },
+   "name": "4d · Claude",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1870,
+    40
+   ],
+   "id": "b13e16f5-b05e-545a-a4a2-68c0f09bc1d8",
+   "credentials": {
+    "anthropicApi": {
+     "id": "7TR9FOfOVcCzLYi0",
+     "name": "Claude API Nio"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "jsCode": "\n\n// 0142: filtro da cutucada escrita pela Mari. Reprovou (ou a API falhou) → texto de reserva do banco. Sai o candidato do\n\n// \"4 · Um por vez\" com o texto final — o 5 · Montar envio segue igual.\n\nconst c = { ...$('4 · Um por vez').first().json };\n\nconst r = $input.first().json || {};\n\nlet ctx = {};\n\ntry { ctx = $('4b · Supabase contexto').first().json || {}; } catch (e) { ctx = {}; }\n\nconst blocos = Array.isArray(r.content) ? r.content.filter((x) => x && x.type === 'text') : [];\n\nlet t = blocos.map((x) => x.text || '').join(' ').replace(/\\s+/g, ' ').trim().replace(/^[\"“']|[\"”']$/g, '');\n\nconst norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\nconst n = norm(t);\n\nconst ja = (Array.isArray(ctx.cutucadas_ja_enviadas) ? ctx.cutucadas_ja_enviadas : []).map(norm);\n\nconst ruim = !t || t.length < 12 || t.length > 260 || !t.includes('?') || t.includes('*') || /r\\$\\s*\\d/.test(n)\n\n  || /descont|gratis|gratuit|promo|brinde|ultima chance|so hoje|somente hoje|amanha|instala(cao|r)? (hoje|amanha|em )|prazo|cobertura confirmada|garanto|garantimos|combo|pacote|dh\\x61rma|2028/.test(n)\n\n  || ja.some((x) => x && (x === n || x.slice(0, 25) === n.slice(0, 25)))\n\n  || r.stop_reason === 'refusal' || !!r.error;\n\nif (!ruim) c.texto = t;\n\nc.cutucada_ia = !ruim;\n\nreturn [{ json: c }];\n\n"
+   },
+   "name": "4e · Ler cutucada",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2090,
+    40
+   ],
+   "id": "05bb7bed-24d0-519d-86ca-183f87bb7969"
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c05_montar.js — nó \"5 · Montar envio\" do mari_cadencia (04/11/2026)\n// Recebe UM candidato (loop de 1) e monta o corpo da mensagem para a API do Chatwoot:\n//   texto livre (dentro da janela de 24 h) → { content, message_type, private:false }\n//   template (fora da janela)              → { content: corpo renderizado, template_params: { name, category,\n//                                              language, processed_params: { body: { \"1\": …, \"2\": … } } } }\n// (formato do noF4b da Renata, capturado do payload da própria UI do Chatwoot).\n// semEnvio = true quando NÃO há envio real: modo teste, canal 'teste', telefone de teste 5500000000xxx ou\n// passo ENCERRAR (só muda o status). Nunca o nome da revendedora no texto (o banco já filtra; aqui de novo).\n\nconst CONFIG = {\n  CHATWOOT_NIO_ACCOUNT: '195428',   // conta própria da Nio no Chatwoot (nunca a da Vero) — prompt 28, 07/11\n};\n\nconst c = $input.first().json;\nconst modo = $('2 · Interruptor').first().json.modo;\nconst tel = String(c.telefone || '');\nconst texto = String(c.texto || '');\n\nconst PROIBIDO = new RegExp(['dh' + 'arma', 'gr[aá]tis', 'gratuit', 'combo', 'pacote', 'nio 5g', '2028', 'sem fidelidade'].join('|'), 'i');\nlet erro = null;\nif (c.acao !== 'encerrar' && (!texto || PROIBIDO.test(texto) || texto.includes('*'))) erro = 'texto vazio ou reprovado no filtro de saída';\n\nconst semEnvio = c.acao === 'encerrar' || modo !== 'chatwoot' || c.canal === 'teste' || tel.startsWith('5500000000');\n\nlet corpo = null;\nif (c.acao === 'texto') {\n  corpo = { content: texto, message_type: 'outgoing', private: false };\n} else if (c.acao === 'template') {\n  const body = {};\n  (c.params || []).forEach((v, i) => { body[String(i + 1)] = String(v); });\n  corpo = {\n    content: texto, message_type: 'outgoing', content_type: 'text',\n    template_params: { name: c.template, category: c.categoria || 'MARKETING', language: 'pt_BR', processed_params: { body } },\n  };\n}\n\nif (!semEnvio && !c.chatwoot_conversation_id) erro = erro || 'conversa sem chatwoot_conversation_id';\nif (!semEnvio && !CONFIG.CHATWOOT_NIO_ACCOUNT) erro = erro || 'CHATWOOT_NIO_ACCOUNT vazio';\n\nreturn [{ json: {\n  conversaId: c.conversa_id,\n  passo: c.proximo_passo,\n  acao: c.acao,\n  texto,\n  excecao: c.excecao || null,\n  semEnvio: semEnvio && !erro,\n  erro,\n  chatwootConversationId: c.chatwoot_conversation_id || null,\n  telefone: tel,   // 12/11 (0146): a cutucada com voz/imagem sai pela Graph API\n  corpo,\n  config: CONFIG,\n} }];\n"
+   },
+   "name": "5 · Montar envio",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1320,
+    300
+   ],
+   "id": "188e7005-8814-5c12-80ab-d048c8d3a5ea"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "988cd42d-65ea-59e9-904d-a0d5d1ce6ef4",
+       "leftValue": "={{ $json.semEnvio === true || !!$json.erro }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "5s · Sem envio real?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    1540,
+    300
+   ],
+   "id": "1c4f111e-140e-5dc6-a863-32534bdcf979"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_pode_falar",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($json.chatwootConversationId), p_para: 'lembrete', p_passo: $json.passo || null }) }}",
+    "options": {
+     "timeout": 10000
+    }
+   },
+   "name": "6g · Porta pode falar?",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1760,
+    500
+   ],
+   "id": "f434599c-a4f1-5bf3-b3cf-cfcde27e0ca4",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "notes": "MODO CHATWOOT — guard: relê a conversa antes de enviar (só roda com _modoCadencia = chatwoot)."
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/rascunhos/passo4_191126/c06_guard_porta.js — RASCUNHO do nó \"6h · Guard Chatwoot\" do mari_cadencia (19/11/2026)\n// Fase 2, passo 4: antes de qualquer envio real a cadência pergunta ao BANCO \"pode falar?\" (RPC mari_pode_falar com\n// p_para = 'lembrete' e o passo), em vez de reler a conversa no Chatwoot (nó 6g). O banco já aplica as regras de hoje\n// (n8n/cadencia/c06_guard.js): aviso da venda sai sempre (só Não contatar e Saída barram) e nunca para a escada; o resto só em\n// \"Mari atendendo\" sem dono. Sem resposta do banco → não envia (vira falha, não queima o passo), como hoje sem o Chatwoot.\n// Saída igual à de hoje: { parar, enviar, humano, time, resolvida, naoContatar, daVenda } (o 6p · Supabase parar lê esses campos).\nconst m = $('5 · Montar envio').first().json;\nconst r = $input.first().json || {};\nconst PASSOS_VENDA = ['INSTALACAO', 'VESPERA', 'CARTAO', 'CARTAO2', 'BIO1', 'BIOVOLTA'];\nconst daVenda = PASSOS_VENDA.includes(String(m.passo || ''));\nif (typeof r.pode !== 'boolean') {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, erro: 'banco sem resposta (pode falar?) — não enviado' } }];\n}\nconst naoContatar = !!r.nao_contatar;\nconst humano = !!r.pessoa;\nconst time = !!r.time;\nconst parar = daVenda ? false : !!r.parar;\nconst resolvida = parar && !humano && !time && !naoContatar;   // \"parou pela situação\" (Saída, instalada…): o 6p registra como hoje\nif (!r.pode && !parar) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, humano, time, resolvida, naoContatar, daVenda, situacao: r.situacao || null,\n    erro: 'não enviado: ' + (r.motivo || 'banco') } }];\n}\nreturn [{ json: { ...m, parar, enviar: !!r.pode && !parar, humano, time, resolvida, naoContatar, daVenda, situacao: r.situacao || null,\n  motivo: r.motivo || null } }];\n"
+   },
+   "name": "6h · Guard Chatwoot",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1980,
+    500
+   ],
+   "id": "c245cb11-35be-51ac-8f57-876150528f1d"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "1bbe6933-219a-515a-ab61-18cd087175a4",
+       "leftValue": "={{ $json.parar === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "6i · Parar escada?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    2200,
+    500
+   ],
+   "id": "aaa7dc98-3fae-578a-b2f0-55a57b06707e"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_cadencia_parar",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversaId, p_humano: !!$json.humano, p_time: !!$json.time, p_resolvida: !!$json.resolvida, p_nao_contatar: !!$json.naoContatar }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "6p · Supabase parar",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2420,
+    400
+   ],
+   "id": "364c9e15-7c7e-5c62-a3ba-ed6a38d3fae3",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "54aaee36-fbdc-562e-af23-6b2891874bd3",
+       "leftValue": "={{ $json.enviar === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "6e · Enviar?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    2420,
+    600
+   ],
+   "id": "5307db60-b27d-52db-b3e9-2beda6ee0bd8"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_config_interativo",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ \"{}\" }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "6k · Supabase config",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2420,
+    800
+   ],
+   "id": "aa2f53dd-e0b0-51ad-9106-2768e911f805",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "alwaysOutputData": true
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c06m_midia.js — nó \"6m · Mídia?\" do mari_cadencia (12/11/2026, 0146)\n// docs/Prompt_mari_resposta_audio_121126_1800.md, itens 6 e 6b: a cutucada escolhida vai como IMAGEM do plano (F2, padrão) ou\n// como VOZ (F3, padrão), com A/B — metade das conversas recebe a mídia, metade só o texto (bit do id da conversa: voz = bit 0,\n// imagem = bit 1; a medição recalcula o grupo pelo mesmo id). Só cutucadas que a Mari escreveu (F1–F5, texto livre na janela de 24 h).\n// Config (config_mari_textos): midia_cadencia_ligado ('sim'), midia_cadencia_telefones ('teste' = telefones_teste, '' = todos),\n// audio_cadencia_passo, imagem_cadencia_passo, midia_cadencia_ab ('sim'), audio_resposta_voz/modelo/instrucoes.\n// Qualquer dúvida → sem mídia (a cutucada segue em texto pelo Chatwoot, como sempre).\nconst m = $('6h · Guard Chatwoot').first().json;\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst sem = (motivo) => [{ json: { ...m, midia: null, midiaMotivo: motivo } }];\nif (m.acao !== 'texto' || !/^F[1-5]$/.test(String(m.passo || ''))) return sem('não é cutucada escrita');\nconst cfg = ((ex('6k · Supabase config') ? $('6k · Supabase config').first().json : null) || {}).textos || {};\nif (String(cfg.midia_cadencia_ligado || '').toLowerCase() !== 'sim') return sem('desligado');\nconst tel = String(m.telefone || '').replace(/\\D/g, '');\nconst lista = String(cfg.midia_cadencia_telefones == null ? 'teste' : cfg.midia_cadencia_telefones).trim();\nconst liberados = (lista === 'teste' ? String(cfg.telefones_teste || '') : lista).split(/[^0-9]+/).filter(Boolean);\nif (lista !== '' && !liberados.includes(tel)) return sem('telefone fora da lista');\nconst tipo = m.passo === String(cfg.audio_cadencia_passo || '') ? 'voz' : m.passo === String(cfg.imagem_cadencia_passo || '') ? 'imagem' : null;\nif (!tipo) return sem('passo sem mídia');\n// A/B pelo id da conversa (estável): bit 0 → voz, bit 1 → imagem. 0 = grupo da mídia.\nconst byte = parseInt(String(m.conversaId || '').replace(/-/g, '').slice(-2), 16) || 0;\nconst ab = String(cfg.midia_cadencia_ab || 'sim').toLowerCase() === 'sim';\nconst grupoMidia = !ab || (tipo === 'voz' ? (byte & 1) === 0 : ((byte >> 1) & 1) === 0);\nif (!grupoMidia) return sem(`A/B: grupo texto (${tipo})`);\nconst texto = String(m.texto || '').trim();\nconst base = { tipo, telefone: tel, texto, origem: 'cadencia', passo: m.passo, ab: tipo === 'voz' ? 'voz' : 'imagem',\n  conversa_id: m.conversaId, chatwoot_conversa: m.chatwootConversationId || null };\nif (tipo === 'voz') {\n  // voz: curta e sem nada que precise ser lido (preço, número, link)\n  if (texto.length > 250 || /R\\$|\\d{4,}|https?:\\/\\//.test(texto)) return sem('texto não cabe em voz');\n  return [{ json: { ...m, midia: 'voz', pedidoMidia: { ...base, texto: texto.replace(/[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{FE0F}\\u{200D}]/gu, '').replace(/\\s+/g, ' ').trim(),\n    voz: cfg.audio_resposta_voz || 'marin', modelo: cfg.audio_resposta_modelo || 'gpt-4o-mini-tts', instrucoes: cfg.audio_resposta_instrucoes || '' } } }];\n}\n// imagem: o cartão do plano que o 4b trouxe para ESTA conversa e ESTE passo\nconst ctx = ex('4b · Supabase contexto') ? ($('4b · Supabase contexto').first().json || {}) : {};\nconst md = ctx.midia || {};\nif (ctx.conversa_id !== m.conversaId || ctx.passo !== m.passo || !/^https:\\/\\//.test(String(md.imagem_url || ''))) return sem('sem imagem do plano');\nreturn [{ json: { ...m, midia: 'imagem', pedidoMidia: { ...base, imagem_url: md.imagem_url, plano: md.plano_da_imagem || null } } }];\n"
+   },
+   "name": "6m · Mídia?",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2530,
+    900
+   ],
+   "id": "2c6d3804-0901-5965-a4dd-d3cd94cb905e"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "ea540398-a2bb-52ef-8de6-c44602dd9579",
+       "leftValue": "={{ !!$json.midia }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "6n · Com mídia?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    2640,
+    900
+   ],
+   "id": "156abd64-e4f2-5f76-b92b-848bd42eb4f3"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://n8n.ofertasverointernet.com.br/webhook/mari-midia-envio",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.pedidoMidia) }}",
+    "options": {
+     "timeout": 90000
+    }
+   },
+   "name": "6o · Enviar mídia",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2750,
+    1000
+   ],
+   "id": "ab87e40e-5a08-5558-a626-04705964069d",
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "uDwozyxJcB1mghWw",
+     "name": "MARI_TESTE_SECRET"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "notes": "0146 — workflow mari_midia_envio (voz: TTS → mensagem de voz; imagem: cartão do plano com legenda) + nota privada."
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c06q_resultado_midia.js — nó \"6q · Resultado mídia\" do mari_cadencia (12/11/2026, 0146)\n// A mídia saiu → item no formato que o 7r espera (id + status), a cutucada conta como enviada. Não saiu → volta o item da cutucada\n// para o \"7 · Chatwoot enviar\" (texto, como sempre). O erro já foi gravado pelo mari_midia_envio.\nconst m = $('6m · Mídia?').first().json;\nconst r = $input.first().json || {};\nif (r.ok) return [{ json: { id: r.wamid || 'whatsapp', status: 'sent', midiaOk: true } }];\nconst { pedidoMidia, ...resto } = m;\nreturn [{ json: { ...resto, midiaOk: false } }];\n"
+   },
+   "name": "6q · Resultado mídia",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2860,
+    1000
+   ],
+   "id": "20a9bb07-b42f-511a-8a72-648239deade0"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "07d6a2ae-d897-53d5-9b45-c684fe8a7f61",
+       "leftValue": "={{ $json.midiaOk === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "6r · Mídia saiu?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    2970,
+    1000
+   ],
+   "id": "026f23c9-f0cb-5a2a-9633-a4833faa23da"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $json.config.CHATWOOT_NIO_ACCOUNT + '/conversations/' + $json.chatwootConversationId + '/messages' }}",
+    "authentication": "genericCredentialType",
+    "genericAuthType": "httpHeaderAuth",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify($json.corpo) }}",
+    "options": {
+     "timeout": 15000
+    }
+   },
+   "name": "7 · Chatwoot enviar",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2640,
+    700
+   ],
+   "id": "15ae7969-aebe-50ae-ae5b-9095c6cd4e7e",
+   "credentials": {
+    "httpHeaderAuth": {
+     "id": "rMBPTco4UoFYPu0b",
+     "name": "Chatwoot Nio — Mari bot"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "notes": "MODO CHATWOOT — envio SEMPRE pela API do Chatwoot (bolha na conversa). Só roda com _modoCadencia = chatwoot."
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c07_resultado.js — nó \"7r · Resultado\" do mari_cadencia (04/11/2026)\n// Lê a resposta do POST no Chatwoot: ok só com id da mensagem e status ≠ 'failed' (a Meta recusou).\n// Nó 7 desligado → chega o próprio item montado (sem id) → falha registrada, passo não queima.\nconst g = $('6h · Guard Chatwoot').first().json;\nconst r = $input.first().json || {};\nconst ok = !!r.id && r.status !== 'failed' && !r.conversaId;\nreturn [{ json: { ...g, ok, erro: ok ? null : (r.error || r.message || `chatwoot sem id (status=${r.status || 'nenhum'})`) } }];\n"
+   },
+   "name": "7r · Resultado",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2860,
+    700
+   ],
+   "id": "6076de12-cec9-5cf7-9090-0bf1d1de02de"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_cadencia_registrar",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversaId, p_passo: $json.passo, p_ok: ($json.ok !== undefined ? $json.ok : !$json.erro), p_erro: $json.erro || null, p_texto: $json.texto || null, p_excecao: $json.excecao || null }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "8 · Supabase registrar",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    3080,
+    300
+   ],
+   "id": "3d06abb5-70cf-5a15-9f15-97bfaa34ed62",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   }
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "446944b4-fbbe-53ec-8fcc-9559252222e7",
+       "leftValue": "={{ $('2 · Interruptor').first().json.modo === 'chatwoot' }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "9 · Futuro? (modo chatwoot)",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    660,
+    900
+   ],
+   "id": "935d8b1a-7d05-5e86-8416-9652553f0c72"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_futuro_pendentes",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_limite: 20 }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "9a · Supabase futuro",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    880,
+    900
+   ],
+   "id": "1b8e6eb3-a8ec-56ec-99c2-af440fa6538c",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   },
+   "onError": "continueRegularOutput"
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/cadencia/c09b_futuro_itens.js — nó \"9b · Itens futuro\" do mari_cadencia (07/11/2026, prompt 28)\n// A RPC mari_futuro_pendentes (0052) devolve as conversas cuja venda está em Saída \"Interesse futuro (com data)\" e\n// ainda sem a etiqueta/nota para essa data. Aqui só vira um item por conversa — sem decisão nenhuma.\n// RPC com erro (ex.: 0052 ainda não aplicada) → nada a fazer nesta rodada (o ramo principal não é afetado).\nconst CHATWOOT_NIO_ACCOUNT = '195428';   // conta própria da Nio no Chatwoot (nunca a da Vero) — a mesma do c05\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  if (!j || j.error || j.code || (j.message && !j.conversa_id)) continue;   // erro da RPC: pula\n  const lista = Array.isArray(j) ? j : (j.conversa_id || j.mari_futuro_pendentes ? [j] : []);\n  for (const x of lista) {\n    const v = (x && x.mari_futuro_pendentes) || x;\n    if (v && v.conversa_id && v.chatwoot_conversation_id && v.volta_em) {\n      out.push({ json: { conta: CHATWOOT_NIO_ACCOUNT, conversaId: v.conversa_id, cw: String(v.chatwoot_conversation_id),\n        voltaEm: v.volta_em, nota: v.nota } });\n    }\n  }\n}\nreturn out.slice(0, 20);\n"
+   },
+   "name": "9b · Itens futuro",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    1100,
+    900
+   ],
+   "id": "f107d0bf-3547-558e-b2e3-18ebab5cde5b"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_chatwoot_pedir",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($json.cw), p_pedido: 'interesse_futuro', p_nota: $json.nota || null }) }}",
+    "options": {
+     "timeout": 10000
+    }
+   },
+   "name": "9f · Porta interesse futuro",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    1980,
+    900
+   ],
+   "id": "7fa84c33-5308-5c28-a84b-d31c763ec486",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   },
+   "onError": "continueRegularOutput",
+   "notes": "POST /labels SUBSTITUI a lista: o 9d já mandou as atuais + interesse-futuro."
+  },
+  {
+   "parameters": {
+    "jsCode": "// NIOGEN | n8n/rascunhos/passo4_191126/c09h_futuro_conferir_porta.js — RASCUNHO do nó \"9h · Conferir\" do mari_cadencia (19/11/2026)\n// Fase 2, passo 4: a etiqueta interesse-futuro e a nota não são mais postas direto no Chatwoot (nós 9c ler, 9d montar a lista\n// inteira, 9f etiquetas, 9g nota): o nó 9f pede ao banco (RPC mari_chatwoot_pedir, pedido 'interesse_futuro'), que põe as duas\n// ordens na fila pela porta (etiqueta como add, nunca a lista inteira). Marca a conversa só quando o banco aceitou.\nconst out = [];\n$input.all().forEach((it, i) => {\n  const base = $('9b · Itens futuro').itemMatching(i).json;\n  const r = it.json || {};\n  const ok = r.ok === true;\n  out.push({ json: { ...base, marcar: ok, erro: ok ? null : 'porta: ' + (r.erro || 'sem resposta do banco') } });\n});\nreturn out;\n"
+   },
+   "name": "9h · Conferir",
+   "type": "n8n-nodes-base.code",
+   "typeVersion": 2,
+   "position": [
+    2420,
+    900
+   ],
+   "id": "3358111d-fee0-5fd8-b8f2-754bc165771d"
+  },
+  {
+   "parameters": {
+    "conditions": {
+     "options": {
+      "caseSensitive": true,
+      "leftValue": "",
+      "typeValidation": "loose"
+     },
+     "conditions": [
+      {
+       "id": "330740b0-91fa-53a4-9741-cc13e4e892a9",
+       "leftValue": "={{ $json.marcar === true }}",
+       "rightValue": "",
+       "operator": {
+        "type": "boolean",
+        "operation": "true",
+        "singleValue": true
+       }
+      }
+     ],
+     "combinator": "and"
+    },
+    "options": {}
+   },
+   "name": "9i · Marcar?",
+   "type": "n8n-nodes-base.if",
+   "typeVersion": 2,
+   "position": [
+    2640,
+    900
+   ],
+   "id": "abeb05de-4b89-5b0a-b475-876220135fb5"
+  },
+  {
+   "parameters": {
+    "method": "POST",
+    "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_futuro_marcar",
+    "authentication": "predefinedCredentialType",
+    "nodeCredentialType": "supabaseApi",
+    "sendBody": true,
+    "specifyBody": "json",
+    "jsonBody": "={{ JSON.stringify({ p_conversa: $json.conversaId, p_para: $json.voltaEm }) }}",
+    "options": {
+     "timeout": 20000
+    }
+   },
+   "name": "9j · Supabase marcar",
+   "type": "n8n-nodes-base.httpRequest",
+   "typeVersion": 4.2,
+   "position": [
+    2860,
+    900
+   ],
+   "id": "24e77f64-f402-51c9-8348-cfa8aef75f5e",
+   "credentials": {
+    "supabaseApi": {
+     "id": "p59RBqdhm80tQqJq",
+     "name": "Supabase Nio (service role)"
+    }
+   }
+  }
+ ],
+ "connections": {
+  "1 · A cada 5 min": {
+   "main": [
+    [
+     {
+      "node": "2 · Interruptor",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "1w · Admin cadência": {
+   "main": [
+    [
+     {
+      "node": "2 · Interruptor",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "2 · Interruptor": {
+   "main": [
+    [
+     {
+      "node": "2a · Admin?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "2a · Admin?": {
+   "main": [
+    [
+     {
+      "node": "2r · Responder admin",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "3 · Supabase candidatos",
+      "type": "main",
+      "index": 0
+     },
+     {
+      "node": "9 · Futuro? (modo chatwoot)",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "3 · Supabase candidatos": {
+   "main": [
+    [
+     {
+      "node": "3b · Itens",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "3b · Itens": {
+   "main": [
+    [
+     {
+      "node": "4 · Um por vez",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4 · Um por vez": {
+   "main": [
+    [],
+    [
+     {
+      "node": "4a · Escrever cutucada?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4a · Escrever cutucada?": {
+   "main": [
+    [
+     {
+      "node": "4b · Supabase contexto",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "5 · Montar envio",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4b · Supabase contexto": {
+   "main": [
+    [
+     {
+      "node": "4c · Montar pedido",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4c · Montar pedido": {
+   "main": [
+    [
+     {
+      "node": "4d · Claude",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4d · Claude": {
+   "main": [
+    [
+     {
+      "node": "4e · Ler cutucada",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "4e · Ler cutucada": {
+   "main": [
+    [
+     {
+      "node": "5 · Montar envio",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "5 · Montar envio": {
+   "main": [
+    [
+     {
+      "node": "5s · Sem envio real?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "5s · Sem envio real?": {
+   "main": [
+    [
+     {
+      "node": "8 · Supabase registrar",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "6g · Porta pode falar?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6g · Porta pode falar?": {
+   "main": [
+    [
+     {
+      "node": "6h · Guard Chatwoot",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6h · Guard Chatwoot": {
+   "main": [
+    [
+     {
+      "node": "6i · Parar escada?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6i · Parar escada?": {
+   "main": [
+    [
+     {
+      "node": "6p · Supabase parar",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "6e · Enviar?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6p · Supabase parar": {
+   "main": [
+    [
+     {
+      "node": "4 · Um por vez",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6e · Enviar?": {
+   "main": [
+    [
+     {
+      "node": "6k · Supabase config",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "8 · Supabase registrar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6k · Supabase config": {
+   "main": [
+    [
+     {
+      "node": "6m · Mídia?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6m · Mídia?": {
+   "main": [
+    [
+     {
+      "node": "6n · Com mídia?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6n · Com mídia?": {
+   "main": [
+    [
+     {
+      "node": "6o · Enviar mídia",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "7 · Chatwoot enviar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6o · Enviar mídia": {
+   "main": [
+    [
+     {
+      "node": "6q · Resultado mídia",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6q · Resultado mídia": {
+   "main": [
+    [
+     {
+      "node": "6r · Mídia saiu?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "6r · Mídia saiu?": {
+   "main": [
+    [
+     {
+      "node": "7r · Resultado",
+      "type": "main",
+      "index": 0
+     }
+    ],
+    [
+     {
+      "node": "7 · Chatwoot enviar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "7 · Chatwoot enviar": {
+   "main": [
+    [
+     {
+      "node": "7r · Resultado",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "7r · Resultado": {
+   "main": [
+    [
+     {
+      "node": "8 · Supabase registrar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "8 · Supabase registrar": {
+   "main": [
+    [
+     {
+      "node": "4 · Um por vez",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9 · Futuro? (modo chatwoot)": {
+   "main": [
+    [
+     {
+      "node": "9a · Supabase futuro",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9a · Supabase futuro": {
+   "main": [
+    [
+     {
+      "node": "9b · Itens futuro",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9b · Itens futuro": {
+   "main": [
+    [
+     {
+      "node": "9f · Porta interesse futuro",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9f · Porta interesse futuro": {
+   "main": [
+    [
+     {
+      "node": "9h · Conferir",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9h · Conferir": {
+   "main": [
+    [
+     {
+      "node": "9i · Marcar?",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  },
+  "9i · Marcar?": {
+   "main": [
+    [
+     {
+      "node": "9j · Supabase marcar",
+      "type": "main",
+      "index": 0
+     }
+    ]
+   ]
+  }
+ },
+ "settings": {
+  "executionOrder": "v1",
+  "saveDataErrorExecution": "all",
+  "saveDataSuccessExecution": "all",
+  "saveManualExecutions": true,
+  "timezone": "America/Sao_Paulo",
+  "errorWorkflow": "Nsb1dcL3HWQpKSav"
+ },
+ "active": true,
+ "staticData": {
+  "_cadenciaAtiva": true,
+  "_modoCadencia": "chatwoot"
+ }
+}
