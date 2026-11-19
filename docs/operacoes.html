@@ -370,29 +370,23 @@
   }
 
   // 0196 (Ricardo, 14/11): radar da biometria da Nio — a queda (automática pelo GED360 ou marcada), os botões e o gargalo por dia.
-  function radarSub() {
-    if (!radar) return '';
-    const q = radar.queda;
-    return q ? `<span class="op-rel bad">${q.confirmada_em ? 'Biometria da Nio FORA DO AR' : 'Biometria da Nio parece fora do ar'} desde ${esc(NG.fmtDataHora(q.inicio))}</span>`
-      : `<span class="op-rel">Biometria da Nio funcionando · última no GED360 ${esc(radar.ultima_envio ? NG.haQuanto(radar.ultima_envio) : '—')}</span>`;
-  }
+  // 0301 (Ricardo, 18/11: "remove o recurso que monitora a Biometria da Nio"): o radar de queda foi desligado — sem status
+  // "funcionando / fora do ar" e sem os botões; ficam os números do gargalo (vendas esperando, mediana, dias).
+  function radarSub() { return ''; }
   function radarHtml() {
     if (!radar) return '';
-    const q = radar.queda;
     const n = (x) => NG.fmtNum(Number(x || 0));
     const dias = (radar.por_dia || []).slice(-10);
     const max = Math.max(1, ...dias.map((x) => Number(x.enviadas || 0)));
     const linha = (x) => `<tr><td>${esc(NG.fmtDiaISO(x.dia).slice(0, 5))}</td><td><span class="op-barra" style="width:${Math.round((Number(x.enviadas) / max) * 100)}%"></span> ${n(x.enviadas)}</td><td>${n(x.aprovadas)}</td><td>${n(x.expiradas)}</td><td>${n(x.so_link)}</td></tr>`;
-    const quedas = (radar.quedas || []).slice(0, 5).map((x) => `<li>${esc(NG.fmtDataHora(x.inicio))} → ${x.fim ? esc(NG.fmtDataHora(x.fim)) : '<b>aberta</b>'} · ${esc(x.horas)} h · ${x.origem === 'auto' ? (x.confirmada ? 'automática, confirmada' : 'automática') : 'marcada pelo time'}</li>`).join('');
-    return `<section class="op-bloco op-radar" aria-label="Radar da biometria da Nio">
-      <header><h2>Radar da biometria da Nio</h2>${NG.dicaTxt('O robô do GED360 lê o relatório de todo o PDV a cada 15 min. Sem biometria nova por 2,5 h num dia útil, entre 9h e 18h, o NIOGEN suspeita que o sistema de biometria da Nio caiu e põe no ⚠ Conferir do Live. Confirmado (aviso do Rogério no grupo), peça à Nio a dispensa e marque "Nio dispensou a biometria" em cada ficha. Quando voltar, a Mari avisa quem ficou esperando e o Live prioriza.')}
-        <span class="op-sub">${q ? `<button type="button" class="btn btn-sm" data-bq="fora">${q.confirmada_em ? 'Confirmada' : 'Confirmar: está fora'}</button> <button type="button" class="btn btn-sm btn-acc" data-bq="voltou">Voltou</button>`
-          : '<button type="button" class="btn btn-sm" data-bq="fora">Biometria da Nio fora do ar</button>'}</span></header>
+    return `<section class="op-bloco op-radar" aria-label="Biometria da Nio">
+      <header><h2>Biometria da Nio</h2>${NG.dicaTxt('O robô do GED360 lê o relatório de todo o PDV a cada 15 min. Aqui: quantas vendas esperam a biometria, o tempo da OS até a aprovação e o movimento dos últimos dias. (O alarme de "biometria da Nio fora do ar" foi desligado em 18/11.)')}
+</header>
       <div class="op-radar-n"><span><b>${n(radar.paradas)}</b> vendas esperando a biometria${radar.paradas_24h ? ` · <b>${n(radar.paradas_24h)}</b> há mais de 24 h` : ''}</span>
         <span>OS → biometria aprovada: <b>${radar.mediana_os_bio_h != null ? `${esc(String(radar.mediana_os_bio_h).replace('.', ','))} h` : '—'}</b> (mediana, 30 dias, ${n(radar.medidas)} vendas)</span>
         <span>Dispensadas pela Nio (30 dias): <b>${n(radar.dispensadas_30d)}</b></span></div>
       ${dias.length ? `<table class="op-radar-t"><thead><tr><th>Dia</th><th>Links enviados (PDV)</th><th>Aprovadas</th><th>Expiradas</th><th>Só link</th></tr></thead><tbody>${dias.map(linha).join('')}</tbody></table>` : ''}
-      ${quedas ? `<div class="op-radar-q"><b>Quedas (30 dias)</b><ul>${quedas}</ul></div>` : ''}</section>`;
+      </section>`;
   }
   async function marcarQueda(acao) {
     const obs = acao === 'fora' ? window.prompt('Biometria da Nio fora do ar. Quem avisou / observação (opcional):', 'Rogério avisou no grupo de parceiros') : '';
