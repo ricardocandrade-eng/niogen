@@ -3664,3 +3664,7 @@ button.fc-id:hover { color: inherit; }
 .inc-chave .inc-linha > div { flex: 1 1 320px; }
 .inc-chave.on { border-color: var(--accent); }
 .inc-chave.off { border-style: dashed; }
+
+/* 19/11 (Ricardo: "Lead qualificado, que é o mais importante…"): quanto a venda vale, ao lado do nome; venda perto de fechar em verde. */
+.lv2-vale { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 9px; font: 600 11px var(--sans); color: #A6AFBE; background: #1D222B; vertical-align: 1px; white-space: nowrap; }
+.lv2-vale.q { color: #57D38C; background: rgba(87, 211, 140, .12); }

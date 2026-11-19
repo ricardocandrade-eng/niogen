@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-4">
+<link rel="stylesheet" href="assets/app.css?v=191126-5">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=191126-5"></script>
@@ -109,6 +109,18 @@
   let osNum = {};     // venda → nº da OS/pedido (a v_jornada não traz; vem da v_vendas, só as vendas em Ativação/Agenda)
   const osLidas = {};
   const osLendo = {};
+  // 19/11 (Ricardo: "Lead qualificado, que é o mais importante, aparece como na Live?" → "Sim, faz isso"): a venda que está perto
+  // de fechar (Lead qualificado e Pedido/OS, etapas 2–3) sobe para o topo da Sua fila — logo abaixo do que está atrasado — e toda
+  // linha de venda mostra quanto vale (vendas.comissao_prevista; sem ela, a comissão do plano na tabela).
+  let comVenda = {};
+  const valeVenda = (vid, plano) => {
+    if (!vid) return null;
+    const c = Number(comVenda[vid]);
+    if (c > 0) return { txt: NG.fmtMoeda(c), tit: 'comissão prevista desta venda' };
+    const v = valeDe({ plano });
+    return v.txt !== '—' && !/mês/.test(v.txt) ? v : null;
+  };
+  const quaseVenda = (j) => !!(j && j.venda_id && (j.etapa === 2 || j.etapa === 3));
   let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -125,7 +137,7 @@
     NG.sb.from('config_bonus').select('tipo, cluster, valor, valido_de, valido_ate').eq('tipo', 'transicao')]).then(([rp, rb]) => {
     const hoje = NG.diaSP();
     tabelaVale = { planos: rp.data || [], trans: (rb.data || []).filter((b) => b.valido_de <= hoje && (!b.valido_ate || b.valido_ate >= hoje)) };
-    if (ops.length) render();
+    render();   // 19/11: o R$ das vendas (fallback pela tabela) também usa a tabela
   }, () => {});
   const valeDe = (o) => {
     const nm = String(o.plano || '').trim().toLowerCase();
@@ -184,10 +196,10 @@
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
       NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir'),
       NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null),
-      NG.sb.from('v_vendas').select('id, nio_os, nio_pedido').in('status', ['1_vendido', '2_aguardando_instalacao']),
+      NG.sb.from('v_vendas').select('id, nio_os, nio_pedido, comissao_prevista').in('status', ['0_qualificado', '1_vendido', '2_aguardando_instalacao']),
       NG.sb.from('porta_sombra').select('id', { count: 'exact', head: true }).eq('por', eu.id).gte('em', `${NG.diaSP()}T00:00:00-03:00`)]);
     if (rfeitos && !rfeitos.error) feitosHoje = rfeitos.count || 0;
-    if (rosn && !rosn.error) { osNum = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); }); }
+    if (rosn && !rosn.error) { osNum = {}; comVenda = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); comVenda[v.id] = v.comissao_prevista; }); }
     if (rosa && !rosa.error) { osa = {}; (rosa.data || []).forEach((o) => { const a = osa[o.venda_id]; if (!a || String(o.mudou_em) > String(a.mudou_em)) osa[o.venda_id] = o; }); }
     conf = rcf && !rcf.error && Array.isArray(rcf.data) ? rcf.data : [];
     mira = fn && !fn.error && Array.isArray(fn.data) ? fn.data : [];
@@ -461,12 +473,13 @@
     });
     const L = [];
     const jPorConv = {};
-    (jor.todas || []).forEach((j) => { if (j.conversa_id) jPorConv[j.conversa_id] = j; });
+    const jPorVenda = {};
+    (jor.todas || []).forEach((j) => { if (j.conversa_id) jPorConv[j.conversa_id] = j; if (j.venda_id) jPorVenda[j.venda_id] = j; });
     // 18/11 (Ricardo: "Colunas 1 e 5 parecem iguais · coluna 4 pode tirar a cor · colunas 3 e 4 são confusas"): cada linha tem
     // tipo · cliente · O QUE ESTÁ ACONTECENDO (título curto e claro + a explicação, sem cor) · COM QUEM (a vez) · prazo · botões.
     const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
-    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
+    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), quali: quaseVenda(j), vale: valeVenda(j.venda_id, j.plano), nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
       sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
       oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
@@ -478,7 +491,8 @@
         const k = c.venda_id ? c.venda_id : c.conversa_id ? `c:${c.conversa_id}` : null;
         const txt = String(c.texto || '');
         const corte = txt.indexOf(' — ');
-        L.push({ bloco: 'conf', k, vid: c.tipo === 'os_excecao' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
+        const jv = c.venda_id ? jPorVenda[c.venda_id] : (c.conversa_id ? jPorConv[c.conversa_id] : null);
+        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
           vez: vezTxt('time'), prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
           rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
       });
@@ -508,7 +522,18 @@
           bts: o.canal === 'ligar' ? '' : `<button type="button" class="btn btn-sm lv-go" data-ope="${esc(o.conversa_id)}">Enviar</button>` });
       });
     }
-    ac.forEach((j) => L.push({ ...jItem(j, 'acomp'), rank: 5 }));
+    // 19/11 (caso Gabriel — venda esperando o cliente): linha do Acompanhando que carrega um aviso do Conferir (Parada com dono,
+    // OS na Nio…) é obrigação — sobe para a Sua fila como Conferir, com o aviso e os botões dele. Sem aviso, segue no Radar.
+    ac.forEach((j) => {
+      const avisos = confDe(j);
+      if (!avisos.length) { L.push({ ...jItem(j, 'acomp'), rank: 5 }); return; }
+      const urg = avisos.some(confUrg);
+      const a0 = avisos[0];
+      const txt = String(a0.texto || '');
+      const corte = txt.indexOf(' — ');
+      L.push({ ...jItem(j, 'conf'), sit: `${CONF_SIT[a0.tipo] || confSit(a0.tipo)} · ${j.etapa_nome || 'Lead'}`, oque: corte > 0 ? txt.slice(corte + 3) : txt,
+        prazo: urg ? 'agora' : 'hoje', urg, rank: urg ? 0 : 1 });
+    });
     // 18/11 (0284): leads da Fila Vero com a Mari conduzindo (caixa 1) não saem do radar — o Ricardo quer vê-los entrando.
     if (!etapaSel || etapaSel === 1) {
       const jaTem = new Set(L.map((x) => x.k).filter(Boolean));
@@ -517,7 +542,9 @@
           oque: j.o_que_fazer || 'A Mari está conduzindo; sobe para Para fazer se precisar de você', vez: vezTxt('Mari'), prazo: '—', urg: false, rank: 4 }));
     }
     const tms = (x) => new Date(x || 0).getTime() || 0;
-    return L.sort((a, b) => a.rank - b.rank || tms(a.t) - tms(b.t));
+    // atrasado (agora) primeiro; depois a venda perto de fechar; depois o resto pelo prazo — e, no empate, o mais antigo
+    const prio = (x) => (x.rank === 0 ? (x.quali ? -0.5 : 0) : x.quali && x.rank < 5 ? 0.5 : x.rank);
+    return L.sort((a, b) => prio(a) - prio(b) || (b.quali ? 1 : 0) - (a.quali ? 1 : 0) || tms(a.t) - tms(b.t));
   }
   const confSit = (tipo) => CONF_SIT[tipo] || String(tipo || 'Conferir').replace(/_/g, ' ').replace(/^./, (x) => x.toUpperCase());
   const tagHtml = (b) => `<span class="lv2-tag" style="--c:${(BLOCOS.find((x) => x.id === b) || {}).cor}">${esc(NOME_BLOCO[b])}</span>`;
@@ -525,7 +552,7 @@
   const acoesDe = (html) => { const tp = document.createElement('template'); tp.innerHTML = html || ''; const a = tp.content.querySelector('.lv-act'); return a ? a.innerHTML : ''; };
   const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}${it.k && NGFicha.atual === it.k ? ' sel' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
       ${tagHtml(it.bloco)}
-      <div class="lv2-who"><b>${esc(it.nome)}</b><small>${esc(it.sub || '—')}</small></div>
+      <div class="lv2-who"><b>${esc(it.nome)}${it.vale ? ` <span class="lv2-vale${it.quali ? ' q' : ''}" title="${esc(it.vale.tit || '')}">${esc(it.vale.txt)}</span>` : ''}</b><small>${esc(it.sub || '—')}</small></div>
       <div class="lv2-oque"${it.dica ? ` title="${esc(it.dica)}"` : ''}><b>${esc(it.sit || '')}${it.selo || ''}</b><span title="${esc([it.oque, it.dica].filter(Boolean).join(' — '))}">${esc(it.oque || '')}</span></div>
       <div>${it.vez || ''}</div>
       <div><span class="lv-pill n-${it.prazo === 'agora' ? 'agora' : it.prazo === 'hoje' ? 'hoje' : 'espera'}">${esc(it.prazo || '—')}</span></div>
