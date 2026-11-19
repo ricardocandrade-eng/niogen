@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-5">
+<link rel="stylesheet" href="assets/app.css?v=191126-6">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=191126-5"></script>
@@ -485,7 +485,7 @@
     // tipo · cliente · O QUE ESTÁ ACONTECENDO (título curto e claro + a explicação, sem cor) · COM QUEM (a vez) · prazo · botões.
     const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
-    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), quali: quaseVenda(j), vale: (j.venda_id || quaseVenda(j)) ? valeVenda(j.venda_id, j.plano) : null, nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
+    const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), etp: seloEtapa(j), quali: quaseVenda(j), vale: (j.venda_id || quaseVenda(j)) ? valeVenda(j.venda_id, j.plano) : null, nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
       sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
       oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
@@ -498,11 +498,11 @@
         const txt = String(c.texto || '');
         const corte = txt.indexOf(' — ');
         const jv = c.venda_id ? jPorVenda[c.venda_id] : (c.conversa_id ? jPorConv[c.conversa_id] : null);
-        L.push({ bloco: 'conf', k, quali: quaseVenda(jv), vale: jv && (jv.venda_id || quaseVenda(jv)) ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' || c.tipo === 'os_agenda' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
+        L.push({ bloco: 'conf', k, etp: seloEtapa(jv), quali: quaseVenda(jv), vale: jv && (jv.venda_id || quaseVenda(jv)) ? valeVenda(jv.venda_id, jv.plano) : null, vid: c.tipo === 'os_excecao' || c.tipo === 'os_agenda' ? c.venda_id || null : null, nome: c.nome || 'Cliente', sub: haTxt(c.desde), sit: corte > 0 ? txt.slice(0, corte) : confSit(c.tipo), oque: corte > 0 ? txt.slice(corte + 3) : txt,
           vez: vezTxt('time'), prazo: confUrg(c) ? 'agora' : 'hoje', urg: confUrg(c),
           rank: confUrg(c) ? 0 : 1, t: c.desde, row: confLinha(c), bts: confBts(c) || (k ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(k)}">Abrir</button>` : '') });
       });
-      mira.filter((m) => !naLista[`c:${m.conversa_id}`]).forEach((m) => L.push({ bloco: 'mira', k: `c:${m.conversa_id}`, nome: m.nome || 'Contato',
+      mira.filter((m) => !naLista[`c:${m.conversa_id}`]).forEach((m) => L.push({ bloco: 'mira', k: `c:${m.conversa_id}`, etp: seloEtapa(jPorConv[m.conversa_id]), nome: m.nome || 'Contato',
         sub: [m.cidade, m.plano, m.ultima_em ? `escreveu ${haTxt(m.ultima_em)}` : ''].filter(Boolean).join(' · '),
         sit: `Conversando com a Mari${m.etapa_nome ? ` · ${m.etapa_nome}` : ''}`, selo: fvSelo(jPorConv[m.conversa_id]), oque: m.ultima_fala ? `Cliente: “${m.ultima_fala}”` : 'A Mari segue; acompanhe para não perder',
         vez: vezTxt(m.acompanho ? 'você acompanha' : 'Mari'), prazo: 'agora',
@@ -553,12 +553,23 @@
     return L.sort((a, b) => prio(a) - prio(b) || (b.quali ? 1 : 0) - (a.quali ? 1 : 0) || tms(a.t) - tms(b.t));
   }
   const confSit = (tipo) => CONF_SIT[tipo] || String(tipo || 'Conferir').replace(/_/g, ' ').replace(/^./, (x) => x.toUpperCase());
+  // 19/11 (Ricardo: "um selo (ícone mesmo) nas linhas que são Qualificados e Instalação… para bater o olho e saber do que aquela
+  // linha se trata"): ícone do degrau da jornada antes do nome — o mesmo em toda parte da Live.
+  const SELO_ETAPA = { 0: ['↩', 'Saída — lead que saiu da venda (Retomada, volta futura)'], 1: ['💬', 'Conversa — ainda não qualificou'],
+    2: ['⭐', 'Lead qualificado — venda perto de fechar'], 3: ['📝', 'Pedido (OS) — pedido no portal, biometria e crédito'],
+    4: ['🔧', 'Instalação — Ativação/Agenda na Nio'], 5: ['🏠', 'Instalada — pós-venda'] };
+  const seloEtapa = (j) => {
+    if (!j || j.etapa == null) return '';
+    const e = quaseVenda(j) && j.etapa < 2 ? 2 : j.etapa;
+    const s = SELO_ETAPA[e];
+    return s ? `<span class="lv2-etp e${e}" title="${esc(s[1])}" aria-label="${esc(s[1])}">${s[0]}</span>` : '';
+  };
   const tagHtml = (b) => `<span class="lv2-tag" style="--c:${(BLOCOS.find((x) => x.id === b) || {}).cor}">${esc(NOME_BLOCO[b])}</span>`;
   // os botões da linha são os mesmos de antes (tirados da linha antiga): Abrir/Conferi, Enviar/Ligar/Dispensar, Casar, Acompanhar…
   const acoesDe = (html) => { const tp = document.createElement('template'); tp.innerHTML = html || ''; const a = tp.content.querySelector('.lv-act'); return a ? a.innerHTML : ''; };
   const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}${it.k && NGFicha.atual === it.k ? ' sel' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
       ${tagHtml(it.bloco)}
-      <div class="lv2-who"><b>${esc(it.nome)}${it.vale ? ` <span class="lv2-vale${it.quali ? ' q' : ''}" title="${esc(it.vale.tit || '')}">${esc(it.vale.txt)}</span>` : ''}</b><small>${esc(it.sub || '—')}</small></div>
+      <div class="lv2-who"><b>${it.etp || ''}${esc(it.nome)}${it.vale ? ` <span class="lv2-vale${it.quali ? ' q' : ''}" title="${esc(it.vale.tit || '')}">${esc(it.vale.txt)}</span>` : ''}</b><small>${esc(it.sub || '—')}</small></div>
       <div class="lv2-oque"${it.dica ? ` title="${esc(it.dica)}"` : ''}><b>${esc(it.sit || '')}${it.selo || ''}</b><span title="${esc([it.oque, it.dica].filter(Boolean).join(' — '))}">${esc(it.oque || '')}</span></div>
       <div>${it.vez || ''}</div>
       <div><span class="lv-pill n-${it.prazo === 'agora' ? 'agora' : it.prazo === 'hoje' ? 'hoje' : 'espera'}">${esc(it.prazo || '—')}</span></div>
@@ -594,11 +605,20 @@
     const trab = vis.filter((x) => OBRIGA.includes(x.bloco));
     const opsV = vis.filter((x) => x.bloco === 'op');
     const ordemRadar = { mira: 0, acomp: 1, fv: 2 };
-    const radar = vis.filter((x) => x.bloco in ordemRadar).sort((a, b) => ordemRadar[a.bloco] - ordemRadar[b.bloco]);
+    const radarTodo = vis.filter((x) => x.bloco in ordemRadar).sort((a, b) => ordemRadar[a.bloco] - ordemRadar[b.bloco]);
+    // 19/11 (caso Sergio L-209 — "Esse não deveria ficar no topo da Live?" → "Sim, pode fazer assim"): venda (Lead qualificado ou
+    // Pedido) em que o time falou por último fica no topo do Radar, numa faixa própria, a de mais tempo calada primeiro. Não conta
+    // no "faltam" — a vez é do cliente —, mas não some no meio do Na mira.
+    const vendaEsp = radarTodo.filter((x) => x.bloco === 'acomp' && x.quali)
+      .sort((a, b) => (a.t ? new Date(a.t) : 0) - (b.t ? new Date(b.t) : 0));
+    const radar = radarTodo.filter((x) => !vendaEsp.includes(x));
     const mariC = (jor.todas || []).filter((j) => j.caixa === 1 && (!etapaSel || j.etapa === etapaSel));
     const divisor = (tit, dica) => `<div class="lv2-div"><b>${tit}</b>${dica ? `<span>${dica}</span>` : ''}</div>`;
     const comOps = opsV.length || (opsCanal.length && (!bloco || bloco === 'op'));
-    const comRadar = radar.length || (mariC.length && !bloco);
+    const comRadar = radarTodo.length || (mariC.length && !bloco);
+    const faixaVenda = vendaEsp.length
+      ? `<div class="lv2-sub">💰 <b>Venda esperando o cliente · ${vendaEsp.length}</b><span>você falou por último — sobe para a Sua fila quando ele responder ou se ficar parada</span></div>${vendaEsp.map(itemLista).join('')}${radar.length ? '<div class="lv2-sub fim"></div>' : ''}`
+      : '';
     const parteTrab = !bloco || OBRIGA.includes(bloco)
       ? `${divisor('Sua fila', trab.length ? `faltam ${trab.length}` : '')}${trab.length ? trab.map(itemLista).join('') : '<div class="lv-vazio">Fila limpa ✅ — nada pede você agora</div>'}`
       : '';
@@ -606,7 +626,7 @@
       ? `${divisor(`🔥 Oportunidades · ${opsV.length + (bloco && bloco !== 'op' ? 0 : opsCanal.length)}`, 'venda a pegar — não conta como pendência')}${opsV.map(itemLista).join('')}${opsCanal.length && (!bloco || bloco === 'op') ? `<div class="opc-bloco">${opsCanal.map((o) => NG.opCanalLinha(o)).join('')}</div>` : ''}`
       : '';
     const parteRadar = comRadar
-      ? `${divisor('Radar', 'não precisa de você agora — sobe para a Sua fila sozinho se precisar')}${radar.map(itemLista).join('')}
+      ? `${divisor('Radar', 'não precisa de você agora — sobe para a Sua fila sozinho se precisar')}${faixaVenda}${radar.map(itemLista).join('')}
         ${mariC.length && !bloco ? `<div class="lv-radar apagado" style="padding:10px 4px;font-size:13px"><span aria-hidden="true">🤖</span> <b>Mari conduzindo · ${mariC.length}</b> — sobe para cá sozinho se precisar de você · <a href="leads.html" data-leads>ver em Todos os leads →</a></div>` : ''}`
       : '';
     listaEl.innerHTML = `${abas()}${filtros(todos)}<div class="lv-rolar lv2">${parteTrab}${parteOps}${parteRadar}</div>`;
