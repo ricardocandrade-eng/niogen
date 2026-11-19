@@ -660,7 +660,7 @@ Guardar?`)) return;
     const [rc, rcom, rpl, rt, rcal] = await Promise.all([
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_comissao').select('*').is('parceiro_id', null),
-      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('termos_programa').select('*').order('vigente_desde', { ascending: false }),
       NG.sb.from('parceiro_calendario').select('*').order('instalacoes_de', { ascending: false }),
     ]);
@@ -717,7 +717,7 @@ Guardar?`)) return;
       </form>
 
       <div class="cfg-bloco" id="bloco-calendario"><h3>Calendário de pagamento</h3>
-        <p>O parceiro recebe na <b>sexta seguinte à quinta em que a Nio paga a Dharma</b> o ciclo da instalação — a Dharma nunca adianta caixa. Marque "a Nio pagou" quando o dinheiro do ciclo cair: até lá, Pagamentos mostra "aguardando a Nio pagar". Ciclo sem cadastro = "data a confirmar" no Pocket. Mudou o calendário, os vencimentos ainda não pagos se ajustam sozinhos. Fonte: calendário Posto Fiscal da Nio.</p>
+        <p>O parceiro recebe na <b>sexta seguinte à quinta em que a Nio nos paga</b> o ciclo da instalação — nunca adiantamos caixa. Marque "a Nio pagou" quando o dinheiro do ciclo cair: até lá, Pagamentos mostra "aguardando a Nio pagar". Ciclo sem cadastro = "data a confirmar" no Pocket. Mudou o calendário, os vencimentos ainda não pagos se ajustam sozinhos. Fonte: calendário Posto Fiscal da Nio.</p>
         <div class="rolagem-s"><table class="tab"><thead><tr><th>Ciclo</th><th>Instalações</th><th>Nio paga</th><th>Parceiro recebe</th><th>A Nio pagou?</th>${ehAdmin ? '<th></th>' : ''}</tr></thead><tbody>
         ${PC.cal.map((c) => `<tr><td><b>${esc(c.ciclo)}</b></td><td>${esc(NG.fmtDiaISO(c.instalacoes_de).slice(0, 5))} a ${esc(NG.fmtDiaISO(c.instalacoes_ate).slice(0, 5))}</td>
             <td>${esc(NG.fmtDiaISO(c.nio_paga_em))}</td><td><b>${esc(NG.fmtDiaISO(c.parceiro_recebe_em))}</b></td><td>${c.confirmado ? '<span class="chip ok">pagou ✓</span>' : '<span class="chip">aguardando</span>'}${ehAdmin ? ` <button type="button" class="btn btn-sm" data-pc="nio-pagou" data-id="${c.id}">${c.confirmado ? 'Desfazer' : 'Marcar: a Nio pagou'}</button>` : ''}</td>
@@ -734,7 +734,7 @@ Guardar?`)) return;
           <div class="cfg-acoes"><button type="submit" class="btn">Cadastrar ciclo</button></div></form>` : ''}</div>
 
       <div class="cfg-bloco" id="bloco-comissao"><h3>Comissão padrão por plano</h3>
-        <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (gaveta dele). Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
+        <p>Valor fixo que o parceiro recebe por venda instalada de cada plano vigente, sem estorno. Cada parceiro pode ter valor próprio (Parceiros › gaveta dele › Comissão por plano). A venda sem fidelidade paga o valor do mesmo plano com fidelidade. Em branco = sem comissão configurada: a instalação confirmada não gera pagamento até alguém preencher.</p>
         <div id="lista-comissao">${PC.planos.map((pl) => {
           const l = PC.comissao.find((x) => x.plano_id === pl.id);
           return `<div class="cfg-linha"><div>${esc(pl.nome_curto || pl.nome)}<small>${esc(pl.portfolio === 'empresas' ? 'Empresas' : 'Varejo')} · ${esc(pl.cluster || '')} · cliente paga ${esc(NG.fmtMoeda(pl.preco))}</small></div>

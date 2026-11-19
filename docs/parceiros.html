@@ -143,7 +143,7 @@
       NG.sb.from('v_parceiro_a_pagar').select('*'),
       NG.sb.from('vendas').select('id, parceiro_id, status, criado_em, cliente_nome, cidade, plano_id, conferencia_status, conferencia_prazo_ate, nio_situacao, nio_venda_valida, instalado_em, parceiro_indevida').not('parceiro_id', 'is', null).order('criado_em', { ascending: false }).limit(5000),
       NG.sb.from('parceiro_comissao').select('*'),
-      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).order('portfolio', { ascending: false }).order('preco'),
+      NG.sb.from('config_planos').select('id, nome, nome_curto, portfolio, cluster, preco, preco_cartao, vigencia_inicio, vigencia_fim').eq('ativo', true).not('variante', 'in', '(nfid,oferta50_nfid)').order('portfolio', { ascending: false }).order('preco'),
       NG.sb.from('config_parceiros').select('*').maybeSingle(),
       NG.sb.from('parceiro_pagamentos').select('id, parceiro_id, tipo, venda_id, competencia, status, valor, vence_em, pago_em, comprovante_path').order('vence_em', { ascending: false }).limit(5000),
       NG.carregarUsuarios(),
@@ -479,7 +479,7 @@
         <span class="nota-campo">${pad ? 'padrão ' + esc(moeda(pad.valor)) : 'sem padrão'}</span>
         ${ehAdmin ? `<input type="number" step="0.01" min="0" data-plano="${pl.id}" value="${meu ? meu.valor : ''}" aria-label="Comissão deste parceiro para ${esc(pl.nome_curto || pl.nome)}" placeholder="padrão">` : `<b>${meu ? esc(moeda(meu.valor)) : '—'}</b>`}</div>`;
     }).join('');
-    return `<span class="nota-campo">Valor fixo por plano, sem estorno. Vazio = vale o padrão (Configurações › Programa Parceiro). Sem nenhum dos dois, a instalação confirmada não gera pagamento e deixa o aviso "instalada sem comissão".</span>
+    return `<span class="nota-campo">Valor fixo por plano, só deste parceiro, sem estorno. A venda sem fidelidade paga o valor do mesmo plano. Vazio = vale o padrão (Configurações › Programa Parceiro). Sem nenhum dos dois, a instalação confirmada não gera pagamento e deixa o aviso "instalada sem comissão".</span>
       <div data-form-comissao>${linhas || '<span class="nota-campo">Nenhum plano vigente.</span>'}</div>
       ${ehAdmin ? '<div class="f-form-acoes"><button type="button" class="btn btn-acc" data-p="salvar-comissao">Salvar comissões deste parceiro</button></div>' : ''}`;
   }
@@ -567,9 +567,11 @@
       if (error && error.context && typeof error.context.json === 'function') { try { const j = await error.context.json(); msgErro = j.error || msgErro; } catch (e) { /* sem corpo */ } }
       if (msgErro || !data || !data.token_hash) { NG.toast(`Acesso não gerado: ${msgErro || 'sem resposta'}`, 'bad'); return; }
       const link = new URL(`parceiro/?acesso=${encodeURIComponent(data.token_hash)}`, location.href).href;
-      const texto = `Oi, ${NG.primeiroNome(p.nome)}! Aqui é a Dharma. Este é o seu acesso ao app do Parceiro Dharma: ${link}\n\nToque no link em até 1 hora. Ele vale uma vez só. Depois você fica logado no celular.`;
+      const texto = `Oi, ${NG.primeiroNome(p.nome)}! Este é o seu acesso ao app do Parceiro PAP: ${link}\n\nToque no link em até 1 hora. Ele vale uma vez só. Depois você fica logado no celular.`;
       window.open(`https://wa.me/${NG.soDigitos(p.whatsapp)}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener');
-      NG.toast('Link gerado: confira e envie no WhatsApp', 'ok');
+      const { data: cz } = await NG.sb.from('config_regras').select('valor').eq('chave', 'parceiro_contato_whatsapp').maybeSingle();
+      const zapPrograma = cz && cz.valor ? NG.soDigitos(String(cz.valor)) : '';
+      NG.toast(zapPrograma ? `Link gerado: envie pelo WhatsApp do programa (${zapPrograma.slice(2, 4)}) ${zapPrograma.slice(4, -4)}-${zapPrograma.slice(-4)}` : 'Link gerado: confira e envie no WhatsApp', 'ok');
       await recarregarTudo();
     }
   });

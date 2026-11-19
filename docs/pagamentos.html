@@ -286,7 +286,7 @@
       ${linha('Líquido a pagar', `<span class="mono">${esc(moeda(liq))}</span>`)}
       ${linha('Chave Pix', `<span class="mono">${esc(p.pix_chave || '—')}</span>`)}
       ${linha('Titular do Pix', p.pix_titular_conferido_em ? '<span class="ok-txt">conferido ✓</span>' : '<span class="bad-txt">não conferido</span>')}
-      ${gr.vence && NIO_PAGOU[gr.vence] && !NIO_PAGOU[gr.vence].confirmado ? `<div class="faixa amarelo">Aguardando a Nio pagar o ciclo ${esc(NIO_PAGOU[gr.vence].ciclo)} (quinta ${esc(NG.fmtDiaISO(NIO_PAGOU[gr.vence].nio_paga_em))}). A Dharma não adianta caixa: quando o dinheiro cair, marque "a Nio pagou" em Configurações › Programa Parceiro › Calendário.</div>` : ''}
+      ${gr.vence && NIO_PAGOU[gr.vence] && !NIO_PAGOU[gr.vence].confirmado ? `<div class="faixa amarelo">Aguardando a Nio pagar o ciclo ${esc(NIO_PAGOU[gr.vence].ciclo)} (quinta ${esc(NG.fmtDiaISO(NIO_PAGOU[gr.vence].nio_paga_em))}). Não adiantamos caixa: quando o dinheiro cair, marque "a Nio pagou" em Configurações › Programa Parceiro › Calendário.</div>` : ''}
       ${!gr.vence ? '<div class="faixa amarelo">O ciclo destas instalações ainda não está no calendário (Configurações › Programa Parceiro). Cadastre o ciclo para a sexta aparecer.</div>' : ''}
       ${ehAdmin && gr.vence ? `<form class="f-formulario" id="form-pagar" novalidate><h3>Marcar a sexta como paga</h3>
           <p>Pague o líquido pelo Pix e anexe o comprovante. Todos os lançamentos acima ficam pagos com o mesmo comprovante.</p>

@@ -58,6 +58,9 @@
 
   // ---------- estado ----------
   let RES = null;        // parceiro_resumo()
+  let CONTATO = null;    // parceiro_contato(): o WhatsApp do programa (config_regras.parceiro_contato_whatsapp)
+  let contatoP = null;
+  const carregarContato = async () => { if (CONTATO) return CONTATO; contatoP = contatoP || rpc('parceiro_contato').catch(() => null); CONTATO = await contatoP; return CONTATO; };
   let VENDAS = null;     // parceiro_minhas_vendas()
   let PAGS = null;       // parceiro_meus_pagamentos()
   let filtroVendas = null;
@@ -76,10 +79,11 @@
   async function carregarPags() { PAGS = await rpc('parceiro_meus_pagamentos'); return PAGS; }
 
   // ================================================================ telas públicas
-  function telaEntrar(msg) {
-    render(`<div style="padding-top:24px"><div class="rot">Parceiro Dharma</div><h1 style="margin-top:6px">Venda Nio e receba toda sexta.</h1></div>
+  async function telaEntrar(msg) {
+    await carregarContato();
+    render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio e receba toda sexta.</h1></div>
       ${msg ? faixa('amarelo', msg.titulo, msg.texto) : ''}
-      <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo WhatsApp da Dharma. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
+      <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo nosso WhatsApp${CONTATO ? ` (${esc(fmtTel(CONTATO))})` : ''}. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
       <div class="acoes"><a class="bt" href="#seja">Quero ser parceiro</a></div>`, null);
   }
 
@@ -89,7 +93,7 @@
     try { termo = await rpc('parceiro_termo_vigente'); } catch (e) { termo = null; }
     const md = termo && termo.texto && window.NGMarkdown ? window.NGMarkdown.render(termo.texto).html : esc((termo && termo.texto) || '');
     render(`${voltar('Seja parceiro', 'entrar')}
-      <p class="sub">Você indica, a Dharma liga para o cliente, faz o pedido e agenda a instalação. Instalou, você recebe na sexta.</p>
+      <p class="sub">Você indica, a gente liga para o cliente, faz o pedido e agenda a instalação. Instalou, você recebe na sexta.</p>
       <form id="f-seja" class="lista" novalidate style="gap:14px">
         <div class="campo"><label for="s-nome">Nome completo</label><input id="s-nome" name="nome" autocomplete="name" required></div>
         <div class="campo"><label for="s-cpf">CPF</label><input id="s-cpf" name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" required></div>
@@ -113,8 +117,9 @@
       try {
         const r = await rpc('parceiro_cadastrar', { p_nome: f.nome.value, p_cpf: f.cpf.value, p_whatsapp: f.zap.value, p_pix: f.pix.value,
           p_cidade: f.cidade.value, p_termo_versao: termo ? termo.versao : null });
+        await carregarContato();
         render(`<div style="padding-top:40px" class="lista">${faixa('verde', r.mensagem || 'Recebemos.', '')}
-          <p class="sub">Guarde este número da Dharma. É dele que vem o seu link de acesso.</p></div>`, null);
+          <p class="sub">Salve o nosso WhatsApp${CONTATO ? `: <b>${esc(fmtTel(CONTATO))}</b>` : ''}. É dele que vem o seu link de acesso.</p></div>`, null);
       } catch (e) {
         err.textContent = erroTxt(e);
         bt.disabled = false; bt.textContent = 'Quero ser parceiro';
@@ -142,13 +147,13 @@
 
   function telaStatus() {
     const msg = RES.status === 'aguardando'
-      ? ['Cadastro em análise', 'A Dharma vai te chamar no WhatsApp. Depois de aprovado, é por aqui que você envia as vendas.']
-      : RES.status === 'suspenso' ? ['Cadastro pausado', 'Agora você não pode enviar venda nova. O que já instalou continua sendo pago. Fale com a Dharma.']
-        : ['Cadastro encerrado', 'Você não envia mais vendas. O que já instalou continua sendo pago. Fale com a Dharma.'];
-    const zap = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro Dharma.`);
+      ? ['Cadastro em análise', 'A gente vai te chamar no WhatsApp. Depois de aprovado, é por aqui que você envia as vendas.']
+      : RES.status === 'suspenso' ? ['Cadastro pausado', 'Agora você não pode enviar venda nova. O que já instalou continua sendo pago. Fale com a gente.']
+        : ['Cadastro encerrado', 'Você não envia mais vendas. O que já instalou continua sendo pago. Fale com a gente.'];
+    const zap = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro PAP.`);
     render(`<div class="topo"><div><div class="ola">Olá,</div><div class="nome">${esc(RES.primeiro_nome)}</div></div></div>
       ${faixa('amarelo', msg[0], msg[1])}
-      ${zap ? `<div class="acoes"><a class="bt zap" href="${esc(zap)}" target="_blank" rel="noopener">${ICO.zap}Falar com a Dharma</a></div>` : ''}`, null);
+      ${zap ? `<div class="acoes"><a class="bt zap" href="${esc(zap)}" target="_blank" rel="noopener">${ICO.zap}Falar com a gente</a></div>` : ''}`, null);
   }
 
   // ================================================================ Início
@@ -184,7 +189,7 @@
           <div class="grande">${moeda(pr.valor)}</div>
           <div style="font-size:14px;color:var(--suave)">${numero(pr.vendas)} ${Number(pr.vendas) === 1 ? 'venda instalada' : 'vendas instaladas'}${pr.instalacoes_de ? ` de ${ddmm(pr.instalacoes_de)} a ${ddmm(pr.instalacoes_ate)}` : ''}</div></div>`
       : Number(RES.a_confirmar && RES.a_confirmar.valor) > 0
-        ? `<div class="cartao"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A Dharma avisa a sexta.</div></div>`
+        ? `<div class="cartao"><div class="rot">Você vai receber</div><div class="grande">${moeda(RES.a_confirmar.valor)}</div><div class="sub">Data a confirmar. A gente avisa a sexta.</div></div>`
         : `<div class="cartao"><div class="rot">Toda sexta você recebe</div><div style="font-size:16px">Quando a sua venda for instalada, o valor e a sexta do pagamento aparecem aqui.</div></div>`;
     const mesAtual = hojeSP().slice(0, 7);
     const garantia = pts && pts.garantia_ate && String(pts.garantia_ate).slice(0, 7) >= mesAtual
@@ -322,7 +327,7 @@
         <div class="campo"><label for="c-zap">WhatsApp do cliente <small>(a gente liga neste número)</small></label><input id="c-zap" type="tel" inputmode="tel" autocomplete="off" placeholder="(32) 90000-0000" value="${esc(c.zap || '')}"></div>
         <div class="campo"><label for="c-mail">E-mail do cliente <small>(se tiver)</small></label><input id="c-mail" type="email" inputmode="email" autocomplete="off" value="${esc(c.email || '')}"></div>
       </form>
-      <div class="acoes"><div class="nota">O cliente precisa atender a ligação da Dharma para a venda seguir.</div>
+      <div class="acoes"><div class="nota">O cliente precisa atender a nossa ligação para a venda seguir.</div>
         <button type="button" class="bt sec" id="c-volta">Voltar ao endereço</button><button type="button" class="bt" id="c-seguir">Continuar</button></div>`, null);
     const f = document.getElementById('f-cli');
     $tela.querySelector('.voltar a').addEventListener('click', (ev) => { ev.preventDefault(); guardarCli(); envio.passo = 1; telaEnviar(); });
@@ -434,9 +439,9 @@
     const pagos = Object.entries(porDia).filter(([k, l]) => k !== 'confirmar' && l.some((g) => g.status === 'pago')).sort((a, b) => (a[0] < b[0] ? 1 : -1));
     const ext = (PAGS || []).slice(0, 60).map((g) => `<div class="d-l"><span>${esc(g.tipo_texto)}${g.venda_primeiro_nome ? ` · ${esc(g.venda_primeiro_nome)}` : ''}<br><small>${g.status === 'pago' ? `pago ${ddmm(g.pago_em || g.vence_em)}` : g.vence_em ? `sexta ${ddmm(g.vence_em)}` : 'data a confirmar'}</small></span>
         <b class="${Number(g.valor) < 0 ? 'neg' : ''}">${moeda(g.valor)}${g.tem_comprovante && g.comprovante_path ? `<br><button type="button" class="link-bt" data-comp="${esc(g.comprovante_path)}">Comprovante</button>` : ''}</b></div>`).join('');
-    render(`<h1>Pagamentos</h1><p class="sub">Você recebe na sexta depois que a Nio paga a Dharma pelas instalações do ciclo.</p>
+    render(`<h1>Pagamentos</h1><p class="sub">Você recebe na sexta depois que a Nio paga as instalações do ciclo.</p>
       <div class="lista"><div class="rot">Próximas sextas</div>${prox || '<div class="vazio">O calendário das próximas sextas ainda não saiu.</div>'}
-        ${aConf.length ? `<div class="cartao pequeno"><div class="linha"><b>Data a confirmar</b><span class="num" style="font-size:18px">${moeda(soma(aConf))}</span></div><div class="sub">A Dharma avisa a sexta assim que a Nio divulgar o ciclo.</div></div>` : ''}</div>
+        ${aConf.length ? `<div class="cartao pequeno"><div class="linha"><b>Data a confirmar</b><span class="num" style="font-size:18px">${moeda(soma(aConf))}</span></div><div class="sub">A gente avisa a sexta assim que a Nio divulgar o ciclo.</div></div>` : ''}</div>
       ${pagos.length ? `<div class="lista"><div class="rot">Já pagas</div>${pagos.map(([k, l]) => `<div class="cartao pequeno"><div class="linha"><b>${ddmm(k)}</b><span class="num" style="font-size:18px">${moeda(soma(l.filter((g) => g.status === 'pago')))}</span></div></div>`).join('')}</div>` : ''}
       <details class="gaveta extrato"${ext ? '' : ' hidden'}><summary>Extrato</summary><div>${ext}</div></details>`, 'pagamentos');
     $tela.querySelectorAll('[data-comp]').forEach((b) => b.addEventListener('click', async () => {
@@ -459,8 +464,8 @@
         rpc('parceiro_material'),
       ]);
     } catch (e) { /* mostra o resto */ }
-    const zap = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro Dharma.`);
-    const zapPix = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro Dharma. Quero trocar a minha chave Pix.`);
+    const zap = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro PAP.`);
+    const zapPix = linkZap(RES.contato_whatsapp, `Oi, sou ${RES.nome}, parceiro PAP. Quero trocar a minha chave Pix.`);
     const t = RES.termo || {};
     const md = (s) => (window.NGMarkdown ? window.NGMarkdown.render(s || '').html : esc(s));
     render(`<h1>Eu</h1>
@@ -468,8 +473,8 @@
         <div class="d-l"><span>Nome</span><b>${esc(RES.nome)}</b></div>
         <div class="d-l"><span>WhatsApp</span><b>${esc(fmtTel(RES.whatsapp))}</b></div>
         <div class="d-l"><span>Cidade</span><b>${esc(RES.cidade || '—')}</b></div>
-        <div class="d-l"><span>Chave Pix</span><b>${esc(RES.pix_chave || '—')}${RES.pix_conferido ? '<br><small style="color:var(--verde)">conferida ✓</small>' : '<br><small style="color:var(--amarelo)">a Dharma ainda vai conferir</small>'}</b></div>
-        ${zapPix ? `<a class="link-bt" href="${esc(zapPix)}" target="_blank" rel="noopener">Trocar a chave Pix (a Dharma confere o titular)</a>` : ''}
+        <div class="d-l"><span>Chave Pix</span><b>${esc(RES.pix_chave || '—')}${RES.pix_conferido ? '<br><small style="color:var(--verde)">conferida ✓</small>' : '<br><small style="color:var(--amarelo)">ainda vamos conferir</small>'}</b></div>
+        ${zapPix ? `<a class="link-bt" href="${esc(zapPix)}" target="_blank" rel="noopener">Trocar a chave Pix (a gente confere o titular)</a>` : ''}
         <div class="d-l"><span>Termo aceito</span><b>${t.aceito ? `versão ${esc(t.aceito)} · ${ddmm(t.aceito_em)}` : '—'}</b></div>
       </div></details>
       ${planos.length ? `<details class="gaveta"><summary>Quanto você ganha por plano</summary><div>
@@ -477,13 +482,13 @@
         <div class="sub">Tabela de ${esc(RES.cidade)}. Em outra cidade o valor pode mudar: o app mostra antes de enviar.</div></div></details>` : ''}
       <details class="gaveta"><summary>Regras que você tem que falar</summary><div class="md">
         <ul><li>Fale só os preços da tabela. Nada de desconto, brinde ou prazo diferente.</li>
-        <li>Não prometa data de instalação. A Dharma agenda com o cliente.</li>
+        <li>Não prometa data de instalação. A gente agenda com o cliente.</li>
         <li>O link da biometria chega pela Nio, no WhatsApp e no e-mail do cliente. Ele precisa fazer.</li>
         <li>Quem já é cliente Nio, ou cancelou há pouco, não pode.</li>
-        <li>O cliente precisa atender a ligação da Dharma. Sem isso a venda não segue.</li>
+        <li>O cliente precisa atender a nossa ligação. Sem isso a venda não segue.</li>
         <li>Venda fora das regras não paga e tira a ajuda de custo do mês.</li></ul></div></details>
       ${(material || []).map((m) => `<details class="gaveta"><summary>${esc(m.titulo || m.chave)}</summary><div class="md">${md(m.markdown)}</div></details>`).join('')}
-      <div class="acoes">${zap ? `<a class="bt zap" href="${esc(zap)}" target="_blank" rel="noopener">${ICO.zap}Falar com a Dharma</a>` : ''}
+      <div class="acoes">${zap ? `<a class="bt zap" href="${esc(zap)}" target="_blank" rel="noopener">${ICO.zap}Falar com a gente</a>` : ''}
         <button type="button" class="bt sec peq" id="sair">Sair deste celular</button></div>`, 'eu');
     document.getElementById('sair').addEventListener('click', async () => { await sb.auth.signOut(); RES = null; VENDAS = null; PAGS = null; location.hash = '#entrar'; rota(); });
   }
@@ -493,7 +498,7 @@
     if (e && (e.code === '42501' || /Acesso só para parceiros/.test(m))) {
       sb.auth.signOut();
       RES = null;
-      return telaEntrar({ titulo: 'Este acesso não é de parceiro', texto: 'Peça um novo link à Dharma.' });
+      return telaEntrar({ titulo: 'Este acesso não é de parceiro', texto: 'Peça um novo link pelo nosso WhatsApp.' });
     }
     render(`${faixa('amarelo', 'Não carregou', m)}<div class="acoes"><button type="button" class="bt" id="de-novo">Tentar de novo</button></div>`, null);
     document.getElementById('de-novo').addEventListener('click', rota);
@@ -523,7 +528,7 @@
       const { data, error } = await sb.auth.verifyOtp({ token_hash: token, type: 'magiclink' });
       if (error || !data || !data.session) {
         sessao = null;
-        return telaEntrar({ titulo: 'Este link não vale mais', texto: 'Ele vale uma vez só e por pouco tempo. Peça um novo à Dharma.' });
+        return telaEntrar({ titulo: 'Este link não vale mais', texto: 'Ele vale uma vez só e por pouco tempo. Peça um novo pelo nosso WhatsApp.' });
       }
       sessao = data.session;
     } else {

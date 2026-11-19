@@ -74,7 +74,7 @@
           <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
           <label class="campo" id="campo-ref" hidden style="grid-column:1/-1">Quem indicou<input type="text" name="origem_ref"></label>
           <label class="campo" id="campo-parceiro" hidden style="grid-column:1/-1">Parceiro PAP (só ativos)<select name="parceiro_id"><option value="">Escolher o parceiro…</option></select>
-            <span class="nota-campo" id="nota-parceiro">A venda nasce em conferência de qualidade: a Dharma liga para o cliente antes de seguir. Nada de pedido, biometria ou "Registrar venda" agora.</span></label>
+            <span class="nota-campo" id="nota-parceiro">A venda nasce em conferência de qualidade: o nosso time liga para o cliente antes de seguir. Nada de pedido, biometria ou "Registrar venda" agora.</span></label>
         </div>
         <span class="nota-campo">PJ · NMEI recebe o bônus NMEI por cima da comissão.</span>
         <label class="check"><input type="checkbox" name="contato_ok"> WhatsApp, e-mail e endereço confirmados com o cliente (erro de cadastro conta como venda indevida)</label>
@@ -543,7 +543,7 @@
       if (!pronto[1]) faltaQ.push(docTxt && !docOk ? 'CPF/CNPJ válido' : 'cliente');
       if (!pronto[2]) faltaQ.push('plano');
       const faltaV = [];
-      if (ehParceiro) faltaV.push('conferência de qualidade do parceiro (a Dharma aprova antes)');
+      if (ehParceiro) faltaV.push('conferência de qualidade do parceiro (o nosso time aprova antes)');
       if (!pronto[0]) faltaV.push(foraArea);
       if (!dfvOk()) faltaV.push('cobertura');
       if (!F.nome.value.trim() || !F.whatsapp.value.trim() || !F.contato_ok.checked) faltaV.push('cliente');
