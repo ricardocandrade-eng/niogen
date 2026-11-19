@@ -83,7 +83,7 @@
     await carregarContato();
     render(`<div style="padding-top:24px"><div class="rot">Parceiro PAP</div><h1 style="margin-top:6px">Venda Nio e receba toda sexta.</h1></div>
       ${msg ? faixa('amarelo', msg.titulo, msg.texto) : ''}
-      <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo nosso WhatsApp${CONTATO ? ` (${esc(fmtTel(CONTATO))})` : ''}. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
+      <div class="cartao"><b>Já é parceiro?</b><p class="sub">O seu acesso chega pelo nosso WhatsApp${CONTATO ? `, <b>${esc(fmtTel(CONTATO))}</b>` : ''}. Toque no link da mensagem para entrar. Ele vale uma vez só.</p></div>
       <div class="acoes"><a class="bt" href="#seja">Quero ser parceiro</a></div>`, null);
   }
 
