@@ -121,6 +121,8 @@
   };
   // a jornada pode ainda dizer "Conversa" de um lead que a escada (v_leads) já pôs em Lead qualificado (caso Gabriel Vinicius, 19/11)
   const quaseVenda = (j) => !!(j && ((j.venda_id && (j.etapa === 2 || j.etapa === 3)) || ((funilDe(j) || {}).etapa === 'qualificado' && (funilDe(j) || {}).destino === 'em_andamento')));
+  // 19/11 (Ricardo: "Sim, troca"): o nome do degrau segue o ícone — a jornada ainda diz "Conversa" de quem a escada já qualificou.
+  const etapaNome = (j) => (j && quaseVenda(j) && j.etapa < 2 ? 'Lead qualificado' : (j && j.etapa_nome) || '');
   let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -275,7 +277,7 @@
       ${etapaSel ? `<button type="button" class="btn btn-sm" data-tirar-etapa>Filtro: ${esc(NG.JORNADA[etapaSel - 1].nome)} ✕</button>` : ''}${faixaSemDono()}</div>`;
 
   // ---------- lista ----------
-  const situacao = (j) => [j.etapa_nome, j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
+  const situacao = (j) => [etapaNome(j), j.pendencia ? `⏸ ${typeof j.pendencia === 'string' ? j.pendencia : 'pendência'}` : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ');
   // 18/11 (Ricardo: "quando o cliente respondeu e notifica para nós respondermos, dê um certo destaque no botão"): o banco escreve
   // "Cliente escreveu · responder" / "Voltou a falar depois do time · responder" / "Voltou a escrever depois de sair (…) · responder".
   const clienteEscreveu = (j) => j.botao === 'responder' && /·\s*responder\s*$/i.test(String(j.o_que_fazer || ''));
@@ -486,7 +488,7 @@
     const haTxt = (x) => (x ? `há ${haTempo(x)}` : '');
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
     const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), etp: seloEtapa(j), quali: quaseVenda(j), vale: (j.venda_id || quaseVenda(j)) ? valeVenda(j.venda_id, j.plano) : null, nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
-      sit: [j.etapa_nome, j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
+      sit: [etapaNome(j), j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
       oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
       row: linha(j, b === 'fazer'),
@@ -537,14 +539,14 @@
       const a0 = avisos[0];
       const txt = String(a0.texto || '');
       const corte = txt.indexOf(' — ');
-      L.push({ ...jItem(j, 'conf'), sit: `${CONF_SIT[a0.tipo] || confSit(a0.tipo)} · ${j.etapa_nome || 'Lead'}`, oque: corte > 0 ? txt.slice(corte + 3) : txt,
+      L.push({ ...jItem(j, 'conf'), sit: `${CONF_SIT[a0.tipo] || confSit(a0.tipo)} · ${etapaNome(j) || 'Lead'}`, oque: corte > 0 ? txt.slice(corte + 3) : txt,
         prazo: urg ? 'agora' : 'hoje', urg, rank: urg ? 0 : 1 });
     });
     // 18/11 (0284): leads da Fila Vero com a Mari conduzindo (caixa 1) não saem do radar — o Ricardo quer vê-los entrando.
     if (!etapaSel || etapaSel === 1) {
       const jaTem = new Set(L.map((x) => x.k).filter(Boolean));
       (jor.todas || []).filter((j) => j.origem === 'fila_vero' && j.caixa === 1 && !jaTem.has(chaveFicha(j)) && !(j.conversa_id && jaTem.has(`c:${j.conversa_id}`)))
-        .forEach((j) => L.push({ ...jItem(j, 'fv'), sit: `Com a Mari${j.etapa_nome ? ` · ${j.etapa_nome}` : ''}`,
+        .forEach((j) => L.push({ ...jItem(j, 'fv'), sit: `Com a Mari${etapaNome(j) ? ` · ${etapaNome(j)}` : ''}`,
           oque: j.o_que_fazer || 'A Mari está conduzindo; sobe para Para fazer se precisar de você', vez: vezTxt('Mari'), prazo: '—', urg: false, rank: 4 }));
     }
     const tms = (x) => new Date(x || 0).getTime() || 0;
