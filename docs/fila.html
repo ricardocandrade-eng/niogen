@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-7">
+<link rel="stylesheet" href="assets/app.css?v=191126-8">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=191126-5"></script>
@@ -550,7 +550,8 @@
       const a0 = avisos[0];
       const txt = String(a0.texto || '');
       const corte = txt.indexOf(' — ');
-      L.push({ ...jItem(j, 'conf'), sit: `${CONF_SIT[a0.tipo] || confSit(a0.tipo)} · ${etapaNome(j) || 'Lead'}`, oque: corte > 0 ? txt.slice(corte + 3) : txt,
+      L.push({ ...jItem(j, 'conf'), selo: saidaSelo(j) + fvSelo(j) + osSelo(j),   // 19/11: o aviso já está no título — sem repetir no selo
+        sit: `${CONF_SIT[a0.tipo] || confSit(a0.tipo)} · ${etapaNome(j) || 'Lead'}`, oque: corte > 0 ? txt.slice(corte + 3) : txt,
         prazo: urg ? 'agora' : 'hoje', urg, rank: urg ? 0 : 1 });
     });
     // 18/11 (0284): leads da Fila Vero com a Mari conduzindo (caixa 1) não saem do radar — o Ricardo quer vê-los entrando.
