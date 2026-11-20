@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # NIOGEN | n8n/waba_templates_indicacao.py | 13/11/2026 — Claude Code (Fable 5.2) · migration 0176_pos_instalacao_indicacao
-# Submete na WABA Nio os templates (0176 + nio_indicacao_base da 0303) do pós-instalação com indicação e grava meta_id/status no banco. O texto vem do BANCO
+# Submete na WABA Nio os templates (0176 + nio_indicacao_base da 0303 + nio_sem_cobertura da 0325) do pós-instalação com indicação e grava meta_id/status no banco. O texto vem do BANCO
 # (config_templates_waba — fonte única): nio_pos_instalacao (botões Tudo certo / Tive um problema), nio_indicacao_contato e
 # nio_indicacao_premio. Textos aprovados pelo Ricardo em 13/11/2026; marca Nio em template só depende da Meta (decisão de 10/11).
 # Token: variável de ambiente WABA_NIO_TOKEN (system user Nio_API). Nunca em arquivo. WABA Nio 1419511943295487 (nunca a da Vero).
@@ -21,6 +21,7 @@ EXEMPLOS = {
     'nio_indicacao_contato': ['Ana', 'Carlos'],
     'nio_indicacao_premio': ['Carlos', 'Ana'],
     'nio_indicacao_base': ['Ana'],   # 0303: varredura da base instalada (60 dias)
+    'nio_sem_cobertura': ['Ana'],    # 0325 (caso Kell): aviso de sem cobertura com a janela fechada
 }
 NOMES = "'" + "', '".join(EXEMPLOS) + "'"
 
