@@ -2352,6 +2352,11 @@
 
   // ---------- ficha de CONVERSA (etapa 1: conversa sem venda) ----------
   // 11/11: uma rodada só (antes eram 3 em fila) e a linha da jornada vem da carga compartilhada.
+  function credQuem(c, oc) {
+    if (!c || !c.credito_resultado || !c.credito_em) return null;
+    if (oc && oc.resultado === c.credito_resultado && Math.abs(new Date(oc.criado_em) - new Date(c.credito_em)) < 5 * 60000) return oc.origem === 'mari' ? 'Mari' : 'ficha';
+    return c.credito_origem === 'humano' ? 'ficha' : 'Mari';
+  }
   async function carregarConversa(cid, fresco) {
     if (fresco) NG.limparCache();
     // 15/11 noite: a 2ª linha do topo mostra plano · valor · forma também na conversa sem venda (1 leitura por sessão, em paralelo)
@@ -2360,6 +2365,10 @@
     // 18/11 (0296): post-it do lead, em paralelo (1 leitura)
     const notaP = Promise.resolve(NG.sb.from('lead_nota').select('texto, atualizado_em').eq('conversa_id', cid).maybeSingle())
       .then((r) => (r && !r.error && r.data ? { texto: r.data.texto, em: r.data.atualizado_em } : null), () => null);
+    // 20/11 (Ricardo, L-207: "foi a ficha, não a Mari"): quem gravou o crédito do lead — a última consulta registrada (operador_consultas:
+    // 'tela' = ficha/extensão do NIOGEN, 'mari' = a Mari). Vale só se bate com o resultado e a hora gravados na conversa.
+    const credP = Promise.resolve(NG.sb.from('operador_consultas').select('origem, resultado, criado_em').eq('conversa_id', cid).eq('tipo', 'credito').order('criado_em', { ascending: false }).limit(1))
+      .then((r) => (r && !r.error && r.data && r.data[0]) || null, () => null);
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
       NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
@@ -2385,6 +2394,7 @@
       conversaId: c.id, convInfo: c, nMsgs: rn.count, bloqueada: ((rb && rb.data) || [])[0] || null,
       chatwoot: NG.linkChatwoot(c.chatwoot_conversation_id),
       nota: await notaP, leadNum: c.lead_numero || null,   // 0296
+      credQuem: credQuem(c, await credP),
     };
   }
   // 14/11 (0202, Ricardo: "o NIOGEN não permite corrigir a viabilidade desses clientes"): o endereço do lead vem das COLUNAS da
@@ -3404,8 +3414,8 @@
       const afB = antifraudeBloco();
       const padraoC = cc && cc.credito_endereco === 'padrao' && /^aprovado/.test(cc.credito_resultado || '');
       corpo = conv ? `${linhaDet('Resultado', padraoC ? '<span class="warn-txt">sem resultado válido para este endereço</span>'
-          : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· Mari ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
-        ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
+          : cc.credito_resultado ? `${esc(CRED_ROT[cc.credito_resultado] || NG.CREDITO[cc.credito_resultado] || cc.credito_resultado)}${cc.credito_em ? ` <small class="apagado">· ${esc(d.credQuem || 'Mari')} ${esc(NG.fmtDataHora(cc.credito_em))}</small>` : ''}` : 'ainda não consultado')}
+        ${padraoC ? `<div class="fc-aviso warn">${d.credQuem === 'ficha' ? 'A ficha gravou' : 'A Mari leu'} "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
         ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}${regMaoConv('cred')}${semCartaoBt(cc && cc.credito_resultado)}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
         ${v.credito_resultado && CRED_ORIGEM[v.credito_origem] ? linhaDet('Gravado por', esc(CRED_ORIGEM[v.credito_origem])) : ''}
