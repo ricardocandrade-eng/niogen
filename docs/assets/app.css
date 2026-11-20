@@ -3833,3 +3833,14 @@ button.fc-id:hover { color: inherit; }
 .fc-sv-o ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45; }
 .fc-sv-espera { margin: 6px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #2A3F5C; background: rgba(88, 150, 230, .08); font-size: 13px; color: #E9EDF3; line-height: 1.45; }
 @media (max-width: 560px) { .fc-sv-l { grid-template-columns: 56px auto; } .fc-sv-l small { grid-column: 1 / -1; white-space: normal; } }
+
+/* 20/11 (Ricardo: gravar na ficha o que o cliente manda no chat, sem copiar e colar) */
+.cvp-grav { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.cvp-grav-b { font: inherit; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid #2F9E62; background: rgba(47, 158, 98, .12); color: #8AE8B2; cursor: pointer; }
+.cvp-grav-b:hover:not(:disabled) { background: rgba(47, 158, 98, .25); }
+.cvp-grav-b:disabled { opacity: .5; cursor: progress; }
+.cvp-grav-ok { font-size: 11px; color: #7F8A96; }
+.cvp-selmenu { position: fixed; z-index: 60; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 340px; padding: 6px 8px; border-radius: 10px; border: 1px solid #2A313B; background: #161B22; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.cvp-selmenu small { width: 100%; font-size: 11px; color: #8D97A3; }
+.cvp-selmenu button { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid #2F3A46; background: #0F1419; color: #E9EDF3; cursor: pointer; }
+.cvp-selmenu button:hover { border-color: #2F9E62; color: #8AE8B2; }

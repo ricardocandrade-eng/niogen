@@ -46,6 +46,27 @@
   const fmtWa = (s) => esc(s).replace(/\*([^*\n]+)\*/g, '<b>$1</b>').replace(/(^|\s)_([^_\n]+)_(?=\s|$)/g, '$1<i>$2</i>');
   const normal = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
+  // 20/11 (Ricardo: "a medida que o cliente vai passando os dados pela conversa… sem ter que abrir o perfil dele e ficar copiando e
+  // colando dado por dado"): o que dá para reconhecer sozinho numa fala do cliente. CPF só com dígito verificador certo; CEP só com
+  // 8 dígitos isolados (não pega pedaço de CPF ou telefone). O resto (nome, rua, número…) vai pela seleção "Gravar como…".
+  const CAMPO_ROT = { nome: 'Nome', cpf: 'CPF', email: 'E-mail', cep: 'CEP', rua: 'Rua', numero: 'Número', complemento: 'Complemento', referencia: 'Referência' };
+  function capturas(txt) {
+    const t = String(txt || '');
+    const out = [];
+    const vistos = new Set();
+    const add = (campo, valor, mostra) => { const k = `${campo}:${valor}`; if (!vistos.has(k)) { vistos.add(k); out.push({ campo, valor, mostra }); } };
+    (t.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) || []).forEach((e) => add('email', e.toLowerCase().replace(/\.$/, ''), e.toLowerCase()));
+    (t.match(/(?<![\d.\-/])\d{3}\.?\d{3}\.?\d{3}[-\s]?\d{2}(?![\d.\-/])/g) || []).forEach((c) => {
+      const n = c.replace(/\D/g, '');
+      if (n.length === 11 && NG.documentoValido(n)) add('cpf', n, `${n.slice(0, 3)}.${n.slice(3, 6)}.${n.slice(6, 9)}-${n.slice(9)}`);
+    });
+    (t.match(/(?<![\d.\-/])\d{5}-?\d{3}(?![\d.\-/])/g) || []).forEach((c) => {
+      const n = c.replace(/\D/g, '');
+      if (n.length === 8 && !/^0{5}/.test(n)) add('cep', n, `${n.slice(0, 5)}-${n.slice(5)}`);
+    });
+    return out;
+  }
+  const normCampo = (campo, v) => (campo === 'email' ? String(v || '').trim().toLowerCase() : ['cpf', 'cep'].includes(campo) ? String(v || '').replace(/\D/g, '') : String(v || '').trim().toLowerCase());
   async function rapidas() {
     if (rapidasCache) return rapidasCache;
     const { data } = await NG.sb.from('config_mari_textos').select('chave, texto').like('chave', 'rr\\_%').order('chave');
@@ -567,6 +588,53 @@
         <div class="cvp-an-t"><small>Veio do anúncio${a.referral_em ? ` · ${esc(NG.fmtDataHora(a.referral_em))}` : ''}</small><b>${esc(a.ad_nome || a.titulo || 'anúncio da Meta')}</b>
         ${linha1 ? `<span title="${esc(a.anuncio_texto || '')}">${esc(linha1.slice(0, 140))}</span>` : ''}${a.campanha_nome ? `<em>${esc(a.campanha_nome)}</em>` : ''}</div></div>`;
     }
+    // ---------- 20/11: gravar na ficha o que o cliente mandou (só quando quem montou passou o.gravar: a ficha, para admin/backoffice) ----------
+    // o.gravar = { atual(): {campo: valor gravado}, salvar(campo, valor): Promise<bool>, campos: [...] }
+    st.gravados = new Set();
+    function chipsGravar(txt) {
+      if (!o.gravar) return '';
+      const atual = o.gravar.atual() || {};
+      const cs = capturas(txt).filter((c) => (o.gravar.campos || []).includes(c.campo));
+      if (!cs.length) return '';
+      return `<span class="cvp-grav">${cs.map((c) => {
+        const ja = normCampo(c.campo, atual[c.campo]) === normCampo(c.campo, c.valor) || st.gravados.has(`${c.campo}:${c.valor}`);
+        return ja ? `<span class="cvp-grav-ok" title="Já está na ficha">✓ ${esc(CAMPO_ROT[c.campo])} na ficha</span>`
+          : `<button type="button" class="cvp-grav-b" data-cv="gravar" data-campo="${c.campo}" data-valor="${esc(c.valor)}" title="${atual[c.campo] ? `Na ficha hoje: ${esc(atual[c.campo])} — troca por este` : 'Grava na ficha do cliente'}">＋ Gravar ${esc(CAMPO_ROT[c.campo])} ${esc(c.mostra)}</button>`;
+      }).join('')}</span>`;
+    }
+    async function gravarCampo(campo, valor, b) {
+      if (!o.gravar || !valor) return;
+      const atual = (o.gravar.atual() || {})[campo];
+      if (atual && normCampo(campo, atual) !== normCampo(campo, valor)
+          && !window.confirm(`${CAMPO_ROT[campo]} na ficha hoje: ${atual}\nTrocar por: ${valor}?`)) return;
+      if (b) b.disabled = true;
+      const ok = await o.gravar.salvar(campo, valor);
+      if (ok) { st.gravados.add(`${campo}:${valor}`); st.sig.msgs = null; desenharMsgs(); } else if (b && b.isConnected) b.disabled = false;
+    }
+    // Selecionar um trecho numa fala do cliente → menu "Gravar como…"
+    const selMenu = document.createElement('div');
+    selMenu.className = 'cvp-selmenu';
+    selMenu.hidden = true;
+    el.appendChild(selMenu);
+    let selTxt = '';
+    function selAbrir() {
+      if (!o.gravar) return;
+      const sel = window.getSelection();
+      const t = sel && !sel.isCollapsed ? String(sel).replace(/\s+/g, ' ').trim() : '';
+      const no = sel && sel.anchorNode ? (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentElement) : null;
+      if (!t || t.length > 160 || !no || !no.closest('.cvp-b.cli')) { selMenu.hidden = true; return; }
+      selTxt = t;
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+
+      selMenu.innerHTML = `<small>Gravar “${esc(t.length > 28 ? `${t.slice(0, 28)}…` : t)}” como</small>${(o.gravar.campos || []).map((c) => `<button type="button" data-cv="gravar-sel" data-campo="${c}">${esc(CAMPO_ROT[c])}</button>`).join('')}`;
+      selMenu.hidden = false;
+      const w = selMenu.offsetWidth;
+      selMenu.style.left = `${Math.max(6, Math.min(window.innerWidth - w - 6, r.left + r.width / 2 - w / 2))}px`;
+      selMenu.style.top = `${Math.min(window.innerHeight - selMenu.offsetHeight - 6, r.bottom + 6)}px`;
+    }
+    msgs.addEventListener('mouseup', () => setTimeout(selAbrir, 0));
+    msgs.addEventListener('touchend', () => setTimeout(selAbrir, 300));
+    document.addEventListener('mousedown', (ev) => { if (!selMenu.hidden && !selMenu.contains(ev.target)) selMenu.hidden = true; });
     function desenharMsgs() {
       const its = itensMsgs();
       let dia = '';
@@ -578,6 +646,7 @@
         return `${sep}<div class="cvp-b ${x.tipo}${md ? ' com-midia' : ''}${x.erro ? ' falhou' : ''}${x.tick === '🕓' ? ' pend' : ''}">${x.quem ? `<small class="cvp-quem">${esc(x.quem)}</small>` : ''}${corpo}
           <span class="cvp-h">${esc(NG.fmtHora(x.em))}${x.tick ? ` <i class="cvp-tick${x.tick === '✓✓l' ? ' lida' : ''}" title="${TIQUE_TIT[x.tick] || 'não saiu'}">${x.tick === '✓✓l' ? '✓✓' : x.tick}</i>` : ''}</span>
           ${x.tipo === 'cli' && x.cw && podeSugerir ? `<button type="button" class="cvp-citar" data-cv="citar" data-cw="${x.cw}" data-txt="${esc(String(x.txt || '📎 mídia').slice(0, 140))}" title="Responder citando esta mensagem" aria-label="Responder citando">↩</button>` : ''}
+          ${x.tipo === 'cli' ? chipsGravar(md ? md.txt + ' ' + (x.midia || []).map((m) => m && m.transcricao || '').join(' ') : x.txt) : ''}
           ${x.cita ? `<span class="cvp-cita-no">${esc(x.cita)}</span>` : ''}
           ${x.erro ? `<span class="cvp-erro">${esc(x.erro)}${x.reenviar ? ` · <button type="button" class="link" data-cv="reenviar" data-txt="${esc(x.reenviar)}"${x.local ? ` data-local="${esc(x.local)}"` : ''}>Reenviar</button>` : ''}</span>` : ''}</div>`;
       }).join('') || '<div class="cvp-b sis">Sem mensagens ainda</div>';
@@ -919,6 +988,17 @@
       if (a === 'enviar') { enviar(); return; }
       if (a === 'citar') { if (!podeMidia()) { NG.toast('Responder citando só no modo Responder.', 'bad'); return; } st.cita = { id: Number(b.dataset.cw), txt: b.dataset.txt || '' }; citaDesenhar(); ta.focus(); return; }
       if (a === 'cita-x') { st.cita = null; citaDesenhar(); return; }
+      if (a === 'gravar') { gravarCampo(b.dataset.campo, b.dataset.valor, b); return; }
+      if (a === 'gravar-sel') {
+        const campo = b.dataset.campo;
+        let val = selTxt;
+        if (campo === 'cpf' || campo === 'cep') val = val.replace(/\D/g, '');
+        if (campo === 'email') val = val.toLowerCase();
+        selMenu.hidden = true;
+        window.getSelection().removeAllRanges();
+        gravarCampo(campo, val, null);
+        return;
+      }
       if (a === 'clip') { const ab = clipMenu.hidden; clipMenu.hidden = !ab; b.setAttribute('aria-expanded', String(ab)); return; }
       if (a === 'clip-foto' || a === 'clip-doc') { clipMenu.hidden = true; const inp = el.querySelector(`input[data-arq="${a === 'clip-foto' ? 'imagem' : 'arquivo'}"]`); if (inp) inp.click(); return; }
       if (a === 'mic') { gravarIniciar(); return; }
@@ -999,5 +1079,5 @@
     };
   }
 
-  window.NGConversa = { montar, textoTurno };
+  window.NGConversa = { montar, textoTurno, capturas };
 })();

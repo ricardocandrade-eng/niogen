@@ -791,6 +791,49 @@
   async function viaCep(cep) {
     try { const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`); const j = await r.json(); return j && !j.erro ? j : null; } catch (e) { return null; }
   }
+  // 20/11 (Ricardo: "a medida que o cliente vai passando os dados pela conversa… sem copiar e colar dado por dado"): o chat mostra
+  // "＋ Gravar CPF …" nas falas do cliente e "Gravar como…" no trecho selecionado. Grava pelas mesmas portas do lápis da ficha:
+  // lead sem venda = lead_corrigir; venda = o mesmo update da ficha (endereço da venda sem o CEP, como o "Editar endereço").
+  function gravarDoChat() {
+    if (!ehBO()) return null;
+    const lead = () => !!(d && d.soConversa);
+    return {
+      campos: lead() ? ['nome', 'cpf', 'email', 'cep', 'rua', 'numero', 'complemento', 'referencia'] : ['nome', 'cpf', 'email', 'rua', 'numero', 'complemento', 'referencia'],
+      atual() {
+        if (!d) return {};
+        if (lead()) {
+          const c = d.conv || {};
+          const x = convDados(c);
+          return { nome: x.nome || '', cpf: x.cpf || '', email: x.email || '', cep: c.cep || '', rua: convLogr(c) || '', numero: c.numero || '', complemento: c.complemento || '', referencia: x.referencia || '' };
+        }
+        const v = d.v || {};
+        return { nome: v.cliente_nome || '', cpf: v.cliente_cpf_cnpj || '', email: v.cliente_email || '', rua: v.logradouro || '', numero: v.numero || '', complemento: v.complemento || '', referencia: v.ponto_referencia || '' };
+      },
+      async salvar(campo, valor) {
+        if (!d) return false;
+        if (campo === 'cpf' && !NG.documentoValido(valor)) { NG.toast('CPF inválido — confira os números.', 'bad'); return false; }
+        if (campo === 'email' && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(valor)) { NG.toast('E-mail inválido.', 'bad'); return false; }
+        if (lead()) {
+          const campos = { [campo]: valor };
+          if (campo === 'cep') {
+            const vc = await viaCep(NG.soDigitos(valor));
+            if (!vc) { NG.toast('CEP não encontrado no ViaCEP — confira o número.', 'bad'); return false; }
+            campos.cep = NG.soDigitos(valor); campos.endereco_cep = vc;
+          }
+          const { data, error } = await NG.sb.rpc('lead_corrigir', { p_conversa: d.conversaId, p_campos: campos });
+          if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+          NG.toast((data && data.resumo) || 'Gravado na ficha', 'ok');
+          await recarregar({ quieto: true });
+          avisarOuvintes(data);
+          return true;
+        }
+        const COL = { nome: 'cliente_nome', cpf: 'cliente_cpf_cnpj', email: 'cliente_email', rua: 'logradouro', numero: 'numero', complemento: 'complemento', referencia: 'ponto_referencia' };
+        const up = { [COL[campo]]: campo === 'cpf' ? NG.soDigitos(valor) : valor };
+        if (campo === 'cpf') up.trava_cpf_valido = true;
+        return gravar(up, `${{ nome: 'Nome', cpf: 'CPF', email: 'E-mail', rua: 'Rua', numero: 'Número', complemento: 'Complemento', referencia: 'Referência' }[campo]} gravado na ficha`);
+      },
+    };
+  }
   const SALVAR = {
     async lead_corr(fd, form) {
       const c = d.conv;
@@ -1569,7 +1612,7 @@
     if (cvComp && cvComp.id === d.conversaId && host.firstChild) return;
     if (cvComp) cvComp.destruir();
     cvComp = NGConversa.montar(host, { conversaId: d.conversaId, nome: d.v ? d.v.cliente_nome : null, rotuloFechar: '× Fechar',
-      aoFechar: () => { convAberta = false; render(); }, aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
+      aoFechar: () => { convAberta = false; render(); }, gravar: gravarDoChat(), aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
   }
   // 12/11 (Ricardo: "na Live a conversa volta para o topo o tempo todo"): o redesenho tira o nó da conversa do DOM e
   // o devolve — e o navegador zera a rolagem de quem sai do DOM. Lê a rolagem ANTES do innerHTML e devolve depois:
@@ -4865,7 +4908,7 @@
       } else {
         if (cvCheia) cvCheia.destruir();
         cvCheia = NGConversa.montar(host, { conversaId: d.conversaId, nome: conv ? d.conv.nome : d.v.cliente_nome, cheia: true,
-          oportunidade: cheiaOpts.oportunidade || null, aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
+          oportunidade: cheiaOpts.oportunidade || null, gravar: gravarDoChat(), aoMudar: (r) => recarregar({ quieto: !!(r && r.eco) }) });
         cheiaOpts.oportunidade = null;
       }
       cvCheia.mari(mariFaixa(), fc.reg || fc.cad);
