@@ -376,6 +376,17 @@ if (V7 && (conv.dados || {}).abertura && !conv.cep) {
     ? `saudação + botões "${String(tx0.abertura_botoes || 'rua,planos,humano')}"`
     : 'saudação + pedido do CEP e do número da casa'}) JÁ FOI ENVIADA pelo sistema — `
     + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
+  // 19/11 (0328, Ricardo: "perguntar a cidade e não o CEP" no "💰 Ver os planos"): o sistema pediu a cidade e/ou já mostrou os
+  // planos dela (preço da cidade), antes do CEP.
+  const dAb = conv.dados || {};
+  if (dAb.planos_cidade) {
+    L.push(`planos_pela_cidade: o cliente JÁ VIU os planos de ${dAb.planos_cidade} com o preço da cidade, antes de dar o CEP. `
+      + 'Se ele escolheu ou perguntou de um plano, registre a escolha e peça o CEP (ou a rua e o bairro) para conferir se a fibra chega na rua dele. '
+      + 'Não mande os planos de novo agora e não confirme a cobertura antes do CEP.');
+  } else if (dAb.abertura_pediu_cidade) {
+    L.push('abertura_pediu_cidade: a Mari perguntou a CIDADE do cliente para mostrar os planos, e o sistema não reconheceu uma cidade atendida na resposta. '
+      + 'Se ele disse uma cidade, confirme qual é e peça o CEP (ou a rua e o bairro) para conferir se a Nio atende; se não respondeu a cidade, pergunte de novo, com leveza.');
+  }
 }
 const estadoTxt = L.join('\n');
 
@@ -479,6 +490,8 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
     { id: 'ab:humano', chave: 'humano', title: tx.abertura_botao_humano || '💬 Falar com alguém' },
     { id: 'ab:cliente', chave: 'cliente', title: tx.abertura_botao_cliente || '🏠 Sou cliente Nio' },
     { id: 'ab:2030', chave: 'trava2030', title: tx.abertura_botao_2030 || '🔒 Preço até 2030' },
+    // 19/11 (0328): o "rua" virou "📍 Tem na minha rua?" — o título antigo segue reconhecido (menu antigo na tela do cliente).
+    { id: 'ab:rua', chave: 'rua', title: '📍 Ver minha rua' },
   ];
   const BOT_AB = String(tx.abertura_botoes || 'rua,planos,humano').split(',').map((k) => BOT_TODOS.find((b) => b.chave === k.trim()))
     .filter(Boolean).slice(0, 3);
@@ -505,6 +518,57 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       upd: { dados: { abertura_botao: 'cliente' } },
       modelo: 'abertura_b2',
     };
+  } else if (tocado && !cluster && tocado.chave === 'planos' && seg === 'varejo' && String(tx.abertura_planos_cidade || 'sim').trim() !== 'nao') {
+    // 19/11 (Ricardo, 0328): "💰 Ver os planos" antes do CEP → a Mari pergunta a CIDADE ("o CEP nem sempre o lead sabe"); a resposta
+    // com a cidade mostra os planos com o preço dela (abaixo). Desliga sem deploy: abertura_planos_cidade = 'nao' (volta a pedir o CEP).
+    textoFixo = {
+      texto: tx.abertura_resp_planos_cidade || 'Claro! 😊 Me diz a sua cidade que eu já te mostro os planos com o preço certinho daí 👇',
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'planos', pediu_cidade: true },
+      upd: { dados: Object.assign(dadosAb.abertura_botao ? {} : { abertura_botao: 'planos' }, { abertura_pediu_cidade: true }) },
+      modelo: 'abertura_b2',
+    };
+  } else if (!tocado && dadosAb.abertura_pediu_cidade && !dadosAb.planos_cidade && !cluster && !conv.cep && !prep.p_cep && seg === 'varejo'
+    && String(tx.abertura_planos_cidade || 'sim').trim() !== 'nao' && msgAb.length <= 60) {
+    // A resposta à pergunta da cidade: casa com a lista de cidades atendidas (config_area, 4c) — a mais longa que aparece inteira.
+    // Regular → o carrossel (preços de config_planos pela trava de sempre); BTU → a lista em texto com o preço único da cidade.
+    // Nos dois, o pedido do CEP no fim (a cobertura é da rua). Não casou → o Claude segue (linha abertura_pediu_cidade).
+    const cidades = Array.isArray(inter.cidades) ? inter.cidades : [];
+    const m1 = ` ${semEmoji(msgAb)} `;
+    const achada = cidades.filter((x) => x && x.cidade && m1.includes(` ${semEmoji(x.cidade)} `))
+      .sort((a, b) => String(b.cidade).length - String(a.cidade).length)[0];
+    if (achada) {
+      const pedeCep = (tx.abertura_planos_cidade_cep || 'Pra ver se a fibra chega na sua rua, me manda o CEP (ou o nome da rua e o bairro) 😊');
+      const updC = { dados: { planos_cidade: achada.cidade, planos_cidade_cluster: achada.cluster } };
+      const tagsC = { abertura: dadosAb.abertura || B2, abertura_botao: 'planos', cidade_planos: achada.cidade };
+      const divergentes = cartoes.filter((k) => {
+        const v = [...String(k.texto_card).matchAll(/R\$\s*([\d.]+,\d{2})/g)].map((m) => Number(m[1].replace(/\./g, '').replace(',', '.')));
+        return v.length < 2 || v[0] !== Number(k.preco) || v[1] !== Number(k.preco_cartao);
+      });
+      const brl = (n) => Number(n).toFixed(2).replace('.', ',').replace(',00', '');
+      const nomeP = (k) => String(k.nome || k.nome_curto || '').replace(/\s*\(.*?\)\s*/g, ' ').trim();
+      const lista = (pls, comCartao) => pls.map((k, i) => `${i + 1}) ${nomeP(k)} — R$${brl(k.preco)} por mês`
+        + (comCartao && k.preco_cartao != null ? ` (R$${brl(k.preco_cartao)} no cartão)` : '')).join('\n\n');
+      if (achada.cluster === 'regular' && cartoes.length && !divergentes.length) {
+        const corpo = `Em ${achada.cidade} são estes 👇\n\n${pedeCep}`;
+        textoFixo = {
+          texto: null,
+          interativo: { tipo: 'carrossel', corpo: corpo.slice(0, 1024),
+            cartoes: cartoes.map((k) => ({ imagem: k.imagem_url, texto: k.texto_card, botoes: [
+              { id: `plano:${k.plano_codigo}:quero`, title: k.titulo_quero }, { id: `plano:${k.plano_codigo}:detalhes`, title: k.titulo_detalhes }] })),
+            resumo: `carrossel: ${cartoes.map((k) => `${String(k.nome_curto || k.nome).split(' ')[0]} R$${Number(k.preco)}/${Number(k.preco_cartao)}`).join(' · ')} (${achada.cidade}, antes do CEP)`,
+            fallbackTexto: `Em ${achada.cidade} são estes:\n\n${lista(cartoes, true)}\n\n${pedeCep}` },
+          tags: Object.assign(tagsC, { carrossel: true }), upd: updC, modelo: 'abertura_b2',
+        };
+      } else {
+        const pls = ((inter.planos_cidade || {})[achada.cluster] || []).slice(0, 4);
+        if (pls.length) {
+          textoFixo = {
+            texto: `Em ${achada.cidade} os planos são:\n\n${lista(pls, achada.cluster !== 'btu')}\n\n${pedeCep}`,
+            tags: tagsC, upd: updC, modelo: 'abertura_b2',
+          };
+        }
+      }
+    }
   } else if (tocado && !cluster) {
     // "📍 Ver minha rua" / "💰 Ver os planos": a cidade ainda não é conhecida → pede só o CEP (ou rua e bairro), sem preço.
     // Cidade já conhecida → o toque segue para o Claude (mostra os planos da cidade).

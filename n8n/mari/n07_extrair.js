@@ -623,6 +623,20 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
     }
     dados.credito_negado_avisado = true;
   }
+  // 0327 (Ricardo, 19/11: "a notícia, seja qual for, deve ser automática"): o NIOGEN já avisou o cliente do negado na hora em que
+  // o portal respondeu (bo_credito_negado, oferecendo um parente como titular) e marcou credito_negado_avisado + credito_negado_sistema.
+  // O bloco acima não roda de novo; aqui, na 1ª fala do cliente depois do aviso, a Mari passa ao time (o pedido no CPF de outra pessoa
+  // é do BKO — 15/11, caso Grace) sem repetir o aviso. Uma vez só (credito_negado_passado).
+  const ddN = cc.dados || {};
+  if (V7 && !posHandoff && !erro && !handoffYaml && !naSaida && cc.credito_resultado === 'negado' && ddN.credito_negado_sistema
+    && !ddN.credito_negado_passado && !dados.credito_negado_passado && Number(cc.credito_consultas || 0) < 2) {
+    texto = 'Combinado! Já passei pro nosso time, que segue com você por aqui pra fazer o pedido no CPF do novo titular 😊';
+    handoffYaml = { motivo_handoff: 'pedido_humano',
+      briefing_humano: 'Crédito NEGADO no CPF do cliente. O NIOGEN avisou na hora e ofereceu um parente como titular; o cliente respondeu (ver a conversa: nome, CPF e parentesco do novo titular).' };
+    tags.handoff = handoffYaml;
+    delete tags.carrossel; delete tags.botoes;
+    dados.credito_negado_passado = true;
+  }
 }
 // 0212 (15/11, caso Helton): "Negado - Critérios Antifraude" — a Nio vê Nio no endereço. NUNCA oferecer outro CPF (num endereço
 // com Nio isso é o que a Nio lê como fraude/recompra). A Mari avisa sem falar em fraude e passa para o BKO, que confere com o cliente
