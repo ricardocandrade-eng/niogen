@@ -173,6 +173,16 @@ RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 # É negado de outra natureza: a Nio vê Nio no endereço (ou outro sinal). NUNCA vira "tente outro CPF" — vai para o backoffice
 # conferir com o cliente (dele → Já é cliente Nio; de outro morador → defesa na Nio). Migration 0212.
 RE_ANTIFRAUDE = re.compile(r'anti\s*-?\s*fraude', re.I)
+# 20/11 (Cintia L-219, print do Ricardo): modal "Viabilidade parcial · Endereço com tratamento especial · Será necessário efetuar o
+# cadastro do endereço" [Continuar] [Voltar]. NÃO é "sem cobertura": a fachada existe e a Nio precisa cadastrar o endereço (Forms
+# "Tratamento nacional de endereço"). O resultado segue 'sem_viabilidade' (banco e Mari não mudam), com cadastro_endereco=True para
+# a tela mandar ao formulário. O robô NUNCA clica Continuar neste modal (iniciaria o tratamento especial no portal).
+RE_CADASTRO_END = re.compile(r'viabilidade\s+parcial|tratamento\s+especial|cadastro\s+do\s+endere', re.I)
+
+
+def marca_cadastro(out, popup):
+    if popup and RE_CADASTRO_END.search(f"{popup.get('titulo') or ''} {popup.get('texto') or ''}"):
+        out['cadastro_endereco'] = True
 RE_PENDENTE = re.compile(r'pendente|24\s*h|aguard', re.I)
 RE_RECEITA = re.compile(r'ops,?\s*ocorreu um erro', re.I)
 # Etapa 4 (11/11 18h50): "Não é possível utilizar o telefone de contato informado pois excede a quantidade de repetições
@@ -803,6 +813,7 @@ class Consulta:
         pp = self.popup()
         if pp and not ref:
             self.out['popup'] = pp
+            marca_cadastro(self.out, pp)
             raise Parar('sem_viabilidade')
         if not ref:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='endereço não resolveu na Etapa 2')
@@ -820,7 +831,7 @@ class Consulta:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='sem modal de viabilidade em 45 s')
         txt = f'{pp.get("titulo")} {pp.get("texto")}'
         continuar = next((x for x in pp.get('botoes') or [] if re.match(r'^\s*continuar\s*$', x, re.I)), None)
-        if continuar and re.search(r'dispon', txt, re.I) and not re.search(r'indispon', txt, re.I):
+        if continuar and re.search(r'dispon', txt, re.I) and not re.search(r'indispon', txt, re.I) and not RE_CADASTRO_END.search(txt):
             self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
             if self.modo == 'viabilidade':     # só viabilidade: lê e PARA — nunca clica Continuar, nunca vai à Etapa 3
                 self.out['velocidade'] = velocidade_de(pp)
@@ -832,6 +843,7 @@ class Consulta:
             return
         self.out['popup'] = pp
         self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
+        marca_cadastro(self.out, pp)
         raise Parar('sem_viabilidade')
 
     def conferir_rua(self, e, ref):

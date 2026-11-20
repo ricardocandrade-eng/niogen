@@ -829,7 +829,26 @@
   }
   // Portal disse "sem viabilidade": o que o DFV muda. {chave, rot, cor, txt, motivoForms} — o texto é o mesmo nas duas telas.
   // chave: 'conferir_fachada' (DFV tem esta fachada) · 'elegivel_200m' · 'sem_cobertura' · 'sem_dfv' (DFV não respondeu: investigar)
+  // 20/11 (Ricardo: "Portal: Sem viabilidade · DFV: Fachada viável e em seguida as orientações"): passos[] = o que fazer, em ordem.
+  // o.cadastro: o portal mostrou "Viabilidade parcial · tratamento especial · cadastro do endereço" (operador marca cadastro_endereco).
   function semViabDecisao(ver, o) {
+    const d = semViabDecisao0(ver, o);
+    const ruaP = String((o && o.ruaPortal) || '');
+    const liberar = 'Peça a liberação pelo formulário da Nio (já abre preenchido — falta só a coordenada do mapa e a foto da fachada).';
+    const marcar = 'Marque "Enviei o pedido à Nio": o lead espera a resposta da Nio (2 dias) e volta para você no prazo.';
+    const acompanhar = 'Acompanhe a resposta no site da Nio (login do PDV). Liberou → consulte o portal de novo.';
+    if (o && o.cadastro) {
+      return { chave: 'cadastro_endereco', cor: 'warn', motivoForms: 'fachada', rot: 'Viabilidade parcial: a Nio precisa cadastrar o endereço',
+        txt: 'O portal respondeu <b>"Viabilidade parcial · Endereço com tratamento especial · Será necessário efetuar o cadastro do endereço"</b>. Não é sem cobertura: <b>peça o cadastro à Nio pelo formulário</b> (já abre preenchido — falta a coordenada do mapa e a foto da fachada).',
+        passos: [liberar, marcar, acompanhar] };
+    }
+    d.passos = d.chave === 'conferir_fachada' ? [`Confira se a rua que o portal consultou${ruaP ? ` (${ruaP})` : ''} é a do cliente. Não é → consulte de novo com a rua certa.`, liberar, marcar, acompanhar]
+      : d.chave === 'elegivel_200m' ? ['Confira no mapa (Cobertura) se a casa viável mais perto fica a até 200 m do cliente.', liberar, marcar, acompanhar]
+        : d.chave === 'sem_cobertura' ? ['Confira o CEP e o número com o cliente e consulte de novo.', 'Se estiverem certos: Saída › Fachada não atendida.']
+          : ['Abra a Cobertura e confira no mapa da Nio (DFV) se há casa viável perto.', 'Não encerre antes disso.'];
+    return d;
+  }
+  function semViabDecisao0(ver, o) {
     const ruaP = String((o && o.ruaPortal) || '');
     const ruaD = String((o && o.ruaDfv) || '');
     if (ver === 'viavel') return { chave: 'conferir_fachada', cor: 'warn', motivoForms: 'fachada', rot: 'Não perca: DFV tem esta fachada viável',

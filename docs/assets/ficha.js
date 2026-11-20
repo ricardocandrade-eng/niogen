@@ -3191,29 +3191,81 @@
     Promise.all([NG.linkConfig('nio_pedido_liberacao'), NG.linkConfig('nio_acompanhar_liberacao'), NG.sb.auth.getSession().then((x) => (((x.data || {}).session || {}).user || {}).email || '', () => '')])
       .then(([lib, acomp, email]) => { Object.assign(lkForms, { ok: true, lib, acomp, email }); atualizarOp('viab'); }, () => { lkForms.vindo = false; });
   }
-  function semViabFicha(s) {
+  // 20/11 (Ricardo: "tá muito confuso… Portal: Sem viabilidade · DFV: Fachada viável e em seguida as orientações. A tela Cobertura
+  // mostra isso bem"): duas linhas (o que o portal disse, o que o DFV diz), os passos numerados e os botões.
+  // "Aguardando liberação da Nio" (Ricardo: "Cria o estado… com prazo"): lead sem venda = Em espera (backoffice_conversa_espera,
+  // 2 dias, motivo fixo); venda = pendência "Confirmar viabilidade com a Nio" (pendencia_abrir, quem destrava: Nio). Os dois já passam
+  // pela porta, saem do Live até o prazo, pausam a Mari e voltam para o time no dia (ou antes, se o cliente escrever).
+  const LIB_MOTIVO = 'Aguardando liberação da Nio (formulário enviado)';
+  function liberacaoEspera() {
+    if (!d) return null;
+    if (d.soConversa) {
+      const c = d.conv || {};
+      return c.espera_ate && /liberação da Nio/i.test(c.espera_motivo || '') && new Date(c.espera_ate) > new Date() ? { ate: c.espera_ate, desde: c.espera_em } : null;
+    }
+    const p = d.pendAberta;
+    return p && p.motivo === 'viabilidade_confirmar' ? { ate: p.revisar_em, desde: p.aberta_em, id: p.id } : null;
+  }
+  async function liberacaoAcao(acao) {
+    if (!d || !ehBO()) return;
+    const ate = NG.somaDias(NG.diaSP(), 2);
+    const le = liberacaoEspera();
+    if (d.soConversa) {
+      if (acao === 'liberou') { if (await rodarEsperaConversa(null, null)) rodarOp('viab'); return; }
+      await rodarEsperaConversa(ate, LIB_MOTIVO);   // pedido e "mais 2 dias"
+      return;
+    }
+    if (acao === 'pedido') {
+      await rpcPendencia('pendencia_abrir', { p_venda: d.v.id, p_motivo: 'viabilidade_confirmar', p_descricao: 'Formulário de liberação da fachada enviado à Nio', p_revisar_em: ate },
+        `Aguardando a Nio · revisão em ${NG.diaCurto(ate)}`);
+    } else if (acao === 'mais' && le) {
+      await rpcPendencia('pendencia_adiar', { p_id: le.id, p_novo_revisar_em: ate, p_nota: 'Nio ainda não respondeu a liberação' }, `Revisão em ${NG.diaCurto(ate)}`);
+    } else if (acao === 'liberou' && le) {
+      if (await rpcPendencia('pendencia_encerrar', { p_id: le.id, p_resultado: 'destravou', p_nota: 'A Nio liberou a fachada' }, 'Pendência encerrada · consultando o portal')) rodarOp('viab');
+    }
+  }
+  const SV_DFV = { viavel: ['Fachada viável', 'ok'], elegivel: ['Fachadas viáveis no CEP (200 m)', 'warn'], sem: ['Nenhuma viável no CEP', 'bad'] };
+  // s: o que o operador leu (ou {} quando o "sem viabilidade" veio gravado) · m: {quando} para a linha do portal
+  function semViabFicha(s, m) {
     const x = fc.dfv;
-    if (x && x.estado === 'rodando') return { ver: undefined, html: '<div class="fc-aviso">Portal: sem viabilidade. Conferindo a fachada no mapa da Nio (DFV)…</div>' };
     const r = x && x.estado === 'pronto' ? x.r : null;
-    const ver = NG.dfvVeredito(r);
+    const ver = x && x.estado === 'rodando' ? undefined : NG.dfvVeredito(r);
     carregarLinksForms();
     const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
-    const ruaD = r && r.fachada ? r.fachada.logradouro : '';
-    const dz = NG.semViabDecisao(ver, { ruaPortal: ruaP, ruaDfv: ruaD });
+    const ruaD = r && r.fachada ? `${r.fachada.logradouro || ''}${r.fachada.numero ? `, ${r.fachada.numero}` : ''}` : '';
+    const parcial = !!s.cadastro_endereco;
+    const dz = NG.semViabDecisao(ver, { ruaPortal: ruaP, ruaDfv: ruaD, cadastro: parcial });
     const e = dfvEnd() || {};
+    const quando = s.consultado_em ? NG.fmtHora(s.consultado_em) : (m && m.quando) || '';
+    // as duas linhas, como na Cobertura
+    const [dRot, dCls] = ver === undefined ? ['consultando…', 'mute'] : SV_DFV[ver] || ['não respondeu', 'warn'];
+    const linhas = `<div class="fc-sv">
+      <div class="fc-sv-l"><span class="fc-sv-k">Portal</span><span class="fc-pill ${parcial ? 'warn' : 'bad'}">${parcial ? 'Viabilidade parcial' : 'Sem viabilidade'}</span><small>${esc([parcial ? 'a Nio precisa cadastrar o endereço' : '', ruaP ? `consultou ${ruaP}` : '', quando].filter(Boolean).join(' · '))}</small></div>
+      <div class="fc-sv-l"><span class="fc-sv-k">DFV</span><span class="fc-pill ${dCls}">${esc(dRot)}</span><small>${esc(ver === 'viavel' ? ruaD : ver === 'elegivel' && r ? `${r.total_fachadas_no_cep} viáveis no CEP` : '')}</small></div></div>`;
+    if (ver === undefined && !parcial) return { ver, html: linhas };
+    const le = liberacaoEspera();
     const url = dz.motivoForms && lkForms.lib ? NG.formsNioUrl(lkForms.lib, dz.motivoForms, { end: e, portal: s, dfv: r, email: lkForms.email }) : null;
     const cob = e.cep ? `cobertura.html?${new URLSearchParams({ cep: e.cep, numero: e.numero || '', complemento: e.complemento || '' })}` : 'cobertura.html';
-    const bts = [
-      url ? `<a class="btn btn-sm btn-acc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (mapa) e a foto da fachada">Pedir liberação (formulário) ↗</a>` : '',
-      dz.motivoForms && lkForms.acomp ? `<a class="btn btn-sm" href="${esc(lkForms.acomp)}" target="_blank" rel="noopener noreferrer" title="Onde a Nio responde o pedido de liberação da fachada (login do PDV)">Acompanhar a resposta da Nio ↗</a>` : '',
-      dz.chave !== 'sem_cobertura' ? `<a class="btn btn-sm${url ? '' : ' btn-acc'}" href="${esc(cob)}" target="_blank" rel="noopener" title="Mesma consulta na tela Cobertura: mapa dos 200 m e fachadas do CEP">Ver na Cobertura (mapa) ↗</a>` : '',
-    ].filter(Boolean).join('');
-    return { ver, html: `<div class="fc-aviso ${dz.cor === 'bad' ? 'bad' : 'warn'}"><b>${esc(dz.rot)}.</b> ${dz.txt}</div>${bts ? `<div class="fc-op-bts">${bts}</div>` : ''}` };
+    const aAcomp = dz.motivoForms && lkForms.acomp ? `<a class="btn btn-sm" href="${esc(lkForms.acomp)}" target="_blank" rel="noopener noreferrer" title="Onde a Nio responde o pedido de liberação (login do PDV)">Acompanhar a resposta da Nio ↗</a>` : '';
+    const aCob = dz.chave !== 'sem_cobertura' ? `<a class="btn btn-sm" href="${esc(cob)}" target="_blank" rel="noopener" title="Mesma consulta na tela Cobertura: mapa dos 200 m e fachadas do CEP">Ver na Cobertura ↗</a>` : '';
+    const B = (acao, txt, acc) => `<button type="button" class="btn btn-sm${acc ? ' btn-acc' : ''}" data-f="lib-acao" data-acao="${acao}">${esc(txt)}</button>`;
+    let corpo;
+    if (le) {   // o estado: aguardando a Nio
+      corpo = `<div class="fc-sv-espera"><b>⏳ Aguardando liberação da Nio</b> — pedido enviado ${esc(NG.fmtData(le.desde))}; volta para você ${esc(NG.fmtData(le.ate))}. A Mari não cobra o cliente enquanto isso.</div>
+        <div class="fc-op-bts">${aAcomp}${B('liberou', 'A Nio liberou → consultar o portal', true)}${B('mais', 'Ainda não respondeu: +2 dias')}</div>
+        <span class="nota-campo">A Nio recusou? Saída › Fachada não atendida.</span>`;
+    } else {
+      const passos = (dz.passos || []).map((t) => `<li>${esc(t)}</li>`).join('');
+      corpo = `<div class="fc-sv-o ${dz.cor === 'bad' ? 'bad' : 'warn'}"><b>${esc(dz.rot)}</b><ol>${passos}</ol></div>
+        <div class="fc-op-bts">${url ? `<a class="btn btn-sm btn-acc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (mapa) e a foto da fachada">1 · Pedir liberação (formulário) ↗</a>` : ''}${dz.motivoForms ? B('pedido', '2 · Enviei o pedido à Nio') : ''}${aAcomp}${aCob}</div>`;
+    }
+    return { ver, html: linhas + corpo };
   }
   // "Sem viabilidade" já gravado (pela Mari, pela extensão ou à mão), sem consulta nova nesta ficha: o mesmo cruzamento com o DFV.
   function semViabGravada(cond, s) {
     if (!cond || !ehBO() || (fc.op.viab && fc.op.viab.estado === 'pronto')) return '';
-    return semViabFicha(s || {}).html;
+    const c = d.soConversa ? d.conv || {} : d.v || {};
+    return semViabFicha(s || {}, { quando: c.nio_viab_em ? NG.fmtDataHora(c.nio_viab_em) : '' }).html;
   }
   function opPainel(tipo) {
     const bo = ehBO();
@@ -3247,7 +3299,7 @@
             Se ele cancelou, o portal só libera quando a Nio baixar o cancelamento: <b>reconsulte depois</b>. Se o pedido for dele e seguir ativo (outra revenda ou Nio direto), é <b>Saída</b>; na dúvida, fale com o Ricardo.</div>`
         : o.s.resultado === 'negado_antifraude' ? '<div class="fc-aviso bad"><b>Negado por critérios antifraude</b>: a Nio vê Nio neste endereço. <b>Nunca consulte outro CPF.</b> Pergunte ao cliente se a Nio é dele (ou de alguém da casa) ou de outro morador que se mudou e grave na ficha › Crédito (Antifraude).</div>'
         : '';
-      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}${oQueFazer}${sv ? sv.html : ''}
+      corpo = `${sv ? '' : `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>`}${sv ? sv.html : ''}${sv ? telaP.replace('<details class="fc2-tela" open>', '<details class="fc2-tela">') : telaP}${oQueFazer}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead && !o.gravado ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
@@ -3438,14 +3490,14 @@
       corpo = `<div class="fc2-v-res"><span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? `<b>até ${esc(c.nio_viab_velocidade)}</b>` : ''}${quando ? `<small class="apagado">${esc(NG.fmtDataHora(quando))}</small>` : ''}</div>
         <div class="fc2-v-end" title="${esc(endTxt)}">${esc(endTxt || '—')}</div>
         <div class="fc2-v-fazer ${rc || (dec && dec !== 'viavel') ? 'warn' : ''}">${fazer}</div>
-        ${semViabGravada(dec !== 'viavel' && (r === 'sem_viabilidade' || ['elegivel_200m', 'sem_cobertura'].includes(dec)), rc ? { endereco: { resolvido: rc.portal } } : {})}
+        ${semViabGravada(!!liberacaoEspera() || (dec !== 'viavel' && (r === 'sem_viabilidade' || ['elegivel_200m', 'sem_cobertura'].includes(dec))), rc ? { endereco: { resolvido: rc.portal } } : {})}
         ${opPainel('viab')}${dec === 'viavel' ? '' : regMaoConv('viab')}${dfvBloco()}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
         ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
         ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
-        ${!conv ? semViabGravada(r === 'sem_viabilidade' && !NG.portalViavel(v) && !fimV, {}) : ''}
+        ${!conv ? semViabGravada(!fimV && (!!liberacaoEspera() || (r === 'sem_viabilidade' && !NG.portalViavel(v))), {}) : ''}
         ${!conv ? dfvBloco() : ''}
         ${fonte(conv ? 'Mari / portal' : v.nio_viab_origem === 'manual' ? 'registrada à mão (portal PAP)' : v.nio_viab_origem ? `portal PAP · ${v.nio_viab_origem}` : 'portal PAP')}
         ${fimV ? '' : opPainel('viab')}
@@ -4913,6 +4965,7 @@
     }   // 15/11: quadro "Handoff da Mari"
     if (a === 'fc-etapa') { const k = b.dataset.k; fc.etapa = fc.etapa === k || b.closest('.fc-pop') ? null : k; fc.etapaX = !fc.etapa; if (fc.etapa) { fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; } render(); return; }
     if (a === 'fc-op') { rodarOp(b.dataset.t); return; }
+    if (a === 'lib-acao') { b.disabled = true; liberacaoAcao(b.dataset.acao).finally(() => { if (b.isConnected) b.disabled = false; }); return; }
     if (a === 'fc-os-ler') { abrirOsModal(); return; }
     if (a === 'fc-op-reg') {
       const r = b.dataset.r;

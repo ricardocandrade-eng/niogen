@@ -269,6 +269,14 @@ ok(cr.unidade_fachada(['', 'Casa A', 'Casa B']) == 'Casa A', 'fachada: empresta 
 ok(cr.unidade_fachada([]) is None, 'fachada: lista vazia → nenhuma (segue parando)')
 ok(cr.escolher_opcao(['Casa A'], 'Casa 1') is None, 'caso 16/11: "Casa 1" nunca vira "Casa A" sozinho (só a fachada empresta)')
 
+# 8. 20/11 (Cintia L-219) — "Viabilidade parcial · tratamento especial · cadastro do endereço": marca, nunca é "viável"
+PARCIAL = {'titulo': 'Viabilidade parcial', 'texto': 'Endereço com tratamento especial. Será necessário efetuar o cadastro do endereço.', 'botoes': ['Continuar', 'Voltar']}
+o = {}; cr.marca_cadastro(o, PARCIAL)
+ok(o.get('cadastro_endereco') is True, 'viabilidade parcial → cadastro_endereco (vai ao formulário da Nio)')
+o = {}; cr.marca_cadastro(o, {'titulo': 'Viabilidade', 'texto': 'Endereço sem viabilidade técnica', 'botoes': ['Voltar']})
+ok('cadastro_endereco' not in o, 'sem viabilidade comum → não marca cadastro')
+ok(bool(cr.RE_CADASTRO_END.search('Viabilidade parcial Endereço disponível com tratamento especial')), 'modal parcial com "disponível" no texto → o Continuar segue proibido')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')

@@ -3819,3 +3819,17 @@ button.fc-id:hover { color: inherit; }
 .fc-corrigir > summary::-webkit-details-marker { display: none; }
 .fc-corrigir[open] > summary { opacity: .7; }
 .fc-corrigir > .fc-op-bts { margin-top: 6px; }
+
+/* 20/11 (L-219, Ricardo: "Portal: Sem viabilidade · DFV: Fachada viável e em seguida as orientações"): o bloco da ficha */
+.fc-sv { display: flex; flex-direction: column; border: 1px solid #1D232B; border-radius: 8px; overflow: hidden; margin: 6px 0; }
+.fc-sv-l { display: grid; grid-template-columns: 64px auto minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px 10px; }
+.fc-sv-l + .fc-sv-l { border-top: 1px solid #1A2028; }
+.fc-sv-k { font-size: 12px; font-weight: 600; color: #8D97A3; text-transform: uppercase; letter-spacing: .05em; }
+.fc-sv-l small { font-size: 12px; color: #AEB7C2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.fc-sv-o { margin: 6px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #5C4A1E; background: rgba(240, 180, 60, .08); font-size: 13px; color: #E9EDF3; }
+.fc-sv-o.bad { border-color: #5A2B2B; background: rgba(244, 112, 103, .08); }
+.fc-sv-o > b { display: block; margin-bottom: 4px; color: #F2CC6B; }
+.fc-sv-o.bad > b { color: #FF8A8A; }
+.fc-sv-o ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45; }
+.fc-sv-espera { margin: 6px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #2A3F5C; background: rgba(88, 150, 230, .08); font-size: 13px; color: #E9EDF3; line-height: 1.45; }
+@media (max-width: 560px) { .fc-sv-l { grid-template-columns: 56px auto; } .fc-sv-l small { grid-column: 1 / -1; white-space: normal; } }

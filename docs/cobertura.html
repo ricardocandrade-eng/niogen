@@ -26,10 +26,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=201126-14">
+<link rel="stylesheet" href="assets/app.css?v=201126-15">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=201126-13"></script>
+<script src="assets/app.js?v=201126-15"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/novavenda.js?v=131126-17"></script>
 <style>
@@ -389,9 +389,9 @@
     else {
       const car = `${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
       const sit = s.resultado === 'complemento_fora_lista' ? situacaoUnidade(s) : '';
-      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: ['Sem viabilidade', 'bad'], rua_divergente: ['Outra rua', 'warn'],
+      const R = { viavel: ['Viável', 'ok'], sem_viabilidade: s.cadastro_endereco ? ['Viabilidade parcial', 'warn'] : ['Sem viabilidade', 'bad'], rua_divergente: ['Outra rua', 'warn'],
         complemento_fora_lista: ['escolher', 'ambiguo'].includes(sit) ? ['Escolha a unidade', 'info'] : ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
-      const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
+      const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.cadastro_endereco ? `a Nio precisa cadastrar o endereço · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
       p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1]);
     }
     // 2 · DFV
@@ -500,7 +500,7 @@
     if (portal && portal.estado === 'erro') lp = `Portal: não respondeu (${portal.erro || 'sem resposta'})`;
     else if (portal && portal.estado === 'pronto') {
       if (s.resultado === 'viavel') lp = `Portal: ✅ viável${s.velocidade ? ` (até ${s.velocidade})` : ''}${s.unidade_a_confirmar ? ` — unidade a confirmar (${predioTxt(s)})` : ''}`;
-      else if (s.resultado === 'sem_viabilidade') lp = 'Portal: ❌ sem viabilidade';
+      else if (s.resultado === 'sem_viabilidade') lp = s.cadastro_endereco ? 'Portal: ⚠️ viabilidade parcial — a Nio precisa cadastrar o endereço' : 'Portal: ❌ sem viabilidade';
       else if (s.resultado === 'complemento_fora_lista') {
         const sit = situacaoUnidade(s);
         lp = sit === 'escolher' ? `Portal: pede a unidade — ${predioTxt(s)} no endereço`
@@ -608,9 +608,10 @@
       // o formulário vem primeiro (pedir a liberação da fachada), com o link para acompanhar a resposta da Nio.
       const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
       const ruaD = dfv && dfv.r && dfv.r.fachada ? dfv.r.fachada.logradouro : '';
-      const dz = NG.semViabDecisao(v, { ruaPortal: ruaP, ruaDfv: ruaD });
+      const dz = NG.semViabDecisao(v, { ruaPortal: ruaP, ruaDfv: ruaD, cadastro: !!s.cadastro_endereco });   // 20/11: "Viabilidade parcial"
       html = caixa(dz.rot, dz.cor, dz.txt, v ? `${carPortal} · ${carDfv}` : carPortal);
-      acoesDec = dz.chave === 'conferir_fachada' ? [BT.liberacao('fachada'), '<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.mapa, BT.acompanhar()]
+      acoesDec = dz.chave === 'cadastro_endereco' ? [BT.liberacao('fachada'), BT.acompanhar(), BT.mapa]
+        : dz.chave === 'conferir_fachada' ? [BT.liberacao('fachada'), '<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.mapa, BT.acompanhar()]
         : dz.chave === 'elegivel_200m' ? [BT.liberacao('liberacao'), BT.mapa, BT.acompanhar(), BT.padrao]
           : dz.chave === 'sem_cobertura' ? [BT.padrao]
             : [BT.mapa, '<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.padrao];
