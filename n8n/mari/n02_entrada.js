@@ -28,7 +28,7 @@ const origemDoTexto = (t) => {
   const s = String(t || '');
   if (/\(IG\)|vim pelo instagram/i.test(s)) return 'instagram';
   if (/\(FB\)|vim pela p[áa]gina do facebook/i.test(s)) return 'facebook';
-  // 20/11: LP dharmatelecom.com.br/nio-internet/ (destino do Google Ads) — todo botão termina em "(GADS)" ou "(GADS-PJ)".
+  // 20/11: LP /nio-internet/ do Google Ads — todo botão termina em "(GADS)" ou "(GADS-PJ)".
   if (/\(GADS(-PJ)?\)|vim pelo google/i.test(s)) return 'google_ads';
   if (/vi o an[úu]ncio/i.test(s)) return 'meta_ads';
   return null;
