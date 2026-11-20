@@ -1,5 +1,5 @@
 // NIOGEN | n8n/mari/n02_entrada.js — nó "2 · Entrada" do workflow mari_principal (04/11/2026; resolvida → 2v em 05/11, prompt 18;
-//   origem pela mensagem pronta (IG)/(FB)/anúncio em 06/11, 0033)
+//   origem pela mensagem pronta (IG)/(FB)/anúncio em 06/11, 0033; (GADS)/(GADS-PJ) da LP do Google em 20/11)
 // Normaliza a entrada (rota de teste ou webhook do Chatwoot), aplica o interruptor de modo
 // (staticData._modoMari = 'teste' | 'chatwoot'), comandos admin da rota de teste, detecção de mídia
 // e rate limit. Sem texto de negócio e sem segredo.
@@ -28,6 +28,8 @@ const origemDoTexto = (t) => {
   const s = String(t || '');
   if (/\(IG\)|vim pelo instagram/i.test(s)) return 'instagram';
   if (/\(FB\)|vim pela p[áa]gina do facebook/i.test(s)) return 'facebook';
+  // 20/11: LP dharmatelecom.com.br/nio-internet/ (destino do Google Ads) — todo botão termina em "(GADS)" ou "(GADS-PJ)".
+  if (/\(GADS(-PJ)?\)|vim pelo google/i.test(s)) return 'google_ads';
   if (/vi o an[úu]ncio/i.test(s)) return 'meta_ads';
   return null;
 };
