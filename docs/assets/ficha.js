@@ -4330,7 +4330,6 @@
     }
     if (k === 'bio' && v) return [v.biometria_link_enviado_em && v.biometria_status !== 'validada' ? `link ${dt(v.biometria_link_enviado_em)}` : null];
     if (k === 'os' && v) return [v.nio_os_em ? `aberta ${dt(v.nio_os_em)}` : null, v.nio_os && v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
-    if (k === 'inst' && v) return [v.instalado_em ? null : v.instalacao_agendada_para ? `agendada ${dt(v.instalacao_agendada_para)}` : null];
     return [];
   }
   function jornadaHtml(passos, at) {
