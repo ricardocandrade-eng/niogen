@@ -78,6 +78,222 @@
           },
           "conditions": [
             {
+              "id": "38568be8-0ace-5951-b2d4-14d67023fe55",
+              "leftValue": "={{ $json.tipo === 'midia' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3m · Mídia?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        360,
+        260
+      ],
+      "id": "66ea90fb-42a5-591c-bd2f-98260a488de4"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://zlrfwbkblytnokuexjti.supabase.co/storage/v1/object/midia_conversas/' + $json.corpo.caminho }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "name": "3m1 · Baixar do bucket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        260
+      ],
+      "id": "f2a3e489-8df1-59a0-97b8-d6e8fe0112f7",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// 3m1b · Nome do arquivo (0333) — o anexo vai ao Chatwoot com o nome e o tipo que o time escolheu (documento chega com nome).\nconst a = $('3m · Mídia?').item.json;\nconst c = a.corpo || {};\nconst it = { json: { ...a }, binary: $input.item.binary || {} };\nif (it.binary.data) {\n  it.binary.data.fileName = String(c.nome || '').trim() || ('arquivo' + (/pdf/.test(c.mime || '') ? '.pdf' : ''));\n  if (c.mime) it.binary.data.mimeType = c.mime;\n} else {\n  it.json.erroLeitura = 'não baixei o arquivo do bucket: ' + JSON.stringify($json.error || $json).slice(0, 200);\n}\nreturn it;\n"
+      },
+      "name": "3m1b · Nome do arquivo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        260
+      ],
+      "id": "cc52d4f4-a9dd-5daf-a173-9892d81899d9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "0d701e8f-cf18-52c4-8925-e49946f7513b",
+              "leftValue": "={{ $json.usuario === true && !$json.erroLeitura }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3m2 · Usuário (mídia)?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        260
+      ],
+      "id": "6e173b41-a73e-53d1-9ef4-68ede775817d"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('3m · Mídia?').item.json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "attachments[]",
+              "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "content",
+              "value": "={{ $('3m · Mídia?').item.json.corpo.content || '' }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "parameterType": "formData",
+              "name": "private",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "3m3u · Chatwoot anexo (usuário)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        200
+      ],
+      "id": "fd95af93-da1c-512f-a9cc-e9a99a700838",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ti7TJGxc6OMDWmkb",
+          "name": "Chatwoot Nio"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('3m · Mídia?').item.json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "attachments[]",
+              "inputDataFieldName": "data"
+            },
+            {
+              "parameterType": "formData",
+              "name": "content",
+              "value": "={{ $('3m · Mídia?').item.json.corpo.content || '' }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "message_type",
+              "value": "outgoing"
+            },
+            {
+              "parameterType": "formData",
+              "name": "private",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "3m3b · Chatwoot anexo (bot Mari)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        340
+      ],
+      "id": "66457e4f-57d1-564c-a26a-133b49d57c38",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "rMBPTco4UoFYPu0b",
+          "name": "Chatwoot Nio — Mari bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
               "id": "4bb9418e-933d-5ff1-b41f-577da6688e45",
               "leftValue": "={{ $json.tipo === 'etiquetas' }}",
               "rightValue": "",
@@ -272,7 +488,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// 6 · Resultado — ok = a API do Chatwoot respondeu sem erro. O id vem do item que entrou no 4 (ou do 3b, se a leitura falhou).\nlet base = null;\ntry { base = $('4 · Usuário?').item.json; } catch (e) { base = null; }\nif (!base || $json.erroLeitura) base = $json;\nconst erro = $json.erroLeitura || ($json.error ? JSON.stringify($json.error).slice(0, 400) : null);\nreturn { json: { p_id: base.id, p_ok: !erro, p_erro: erro } };\n"
+        "jsCode": "// 6 · Resultado — ok = a API do Chatwoot respondeu sem erro. O id vem do item que entrou no 4 (ou do 3b, se a leitura falhou).\n// 0333: a mídia vem do ramo 3m (o 4 · Usuário? não roda para ela).\nlet base = null;\ntry { base = $('4 · Usuário?').item.json; } catch (e) { base = null; }\nif (!base) { try { base = $('3m · Mídia?').item.json; } catch (e) { base = null; } }\nif (!base || $json.erroLeitura) base = $json;\nconst erro = $json.erroLeitura || ($json.error ? JSON.stringify($json.error).slice(0, 400) : null);\nreturn { json: { p_id: base.id, p_ok: !erro, p_erro: erro } };\n"
       },
       "name": "6 · Resultado",
       "type": "n8n-nodes-base.code",
@@ -343,7 +559,87 @@
       "main": [
         [
           {
+            "node": "3m · Mídia?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m · Mídia?": {
+      "main": [
+        [
+          {
+            "node": "3m1 · Baixar do bucket",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "3 · Etiquetas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m1 · Baixar do bucket": {
+      "main": [
+        [
+          {
+            "node": "3m1b · Nome do arquivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m1b · Nome do arquivo": {
+      "main": [
+        [
+          {
+            "node": "3m2 · Usuário (mídia)?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m2 · Usuário (mídia)?": {
+      "main": [
+        [
+          {
+            "node": "3m3u · Chatwoot anexo (usuário)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "3m3b · Chatwoot anexo (bot Mari)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m3u · Chatwoot anexo (usuário)": {
+      "main": [
+        [
+          {
+            "node": "6 · Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3m3b · Chatwoot anexo (bot Mari)": {
+      "main": [
+        [
+          {
+            "node": "6 · Resultado",
             "type": "main",
             "index": 0
           }

@@ -44,7 +44,8 @@ ROTA = 'niogen-meta-ads-coleta'
 
 CAMPOS_INSIGHTS = ','.join(['date_start', 'ad_id', 'ad_name', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                             'spend', 'impressions', 'reach', 'clicks', 'actions'])
-CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}'
+# 20/11 (0331, prévia do anúncio na conversa e na ficha): + o criativo (arte e texto). As URLs da Meta expiram: a coleta renova.
+CAMPOS_ADS = 'id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name},creative{id,image_url,thumbnail_url,body,title,asset_feed_spec{bodies,titles},object_story_spec{link_data{message,name}}}'
 CAMPOS_POSIC = ','.join(['date_start', 'adset_id', 'adset_name', 'campaign_id', 'campaign_name',
                          'spend', 'impressions', 'clicks', 'inline_link_clicks', 'actions'])
 # 0078: card "Saldo em aberto" (sem dados do cartão). 0129 (12/11): + account_status/disable_reason → selo "Meta" do menu acusa
@@ -137,6 +138,15 @@ def build(ids):
                      "p_ciclo: $('9b · Meta ciclo de cobrança').first().json }) }}"),
         'options': {'timeout': 20000}}, 2400, 100, credentials=sb_cred, onError='continueRegularOutput')
 
+    # 20/11 (0331): a arte e o texto de cada anúncio (vieram no nó 3) → meta_ads_anuncios. No fim e sem travar a coleta: se falhar,
+    # o desempenho e o saldo já foram gravados.
+    add('11 · Supabase criativos', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': f'{SB}/rest/v1/rpc/meta_ads_gravar_criativos',
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ p_anuncios: $('3 · Meta anúncios').first().json.data || [] }) }}",
+        'options': {'timeout': 20000}}, 2640, 100, credentials=sb_cred, onError='continueRegularOutput')
+
     ligacoes = [
         ('1 · A cada 15 min', 0, '2 · Meta insights'),
         ('1w · Rodar agora (teste)', 0, '2 · Meta insights'),
@@ -149,6 +159,7 @@ def build(ids):
         ('8 · Supabase conjuntos', 0, '9 · Meta saldo'),
         ('9 · Meta saldo', 0, '9b · Meta ciclo de cobrança'),
         ('9b · Meta ciclo de cobrança', 0, '10 · Supabase saldo'),
+        ('10 · Supabase saldo', 0, '11 · Supabase criativos'),
     ]
     nomes = {n['name'] for n in nodes}
     conns = {}

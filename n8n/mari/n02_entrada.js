@@ -139,6 +139,19 @@ if (ex('1 · Webhook Mari teste')) {
     }
     return cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
   }
+  // 20/11 (0334): "Mensagem atualizada" do Chatwoot (entregue/lida/falhou) → só o status da mensagem (tiques ✓✓ na conversa).
+  if (b.event === 'message_updated') {
+    const pu = b.payload || b;
+    const mu = pu.message || pu;
+    const cu = pu.conversation || {};
+    const cidU = String(cu.id || mu.conversation_id || pu.conversation_id || '');
+    const stU = statusDe(cu, cidU);
+    if (!stU || mu.private || !(mu.id || pu.id)) return [];
+    stU.p_msg = { id: Number(mu.id ?? pu.id), wamid: String(mu.source_id || pu.source_id || '') || null, status: mu.status || pu.status || null,
+      dir: (mu.message_type ?? pu.message_type) === 0 || (mu.message_type ?? pu.message_type) === 'incoming' ? 'in' : 'out',
+      texto: String(mu.content || pu.content || '').slice(0, 300), em: mu.created_at ?? pu.created_at ?? null };
+    return [{ json: { soStatus: true, cwStatus: stU } }];
+  }
   if (b.event && b.event !== 'message_created') return [];
 
   const p = b.payload || b;
@@ -151,6 +164,11 @@ if (ex('1 · Webhook Mari teste')) {
   if (!convId) return [];
   const cwStatus = statusDe(conv, convId);
   if (msg.private) return cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
+  // 20/11 (0334): a mensagem (id do Chatwoot, wamid, status) vai junto com o status da conversa → mari_msg_cw (tiques e citar)
+  if (cwStatus && (msg.id || p.id)) {
+    cwStatus.p_msg = { id: Number(msg.id ?? p.id), wamid: String(msg.source_id || p.source_id || '') || null, status: msg.status || p.status || null,
+      dir: entrante ? 'in' : 'out', texto: String(msg.content || p.content || '').slice(0, 300), em: msg.created_at ?? p.created_at ?? null };
+  }
 
   // Fala do consultor no Chatwoot (saída, não privada, de um usuário): vira turno 'humano' no histórico da Mari,
   // sem resposta. O eco do envio da própria Mari tem o mesmo formato (mesmo usuário do token) — quem o separa é
@@ -179,15 +197,26 @@ if (ex('1 · Webhook Mari teste')) {
     const tipo = f === 'image' ? 'imagem' : (f === 'audio' || f === 'voice') ? 'audio' : f === 'video' ? 'video' : f === 'location' ? 'local' : f === 'sticker' ? 'figurinha' : 'arquivo';
     const tam = Number(a.file_size) || null;
     const url = String(a.data_url || '');
+    // 20/11 (prompt "conversa sem Chatwoot", itens 3 e 6): a localização guarda só o que o cliente mandou (coordenadas e o nome do
+    // lugar) e a figurinha é baixada como imagem (webp) para aparecer na conversa do NIOGEN.
+    if (tipo === 'local') {
+      const num = (x) => (x === null || x === undefined || x === '' || Number.isNaN(Number(x)) ? null : Number(x));
+      return { n: i, tipo, lat: num(a.coordinates_lat), lng: num(a.coordinates_long), nome: String(a.fallback_title || '').trim().slice(0, 200) || null, baixar: false };
+    }
     return { n: i, tipo, mime: String(a.content_type || '') || null, ext: String(a.extension || '').replace(/[^a-z0-9]/gi, '').toLowerCase() || null,
       tamanho: tam, url: /^https:\/\//.test(url) ? url : null, cw_transcricao: String(a.transcribed_text || '').trim() || null,
-      baixar: ['audio', 'imagem'].includes(tipo) && /^https:\/\//.test(url) && (!tam || tam <= LIM) };
-  }).filter((a) => a.tipo !== 'local');
+      baixar: ['audio', 'imagem', 'figurinha'].includes(tipo) && /^https:\/\//.test(url) && (!tam || tam <= LIM) };
+  });
   const msgId = String(msg.id ?? p.id ?? Date.now());
   const ca = msg.content_attributes || p.content_attributes || {};
   let texto = textoDoBotao(msg.content || p.content || '', ca.button_reply_id || ca.id || (ca.interactive && ca.interactive.id));
   if (ft === 'image') texto = ['[Imagem enviada pelo cliente]', texto].filter(Boolean).join('\n');
-  else if (ft === 'location') texto = ['[Localização enviada pelo cliente]', texto].filter(Boolean).join('\n');
+  else if (ft === 'location') {
+    // 20/11: a Mari entende a localização (o nome do lugar e as coordenadas vão no texto) e segue a conversa
+    const lc = anexos.find((x) => x.tipo === 'local') || {};
+    const det = [lc.nome, lc.lat !== null && lc.lat !== undefined && lc.lng !== null && lc.lng !== undefined ? `${lc.lat}, ${lc.lng}` : null].filter(Boolean).join(' · ');
+    texto = [`[Localização enviada pelo cliente${det ? `: ${det}` : ''}]`, texto].filter(Boolean).join('\n');
+  }
   else if (ft && !texto) texto = `[MIDIA:${MIDIA_SO.has(ft) ? ft : 'attachment'}]`;
   if (!texto) return soStatus;
   entrada = {
@@ -198,6 +227,9 @@ if (ex('1 · Webhook Mari teste')) {
     cwStatus,
     anexos: anexos.length ? anexos : null,
     baixarMidia: anexos.some((a) => a.baixar),
+    // 20/11: localização sem nada a baixar já vai como mídia do turno (a cadeia 2b não roda)
+    ...(anexos.some((a) => a.baixar) || !anexos.some((a) => a.tipo === 'local') ? {}
+      : { midia: anexos.filter((a) => a.tipo === 'local').map((a) => ({ tipo: 'local', lat: a.lat, lng: a.lng, nome: a.nome })) }),
     msgId,
   };
   if (!/^\d{10,15}$/.test(entrada.telefone)) return soStatus;

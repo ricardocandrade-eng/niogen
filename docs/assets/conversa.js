@@ -138,8 +138,10 @@
           <span class="cvp-ajuda" data-ajuda></span>
         </div>
         <div class="cvp-sug" data-sug hidden aria-live="polite"></div>
-        <div class="cvp-caixa"><span class="cvp-quem-ico" data-quem hidden></span><button type="button" class="cvp-emo-bt" data-cv="emoji" aria-label="Emojis" aria-expanded="false" title="Emojis">😊</button><div class="cvp-emo" data-emo hidden></div><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
-          <button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
+        <div class="cvp-cita" data-cita hidden></div>
+        <div class="cvp-anexo" data-anexo hidden></div>
+        <div class="cvp-caixa vazia"><span class="cvp-quem-ico" data-quem hidden></span><button type="button" class="cvp-clip" data-cv="clip" aria-label="Anexar foto ou documento" aria-expanded="false" title="Anexar foto ou documento">📎</button><div class="cvp-clip-menu" data-clipmenu hidden><button type="button" data-cv="clip-foto">📷 Foto</button><button type="button" data-cv="clip-doc">📄 Documento</button></div><input type="file" data-arq="imagem" accept="image/jpeg,image/png,image/webp" hidden><input type="file" data-arq="arquivo" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,application/pdf" hidden><button type="button" class="cvp-emo-bt" data-cv="emoji" aria-label="Emojis" aria-expanded="false" title="Emojis">😊</button><div class="cvp-emo" data-emo hidden></div><textarea data-cv-txt rows="1" placeholder="Digite uma mensagem" aria-label="Mensagem"></textarea>
+          <button type="button" class="cvp-mic" data-cv="mic" aria-label="Gravar áudio" title="Gravar áudio">🎤</button><button type="button" class="btn btn-acc cvp-enviar" data-cv="enviar" aria-label="Enviar">Enviar</button></div>
       </div>
     </section>`;
     const $ = (s) => el.querySelector(s);
@@ -172,7 +174,7 @@
     const qTurnosDe = (id, ult) => (ult
       ? NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
       : NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400));
-    const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem']).order('criada_em', { ascending: false }).limit(200);
+    const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem', 'midia']).order('criada_em', { ascending: false }).limit(200);
     // 11/11 (Live lenta): leve = a atualização de 4 s. Antes cada rodada baixava de novo as 400 mensagens, as 200 ações e a
     // v_jornada; agora traz só as mensagens novas (depois da última), o cabeçalho e as ações. A carga completa fica para a
     // abertura, a volta à aba e depois de uma ação. A linha da jornada vem da carga compartilhada (NG.jornadaLinha).
@@ -194,14 +196,28 @@
       // 12/11 (0146): voz e imagem que a Mari mandou (mari_midia_envios) — na mesma rodada paralela (regra 19)
       const qEnvios = NG.sb.from('mari_midia_envios').select('id, tipo, texto, caminho, imagem_url, passo, origem, created_at')
         .eq('conversa_id', id).eq('ok', true).order('created_at', { ascending: false }).limit(60).then((r) => r, () => ({ data: [] }));
-      const [rc, rt, ra, rr, rtpl, rme] = await Promise.all([
+      // 20/11 (0331, prompt "conversa sem Chatwoot", item 1): o anúncio que o cliente clicou — só na 1ª carga, na mesma rodada paralela
+      // (regra 19); lê do banco o que a coleta da Meta trouxe (nunca a Meta na abertura). Sem referral, não aparece.
+      const qAnuncio = ult || st.anuncio !== undefined ? Promise.resolve(null)
+        : NG.sb.from('v_mari_conversa_anuncio').select('ad_nome, titulo, anuncio_texto, titulo_ad, arte_url, arte_miniatura, campanha_nome, referral_em, source_url')
+          .eq('conversa_id', id).maybeSingle().then((r) => (r && !r.error ? r.data || null : null), () => null);
+      // 20/11 (0334): status de cada mensagem no Chatwoot (✓ enviada · ✓✓ entregue · ✓✓ azul lida) e o id para citar
+      const qMsgCw = (ult ? NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).gt('atualizado_em', st.msgCwAte || ult)
+        : NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).order('criado_em', { ascending: false }).limit(300))
+        .then((r) => (r && !r.error ? r.data || [] : null), () => null);
+      const tMsgCw = new Date().toISOString();
+      const [rc, rt, ra, rr, rtpl, rme, ran, rmc] = await Promise.all([
         NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
         qTurnos,
         qAcoes(id),
         rapidas(),
         templates(),
         qEnvios,
+        qAnuncio,
+        qMsgCw,
       ]);
+      if (rmc) { if (!st.msgCw || !ult) st.msgCw = new Map(); rmc.forEach((m) => st.msgCw.set(m.cw_msg_id, m)); st.msgCwAte = tMsgCw; }
+      if (!ult && st.anuncio === undefined) st.anuncio = ran || null;
       if (!st.vivo || meu !== st.seq) return;
       if (rc.error || !rc.data) {
         if (ult) return;   // falha passageira na atualização leve: mantém o que está na tela
@@ -379,11 +395,12 @@
         const em = new Date(t.created_at).getTime();
         return midiaCad.some((e) => e.passo === p && Math.abs(e.em - em) < 120000);
       };
+      const comMidia = (t) => Array.isArray(t.midia) && t.midia.length > 0;
       d.turnos.forEach((t) => {
         const txt = textoTurno(t.texto);
-        if (!txt || virouMidia(t)) return;
+        if ((!txt && !comMidia(t)) || virouMidia(t)) return;
         if (t.papel === 'sistema') { its.push({ em: t.created_at, tipo: 'sis', txt: txt.replace(/^\[|\]$/g, '') }); return; }
-        its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: t.papel === 'lead' && Array.isArray(t.midia) ? t.midia : null,
+        its.push({ em: t.created_at, tipo: t.papel === 'lead' ? 'cli' : t.papel === 'mari' ? 'mari' : 'hum', txt, midia: comMidia(t) ? t.midia : null,
           quem: t.papel === 'mari' ? (t.tags && t.tags.backoffice === 'sopro' ? 'Mari · soprada pelo time' : t.tags && t.tags.backoffice ? 'Mari · NIOGEN' : 'Mari') : t.papel === 'humano' ? 'Time' : '', tick: t.papel !== 'lead' ? '✓' : '' });
       });
       (d.envios || []).forEach((e) => {
@@ -399,18 +416,58 @@
             erro: a.status === 'erro' ? (a.erro || 'não foi ao Chatwoot') : '' });
           return;
         }
+        // 0333: mídia do time — feita vira turno (com a mídia); até lá, o balão da ação com o nome do arquivo
+        if (a.tipo === 'midia') {
+          if (a.status === 'feita' && d.turnos.some((t) => t.tags && Number(t.tags.acao_id) === a.id)) return;
+          if (a.status === 'cancelada') return;
+          const pm = a.payload || {};
+          const falhouM = ['bloqueada', 'erro'].includes(a.status);
+          its.push({ em: a.criada_em, tipo: 'hum', txt: pm.content || '', quem: 'Você',
+            midia: [{ tipo: pm.tipo_midia || 'arquivo', caminho: pm.caminho, nome: pm.nome, mime: pm.mime, do_time: true }],
+            tick: a.status === 'feita' ? '✓' : falhouM ? '⚠' : '🕓', erro: falhouM ? (a.erro || 'não saiu') : '' });
+          return;
+        }
         // Já virou fala (o motor grava a do time; o resultado grava a da Mari)? Então não repete.
         if (a.status === 'feita' && turnosOut.some((t) => normal(t.texto) === normal(txt) && new Date(t.created_at) >= new Date(new Date(a.criada_em).getTime() - 15000))) return;
         if (a.status === 'cancelada') return;
         const falhou = ['bloqueada', 'erro'].includes(a.status);
         const sop = a.momento === 'sopro';
-        its.push({ em: a.criada_em, tipo: sop ? 'mari' : 'hum', txt, quem: (a.payload || {}).como === 'humano' ? 'Você' : sop ? 'Mari · soprada pelo time' : 'NIOGEN',
+        const ir = (((a.payload || {}).content_attributes) || {}).in_reply_to;   // 0334: resposta citando
+        const citaTxt = ir && st.msgCw && st.msgCw.get(Number(ir)) ? `↩ ${String(st.msgCw.get(Number(ir)).texto || '📎 mídia').slice(0, 140)}` : ir ? '↩ mensagem do cliente' : '';
+        its.push({ em: a.criada_em, tipo: sop ? 'mari' : 'hum', txt, cita: citaTxt, quem: (a.payload || {}).como === 'humano' ? 'Você' : sop ? 'Mari · soprada pelo time' : 'NIOGEN',
           tick: a.status === 'feita' ? '✓' : falhou ? '⚠' : '🕓', erro: falhou ? (a.erro || 'não saiu') : '', reenviar: falhou && (a.payload || {}).como === 'humano' ? txt : '' });
       });
       st.locais.forEach((l) => its.push({ em: l.em, tipo: l.nota ? 'nota' : l.sopro ? 'mari' : 'hum', txt: l.texto, quem: l.nota ? 'Nota privada' : l.sopro ? 'Mari · soprada pelo time' : 'Você',
+        midia: l.midiaLocal ? [l.midiaLocal] : null, cita: l.cita ? `↩ ${l.cita.txt}` : '',
         tick: l.estado === 'erro' ? '⚠' : '🕓', erro: l.estado === 'erro' ? l.erro : '', reenviar: l.estado === 'erro' ? l.texto : '', local: l.id }));
       its.sort((a, b) => new Date(a.em) - new Date(b.em));
+      casarChatwoot(its);
       return its;
+    }
+    function casarChatwoot(its) {
+      if (!st.msgCw || !st.msgCw.size) return;
+      const lista = [...st.msgCw.values()];
+      const usados = new Set();
+      const nt = (t) => normal(String(t || '')).slice(0, 120);
+      its.forEach((x) => {
+        if (!['cli', 'mari', 'hum'].includes(x.tipo) || x.local) return;
+        const dir = x.tipo === 'cli' ? 'in' : 'out';
+        const em = new Date(x.em).getTime();
+        const alvo = nt(x.txt);
+        let melhor = null, dist = 6 * 60000;
+        lista.forEach((m) => {
+          if (m.direcao !== dir || usados.has(m.cw_msg_id)) return;
+          const d = Math.abs(new Date(m.criado_em).getTime() - em);
+          if (d > dist) return;
+          const mt = nt(m.texto);
+          if (alvo ? !(mt && (mt === alvo || alvo.startsWith(mt) || mt.startsWith(alvo))) : !!mt) return;
+          melhor = m; dist = d;
+        });
+        if (!melhor) return;
+        usados.add(melhor.cw_msg_id);
+        x.cw = melhor.cw_msg_id;
+        if (dir === 'out' && melhor.status) x.tick = melhor.status === 'lida' ? '✓✓l' : melhor.status === 'entregue' ? '✓✓' : melhor.status === 'falhou' ? '⚠' : '✓';
+      });
     }
     // ---------- mídia do cliente (0145): player + transcrição, miniatura da foto ----------
     // URLs assinadas de 1 h, num lote só por rodada; só pede o que falta (ou vence em < 5 min). Falhou → não repete por 10 min.
@@ -418,9 +475,10 @@
     async function pedirUrls() {
       if (pedindoUrls || !st.d) return;
       const falta = new Set();
-      [...st.d.turnos, ...(st.d.envios || []).filter((e) => e.tipo === 'voz').map((e) => ({ midia: [{ tipo: 'audio', caminho: e.caminho }] }))]
+      [...st.d.turnos, ...(st.d.envios || []).filter((e) => e.tipo === 'voz').map((e) => ({ midia: [{ tipo: 'audio', caminho: e.caminho }] })),
+        ...(st.d.acoes || []).filter((x) => x.tipo === 'midia' && x.payload && x.payload.caminho).map((x) => ({ midia: [{ tipo: x.payload.tipo_midia, caminho: x.payload.caminho }] }))]
         .forEach((t) => (Array.isArray(t.midia) ? t.midia : []).forEach((m) => {
-        if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
+        if (!m || !m.caminho || !['audio', 'imagem', 'arquivo', 'figurinha'].includes(m.tipo)) return;
         const u = urlsMidia.get(m.caminho);
         if (!u || u.ate < Date.now() + 5 * 60000) falta.add(m.caminho);
       }));
@@ -441,6 +499,27 @@
       midia.forEach((m) => {
         if (m && m.tipo === 'imagem' && m.url && !m.caminho) {   // cartão do plano (público) que a Mari mandou
           partes.push(`<button type="button" class="cvp-foto" data-cv="foto" data-url="${esc(m.url)}" aria-label="Abrir a imagem em tamanho grande"><img src="${esc(m.url)}" alt="Imagem enviada pela Mari" loading="lazy"></button>`);
+          return;
+        }
+        // 20/11 (prompt "conversa sem Chatwoot"): prévia local (ainda subindo), documento, figurinha e localização
+        if (m && m.local) {
+          if (m.tipo === 'imagem') partes.push(`<span class="cvp-foto"><img src="${esc(m.local)}" alt=""></span>`);
+          else if (m.tipo === 'audio') partes.push(`<div class="cvp-audio"><audio controls preload="metadata" src="${esc(m.local)}"></audio></div>`);
+          else partes.push(`<span class="cvp-doc">📄 <b>${esc(m.nome || 'documento')}</b></span>`);
+          return;
+        }
+        if (m && m.tipo === 'local' && (m.lat != null || m.endereco || m.nome)) {
+          const q = m.lat != null && m.lng != null ? `${m.lat},${m.lng}` : (m.endereco || m.nome);
+          partes.push(`<a class="cvp-local" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}" target="_blank" rel="noopener">📍 <span><b>${esc(m.nome || 'Localização')}</b>${m.endereco ? `<small>${esc(m.endereco)}</small>` : ''}<small>abrir no mapa ↗</small></span></a>`);
+          resto = resto.replace('[Localização enviada pelo cliente]', '');
+          return;
+        }
+        if (m && m.caminho && ['arquivo', 'figurinha'].includes(m.tipo)) {
+          const u0 = urlsMidia.get(m.caminho);
+          const url0 = u0 && u0.url ? u0.url : null;
+          if (m.tipo === 'figurinha') partes.push(url0 ? `<img class="cvp-fig" src="${esc(url0)}" alt="figurinha">` : '<span class="cvp-carrega">🙂 figurinha</span>');
+          else partes.push(url0 ? `<a class="cvp-doc" href="${esc(url0)}" target="_blank" rel="noopener">📄 <b>${esc(m.nome || 'documento')}</b><small>abrir ↗</small></a>` : `<span class="cvp-doc">📄 <b>${esc(m.nome || 'documento')}</b><small>carregando…</small></span>`);
+          resto = resto.replace('📎 figurinha', '');
           return;
         }
         if (!m || !m.caminho || !['audio', 'imagem'].includes(m.tipo)) return;
@@ -477,18 +556,32 @@
       document.body.appendChild(ov);
     }
 
+    // 20/11 (0331): "veio do anúncio" — miniatura (clica e abre a arte inteira), nome, 1ª linha do texto e a campanha.
+    const TIQUE_TIT = { '✓': 'enviada', '✓✓': 'entregue no celular do cliente', '✓✓l': 'lida pelo cliente', '🕓': 'enviando', '⚠': 'não saiu' };
+    function anuncioHtml() {
+      const a = st.anuncio;
+      if (!a) return '';
+      const arte = a.arte_miniatura || a.arte_url;
+      const linha1 = String(a.anuncio_texto || a.titulo || '').split(String.fromCharCode(10)).map((x) => x.trim()).find(Boolean) || '';
+      return `<div class="cvp-anuncio">${arte ? `<a href="${esc(a.arte_url || arte)}" target="_blank" rel="noopener" title="Abrir a arte do anúncio"><img src="${esc(arte)}" alt="" loading="lazy" referrerpolicy="no-referrer"></a>` : '<span class="cvp-an-sem">📣</span>'}
+        <div class="cvp-an-t"><small>Veio do anúncio${a.referral_em ? ` · ${esc(NG.fmtDataHora(a.referral_em))}` : ''}</small><b>${esc(a.ad_nome || a.titulo || 'anúncio da Meta')}</b>
+        ${linha1 ? `<span title="${esc(a.anuncio_texto || '')}">${esc(linha1.slice(0, 140))}</span>` : ''}${a.campanha_nome ? `<em>${esc(a.campanha_nome)}</em>` : ''}</div></div>`;
+    }
     function desenharMsgs() {
       const its = itensMsgs();
       let dia = '';
-      const html = its.map((x) => {
+      let html = its.map((x) => {
         const sep = diaRot(x.em) !== dia ? `<div class="cvp-dia"><span>${esc((dia = diaRot(x.em)))}</span></div>` : '';
         if (x.tipo === 'sis') return `${sep}<div class="cvp-b sis">${esc(x.txt)} · ${esc(NG.fmtHora(x.em))}</div>`;
         const md = x.midia ? htmlMidia(x.midia, x.txt) : null;
         const corpo = md ? `${md.html}${md.txt ? `<span class="cvp-t">${fmtWa(md.txt)}</span>` : ''}` : `<span class="cvp-t">${fmtWa(x.txt)}</span>`;
         return `${sep}<div class="cvp-b ${x.tipo}${md ? ' com-midia' : ''}${x.erro ? ' falhou' : ''}${x.tick === '🕓' ? ' pend' : ''}">${x.quem ? `<small class="cvp-quem">${esc(x.quem)}</small>` : ''}${corpo}
-          <span class="cvp-h">${esc(NG.fmtHora(x.em))}${x.tick ? ` <i class="cvp-tick" title="${x.tick === '✓' ? 'entregue ao Chatwoot' : x.tick === '🕓' ? 'enviando' : 'não saiu'}">${x.tick}</i>` : ''}</span>
+          <span class="cvp-h">${esc(NG.fmtHora(x.em))}${x.tick ? ` <i class="cvp-tick${x.tick === '✓✓l' ? ' lida' : ''}" title="${TIQUE_TIT[x.tick] || 'não saiu'}">${x.tick === '✓✓l' ? '✓✓' : x.tick}</i>` : ''}</span>
+          ${x.tipo === 'cli' && x.cw && podeSugerir ? `<button type="button" class="cvp-citar" data-cv="citar" data-cw="${x.cw}" data-txt="${esc(String(x.txt || '📎 mídia').slice(0, 140))}" title="Responder citando esta mensagem" aria-label="Responder citando">↩</button>` : ''}
+          ${x.cita ? `<span class="cvp-cita-no">${esc(x.cita)}</span>` : ''}
           ${x.erro ? `<span class="cvp-erro">${esc(x.erro)}${x.reenviar ? ` · <button type="button" class="link" data-cv="reenviar" data-txt="${esc(x.reenviar)}"${x.local ? ` data-local="${esc(x.local)}"` : ''}>Reenviar</button>` : ''}</span>` : ''}</div>`;
       }).join('') || '<div class="cvp-b sis">Sem mensagens ainda</div>';
+      html = anuncioHtml() + html;
       if (st.sig.msgs === html) return;
       // Áudio tocando: não redesenha (cortaria o áudio). Redesenha quando ele pausar ou acabar.
       if ([...msgs.querySelectorAll('audio')].some((a) => !a.paused && !a.ended)) { st.adiar = true; return; }
@@ -555,15 +648,21 @@
 
     // ---------- enviar (aparece na hora; a caixa esvazia e o cursor fica) ----------
     let nLocal = 0;
+    // 20/11 (prompt "conversa sem Chatwoot", item 5 — o WhatsApp oficial não apaga mensagem enviada): texto do time com valor ou data
+    // pede uma conferida antes de sair (uma linha, sem travar). Errou? Responda citando: "me corrigindo: …".
+    const temValorOuData = (t) => /R\$\s*\d|\b\d{1,3}(?:[.,]\d{2})\b|\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b|\b\d{1,2}\s*(?:h|horas?)\b|(?:^|[^a-zà-ú])(?:segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo|amanhã|amanha)(?![a-zà-ú])/i.test(t);
     function enviar() {
       if (!st.d) return;
+      if (st.anexo) { enviarMidia(); return; }
       const txt = ta.value.trim();
+      if (txt && !st.nota && !st.tpl && temValorOuData(txt) && !window.confirm(`Conferir antes de enviar: esta mensagem tem valor ou data.\n\n${txt.slice(0, 300)}\n\nO WhatsApp não deixa apagar depois. Enviar assim?`)) { ta.focus(); return; }
       if (!st.tpl && !txt) { ta.focus(); return; }
       const item = { id: `l${++nLocal}`, texto: st.tpl ? txt || `[template ${st.tpl}]` : txt, nota: st.nota, sopro: st.sopro && !st.nota, tpl: st.nota || st.sopro ? null : st.tpl, em: new Date().toISOString(), estado: 'enviando',
         op: !st.nota && !st.sopro && o.oportunidade ? o.oportunidade : null };
       if (item.op) o.oportunidade = null;   // só a 1ª mensagem é a da oportunidade
       // ✨ a mensagem saiu de uma sugestão: amarra o envio a ela (medição: % que saiu de sugestão e quanto foi editada)
       if (st.sug && st.sug.escolhida && !item.nota && !item.tpl) { item.sug = { id: st.sug.id, escolhida: st.sug.escolhida }; sugFechar(false); }
+      if (st.cita && !item.nota && !item.sopro && !item.tpl && !item.op) { item.cita = st.cita; st.cita = null; citaDesenhar(); }
       st.locais.push(item);
       ta.value = '';
       st.tpl = null;
@@ -573,8 +672,93 @@
       desenhar();
       st.fila = st.fila.then(() => enviarUm(item));
     }
+    // ---------- 20/11: foto, documento e áudio do time (0333) — sobe no bucket (bo/…) e vai pela fila, como a resposta escrita ----------
+    const LIM_ARQ = 16 * 1024 * 1024;
+    const EXT_MIME = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a',
+      'application/msword': 'doc', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx', 'application/vnd.ms-excel': 'xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx', 'text/plain': 'txt' };
+    const podeMidia = () => podeSugerir && !st.nota && !st.sopro;
+    function anexoDesenhar() {
+      const a = st.anexo, g = st.grav;
+      anexoEl.hidden = !a && !g;
+      if (g) {
+        const seg = Math.floor((Date.now() - g.t0) / 1000);
+        anexoEl.innerHTML = `<div class="cvp-grav"><span class="cvp-grav-ponto"></span><b>Gravando ${Math.floor(seg / 60)}:${String(seg % 60).padStart(2, '0')}</b><span class="cvp-sp"></span>
+          <button type="button" class="btn btn-sm" data-cv="grav-x">Descartar</button><button type="button" class="btn btn-sm btn-acc" data-cv="grav-parar">■ Parar</button></div>`;
+      } else if (a) {
+        const prev = a.tipo === 'imagem' ? `<img src="${esc(a.url)}" alt="">` : a.tipo === 'audio' ? `<audio controls src="${esc(a.url)}"></audio>` : `<span class="cvp-doc">📄 <b>${esc(a.nome)}</b><small>${Math.ceil(a.file.size / 1024)} KB</small></span>`;
+        anexoEl.innerHTML = `<div class="cvp-anx">${prev}<span class="cvp-anx-t">${a.tipo === 'audio' ? 'Áudio pronto: ouça e envie' : 'Escreva uma legenda (opcional) e envie'}</span><span class="cvp-sp"></span><button type="button" class="btn btn-sm" data-cv="anexo-x" aria-label="Tirar o anexo">✕</button></div>`;
+      } else anexoEl.innerHTML = '';
+      ajusta();
+    }
+    function anexoLimpar() { if (st.anexo && st.anexo.url) URL.revokeObjectURL(st.anexo.url); st.anexo = null; anexoDesenhar(); }
+    function escolherArquivo(tipo, f) {
+      if (!f) return;
+      if (!podeMidia()) { NG.toast('Foto, documento e áudio só no modo Responder.', 'bad'); return; }
+      if (f.size > LIM_ARQ) { NG.toast('Arquivo maior que 16 MB: o WhatsApp não aceita.', 'bad'); return; }
+      const mime = f.type || (/\.pdf$/i.test(f.name) ? 'application/pdf' : '');
+      if (!EXT_MIME[mime]) { NG.toast('Tipo de arquivo que o WhatsApp não aceita por aqui (use foto JPG/PNG, PDF, Word, Excel ou texto).', 'bad'); return; }
+      anexoLimpar();
+      st.anexo = { file: f, tipo, mime, nome: f.name || `arquivo.${EXT_MIME[mime]}`, url: URL.createObjectURL(f) };
+      anexoDesenhar();
+      ta.focus();
+    }
+    el.querySelectorAll('input[data-arq]').forEach((inp) => inp.addEventListener('change', () => { escolherArquivo(inp.dataset.arq, inp.files && inp.files[0]); inp.value = ''; }));
+    // Gravar: OGG/Opus (Firefox) ou MP4/AAC (Chrome) — formatos que o WhatsApp aceita. WebM não vai (o WhatsApp recusa).
+    const MIME_GRAV = () => (window.MediaRecorder ? ['audio/ogg;codecs=opus', 'audio/mp4;codecs=mp4a.40.2', 'audio/mp4'].find((m) => MediaRecorder.isTypeSupported(m)) : null);
+    async function gravarIniciar() {
+      if (!podeMidia()) { NG.toast('Áudio só no modo Responder.', 'bad'); return; }
+      const mime = MIME_GRAV();
+      if (!mime) { NG.toast('Este navegador grava num formato que o WhatsApp não aceita. Atualize o Chrome (ou use o Firefox).', 'bad'); return; }
+      let stream;
+      try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch (e) { NG.toast('Sem acesso ao microfone: libere no cadeado da barra de endereço.', 'bad'); return; }
+      anexoLimpar();
+      const rec = new MediaRecorder(stream, { mimeType: mime });
+      const partes = [];
+      rec.ondataavailable = (ev) => { if (ev.data && ev.data.size) partes.push(ev.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const g = st.grav; st.grav = null; clearInterval(g && g.timer);
+        if (!g || g.descartar || !partes.length) { anexoDesenhar(); return; }
+        const base = mime.split(';')[0];
+        const blob = new Blob(partes, { type: base });
+        if (blob.size > LIM_ARQ) { NG.toast('Áudio longo demais (mais de 16 MB).', 'bad'); anexoDesenhar(); return; }
+        st.anexo = { file: blob, tipo: 'audio', mime: base, nome: `audio.${EXT_MIME[base] || 'ogg'}`, url: URL.createObjectURL(blob) };
+        anexoDesenhar();
+      };
+      st.grav = { rec, t0: Date.now(), timer: setInterval(anexoDesenhar, 500) };
+      rec.start();
+      anexoDesenhar();
+    }
+    function gravarParar(descartar) { const g = st.grav; if (!g) return; g.descartar = !!descartar; try { g.rec.stop(); } catch (e) { st.grav = null; anexoDesenhar(); } }
+    async function enviarMidia() {
+      const a = st.anexo;
+      if (!a || !st.d) return;
+      if (!podeMidia()) { NG.toast('Foto, documento e áudio só no modo Responder.', 'bad'); return; }
+      const legenda = a.tipo === 'audio' ? '' : ta.value.trim();
+      const item = { id: `l${++nLocal}`, texto: legenda, em: new Date().toISOString(), estado: 'enviando', midiaLocal: { tipo: a.tipo, local: a.url, nome: a.nome } };
+      st.locais.push(item);
+      st.anexo = null; ta.value = ''; anexoDesenhar(); st.descer = true; desenhar();
+      st.fila = st.fila.then(async () => {
+        const caminho = `bo/${o.conversaId}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${EXT_MIME[a.mime] || 'bin'}`;
+        const up = await NG.sb.storage.from('midia_conversas').upload(caminho, a.file, { contentType: a.mime, upsert: false });
+        const r = up.error ? { error: up.error } : await NG.sb.rpc('backoffice_midia', { p_conversa: o.conversaId, p_caminho: caminho, p_tipo: a.tipo, p_mime: a.mime, p_nome: a.nome, p_legenda: legenda || null });
+        if (!st.vivo) return;
+        if (r.error) { item.estado = 'erro'; item.erro = NG.msgErro(r.error); NG.toast(item.erro, 'bad'); }
+        else { item.acao_id = r.data && r.data.acao_id; if (r.data && r.data.assumiu) NG.toast('Conversa assumida: a Mari calou', 'ok'); if (o.aoMudar) o.aoMudar(r.data); }
+        desenharMsgs();
+        setTimeout(() => carregar(), 1500);
+      });
+    }
+    const citaEl = el.querySelector('[data-cita]');
+    function citaDesenhar() {
+      citaEl.hidden = !st.cita;
+      citaEl.innerHTML = st.cita ? `<div class="cvp-cita-bar"><span><small>Respondendo a</small>${esc(st.cita.txt)}</span><button type="button" class="btn btn-sm" data-cv="cita-x" aria-label="Não citar">✕</button></div>` : '';
+    }
     async function enviarUm(item) {
-      const { data, error } = item.sopro
+      const { data, error } = item.cita
+        ? await NG.sb.rpc('backoffice_responder_citando', { p_conversa: o.conversaId, p_texto: item.texto, p_cw_msg_id: item.cita.id })   // 0334
+        : item.sopro
         ? await NG.sb.rpc('mari_soprar', { p_conversa: o.conversaId, p_texto: item.texto })   // 0299: 🌬️ Soprar (a porta confere)
         : item.op
         ? await NG.sb.rpc('oportunidade_enviar', { p_conversa: o.conversaId, p_texto: item.tpl ? '' : item.texto, p_assumir: !!item.op.assumir, p_template: item.tpl })
@@ -710,7 +894,11 @@
     document.addEventListener('mousedown', emoFora);
     el.addEventListener('keydown', emoEsc, true);
 
-    const ajusta = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, o.cheia ? 66 : 150)}px`; };
+    const caixaEl = el.querySelector('.cvp-caixa'), anexoEl = el.querySelector('[data-anexo]'), clipMenu = el.querySelector('[data-clipmenu]');
+    const ajusta = () => {
+      ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, o.cheia ? 66 : 150)}px`;
+      if (caixaEl) caixaEl.classList.toggle('vazia', !ta.value.trim() && !st.anexo && !st.tpl && !st.nota);
+    };
     ta.addEventListener('input', ajusta);
     ta.addEventListener('input', () => { if (st.sug && st.sug.escolhida) desenharSug(); });   // editou: a faixa "confira" sai
     // Enter envia; Shift+Enter pula linha. No meio de um acento (IME) não envia. Esc cancela o template.
@@ -729,6 +917,14 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'citar') { if (!podeMidia()) { NG.toast('Responder citando só no modo Responder.', 'bad'); return; } st.cita = { id: Number(b.dataset.cw), txt: b.dataset.txt || '' }; citaDesenhar(); ta.focus(); return; }
+      if (a === 'cita-x') { st.cita = null; citaDesenhar(); return; }
+      if (a === 'clip') { const ab = clipMenu.hidden; clipMenu.hidden = !ab; b.setAttribute('aria-expanded', String(ab)); return; }
+      if (a === 'clip-foto' || a === 'clip-doc') { clipMenu.hidden = true; const inp = el.querySelector(`input[data-arq="${a === 'clip-foto' ? 'imagem' : 'arquivo'}"]`); if (inp) inp.click(); return; }
+      if (a === 'mic') { gravarIniciar(); return; }
+      if (a === 'grav-parar') { gravarParar(false); return; }
+      if (a === 'grav-x') { gravarParar(true); return; }
+      if (a === 'anexo-x') { anexoLimpar(); return; }
       if (a === 'sugerir') { sugerir(); return; }
       if (a === 'sug-op') { sugEscolher(Number(b.dataset.i) || 0); return; }
       if (a === 'sug-fechar') { sugFechar(true); return; }

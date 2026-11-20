@@ -42,6 +42,8 @@ aTrans.forEach((it, i) => {
 
 const midia = (e.anexos || []).map((a) => {
   const r = porN[a.n] || {};
+  // 20/11: localização = só o que o cliente mandou (coordenadas e nome do lugar); não há arquivo
+  if (a.tipo === 'local') return Object.fromEntries(Object.entries({ tipo: 'local', lat: a.lat, lng: a.lng, nome: a.nome }).filter(([, v]) => v !== null && v !== undefined));
   const m = { tipo: a.tipo, mime: a.mime, ext: a.ext, tamanho: a.tamanho, caminho: r.caminho || null };
   if (a.tipo === 'audio') {
     if (a.cw_transcricao) { m.transcricao = a.cw_transcricao.slice(0, 4000); m.transcrito_em = agora.toISOString(); m.transcrito_por = 'chatwoot'; }

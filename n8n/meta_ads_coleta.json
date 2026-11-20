@@ -109,7 +109,7 @@
           "parameters": [
             {
               "name": "fields",
-              "value": "id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name}"
+              "value": "id,name,effective_status,adset_id,adset{name},campaign_id,campaign{name},creative{id,image_url,thumbnail_url,body,title,asset_feed_spec{bodies,titles},object_story_spec{link_data{message,name}}}"
             },
             {
               "name": "limit",
@@ -421,6 +421,35 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/meta_ads_gravar_criativos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_anuncios: $('3 · Meta anúncios').first().json.data || [] }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "11 · Supabase criativos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        100
+      ],
+      "id": "e413e529-41de-5084-89e7-cfb202b89e88",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -539,6 +568,17 @@
         [
           {
             "node": "10 · Supabase saldo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 · Supabase saldo": {
+      "main": [
+        [
+          {
+            "node": "11 · Supabase criativos",
             "type": "main",
             "index": 0
           }

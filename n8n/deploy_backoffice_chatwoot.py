@@ -51,9 +51,24 @@ const labels = [...new Set([...r.payload, ...(a.add || [])])].filter((l) => !tir
 return { json: { ...a, corpo: { labels } } };
 """
 
+NOME_ARQUIVO = r"""// 3m1b · Nome do arquivo (0333) — o anexo vai ao Chatwoot com o nome e o tipo que o time escolheu (documento chega com nome).
+const a = $('3m · Mídia?').item.json;
+const c = a.corpo || {};
+const it = { json: { ...a }, binary: $input.item.binary || {} };
+if (it.binary.data) {
+  it.binary.data.fileName = String(c.nome || '').trim() || ('arquivo' + (/pdf/.test(c.mime || '') ? '.pdf' : ''));
+  if (c.mime) it.binary.data.mimeType = c.mime;
+} else {
+  it.json.erroLeitura = 'não baixei o arquivo do bucket: ' + JSON.stringify($json.error || $json).slice(0, 200);
+}
+return it;
+"""
+
 RESULTADO = r"""// 6 · Resultado — ok = a API do Chatwoot respondeu sem erro. O id vem do item que entrou no 4 (ou do 3b, se a leitura falhou).
+// 0333: a mídia vem do ramo 3m (o 4 · Usuário? não roda para ela).
 let base = null;
 try { base = $('4 · Usuário?').item.json; } catch (e) { base = null; }
+if (!base) { try { base = $('3m · Mídia?').item.json; } catch (e) { base = null; } }
 if (!base || $json.erroLeitura) base = $json;
 const erro = $json.erroLeitura || ($json.error ? JSON.stringify($json.error).slice(0, 400) : null);
 return { json: { p_id: base.id, p_ok: !erro, p_erro: erro } };
@@ -104,6 +119,29 @@ def build(ids, webhook_path=None):
         'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
         'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ p_limite: 20 }) }}',
         'options': {'timeout': 20000}}, 240, 0, credentials=sb_cred)
+    # 0333: foto, documento ou áudio do time — baixa do bucket privado (chave de serviço) e manda ao Chatwoot como anexo.
+    iff('3m · Mídia?', "={{ $json.tipo === 'midia' }}", 360, 260)
+    add('3m1 · Baixar do bucket', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'GET', 'url': f"={{{{ '{dm.SB}/storage/v1/object/midia_conversas/' + $json.corpo.caminho }}}}",
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'supabaseApi',
+        'options': {'timeout': 30000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'data'}}}},
+        600, 260, credentials=sb_cred, onError='continueRegularOutput')
+    add('3m1b · Nome do arquivo', 'n8n-nodes-base.code', 2, {'mode': 'runOnceForEachItem', 'jsCode': NOME_ARQUIVO}, 840, 260)
+    iff('3m2 · Usuário (mídia)?', "={{ $json.usuario === true && !$json.erroLeitura }}", 1080, 260)
+
+    def http_anexo(name, x, y, credencial):
+        add(name, 'n8n-nodes-base.httpRequest', 4.2, {
+            'method': 'POST', 'url': "={{ $('3m · Mídia?').item.json.url }}",
+            'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+            'sendBody': True, 'contentType': 'multipart-form-data',
+            'bodyParameters': {'parameters': [
+                {'parameterType': 'formBinaryData', 'name': 'attachments[]', 'inputDataFieldName': 'data'},
+                {'parameterType': 'formData', 'name': 'content', 'value': "={{ $('3m · Mídia?').item.json.corpo.content || '' }}"},
+                {'parameterType': 'formData', 'name': 'message_type', 'value': 'outgoing'},
+                {'parameterType': 'formData', 'name': 'private', 'value': 'false'}]},
+            'options': {'timeout': 60000}}, x, y, credentials=credencial, onError='continueRegularOutput')
+    http_anexo('3m3u · Chatwoot anexo (usuário)', 1320, 200, cw_usr)
+    http_anexo('3m3b · Chatwoot anexo (bot Mari)', 1320, 340, cw_bot)
     iff('3 · Etiquetas?', "={{ $json.tipo === 'etiquetas' }}", 480, 0)
     add('3a · Chatwoot ler etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET', 'url': "={{ $json.url_base + '/labels' }}",
@@ -134,7 +172,15 @@ def build(ids, webhook_path=None):
 
     liga('1 · A cada 1 min', '2 · Supabase ações')
     liga('1w · Na hora (webhook)', '2 · Supabase ações')
-    liga('2 · Supabase ações', '3 · Etiquetas?')
+    liga('2 · Supabase ações', '3m · Mídia?')
+    liga('3m · Mídia?', '3m1 · Baixar do bucket', 0)
+    liga('3m · Mídia?', '3 · Etiquetas?', 1)
+    liga('3m1 · Baixar do bucket', '3m1b · Nome do arquivo')
+    liga('3m1b · Nome do arquivo', '3m2 · Usuário (mídia)?')
+    liga('3m2 · Usuário (mídia)?', '3m3u · Chatwoot anexo (usuário)', 0)
+    liga('3m2 · Usuário (mídia)?', '3m3b · Chatwoot anexo (bot Mari)', 1)
+    liga('3m3u · Chatwoot anexo (usuário)', '6 · Resultado')
+    liga('3m3b · Chatwoot anexo (bot Mari)', '6 · Resultado')
     liga('3 · Etiquetas?', '3a · Chatwoot ler etiquetas', 0)
     liga('3 · Etiquetas?', '4 · Usuário?', 1)
     liga('3a · Chatwoot ler etiquetas', '3b · Montar etiquetas')

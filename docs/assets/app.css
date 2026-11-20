@@ -3754,3 +3754,57 @@ button.fc-id:hover { color: inherit; }
 .fc2-dc .fc-aviso { border-left: 3px solid currentColor; }
 .fc2-dc .nota-campo, .fc2-dc .apagado { font-size: 12px; color: #8D97A3; }
 @media (max-width: 1100px) { .fc2-dc { grid-template-columns: minmax(0, 1fr); } }
+
+/* 20/11 (0331): o anúncio que o cliente clicou, no começo da conversa (conversa e ficha) */
+.cvp-anuncio { display: flex; gap: 10px; align-items: flex-start; margin: 6px auto 10px; max-width: 92%; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid #2A3340; background: #111821; }
+.cvp-anuncio img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; display: block; background: #0B0F14; }
+.cvp-an-sem { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.cvp-an-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cvp-an-t small { font-size: 11px; color: #7F8A96; text-transform: uppercase; letter-spacing: .05em; }
+.cvp-an-t b { font-size: 13px; color: #E9EDF3; }
+.cvp-an-t span { font-size: 12.5px; color: #C9D1DA; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cvp-an-t em { font-style: normal; font-size: 11.5px; color: #8D97A3; }
+
+/* 20/11 (Ricardo: "deixe o chat o mais parecido possível com o WhatsApp… gravar áudio também"): clipe (foto/documento), microfone
+   que troca com o Enviar quando a caixa está vazia, prévia do anexo e da gravação, documento, figurinha e localização no balão. */
+.cvp-caixa { position: relative; }
+.cvp-clip, .cvp-mic { flex: none; width: 40px; height: 44px; border-radius: 50%; border: 0; background: none; color: #AEB7C2; font-size: 19px; cursor: pointer; }
+.cvp-clip:hover, .cvp-mic:hover { background: rgba(255,255,255,.06); }
+.cvp-mic { background: #1F6F4A; color: #fff; width: 44px; }
+.cvp-mic:hover { background: #25865A; }
+.cvp-caixa.vazia .cvp-enviar { display: none; }
+.cvp-caixa:not(.vazia) .cvp-mic { display: none; }
+.cvp-clip-menu { position: absolute; bottom: 52px; left: 0; z-index: 30; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: 10px;
+  background: #1A222B; border: 1px solid #2A3340; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.cvp-clip-menu button { border: 0; background: none; color: #E9EDF3; text-align: left; padding: 8px 12px; border-radius: 8px; font: inherit; font-size: 13.5px; cursor: pointer; white-space: nowrap; }
+.cvp-clip-menu button:hover { background: #24303C; }
+.cvp-anexo { padding: 6px 2px 8px; }
+.cvp-anx, .cvp-grav { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: #111821; border: 1px solid #2A3340; }
+.cvp-anx img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; }
+.cvp-anx audio { height: 34px; max-width: 260px; }
+.cvp-anx-t { font-size: 12.5px; color: #AEB7C2; }
+.cvp-sp { flex: 1; }
+.cvp-grav b { font-size: 13px; color: #FF9A9A; font-variant-numeric: tabular-nums; }
+.cvp-grav-ponto { width: 10px; height: 10px; border-radius: 50%; background: #E5484D; animation: cvp-pisca 1s infinite; }
+@keyframes cvp-pisca { 50% { opacity: .25; } }
+.cvp-doc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.18); color: inherit; text-decoration: none; max-width: 100%; }
+.cvp-doc b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+.cvp-doc small { font-size: 11px; opacity: .75; }
+.cvp-fig { width: 120px; height: 120px; object-fit: contain; display: block; }
+.cvp-local { display: inline-flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.18); color: inherit; text-decoration: none; }
+.cvp-local span { display: flex; flex-direction: column; gap: 2px; }
+.cvp-local small { font-size: 11.5px; opacity: .8; }
+
+/* 20/11 (0334): tiques do WhatsApp (✓ enviada · ✓✓ entregue · ✓✓ azul lida) e responder citando */
+.cvp-tick.lida { color: #53BDEB; }
+.cvp-b { position: relative; }
+.cvp-citar { position: absolute; top: 4px; right: -30px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #2A3340; background: #1A222B;
+  color: #C9D1DA; cursor: pointer; opacity: 0; transition: opacity .12s; font-size: 13px; line-height: 1; }
+.cvp-b:hover .cvp-citar, .cvp-citar:focus-visible { opacity: 1; }
+.cvp-cita-no { display: block; order: -1; margin: 0 0 4px; padding: 4px 8px; border-left: 3px solid #53BDEB; border-radius: 4px; background: rgba(0,0,0,.18);
+  font-size: 12px; color: #AEB7C2; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cvp-cita { padding: 6px 2px 0; }
+.cvp-cita-bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-left: 4px solid #53BDEB; border-radius: 8px; background: #111821; }
+.cvp-cita-bar span { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; color: #C9D1DA; overflow: hidden; }
+.cvp-cita-bar small { font-size: 11px; color: #53BDEB; font-weight: 600; }

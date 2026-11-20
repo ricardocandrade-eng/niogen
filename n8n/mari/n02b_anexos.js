@@ -3,7 +3,7 @@
 // (áudio e imagem até 16 MB). Caminho: mari/<conversa do Chatwoot>/<mensagem>_<n>.<ext>. Sem segredo, sem texto de negócio.
 // transcrever = áudio sem a transcrição do próprio Chatwoot (essa vem de graça e é usada no 2b8).
 const e = $('2 · Entrada').first().json;
-const PADRAO = { audio: 'ogg', imagem: 'jpg' };
+const PADRAO = { audio: 'ogg', imagem: 'jpg', figurinha: 'webp' };   // 20/11: figurinha (webp) também vai ao bucket
 const MIME = { ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', mp4: 'audio/mp4', aac: 'audio/aac',
   amr: 'audio/amr', wav: 'audio/wav', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 const conv = String(e.chatwootConversationId || 'sem-conversa').replace(/[^0-9A-Za-z_-]/g, '');
