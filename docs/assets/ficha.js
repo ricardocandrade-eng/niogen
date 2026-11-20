@@ -4568,7 +4568,7 @@
       itens.push(linha('ind', 'Indicações', sub, inst ? 'done' : M.length || (po && po.pediu_em) ? 'now' : 'todo', det));
     }
     const feitas = L.filter((x) => x.st === 'done').length + (at.st === 'done' ? 1 : 0) + (din && din.estado === 'paga' ? 1 : 0);
-    return { html: `<div class="fc2-lista fc2-jl${detAberto ? ' fc2-jl-on' : ''}" style="--n:${itens.length}">${itens.join('')}</div>${detAberto}`, feitas, total: L.length + 2 };
+    return { html: `<div class="fc2-lista fc2-jl${detAberto ? ' fc2-jl-on' : ''}" style="--n:${itens.length}">${itens.join('')}</div>${detAberto}`, feitas, total: L.length + 2, aberta: !!detAberto };
   }
   // Uma linha de dado: rótulo · valor (ou "falta" em amarelo) · cadeado/lápis · copiar.
   const dl = (rot, val, o = {}) => `<div class="fc2-f"><span class="fc2-fk">${esc(rot)}</span><span class="fc2-fv${val ? '' : ' falta'}${o.mono ? ' mono' : ''}" title="${esc(val || o.falta || 'falta')}">${esc(val || o.falta || 'falta')}</span>
@@ -4784,7 +4784,7 @@
           : `<div class="fc-colh"><h2>Conversa</h2></div><div class="fc-semconv"><p>Sem conversa no WhatsApp (venda de rua ou parceiro).</p>
               <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
-        <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
+        <section class="fc2-col fc2-jor${jor && jor.aberta ? ' et-on' : ''}" aria-label="Jornada da venda">
           ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${gedLinha()}${agBts || btSaidaAg() ? `<div class="fc2-agb">${agBts}${btSaidaAg()}</div>` : ''}<p class="fc-efeito"></p></div>` : ''}
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
           ${jor ? jor.html : ''}

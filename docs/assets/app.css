@@ -3682,6 +3682,10 @@ button.fc-id:hover { color: inherit; }
    com o resumo à vista. Clicada, o detalhe ocupa o lugar das colunas (o bloco todo abaixo do título), com "← Jornada" para voltar.
    Até 900 px as colunas viram a lista de antes, uma embaixo da outra. */
 .fc2-jl.fc2-jl-on { display: none; }
+/* 20/11 (Ricardo: "expande o card que se abre sobre o card Agora também… espaço maior"): etapa aberta ocupa a coluna inteira;
+   o Agora e o título da Jornada voltam ao fechar a etapa (Voltar / ✕). */
+.fc2-jor.et-on > .fc2-agcard, .fc2-jor.et-on > .fc2-colh { display: none; }
+.fc2-jor.et-on > .fc2-jl-ab { border-top: 0; }
 .fc2-jl-ab { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid #1D232B; }
 .fc2-jl-abh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #1D232B; min-width: 0; }
 .fc2-jl-abh b { font-size: 14px; color: #E9EDF3; white-space: nowrap; }
