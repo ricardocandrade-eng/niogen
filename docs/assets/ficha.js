@@ -1462,7 +1462,7 @@
       // 15/11 (Ricardo, caso Lucas: "o crédito não deveria ficar vermelho?"): venda em Saída mostra em vermelho a etapa onde parou.
       { nome: 'Crédito', ...(saiu && (sm === 'credito_negado' || v.credito_resultado === 'negado') ? { s: 'x', d: 'negado · saída' }
         : ['aprovado', 'so_cartao'].includes(v.credito_resultado) ? { s: 'ok', d: NG.CREDITO[v.credito_resultado] }
-        : v.credito_resultado === 'negado' ? { s: 'wa', d: 'negado · outro CPF' }
+        : v.credito_resultado === 'negado' ? { s: 'x', d: 'negado · outro CPF?' }   // 20/11: negado = vermelho
         : v.credito_resultado === 'pendente' ? { s: 'wa', d: credH == null ? 'pendente' : credH >= 24 ? `pendente há ${credH} h · cobrar a Nio` : `pendente há ${credH} h` }
         : v.nio_pedido && !v.nio_os ? { s: 'ok', d: 'pedido gravado' } : { s: 'no', d: '' }) },
       // 0247 (Ricardo, 16/11): a biometria aprovada vem ANTES da OS.
@@ -2473,8 +2473,9 @@
     const pCredC = smC === 'credito_negado' ? { s: 'x', d: 'negado · saída' }
       : crPadrao ? { s: 'wa', d: 'endereço padrão · consultar de novo' }
       : /^aprovado/.test(crC || '') ? { s: 'ok', d: crC === 'aprovado_cartao' ? 'aprovado só no cartão' : 'aprovado' }
-      : crC === 'negado_antifraude' ? { s: 'wa', d: 'negado · antifraude' }
-      : crC === 'negado' ? { s: 'wa', d: 'negado · outro CPF' }
+      // 20/11 (Ricardo, L-207): negado é etapa que parou — vermelho na Jornada (outro CPF ainda pode reabrir)
+      : crC === 'negado_antifraude' ? { s: 'x', d: 'negado · antifraude' }
+      : crC === 'negado' ? { s: 'x', d: 'negado · outro CPF?' }
       : crC === 'pendente' ? { s: 'wa', d: 'pendente' } : crC === 'pedido_em_andamento' ? { s: 'wa', d: 'já tem pedido em andamento' } : { s: 'no', d: '' };
     const pViabC = ['fachada_nao_atendida', 'cidade_nao_atendida'].includes(smC) ? { s: 'x', d: smC === 'cidade_nao_atendida' ? 'fora da área · saída' : 'sem cobertura · saída' }
       : { s: viabC === 'viavel' ? 'ok' : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viabC) ? 'wa' : 'no', d: viabC ? (viabC === 'viavel' ? 'portal · ok' : (NG.VIAB_NIO[viabC] || viabC).toLowerCase()) : '' };
