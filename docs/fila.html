@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=191126-6">
+<link rel="stylesheet" href="assets/app.css?v=191126-7">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=191126-5"></script>
@@ -314,7 +314,7 @@
         <div><span class="mv-dono apagado">GED360</span></div><div><span class="lv-pill">${p.alerta ? 'agora' : 'hoje'}</span></div>
         <div class="lv-act"><button type="button" class="btn btn-sm" data-visto="${esc(p.chave)}">Visto</button></div></div>`);
   // 0153 (etapa 1a): ninguém parado em silêncio. Cada linha diz o que travou e o que fazer; "Abrir" leva ao cliente.
-  const CONF_SIT = { acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', os_agenda: 'Agenda da Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar', retomada_ligar: 'Retomada · ligar', conta_nao_fecha: 'A conta não fecha' };
+  const CONF_SIT = { janela_fechada: '📵 Janela fechada', acao_falhou: 'Chatwoot não obedeceu', fora_niogen: 'Fora do NIOGEN', dono_parado: 'Parada com dono', handoff_parado: 'Ninguém pegou', pos_venda: 'Pós-venda', cancelar_nio: 'Cancelar na Nio', silencio_qualificado: 'Sem resposta', silencio_com_pedido: 'Sem resposta · com pedido', volta_hoje: 'Hora de voltar', docs_prazo: 'Documentos à Nio', os_excecao: 'OS na Nio', os_agenda: 'Agenda da Nio', conferir_rua: 'Portal: outra rua', conferir_unidade: 'Unidade a confirmar', retomada_ligar: 'Retomada · ligar', conta_nao_fecha: 'A conta não fecha' };
   // 19/11 (0315, Ricardo: "fico com a impressão que o trabalho nunca acaba e eles ficam ali parados há dias"): a "Retomada · ligar"
   // só saía escrevendo na conversa ou no D7. Agora: 📞 Ligar (discador) · Atendeu (registra e abre o cliente) · Não atendeu · Pular
   // (motivo). Os três passam pela porta (retomada_ligacao) e tiram a linha; o D7 segue na data se o cliente não responder.
@@ -328,8 +328,19 @@
   const abrirCf = (c) => (kDe(c) ? `<button type="button" class="btn btn-sm" data-cf-abrir="${esc(kDe(c))}">Abrir</button>` : '');
   const bt = (attrs, txt, dica, ghost = true) => `<button type="button" class="btn btn-sm${ghost ? ' btn-ghost' : ''} lv-rl" ${attrs} title="${esc(dica)}">${txt}</button>`;
   const cienteBt = (c) => bt(`data-cf-osciente="${esc(c.chave)}"`, 'Ciente', 'A linha some enquanto a Situação do agendamento continuar igual na Nio; se mudar, volta.', false);
+  // 19/11 (0324, caso Gabriel — "Ele está com a janela de 24h fechada. Não deveríamos considerar isso?" → "Gostei da ideia"): venda
+  // esperando o cliente com a janela fechada. 📞 Ligar · Atendeu (registra e abre o cliente) · Não atendeu · ✉ Template (o aprovado do
+  // degrau). Tudo passa pela porta (venda_janela) e tira a linha por 24 h; se ele seguir calado, ela volta.
+  const jfBts = (c) => {
+    const cid = esc(c.conversa_id), k = esc(c.venda_id || `c:${c.conversa_id}`), t = telDe(c.texto);
+    return `${t ? `<a class="btn btn-sm lv-rl" href="tel:+${esc(t)}" title="Ligar: abre o discador do celular ou do computador" aria-label="Ligar">📞</a>` : ''}`
+      + bt(`data-jf="${cid}" data-jf-acao="atendeu" data-jf-k="${k}"`, 'Atendeu', 'Registra que o cliente atendeu e abre a conversa para você anotar o que ele disse.', false)
+      + bt(`data-jf="${cid}" data-jf-acao="nao_atendeu"`, 'Não atendeu', 'Registra a ligação. A linha sai e volta amanhã se ele seguir calado.')
+      + bt(`data-jf="${cid}" data-jf-acao="template"`, '✉ Template', 'Manda o template aprovado (Lead qualificado: retomada com o seu nome; Pedido: lembrete da biometria). Se ele responder, a janela abre de novo.');
+  };
   const saidaBts = (c) => {
     const conv = esc(c.conversa_id || ''), vd = esc(c.venda_id || '');
+    if (c.tipo === 'janela_fechada' && c.conversa_id) return jfBts(c);
     if ((c.tipo === 'dono_parado' || c.tipo === 'handoff_parado') && c.conversa_id)
       return abrirCf(c) + bt(`data-cf-devolver="${conv}" data-venda="${vd}"`, 'Devolver à Mari', 'A Mari retoma a conversa (sem dono) e a linha sai. Para assumir, responder ou dar Saída, use Abrir.');
     if (c.tipo === 'pos_venda' && c.conversa_id)
@@ -489,7 +500,7 @@
     const vezTxt = (txt, cls = '') => `<span class="lv2-vez ${cls}">${esc(txt)}</span>`;
     const jItem = (j, b) => ({ bloco: b, k: chaveFicha(j), etp: seloEtapa(j), quali: quaseVenda(j), vale: (j.venda_id || quaseVenda(j)) ? valeVenda(j.venda_id, j.plano) : null, nome: j.nome || 'Contato', sub: [j.cidade, j.plano, haTxt(j.desde)].filter(Boolean).join(' · '),
       sit: [etapaNome(j), j.pendencia ? (typeof j.pendencia === 'string' ? j.pendencia : 'pendência') : '', j.cliente_confirmou ? 'cliente confirmou' : ''].filter(Boolean).join(' · ') || 'Lead',
-      oque: j.o_que_fazer || '', dica: confMudo(j), selo: fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
+      oque: j.o_que_fazer || '', dica: confMudo(j), selo: saidaSelo(j) + fvSelo(j) + confSelo(j) + osSelo(j), vid: temOs(j) ? j.venda_id : null,
       vez: donoHtml(j), prazo: PRAZO[j.nivel] || '—', urg: j.nivel === 'agora' || confDe(j).some(confUrg), rank: confDe(j).some(confUrg) ? 0 : (RANK[j.nivel] ?? 3), t: j.desde,
       row: linha(j, b === 'fazer'),
       bts: osBt(j) + confDe(j).filter((c) => c.tipo === 'os_agenda').map(cienteBt).join('') + (b === 'fazer' ? descBt(j) + botaoLinha(j, true, false) : '') });
@@ -566,10 +577,18 @@
     const s = SELO_ETAPA[e];
     return s ? `<span class="lv2-etp e${e}" title="${esc(s[1])}" aria-label="${esc(s[1])}">${s[0]}</span>` : '';
   };
-  const tagHtml = (b) => `<span class="lv2-tag" style="--c:${(BLOCOS.find((x) => x.id === b) || {}).cor}">${esc(NOME_BLOCO[b])}</span>`;
+  // 19/11 (caso Kell L-208 — "Ela está sem viabilidade e foi pra Live"): a linha de quem está em Saída diz POR QUÊ, em vermelho
+  // (⛔ Fachada não atendida…), para ninguém oferecer plano a quem a Nio não atende. Vem da escada (v_leads), sem chamada nova.
+  const saidaSelo = (j) => {
+    const f = j && funilDe(j);
+    if (!f || f.destino !== 'saida') return '';
+    return ` <span class="lv2-sai" title="${esc(`Saída${f.saida_sub ? `: ${f.saida_sub}` : ''} — não ofereça plano antes de resolver isto`)}">⛔ ${esc(f.saida_nome || 'Saída')}</span>`;
+  };
+  const corBloco = (b) => (BLOCOS.find((x) => x.id === b) || {}).cor || (b === 'feito' ? '#57D38C' : '#8D97A3');
+  const tagHtml = (b) => `<span class="lv2-tag" style="--c:${corBloco(b)}">${esc(b === 'feito' ? '✓ Feito' : NOME_BLOCO[b])}</span>`;
   // os botões da linha são os mesmos de antes (tirados da linha antiga): Abrir/Conferi, Enviar/Ligar/Dispensar, Casar, Acompanhar…
   const acoesDe = (html) => { const tp = document.createElement('template'); tp.innerHTML = html || ''; const a = tp.content.querySelector('.lv-act'); return a ? a.innerHTML : ''; };
-  const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}${it.k && NGFicha.atual === it.k ? ' sel' : ''}" style="--c:${(BLOCOS.find((x) => x.id === it.bloco) || {}).cor}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
+  const itemLista = (it) => `<div class="lv2-it b-${it.bloco}${it.urg ? ' urg' : ''}${it.k && NGFicha.atual === it.k ? ' sel' : ''}" style="--c:${corBloco(it.bloco)}"${it.k ? ` data-k="${esc(it.k)}" tabindex="0" role="button"` : ''}>
       ${tagHtml(it.bloco)}
       <div class="lv2-who"><b>${it.etp || ''}${esc(it.nome)}${it.vale ? ` <span class="lv2-vale${it.quali ? ' q' : ''}" title="${esc(it.vale.tit || '')}">${esc(it.vale.txt)}</span>` : ''}</b><small>${esc(it.sub || '—')}</small></div>
       <div class="lv2-oque"${it.dica ? ` title="${esc(it.dica)}"` : ''}><b>${esc(it.sit || '')}${it.selo || ''}</b><span title="${esc([it.oque, it.dica].filter(Boolean).join(' — '))}">${esc(it.oque || '')}</span></div>
@@ -595,10 +614,48 @@
       ${BLOCOS.map((b) => `<button type="button" class="lv2-chip${bloco === b.id ? ' on' : ''}" data-bloco="${b.id}" style="--c:${b.cor}"><i aria-hidden="true"></i>${esc(b.nome)} <b>${n(b.id)}</b></button>`).join('')}
       ${placar(todos)}<span class="lv2-ordem apagado">o que vence primeiro fica em cima</span></div>`;
   }
+  // 19/11 (Ricardo: "quando notifica… que é pra eu responder e eu respondo, a linha desaparece da Live porque eu respondi, mas
+  // deveria ficar um tempo"): a linha que sai da Sua fila fica 15 min no mesmo lugar, apagada, com "✓ saiu da sua fila há N min —
+  // agora: …" e o Abrir. Não conta no "faltam". A mesma linha no Radar espera esses 15 min (sem duplicar). Só nesta aba.
+  const RECENTE_MS = 15 * 60000;
+  const SS_RECENTES = 'niogen.live.recentes';
+  let recentes = {};
+  try { recentes = JSON.parse(sessionStorage.getItem(SS_RECENTES) || '{}') || {}; } catch (e) { recentes = {}; }
+  let filaAnt = null;
+  let filaAntSel = null;
+  function lembrarSaidas(todos) {
+    const agora = Date.now();
+    const naFila = {};
+    todos.filter((x) => OBRIGA.includes(x.bloco) && x.k).forEach((x) => { naFila[x.k] = x; });
+    if (filaAnt && filaAntSel === etapaSel) {
+      Object.keys(filaAnt).forEach((k) => {
+        if (naFila[k] || recentes[k]) return;
+        const x = filaAnt[k];
+        recentes[k] = { t: agora, nome: x.nome, sub: x.sub, sit: x.sit, etp: x.etp, vale: x.vale, quali: x.quali };
+      });
+    }
+    Object.keys(recentes).forEach((k) => { if (naFila[k] || agora - recentes[k].t > RECENTE_MS) delete recentes[k]; });
+    filaAnt = naFila;
+    filaAntSel = etapaSel;
+    try { sessionStorage.setItem(SS_RECENTES, JSON.stringify(recentes)); } catch (e) { /* sem armazenamento: vale só até recarregar */ }
+  }
+  const itemRecente = (k, todos) => {
+    const r = recentes[k];
+    const ag = todos.find((x) => x.k === k);
+    const min = Math.max(1, Math.round((Date.now() - r.t) / 60000));
+    const agora = ag ? `agora: ${NOME_BLOCO[ag.bloco] || ag.bloco}${ag.sit ? ` · ${ag.sit}` : ''}` : 'agora: fora da Live (com a Mari ou encerrada)';
+    return { bloco: 'feito', k, etp: r.etp, nome: r.nome, sub: r.sub, vale: r.vale, quali: r.quali, sit: `✓ ${r.sit || 'Feito'}`,
+      oque: `saiu da sua fila há ${min} min — ${agora}`, vez: '', prazo: '—', urg: false,
+      row: `<div class="lv-act"><button type="button" class="btn btn-sm btn-ghost" data-cf-abrir="${esc(k)}">Abrir</button></div>` };
+  };
   function renderLista() {
     const rol = listaEl.querySelector('.lv-rolar');
     const pos = rol ? rol.scrollTop : 0;
-    const todos = itens();
+    const todosC = itens();
+    lembrarSaidas(todosC);
+    const recK = new Set(Object.keys(recentes));
+    const todos = todosC.filter((x) => !(x.k && recK.has(x.k) && !OBRIGA.includes(x.bloco)));   // a linha espera no lugar antigo
+    const fantasmas = !bloco ? [...recK].map((k) => itemRecente(k, todosC)) : [];
     const vis = todos.filter((x) => !bloco || x.bloco === bloco);
     // 19/11 (Ricardo: "Separar trabalho e radar" · Radar aberto, só embaixo · 🔥 em faixa própria): três partes, de cima para baixo.
     // Sua fila = obrigação do time (Para fazer · Conferir · Andamento na Nio) — é o que o "faltam" conta e o que zera.
@@ -622,7 +679,7 @@
       ? `<div class="lv2-sub">💰 <b>Venda esperando o cliente · ${vendaEsp.length}</b><span>você falou por último — sobe para a Sua fila quando ele responder ou se ficar parada</span></div>${vendaEsp.map(itemLista).join('')}${radar.length ? '<div class="lv2-sub fim"></div>' : ''}`
       : '';
     const parteTrab = !bloco || OBRIGA.includes(bloco)
-      ? `${divisor('Sua fila', trab.length ? `faltam ${trab.length}` : '')}${trab.length ? trab.map(itemLista).join('') : '<div class="lv-vazio">Fila limpa ✅ — nada pede você agora</div>'}`
+      ? `${divisor('Sua fila', trab.length ? `faltam ${trab.length}` : '')}${trab.length ? trab.map(itemLista).join('') : '<div class="lv-vazio">Fila limpa ✅ — nada pede você agora</div>'}${fantasmas.map(itemLista).join('')}`
       : '';
     const parteOps = comOps
       ? `${divisor(`🔥 Oportunidades · ${opsV.length + (bloco && bloco !== 'op' ? 0 : opsCanal.length)}`, 'venda a pegar — não conta como pendência')}${opsV.map(itemLista).join('')}${opsCanal.length && (!bloco || bloco === 'op') ? `<div class="opc-bloco">${opsCanal.map((o) => NG.opCanalLinha(o)).join('')}</div>` : ''}`
@@ -841,6 +898,21 @@
     if (data && data.resumo) NG.toast(data.resumo, 'ok');
     await carregar();
   }
+  async function vendaJanela(b) {
+    const acao = b.dataset.jfAcao;
+    if (acao === 'template') {
+      const ok = await NG.modal(`<h3>Mandar o template</h3>
+        <p>A janela de 24 h fechou: só sai mensagem aprovada pela Meta. Vai o template do degrau — <b>Lead qualificado</b>: "Oi, …! Aqui é você, que está cuidando do seu pedido… Quer continuar de onde paramos?"; <b>Pedido</b>: o lembrete da biometria.</p>
+        <p class="apagado">A conversa segue com você. Se ele responder, a janela abre de novo e a linha vai para o topo da Sua fila.</p>`);
+      if (!ok) return;
+    }
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc('venda_janela', { p_conversa: b.dataset.jf, p_acao: acao, p_motivo: null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    NG.toast((data && data.resumo) || 'Registrado', 'ok');
+    await carregar();
+    if (acao === 'atendeu' && b.dataset.jfK) abrirChave(b.dataset.jfK);
+  }
   async function retomadaLigacao(b) {
     const res = b.dataset.rlRes;
     let motivo = null;
@@ -894,6 +966,8 @@
     if (osx) { ev.stopPropagation(); delete osLidas[osx.dataset.osX]; render(); return; }
     if (ev.target.closest('.lv2-os')) return;   // a faixa da leitura da OS não abre a ficha
     if (ev.target.closest('a.lv-rl[href^="tel:"]')) { ev.stopPropagation(); return; }   // 0315: o link segue e abre o discador
+    const jfb = ev.target.closest('[data-jf]');
+    if (jfb) { ev.stopPropagation(); vendaJanela(jfb); return; }
     const rl = ev.target.closest('[data-rl]');
     if (rl) { ev.stopPropagation(); retomadaLigacao(rl); return; }
     const cf = ev.target.closest('[data-cf-retentar], [data-cf-dispensar], [data-cf-visto], [data-cf-abrir], [data-cf-cancelei], [data-cf-semresp], [data-cf-rua], [data-cf-unidade], [data-cf-descartar], [data-cf-devolver], [data-cf-nada], [data-cf-reabrir], [data-cf-adiar], [data-cf-osvisto], [data-cf-osciente], [data-cf-contavisto], [data-cf-docs]');
