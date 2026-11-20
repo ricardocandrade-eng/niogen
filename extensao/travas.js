@@ -221,7 +221,16 @@
   // ------------------------------------------------------------------ texto que vai para o NIOGEN (sem CPF/telefone/e-mail)
   const redigir = (s) => String(s || '').replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, '<email>').replace(/\d[\d.\-/() ]{5,}\d/g, '<num>').slice(0, 400);
 
+  // 20/11 (revisão da extensão): o crédito lido pelas formas de pagamento liberadas na Etapa 5 (BOLETO / CREDITO / DACC).
+  function creditoPelasFormas(livres) {
+    const l = (livres || []).map((x) => String(x || '').toUpperCase());
+    if (!l.length) return null;
+    if (l.length === 1 && l[0] === 'CREDITO') return 'so_cartao';
+    if (l.includes('BOLETO') || l.includes('DACC')) return 'aprovado';
+    return null;
+  }
+
   raiz.NIOGEN_TRAVAS = { norm, textoBotao, LISTA_NEGRA, BOTOES, POPUP, naListaNegra, popupSeguro, conferirClique, classificarPopup, MOTIVO_POPUP,
     temNumero, escolherOpcao, alvoComplemento, alvoEndereco, formaDaVenda, lerOferta, casarOferta, megas, preco,
-    regrasRede, idsRegras, redeBloqueada, redigir, so };
+    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

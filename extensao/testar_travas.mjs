@@ -131,5 +131,11 @@ caso('complemento com bloco dito casa', T.alvoComplemento(['Bloco 1 - Apartament
 // ── 8. texto redigido para o NIOGEN ──
 caso('redigir tira CPF, celular e e-mail', !/\d{6}|@/.test(T.redigir('CPF 123.456.789-09, cel (32) 99999-8888, a@b.com.br')));
 
+// ── 9. crédito pelas formas liberadas na Etapa 5 (20/11: nunca "aprovado" às cegas) ──
+caso('só cartão liberado → so_cartao', T.creditoPelasFormas(['CREDITO']) === 'so_cartao');
+caso('boleto liberado → aprovado', T.creditoPelasFormas(['BOLETO', 'CREDITO']) === 'aprovado');
+caso('débito liberado → aprovado', T.creditoPelasFormas(['dacc']) === 'aprovado');
+caso('nenhuma liberada → não grava', T.creditoPelasFormas([]) === null);
+
 console.log(`\n${falhou ? 'VERMELHO' : 'VERDE'} — ${ok} ok, ${falhou} falharam`);
 process.exit(falhou ? 1 : 0);

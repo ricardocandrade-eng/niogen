@@ -11,6 +11,18 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.8.1 (20/11/2026) — o que o portal mostra, a extensão grava (revisão da extensão)
+Pedido do Ricardo: "se é o Portal, seja quem for gravar, que grave, sem o humano se envolver". Na condução:
+- **Crédito lido de verdade.** Sem popup visto, a extensão não grava mais "aprovado" às cegas: tenta o popup de novo e, sem ele,
+  lê as formas de pagamento liberadas na Etapa 5 (só cartão → "só cartão"; boleto ou débito → "aprovado"; nenhuma → não grava).
+- **Grava antes de parar ou pausar.** Negado, pendente e só cartão (venda em boleto) agora são gravados antes de a condução parar;
+  o aprovado é gravado antes da pausa da biometria (antes, se a pausa caísse, perdia-se). Antifraude continua com o humano.
+- **Na venda certa.** O registro vai para a venda aberta quando a condução começou, mesmo que outra seja aberta no meio.
+- **Erro à vista.** O registro da condução diz "✓ gravado" ou "⚠ NÃO foi gravado — grave na ficha".
+- Nenhum clique novo no portal; `testar_travas.mjs` com 112 casos (4 novos: crédito pelas formas).
+- Ainda a fazer (plano `docs/PLANO_retornos_do_portal_gravam_sozinhos_201126_0010.md`, etapa C): OS e agenda gravadas sozinhas
+  lendo o modal da OS e o calendário; sem viabilidade e "não encontrado" gravados; clique de opção passando pela lista negra.
+
 ## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
 
 > **0.6.3 (12/11):** a orelha "Conversas da Mari" traz **todas** as conversas (qualquer status, resolvidas no Chatwoot, com pedido ou em saída; só o canal `teste` fica fora; até 1000, mais recentes primeiro), com selo do estado: pedido aberto · saída · encerrada · resolvida no Chatwoot · adiada. Antes: só ativo/handoff, não resolvida, sem pedido, até 80.

@@ -524,23 +524,33 @@
   // 0092: registra no NIOGEN o que o portal respondeu (viabilidade na etapa 2, crédito na etapa 3) — o mesmo botão da ficha.
   // 0111 (Ricardo, 10/11): o nº do pedido só existe na OS. Crédito aprovado aqui = etapa Biometria no NIOGEN (etiqueta + aviso do link).
   const aprovou = (qual, resultado) => qual === 'credito' && ['aprovado', 'so_cartao'].includes(resultado);
-  async function registra(qual, resultado) {
-    if (!S.dados || !S.dados.venda_id) { aviso('Abra uma venda para registrar.', 'bad'); desenha(); return; }
-    if (aprovou(qual, resultado) && (S.selos || []).length && !S.conferiRecompra) {
-      aviso('Marque "Conferi: não é cliente nem endereço Nio" — há aviso de possível duplicado nesta venda.', 'bad'); desenha(); return;
+  // 20/11 (revisão da extensão): grava na venda que estava aberta quando a condução começou (vendaFixa) — antes usava a do momento
+  // da mensagem, e trocar de venda no meio gravava o crédito na outra. Devolve true/false (a condução mostra se não gravou).
+  async function registra(qual, resultado, vendaFixa) {
+    const vendaId = vendaFixa || (S.dados && S.dados.venda_id);
+    if (!vendaId) { aviso('Abra uma venda para registrar.', 'bad'); desenha(); return false; }
+    const mesma = S.dados && S.dados.venda_id === vendaId;
+    if (aprovou(qual, resultado) && (!mesma || ((S.selos || []).length && !S.conferiRecompra))) {
+      aviso(mesma ? 'Marque "Conferi: não é cliente nem endereço Nio" — há aviso de possível duplicado nesta venda.'
+        : 'A venda aberta no painel mudou durante a condução: grave o crédito na ficha da venda certa.', 'bad'); desenha(); return false;
     }
     S.ocupado = true; aviso(''); desenha();
+    let ok = false;
     try {
       if (aprovou(qual, resultado) && (S.selos || []).length) {
-        try { await rpc('venda_conferencia_recompra', { p_venda: S.dados.venda_id, p_selos: S.selos.map((x) => x.tipo), p_origem: 'extensao' }); } catch (e) { /* não segura a venda */ }
+        try { await rpc('venda_conferencia_recompra', { p_venda: vendaId, p_selos: S.selos.map((x) => x.tipo), p_origem: 'extensao' }); } catch (e) { /* não segura a venda */ }
       }
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
-      S.registro = { ...(S.registro || {}), [qual]: resultado };
-      S.feitas[qual === 'viabilidade' ? 2 : 3] = true; salvaJornada();
-      await carregaPorta();
+      const r = await rpc('backoffice_momento', { p_venda: vendaId, p_momento: qual, p_dados: { resultado, origem: 'extensao' } });
+      if (mesma) {
+        S.registro = { ...(S.registro || {}), [qual]: resultado };
+        S.feitas[qual === 'viabilidade' ? 2 : 3] = true; salvaJornada();
+        await carregaPorta();
+      }
       aviso(`${(r && r.resumo) || 'Registrado no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
+      ok = true;
     } catch (e) { aviso(e.message, 'bad'); }
     S.ocupado = false; desenha();
+    return ok;
   }
   // ================================================================== 0.6.0 — Conduzir até o Resumo (12/11/2026)
   // O painel liga as travas de rede SÓ na aba do portal (regras de sessão do declarativeNetRequest com tabIds) enquanto o content.js
@@ -610,7 +620,8 @@
     const falta = faltasConduzir();
     if (falta.length) { aviso(`Falta: ${falta.join(', ')}.`, 'bad'); desenha(); return; }
     await abaAtiva();
-    S.cond = { rodando: true, modo: S.modoConduzir, log: [], pergunta: null, pausa: null, fim: null, posEtapa2: false, trava: null, t0: Date.now() };
+    S.cond = { rodando: true, modo: S.modoConduzir, log: [], pergunta: null, pausa: null, fim: null, posEtapa2: false, trava: null, t0: Date.now(),
+      vendaId: S.dados && S.dados.venda_id };   // 20/11: a venda desta condução (o registro vai sempre para ela)
     aviso(''); desenha();
     let r = null;
     try {
@@ -631,9 +642,10 @@
       regrasAtivas: (regras || []).filter((x) => TR.idsRegras().includes(x.id)).length };
     if (r && r.motivo === 'resumo') { [1, 2, 3, 4, 5].forEach((n) => { S.feitas[n] = true; }); salvaJornada(); }
     // evento (regra 18: medir em 7 dias) — sem CPF/telefone/e-mail
-    if (S.dados && S.dados.venda_id) {
+    const vendaEv = (S.cond && S.cond.vendaId) || (S.dados && S.dados.venda_id);
+    if (vendaEv) {
       const motivoEv = { resumo: 'resumo', recompra: 'recompra', credito: 'credito', oferta: 'oferta', dacc: 'dacc', timeout: 'timeout', humano: 'humano', parou: 'parou', painel: 'parou', trava: 'trava' }[r && r.motivo] || 'popup';
-      api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: { venda_id: S.dados.venda_id, tipo: 'portal_extensao_conduzido',
+      api('/rest/v1/eventos_venda', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: { venda_id: vendaEv, tipo: 'portal_extensao_conduzido',
         detalhe: { etapa_parada: (r && r.etapa) || null, motivo: motivoEv, modo: S.cond.modo, duracao_s: (r && r.duracao_s) || Math.round((Date.now() - S.cond.t0) / 1000),
           popup: r && r.extra && r.extra.popup ? TR.redigir(r.extra.popup) : null, texto: r && r.texto ? TR.redigir(r.texto) : null } } }).catch(() => {});
     }
@@ -661,8 +673,10 @@
       desenha(); return true;   // responde depois (Seguir / Parar)
     }
     if (msg.tipo === 'conduzir_registro') {
-      condLog(msg.qual === 'viabilidade' ? 'Viável — registrando no NIOGEN.' : `Crédito ${msg.resultado === 'so_cartao' ? 'só cartão' : 'aprovado'} — registrando no NIOGEN.`);
-      registra(msg.qual, msg.resultado);
+      const rot = { viavel: 'Viável', aprovado: 'aprovado', so_cartao: 'só cartão', negado: 'negado', pendente: 'pendente' }[msg.resultado] || msg.resultado;
+      condLog(msg.qual === 'viabilidade' ? `${rot} — registrando no NIOGEN.` : `Crédito ${rot} — registrando no NIOGEN.`);
+      // 20/11: espera a gravação e diz no registro da condução se não gravou (antes o erro sumia num aviso coberto pelos seguintes)
+      registra(msg.qual, msg.resultado, S.cond.vendaId).then((ok) => { condLog(ok ? `✓ ${rot} gravado no NIOGEN.` : `⚠ ${rot} NÃO foi gravado no NIOGEN — grave na ficha.`); desenha(); });
       responde({ ok: true }); return false;
     }
     return false;

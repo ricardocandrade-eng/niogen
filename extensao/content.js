@@ -725,16 +725,38 @@
     await avancar();
     progresso('Etapa 4 · análise de crédito.');
     const r = await esperaAte(() => { const pp = popupAtual(); if (pp) return { pp }; return document.querySelector('input[name="radio-group"]') ? { e5: true } : null; }, 60000, 'crédito');
-    if (r.e5) { avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: 'aprovado' }); return; }
+    // 20/11 (revisão da extensão — Ricardo: "o que o portal mostra, quem lê grava"): antes, sem popup visto, gravava "aprovado" às cegas
+    // (errado quando o portal disse "só cartão"). Agora: mais uma chance ao popup; sem ele, as formas liberadas na Etapa 5.
+    if (r.e5) {
+      await espera(1500);
+      const pp2 = popupAtual();
+      if (pp2) r.pp = pp2;
+      else {
+        const lido = creditoPelosRadios();
+        if (lido) avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: lido });
+        else progresso('Crédito: não consegui ler o resultado no portal — confira e grave na ficha.');
+        return;
+      }
+    }
     const cls = T.classificarPopup(r.pp.titulo, r.pp.texto, 4);
+    // 20/11: o resultado vai para o NIOGEN ANTES de qualquer parada ou pausa (antes, negado/pendente/só cartão paravam sem gravar, e o
+    // aprovado só gravava depois do clique humano — se a pausa caísse, perdia-se). Antifraude fica com o humano: nunca outro CPF.
+    const lido = cls === 'aprovado_cartao' ? 'so_cartao' : /^aprovado/.test(cls) ? 'aprovado' : cls === 'negado' ? 'negado' : cls === 'pendente' ? 'pendente' : null;
+    if (lido) avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: lido });
     if (!/^aprovado/.test(cls)) pararPorPopup(r.pp);
     const forma = T.formaDaVenda(v.oferta.forma_pagamento);
     if (cls === 'aprovado_cartao' && forma.valor !== 'CREDITO') throw new Parada('credito', 'Crédito aprovado só para cartão, e a venda é em boleto. Combine com o cliente (troque a forma na ficha) antes de seguir.', { classe: cls });
-    const res = cls === 'aprovado_cartao' ? 'so_cartao' : 'aprovado';
     // O Continuar deste popup manda a biometria ao cliente: o clique é do humano. Retoma quando a Etapa 5 aparecer.
-    await pausaHumano('biometria', 'Crédito aprovado. O próximo clique (Continuar) manda a biometria ao cliente — clique você. Eu sigo quando a Etapa 5 abrir.',
+    await pausaHumano('biometria', 'Crédito aprovado (já gravado no NIOGEN). O próximo clique (Continuar) manda a biometria ao cliente — clique você. Eu sigo quando a Etapa 5 abrir.',
       () => !popupAtual() && document.querySelector('input[name="radio-group"]'), 15 * 60000);
-    avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: res });
+  }
+  // 20/11: o crédito pelas formas de pagamento que o portal liberou na Etapa 5 (só lê — o c5 usa o mesmo teste). Só cartão → so_cartao;
+  // boleto liberado → aprovado; nenhuma → não grava (o humano confere).
+  function creditoPelosRadios() {
+    const rs = [...document.querySelectorAll('input[name="radio-group"]')];
+    const desab = (e) => !!(e.disabled || e.getAttribute('aria-disabled') === 'true' || e.closest('[aria-disabled=true],.Mui-disabled,.disabled,[disabled]'));
+    const livres = rs.filter((e) => !desab(e)).map((e) => String(e.value || '').toUpperCase());
+    return T.creditoPelasFormas(livres);
   }
   // ---- Etapa 5 · Pagamento e ofertas
   function cartoesOferta() {

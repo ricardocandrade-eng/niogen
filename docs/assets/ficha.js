@@ -4420,7 +4420,6 @@
       if (c) return [c.credito_resultado ? (CRED_ROT[c.credito_resultado] || c.credito_resultado) : null, c.credito_em ? `lido ${dt(c.credito_em)}` : null];
       return [v.credito_em ? `gravado ${dt(v.credito_em)}` : null, v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
     }
-    if (k === 'bio' && v) return [v.biometria_link_enviado_em && v.biometria_status !== 'validada' ? `link ${dt(v.biometria_link_enviado_em)}` : null];
     if (k === 'os' && v) return [v.nio_os_em ? `aberta ${dt(v.nio_os_em)}` : null, v.nio_os && v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
     return [];
   }
