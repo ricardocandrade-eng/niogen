@@ -3208,7 +3208,7 @@
         ? `<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="fc2-ed" data-g="${grupoFalta}">Preencher na ficha</button></div>` : ''}`;
     } else {
       corpo = `${tipo === 'cred' ? '<label class="fc-chk"><input type="checkbox" data-fc-autoriza> O titular autorizou a consulta do CPF</label>' : ''}
-        <div class="fc-op-bts"><button type="button" class="btn btn-sm${tipo === 'viab' ? ' btn-acc' : ''}" data-f="fc-op" data-t="${tipo}">${IC.play}${tipo === 'viab' ? 'Consultar agora' : 'Rodar operador'}</button>${tipo === 'viab' ? '<small class="apagado">o robô consulta o portal da Nio (20–40 s), só leitura — nada é gravado até você mandar</small>' : ''}</div>`;
+        <div class="fc-op-bts"><button type="button" class="btn btn-sm${tipo === 'viab' ? ' btn-acc' : ''}" data-f="fc-op" data-t="${tipo}">${IC.play}${tipo === 'viab' ? 'Consultar agora' : 'Rodar operador'}</button>${tipo === 'viab' ? '<small class="apagado">o robô lê o portal da Nio (20–40 s, sem clicar em nada que grave lá) e grava aqui o que leu (sem viabilidade e aprovado com aviso de recompra ficam com você)</small>' : ''}</div>`;
     }
     return `<div class="fc-op" data-fc-op="${tipo}"><span class="fc-src op">${esc(nome)}</span>${corpo}</div>`;
   }
