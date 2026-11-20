@@ -4311,16 +4311,45 @@
     const resto = ks.filter((k) => !usados.has(k) && html[k]).map((k) => html[k]).join('');
     return out.join('') + (resto ? `<div class="fc2-grp g-todo"><div class="fc2-grp-h"><span>Outros</span></div>${resto}</div>` : '');
   }
+  // 20/11 (Ricardo: "as 7 etapas abram sempre recolhidas e distribuídas por todo o card da jornada, com a mesma largura. E ao clicar
+  // na etapa, ela se expande do tamanho todo do bloco da jornada… as etapas podem ter as principais informações sem precisar clicar"):
+  // as etapas ficam lado a lado, em colunas iguais (fc2-jl), cada uma com o status e o resumo do que importa (crédito, viabilidade,
+  // biometria, OS, agenda). Nenhuma abre sozinha. Clicada, o detalhe cobre o bloco todo (fc2-jl-ab), com "← Jornada" para voltar.
+  // Em tela estreita (≤ 900 px) as colunas viram a lista de antes, uma embaixo da outra.
+  function resumoEtapa(k) {
+    const v = d && !d.soConversa ? d.v : null;
+    const c = d && d.soConversa ? (d.conv || {}) : null;
+    const dt = (x) => (x ? NG.fmtData(x) : null);
+    if (k === 'viab') {
+      const o = v || c || {};
+      return [o.nio_viab_velocidade ? `até ${o.nio_viab_velocidade}` : null, o.nio_viab_em ? `lida ${dt(o.nio_viab_em)}` : null];
+    }
+    if (k === 'cred') {
+      if (c) return [c.credito_resultado ? (CRED_ROT[c.credito_resultado] || c.credito_resultado) : null, c.credito_em ? `lido ${dt(c.credito_em)}` : null];
+      return [v.credito_em ? `gravado ${dt(v.credito_em)}` : null, v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
+    }
+    if (k === 'bio' && v) return [v.biometria_link_enviado_em && v.biometria_status !== 'validada' ? `link ${dt(v.biometria_link_enviado_em)}` : null];
+    if (k === 'os' && v) return [v.nio_os_em ? `aberta ${dt(v.nio_os_em)}` : null, v.nio_os && v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
+    if (k === 'inst' && v) return [v.instalado_em ? null : v.instalacao_agendada_para ? `agendada ${dt(v.instalacao_agendada_para)}` : null];
+    return [];
+  }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
-    const atual = at.st !== 'done' ? 'atend' : ((L.find((x) => x.st !== 'done') || {}).k || null);
-    const aberta = fc.etapa || (fc.etapaX ? null : (at.abrir || atual));
+    const aberta = fc.etapa || null;
     const icone = (st) => (st === 'done' ? IC.ok : st === 'now' ? '<span class="fc-rdot"></span>' : st === 'wait' ? IC.pausa : st === 'run' ? IC.gira : st === 'warn' ? ICL.alerta : st === 'fail' ? IC.x : '');
+    let detAberto = '';
     const linha = (k, nome, sub, st, det) => {
       const on = aberta === k;
+      const subT = sub || '—';
+      const info = resumoEtapa(k).filter((x) => x && !subT.toLowerCase().includes(String(x).toLowerCase()));
+      if (on) {
+        detAberto = `<div class="fc2-jl-ab s-${st}"><div class="fc2-jl-abh"><button type="button" class="fc2-jl-volta" data-f="fc2-et" data-k="${k}" data-on="1" title="Voltar para as etapas">${IC.voltar}Jornada</button>
+          <span class="fc2-et-ic">${icone(st)}</span><b>${esc(nome)}</b><small title="${esc(subT)}">${esc(subT)}</small><span class="fc-sp"></span>
+          <button type="button" class="fc-x" data-f="fc2-et" data-k="${k}" data-on="1" aria-label="Fechar a etapa">${IC.x}</button></div>
+          <div class="fc2-det">${det || `<span class="apagado">${esc(subT)}</span>`}</div></div>`;
+      }
       return `<div class="fc2-et s-${st}${on ? ' on' : ''}"><button type="button" class="fc2-et-b" data-f="fc2-et" data-k="${k}" data-on="${on ? 1 : 0}" aria-expanded="${on}">
-        <span class="fc2-et-ic">${icone(st)}</span><span class="fc2-et-t"><b>${esc(nome)}</b><small title="${esc(sub || '')}">${esc(sub || '—')}</small></span><span class="fc2-et-sx">${on ? IC.cima : IC.baixo}</span></button>
-        ${on && det ? `<div class="fc2-det">${det}</div>` : ''}</div>`;
+        <span class="fc2-et-ic">${icone(st)}</span><span class="fc2-et-t"><b>${esc(nome)}</b><small title="${esc(subT)}">${esc(subT)}</small>${info.map((x) => `<em>${esc(x)}</em>`).join('')}</span><span class="fc2-et-sx">${IC.baixo}</span></button></div>`;
     };
     const itens = [linha('atend', 'Atendimento', at.d, at.st, at.det)];
     L.forEach((x) => {
@@ -4350,7 +4379,7 @@
       itens.push(linha('ind', 'Indicações', sub, inst ? 'done' : M.length || (po && po.pediu_em) ? 'now' : 'todo', det));
     }
     const feitas = L.filter((x) => x.st === 'done').length + (at.st === 'done' ? 1 : 0) + (din && din.estado === 'paga' ? 1 : 0);
-    return { html: `<div class="fc2-lista">${itens.join('')}</div>`, feitas, total: L.length + 2 };
+    return { html: `<div class="fc2-lista fc2-jl${detAberto ? ' fc2-jl-on' : ''}" style="--n:${itens.length}">${itens.join('')}</div>${detAberto}`, feitas, total: L.length + 2 };
   }
   // Uma linha de dado: rótulo · valor (ou "falta" em amarelo) · cadeado/lápis · copiar.
   const dl = (rot, val, o = {}) => `<div class="fc2-f"><span class="fc2-fk">${esc(rot)}</span><span class="fc2-fv${val ? '' : ' falta'}${o.mono ? ' mono' : ''}" title="${esc(val || o.falta || 'falta')}">${esc(val || o.falta || 'falta')}</span>
@@ -4621,7 +4650,7 @@
       bal.style.setProperty('--seta', `${Math.max(14, Math.min(w - 14, B.left + B.width / 2 - R.left - x))}px`);
     }
     ligarDfvSeEditando();
-    if (fc.rolarEt) { fc.rolarEt = false; const eo = raiz.querySelector('.fc2-et.on'); if (eo) eo.scrollIntoView({ block: 'nearest' }); }
+    if (fc.rolarEt) { fc.rolarEt = false; const eo = raiz.querySelector('.fc2-jl-ab'); if (eo) eo.scrollTop = 0; }
     if (fc.ind === undefined) carregarIndFicha();
     if (fc.dfv === undefined) carregarDfvFicha();   // 15/11: mapa da Nio (DFV) da ficha, 1 vez por cliente aberto
     const f = raiz.querySelector('[data-form] [autofocus]');

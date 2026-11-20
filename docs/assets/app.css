@@ -3677,3 +3677,34 @@ button.fc-id:hover { color: inherit; }
 /* 19/11 (Ricardo: "Lead qualificado, que é o mais importante…"): quanto a venda vale, ao lado do nome; venda perto de fechar em verde. */
 .lv2-vale { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 9px; font: 600 11px var(--sans); color: #A6AFBE; background: #1D222B; vertical-align: 1px; white-space: nowrap; }
 .lv2-vale.q { color: #57D38C; background: rgba(87, 211, 140, .12); }
+
+/* 20/11 (Ricardo): Jornada da venda — as etapas lado a lado, em colunas da mesma largura, ocupando o bloco todo; sempre recolhidas,
+   com o resumo à vista. Clicada, o detalhe ocupa o lugar das colunas (o bloco todo abaixo do título), com "← Jornada" para voltar.
+   Até 900 px as colunas viram a lista de antes, uma embaixo da outra. */
+.fc2-jl.fc2-jl-on { display: none; }
+.fc2-jl-ab { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid #1D232B; }
+.fc2-jl-abh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #1D232B; min-width: 0; }
+.fc2-jl-abh b { font-size: 14px; color: #E9EDF3; white-space: nowrap; }
+.fc2-jl-abh small { font-size: 12px; color: #AEB7C2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.fc2-jl-volta { display: inline-flex; align-items: center; gap: 6px; background: #141A21; border: 1px solid #262E38; color: #C9D1DA;
+  border-radius: 8px; padding: 4px 10px; font: inherit; font-size: 12.5px; cursor: pointer; flex: none; }
+.fc2-jl-volta:hover { background: #1A222B; }
+.fc2-jl-volta .fc-ic { width: 14px; height: 14px; }
+.fc2-jl-ab .fc2-det { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 18px; }
+.fc2-jl .fc2-et-t em { font-style: normal; font-size: 11.5px; line-height: 1.3; color: #8D97A3; }
+@media (min-width: 901px) {
+  .fc2-jl { display: grid; grid-template-columns: repeat(var(--n, 7), minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 6px;
+    padding: 8px 10px 10px; overflow: hidden; }
+  .fc2-jl .fc2-et { display: flex; min-width: 0; min-height: 0; border: 1px solid #1D232B; background: #0F1419; border-radius: 10px; }
+  .fc2-jl .fc2-et.s-now { border-color: #2C4E7E; background: #0F1722; }
+  .fc2-jl .fc2-et.s-warn { border-color: #5C4A1E; background: #17140C; }
+  .fc2-jl .fc2-et.s-fail { border-color: #6A2A2A; background: #1A0F10; }
+  .fc2-jl .fc2-et.s-done { border-color: #1E3A2A; }
+  .fc2-jl .fc2-et-b { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 8px; height: 100%;
+    min-height: 0; padding: 12px 10px; overflow: hidden; }
+  .fc2-jl .fc2-et-t { gap: 4px; width: 100%; }
+  .fc2-jl .fc2-et-t b { font-size: 13px; line-height: 1.25; }
+  .fc2-jl .fc2-et-t small { white-space: normal; overflow: visible; font-size: 12px; line-height: 1.35; color: #AEB7C2; }
+  .fc2-jl .fc2-et.s-todo .fc2-et-t small { color: #7F8A96; }
+  .fc2-jl .fc2-et-sx { display: none; }
+}
