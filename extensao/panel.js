@@ -207,6 +207,47 @@
     if (S.dados) acendeAnteriores();
     desenha();
   });
+  // 20/11 (etapa C): o portal mostrou o nº da OS (modal do fim do pedido) → grava sozinho na venda aberta no painel: OS + dia +
+  // período + forma quando o humano tocou no calendário (os_agendar); só a OS quando não (momento 'os' — a agenda chega pela Consulta
+  // OS). Uma vez por OS (storage da sessão). A porta recusa o que não vale (biometria pendente, cartão sem forma cartão…) e o aviso diz.
+  chrome.runtime.onMessage.addListener((msg, sender) => {
+    if (!msg || msg.tipo !== 'portal_os_lida' || !sender.tab) return;
+    if (S.tabId != null && sender.tab.id !== S.tabId) return;
+    gravarOsLida(msg);
+  });
+  async function gravarOsLida(msg) {
+    const os = String(msg.os || '').replace(/\D/g, '');
+    if (os.length < 6) return;
+    if (!['admin', 'backoffice'].includes(S.perfil)) return;
+    if (!S.dados || !S.dados.venda_id) { aviso(`O portal mostrou a OS ${os}. Abra a venda no painel para ela ser gravada sozinha (ou grave na ficha).`, 'bad'); desenha(); return; }
+    const chave = `os_lida:${S.dados.venda_id}:${os}`;
+    try { const j = await chrome.storage.session.get(chave); if (j && j[chave]) return; } catch (e) { /* segue */ }
+    const vendaId = S.dados.venda_id;
+    // a venda já tem OS? a mesma → nada a fazer; outra → NÃO grava sozinho (seria "reemitir pedido", que troca a OS e apaga a agenda:
+    // decisão do admin, na ficha). Também protege de a venda aberta no painel não ser a do portal.
+    try {
+      const atual = await api(`/rest/v1/vendas?id=eq.${encodeURIComponent(vendaId)}&select=nio_os,status`);
+      const osAtual = String(((atual || [])[0] || {}).nio_os || '').trim();
+      if (osAtual === os) { try { await chrome.storage.session.set({ [chave]: Date.now() }); } catch (e) { /* ok */ } return; }
+      if (osAtual) { aviso(`O portal mostrou a OS ${os}, mas esta venda já tem a OS ${osAtual}. Confira se a venda aberta é a do portal; reemitir pedido é na ficha (admin).`, 'bad'); desenha(); return; }
+    } catch (e) { aviso(`O portal mostrou a OS ${os}, mas não consegui conferir a venda: grave na ficha.`, 'bad'); desenha(); return; }
+    const forma = msg.forma || (S.dados.oferta || {}).forma_pagamento || '';
+    const comAgenda = /^\d{4}-\d{2}-\d{2}$/.test(msg.dia || '') && ['08:00', '13:00'].includes(msg.periodo) && forma;
+    S.ocupado = true; desenha();
+    try {
+      const r = comAgenda
+        ? await rpc('backoffice_momento', { p_venda: vendaId, p_momento: 'os_agendar', p_dados: { os, dia: msg.dia, periodo: msg.periodo, forma, origem: 'extensao' } })
+        : await rpc('backoffice_momento', { p_venda: vendaId, p_momento: 'os', p_dados: forma ? { os, forma, origem: 'extensao' } : { os, origem: 'extensao' } });
+      try { await chrome.storage.session.set({ [chave]: Date.now() }); } catch (e) { /* ok */ }
+      S.registro = { ...(S.registro || {}), os_agendar: `OS ${os} gravada sozinha${comAgenda ? ` · ${msg.dia.split('-').reverse().slice(0, 2).join('/')} ${msg.periodo === '08:00' ? 'manhã' : 'tarde'}` : ' (a agenda chega pela Consulta OS)'}` };
+      S.feitas[7] = true; salvaJornada();
+      await carregaPorta();
+      aviso(`OS ${os} lida do portal e gravada no NIOGEN${r && r.resumo ? ` · ${r.resumo}` : ''}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
+    } catch (e) {
+      aviso(`O portal mostrou a OS ${os}, mas o NIOGEN não gravou: ${e.message}. Grave na ficha.`, 'bad');
+    }
+    S.ocupado = false; desenha();
+  }
   chrome.runtime.onMessage.addListener((msg, sender) => {
     if (!msg || msg.tipo !== 'historico_progresso' || !S.hist) return;
     S.hist.progresso = [...(S.hist.progresso || []).slice(-11), msg.texto];

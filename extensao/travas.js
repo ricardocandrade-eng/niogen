@@ -230,7 +230,54 @@
     return null;
   }
 
+  // 20/11 (etapa C do plano "o retorno do portal grava sozinho"): o nº da OS que o portal mostra no modal do fim do pedido.
+  // Só lê o texto. Aceita "OS 12345678", "Nº da OS: 12345678", "Ordem de serviço 12345678"; sem esse rótulo, só um número de 8 a
+  // 10 dígitos sozinho num texto que fala de OS/pedido. Nunca CPF, CEP ou telefone (formatos e tamanhos diferentes).
+  function lerOS(texto) {
+    const t = String(texto || '');
+    const m = t.match(/(?:n[ºo°.]?\s*(?:da\s*)?os\b|\bos\s*(?:n[ºo°.]?)?\s*[:#-]?|ordem\s+de\s+servi[cç]o\s*(?:n[ºo°.]?)?\s*[:#-]?)\s*(\d{6,12})\b/i);
+    if (m) return m[1];
+    if (!/\b(os|ordem de servi[cç]o|pedido)\b/i.test(t)) return null;
+    const nums = (t.match(/(?<![\d.\-/])\d{8,10}(?![\d.\-/])/g) || []);
+    return nums.length === 1 ? nums[0] : null;
+  }
+  // período que o humano tocou no calendário do portal: manhã → 08:00, tarde → 13:00; o resto não se grava (formulário à mão).
+  function periodoDoTexto(texto) {
+    const t = norm(texto);
+    if (!t || t.length > 40) return null;
+    if (/manha|\b0?8\s*(:|h)\s*0?0?\b|\b0?8h\b/.test(t)) return '08:00';
+    if (/tarde|\b13\s*(:|h)\s*0?0?\b|\b13h\b/.test(t)) return '13:00';
+    return null;
+  }
+  // dia que o humano tocou no calendário: pela data do aria-label (se houver) ou pelo dia + mês/ano do cabeçalho; sem cabeçalho,
+  // o mês corrente (dia que já passou = mês seguinte). Devolve AAAA-MM-DD ou null.
+  const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const MES_EN = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  function diaDoCalendario(dia, rotulo, cabecalho, hojeISO) {
+    const d = Number(dia);
+    if (!(d >= 1 && d <= 31)) return null;
+    const pad = (n) => String(n).padStart(2, '0');
+    const iso = (a, m, x) => `${a}-${pad(m)}-${pad(x)}`;
+    const r = norm(rotulo);
+    let m = r.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return iso(m[1], Number(m[2]), Number(m[3]));
+    m = r.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return iso(m[3], Number(m[2]), Number(m[1]));
+    const acharMes = (s) => { const t = norm(s); let i = MESES.findIndex((x) => t.includes(x)); if (i < 0) i = MESES.findIndex((x) => new RegExp(`\\b${x.slice(0, 3)}\\b`).test(t)); if (i < 0) i = MES_EN.findIndex((x) => new RegExp(`\\b${x}\\b`).test(t)); return i; };
+    const acharAno = (s) => { const y = norm(s).match(/\b(20\d{2})\b/); return y ? Number(y[1]) : null; };
+    const hoje = hojeISO ? new Date(`${hojeISO}T12:00:00`) : new Date();
+    let mes = acharMes(rotulo), ano = acharAno(rotulo);
+    if (mes < 0) { mes = acharMes(cabecalho); ano = acharAno(cabecalho) || ano; }
+    if (mes < 0) {
+      mes = hoje.getMonth(); ano = hoje.getFullYear();
+      if (d < hoje.getDate()) { mes += 1; if (mes > 11) { mes = 0; ano += 1; } }
+    }
+    if (!ano) ano = hoje.getFullYear() + (mes < hoje.getMonth() ? 1 : 0);
+    return iso(ano, mes + 1, d);
+  }
+  const FORMA_RADIO = { BOLETO: 'boleto', CREDITO: 'cartao', DACC: 'dacc' };
+
   raiz.NIOGEN_TRAVAS = { norm, textoBotao, LISTA_NEGRA, BOTOES, POPUP, naListaNegra, popupSeguro, conferirClique, classificarPopup, MOTIVO_POPUP,
     temNumero, escolherOpcao, alvoComplemento, alvoEndereco, formaDaVenda, lerOferta, casarOferta, megas, preco,
-    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas };
+    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas, lerOS, periodoDoTexto, diaDoCalendario, FORMA_RADIO };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

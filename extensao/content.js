@@ -863,10 +863,55 @@
     return { ok: !r.ok, msg: r.ok ? `ERRO: "${texto}" passaria na etapa ${etapa}` : `"${texto}" recusado — ${r.motivo}` };
   }
 
+  // ------------------------------------------------------------------ 20/11 (etapa C): OS e agenda lidas do portal, sem clicar
+  // Decisão do Ricardo (20/11): "a OS e o agendamento [podem] ser gravados pela extensão ou de forma automática… o agendamento é na
+  // tela anterior, que abre aquele calendário que clicamos na data e ao lado os turnos". A extensão SÓ OUVE o que o humano faz:
+  // um ouvinte passivo de clique (isTrusted, sem preventDefault, sem disparar nada) guarda o dia e o período tocados no calendário,
+  // e a forma de pagamento marcada na Etapa 5; quando o modal com o nº da OS aparece (depois do clique humano que grava o pedido),
+  // ela lê o número e manda ao painel, que grava no NIOGEN. Nenhum clique novo no portal (regra 5); o modal não é fechado.
+  const OSL = { dia: null, periodo: null, forma: null, enviada: null };
+  function cabecalhoCalendario(el) {
+    const cal = el.closest('[role=grid],[class*=calend i],[class*=picker i],[class*=datepicker i],table');
+    const box = cal && (cal.parentElement || cal);
+    const h = box && box.querySelector('[role=heading],[class*=header i],[class*=title i],[class*=label i],caption,thead');
+    return h ? (h.innerText || h.textContent || '').trim().slice(0, 60) : '';
+  }
+  document.addEventListener('click', (ev) => {
+    if (!ev.isTrusted) return;
+    try {
+      const el = ev.target && ev.target.closest ? ev.target.closest('button,[role=gridcell],[role=option],[role=button],td,li,label') : null;
+      if (!el) return;
+      const tx = (el.innerText || el.textContent || '').trim();
+      const p = T.periodoDoTexto(tx);
+      if (p) { OSL.periodo = p; return; }
+      if (/^\d{1,2}$/.test(tx) && el.closest('[role=grid],[class*=calend i],[class*=picker i],[class*=datepicker i],table')) {
+        const rot = el.getAttribute('aria-label') || (el.closest('[aria-label]') && el.closest('[aria-label]').getAttribute('aria-label')) || '';
+        const hoje = new Date();
+        const dia = T.diaDoCalendario(tx, rot, cabecalhoCalendario(el), `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`);
+        if (dia) OSL.dia = dia;
+      }
+    } catch (e) { /* só ouve: nunca atrapalha o portal */ }
+  }, { capture: true, passive: true });
+  document.addEventListener('change', (ev) => {
+    if (!ev.isTrusted) return;
+    const el = ev.target;
+    if (el && el.name === 'radio-group' && el.checked) OSL.forma = T.FORMA_RADIO[String(el.value || '').toUpperCase()] || OSL.forma;
+  }, { capture: true, passive: true });
+  function checarOS(etapa) {
+    if (!(etapa >= 5)) return;
+    const pp = popupAtual();
+    if (!pp) return;
+    const os = T.lerOS(`${pp.titulo}\n${pp.texto}`);
+    if (!os || os === OSL.enviada) return;
+    OSL.enviada = os;
+    try { chrome.runtime.sendMessage({ tipo: 'portal_os_lida', os, dia: OSL.dia, periodo: OSL.periodo, forma: OSL.forma, texto: T.redigir(pp.texto).slice(0, 200) }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ }
+  }
+
   // ------------------------------------------------------------------ conversa com o painel
   let ultimo = '';
   function empurraEstado(forca) {
     const estado = { tipo: 'estado', etapa: detectarEtapa(), avisos: detectarAvisos(), historico: naHistorico() };
+    try { checarOS(estado.etapa); } catch (e) { /* só leitura */ }
     const chave = JSON.stringify([estado.etapa, estado.avisos.map((a) => a.codigo), estado.historico]);
     if (!forca && chave === ultimo) return;
     ultimo = chave;

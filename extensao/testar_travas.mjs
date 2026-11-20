@@ -137,5 +137,22 @@ caso('boleto liberado → aprovado', T.creditoPelasFormas(['BOLETO', 'CREDITO'])
 caso('débito liberado → aprovado', T.creditoPelasFormas(['dacc']) === 'aprovado');
 caso('nenhuma liberada → não grava', T.creditoPelasFormas([]) === null);
 
+// ── 10. etapa C (20/11): OS e agenda lidas do portal, sem clicar ──
+caso('OS com rótulo', T.lerOS('Pedido realizado com sucesso! Nº da OS: 12242686') === '12242686');
+caso('OS "OS 12345678"', T.lerOS('OS 12345678 aberta') === '12345678');
+caso('OS ordem de serviço', T.lerOS('Ordem de serviço nº 98765432 gerada') === '98765432');
+caso('OS sem rótulo, número único em texto de pedido', T.lerOS('Pedido concluído ' + String.fromCharCode(10) + '12242686') === '12242686');
+caso('CPF não vira OS', T.lerOS('Pedido do CPF 123.456.789-09 concluído') === null);
+caso('texto sem OS nem pedido não lê', T.lerOS('Viabilidade disponível 12345678') === null);
+caso('dois números soltos não lê', T.lerOS('Pedido 12345678 e 87654321') === null);
+caso('período manhã', T.periodoDoTexto('Manhã') === '08:00');
+caso('período 13:00 - 17:00', T.periodoDoTexto('13:00 - 17:00') === '13:00');
+caso('período texto longo não lê', T.periodoDoTexto('Escolha a data e o período da instalação de manhã ou à tarde, por favor') === null);
+caso('dia pelo aria-label', T.diaDoCalendario('21', '21 de novembro de 2026', '', '2026-11-20') === '2026-11-21');
+caso('dia pelo cabeçalho', T.diaDoCalendario('3', '', 'Dezembro 2026', '2026-11-20') === '2026-12-03');
+caso('dia sem cabeçalho, já passou → mês seguinte', T.diaDoCalendario('2', '', '', '2026-11-20') === '2026-12-02');
+caso('dia sem cabeçalho, ainda vem → este mês', T.diaDoCalendario('25', '', '', '2026-11-20') === '2026-11-25');
+caso('dia inválido', T.diaDoCalendario('42', '', '', '2026-11-20') === null);
+
 console.log(`\n${falhou ? 'VERMELHO' : 'VERDE'} — ${ok} ok, ${falhou} falharam`);
 process.exit(falhou ? 1 : 0);

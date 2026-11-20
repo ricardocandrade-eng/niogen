@@ -11,6 +11,21 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.9.0 (20/11/2026) — a OS e a agenda gravam sozinhas (etapa C do plano "o retorno do portal grava sozinho")
+Ricardo: "a OS e o agendamento [podem] ser gravados pela extensão… OS até dá pra ser automático. Já o agendamento é na tela
+anterior, que abre aquele calendário que clicamos na data e ao lado os turnos".
+- **Só ouve, não clica.** Um ouvinte passivo (só cliques de gente — `isTrusted` —, sem `preventDefault`, sem disparar nada) guarda o
+  **dia** e o **período** que você toca no calendário do portal e a **forma de pagamento** marcada na Etapa 5.
+- **OS lida do modal.** Quando o portal mostra o modal com o nº da OS (depois do SEU clique que grava o pedido), a extensão lê o
+  número e o painel grava na venda aberta: **OS + dia + período + forma** (`os_agendar`) quando o calendário foi lido; **só a OS**
+  (`os`) quando não — a agenda chega sozinha pela Consulta OS. O modal não é tocado.
+- **Travas da gravação:** só admin/backoffice; precisa da venda aberta no painel; **a venda já tem outra OS → não grava** (seria
+  "reemitir pedido", decisão do admin na ficha — e protege de a venda aberta não ser a do portal); a mesma OS → nada; uma vez por OS.
+  A porta do banco recusa o que não vale (biometria pendente, só cartão com forma boleto…) e o painel diz.
+- **Não testado no portal real:** os seletores do calendário são genéricos (célula de grade/tabela com o número do dia; período por
+  "manhã/tarde/8h/13h"). Se o dia ou o período não forem lidos, a OS grava sozinha mesmo assim e a agenda vem da Consulta OS.
+- `testar_travas.mjs`: 127 casos (15 novos: `lerOS`, `periodoDoTexto`, `diaDoCalendario`).
+
 ## 0.8.1 (20/11/2026) — o que o portal mostra, a extensão grava (revisão da extensão)
 Pedido do Ricardo: "se é o Portal, seja quem for gravar, que grave, sem o humano se envolver". Na condução:
 - **Crédito lido de verdade.** Sem popup visto, a extensão não grava mais "aprovado" às cegas: tenta o popup de novo e, sem ele,
@@ -20,8 +35,7 @@ Pedido do Ricardo: "se é o Portal, seja quem for gravar, que grave, sem o human
 - **Na venda certa.** O registro vai para a venda aberta quando a condução começou, mesmo que outra seja aberta no meio.
 - **Erro à vista.** O registro da condução diz "✓ gravado" ou "⚠ NÃO foi gravado — grave na ficha".
 - Nenhum clique novo no portal; `testar_travas.mjs` com 112 casos (4 novos: crédito pelas formas).
-- Ainda a fazer (plano `docs/PLANO_retornos_do_portal_gravam_sozinhos_201126_0010.md`, etapa C): OS e agenda gravadas sozinhas
-  lendo o modal da OS e o calendário; sem viabilidade e "não encontrado" gravados; clique de opção passando pela lista negra.
+- Ainda a fazer: sem viabilidade e "não encontrado" gravados; clique de opção passando pela lista negra.
 
 ## Conduzir até o Resumo (0.6.0, 12/11/2026) — `docs/Prompt_extensao_ate_resumo_121126_0100.md`
 
