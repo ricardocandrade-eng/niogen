@@ -3188,7 +3188,16 @@
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
       const telaP = !['viavel'].includes(o.s.resultado) && (!/^aprovado/.test(o.s.resultado || '') || (o.s.resultado === 'aprovado_parcial' && !(o.s.formas_liberadas || []).length)) && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
         ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
-      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}
+      // 20/11 (Ricardo, caso Michele L-82: "Clico em 'Gravar o que o portal mostrou'?"): pedido em andamento e antifraude não são um
+      // resultado de crédito para gravar — o que fazer vai à vista, e o "Gravar o que o portal mostrou" sai (ver o cartão do crédito).
+      const respPed = String((((d.conv || d.convInfo || {}).dados) || {}).pedido_aberto_resposta || '').trim();
+      const oQueFazer = tipo !== 'cred' ? ''
+        : o.s.resultado === 'pedido_em_andamento' ? `<div class="fc-aviso bad"><b>Já existe pedido Nio em andamento neste CPF — NÃO abra outro</b> (recompra = multa de R$ 500).
+            Confira no portal, em <b>Histórico de Pedidos</b>, de quem é e em que status está.${respPed ? ` O cliente disse à Mari: «${esc(respPed.slice(0, 160))}».` : ''}
+            Se ele cancelou, o portal só libera quando a Nio baixar o cancelamento: <b>reconsulte depois</b>. Se o pedido for dele e seguir ativo (outra revenda ou Nio direto), é <b>Saída</b>; na dúvida, fale com o Ricardo.</div>`
+        : o.s.resultado === 'negado_antifraude' ? '<div class="fc-aviso bad"><b>Negado por critérios antifraude</b>: a Nio vê Nio neste endereço. <b>Nunca consulte outro CPF.</b> Pergunte ao cliente se a Nio é dele (ou de alguém da casa) ou de outro morador que se mudou e grave na ficha › Crédito (Antifraude).</div>'
+        : '';
+      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}${oQueFazer}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead && !o.gravado ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
@@ -3391,6 +3400,7 @@
           : comOS ? '<span class="nota-campo">O pedido (OS) já foi aberto: o crédito passou e não se consulta de novo.</span>' : opPainel('cred')}
         ${!fimV && !comOS && ehBO() ? (v.credito_resultado && 'credito_origem' in v   // 0330: o Corrigir (credito_corrigir) só com a migration no ar
           ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-form" data-form="credito_corrigir">Corrigir</button><span class="nota-campo">o portal mostrou outro resultado? corrija com o motivo</span></div>'
+          : fc.op.cred && fc.op.cred.estado === 'pronto' && ['pedido_em_andamento', 'negado_antifraude'].includes((fc.op.cred.s || {}).resultado) ? ''
           : '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Gravar o que o portal mostrou</button><span class="nota-campo">rodou o crédito no portal sem a extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>') : ''}${!fimV && !comOS ? semCartaoBt(v.credito_resultado) : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.

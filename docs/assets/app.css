@@ -3716,3 +3716,11 @@ button.fc-id:hover { color: inherit; }
 .fc2-agcard .fc-efeito.saida { background: #24141A; color: #F2A3A3; }
 .fc2-agb .btn.fc2-ag-saida { border-color: #5A2A2E; color: #F09A9A; background: #1A1214; }
 .fc2-agb .btn.fc2-ag-saida:hover { background: #24161A; border-color: #7A3438; color: #FFB3B3; }
+
+/* 20/11 (Ricardo: "sempre que estiver parado numa etapa, o botão da trilha deve ficar amarelo e se parou na etapa (encerrou),
+   vermelho"): a etapa da vez em amarelo (texto e ícone) na Escada e na Jornada; a encerrada (Saída) segue vermelha. */
+.fc-es.s-now { color: #F2C46B; }
+.fc2-jl .fc2-et.s-now { border-color: #6B5320; background: #17140C; }
+.fc2-et.s-now .fc2-et-ic { background: rgba(227,179,65,.15); border-color: #B38422; color: #F2C46B; }
+.fc2-et.s-now .fc2-et-ic .fc-rdot { background: #F2C46B; }
+.fc2-jl-ab.s-now .fc2-jl-abh b { color: #F2C46B; }
