@@ -29,7 +29,7 @@
 <link rel="stylesheet" href="assets/app.css?v=201126-9">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=191126-5"></script>
+<script src="assets/app.js?v=201126-13"></script>
 <script src="assets/sidebar.js?v=161126-21"></script>
 <script src="assets/novavenda.js?v=131126-17"></script>
 <style>
@@ -281,6 +281,8 @@
   let linkCadastro = null, linkLiberacao = null;
   NG.linkConfig('nio_cadastro_unidade').then((u) => { linkCadastro = u; }).catch(() => {});
   NG.linkConfig('nio_pedido_liberacao').then((u) => { linkLiberacao = u; }).catch(() => {});
+  let linkAcompanhar = null;   // 20/11 (L-219): onde a Nio responde o pedido de liberação (config_links, fora do repo)
+  NG.linkConfig('nio_acompanhar_liberacao').then((u) => { linkAcompanhar = u; }).catch(() => {});
 
   // ------------------------------------------------------------ estado da consulta atual
   let rodada = 0;          // cada Consultar abre uma rodada; respostas de rodadas velhas são ignoradas
@@ -463,63 +465,20 @@
       <span>${txt}</span>
     </div>`;
   // ------------------------------------------------------------ Forms "Tratamento nacional de endereço - NIO" já preenchido
-  // (11/11 ~23h20, pedido do Ricardo). Mesmo formulário para "Pedir liberação" (200 m) e "Pedir cadastro da unidade".
-  // Ficam para a pessoa: coordenada (Maps) e a foto. Valores das listas = texto exato do Forms.
-  const FORMS_NIO = {   // TODO regra 15: mover para config no Supabase (parceiro_id) quando houver 2º parceiro
-    executivo: 'ROGERIO PEREIRA PACHECO', canal: 'PAP', empresa: 'DHARMA', sap: '1069521',   // SAP = código do PDV (rascunho do Ricardo, 11/11)
-    e: { sap: 98401140, executivo: 1446139771, canal: 1657894342, email: 1046842637, empresa: 1496414418, uf: 81810683, cep: 1307779506,
-      cidade: 1889792069, tipoLog: 559365206, logradouro: 1115141868, bairro: 2063972096, numero: 1765507466, complemento: 1597331614,
-      vizinhos: 386386775, obs: 1647236246 },
-  };
-  const UF_NOME = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santos',
-    GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
-    PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima',
-    SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
-  const TIPO_LOG = [[/^(r|rua)\.?$/i, 'Rua'], [/^(av|avenida)\.?$/i, 'Avenida'], [/^(al|alameda)\.?$/i, 'Alameda'], [/^beco$/i, 'Beco'],
-    [/^(tv|trav|travessa)\.?$/i, 'Travessa'], [/^(rod|rodovia)\.?$/i, 'Rodovia'], [/^servid[aã]o$/i, 'Servidão']];
+  // (11/11 ~23h20, pedido do Ricardo). 20/11 (L-219): a montagem mora em NG.formsNioUrl (a Ficha usa a mesma; CEP 00000-000).
+  const formsUrl = (base, motivo) => NG.formsNioUrl(base, motivo, { end: ultimo || endereco(), portal: (portal && portal.s) || {},
+    dfv: dfv && dfv.estado === 'pronto' ? dfv.r : null, email: eu.email || '' });
   const titulo = (t) => String(t || '').toLowerCase().replace(/(^|[\s(-])([a-zà-ú])/g, (m, a, b) => a + b.toUpperCase()).replace(/ (De|Da|Do|Das|Dos|E)(?= )/g, (m) => m.toLowerCase());
-  function formsUrl(base, motivo) {
-    if (!base) return null;
-    const e = ultimo || endereco();
-    const s = (portal && portal.s) || {};
-    const r = (dfv && dfv.estado === 'pronto' && dfv.r && dfv.r.fonte !== 'base_congelada') ? dfv.r : {};
-    // "Rua Almirante Barroso, 170 - Paineiras, Juiz De Fora - MG" (portal) → rua, bairro, cidade, UF; senão, o DFV
-    const m = String((s.endereco && s.endereco.resolvido) || '').match(/^(.+?),\s*[^,]*?-\s*(.+?),\s*(.+?)\s*-\s*([A-Z]{2})\s*$/);
-    let rua = m ? m[1] : titulo(r.logradouro);
-    const bairro = m ? m[2] : titulo(r.bairro);
-    const cidade = m ? titulo(m[3]) : titulo((r.entrada || {}).municipio);
-    const uf = m ? m[4] : String((r.entrada || {}).uf || '').toUpperCase();
-    let tipo = '';
-    const pal = rua.split(/\s+/);
-    const achado = TIPO_LOG.find(([re]) => re.test(pal[0] || ''));
-    if (achado) { tipo = achado[1]; rua = pal.slice(1).join(' '); } else if (rua) tipo = 'Outros';
-    const alvo = parseInt(String(e.numero || '').replace(/\D/g, ''), 10);
-    const viz = (r.fachadas_no_cep || []).map((x) => ({ n: String(x.numero || ''), c: comp(x), d: Math.abs((parseInt(String(x.numero).replace(/\D/g, ''), 10) || 1e9) - (alvo || 0)) }))
-      .filter((x) => x.n && x.n !== String(e.numero)).sort((a, b) => a.d - b.d).slice(0, 6);
-    const quando = s.consultado_em ? NG.fmtHora(s.consultado_em) : '';
-    const obs = motivo === 'cadastro'
-      ? `Pedido de cadastro da unidade "${e.complemento || '—'}". Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): a unidade não está na lista do endereço${s.opcoes && s.opcoes.lista ? ` (${s.opcoes.lista.length} unidades cadastradas)` : ''}. Enviado pelo NIOGEN (Dharma Telecom).`
-      : `Pedido de liberação pela regra dos 200 m. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): ${viz.length ? `fachada viável mais próxima no CEP: nº ${viz[0].n}` : 'fachadas viáveis no CEP'}. Enviado pelo NIOGEN (Dharma Telecom).`;
-    const v = {
-      sap: FORMS_NIO.sap, executivo: FORMS_NIO.executivo, canal: FORMS_NIO.canal, email: eu.email || '', empresa: FORMS_NIO.empresa,
-      uf: UF_NOME[uf] || '', cep: e.cep || '', cidade, tipoLog: tipo, logradouro: rua, bairro, numero: e.numero || '0', complemento: e.complemento || '',
-      vizinhos: viz.length ? `Viáveis no DFV (mesmo CEP): ${viz.map((x) => `nº ${x.n}${x.c ? ` ${x.c}` : ''}`).join(', ')}` : '',
-      obs,
-    };
-    const u = new URL(base);
-    u.searchParams.set('usp', 'pp_url');
-    Object.entries(v).forEach(([k, val]) => { if (val) u.searchParams.set(`entry.${FORMS_NIO.e[k]}`, val); });
-    return u.toString();
-  }
   const BT = {
     pedido: '<button type="button" class="btn btn-acc" data-criar>＋ Abrir pedido com este endereço</button>',
     credito: podeCredito ? '<button type="button" class="btn" data-ir-credito>Consultar crédito</button>' : '',
     padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ endereço padrão</button>' : '',
     mapa: '<button type="button" class="btn" data-abrir-painel>Ver no mapa (200 m)</button>',
-    liberacao: () => (linkLiberacao
-      ? `<a class="btn btn-acc" href="${esc(formsUrl(linkLiberacao, 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
+    liberacao: (mot) => (linkLiberacao
+      ? `<a class="btn btn-acc" href="${esc(formsUrl(linkLiberacao, mot || 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
       : '<span class="chip warn" title="config_links.nio_pedido_liberacao">Pedir liberação: formulário ainda não cadastrado no NIOGEN — pedir ao Rogério</span>'),
     cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(formsUrl(linkCadastro, 'cadastro'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
+    acompanhar: () => (linkAcompanhar ? `<a class="btn" href="${esc(linkAcompanhar)}" target="_blank" rel="noopener noreferrer" title="Onde a Nio responde o pedido de liberação da fachada (login do PDV)">Acompanhar a resposta da Nio ↗</a>` : ''),
     conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
   };
 
@@ -645,21 +604,16 @@
       html = caixa('Viável no portal', 'ok', `Endereço com viabilidade oficial da Nio${s.velocidade ? ` · até <b>${esc(s.velocidade)}</b>` : ''}.${s.endereco && s.endereco.viabilidade ? ` <span class="muted">${esc(s.endereco.viabilidade)}</span>` : ''}`, carPortal);
       acoesDec = [BT.pedido, BT.credito];
     } else if (p.estado === 'pronto' && r === 'sem_viabilidade') {
-      if (v === 'viavel') {   // 14/11 (0202, Helton): a própria fachada está viável no DFV — o "não" do portal pode ser de OUTRA rua do CEP
-        const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
-        const ruaD = dfv && dfv.r && dfv.r.fachada ? dfv.r.fachada.logradouro : '';
-        html = caixa('Conferir a rua no portal', 'warn', `O portal diz <b>sem viabilidade</b>, mas o DFV tem <b>esta fachada como viável</b>${ruaD ? ` (${esc(ruaD)})` : ''}. ${ruaP ? `O portal consultou <b>${esc(ruaP)}</b> — ` : ''}confira se é a rua do cliente: se não for, consulte de novo escolhendo a rua certa; se for, peça a liberação.`, `${carPortal} · ${carDfv}`);
-        acoesDec = ['<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.liberacao(), BT.mapa];
-      } else if (v === 'elegivel') {
-        html = caixa('Elegível pelos 200 m', 'warn', `O portal diz <b>sem viabilidade</b>, mas o DFV tem ${v === 'viavel' ? 'esta fachada como viável' : 'fachadas viáveis neste CEP'}: a Nio instala até 200 m da última casa viável. Confira a distância no mapa e peça a liberação.`, `${carPortal} · ${carDfv}`);
-        acoesDec = [BT.liberacao(), BT.mapa, BT.padrao];
-      } else if (v === 'sem') {
-        html = caixa('Sem cobertura', 'bad', 'O portal diz sem viabilidade e o DFV não tem nenhuma fachada viável neste CEP. Não há venda neste endereço hoje.', `${carPortal} · ${carDfv}`);
-        acoesDec = [BT.padrao];
-      } else {
-        html = caixa('Sem viabilidade no portal', 'bad', 'O DFV não respondeu para checar os 200 m — confira no mapa.', carPortal);
-        acoesDec = [BT.mapa, BT.padrao];
-      }
+      // 20/11 (L-219, Cintia): a decisão e o texto moram em NG.semViabDecisao — a Ficha mostra o mesmo. Fachada viável no DFV →
+      // o formulário vem primeiro (pedir a liberação da fachada), com o link para acompanhar a resposta da Nio.
+      const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
+      const ruaD = dfv && dfv.r && dfv.r.fachada ? dfv.r.fachada.logradouro : '';
+      const dz = NG.semViabDecisao(v, { ruaPortal: ruaP, ruaDfv: ruaD });
+      html = caixa(dz.rot, dz.cor, dz.txt, v ? `${carPortal} · ${carDfv}` : carPortal);
+      acoesDec = dz.chave === 'conferir_fachada' ? [BT.liberacao('fachada'), '<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.mapa, BT.acompanhar()]
+        : dz.chave === 'elegivel_200m' ? [BT.liberacao('liberacao'), BT.mapa, BT.acompanhar(), BT.padrao]
+          : dz.chave === 'sem_cobertura' ? [BT.padrao]
+            : [BT.mapa, '<button type="button" class="btn" data-repetir>Tentar o portal de novo</button>', BT.padrao];
     } else if (p.estado === 'pronto' && r === 'complemento_fora_lista') {
       const sit = situacaoUnidade(s);
       const predio = predioTxt(s);

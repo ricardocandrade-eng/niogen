@@ -760,6 +760,88 @@
     return data;
   }
 
+  // ---------- 20/11 (L-219, Cintia): a mesma decisão portal × DFV e o mesmo Forms da Nio na Cobertura e na Ficha ----------
+  // "Não podemos perder venda num endereço desses. Na dúvida, precisa indicar ao usuário que investigue." (Ricardo)
+  // O que o DFV diz para o resgate: 'viavel' (esta fachada na base) · 'elegivel' (há viáveis no CEP) · 'sem' · null (sem resposta)
+  function dfvVeredito(r) {
+    if (!r) return null;
+    if (r.fonte === 'base_congelada') {
+      const x = r.rpc || {};
+      return ['viavel', 'viavel_predio'].includes(x.resultado) ? 'viavel' : x.resultado === 'nao_encontrado' ? 'sem' : 'elegivel';
+    }
+    if (r.match === 'exato') return 'viavel';
+    return r.total_fachadas_no_cep ? 'elegivel' : 'sem';
+  }
+  // Forms "Tratamento nacional de endereço - NIO" (11/11, Ricardo): o mesmo para liberação (200 m), fachada e unidade.
+  // Ficam para a pessoa: a coordenada (Maps) e a foto da fachada. Valores das listas = texto exato do Forms.
+  const FORMS_NIO = {   // TODO regra 15: mover para config no Supabase (parceiro_id) quando houver 2º parceiro
+    executivo: 'ROGERIO PEREIRA PACHECO', canal: 'PAP', empresa: 'DHARMA', sap: '1069521',   // SAP = código do PDV
+    e: { sap: 98401140, executivo: 1446139771, canal: 1657894342, email: 1046842637, empresa: 1496414418, uf: 81810683, cep: 1307779506,
+      cidade: 1889792069, tipoLog: 559365206, logradouro: 1115141868, bairro: 2063972096, numero: 1765507466, complemento: 1597331614,
+      vizinhos: 386386775, obs: 1647236246 },
+  };
+  const UF_NOME = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santos',
+    GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+    PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul', RO: 'Rondônia', RR: 'Roraima',
+    SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins' };
+  const TIPO_LOG = [[/^(r|rua)\.?$/i, 'Rua'], [/^(av|avenida)\.?$/i, 'Avenida'], [/^(al|alameda)\.?$/i, 'Alameda'], [/^beco$/i, 'Beco'],
+    [/^(tv|trav|travessa)\.?$/i, 'Travessa'], [/^(rod|rodovia)\.?$/i, 'Rodovia'], [/^servid[aã]o$/i, 'Servidão']];
+  const tituloEnd = (t) => String(t || '').toLowerCase().replace(/(^|[\s(-])([a-zà-ú])/g, (m, a, b) => a + b.toUpperCase()).replace(/ (De|Da|Do|Das|Dos|E)(?= )/g, (m) => m.toLowerCase());
+  const compDfv = (f) => [f.complemento, f.complemento2, f.complemento3].filter(Boolean).join(' · ');
+  const cepHifen = (c) => { const n = soDigitos(c); return n.length === 8 ? `${n.slice(0, 5)}-${n.slice(5)}` : n; };   // o Forms quer 00000-000
+  // motivo: 'liberacao' (200 m) · 'fachada' (a própria fachada viável no DFV, portal diz não) · 'cadastro' (unidade fora da lista)
+  // o: { end: {cep, numero, complemento}, portal: s do operador (endereco.resolvido, consultado_em, opcoes), dfv: resposta do dfv-consulta, email }
+  function formsNioUrl(base, motivo, o) {
+    if (!base) return null;
+    const e = o.end || {};
+    const s = o.portal || {};
+    const r = (o.dfv && o.dfv.fonte !== 'base_congelada') ? o.dfv : {};
+    // "Rua Almirante Barroso, 170 - Paineiras, Juiz De Fora - MG" (portal) → rua, bairro, cidade, UF; senão, o DFV
+    const m = String((s.endereco && s.endereco.resolvido) || '').match(/^(.+?),\s*[^,]*?-\s*(.+?),\s*(.+?)\s*-\s*([A-Z]{2})\s*$/);
+    let rua = m ? m[1] : tituloEnd(r.logradouro || (r.fachada || {}).logradouro);
+    const bairro = m ? m[2] : tituloEnd(r.bairro);
+    const cidade = m ? tituloEnd(m[3]) : tituloEnd((r.entrada || {}).municipio);
+    const uf = m ? m[4] : String((r.entrada || {}).uf || '').toUpperCase();
+    let tipo = '';
+    const pal = String(rua || '').split(/\s+/);
+    const achado = TIPO_LOG.find(([re]) => re.test(pal[0] || ''));
+    if (achado) { tipo = achado[1]; rua = pal.slice(1).join(' '); } else if (rua) tipo = 'Outros';
+    const alvo = parseInt(String(e.numero || '').replace(/\D/g, ''), 10);
+    const viz = (r.fachadas_no_cep || []).map((x) => ({ n: String(x.numero || ''), c: compDfv(x), d: Math.abs((parseInt(String(x.numero).replace(/\D/g, ''), 10) || 1e9) - (alvo || 0)) }))
+      .filter((x) => x.n && x.n !== String(e.numero)).sort((a, b) => a.d - b.d).slice(0, 6);
+    const quando = s.consultado_em ? fmtHora(s.consultado_em) : '';
+    const fach = r.fachada || null;
+    const obs = motivo === 'cadastro'
+      ? `Pedido de cadastro da unidade "${e.complemento || '—'}". Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): a unidade não está na lista do endereço${s.opcoes && s.opcoes.lista ? ` (${s.opcoes.lista.length} unidades cadastradas)` : ''}. Enviado pelo NIOGEN (Dharma Telecom).`
+      : motivo === 'fachada'
+        ? `Pedido de liberação/cadastro da fachada. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): esta fachada consta como viável${fach ? ` (${fach.logradouro || ''}, ${fach.numero || e.numero || ''}${fach.celula ? ` · célula ${fach.celula}` : ''})` : ''}. Enviado pelo NIOGEN (Dharma Telecom).`
+        : `Pedido de liberação pela regra dos 200 m. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): ${viz.length ? `fachada viável mais próxima no CEP: nº ${viz[0].n}` : 'fachadas viáveis no CEP'}. Enviado pelo NIOGEN (Dharma Telecom).`;
+    const v = {
+      sap: FORMS_NIO.sap, executivo: FORMS_NIO.executivo, canal: FORMS_NIO.canal, email: o.email || '', empresa: FORMS_NIO.empresa,
+      uf: UF_NOME[uf] || '', cep: cepHifen(e.cep), cidade, tipoLog: tipo, logradouro: rua, bairro, numero: e.numero || '0', complemento: e.complemento || '',
+      vizinhos: viz.length ? `Viáveis no DFV (mesmo CEP): ${viz.map((x) => `nº ${x.n}${x.c ? ` ${x.c}` : ''}`).join(', ')}` : '',
+      obs,
+    };
+    const u = new URL(base);
+    u.searchParams.set('usp', 'pp_url');
+    Object.entries(v).forEach(([k, val]) => { if (val) u.searchParams.set(`entry.${FORMS_NIO.e[k]}`, val); });
+    return u.toString();
+  }
+  // Portal disse "sem viabilidade": o que o DFV muda. {chave, rot, cor, txt, motivoForms} — o texto é o mesmo nas duas telas.
+  // chave: 'conferir_fachada' (DFV tem esta fachada) · 'elegivel_200m' · 'sem_cobertura' · 'sem_dfv' (DFV não respondeu: investigar)
+  function semViabDecisao(ver, o) {
+    const ruaP = String((o && o.ruaPortal) || '');
+    const ruaD = String((o && o.ruaDfv) || '');
+    if (ver === 'viavel') return { chave: 'conferir_fachada', cor: 'warn', motivoForms: 'fachada', rot: 'Não perca: DFV tem esta fachada viável',
+      txt: `O portal diz <b>sem viabilidade</b>, mas o DFV tem <b>esta fachada como viável</b>${ruaD ? ` (${esc(ruaD)})` : ''}. ${ruaP ? `O portal consultou <b>${esc(ruaP)}</b> — ` : ''}confira se é a rua do cliente: se não for, consulte de novo escolhendo a rua certa; se for, <b>peça a liberação da fachada à Nio pelo formulário</b> (já abre preenchido — falta só a coordenada do mapa e a foto da fachada) e acompanhe a resposta da Nio.` };
+    if (ver === 'elegivel') return { chave: 'elegivel_200m', cor: 'warn', motivoForms: 'liberacao', rot: 'Elegível pelos 200 m',
+      txt: 'O portal diz <b>sem viabilidade</b>, mas o DFV tem <b>fachadas viáveis neste CEP</b>: a Nio instala até 200 m da última casa viável. Confira a distância no mapa e <b>peça a liberação pelo formulário</b> (já abre preenchido — falta a coordenada e a foto da fachada).' };
+    if (ver === 'sem') return { chave: 'sem_cobertura', cor: 'bad', rot: 'Sem cobertura',
+      txt: 'O portal diz sem viabilidade e o DFV não tem nenhuma fachada viável neste CEP. Confira o CEP e o número com o cliente antes de encerrar.' };
+    return { chave: 'sem_dfv', cor: 'warn', rot: 'Sem viabilidade no portal — investigue',
+      txt: 'O DFV não respondeu para checar a fachada e os 200 m. <b>Não encerre ainda:</b> abra a Cobertura e confira no mapa.' };
+  }
+
   // 11/11: Consulta de crédito (edge function credito-consulta → operador de crédito no niogen-portal). Assíncrona:
   // creditoIniciar devolve {job_id, posicao_fila, estado}; a tela chama creditoStatus a cada 3 s. Só admin/backoffice.
   async function creditoFn(corpo) {
@@ -1799,7 +1881,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, dfvVeredito, formsNioUrl, semViabDecisao, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     mudou,   // 14/11 (0190): timer só refaz a leitura pesada se o banco foi gravado
     abrirLeadNumero,   // 0296: busca por L-n

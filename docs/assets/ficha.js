@@ -3181,6 +3181,40 @@
       : `${bt('liberado', 'A Nio liberou', true)}${bt('recusado', 'A Nio recusou → Já é cliente Nio')}${bt('cobrar', 'Cobrei a Nio')}`;
     return `<div class="fc-aviso bad">${txt}${quando ? ` <small class="apagado">· desde ${esc(quando)}</small>` : ''}</div>${bts ? `<div class="fc-op-bts">${bts}</div>` : ''}`;
   }
+  // 20/11 (L-219, Cintia: "consultei pela Ficha e deu sem viabilidade; na Cobertura, o DFV tem a fachada viável"): o "sem viabilidade"
+  // do portal na Ficha cruza com o DFV (fc.dfv, o mesmo dfv-consulta da Cobertura) e mostra a mesma decisão (NG.semViabDecisao), com o
+  // formulário da Nio já preenchido e o link para acompanhar a resposta. Só leitura: nada é gravado.
+  const lkForms = { ok: false, lib: null, acomp: null, email: '' };
+  function carregarLinksForms() {
+    if (lkForms.ok || lkForms.vindo) return;
+    lkForms.vindo = true;
+    Promise.all([NG.linkConfig('nio_pedido_liberacao'), NG.linkConfig('nio_acompanhar_liberacao'), NG.sb.auth.getSession().then((x) => (((x.data || {}).session || {}).user || {}).email || '', () => '')])
+      .then(([lib, acomp, email]) => { Object.assign(lkForms, { ok: true, lib, acomp, email }); atualizarOp('viab'); }, () => { lkForms.vindo = false; });
+  }
+  function semViabFicha(s) {
+    const x = fc.dfv;
+    if (x && x.estado === 'rodando') return { ver: undefined, html: '<div class="fc-aviso">Portal: sem viabilidade. Conferindo a fachada no mapa da Nio (DFV)…</div>' };
+    const r = x && x.estado === 'pronto' ? x.r : null;
+    const ver = NG.dfvVeredito(r);
+    carregarLinksForms();
+    const ruaP = String((s.endereco && s.endereco.resolvido) || '').split(',')[0].trim();
+    const ruaD = r && r.fachada ? r.fachada.logradouro : '';
+    const dz = NG.semViabDecisao(ver, { ruaPortal: ruaP, ruaDfv: ruaD });
+    const e = dfvEnd() || {};
+    const url = dz.motivoForms && lkForms.lib ? NG.formsNioUrl(lkForms.lib, dz.motivoForms, { end: e, portal: s, dfv: r, email: lkForms.email }) : null;
+    const cob = e.cep ? `cobertura.html?${new URLSearchParams({ cep: e.cep, numero: e.numero || '', complemento: e.complemento || '' })}` : 'cobertura.html';
+    const bts = [
+      url ? `<a class="btn btn-sm btn-acc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (mapa) e a foto da fachada">Pedir liberação (formulário) ↗</a>` : '',
+      dz.motivoForms && lkForms.acomp ? `<a class="btn btn-sm" href="${esc(lkForms.acomp)}" target="_blank" rel="noopener noreferrer" title="Onde a Nio responde o pedido de liberação da fachada (login do PDV)">Acompanhar a resposta da Nio ↗</a>` : '',
+      dz.chave !== 'sem_cobertura' ? `<a class="btn btn-sm${url ? '' : ' btn-acc'}" href="${esc(cob)}" target="_blank" rel="noopener" title="Mesma consulta na tela Cobertura: mapa dos 200 m e fachadas do CEP">Ver na Cobertura (mapa) ↗</a>` : '',
+    ].filter(Boolean).join('');
+    return { ver, html: `<div class="fc-aviso ${dz.cor === 'bad' ? 'bad' : 'warn'}"><b>${esc(dz.rot)}.</b> ${dz.txt}</div>${bts ? `<div class="fc-op-bts">${bts}</div>` : ''}` };
+  }
+  // "Sem viabilidade" já gravado (pela Mari, pela extensão ou à mão), sem consulta nova nesta ficha: o mesmo cruzamento com o DFV.
+  function semViabGravada(cond, s) {
+    if (!cond || !ehBO() || (fc.op.viab && fc.op.viab.estado === 'pronto')) return '';
+    return semViabFicha(s || {}).html;
+  }
   function opPainel(tipo) {
     const bo = ehBO();
     if (!bo) return '';
@@ -3195,6 +3229,8 @@
       corpo = `<div class="fc-op-run">${IC.gira}<span>${esc(txt)} · ${seg} s <small>(${tipo === 'viab' ? '~20–40 s' : '~30–40 s'})</small></span></div>`;
     } else if (o && o.estado === 'pronto') {
       const r = opResultado(tipo, o.s);
+      const sv = tipo === 'viab' && o.s.resultado === 'sem_viabilidade' ? semViabFicha(o.s) : null;
+      if (sv && ['viavel', 'elegivel', undefined, null].includes(sv.ver)) r.cls = 'warn';   // DFV com fachada (ou sem resposta): não é "não" ainda
       const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida' && !o.gravado;
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
@@ -3211,7 +3247,7 @@
             Se ele cancelou, o portal só libera quando a Nio baixar o cancelamento: <b>reconsulte depois</b>. Se o pedido for dele e seguir ativo (outra revenda ou Nio direto), é <b>Saída</b>; na dúvida, fale com o Ricardo.</div>`
         : o.s.resultado === 'negado_antifraude' ? '<div class="fc-aviso bad"><b>Negado por critérios antifraude</b>: a Nio vê Nio neste endereço. <b>Nunca consulte outro CPF.</b> Pergunte ao cliente se a Nio é dele (ou de alguém da casa) ou de outro morador que se mudou e grave na ficha › Crédito (Antifraude).</div>'
         : '';
-      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}${oQueFazer}
+      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}${oQueFazer}${sv ? sv.html : ''}
         <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead && !o.gravado ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
@@ -3370,7 +3406,7 @@
       if (oc && oc.estado === 'pronto' && ['pedido_em_andamento', 'negado_antifraude'].includes((oc.s || {}).resultado)) return '';
     }
     return tipo === 'viab'
-      ? `<div class="fc-op-bts">${bt('viavel', 'Registrar "viável" à mão')}<span class="nota-campo">viu viável no portal ou na extensão? grave aqui · sem viabilidade: Saída › Fachada não atendida</span></div>`
+      ? `<div class="fc-op-bts">${bt('viavel', 'Registrar "viável" à mão')}<span class="nota-campo">viu viável no portal ou na extensão? grave aqui · sem viabilidade: antes da Saída, confira o DFV e a Cobertura — fachada viável lá vira pedido de liberação</span></div>`
       : `<div class="fc-op-bts"><span class="nota-campo">Rodou o crédito no portal ou pela extensão? Grave aqui:</span>${bt('aprovado_todas', 'Aprovado')}${bt('aprovado_cartao', 'Só cartão')}${bt('pendente', 'Pendente')}${bt('negado', 'Negado')}</div>`;
   }
   // Detalhe de cada etapa (abre por baixo dela, na mesma largura).
@@ -3402,12 +3438,14 @@
       corpo = `<div class="fc2-v-res"><span class="fc-pill ${cls}">${esc(rot)}</span>${c.nio_viab_velocidade && dec === 'viavel' ? `<b>até ${esc(c.nio_viab_velocidade)}</b>` : ''}${quando ? `<small class="apagado">${esc(NG.fmtDataHora(quando))}</small>` : ''}</div>
         <div class="fc2-v-end" title="${esc(endTxt)}">${esc(endTxt || '—')}</div>
         <div class="fc2-v-fazer ${rc || (dec && dec !== 'viavel') ? 'warn' : ''}">${fazer}</div>
+        ${semViabGravada(dec !== 'viavel' && (r === 'sem_viabilidade' || ['elegivel_200m', 'sem_cobertura'].includes(dec)), rc ? { endereco: { resolvido: rc.portal } } : {})}
         ${opPainel('viab')}${dec === 'viavel' ? '' : regMaoConv('viab')}${dfvBloco()}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
         ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
         ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
+        ${!conv ? semViabGravada(r === 'sem_viabilidade' && !NG.portalViavel(v) && !fimV, {}) : ''}
         ${!conv ? dfvBloco() : ''}
         ${fonte(conv ? 'Mari / portal' : v.nio_viab_origem === 'manual' ? 'registrada à mão (portal PAP)' : v.nio_viab_origem ? `portal PAP · ${v.nio_viab_origem}` : 'portal PAP')}
         ${fimV ? '' : opPainel('viab')}
