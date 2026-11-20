@@ -47,6 +47,7 @@ select sim.confere('com o time na conversa: não manda', not exists (select 1 fr
   and a.tipo = 'mensagem' and a.payload ->> 'texto_chave' like 'saida_sem_cobertura%'), 'mandou com o time');
 
 -- 3) Cida: janela fechada → não manda (texto livre não sai)
+update public.config_templates_waba set status = 'PENDING' where nome = 'nio_sem_cobertura';   -- premissa: template ainda não aprovado (em produção já está APPROVED desde 19/11)
 select sim.lead_novo('Cida X53') as c3 \gset
 select sim.fila_rodar();
 select sim.como('servico');
