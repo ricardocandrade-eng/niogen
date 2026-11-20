@@ -2354,6 +2354,9 @@
   // 11/11: uma rodada só (antes eram 3 em fila) e a linha da jornada vem da carga compartilhada.
   function credQuem(c, oc) {
     if (!c || !c.credito_resultado || !c.credito_em) return null;
+    // 0336: a conversa guarda quem gravou (mari · ficha · humano = ficha/extensão pela venda); antes dela, pela consulta registrada
+    const ORIG = { mari: 'Mari', ficha: 'ficha', humano: 'ficha', operador: 'robô do portal', correcao: 'corrigido', sistema: 'sistema' };
+    if (ORIG[c.credito_origem]) return ORIG[c.credito_origem];
     if (oc && oc.resultado === c.credito_resultado && Math.abs(new Date(oc.criado_em) - new Date(c.credito_em)) < 5 * 60000) return oc.origem === 'mari' ? 'Mari' : 'ficha';
     return c.credito_origem === 'humano' ? 'ficha' : 'Mari';
   }
@@ -2370,7 +2373,7 @@
     const credP = Promise.resolve(NG.sb.from('operador_consultas').select('origem, resultado, criado_em').eq('conversa_id', cid).eq('tipo', 'credito').order('criado_em', { ascending: false }).limit(1))
       .then((r) => (r && !r.error && r.data && r.data[0]) || null, () => null);
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_origem, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro').select('coluna, itens, itens_total, itens_validados, faltam, contatos_hoje, contatos_mes, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
