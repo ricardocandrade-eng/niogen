@@ -64,6 +64,21 @@
       const n = c.replace(/\D/g, '');
       if (n.length === 8 && !/^0{5}/.test(n)) add('cep', n, `${n.slice(0, 5)}-${n.slice(5)}`);
     });
+    // 20/11 (Ricardo: "Número da fachada, complemento, referência, não?"): endereço só com marca clara — sugestão, o clique decide.
+    const TIPO = '(?:rua|r\\.|avenida|av\\.?|travessa|tv\\.?|alameda|al\\.?|beco|rodovia|estrada|pra[çc]a)';
+    const mRua = t.match(new RegExp(`\\b(${TIPO}\\s+[A-Za-zÀ-ÿ0-9 .'-]{2,60}?)\\s*,\\s*(?:n[º°o.]?\\s*)?(\\d{1,6}[A-Za-z]?)\\b`, 'i'));
+    if (mRua) { add('rua', mRua[1].trim(), mRua[1].trim()); add('numero', mRua[2], mRua[2]); }
+    const mNum = t.match(/(?:\bn[º°o]\.?|\bn[uú]mero|\bnum\.?)\s*:?\s*(\d{1,6}[A-Za-z]?)\b/i);
+    if (mNum) add('numero', mNum[1], mNum[1]);
+    const UNI = '(?:apto?\\.?|apartamento|bloco|bl\\.?|torre|casa|loja|sala|lote|lt\\.?|quadra|qd\\.?)';
+    // letra sozinha ("casa A") só no fim da frase, antes de pontuação ou de outra unidade — "na casa a minha mãe" não vira complemento
+    const VAL = '(?:\\d{1,5}[A-Za-z]?(?![A-Za-zÀ-ÿ])|[A-Za-z](?=\\s*(?:$|[,.;!?\\n]|(?:apto?|apartamento|bloco|bl|torre|casa|loja|sala|lote|quadra)\\b)))';
+    const mComp = t.match(new RegExp(`\\b${UNI}\\s*(?:n[º°o]\\.?\\s*)?${VAL}(?:[\\s,/-]+${UNI}\\s*(?:n[º°o]\\.?\\s*)?${VAL})*`, 'i'));
+    if (mComp) add('complemento', mComp[0].trim(), mComp[0].trim());
+    else if (/\bfundos\b/i.test(t)) add('complemento', 'Fundos', 'Fundos');
+    const mRef = t.match(/\b(?:ponto de )?refer[eê]ncia\s*(?:[:é-]|e)?\s*([^\n]{4,90})/i)
+      || t.match(/\b((?:pr[oó]ximo|perto|em frente|ao lado|atr[aá]s|esquina)\s+(?:a|ao|à|aos|da|do|das|dos|de|com)\s+[^\n.!?]{3,80})/i);
+    if (mRef) { const r = mRef[1].trim().replace(/[.!?,;]+$/, ''); add('referencia', r.charAt(0).toUpperCase() + r.slice(1), r.length > 40 ? `${r.slice(0, 40)}…` : r); }
     return out;
   }
   const normCampo = (campo, v) => (campo === 'email' ? String(v || '').trim().toLowerCase() : ['cpf', 'cep'].includes(campo) ? String(v || '').replace(/\D/g, '') : String(v || '').trim().toLowerCase());
