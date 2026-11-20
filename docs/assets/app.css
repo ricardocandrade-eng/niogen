@@ -3708,3 +3708,11 @@ button.fc-id:hover { color: inherit; }
   .fc2-jl .fc2-et.s-todo .fc2-et-t small { color: #7F8A96; }
   .fc2-jl .fc2-et-sx { display: none; }
 }
+
+/* 20/11 (Ricardo): card AGORA — a faixa azul fica fixa, com 2 linhas (passar o mouse troca o texto, não o tamanho); com Saída gravada,
+   ela mostra o motivo (vermelho discreto). O botão Saída, à direita, discretamente vermelho. */
+.fc2-agcard .fc-efeito { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  height: calc(2 * 1.45em + 16px); box-sizing: border-box; }
+.fc2-agcard .fc-efeito.saida { background: #24141A; color: #F2A3A3; }
+.fc2-agb .btn.fc2-ag-saida { border-color: #5A2A2E; color: #F09A9A; background: #1A1214; }
+.fc2-agb .btn.fc2-ag-saida:hover { background: #24161A; border-color: #7A3438; color: #FFB3B3; }

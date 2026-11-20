@@ -278,7 +278,7 @@
       usuariosCache ? Promise.resolve(usuariosCache) : NG.carregarUsuarios(),
       // 0048 (prompt 27): v_funil congela v.* — quem registrou a viabilidade do portal e a referência vêm da tabela. Na mesma
       // leitura, a obs. interna e quem/quando aprovou a conferência (só usadas em venda de parceiro, por admin/backoffice).
-      daVenda('extra', () => NG.sb.from('vendas').select('lead_numero, nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em').eq('id', id).maybeSingle()),
+      daVenda('extra', () => NG.sb.from('vendas').select('lead_numero, nio_viab_por, ponto_referencia, nio_os, nio_os_em, contato_nome, contato_relacao, nio_interesse, nio_interesse_em, titular_trocado_em, docs_dispensados_em, biometria_dispensada_em, biometria_dispensa_motivo, cartao_pago_em, conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em, credito_origem').eq('id', id).maybeSingle()),
       // 0064: pendências da venda (aberta + histórico) e a lista de motivos (config). 0076: avisos de ficha única (só aviso).
       daVenda('pend', () => NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false })),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
@@ -544,6 +544,13 @@
       'Viabilidade ok. Abra o Novo Pedido no portal (a extensão preenche), rode a análise de crédito e grave aqui o resultado — <b>não precisa de número</b>. Aprovado: siga no portal (forma de pagamento → agenda → OS) e grave a OS e a data no passo seguinte. Negado: o NIOGEN pede outro CPF ao cliente e abre a pendência.',
       `${botoesPortal}<label class="campo">Análise de crédito<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, credPreset || (['aprovado', 'so_cartao', 'pendente', 'negado'].includes(v.credito_resultado) ? v.credito_resultado : ''), 'Escolher o resultado…')}</select>${credPreset ? '<span class="nota-campo">Resultado trazido do operador de crédito — confira e grave.</span>' : ''}</label>
        ${checkRecompra()}`, 'Gravar o crédito'),
+    // 20/11 (etapa A, 0330 — Ricardo: corrigir só admin/BKO, com motivo): crédito já gravado (pelo robô ou à mão) → Corrigir.
+    credito_corrigir: (v) => formWrap('credito_corrigir', 'Corrigir o crédito',
+      `Gravado: <b>${esc(NG.CREDITO[v.credito_resultado] || v.credito_resultado || '—')}</b>${CRED_ORIGEM[v.credito_origem] ? ` (${esc(CRED_ORIGEM[v.credito_origem])})` : ''}. Vale a leitura mais nova do portal: corrija só se o portal mostra outro resultado. O cliente é avisado do resultado novo.`,
+      `<label class="campo">Resultado certo<select name="credito" required autofocus>${NG.opcoes(NG.CREDITO, '', 'Escolher')}</select></label>
+       <label class="campo">Motivo<select name="motivo" required><option value="">Escolher</option>${Object.entries(CRED_MOTIVOS).map(([k, t]) => `<option value="${k}">${esc(t)}</option>`).join('')}</select></label>
+       <label class="campo">O que o portal mostrou (opcional)<input type="text" name="obs" autocomplete="off"></label>
+       ${checkRecompra()}`, 'Corrigir'),
     // 0096 / 0111: etapa 3 → 4 (VENDA). O nº do pedido = a OS (o único ID da Nio); agendar é o passo seguinte.
     // 0247 (Ricardo, 16/11: "a biometria aprovada é uma etapa anterior à criação da OS"): um passo só — o nº da OS.
     // A agenda vem sozinha da Consulta OS (operador); o dia só se preenche se ela não chegar.
@@ -905,6 +912,19 @@
       if (!fd.get('dia')) { NG.toast('Informe a data da instalação.', 'bad'); return false; }
       // 0089: reagendar (exceção, depois da venda) — confirma ao cliente e resolve a conversa, pelo sistema.
       return !!(await rodarMomento('agendar', { dia: fd.get('dia'), periodo: fd.get('periodo') }));
+    },
+    async credito_corrigir(fd) {
+      const resultado = fd.get('credito') || '';
+      const motivo = fd.get('motivo') || '';
+      if (!resultado || !motivo) { NG.toast('Escolha o resultado certo e o motivo.', 'bad'); return false; }
+      if (['aprovado', 'so_cartao'].includes(resultado) && !(await conferiuRecompra(fd, 'ficha'))) return false;
+      const { error } = await NG.sb.rpc('credito_corrigir', { p_venda: d.v.id, p_resultado: resultado, p_motivo: motivo, p_obs: String(fd.get('obs') || '').trim() || null });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return false; }
+      NG.toast('Crédito corrigido', 'ok');
+      formAtivo = null;
+      await recarregar();
+      avisarOuvintes(null);
+      return true;
     },
     async credito(fd) {
       const resultado = fd.get('credito') || '';
@@ -2212,7 +2232,15 @@
     // 17/11 (caso Geraldo): só o 1º botão do card mostra o efeito sozinho — e só se ele for uma ação (Consultar não muda nada)
     const prim = card && card.querySelector('.fc2-agb > :first-child');
     const linhaC = card && card.querySelector('.fc-efeito');
-    if (prim && prim.dataset.efeito && linhaC) { linhaC.textContent = efeitoTxt(prim); linhaC.classList.toggle('aviso', !!prim.dataset.aviso); linhaC.hidden = false; }
+    // 20/11 (Ricardo: "o texto da faixa azul muda quando se passa o mouse… e acaba aumentando a faixa azul. Deixe ela fixa, com duas
+    // linhas… se tiver saída gravada, mostre o motivo na faixa azul"): a faixa fica sempre à vista, com 2 linhas; o texto de base é
+    // o motivo da Saída (se houver) ou o efeito do 1º botão; passar o mouse num botão troca, sair dos botões volta à base.
+    if (linhaC) {
+      const base = saidaTxt() || (prim && prim.dataset.efeito ? efeitoTxt(prim) : 'Passe o mouse num botão para ver o que ele faz antes de clicar.');
+      linhaC.dataset.base = base;
+      linhaC.dataset.baseAviso = saidaTxt() ? 'saida' : prim && prim.dataset.aviso ? '1' : '';
+      voltarEfeito(linhaC);
+    }
     const alvo = raiz.querySelector('.fc2-agcard') || raiz.querySelector('.fc-passo-corpo');
     if (fora.size && alvo) {
       alvo.insertAdjacentHTML('beforeend', `<details class="fc-naovale" data-porta-fora><summary>Não vale agora (${fora.size})</summary><ul>${
@@ -2225,6 +2253,28 @@
     const rot = b.textContent.replace(/\s+/g, ' ').replace(/^[✓✔]\s*/, '').trim();
     return `${b.dataset.aviso ? `⚠ ${b.dataset.aviso} · ` : ''}Se você clicar em “${rot}”: ${b.dataset.efeito || ''}`;
   }
+  // 20/11 (Ricardo: "a direita desses botões, adicione o botão de saída, que é muito usado (discretamente vermelho)"): abre o mesmo
+  // formulário da Saída (lista única de motivos). A porta decide se vale ('saida:*'); em Saída ou instalada não aparece.
+  function btSaidaAg() {
+    const l = d && d.lead;
+    if (!ehBO() || !l || ['saida', 'instalada', 'teste_duplicada'].includes(l.destino)) return '';
+    if (d.soConversa && silenciadaConv()) return '';
+    return '<button type="button" class="btn fc2-ag-saida" data-f="saida-form" data-efeito="abre a Saída: você escolhe o motivo da lista e o lead sai do andamento (a Mari para de falar).">Saída</button>';
+  }
+  function saidaTxt() {
+    const l = d && d.lead;
+    if (!l || l.destino !== 'saida') return '';
+    const nome = l.saida_nome || l.saida_motivo || 'sem motivo';
+    const sub = l.saida_sub && !String(l.saida_sub).toLowerCase().startsWith(String(nome).toLowerCase()) ? ` · ${l.saida_sub}` : '';
+    return `⛔ Saída gravada: ${nome}${sub}`;
+  }
+  function voltarEfeito(linha) {
+    if (!linha || linha.dataset.base == null) return;
+    linha.textContent = linha.dataset.base;
+    linha.classList.toggle('aviso', linha.dataset.baseAviso === '1');
+    linha.classList.toggle('saida', linha.dataset.baseAviso === 'saida');
+    linha.hidden = false;
+  }
   function mostrarEfeito(ev) {
     const b = ev.target && ev.target.closest ? ev.target.closest('[data-efeito]') : null;
     const box = b && b.closest('.fc2-agcard, .fc-passo-corpo');
@@ -2232,7 +2282,13 @@
     if (!linha) return;
     linha.textContent = efeitoTxt(b);
     linha.classList.toggle('aviso', !!b.dataset.aviso);
+    linha.classList.remove('saida');
     linha.hidden = false;
+  }
+  function esconderEfeito(ev) {   // 20/11: saiu dos botões do card Agora → volta ao texto de base
+    const agb = ev.target && ev.target.closest ? ev.target.closest('.fc2-agb') : null;
+    if (!agb || (ev.relatedTarget && agb.contains(ev.relatedTarget))) return;
+    voltarEfeito(agb.closest('.fc2-agcard') && agb.closest('.fc2-agcard').querySelector('.fc-efeito'));
   }
   function desenhar() {
     if (!raiz || !d) return;
@@ -2527,6 +2583,7 @@
   }
   function ligar(el) {
     el.addEventListener('mouseover', mostrarEfeito);
+    el.addEventListener('mouseout', esconderEfeito);
     el.addEventListener('focusin', mostrarEfeito);
     el.addEventListener('click', async (ev) => {
       const cp = ev.target.closest('[data-copiar]');
@@ -2716,8 +2773,8 @@
           }
           const comTime = cv.humano_atribuido || cv.time_atribuido || cv.chatwoot_agente || cv.status === 'handoff_realizado';
           if (b.dataset.r === 'negado' && !window.confirm(`Gravar crédito NEGADO neste lead?\n\n${comTime
-            ? 'A conversa está com o time: VOCÊ pede ao cliente o CPF de outra pessoa da casa (um parente) como titular. Nenhuma mensagem automática sai.'
-            : 'Só grava o resultado no lead (nenhuma mensagem sai agora). Peça ao cliente o CPF de outra pessoa da casa como titular.'}`)) return;
+            ? 'O NIOGEN avisa o cliente e oferece um parente como titular (uma vez, em seu nome). Siga com a resposta dele.'
+            : 'O NIOGEN avisa o cliente e oferece um parente como titular (uma vez). Quando ele responder, a Mari passa para o time.'}`)) return;
         }
         b.disabled = true;
         const { data, error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: b.dataset.t === 'viab' ? 'viabilidade' : 'credito', p_resultado: b.dataset.r });
@@ -3027,6 +3084,8 @@
     pedido_em_andamento: 'Já tem pedido em andamento', pendente: 'Pendente', nao_classificado: 'Não classificado', sem_viabilidade: 'Endereço sem viabilidade',
     complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', email_invalido: 'E-mail recusado pelo portal — confira o e-mail do cliente (ex.: @uol.com.br)', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
   const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
+  const CRED_ORIGEM = { operador: 'robô do portal (sozinho)', humano: 'gravado na ficha ou na extensão', sistema: 'sistema', correcao: 'corrigido à mão' };
+  const CRED_MOTIVOS = { portal_outro: 'O portal mostrou outro resultado', troca_titular: 'Troca de titular', robo_errou: 'O robô leu errado' };
   // O que o operador precisa (venda: da ficha; conversa: o que a Mari coletou). Falta = selo no lugar do botão.
   function celularBR(t) {
     let n = NG.soDigitos(t || '');
@@ -3122,15 +3181,15 @@
       corpo = `<div class="fc-op-run">${IC.gira}<span>${esc(txt)} · ${seg} s <small>(${tipo === 'viab' ? '~20–40 s' : '~30–40 s'})</small></span></div>`;
     } else if (o && o.estado === 'pronto') {
       const r = opResultado(tipo, o.s);
-      const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida';
+      const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida' && !o.gravado;
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
         : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
       const telaP = !['viavel'].includes(o.s.resultado) && (!/^aprovado/.test(o.s.resultado || '') || (o.s.resultado === 'aprovado_parcial' && !(o.s.formas_liberadas || []).length)) && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
         ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
-      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · não gravado</small></div>${telaP}
-        <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
+      corpo = `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>${telaP}
+        <div class="fc-op-bts">${podeReg ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-reg" data-t="${tipo}" data-r="${esc(r.registrar)}">Registrar na venda</button>` : ''}${rLead && !o.gravado ? `<button type="button" class="btn btn-sm btn-acc" data-f="fc-op-lead" data-t="${tipo}" data-r="${esc(rLead)}">${tipo === 'viab' ? 'Gravar "viável" na ficha' : 'Gravar na ficha'}</button>${NG.dicaTxt(NG.ajuda.lead_registrar)}` : ''}
         <button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Reconsultar</button></div>`;
     } else if (o && o.estado === 'erro') {
       corpo = `<div class="fc-op-res"><span class="fc-pill warn">${esc(o.erro)}</span></div><div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op" data-t="${tipo}">Tentar de novo</button>${tipo === 'viab' ? '' : ''}</div>`;
@@ -3233,6 +3292,7 @@
       fc.op[tipo] = { estado: 'pronto', s: s || {}, em };
       const r = opResultado(tipo, s || {});
       fc.leituras.unshift({ em, tipo, rot: r.rot, det: r.det });
+      autoGravarOp(tipo, s || {}, r);
     } catch (err) {
       if (idAtual !== alvo) return;
       fc.op[tipo] = { estado: 'erro', erro: err.naoInstalado ? 'operador fora do ar — consulte direto no portal' : NG.msgErro(err) };
@@ -3240,6 +3300,35 @@
     atualizarOp(tipo);
   }
 
+  // 20/11 (etapa A, 0330 — Ricardo: "se é o Portal, seja quem for gravar, que grave, sem o humano se envolver"): o que o operador leu
+  // grava sozinho, pela mesma porta dos botões. Fica com o humano: sem viabilidade (tentar variações antes), aprovado com aviso de
+  // possível recompra (a conferência — multa R$ 500), endereço padrão, "aprovado" sem as formas lidas. O espelho do banco leva o
+  // crédito para a conversa (e a conversa para a venda); o aviso ao cliente sai uma vez (0327).
+  async function autoGravarOp(tipo, s, r) {
+    if (!ehBO()) return;
+    const o = fc.op[tipo];
+    if (!o || o.gravado) return;
+    if (d.soConversa) {
+      if (silenciadaConv() || !d.conversaId) return;
+      const res = tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
+        : (s.endereco && s.endereco.origem === 'padrao') ? null
+        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? s.resultado : null);
+      if (!res) return;
+      const { error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: tipo === 'viab' ? 'viabilidade' : 'credito', p_resultado: res });
+      if (error) { NG.toast(`Não gravou sozinho: ${NG.msgErro(error)}`, 'bad'); return; }
+      o.gravado = true;
+      NG.toast(tipo === 'viab' ? 'Viabilidade gravada (lida do portal)' : 'Crédito gravado (lido do portal) — o cliente é avisado sozinho', 'ok');
+      await recarregar();
+      return;
+    }
+    const v = d.v || {};
+    if (!r.registrar || v.status === 'saida' || v.instalado_em || String(v.nio_os || '').trim()) return;
+    if (tipo === 'viab' && r.registrar !== 'viavel') return;
+    if (tipo === 'cred' && ['aprovado', 'so_cartao'].includes(r.registrar) && precisaConferir()) return;
+    if (tipo === 'cred' && v.credito_resultado === r.registrar) { o.gravado = true; atualizarOp(tipo); return; }
+    const ok = await rodarMomento(tipo === 'viab' ? 'viabilidade' : 'credito', tipo === 'viab' ? { resultado: 'viavel', origem: 'operador' } : { resultado: r.registrar, origem: 'operador' });
+    if (ok && fc.op[tipo]) { fc.op[tipo].gravado = true; atualizarOp(tipo); }
+  }
   // 15/11 (revisão dos fluxos, F3): lead só de conversa — gravar à mão o que se viu no portal ou na extensão (lead_registrar_consulta).
   // Sem viabilidade não se grava aqui: é Saída › Fachada não atendida.
   function regMaoConv(tipo) {
@@ -3297,9 +3386,12 @@
         ${padraoC ? `<div class="fc-aviso warn">A Mari leu "${esc(CRED_ROT[cc.credito_resultado] || cc.credito_resultado)}" em ${esc(NG.fmtDataHora(cc.credito_em))}, mas com o <b>endereço padrão</b> — não vale para o endereço do cliente. Consulte aqui.</div>` : ''}
         ${dfvRisco() ? '<div class="fc-aviso bad"><b>O mapa da Nio mostra cliente Nio neste endereço.</b> Um "Negado – Critérios Antifraude" costuma vir daí — veja a etapa Viabilidade.</div>' : ''}${afB}${opPainel('cred')}${regMaoConv('cred')}${semCartaoBt(cc && cc.credito_resultado)}`
         : `${linhaDet('Resultado', esc(v.credito_resultado ? `${NG.CREDITO[v.credito_resultado]}${v.credito_em ? ` · ${NG.fmtDataHora(v.credito_em)}` : ''}` : 'não gravado'))}
+        ${v.credito_resultado && CRED_ORIGEM[v.credito_origem] ? linhaDet('Gravado por', esc(CRED_ORIGEM[v.credito_origem])) : ''}
         ${fonte('portal PAP (análise de crédito do Novo Pedido)')}${afB}${v.status === 'saida' ? '<span class="nota-campo">Venda em Saída — para consultar de novo, reabra o lead.</span>'
           : comOS ? '<span class="nota-campo">O pedido (OS) já foi aberto: o crédito passou e não se consulta de novo.</span>' : opPainel('cred')}
-        ${!fimV && !comOS && ehBO() ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Registrar resultado à mão</button><span class="nota-campo">rodou o crédito no portal ou pela extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>' : ''}${!fimV && !comOS ? semCartaoBt(v.credito_resultado) : ''}`;
+        ${!fimV && !comOS && ehBO() ? (v.credito_resultado && 'credito_origem' in v   // 0330: o Corrigir (credito_corrigir) só com a migration no ar
+          ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-form" data-form="credito_corrigir">Corrigir</button><span class="nota-campo">o portal mostrou outro resultado? corrija com o motivo</span></div>'
+          : '<div class="fc-op-bts"><button type="button" class="btn btn-sm" data-f="fc-op-reg" data-t="cred" data-r="">Gravar o que o portal mostrou</button><span class="nota-campo">rodou o crédito no portal sem a extensão? grave aqui (aprovado, só cartão, pendente ou negado)</span></div>') : ''}${!fimV && !comOS ? semCartaoBt(v.credito_resultado) : ''}`;
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
@@ -4595,7 +4687,7 @@
               <p class="apagado">Contatos ${esc(NG.contatosTxt(d.lim.hoje, d.lim.mes, d.teto))}${d.contatos[0] ? ` · último ${esc(NG.quando(d.contatos[0].em))}` : ''}</p>
               ${!conv && d.v.status !== 'saida' ? (formAtivo === 'contato' ? FORMS.contato(d.v) : '<button type="button" class="btn" data-resolver="contato">Registrar contato</button>') : ''}</div>`}</section>
         <section class="fc2-col fc2-jor" aria-label="Jornada da venda">
-          ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${gedLinha()}${agBts ? `<div class="fc2-agb">${agBts}</div>` : ''}<p class="fc-efeito" hidden></p></div>` : ''}
+          ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${gedLinha()}${agBts || btSaidaAg() ? `<div class="fc2-agb">${agBts}${btSaidaAg()}</div>` : ''}<p class="fc-efeito"></p></div>` : ''}
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
           ${jor ? jor.html : ''}
         </section>
