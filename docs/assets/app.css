@@ -3724,3 +3724,33 @@ button.fc-id:hover { color: inherit; }
 .fc2-et.s-now .fc2-et-ic { background: rgba(227,179,65,.15); border-color: #B38422; color: #F2C46B; }
 .fc2-et.s-now .fc2-et-ic .fc-rdot { background: #F2C46B; }
 .fc2-jl-ab.s-now .fc2-jl-abh b { color: #F2C46B; }
+
+/* 20/11 (Ricardo: "dá uma organizada nas informações e 'colorida' nos cards… padronizando-os"): o card da etapa aberta no mesmo
+   molde — cabeçalho com a cor do estado, "O que se sabe" (painel de dados) e "O que fazer" (robô, avisos, botões), lado a lado. */
+.fc2-jl-ab .fc2-jl-abh { border-left: 4px solid #3A434E; }
+.fc2-jl-ab.s-done .fc2-jl-abh { border-left-color: #2E7D52; background: linear-gradient(90deg, rgba(87,211,140,.08), transparent 60%); }
+.fc2-jl-ab.s-now .fc2-jl-abh, .fc2-jl-ab.s-wait .fc2-jl-abh, .fc2-jl-ab.s-run .fc2-jl-abh { border-left-color: #B38422; background: linear-gradient(90deg, rgba(227,179,65,.09), transparent 60%); }
+.fc2-jl-ab.s-warn .fc2-jl-abh { border-left-color: #B38422; background: linear-gradient(90deg, rgba(227,179,65,.12), transparent 60%); }
+.fc2-jl-ab.s-fail .fc2-jl-abh { border-left-color: #B23B3B; background: linear-gradient(90deg, rgba(240,96,96,.10), transparent 60%); }
+.fc2-jl-ab.s-done .fc2-jl-abh small { color: #8AE8B2; }
+.fc2-jl-ab.s-now .fc2-jl-abh small, .fc2-jl-ab.s-warn .fc2-jl-abh small, .fc2-jl-ab.s-wait .fc2-jl-abh small { color: #F2C46B; }
+.fc2-jl-ab.s-fail .fc2-jl-abh small { color: #FF8A8A; }
+.fc2-dc { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+.fc2-dc.so1 { grid-template-columns: minmax(0, 1fr); }
+.fc2-dc > section { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px; border-radius: 10px; border: 1px solid #1D232B; background: #0F1419; }
+.fc2-dc > section > h3 { margin: 0; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #7F8A96; font-weight: 600; }
+.fc2-dc-acao { background: #10151C; }
+.fc2-jl-ab.s-now .fc2-dc-acao, .fc2-jl-ab.s-warn .fc2-dc-acao, .fc2-jl-ab.s-wait .fc2-dc-acao { border-color: #4A3B17; background: #14120C; }
+.fc2-jl-ab.s-fail .fc2-dc-acao { border-color: #5A2A2E; background: #161012; }
+.fc2-dc-kv { display: flex; flex-direction: column; border: 1px solid #1D232B; border-radius: 8px; overflow: hidden; }
+.fc2-dc-kv .fc-dr { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 7px 10px; margin: 0; }
+.fc2-dc-kv .fc-dr + .fc-dr { border-top: 1px solid #1A2028; }
+.fc2-dc-kv .fc-dr > span:first-child { font-size: 12px; color: #8D97A3; }
+.fc2-dc-kv .fc-dr b { font-size: 13px; color: #E9EDF3; font-weight: 600; white-space: normal; }
+.fc2-dc .ok-txt { color: #8AE8B2; } .fc2-dc .warn-txt { color: #F2C46B; } .fc2-dc .bad-txt { color: #FF8A8A; }
+.fc2-dc .fc-src { align-self: flex-start; font-size: 11px; color: #7F8A96; border: 1px solid #262E38; border-radius: 999px; padding: 2px 8px; background: none; }
+.fc2-dc .fc-src.op { display: inline-flex; }
+.fc2-dc .fc-op-bts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.fc2-dc .fc-aviso { border-left: 3px solid currentColor; }
+.fc2-dc .nota-campo, .fc2-dc .apagado { font-size: 12px; color: #8D97A3; }
+@media (max-width: 1100px) { .fc2-dc { grid-template-columns: minmax(0, 1fr); } }

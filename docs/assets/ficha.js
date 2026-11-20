@@ -4433,6 +4433,31 @@
     if (k === 'os' && v) return [v.nio_os_em ? `aberta ${dt(v.nio_os_em)}` : null, v.nio_os && v.forma_pagamento ? `pagamento: ${(FORMAS[v.forma_pagamento] || v.forma_pagamento).toLowerCase()}` : null];
     return [];
   }
+  // 20/11 (Ricardo: "dá uma organizada nas informações e 'colorida' nos cards que se abrem quando se clica num evento da trilha,
+  // padronizando-os"): todo card de etapa sai no mesmo molde — "O que se sabe" (as linhas de dado num painel, o mapa da Nio, a
+  // fonte) e "O que fazer" (o robô, os avisos, os botões) —, com a cor do estado. Feito sobre o HTML de cada etapa, sem mudar o que
+  // cada uma mostra: os botões continuam os mesmos (data-f), só mudam de lugar.
+  const ACAO_SEL = '.fc-op, .fc-op-bts, .fc-aviso, .fc2-det-bts, form, .fc-naovale, .fc-cb';
+  function organizarDet(html) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html || '';
+    const base = tpl.content.querySelector('.fc-pop') || tpl.content;
+    const filhos = [...base.childNodes].filter((n) => n.nodeType === 1 || String(n.textContent || '').trim());
+    const info = [], acao = [];
+    filhos.forEach((n) => {
+      if (n.nodeType === 1 && n.classList.contains('fc-pop-h')) return;
+      if (n.nodeType === 1 && (n.matches(ACAO_SEL) || n.querySelector('button, select, input'))) acao.push(n); else info.push(n);
+    });
+    const html1 = (ns) => ns.map((n) => (n.nodeType === 1 ? n.outerHTML : `<span>${esc(n.textContent.trim())}</span>`)).join('');
+    // as linhas de dado (fc-dr) seguidas viram um painel; o resto (mapa, fonte, notas) segue embaixo
+    let infoHtml = '', kv = [];
+    const solta = () => { if (kv.length) { infoHtml += `<div class="fc2-dc-kv">${html1(kv)}</div>`; kv = []; } };
+    info.forEach((n) => { if (n.nodeType === 1 && n.classList.contains('fc-dr')) kv.push(n); else { solta(); infoHtml += html1([n]); } });
+    solta();
+    const acaoHtml = html1(acao);
+    if (!infoHtml && !acaoHtml) return html || '';
+    return `<div class="fc2-dc${infoHtml && acaoHtml ? '' : ' so1'}">${infoHtml ? `<section class="fc2-dc-info"><h3>O que se sabe</h3>${infoHtml}</section>` : ''}${acaoHtml ? `<section class="fc2-dc-acao"><h3>O que fazer</h3>${acaoHtml}</section>` : ''}</div>`;
+  }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
     const aberta = fc.etapa || null;
@@ -4446,7 +4471,7 @@
         detAberto = `<div class="fc2-jl-ab s-${st}"><div class="fc2-jl-abh"><button type="button" class="fc2-jl-volta" data-f="fc2-et" data-k="${k}" data-on="1" title="Voltar para as etapas">${IC.voltar}Jornada</button>
           <span class="fc2-et-ic">${icone(st)}</span><b>${esc(nome)}</b><small title="${esc(subT)}">${esc(subT)}</small><span class="fc-sp"></span>
           <button type="button" class="fc-x" data-f="fc2-et" data-k="${k}" data-on="1" aria-label="Fechar a etapa">${IC.x}</button></div>
-          <div class="fc2-det">${det || `<span class="apagado">${esc(subT)}</span>`}</div></div>`;
+          <div class="fc2-det">${det ? organizarDet(det) : `<span class="apagado">${esc(subT)}</span>`}</div></div>`;
       }
       return `<div class="fc2-et s-${st}${on ? ' on' : ''}"><button type="button" class="fc2-et-b" data-f="fc2-et" data-k="${k}" data-on="${on ? 1 : 0}" aria-expanded="${on}">
         <span class="fc2-et-ic">${icone(st)}</span><span class="fc2-et-t"><b>${esc(nome)}</b><small title="${esc(subT)}">${esc(subT)}</small>${info.map((x) => `<em>${esc(x)}</em>`).join('')}</span><span class="fc2-et-sx">${IC.baixo}</span></button></div>`;
