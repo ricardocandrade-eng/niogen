@@ -3808,3 +3808,10 @@ button.fc-id:hover { color: inherit; }
 .cvp-cita-bar { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-left: 4px solid #53BDEB; border-radius: 8px; background: #111821; }
 .cvp-cita-bar span { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; color: #C9D1DA; overflow: hidden; }
 .cvp-cita-bar small { font-size: 11px; color: #53BDEB; font-weight: 600; }
+
+/* 20/11 (L-207): crédito já gravado sozinho — os botões ficam atrás de "Corrigir" */
+.fc-corrigir { margin-top: 6px; }
+.fc-corrigir > summary { list-style: none; display: inline-flex; cursor: pointer; }
+.fc-corrigir > summary::-webkit-details-marker { display: none; }
+.fc-corrigir[open] > summary { opacity: .7; }
+.fc-corrigir > .fc-op-bts { margin-top: 6px; }

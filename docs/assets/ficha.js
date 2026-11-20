@@ -3343,6 +3343,18 @@
   function regMaoConv(tipo) {
     if (!ehBO() || silenciadaConv() || !d.conversaId || (d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino))) return '';
     const bt = (r, rot) => `<button type="button" class="btn btn-sm" data-f="fc-op-lead" data-t="${tipo}" data-r="${r}" data-mao="1">${esc(rot)}</button>`;
+    // 20/11 (Ricardo, L-207: "continuam aparecendo botões… pode induzir ao erro. A gravação é automática"): com o resultado já gravado
+    // (pelo operador da ficha, pela extensão ou pela Mari), os botões ficam recolhidos atrás de "Corrigir"; rodando a consulta, somem.
+    if (tipo === 'cred') {
+      const oc = fc.op.cred;
+      if (oc && oc.estado === 'rodando') return '';
+      const cc = d.conv || {};
+      const gravado = (cc.credito_resultado && cc.credito_endereco !== 'padrao') || (oc && oc.gravado);
+      if (gravado) {
+        return `<details class="fc-corrigir"><summary class="btn btn-sm">Corrigir</summary><div class="fc-op-bts"><span class="nota-campo">Já gravado sozinho. Corrija só se o portal mostrou outro resultado — o cliente é avisado do novo.</span>${bt('aprovado_todas', 'Aprovado')}${bt('aprovado_cartao', 'Só cartão')}${bt('pendente', 'Pendente')}${bt('negado', 'Negado')}</div></details>`;
+      }
+      if (oc && oc.estado === 'pronto' && ['pedido_em_andamento', 'negado_antifraude'].includes((oc.s || {}).resultado)) return '';
+    }
     return tipo === 'viab'
       ? `<div class="fc-op-bts">${bt('viavel', 'Registrar "viável" à mão')}<span class="nota-campo">viu viável no portal ou na extensão? grave aqui · sem viabilidade: Saída › Fachada não atendida</span></div>`
       : `<div class="fc-op-bts"><span class="nota-campo">Rodou o crédito no portal ou pela extensão? Grave aqui:</span>${bt('aprovado_todas', 'Aprovado')}${bt('aprovado_cartao', 'Só cartão')}${bt('pendente', 'Pendente')}${bt('negado', 'Negado')}</div>`;
