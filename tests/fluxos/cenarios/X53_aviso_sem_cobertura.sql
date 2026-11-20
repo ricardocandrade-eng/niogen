@@ -1,6 +1,8 @@
 -- id: X53
--- titulo: 0325 (caso Kell L-208): a Mari mostrou os planos e a viabilidade deu sem cobertura depois — 2 min sem ninguém avisar, o NIOGEN manda ao cliente a mensagem da Saída por cobertura (uma vez, pela porta, com nota); com o time na conversa, com Não contatar ou com a janela fechada, não manda
+-- titulo: 0325/0329 (caso Kell L-208): a Mari mostrou os planos e a viabilidade deu sem cobertura depois — 2 min sem ninguém avisar, o NIOGEN manda ao cliente a mensagem da Saída por cobertura (uma vez, pela porta, com nota); com o time na conversa, com Não contatar ou com a janela fechada, não manda
 -- tipo: atual
+-- premissa (0329): o horário dos toques cobre agora — o cenário não depende da hora em que o portão roda
+update public.config_regras set valor = '{"abre": "00:00", "fecha": "24:00", "todos_os_dias": true}'::jsonb where chave = 'mari_horario_toques';
 -- 1) Ana: ninguém com a conversa → avisa
 select sim.lead_novo('Ana X53') as c \gset
 select sim.mari_fala(:'c', 'A Nio atende a sua cidade 🎯 A disponibilidade exata na sua rua o nosso time confirma. Olha as opções:');
@@ -62,3 +64,19 @@ select sim.confere('template aprovado: o aviso sai pelo template', exists (selec
 select public._cobertura_avisa_veredito();
 select sim.confere('e não repete', (select count(*) from public.chatwoot_acoes a where a.conversa_id = :'c3' and a.tipo = 'mensagem' and a.payload ->> 'template' = 'nio_sem_cobertura') = 1,
   (select count(*)::text from public.chatwoot_acoes a where a.conversa_id = :'c3' and a.tipo = 'mensagem'));
+
+-- 4) 0329: fora do horário dos toques (caso 19/11 23:30) — não manda e não marca; no horário, sai
+select sim.lead_novo('Dani X53') as c4 \gset
+select sim.fila_rodar();
+select sim.como('servico');
+select sim.passa(:'c4', '1 hour');   -- as falas da Mari ficam antes do veredito
+update public.mari_conversas set cobertura_decisao = 'sem_cobertura', nio_viab_resultado = 'sem_viabilidade', cobertura_em = now() - interval '5 minutes' where id = :'c4';
+update public.config_regras set valor = '{"abre": "00:00", "fecha": "00:01", "todos_os_dias": true}'::jsonb where chave = 'mari_horario_toques';
+select public._cobertura_avisa_veredito();
+select sim.confere('fora do horário dos toques: não manda e não marca', not exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c4'
+  and a.tipo = 'mensagem' and a.payload ->> 'texto_chave' like 'saida_sem_cobertura%')
+  and (select not (coalesce(dados, '{}'::jsonb) ? 'cobertura_aviso_tentado') from public.mari_conversas where id = :'c4'), 'mandou de noite');
+update public.config_regras set valor = '{"abre": "00:00", "fecha": "24:00", "todos_os_dias": true}'::jsonb where chave = 'mari_horario_toques';
+select public._cobertura_avisa_veredito();
+select sim.confere('no horário: sai', exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c4'
+  and a.tipo = 'mensagem' and a.payload ->> 'texto_chave' like 'saida_sem_cobertura%'), 'não saiu no horário');
