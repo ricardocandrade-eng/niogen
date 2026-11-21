@@ -658,8 +658,17 @@
     calmo: ['Calmo', 'off', 'Pouca gente conversando agora. Bom momento para olhar a Auditoria ou ajustar a campanha.'],
     bom: ['Ritmo bom', 'ok', 'Clientes conversando num volume saudável e a Mari dando conta.'],
     pico: ['Pico', 'warn', 'Muita gente conversando ao mesmo tempo. Olhe o Na mira da Live: as conversas quentes merecem um olho humano.'],
-    sobrecarga: ['Sobrecarga', 'bad', 'Muitas conversas ao mesmo tempo ou cliente esperando resposta há mais de 6 min. Confira se a Mari está respondendo (pulso acima) e reforce com o time.'],
+    sobrecarga: ['Sobrecarga', 'bad', 'Muitas conversas ao mesmo tempo. Confira se a Mari está respondendo (pulso acima) e reforce com o time.'],
   };
+  // 21/11: o mostrador mede só o volume (conversando agora). O mari_ritmo() do banco também marca "sobrecarga" quando
+  // alguém espera há mais de 2× espera_alerta_min — com 0 conversas o ponteiro ficava no Calmo e o rótulo dizia Sobrecarga.
+  // A espera continua visível (e vermelha) no número "esperando" ao lado.
+  function nivelVolume(ag, lim) {
+    if (ag >= (lim.sobrecarga_conversas ?? 12)) return 'sobrecarga';
+    if (ag >= (lim.pico_conversas ?? 6)) return 'pico';
+    if (ag >= (lim.bom_conversas ?? 2)) return 'bom';
+    return 'calmo';
+  }
   const horasEl = document.getElementById('mp-horas');
   const p14El = document.getElementById('mp-14');
   const escadaEl = document.getElementById('mp-escada');
@@ -678,9 +687,10 @@
   }
   function renderRitmo(r) {
     if (!r) { ritmoEl.innerHTML = '<span class="apagado">Ritmo indisponível agora.</span>'; horasEl.innerHTML = ''; return; }
-    const [rot, cls, dica] = NIVEL[r.nivel] || NIVEL.calmo;
     const lim = r.limites || {};
     const ag = Number(r.agora || 0);
+    const nivel = nivelVolume(ag, lim);
+    const [rot, cls, dica] = NIVEL[nivel];
     const pos = posNivel(ag, lim);
     const ang = Math.PI * pos;
     const nx = 100 - 70 * Math.cos(ang); const ny = 100 - 70 * Math.sin(ang);
@@ -690,12 +700,12 @@
     ritmoEl.className = `mp-card mp-ritmo ${cls}`;
     ritmoEl.innerHTML = `<div class="mp-h"><b>Ritmo da Mari</b><span class="apagado" title="${esc(dica)}">${esc(dica.split('.')[0])}</span></div>
       <div class="mp-rit">
-        <div class="mp-gauge" title="${esc(`${dica} Ritmo bom a partir de ${lim.bom_conversas ?? 2} conversas ao mesmo tempo, Pico a partir de ${lim.pico_conversas ?? 6}, Sobrecarga a partir de ${lim.sobrecarga_conversas ?? 12} ou alguém esperando resposta há mais de ${alerta} min.`)}">
+        <div class="mp-gauge" title="${esc(`${dica} Ritmo bom a partir de ${lim.bom_conversas ?? 2} conversas ao mesmo tempo, Pico a partir de ${lim.pico_conversas ?? 6}, Sobrecarga a partir de ${lim.sobrecarga_conversas ?? 12}. Cliente esperando resposta há mais de ${alerta} min fica vermelho no número "esperando".`)}">
           <svg viewBox="0 0 200 112" role="img" aria-label="${esc(`Ritmo: ${rot}, ${ag} conversando agora`)}">
-            ${['calmo', 'bom', 'pico', 'sobrecarga'].map((n, i) => `<path d="${arco(i / 4 + 0.008, (i + 1) / 4 - 0.008, 80)}" class="seg${r.nivel === n ? ' on' : ''}" style="stroke:${COR_NIVEL[n]}"/>`).join('')}
+            ${['calmo', 'bom', 'pico', 'sobrecarga'].map((n, i) => `<path d="${arco(i / 4 + 0.008, (i + 1) / 4 - 0.008, 80)}" class="seg${nivel === n ? ' on' : ''}" style="stroke:${COR_NIVEL[n]}"/>`).join('')}
             <line x1="100" y1="100" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" class="pt"/><circle cx="100" cy="100" r="6" class="pt-c"/>
           </svg>
-          <div class="mp-gauge-t"><b style="color:${COR_NIVEL[r.nivel] || COR_NIVEL.calmo}">${rot}</b><small>${NG.fmtNum(ag)} conversando agora</small></div>
+          <div class="mp-gauge-t"><b style="color:${COR_NIVEL[nivel]}">${rot}</b><small>${NG.fmtNum(ag)} conversando agora</small></div>
         </div>
         <div class="mp-rit-n">
           <div title="Conversas (últimas 3 h) em que a última fala é do cliente: ainda sem resposta da Mari ou do time."><b class="${espMax >= alerta ? 'bad-txt' : esp ? 'warn-txt' : ''}">${NG.fmtNum(esp)}</b><small>${esp ? `esperando · a maior há ${espMax < 1 ? '<1' : NG.fmtNum(Math.round(espMax))} min` : 'esperando resposta'}</small></div>
