@@ -601,6 +601,55 @@ def cen_an(c):   # P40 (18/11, conversas reais 5308592e, 70afef39, b85cfce7): re
     c.exige('rio branco' in norm(row.get('referencia') or ''), f'[P40] referência não gravada: {row}')
 
 
+RX_PEDE_DADOS = re.compile(r'nome completo|\bcpf\b')
+
+
+def cen_ao(c):   # P41 + P42 (21/11, Ricardo; conversa L-222, #202): upsell + CPF juntos; "Am n entende" virou o nome
+    # A Mari sugeriu o Super e, na mesma mensagem, pediu nome e CPF; a cliente respondeu "Am n entende", a explicação pediu o CPF
+    # de novo, e a frase foi gravada como nome (a Mari passou a chamá-la de "Am").
+    ate_planos_jf(c)
+    r = c.diz('Quero o plano Nio Essencial')
+    t = fala(r)
+    teve_upsell = 'por mais r$' in t
+    if teve_upsell:
+        c.exige(not RX_PEDE_DADOS.search(t), f'[P41] pediu nome/CPF junto com a sugestão: «{t[-220:]}»')
+        c.exige((r.get('interativo') or {}).get('chave') == 'upsell', f'[P41] sugestão sem os botões fica/troca: «{t[-160:]}»')
+    r = c.diz('Am n entende')
+    t = fala(r)
+    if teve_upsell:
+        c.exige(not RX_PEDE_DADOS.search(t), f'[P41] "não entendi" e pediu nome/CPF sem a resposta do upsell: «{t[-220:]}»')
+        c.exige((r.get('interativo') or {}).get('chave') == 'upsell', f'[P41] não perguntou de novo "fica ou troca": «{t[-160:]}»')
+    row = conv_row(c, "dados->>'nome' as nome")
+    c.exige(not row.get('nome'), f'[P42] a frase "Am n entende" virou nome: {row}')
+    if teve_upsell:
+        r = c.diz('Fico no Essencial')
+        t = fala(r)
+        c.exige(RX_PEDE_DADOS.search(t), f'[P41] respondeu "fico" e a Mari não pediu nome/CPF: «{t[-220:]}»')
+    c.diz('529.982.247-25')
+    r = c.diz('Gizele Odile Teste')
+    row = conv_row(c, "dados->>'nome' as nome, plano_escolhido, dados->>'upsell_resposta' as up")
+    c.exige(row.get('nome') == 'Gizele Odile Teste', f'[P42] nome certo não gravado: {row}')
+    c.exige('ESS' in str(row.get('plano_escolhido') or ''), f'[P41] o plano mudou sem o cliente pedir: {row}')
+    c.exige(not re.search(r'\bam\b', fala(r)), f'[P42] chamou a cliente de "Am": «{fala(r)[:160]}»')
+
+
+def cen_ap(c):   # P43 (21/11, conversa L-222): a unidade que o cliente deu está na lista da Nio → não se pergunta de novo
+    # O portal consultou antes do "Casa A" chegar e abriu a conferência; a Mari perguntou "Casa A, B ou C?" 2 vezes (uma no meio do chip).
+    ate_planos_jf(c)
+    comp = conv_row(c, 'complemento').get('complemento') or 'Apto 403'
+    lista = json.dumps(['Apto 401', comp, 'Apto 404'], ensure_ascii=False).replace("'", "''")
+    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(),
+                 cobertura_detalhe = jsonb_build_object('portal', 'viavel', 'unidade_a_confirmar', true, 'unidades', '{lista}'::jsonb),
+                 unidade_conferir = jsonb_build_object('motivo', 'escolher', 'lista', '{lista}'::jsonb, 'usada', 'Apto 401', 'autor', 'portao'),
+                 unidade_conferir_em = now()
+           where id = (select id from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1)""", escrita=True)
+    for msg in ('Quero o plano Nio Essencial', 'Tem chip?'):
+        r = c.diz(msg)
+        t = fala(r)
+        c.exige(not re.search(r'\b40[14]\b', t), f'[P43] perguntou de novo a unidade que já está na lista ({msg!r}): «{t[:220]}»')
+        c.exige((r.get('interativo') or {}).get('chave') != 'unidade', f'[P43] botões de unidade com a unidade já certa ({msg!r})')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -630,6 +679,8 @@ PORTAO = {
     'al': (45, cen_al, 'P38'),
     # 18/11 — auditoria do funil: ponto de referência só depois dos planos; referência com outra rua não é a rua do cliente
     'am': (46, cen_am, 'P39'), 'an': (47, cen_an, 'P40'),
+    # 21/11 — conversa L-222 (#202): upsell sem pedir CPF junto; frase não vira nome; unidade da lista não se pergunta de novo
+    'ao': (48, cen_ao, 'P41 P42'), 'ap': (49, cen_ap, 'P43'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

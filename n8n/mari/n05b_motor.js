@@ -21,7 +21,19 @@ const cartoes = Array.isArray(inter.cartoes) ? inter.cartoes : [];
 const conv = db.conversa || {};
 const planos = Array.isArray(db.planos) ? db.planos : [];
 const cons = prep.consolidado || {};
-const dados = conv.dados || {};
+const dados = { ...(conv.dados || {}) };
+// 21/11 (L-222 "Am n entende", L-40 "Moro acima do bar"): nome que é frase não é nome — a Mari não chama o cliente por ele e
+// pede o nome de novo. Mesma regra do 7 · Extrair (pareceNome).
+{
+  const NAO_NOME = new Set(('n nao num nem entendi entende entendo entender entendeu sei sabe quero queria quer tem tenho temos moro '
+    + 'pode posso podia qual quais como quando onde porque pq por pra pro para com sem mas ok sim isso eu meu minha voce vc ta to '
+    + 'esta estou acho aqui acima abaixo perto lado bar rua apto ap bloco plano internet chip oi ola bom boa dia tarde noite obrigado '
+    + 'obrigada valeu blz beleza certo favor o a os as um uma que se ja so mais menos muito agora depois hoje amanha fala falar ver '
+    + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem').split(' '));
+  const t = String(dados.nome || '').trim();
+  const n = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (t && (!/^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){0,6}$/.test(t) || n.split(' ').some((w) => NAO_NOME.has(w)))) delete dados.nome;
+}
 
 // ── relógio de Brasília e horário do contrato (seg–sex 9–21, sáb 10–16, nunca domingo) ──
 const agora = new Date();
@@ -246,7 +258,12 @@ if (V4) {
     // 16/11 (0233, Ricardo; caso "CS 1" × "Casa A"): viável no endereço, mas a unidade do cliente não está IGUAL na lista
     // fechada da Nio (ou ele não disse). A Mari mostra as opções e o cliente escolhe — nunca escolhe por ele.
     const uc = conv.unidade_conferir || {};
-    if (det.unidade_a_confirmar && Array.isArray(det.unidades) && conv.unidade_conferir_em) {
+    // 21/11 (conversa L-222, #202): o portal consultou antes do "Casa A" chegar e abriu a conferência — mas "Casa A" está na
+    // lista. A unidade do cliente que BATE com a lista não se pergunta (a Mari perguntou 2 vezes, uma no meio do chip).
+    const kUn = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const unBate = !!kUn(conv.complemento) && Array.isArray(det.unidades)
+      && det.unidades.some((u) => kUn(typeof u === 'string' ? u : (u && (u.texto || u.nome))) === kUn(conv.complemento));
+    if (det.unidade_a_confirmar && Array.isArray(det.unidades) && conv.unidade_conferir_em && !unBate) {
       const ul = det.unidades.slice(0, 12).map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
       // 16/11 (caso Queroly, conversa 138): a viabilidade pode chegar DEPOIS dos planos (fila do operador). O sistema diz se a
       // Mari já mostrou as unidades; se não mostrou, ela pergunta NESTA resposta, em qualquer etapa (antes do próximo dado).
@@ -302,6 +319,16 @@ if (planoSel && conv.forma_pagamento) {
   L.push(`valor_mensal_na_forma: ${R(noCartao ? planoSel.preco_cartao : planoSel.preco)}/mês no ${formaTxt} — use SÓ este valor na confirmação e no resumo`);
 }
 L.push(`upsell_oferecido: ${conv.upsell_oferecido ? 'sim' : 'nao'} | lgpd_enviada: ${conv.lgpd_enviada ? 'sim' : 'nao'}`);
+// 21/11 (Ricardo; conversa L-222, #202): a sugestão saiu e o cliente ainda não disse se fica ou troca → nada de nome/CPF agora.
+if (planoSel && conv.upsell_oferecido && !dados.upsell_resposta && !(dados.cpf && cpfOk)) {
+  const ac = planos.filter((o) => o.portfolio === planoSel.portfolio && o.variante === planoSel.variante && Number(o.preco) > Number(planoSel.preco)
+    && Number(o.preco) - Number(planoSel.preco) <= 40).sort((a, b) => a.preco - b.preco)[0];
+  if (ac) {
+    L.push(`upsell_pendente: SIM — você sugeriu o ${nomeCurto(ac.nome)} e o cliente ainda NÃO disse se fica no ${nomeCurto(planoSel.nome)} ou troca. `
+      + 'Responda o que ele mandou (dúvida, "não entendi": explique curto, só o plano escolhido e a diferença) e NÃO peça nome nem CPF nesta resposta — '
+      + 'o sistema fecha com a pergunta "fica ou troca" e os botões. Se ele escolheu um dos dois, confirme o plano e o sistema pede os dados.');
+  }
+}
 L.push(`dados: nome=${dados.nome || '—'}; cpf=${dados.cpf || '—'}${dados.cpf ? ` (cpf_valido: ${cpfOk ? 'SIM' : 'NAO'})` : ''}; telefone=${dados.telefone || '—'}; email=${dados.email || '—'}${dados.email && dados.email_confirmado === true ? ' (CONFIRMADO pelo cliente — nunca peça nem confirme de novo)' : ''}; pagamento=${formaTxt || '—'}; ${V4 ? `instalacao=${conv.instalacao_preferencia || (dados.instalacao_data ? `data ${dados.instalacao_data} escolhida — falta o período (o sistema manda Manhã/Tarde)` : '—')}` : `visita=${conv.visita_preferencia || '—'}`}`
   + (V7 ? `; referencia=${dados.referencia || '—'}; operadora_atual=${dados.operadora_atual || '—'}` : ''));
 L.push(`dados_faltando: ${faltando.length ? faltando.join(', ') : 'nenhum'}`);

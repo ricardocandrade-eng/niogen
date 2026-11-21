@@ -378,6 +378,14 @@ def cen_p(c):   # teste real 08/11 00h15: upsell do Essencial sem "o dobro" (800
     if 'condicoes' not in t:
         r = c.diz('Quero esse mesmo')
         t = norm(r.get('resposta'))
+    # 21/11 (L-222): com a sugestão, a resposta fecha na pergunta "fica ou troca" (botões) e o nome/CPF vem depois da resposta.
+    if 'por mais r$' in t:
+        c.exige('as condicoes do seu plano' in t, f'(p) upsell sem as condições: «{(r.get("resposta") or "")[:220]}»')
+        c.exige('nome completo' not in t and not re.search(r'\bcpf\b', t), f'(p) pediu nome/CPF junto com a sugestão: «{(r.get("resposta") or "")[:220]}»')
+        c.exige((r.get('interativo') or {}).get('chave') == 'upsell', '(p) upsell sem os botões fica/troca')
+        r = c.diz('Fico no Essencial')
+        t = norm((r.get('resposta') or '') + ' ' + ((r.get('interativo') or {}).get('corpo') or ''))
+        t = 'as condicoes do seu plano ' + t   # as condições já saíram na resposta anterior
     # 08/11 00h36: confirmação → condições → "Fechou? Me manda seu nome completo e CPF…" (nunca o pedido antes das condições)
     c.exige('as condicoes do seu plano' in t and 'nome completo' in t and t.index('as condicoes do seu plano') < t.index('nome completo'),
             f'(p) condições fora de ordem: «{(r.get("resposta") or "")[:220]}»')

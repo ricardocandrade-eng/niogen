@@ -16,6 +16,19 @@ const tentativa = ex('6r · Claude (correção)') ? 2 : 1;
 const resp = $input.first().json || {};
 
 const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+// 21/11 (conversas L-222 "Am n entende" e L-40 "Moro acima do bar"): frase do cliente gravada como nome. Nome = só letras,
+// de min a 7 palavras, nenhuma delas palavra de frase (negação, verbo, pergunta, lugar, cumprimento). "da/de/dos/e" valem.
+const NAO_NOME = new Set(('n nao num nem entendi entende entendo entender entendeu sei sabe quero queria quer tem tenho temos moro '
+  + 'pode posso podia qual quais como quando onde porque pq por pra pro para com sem mas ok sim isso eu meu minha voce vc ta to '
+  + 'esta estou acho aqui acima abaixo perto lado bar rua apto ap bloco plano internet chip oi ola bom boa dia tarde noite obrigado '
+  + 'obrigada valeu blz beleza certo favor o a os as um uma que se ja so mais menos muito agora depois hoje amanha fala falar ver '
+  + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem').split(' '));
+function pareceNome(s, min) {
+  const t = String(s || '').trim();
+  const n = Math.max(1, min || 2) - 1;
+  if (!new RegExp(`^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){${n},6}$`).test(t)) return false;
+  return !norm(t).split(' ').some((w) => NAO_NOME.has(w));
+}
 
 // v7 (prompt 26, spec §4): "Detalhes <plano>" — texto fixo do cartão, sem Claude e sem filtro (texto aprovado pelo Ricardo).
 // 08/11 (abertura B2): o mesmo caminho leva a abertura com 3 botões (interativo), a resposta fixa de cada botão e o
@@ -587,7 +600,8 @@ if (scVoltou && !posHandoff && !erro) {
 }
 if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_decisao === 'sem_cobertura'
   && !(handoffYaml && norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') === 'sem_cobertura')) {
-  const pn = String(((ctx.conversa || {}).dados || {}).nome || (ctx.conversa || {}).nome_contato || '').trim().split(/\s+/)[0];
+  const nd = ((ctx.conversa || {}).dados || {}).nome;
+  const pn = String((pareceNome(nd, 1) && nd) || (ctx.conversa || {}).nome_contato || '').trim().split(/\s+/)[0];
   texto = `Poxa${pn && (ctx.conversa || {}).nome_confiavel !== false ? `, ${pn}` : ''}, infelizmente a fibra da Nio ainda não chega no seu endereço 😕\n\n`
     + 'Deixei seu interesse registrado e te aviso por aqui assim que a rede chegar aí. Se o número ou o CEP estiver diferente do que você me passou, me manda que eu confiro de novo.';
   handoffYaml = { motivo_handoff: 'sem_cobertura',
@@ -662,7 +676,7 @@ const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');
 let tel = (d.telefone || hy.telefone || '').replace(/\D/g, '');
 if (/^55\d{10,11}$/.test(tel)) tel = tel.slice(2);
 const email = (d.email || hy.email || '').trim();
-if (nome && nome !== '—') { dados.nome = nome; upd.nome_confiavel = true; }
+if (nome && nome !== '—' && pareceNome(nome, 1)) { dados.nome = nome; upd.nome_confiavel = true; }
 if (cpf) dados.cpf = cpf;
 // 08/11 (Ricardo): o telefone de contato é o do WhatsApp — a Mari não pergunta; o sistema grava. Celular sem o 9 (como o
 // WhatsApp entrega, "553288015161", ou como o modelo copiou na conversa #1, "3288015161") ganha o 9 de volta.
@@ -773,7 +787,11 @@ const UNIDADES = (() => {
   const det = c.cobertura_detalhe || {};
   if (!V7 || !det.unidade_a_confirmar || !Array.isArray(det.unidades) || !c.unidade_conferir_em
     || (c.unidade_conferir || {}).motivo !== 'escolher') return [];
-  return det.unidades.map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
+  const lista = det.unidades.map((u) => (typeof u === 'string' ? u : (u && (u.texto || u.nome)) || '')).filter(Boolean);
+  // 21/11 (L-222): a unidade que o cliente já deu está na lista → nada a escolher.
+  const k = (x) => norm(x).replace(/[^a-z0-9]/g, '');
+  if (k(c.complemento) && lista.some((u) => k(u) === k(c.complemento))) return [];
+  return lista;
 })();
 if (UNIDADES.length && !posHandoff) {
   const msgU = String((prep.consolidado || {}).mensagem || '').trim();
@@ -825,6 +843,36 @@ if (V7 && !posHandoff && !upd.plano_escolhido && !(ctx.conversa || {}).plano_esc
   if (achadoCli) upd.plano_escolhido = achadoCli.codigo;
 }
 
+// 21/11 (Ricardo; conversa L-222, #202): a sugestão do plano de cima saía junto com "me manda seu nome completo e CPF" — o
+// cliente não tinha como dizer se aceitava, ficou perdido ("Am n entende") e a explicação seguinte pediu o CPF de novo.
+// Agora a sugestão termina na pergunta "fica ou troca" (botões) e os dados só vêm depois da resposta. Enquanto ela não vem,
+// nenhuma fala pede nome/CPF; na 3ª fala sem resposta (ou se o cliente manda o CPF) vale "fica".
+const famPlano = (p) => String((p && p.nome) || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/^Nio (Empresas )?/, '').replace(/\s+\d.*$/, '').trim();
+function planoAcima(cod) {
+  const p = (ctx.planos || []).find((x) => x.codigo === cod);
+  if (!p) return null;
+  const acima = (ctx.planos || []).filter((o) => o.portfolio === p.portfolio && o.variante === p.variante && Number(o.preco) > Number(p.preco)
+    && Number(o.preco) - Number(p.preco) <= 40).sort((a, b) => Number(a.preco) - Number(b.preco))[0];
+  return acima ? { atual: p, acima, nAtual: famPlano(p), nAcima: famPlano(acima) } : null;
+}
+const UPS_DADOS = c.dados || {};
+const upsPendente = V7 && !posHandoff && !!c.upsell_oferecido && !UPS_DADOS.upsell_resposta && !cpfOk(UPS_DADOS.cpf) && !!c.plano_escolhido;
+let upsResposta = null;
+if (upsPendente) {
+  const par = planoAcima(c.plano_escolhido);
+  const msgU = norm((prep.consolidado || {}).mensagem).trim();
+  const fam = (p) => norm(famPlano(p));
+  const cpfMsg = (msgU.match(/(?<!\d)(\d{3})\.?(\d{3})\.?(\d{3})-?(\d{2})(?!\d)/) || []).slice(1).join('');
+  if (upd.plano_escolhido && upd.plano_escolhido !== c.plano_escolhido) upsResposta = 'troca';
+  else if (par && (/^up:troca$/.test(msgU) || new RegExp(`\\b(quero|prefiro|vou de|manda|pode ser)\\b[^?]{0,15}\\b${fam(par.acima)}\\b`).test(msgU))) {
+    upsResposta = 'troca'; upd.plano_escolhido = par.acima.codigo;
+  } else if (/^up:fica$/.test(msgU) || (par && new RegExp(`\\b(fico|fica|mantenho|continuo|quero|prefiro|pode ser|vou de)\\b[^?]{0,15}\\b${fam(par.atual)}\\b`).test(msgU))
+    || /^(esse mesmo|este mesmo|so esse|fico com esse|pode ser esse|nao,? obrigad[oa]|nao precisa|t[aá] bom assim)\b/.test(msgU)
+    || (cpfMsg && cpfOk(cpfMsg))) upsResposta = 'fica';
+  else if (Number(UPS_DADOS.upsell_perguntas || 0) >= 2) upsResposta = 'fica';
+  if (upsResposta) dados.upsell_resposta = upsResposta;
+}
+
 if (/seus dados sao usados/.test(norm(texto))) upd.lgpd_enviada = true;
 if (tags.upsell_oferecido || /so pra voce saber: por mais/.test(norm(texto))) upd.upsell_oferecido = true;
 
@@ -859,7 +907,8 @@ if (V7 && !m.elegibilidade && m.cep && m.numero && (m.complemento || m.dados.com
   upd.elegibilidade = 'ok';
   m.elegibilidade = 'ok';
 }
-const cpfOk = (v) => { const x = String(v || '').replace(/\D/g, ''); if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); };
+// 21/11: função içada — o upsell pendente (acima) usa antes desta linha.
+function cpfOk(v) { const x = String(v || '').replace(/\D/g, ''); if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); }
 const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento
   && (V4 ? m.instalacao_preferencia : m.visita_preferencia);
 if (!m.cep || !m.numero || !(m.complemento || m.dados.complemento_ok)) upd.etapa = (m.cep || m.numero) ? 'endereco' : 'abertura';
@@ -1095,8 +1144,9 @@ if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas
     (ctx.conversa || {}).lgpd_enviada ? null : 'Seus dados são usados só pro seu pedido com a Nio.'].filter(Boolean).join('\n\n');
   const jaTemNomeCpf = !!(((ctx.conversa || {}).dados || {}).cpf || dados.cpf);
   if (upsellAgora) {
-    // confirmação + sugestão num balão só (máx. 3 balões): [confirmação e sugestão] · [condições] · [pedido de dados]
-    baloesFinais = [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? (vai.join('\n\n') || null) : pedidoDados].filter(Boolean);
+    // confirmação + sugestão num balão só (máx. 3 balões): [confirmação e sugestão] · [condições] · [pergunta fica/troca]
+    // 21/11 (L-222): o pedido de nome/CPF NÃO vai aqui — a pergunta "fica ou troca" entra mais abaixo (upsell sem resposta).
+    baloesFinais = [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? (vai.join('\n\n') || null) : null].filter(Boolean);
   } else {
     baloesFinais = (fica.length && vai.length
       ? [fica.join('\n\n'), blocoCondicoes(), jaTemNomeCpf ? vai.join('\n\n') : pedidoDados, ...baloesFinais.slice(1)]
@@ -1206,7 +1256,7 @@ if (V7 && !cpfOk(m.dados.cpf)) {
       .replace(/^\s*(?:o\s+)?meu\s+nome(?:\s+completo)?(?:\s+(?:é|e))?\s+/i, ' ')
       .replace(/\s+(?:e\s+)?(?:o\s+)?(?:meu\s+)?cpf(?:\s+(?:é|e))?\s*$/i, ' ').replace(/^\s*cpf(?:\s+(?:é|e))?\s*$/i, ' ')
       .replace(/\s+/g, ' ').trim();
-    if (!m.dados.nome && /^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){1,6}$/.test(antes)) { dados.nome = antes; m.dados.nome = antes; upd.nome_confiavel = true; }
+    if (!pareceNome(m.dados.nome, 1) && pareceNome(antes)) { dados.nome = antes; m.dados.nome = antes; upd.nome_confiavel = true; }
     upd.dados = { ...(upd.dados || {}), ...dados };
   }
 }
@@ -1218,9 +1268,15 @@ if (V7 && !cpfOk(m.dados.cpf)) {
   const histC = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
   const ultMari = String((histC.filter((h) => h && h.papel === 'mari').pop() || {}).texto || '');
   const msgC = String((prep.consolidado || {}).mensagem || '').trim();
-  if (V7 && !m.dados.nome && /nome completo|seu nome/.test(norm(ultMari))
-    && /^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){1,6}$/.test(msgC) && !/\b(sim|nao|ok|isso|oi|ola)\b/.test(norm(msgC))) {
+  // 21/11 (L-40): "…ativa hoje, no seu nome?" não é pedido de nome — só "nome completo" ou "qual/me diz… seu nome". E a
+  // resposta tem de parecer nome (L-222: "Am n entende" virou o nome e a Mari passou a chamar a cliente de "Am").
+  const pediuNome = /nome completo|\b(qual|me (diz|fala|passa|manda|conta)|preciso)\b[^?.!]{0,20}\bseu nome\b/.test(norm(ultMari));
+  if (V7 && !pareceNome(m.dados.nome, 1) && pediuNome && pareceNome(msgC)) {
     dados.nome = msgC; m.dados.nome = msgC; upd.dados = { ...(upd.dados || {}), nome: msgC };
+  }
+  // Nome ruim já gravado (frase de antes desta correção) e nada para pôr no lugar: sai, e a Mari pede de novo.
+  if (V7 && m.dados.nome && !pareceNome(m.dados.nome, 1)) {
+    dados.nome = null; m.dados.nome = null; upd.dados = { ...(upd.dados || {}), nome: null };
   }
   const telConf = ultMari.match(/confirmando:?\s*\(?(\d{2})\)?\s*(9?\d{4})[\s-]?(\d{4})\s*\?/i);
   if (V7 && !m.dados.telefone && telConf && /^(sim|s|ss|isso|isso mesmo|exato|correto|certo|confirmo|esse mesmo|e esse|e sim|positivo)\b/.test(norm(msgC))) {
@@ -1228,6 +1284,36 @@ if (V7 && !cpfOk(m.dados.cpf)) {
     dados.telefone = tc; dados.telefone_confirmado = true; m.dados.telefone = tc;
     upd.dados = { ...(upd.dados || {}), telefone: tc, telefone_confirmado: true };
   }
+}
+// 21/11 (Ricardo; conversa L-222, #202): upsell sugerido agora, ou sugerido antes e sem resposta → nenhuma fala pede nome/CPF;
+// a resposta termina na pergunta "fica ou troca" com os botões. Respondeu (ou vale "fica") → o pedido de nome e CPF vem já.
+{
+  const temCpf = cpfOk((m.dados || {}).cpf);
+  const PED_F = /nome completo|\bcpf\b|seus dados sao usados|^fechou\??$|pode me mandar\??$|me passa\??$/;
+  const parU = planoAcima(upd.plano_escolhido || c.plano_escolhido);
+  const perguntarUps = V7 && !erro && !handoff && !posHandoff && !temCpf && parU
+    && ((upsellAgora && !c.upsell_oferecido) || (upsPendente && !upsResposta));
+  if (perguntarUps) {
+    const fA = norm(parU.nAtual); const fB = norm(parU.nAcima);
+    baloesFinais = baloesFinais.map((b) => b.split('\n\n').map((p) => {
+      const x = norm(p);
+      if (x.includes('?') && x.includes(fA) && x.includes(fB) && !/por mais r\$/.test(x)) return '';   // a pergunta do modelo: sai (entra a do sistema)
+      if (!PED_F.test(x) && !/nome completo|\bcpf\b/.test(x)) return p;
+      return p.split(/(?<=[.!?])\s+/).filter((f) => !PED_F.test(norm(f).trim())).join(' ').trim();
+    }).filter(Boolean).join('\n\n')).filter((b) => b.trim());
+    baloesFinais.push(`Fica no ${parU.nAtual} ou prefere o ${parU.nAcima}?`);
+    tags.botoes = 'upsell';
+    texto = baloesFinais.join('\n\n');
+    dados.upsell_perguntas = Number(UPS_DADOS.upsell_perguntas || 0) + 1;
+    upd.dados = { ...(upd.dados || {}), upsell_perguntas: dados.upsell_perguntas };
+  } else if (V7 && !erro && !handoff && !posHandoff && upsResposta && !temCpf
+    && !baloesFinais.some((b) => /nome completo|\bcpf\b/.test(norm(b)))) {
+    const lg = c.lgpd_enviada || upd.lgpd_enviada ? null : 'Seus dados são usados só pro seu pedido com a Nio.';
+    baloesFinais.push(['Me manda seu nome completo e CPF que eu já adianto aqui.', lg].filter(Boolean).join('\n\n'));
+    if (lg) upd.lgpd_enviada = true;
+    texto = baloesFinais.join('\n\n');
+  }
+  if (upsResposta) upd.dados = { ...(upd.dados || {}), upsell_resposta: upsResposta };
 }
 // Forma de pagamento tocada no botão (ou digitada) e não registrada pelo modelo — o sistema registra.
 if (V7 && !m.forma_pagamento) {
@@ -1395,6 +1481,11 @@ if (V7 && !erro && tags.botoes) {
     // 16/11 (0233): até 2 unidades da lista da Nio (título do WhatsApp ≤ 20) + "Nenhuma dessas"; mais que isso fica no texto.
     unidade: UNIDADES.length && UNIDADES.length <= 2 && UNIDADES.every((u) => u.length <= 20)
       ? [...UNIDADES.map((u, i) => ({ id: `un:${i + 1}`, title: u })), { id: 'un:nenhuma', title: 'Nenhuma dessas' }] : null,
+    // 21/11 (L-222): a resposta do upsell — fica no escolhido ou troca pelo de cima (título ≤ 20).
+    upsell: (() => {
+      const par = planoAcima(upd.plano_escolhido || c.plano_escolhido);
+      return par ? [{ id: 'up:fica', title: `Fico no ${par.nAtual}`.slice(0, 20) }, { id: 'up:troca', title: `Quero o ${par.nAcima}`.slice(0, 20) }] : null;
+    })(),
   }[chave];
   if (BOT) {
     let corpo = '';
