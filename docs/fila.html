@@ -36,7 +36,7 @@
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=161126-21"></script>
+<script src="assets/sidebar.js?v=211126-4d"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=211126-4b"></script>
 <script src="assets/pulso.js?v=181126-2"></script>
@@ -124,7 +124,23 @@
   // a jornada pode ainda dizer "Conversa" de um lead que a escada (v_leads) já pôs em Lead qualificado (caso Gabriel Vinicius, 19/11)
   const quaseVenda = (j) => !!(j && ((j.venda_id && (j.etapa === 2 || j.etapa === 3)) || ((funilDe(j) || {}).etapa === 'qualificado' && (funilDe(j) || {}).destino === 'em_andamento')));
   // 19/11 (Ricardo: "Sim, troca"): o nome do degrau segue o ícone — a jornada ainda diz "Conversa" de quem a escada já qualificou.
-  const etapaNome = (j) => (j && quaseVenda(j) && j.etapa < 2 ? 'Lead qualificado' : (j && j.etapa_nome) || '');
+  const etapaNome0 = (j) => (j && quaseVenda(j) && j.etapa < 2 ? 'Lead qualificado' : (j && j.etapa_nome) || '');
+  // 21/11 (0342, fase 2 passo 4b (d) — debate da Live com o Ricardo): a Live lê a SITUAÇÃO GRAVADA pela porta (lead_estado).
+  // "Sim, pela vez do time": vez do time na situação gravada entra no Para fazer, na ordem do prazo gravado. "Para fazer, como
+  // alarme": os alarmes da v_jornada (precisa_acao) seguem lá, com o texto deles. "Sim, as 15": a coluna diz a situação.
+  // "Sim, da situação": sem alarme, o texto e o botão são os da situação. Sem a leitura (0342 fora do ar), a Live de antes.
+  let sitMap = {};
+  const sitDe = (j) => (j && ((j.conversa_id && sitMap[`c:${j.conversa_id}`]) || (j.venda_id && sitMap[`v:${j.venda_id}`]))) || null;
+  const vezTime = (j) => (sitDe(j) || {}).vez === 'time';
+  const etapaNome = (j) => (sitDe(j) || {}).nome || etapaNome0(j);
+  // a linha que entrou só pela vez gravada (sem alarme): texto, botão e prazo da situação
+  const pelaSituacao = (j) => {
+    if (j.precisa_acao || !vezTime(j)) return j;
+    const st = sitDe(j);
+    const venceu = st.prazo_em && new Date(st.prazo_em) <= Date.now();
+    return { ...j, precisa_acao: true, pela_situacao: true, o_que_fazer: st.o_que_fazer || j.o_que_fazer, botao: st.botao || 'abrir',
+      nivel: venceu ? 'agora' : 'hoje', desde: st.prazo_em || st.em || j.desde };
+  };
   let feitosHoje = null;   // 19/11 (0315): ações suas hoje que passaram pela porta (porta_sombra.por = você)
   let opsCanal = [];  // 0117: 🔥 oportunidades do canal parceiro
   let ops = [];       // 0107: 🔥 oportunidades (sem as que já pedem ação)
@@ -187,7 +203,7 @@
   // 2 Time precisa agir + 5 Sem caixa = Para fazer · 3 Com o time + 4 Venda andando = Acompanhando · 1 Mari conduzindo = uma linha
   // de radar · 6 Saída e 7 Instalada ficam fora. Sem a coluna (cache antigo), a regra de antes.
   const comCaixa = (j) => j.caixa !== undefined && j.caixa !== null;
-  const filtroBase = (l) => l.filter((j) => (comCaixa(j) ? (j.precisa_acao || [3, 4].includes(j.caixa)) : (j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia)));
+  const filtroBase = (l) => l.filter((j) => vezTime(j) || (comCaixa(j) ? (j.precisa_acao || [3, 4].includes(j.caixa)) : (j.precisa_acao || j.dono_tipo === 'pessoa' || j.dono_tipo === 'time' || (j.venda_id && j.dono_tipo !== 'mari') || j.pendencia)));
 
   const LIVE_MAX_MS = 2 * 60000;   // 14/11 (0190): recarga obrigatória da Live mesmo sem gravação no banco
   // fresco=true (padrão): após ação/Atualizar, descarta o cache. Carga inicial e timer usam o que a barra lateral já buscou.
@@ -196,12 +212,13 @@
     NG.mudou('live', LIVE_MAX_MS);   // 14/11 (0190): marca o carimbo desta carga — o timer só refaz se o banco mudar depois
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap, rf, fn, rcf, rosa, rosn, rfeitos] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+    const [r, ap, rf, fn, rcf, rosa, rosn, rfeitos, rsit] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
       NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir'),
       NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null),
       NG.sb.from('v_vendas').select('id, nio_os, nio_pedido, comissao_prevista').in('status', ['0_qualificado', '1_vendido', '2_aguardando_instalacao']),
-      NG.sb.from('porta_sombra').select('id', { count: 'exact', head: true }).eq('por', eu.id).gte('em', `${NG.diaSP()}T00:00:00-03:00`)]);
+      NG.sb.from('porta_sombra').select('id', { count: 'exact', head: true }).eq('por', eu.id).gte('em', `${NG.diaSP()}T00:00:00-03:00`),
+      NG.sb.rpc('live_situacoes')]);   // 0342: a situação gravada de cada lead (~ms)
     if (rfeitos && !rfeitos.error) feitosHoje = rfeitos.count || 0;
     if (rosn && !rosn.error) { osNum = {}; comVenda = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); comVenda[v.id] = v.comissao_prevista; }); }
     if (rosa && !rosa.error) { osa = {}; (rosa.data || []).forEach((o) => { const a = osa[o.venda_id]; if (!a || String(o.mudou_em) > String(a.mudou_em)) osa[o.venda_id] = o; }); }
@@ -213,7 +230,11 @@
     }
     andPend = ap.error ? [] : (ap.data || []);
     if (r.erro) { listaEl.innerHTML = `<div class="vazio">${esc(r.erro)}</div>`; return; }
-    jor = { ...r, lista: filtroBase(r.lista) };
+    if (rsit && !rsit.error && Array.isArray(rsit.data)) {
+      sitMap = {};
+      rsit.data.forEach((x) => { if (x.conversa_id) sitMap[`c:${x.conversa_id}`] = x; if (x.venda_id && !sitMap[`v:${x.venda_id}`]) sitMap[`v:${x.venda_id}`] = x; });
+    }
+    jor = { ...r, lista: filtroBase(r.lista).map(pelaSituacao) };
     render();
     const [ro, rc] = await Promise.all([NG.oportunidades(r, pOp), pOpc]);
     ops = ro.erro ? [] : ro.lista;
@@ -560,7 +581,7 @@
     if (!etapaSel || etapaSel === 1) {
       const jaTem = new Set(L.map((x) => x.k).filter(Boolean));
       (jor.todas || []).filter((j) => j.origem === 'fila_vero' && j.caixa === 1 && !jaTem.has(chaveFicha(j)) && !(j.conversa_id && jaTem.has(`c:${j.conversa_id}`)))
-        .forEach((j) => L.push({ ...jItem(j, 'fv'), sit: `Com a Mari${etapaNome(j) ? ` · ${etapaNome(j)}` : ''}`,
+        .forEach((j) => L.push({ ...jItem(j, 'fv'), sit: `Com a Mari${etapaNome0(j) ? ` · ${etapaNome0(j)}` : ''}`,
           oque: j.o_que_fazer || 'A Mari está conduzindo; sobe para Para fazer se precisar de você', vez: vezTxt('Mari'), prazo: '—', urg: false, rank: 4 }));
     }
     const tms = (x) => new Date(x || 0).getTime() || 0;

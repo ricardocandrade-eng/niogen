@@ -403,9 +403,15 @@
         // 10/11 (Ricardo: "não pode o mesmo cliente trazer 2 notificações no menu lateral"): cada cliente conta UMA vez.
         // Live conta tudo o que precisa de ação; Mari não repete esse número; Conversas conta só quem espera e NÃO está no Live.
         pinta(nav, 'mari', 0, 'info', '');
-        pinta(nav, 'fila', acao.length, verm(acao) ? 'alerta' : 'info',
-          `${acao.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
-        total = acao.length;
+        // 21/11 (0342, debate da Live): o Para fazer = alarmes da jornada + vez do time na situação gravada — o menu conta igual
+        const rs = await Promise.resolve(NG.sb.rpc('live_situacoes')).catch(() => null);
+        const vezT = new Set(((rs && !rs.error && rs.data) || []).filter((x) => x.vez === 'time')
+          .flatMap((x) => [x.conversa_id && `c:${x.conversa_id}`, x.venda_id && `v:${x.venda_id}`]).filter(Boolean));
+        const chaves = (x) => [x.conversa_id && `c:${x.conversa_id}`, x.venda_id && `v:${x.venda_id}`].filter(Boolean);
+        const fila = j.lista.filter((x) => x.precisa_acao || chaves(x).some((k) => vezT.has(k)));
+        pinta(nav, 'fila', fila.length, verm(acao) ? 'alerta' : 'info',
+          `${fila.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
+        total = fila.length;
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
         // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.
         const [op, fu] = await Promise.all([NG.oportunidades(j), NG.furosJornada(j)]);
