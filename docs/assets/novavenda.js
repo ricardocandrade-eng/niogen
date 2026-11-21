@@ -690,7 +690,13 @@
       // As travas também: se algo escapar daqui, o RAISE do banco volta como toast.
       const ads = adicionaisEscolhidos();
       const recompra = estado.recompra && estado.recompra.recompra ? estado.recompra : null;
-      const { data, error } = await NG.sb.from('vendas').insert(linha).select('id').single();
+      // 0341 (fase 2, passo 4b): a venda que já nasce em Saída vai pela porta — nasce em Qualificado e sai com o motivo, na mesma
+      // transação (venda_nova_saida). A tela não grava a etapa; o INSERT direto em Saída é recusado pelo banco.
+      const { data, error } = status === 'saida'
+        ? await NG.sb.rpc('venda_nova_saida', { p_linha: linha, p_motivo: saida.saida_motivo, p_sub: saida.saida_sub || null,
+            p_volta: saida.interesse_futuro_em || null, p_obs: saida.obs || null })
+          .then((x) => (x.error ? x : { data: { id: (x.data || {}).venda_id }, error: null }))
+        : await NG.sb.from('vendas').insert(linha).select('id').single();
       if (!error && recompra) {
         await NG.sb.from('eventos_venda').insert({ venda_id: data.id, tipo: 'alerta_recompra', detalhe: {
           cep: linha.cep, numero: linha.numero, complemento: linha.complemento, anteriores: recompra.anteriores, ultima_em: recompra.ultima_em } });
@@ -713,7 +719,7 @@
     const saidaUnica = async (bt, cod, sub, volta, obs) => {
       let campos;
       try { campos = await NG.saidaCampos(cod, sub, volta, obs); } catch (e) { NG.toast(e.message, 'bad'); return; }
-      return salvar('saida', bt, campos);
+      return salvar('saida', bt, { ...campos, obs: obs || null });
     };
     btnSem.addEventListener('click', (ev) => (F.dfv_resultado.value === 'endereco_ocupado'
       ? saidaUnica(ev.currentTarget, 'ja_cliente_nio', 'cliente ativo', null)

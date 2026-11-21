@@ -148,6 +148,49 @@
     document.head.appendChild(s);
   }
 
+  // ---------- leituras da conversa ----------
+  const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
+  // 12/11 (0145): midia = áudio/foto do cliente no bucket privado. Banco sem a coluna ainda → cai para a lista antiga.
+  const SEL_TURNO_BASE = 'id, papel, texto, tags, created_at';
+  const selTurno = () => (semColunaMidia ? SEL_TURNO_BASE : `${SEL_TURNO_BASE}, midia`);
+  const qTurnosDe = (id, ult) => (ult
+    ? NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
+    : NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400));
+  const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem', 'midia']).order('criada_em', { ascending: false }).limit(200);
+  // A 1ª carga completa de uma conversa (cabeçalho, 400 falas, 200 ações, mídias da Mari, anúncio, status no Chatwoot).
+  function cargaInicial(id, comAnuncio = true) {
+    const t = new Date().toISOString();
+    const qTurnos = qTurnosDe(id, null).then((r) => {
+      if (r.error && !semColunaMidia && /midia/i.test(String(r.error.message || ''))) { semColunaMidia = true; return qTurnosDe(id, null); }
+      return r;
+    });
+    // 12/11 (0146): voz e imagem que a Mari mandou (mari_midia_envios) — na mesma rodada paralela (regra 19)
+    const qEnvios = NG.sb.from('mari_midia_envios').select('id, tipo, texto, caminho, imagem_url, passo, origem, created_at')
+      .eq('conversa_id', id).eq('ok', true).order('created_at', { ascending: false }).limit(60).then((r) => r, () => ({ data: [] }));
+    // 20/11 (0331, prompt "conversa sem Chatwoot", item 1): o anúncio que o cliente clicou — só na 1ª carga; lê do banco o que a
+    // coleta da Meta trouxe (nunca a Meta na abertura). Sem referral, não aparece.
+    const qAnuncio = !comAnuncio ? Promise.resolve(null) : NG.sb.from('v_mari_conversa_anuncio').select('ad_nome, titulo, anuncio_texto, titulo_ad, arte_url, arte_miniatura, campanha_nome, referral_em, source_url')
+      .eq('conversa_id', id).maybeSingle().then((r) => (r && !r.error ? r.data || null : null), () => null);
+    // 20/11 (0334): status de cada mensagem no Chatwoot (✓ enviada · ✓✓ entregue · ✓✓ azul lida) e o id para citar
+    const qMsgCw = NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).order('criado_em', { ascending: false }).limit(300)
+      .then((r) => (r && !r.error ? r.data || [] : null), () => null);
+    return { t, rc: NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(), qTurnos, ra: qAcoes(id), qEnvios, qAnuncio, qMsgCw };
+  }
+  // 21/11 (fase 2, passo 4b (b) — ficha em até 1,0 s): a ficha sabe a conversa antes de desenhar e dispara a 1ª carga junto com
+  // a dela; o painel da conversa, quando monta, usa essa carga (até 8 s) em vez de começar outra rodada depois da ficha.
+  const adiantadas = new Map();
+  function adiantar(id) {
+    if (!id) return;
+    const x = adiantadas.get(id);
+    if (x && Date.now() - x.em < 8000) return;
+    adiantadas.set(id, { em: Date.now(), c: cargaInicial(id) });
+  }
+  function usarAdiantada(id) {
+    const x = adiantadas.get(id);
+    adiantadas.delete(id);
+    return x && Date.now() - x.em < 8000 ? x.c : null;
+  }
+
   function montar(host, opts) {
     const o = { rotuloFechar: '← Lista', ...opts };
     host.innerHTML = '';
@@ -202,15 +245,7 @@
     // como fala da Mari e ela segue dona e com o contexto (ninguém assume nem devolve). Só admin/backoffice; o banco confere tudo.
     if (podeSugerir) $('[data-m="sopro"]').hidden = false;
 
-    // ---------- dados ----------
-    const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
-    // 12/11 (0145): midia = áudio/foto do cliente no bucket privado. Banco sem a coluna ainda → cai para a lista antiga.
-    const SEL_TURNO_BASE = 'id, papel, texto, tags, created_at';
-    const selTurno = () => (semColunaMidia ? SEL_TURNO_BASE : `${SEL_TURNO_BASE}, midia`);
-    const qTurnosDe = (id, ult) => (ult
-      ? NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).gte('created_at', ult).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(100)
-      : NG.sb.from('mari_turnos').select(selTurno()).eq('conversa_id', id).order('created_at', { ascending: false }).order('id', { ascending: false }).limit(400));
-    const qAcoes = (id) => NG.sb.from('chatwoot_acoes').select('id, tipo, momento, payload, status, erro, criada_em, feita_em').eq('conversa_id', id).in('tipo', ['nota', 'mensagem', 'midia']).order('criada_em', { ascending: false }).limit(200);
+    // ---------- dados ---------- (as leituras ficam fora do montar: a ficha adianta a 1ª carga — cargaInicial / adiantar)
     // 11/11 (Live lenta): leve = a atualização de 4 s. Antes cada rodada baixava de novo as 400 mensagens, as 200 ações e a
     // v_jornada; agora traz só as mensagens novas (depois da última), o cabeçalho e as ações. A carga completa fica para a
     // abertura, a volta à aba e depois de uma ação. A linha da jornada vem da carga compartilhada (NG.jornadaLinha).
@@ -218,10 +253,6 @@
       const id = o.conversaId;
       const meu = ++st.seq;
       const ult = leve === true && st.d && st.d.turnos.length ? st.d.turnos[st.d.turnos.length - 1].created_at : null;
-      const qTurnos = qTurnosDe(id, ult).then((r) => {
-        if (r.error && !semColunaMidia && /midia/i.test(String(r.error.message || ''))) { semColunaMidia = true; return qTurnosDe(id, ult); }
-        return r;
-      });
       // 10/11 (Ricardo): cliente com venda → lembrete âmbar acima da caixa: o próximo passo é pelo botão da ficha.
       // 11/11: não segura as mensagens — entra quando a jornada chegar.
       NG.jornadaLinha({ conversaComVenda: id }).then((vj) => {
@@ -229,23 +260,23 @@
         st.venda = vj || null;
         if (st.d) desenhar();
       }, () => {});
-      // 12/11 (0146): voz e imagem que a Mari mandou (mari_midia_envios) — na mesma rodada paralela (regra 19)
-      const qEnvios = NG.sb.from('mari_midia_envios').select('id, tipo, texto, caminho, imagem_url, passo, origem, created_at')
+      // 21/11 (4b b): a 1ª carga pode ter saído adiantada pela ficha (cargaInicial); a atualização leve busca só o que é novo.
+      const ad = !ult ? usarAdiantada(id) : null;
+      const k = ad || (ult ? null : cargaInicial(id, st.anuncio === undefined));
+      const qTurnos = k ? k.qTurnos : qTurnosDe(id, ult).then((r) => {
+        if (r.error && !semColunaMidia && /midia/i.test(String(r.error.message || ''))) { semColunaMidia = true; return qTurnosDe(id, ult); }
+        return r;
+      });
+      const qEnvios = k ? k.qEnvios : NG.sb.from('mari_midia_envios').select('id, tipo, texto, caminho, imagem_url, passo, origem, created_at')
         .eq('conversa_id', id).eq('ok', true).order('created_at', { ascending: false }).limit(60).then((r) => r, () => ({ data: [] }));
-      // 20/11 (0331, prompt "conversa sem Chatwoot", item 1): o anúncio que o cliente clicou — só na 1ª carga, na mesma rodada paralela
-      // (regra 19); lê do banco o que a coleta da Meta trouxe (nunca a Meta na abertura). Sem referral, não aparece.
-      const qAnuncio = ult || st.anuncio !== undefined ? Promise.resolve(null)
-        : NG.sb.from('v_mari_conversa_anuncio').select('ad_nome, titulo, anuncio_texto, titulo_ad, arte_url, arte_miniatura, campanha_nome, referral_em, source_url')
-          .eq('conversa_id', id).maybeSingle().then((r) => (r && !r.error ? r.data || null : null), () => null);
-      // 20/11 (0334): status de cada mensagem no Chatwoot (✓ enviada · ✓✓ entregue · ✓✓ azul lida) e o id para citar
-      const qMsgCw = (ult ? NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).gt('atualizado_em', st.msgCwAte || ult)
-        : NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).order('criado_em', { ascending: false }).limit(300))
+      const qAnuncio = k && st.anuncio === undefined ? k.qAnuncio : Promise.resolve(null);
+      const qMsgCw = k ? k.qMsgCw : NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).gt('atualizado_em', st.msgCwAte || ult)
         .then((r) => (r && !r.error ? r.data || [] : null), () => null);
-      const tMsgCw = new Date().toISOString();
+      const tMsgCw = k ? k.t : new Date().toISOString();
       const [rc, rt, ra, rr, rtpl, rme, ran, rmc] = await Promise.all([
-        NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
+        k ? k.rc : NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(),
         qTurnos,
-        qAcoes(id),
+        k ? k.ra : qAcoes(id),
         rapidas(),
         templates(),
         qEnvios,
@@ -1094,5 +1125,5 @@
     };
   }
 
-  window.NGConversa = { montar, textoTurno, capturas };
+  window.NGConversa = { montar, textoTurno, capturas, adiantar };
 })();

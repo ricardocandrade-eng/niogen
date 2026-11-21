@@ -256,8 +256,24 @@
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
       ultimaFalaTime(cid),   // 0103: sugestão do motivo quando o cliente só confirmou
     ]);
-    const convPrev = bo ? ((NG.jornadaEspia({ venda: id }) || {}).conversa_id || null) : null;
+    // 21/11 (fase 2, passo 4b (b) — ficha em até 1,0 s; medido no ar: a jornada_live leva 1,3–1,7 s e segurava a ficha inteira
+    // quando não estava em memória — página da venda, 1ª ficha da aba). A ficha usa a linha em memória ou a última vista na aba
+    // (até 10 min) e não espera a jornada: ela chega depois e a ficha se redesenha. Sem nenhuma das duas, a linha vem em seguida.
+    const joMem = NG.jornadaEspia({ venda: id });
+    const joSnap = joMem ? null : (((NG.jornadaSnap() || {}).porVenda || {})[id] || null);
+    const pJorDepois = joMem ? null : NG.jornadaLinha({ venda: id }).catch(() => null);
+    const convPrev = bo ? ((joMem || joSnap || {}).conversa_id || null) : null;
     const pPrev = convPrev ? daConversa(convPrev).catch(() => null) : null;
+    // 4b (b): o painel da conversa e as indicações/pós-instalação começavam só depois de a ficha desenhar (+0,3–0,5 s): saem já
+    // (só ao abrir: com o painel já montado ou as indicações já lidas, a recarga depois de uma ação não lê de novo)
+    const adiantarConv = (cid) => {
+      if (!cid || !(modo === 'cheia' || modo === 'pagina' || convAberta) || !window.NGConversa || !NGConversa.adiantar) return;
+      if ((cvCheia && cvCheia.id === cid) || (cvComp && cvComp.id === cid)) return;
+      NGConversa.adiantar(cid);
+    };
+    const adiantarInd = (cid) => { if (bo && fc.ind === undefined && idAtual === id) indAdiantar(id, cid); };
+    adiantarConv(convPrev);
+    if (convPrev) adiantarInd(convPrev);
     // 18/11 (0283, regra 19: ≤ 25 chamadas): as 13 leituras que só dependem da venda vêm numa chamada (ficha_venda). Sem a RPC
     // (não aplicada ou erro), cada parte cai na leitura de antes. Mesmo formato de resposta ({ data, error }).
     const fv = Promise.resolve(NG.sb.rpc('ficha_venda', { p_venda: id })).then((x) => (x.error || !x.data ? null : x.data), () => null);
@@ -283,7 +299,7 @@
       daVenda('pend', () => NG.sb.from('venda_pendencias').select('*').eq('venda_id', id).order('aberta_em', { ascending: false })),
       motivosCache ? Promise.resolve({ data: motivosCache }) : NG.sb.from('config_motivos_pendencia').select('*').eq('ativo', true).order('ordem'),
       daVenda('avisos', () => NG.sb.rpc('ficha_avisos', { p_venda: id })),
-      NG.jornadaLinha({ venda: id }),   // 0090: etapa, próximo passo, precisa de ação
+      joMem || joSnap,   // 0090: etapa, próximo passo, precisa de ação (4b b: sem esperar a jornada_live — pJorDepois)
       planosCache ? Promise.resolve({ data: planosCache }) : NG.sb.from('config_planos').select('id, codigo, nome, nome_curto, preco, preco_cartao, cluster, portfolio, variante, forma_pagamento_permitida').eq('ativo', true).order('preco'),
       linksCache ? Promise.resolve({ data: linksCache }) : NG.sb.from('config_links').select('chave, url').in('chave', ['dfv_sudeste', 'nio_form_analise_viabilidade']),
       // 0105: andamento na Nio — status do portal PAP (extensão 0.4) e biometria do GED360 (robô n8n). Só admin/backoffice.
@@ -314,6 +330,8 @@
       Object.assign(v, viab, ehParc ? { conferencia_obs, conferencia_em, conferencia_por, parceiro_indevida, parceiro_indevida_motivo, parceiro_indevida_em } : {});
     }
     const convId = ((rc.data || [])[0] || {}).id || null;
+    if (convId !== convPrev) adiantarConv(convId);   // 4b (b): a conversa só se soube agora
+    adiantarInd(convId);   // (repetir a mesma venda e conversa não lê de novo)
     const planoLista = v.plano_id ? (planosCache || []).find((p) => p.id === v.plano_id) : null;
     // 2ª rodada: o que depende da conversa (se não saiu adiantado) e da venda (parceiro, faturas).
     const [rpCurto, rparc, rconv, fatRow, concRow] = await Promise.all([
@@ -356,7 +374,7 @@
     }
     const pendHist = (rph.data || []).filter((p) => p.encerrada_em).map((p) => ({ ...p, autor: nomeDe[p.encerrada_por] || nomeDe[p.aberta_por] }));
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
-    return {
+    const res = {
       jor: jo || null,
       lead, din, leadCfg: lcfg || [],
       andamento: andRow || null,
@@ -389,6 +407,16 @@
       leadNum: (((rc.data || [])[0] || {}).lead_numero) || (rx27.data || {}).lead_numero || null,   // 0296: L-n
       nomeCurto,
     };
+    // 4b (b): a linha nova da jornada chega depois da ficha desenhada — troca e redesenha só se mudou
+    if (pJorDepois) {
+      pJorDepois.then((j) => {
+        if (!j || d !== res || formAtivo || edicao) return;
+        if (JSON.stringify(j) === JSON.stringify(res.jor)) return;
+        res.jor = j;
+        render();
+      }, () => {});
+    }
+    return res;
   }
 
   // ---------- próximo passo: botão e formulário que resolvem ----------
@@ -1119,10 +1147,20 @@
     const motivo = fd.get('motivo_conf');
     if (!motivo) { NG.toast('Escolha o motivo da lista: reprovar ou devolver sem motivo não é permitido.', 'bad'); return false; }
     const obsNova = String(fd.get('obs_conf') || '').trim();
+    // 0341 (fase 2, passo 4b — D17): reprovar grava a conferência e faz a Saída pela porta (o motivo da conferência vira o motivo
+    // da Saída da lista única). A tela não grava a etapa — o PATCH com status é recusado desde a 0295.
+    if (para === 'reprovada') {
+      const { data, error } = await NG.sb.rpc('venda_conferencia_reprovar', { p_venda: d.v.id, p_motivo: motivo, p_obs: obsNova || null });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); d.avisoBanco = NG.msgErro(error); render(); return false; }
+      d.avisoBanco = null; formAtivo = null; edicao = null; abertos = null;
+      NG.toast((data && data.resumo) || 'Venda reprovada e encerrada', 'ok');
+      await recarregar();
+      avisarOuvintes(data || null);
+      return true;
+    }
     const campos = { conferencia_status: para, conferencia_motivo: motivo };
     if (obsNova) campos.conferencia_obs = [d.v.conferencia_obs, obsNova].filter(Boolean).join('\n');
-    if (para === 'reprovada') { campos.status = 'saida'; campos.motivo_saida = `Reprovada na conferência: ${NG.MOTIVOS_CONFERENCIA[motivo]}`; }
-    return gravar(campos, para === 'reprovada' ? 'Venda reprovada e encerrada' : 'Venda devolvida ao parceiro');
+    return gravar(campos, 'Venda devolvida ao parceiro');
   }
   async function confTentativa(atendeu) {
     const sel = raiz.querySelector('[data-conf-canal]');
@@ -4349,18 +4387,29 @@
   const IND_SIT = { recebida: 'recebida', contatada: 'a Mari já falou', em_venda: 'virou venda', aguarda_nio: 'instalou · falta a Nio confirmar',
     aguarda_prazo: 'instalou · Pix no prazo', falta_pix: 'instalou · falta a chave Pix', a_pagar: 'Pix a pagar', pago: 'Pix pago', cancelado: 'prêmio cancelado',
     invalida: 'não vale', indicado_saiu: 'indicado saiu', erro: 'erro ao abrir a conversa' };
+  const indLeituras = (vid, cid) => {
+    const quem = [cid && `conversa_id.eq.${cid}`, vid && `venda_id.eq.${vid}`].filter(Boolean).join(',');
+    return Promise.all([
+      vid ? NG.sb.from('pos_instalacao').select('estado, enviar_em, enviada_em, respondeu_em, pediu_em, insistencias, insistiu_em').eq('venda_id', vid).maybeSingle() : null,
+      vid ? NG.sb.from('v_indicacoes').select('id, criado_em, indicado_nome, indicado_cliente_nome, conversa_id, venda_id, situacao, premio_valor, premio_vence_em').eq('indicador_venda_id', vid).order('criado_em') : null,
+      quem ? NG.sb.from('v_indicacoes').select('indicador_nome').or(quem).limit(1) : null,
+    ]);
+  };
+  // 21/11 (4b b): a ficha da venda dispara estas leituras junto com a 1ª rodada (a conversa já conhecida); o carregarIndFicha usa.
+  let indAdiant = null;
+  function indAdiantar(vid, cid) {
+    if (indAdiant && indAdiant.vid === vid && indAdiant.cid === (cid || null)) return;
+    indAdiant = { vid, cid: cid || null, p: indLeituras(vid, cid) };
+  }
   function carregarIndFicha() {
     if (!d || !ehBO()) { fc.ind = null; return; }
     const vid = d.soConversa ? (d.conv && d.conv.venda_id) || null : d.v.id;
     const cid = d.conversaId || null;
-    const quem = [cid && `conversa_id.eq.${cid}`, vid && `venda_id.eq.${vid}`].filter(Boolean).join(',');
     const alvo = d;
     fc.ind = null;
-    Promise.all([
-      vid ? NG.sb.from('pos_instalacao').select('estado, enviar_em, enviada_em, respondeu_em, pediu_em, insistencias, insistiu_em').eq('venda_id', vid).maybeSingle() : null,
-      vid ? NG.sb.from('v_indicacoes').select('id, criado_em, indicado_nome, indicado_cliente_nome, conversa_id, venda_id, situacao, premio_valor, premio_vence_em').eq('indicador_venda_id', vid).order('criado_em') : null,
-      quem ? NG.sb.from('v_indicacoes').select('indicador_nome').or(quem).limit(1) : null,
-    ]).then(([rp, rm, rq]) => {
+    const ad = indAdiant && indAdiant.vid === vid && indAdiant.cid === cid ? indAdiant.p : null;
+    indAdiant = null;
+    (ad || indLeituras(vid, cid)).then(([rp, rm, rq]) => {
       if (d !== alvo) return;
       fc.ind = { pos: (rp && !rp.error && rp.data) || null, minhas: (rm && !rm.error && rm.data) || [], por: ((rq && !rq.error && rq.data) || [])[0] || null };
       if (fc.ind.pos || fc.ind.minhas.length || fc.ind.por) render();
