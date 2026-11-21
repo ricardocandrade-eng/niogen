@@ -32,7 +32,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=201126-16">
+<link rel="stylesheet" href="assets/app.css?v=211126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
@@ -40,6 +40,7 @@
 <script src="assets/conversa.js?v=201126-17"></script>
 <script src="assets/ficha.js?v=201126-16"></script>
 <script src="assets/pulso.js?v=181126-2"></script>
+<script src="assets/atendimento.js?v=211126-1"></script>
 </head>
 <body class="tela-fila lv-tela">
 <div class="app">
@@ -56,6 +57,7 @@
         </div>
       </header>
       <div id="pulso" class="pl" hidden></div>
+      <div id="atendimento" class="at" aria-live="polite"></div>
       <div id="intro"></div>
       <nav id="funil" class="lv-stages" aria-label="Filtrar por etapa"></nav>
       <section class="lv-lista" id="lista" aria-label="Fila do backoffice"></section>
@@ -1023,6 +1025,8 @@
   NGFicha.iniciar();   // #venda=<id> / #conversa=<id> no endereço: o cliente abre junto com a lista
   sincCliente();
   await carregar(false);
+  // 21/11 (0339 · Ricardo: "Quero a faixa na Live"): faixa de atendimento pelas mensagens, depois da lista (não atrasa a fila).
+  NGAtendimento.montar(document.getElementById('atendimento'));
   // O refresh de 1 min também atualiza a ficha aberta (quieto: só redesenha se mudou, nunca por cima de formulário).
   // 14/11 (0190 — Supabase engasgado): o tick de 1 min só refaz se algo foi gravado no banco (NG.mudou) ou a cada 2 min
   // (prazos que vencem com o relógio). Lead novo, mensagem ou ação de qualquer pessoa mudam o carimbo e entram no tick seguinte.
