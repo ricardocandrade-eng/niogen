@@ -174,7 +174,9 @@
     // 20/11 (0334): status de cada mensagem no Chatwoot (✓ enviada · ✓✓ entregue · ✓✓ azul lida) e o id para citar
     const qMsgCw = NG.sb.from('mari_msg_cw').select('cw_msg_id, direcao, status, texto, criado_em').eq('conversa_id', id).order('criado_em', { ascending: false }).limit(300)
       .then((r) => (r && !r.error ? r.data || [] : null), () => null);
-    return { t, rc: NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle(), qTurnos, ra: qAcoes(id), qEnvios, qAnuncio, qMsgCw };
+    // .then já aqui: a consulta do supabase-js só sai quando alguém pede o resultado — sem isso, a carga adiantada esperava o painel
+    const ja = (q) => Promise.resolve(q).then((r) => r, (e) => ({ data: null, error: e }));
+    return { t, rc: ja(NG.sb.from('mari_conversas').select(SEL_CONV).eq('id', id).maybeSingle()), qTurnos, ra: ja(qAcoes(id)), qEnvios, qAnuncio, qMsgCw };
   }
   // 21/11 (fase 2, passo 4b (b) — ficha em até 1,0 s): a ficha sabe a conversa antes de desenhar e dispara a 1ª carga junto com
   // a dela; o painel da conversa, quando monta, usa essa carga (até 8 s) em vez de começar outra rodada depois da ficha.
