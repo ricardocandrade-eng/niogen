@@ -448,7 +448,8 @@
   };
   const periodoDe = (ts) => (ts && Number(new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, hour: '2-digit', hour12: false }).format(new Date(ts))) >= 12 ? '13:00' : '08:00');
   const campoData = (rot, nome, valor, extra = '') => `<label class="campo">${esc(rot)}<input type="date" name="${nome}" value="${esc(valor || '')}" ${extra}></label>`;
-  const campoPeriodo = (nome, atual) => `<label class="campo">Período<select name="${nome}">
+  // 0345 (caso L-217): atual = '' → "Escolher" (sem período pronto; a tarde que vinha marcada virou agenda errada)
+  const campoPeriodo = (nome, atual) => `<label class="campo">Período<select name="${nome}">${atual === '' ? '<option value="" selected>Escolher</option>' : ''}
       <option value="08:00" ${atual === '08:00' ? 'selected' : ''}>Manhã · 8–12h</option>
       <option value="13:00" ${atual === '13:00' ? 'selected' : ''}>Tarde · 13–17h</option></select></label>`;
   const optBiometria = (atual) => NG.opcoes(NG.BIOMETRIA, atual);
@@ -587,7 +588,7 @@
       `${botoesPortal}<div class="grade2"><label class="campo">Nº da OS<input type="text" name="os" value="${esc(v.nio_os || v.nio_pedido || '')}" inputmode="numeric" autocomplete="off" autofocus required></label>
        <label class="campo">Forma de pagamento<select name="forma">${Object.entries(FORMAS).map(([k, tx]) => `<option value="${k}"${k === (v.forma_pagamento || '') ? ' selected' : ''}>${esc(tx)}</option>`).join('')}</select></label></div>
        <details class="f-agenda-mao" style="margin-top:8px"><summary>A agenda não chegou? Gravar o dia à mão</summary><div class="grade2">${campoData('Dia da instalação', 'dia', '', `min="${hojeISO()}"`)}
-       ${campoPeriodo('periodo', '13:00')}</div></details>`, 'Gravar venda'),
+       ${campoPeriodo('periodo', '')}</div></details>`, 'Gravar venda'),
     // 0089 (mantido): OS + dia + período num formulário só.
     // 0194 (Ricardo, 14/11): no portal a ordem é forma de pagamento + plano → agenda → nº da OS → a Nio manda o link da biometria.
     os_agendar: (v) => formWrap('os_agendar', 'Gravar OS e agenda = VENDA',
@@ -1008,6 +1009,7 @@
       if (!os) { NG.toast('Informe o nº do pedido (OS).', 'bad'); return false; }
       // 0247: "Gravar venda" = só a OS (e a forma do portal). Com o dia preenchido (a Consulta OS não leu), grava a agenda junto.
       const forma = fd.get('forma') || null;
+      if (fd.get('dia') && !fd.get('periodo')) { NG.toast('Escolha o período que o portal agendou (manhã ou tarde).', 'bad'); return false; }
       if (fd.get('dia')) return !!(await rodarMomento('os_agendar', { os, dia: fd.get('dia'), periodo: fd.get('periodo'), forma, sem_aviso: true }));
       return !!(await rodarMomento('os', { os, forma }));
     },
