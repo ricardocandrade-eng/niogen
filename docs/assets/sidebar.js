@@ -25,6 +25,7 @@
 
   // 22/11 (Ricardo: "organiza os itens do menu" → "Pela rotina"): seções pelo uso do dia — atender, vender, acompanhar,
   // financeiro e cadastros. Saíram os itens "em breve" (Placar e Alterar senha; embreve.html segue existindo).
+  // 22/11 (novo layout, passo 6): o Placar voltou ao menu como tela de verdade (placar.html), em Acompanhamento.
   const MENU = [
     ['Atendimento', [
       { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
@@ -39,6 +40,7 @@
     ]],
     ['Acompanhamento', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
+      { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },

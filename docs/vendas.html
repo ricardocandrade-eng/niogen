@@ -38,7 +38,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-9"></script>
+<script src="assets/sidebar.js?v=221126-10"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 <script src="assets/vendasos.js?v=221126-2"></script>
@@ -197,6 +197,14 @@
     NG.preencherSelect(fVendedor, vend, 'Todos os vendedores');
     NG.preencherSelect(fOrigem, Object.entries(NG.ORIGENS).filter(([k]) => d.vendas.some((v) => v.origem === k)), 'Todas as origens');
     fVendedor.value = guarda[0]; fOrigem.value = guarda[1];
+    // 22/11 (Placar): ?vendedor= ?origem= ?q= chegam do Placar e valem só na 1ª carga
+    if (!window.NGvdUrl) {
+      window.NGvdUrl = true;
+      const U = new URLSearchParams(location.search);
+      if (U.get('vendedor')) fVendedor.value = U.get('vendedor');
+      if (U.get('origem')) fOrigem.value = U.get('origem');
+      if (U.get('q')) fBusca.value = U.get('q');
+    }
     if (!window.NGvdTempo) window.NGvdTempo = Math.round(performance.now() - t0);
     render();
   }
