@@ -877,8 +877,27 @@ if (/seus dados sao usados/.test(norm(texto))) upd.lgpd_enviada = true;
 if (tags.upsell_oferecido || /so pra voce saber: por mais/.test(norm(texto))) upd.upsell_oferecido = true;
 
 const ag = tags.agendamento_retorno || null;
-const agm = ag && ag.match(/(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-if (agm) upd.agendamento_retorno = `${agm[1]}T${agm[2]}:00-03:00`;
+// 21/11 (caso L-199, 0348): a data sem horário também vale (09:00) — o banco marca a espera com ela no C3.
+const agm = ag && ag.match(/(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}:\d{2}))?/);
+if (agm) upd.agendamento_retorno = `${agm[1]}T${agm[2] || '09:00'}:00-03:00`;
+// Rede de segurança (L-199: "temos até dia 18/12 para tomar decisões" e a Mari não emitiu a tag): no C3 (múltiplos decisores /
+// interesse caindo), se o cliente escreveu um DD/MM futuro nesta fala, é essa a data de retorno.
+{
+  const mC3 = handoffYaml && ['multiplos_decisores', 'interesse_caindo'].includes(norm(hy.motivo_handoff || '').replace(/[^a-z_]/g, ''));
+  const msgC = String((prep.consolidado || {}).mensagem || '');
+  const dm = !upd.agendamento_retorno && mC3 && msgC.match(/\b([0-3]?\d)\s*\/\s*([01]?\d)(?:\s*\/\s*(\d{2,4}))?\b/);
+  if (dm) {
+    const hojeSP = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const [ah] = hojeSP.split('-').map(Number);
+    const d = Number(dm[1]); const mes = Number(dm[2]);
+    let ano = dm[3] ? Number(dm[3].length === 2 ? `20${dm[3]}` : dm[3]) : ah;
+    const iso = (a) => `${a}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    if (d >= 1 && d <= 31 && mes >= 1 && mes <= 12) {
+      if (!dm[3] && iso(ano) <= hojeSP) ano += 1;
+      if (iso(ano) > hojeSP) { upd.agendamento_retorno = `${iso(ano)}T09:00:00-03:00`; tags.retorno_da_fala = iso(ano); }
+    }
+  }
+}
 
 // 0138 (regra 5 revista, 12/11): resposta à pergunta da autorização do crédito → grava quando e com qual frase (dados → gatilho
 // 0139 copia para as colunas que o n8n mari_credito lê).

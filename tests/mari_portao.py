@@ -682,6 +682,34 @@ def cen_aq(c):   # P44 (19/11, conversa L-217, Jussara): o cliente respondeu "Ma
     row = conv_row(c, 'instalacao_preferencia')
     c.exige('manha' in norm(row.get('instalacao_preferencia') or ''), f'[P44] o período "Manhã" não ficou gravado: {row}')
 
+def data_futura(dias):
+    hoje = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3))).date()
+    return hoje + datetime.timedelta(days=dias)
+
+
+def cen_ar(c):   # P45 (20/11, conversa L-199, Bruno): "temos até dia 18/12 para tomar decisões" e nada foi gravado
+    # A Mari entendeu (estava no briefing), mas não emitiu o [AGENDAMENTO_RETORNO], e o C3 do banco descartava a data:
+    # o lead seguia na escada e no 🔥 O10. Agora: a data do cliente fica gravada, a espera (⏸) nasce sozinha (0348) e a
+    # despedida diz que A GENTE chama perto do dia (nunca "é só me chamar").
+    d = data_futura(27)
+    ate_planos_jf(c)
+    r = c.diz('Existe possibilidade de trocar os chips por outra coisa?')
+    msg = f'Vou decidir com calma, temos até dia {d:%d/%m} para tomar decisões, pq nossa mudança será dia {(d - datetime.timedelta(days=1)):%d/%m}'
+    r = c.diz(msg)
+    row = conv_row(c, 'agendamento_retorno, espera_ate, espera_motivo, espera_por')
+    if not row.get('espera_ate'):   # pode contornar uma vez antes de aceitar
+        r = c.diz(f'Prefiro decidir mais perto mesmo, até dia {d:%d/%m}')
+        row = conv_row(c, 'agendamento_retorno, espera_ate, espera_motivo, espera_por')
+    t = fala(r)
+    c.exige(bool(row.get('espera_ate')), f'[P45] o cliente deu o dia {d:%d/%m} e a conversa não ficou em espera: {row}')
+    c.exige(f'{d:%d/%m}' in str(row.get('espera_motivo') or ''), f'[P45] o motivo da espera não traz a data do cliente: {row}')
+    c.exige(not row.get('espera_por'), f'[P45] a espera devia ser marcada pela Mari (espera_por vazio): {row}')
+    c.exige(not re.search(r'(e so|so) (me )?(chamar|mandar um oi)', t), f'[P45] despedida com "é só me chamar" — quem chama perto do dia é a gente: «{t[-200:]}»')
+    r = c.diz('😉')
+    row2 = conv_row(c, 'espera_ate')
+    c.exige(bool(row2.get('espera_ate')), f'[P45] o "😉" depois da despedida derrubou a espera: {row2}')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -715,6 +743,8 @@ PORTAO = {
     'ao': (48, cen_ao, 'P41 P42'), 'ap': (49, cen_ap, 'P43'),
     # 21/11 — conversa L-217 (Jussara): período respondido antes do nome não se pergunta de novo
     'aq': (50, cen_aq, 'P44'),
+    # 21/11 — conversa L-199 (Bruno): o cliente dá um dia para decidir → espera marcada pela Mari (0348)
+    'ar': (51, cen_ar, 'P45'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
