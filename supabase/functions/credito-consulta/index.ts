@@ -16,6 +16,10 @@
 //   {acao: 'bio', venda_id | conversa_id}                                → 14/11 (0194, degrau Biometria da ficha): manda o robô do GED360 (n8n,
 //        mesmo login e mesmo Relatório Detalhado em CSV do agendamento de 15 min) ler AGORA e devolve a biometria desta venda
 //        (protocolo, resultado, datas — nunca o CPF). Secret N8N_GED360_AGORA_URL (caminho secreto do webhook). Só admin/backoffice.
+//   22/11 (Ricardo: "Libera a OS e o GED360 com dados digitados" — Consulta central, dados novos):
+//   {acao: 'os', cpf, os, criada_em?}                       → a mesma leitura da Consulta OS com CPF/CNPJ e nº da OS DIGITADOS (sem venda
+//        no NIOGEN). {acao: 'os_status', job_id, os} acompanha. Só lê: nada é gravado (sem os_registrar_leitura). Só admin/backoffice.
+//   {acao: 'bio', cpf}                                      → o mesmo robô do GED360, filtrando a biometria pelo CPF/CNPJ DIGITADO. Só lê.
 // A consulta leva ~2 min no portal: a tela faz polling; esta função nunca segura a conexão aberta.
 // Segredos (Supabase › Edge Functions › Secrets): CREDITO_OP_URL, NIO_PORTAL_SERVICO_SECRET. Nada no front nem no repo.
 // Crédito e viabilidade não gravam nada aqui. A leitura da OS grava só o andamento (sem dado pessoal). Log: usuário, ação,
@@ -70,12 +74,16 @@ Deno.serve(async (req) => {
       // 15/11 (Ricardo): também para o lead SEM venda — {acao:'bio', conversa_id}: lê pelo CPF que a conversa guardou.
       const vendaId = String(b.venda_id ?? '');
       const convId = String(b.conversa_id ?? '');
-      if (!/^[0-9a-f-]{36}$/.test(vendaId) && !/^[0-9a-f-]{36}$/.test(convId)) return json({ error: 'venda inválida.' }, 400);
+      const docDig = so(b.cpf);   // 22/11: CPF/CNPJ digitado na Consulta central (sem venda nem conversa)
+      const porDoc = !vendaId && !convId && (cpfValido(docDig) || docDig.length === 14);
+      if (!porDoc && !/^[0-9a-f-]{36}$/.test(vendaId) && !/^[0-9a-f-]{36}$/.test(convId)) return json({ error: b.cpf ? 'CPF inválido (confira os dígitos).' : 'venda inválida.' }, 400);
       const gancho = Deno.env.get('N8N_GED360_AGORA_URL') ?? '';
       if (!gancho) { log('503 bio nao_instalado'); return json({ error: 'Leitura na hora do GED360 ainda não instalada.', nao_instalado: true }, 503); }
       const adm = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
       let v: { id: string | null; cliente_cpf_cnpj: string | null } | null = null;
-      if (vendaId) {
+      if (porDoc) {
+        v = { id: null, cliente_cpf_cnpj: docDig };
+      } else if (vendaId) {
         const { data } = await adm.from('vendas').select('id, cliente_cpf_cnpj').eq('id', vendaId).maybeSingle();
         v = data;
       } else {
@@ -112,6 +120,34 @@ Deno.serve(async (req) => {
     const hdr = { 'X-Portal-Secret': segredo, 'Content-Type': 'application/json' };
 
     let r: Response;
+    if ((acao === 'os' || acao === 'os_status') && !b.venda_id && b.os) {
+      // 22/11 (Ricardo: "Libera a OS e o GED360 com dados digitados"): CPF/CNPJ e nº da OS digitados na Consulta central. Mesma
+      // leitura do operador (só "Filtros"/"Filtrar"); NÃO grava nada — a OS pode nem ser de venda do NIOGEN.
+      const num = so(b.os);
+      if (num.length !== 8) return json({ error: 'Número da OS com 8 dígitos.' }, 400);
+      if (acao === 'os') {
+        const doc = so(b.cpf);
+        if (!(doc.length === 14 || cpfValido(doc))) { log('400 doc'); return json({ error: 'CPF/CNPJ inválido (confira os dígitos).' }, 400); }
+        const criada = /^\d{4}-\d{2}-\d{2}$/.test(String(b.criada_em ?? '')) ? String(b.criada_em) : '';
+        r = await fetch(`${opUrl}/credito/os`, { method: 'POST', headers: hdr,
+          body: JSON.stringify({ cpf: doc, os: num, criada_em: criada, origem: `niogen:${perfil}:digitado` }), signal: AbortSignal.timeout(15000) });
+      } else {
+        const id = String(b.job_id ?? '');
+        if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
+        r = await fetch(`${opUrl}/credito/${id}`, { headers: hdr, signal: AbortSignal.timeout(10000) });
+      }
+      const d = await r.json().catch(() => null);
+      if (!d) { log(`502 operador ${r.status} sem json`); return json({ error: `Operador respondeu ${r.status} sem JSON.` }, 502); }
+      if (!r.ok || d.ok === false) {
+        log(`${r.status} ${d.erro ?? ''}`);
+        return json({ error: r.status === 429 ? 'O operador está ocupado com outra consulta. Tente de novo em 1 minuto.' : (d.erro ?? `Operador respondeu ${r.status}.`) },
+          r.status === 429 ? 429 : r.status === 400 ? 400 : 502);
+      }
+      if (d.modo !== 'os') { log('400 job de outro tipo'); return json({ error: 'job inválido.' }, 400); }
+      log(`digitado ${d.estado}${d.resultado ? ` ${d.resultado}` : ''}${d.cache ? ' cache' : ''}`);
+      return json({ job_id: d.job_id, estado: d.estado, resultado: d.resultado ?? null, motivo: d.motivo ?? null,
+        leitura: d.leitura ?? null, consultado_em: d.consultado_em ?? null, cache: d.cache === true, digitado: true });
+    }
     if (acao === 'os' || acao === 'os_status') {
       // 13/11: leitura de acompanhamento de UMA OS. Tudo que identifica o cliente sai do banco, pela chave de serviço.
       const vendaId = String(b.venda_id ?? '');

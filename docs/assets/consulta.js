@@ -260,7 +260,7 @@
   function avulso(pre) {
     pre = pre || {};
     est.cli = { avulso: true, nome: 'Dados novos' };
-    est.novos = {}; est.resumo = ''; est.end = pre.end || null; est.aba = pre.aba || 'viab';
+    est.novos = {}; est.resumo = ''; est.end = pre.end || null; est.aba = pre.aba || 'viab'; est.osNum = ''; est.osData = '';
     dados = vazio(); pessoal = { cpf: pre.cpf || '' };
     gravar(); pintarMeio();
     setTimeout(() => { const i = painel.querySelector(est.aba === 'cred' ? '[data-cc-cred] [name=celular]' : '[data-cc-end] [name=cep]'); if (i) i.focus(); }, 30);
@@ -331,7 +331,7 @@
       const soNum = /^[\d\s().\-/]+$/.test(String(est.q || '').trim());
       const atalhos = [
         soNum && dig.length === 8 ? `<button type="button" class="cc-res cc-novo" data-cc="avulso-cep"><b>⌖ Consultar a viabilidade do CEP ${esc(NG.fmtCep(dig))}</b><span>sem cliente — endereço novo</span></button>` : '',
-        soNum && dig.length === 11 && NG.documentoValido(dig) && bo() ? '<button type="button" class="cc-res cc-novo" data-cc="avulso-cpf"><b>◇ Consultar o crédito deste CPF</b><span>sem cliente — com a autorização do titular</span></button>' : '',
+        soNum && dig.length === 11 && NG.documentoValido(dig) && bo() ? '<button type="button" class="cc-res cc-novo" data-cc="avulso-cpf"><b>◇ Consultar este CPF (crédito, OS ou GED360)</b><span>sem cliente no NIOGEN</span></button>' : '',
       ].join('');
       meio.innerHTML = `<div class="cc-lista">${atalhos}${l == null ? '<div class="cc-aviso">Digite o nome, o telefone, o CPF ou o L-número do cliente.</div>'
         : !l.length ? (atalhos ? '' : '<div class="cc-aviso warn">Nenhum cliente encontrado. Confira a grafia ou tente pelo telefone.</div>')
@@ -613,8 +613,7 @@
   // ----- OS
   function corpoOs() {
     const v = (dados && dados.venda) || null, o = (dados && dados.os) || null, n = est.novos.os;
-    if (est.cli.avulso) return '<div class="cc-aviso">Com dados novos dá para consultar <b>viabilidade</b> e <b>crédito</b>. A OS só é lida para venda registrada no NIOGEN (regra do portal) — busque o cliente pelo nome, CPF ou L-número.</div>';
-    if (!v) return '<div class="cc-aviso">Este cliente ainda não tem venda no NIOGEN — não há OS para ler.</div>';
+    if (!v) return corpoOsDigitado();
     const dataBR = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
     const g = `<div class="cc-q"><h4>Última leitura guardada${o && o.mudou_em ? ` · ${esc(dh(o.mudou_em))}` : ''}</h4>
       ${linT('Nº da OS', v.nio_os)}${linT('Aberta em', v.nio_os_em ? dh(v.nio_os_em) : '')}
@@ -625,6 +624,52 @@
     const lendo = rodando.os ? '<div class="cc-lendo">Lendo a OS na Nio… leva uns 15 segundos. Pode minimizar: a leitura termina e fica gravada.</div>' : '';
     if (!bo()) return `${agora}${g}${soBo}`;
     return `${lendo}${agora}${g}<div class="cc-botoes"><button type="button" class="btn btn-acc btn-sm" data-cc="os"${rodando.os ? ' disabled' : ''} title="O robô lê o andamento na Consulta OS do portal (só filtra e lê)">⟳ Ler a OS na Nio agora</button></div>`;
+  }
+  // 22/11 (Ricardo: "Libera a OS e o GED360 com dados digitados"): sem venda no NIOGEN, a leitura vai com CPF/CNPJ e nº da OS
+  // digitados (edge credito-consulta, acao 'os' sem venda_id). Só lê: nada é gravado. O nº da OS fica no storage; o CPF nunca.
+  const fmtDoc = (d) => (d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d);
+  function corpoOsDigitado() {
+    const n = est.novos.os;
+    const agora = n && n.em ? quadroAgora(n, `<div class="cc-aviso ${n.cls}">${esc(n.txt)}</div>${(n.linhas || []).map(([k, x]) => linT(k, x)).join('')}`) : '';
+    const lendo = rodando.os ? '<div class="cc-lendo">Lendo a OS na Nio… leva uns 15 segundos. Pode minimizar.</div>' : '';
+    if (!bo()) return `${agora}${soBo}`;
+    return `${lendo}${agora}<form class="cc-q cc-form" data-cc-os autocomplete="off"><h4 style="grid-column:1/-1">${est.cli.avulso ? 'Ler uma OS na Nio' : 'Sem venda no NIOGEN — ler uma OS pelos dados'}</h4>
+        <label>CPF ou CNPJ do titular<input type="text" name="cpf" inputmode="numeric" value="${esc(fmtDoc(pessoal.cpf || ''))}"></label>
+        <label>Nº da OS (8 dígitos)<input type="text" name="os" inputmode="numeric" maxlength="10" value="${esc(est.osNum || '')}"></label>
+        <label class="inteira">Pedido feito em (se tiver mais de 25 dias)<input type="date" name="criada" value="${esc(est.osData || '')}"></label>
+        <span class="cc-dica" style="grid-column:1/-1">Só lê o andamento na Consulta OS do portal. Nada é gravado no NIOGEN.</span>
+        <div class="cc-botoes" style="grid-column:1/-1"><button type="submit" class="btn btn-acc btn-sm"${rodando.os ? ' disabled' : ''}>⟳ Ler a OS na Nio</button></div></form>`;
+  }
+  async function consultarOsDigitado() {
+    if (rodando.os) return;
+    const fm = painel.querySelector('[data-cc-os]');
+    if (!fm) return;
+    const E = fm.elements;
+    const doc = NG.soDigitos(E.cpf.value), num = NG.soDigitos(E.os.value), criada = E.criada.value || '';
+    if (!(doc.length === 14 || (doc.length === 11 && NG.documentoValido(doc)))) { NG.toast('CPF ou CNPJ inválido — confira os dígitos.', 'bad'); E.cpf.focus(); return; }
+    if (num.length !== 8) { NG.toast('O número da OS tem 8 dígitos.', 'bad'); E.os.focus(); return; }
+    pessoal.cpf = doc; est.osNum = num; est.osData = criada;
+    rodando.os = true; gravar(); pintarTudo();
+    const fn = async (corpo) => {
+      const { data, error } = await NG.sb.functions.invoke('credito-consulta', { body: corpo });
+      if (error) { let m = error.message; try { const c = await error.context.json(); if (c && c.error) m = c.error; } catch (_) { /* */ } throw new Error(m); }
+      return data;
+    };
+    try {
+      let s2 = await fn({ acao: 'os', cpf: doc, os: num, criada_em: criada });
+      const fim = Date.now() + 90 * 1000;
+      while (s2 && !['pronto', 'erro'].includes(s2.estado)) {
+        if (Date.now() > fim) throw new Error('O portal demorou demais. Tente de novo em 1 minuto.');
+        await pausa(3000);
+        s2 = await fn({ acao: 'os_status', job_id: s2.job_id, os: num });
+      }
+      const r = NG.osResumo(s2), l = s2.leitura || {};
+      est.novos.os = { em: s2.consultado_em || new Date().toISOString(), txt: r.txt, cls: r.cls,
+        linhas: s2.resultado === 'lida' ? [['Nº da OS', num], ['Status na Nio', l.status_ordem], ['Agendamento', l.agendamento], ['Situação do agendamento', l.status_agendamento], ['Pendência', l.pendencia], ['Caso aberto na Nio', l.caso], ['Motivo do cancelamento', l.motivo_cancelamento]].filter(([, x]) => x) : [] };
+    } catch (err) {
+      est.novos.os = { em: new Date().toISOString(), cls: 'bad', txt: NG.msgErro(err) };
+    }
+    rodando.os = false; gravar(); pintarTudo();
   }
   async function consultarOs() {
     const v = dados && dados.venda;
@@ -646,26 +691,39 @@
 
   // ----- GED360 (biometria)
   function corpoBio() {
-    if (est.cli.avulso) return '<div class="cc-aviso">A biometria (GED360) é lida para cliente com venda ou conversa no NIOGEN. Com dados novos, use as abas Viabilidade e Crédito.</div>';
     const v = (dados && dados.venda) || null, n = est.novos.bio;
+    const digitar = !v && (est.cli.avulso || !pessoal.cpf);   // 22/11: sem venda e sem CPF guardado → CPF digitado
     const g = v ? `<div class="cc-q"><h4>Gravado na venda${v.biometria_em ? ` · ${esc(dh(v.biometria_em))}` : ''}</h4>
         ${lin('Biometria', v.biometria_status ? chip([NG.BIOMETRIA[v.biometria_status] || v.biometria_status, corBio()]) : '<span class="muted">—</span>')}
         ${linT('Link da Nio enviado', v.biometria_link_enviado_em ? dh(v.biometria_link_enviado_em) : '')}${linT('Validada em', v.biometria_validada_em ? dh(v.biometria_validada_em) : '')}</div>`
-      : '<div class="cc-aviso">Ainda sem venda no NIOGEN: a leitura no GED360 vai pelo CPF da conversa.</div>';
-    const agora = n && n.em ? quadroAgora(n, `${n.erro ? `<div class="cc-aviso bad">${esc(n.erro)}</div>` : ''}${(n.lista || []).map((b) => `<div class="cc-q${b.casada ? '' : ''}"><h4>Protocolo ${esc(b.protocolo || '—')}${b.casada ? '' : ' · ainda não casado com a venda'}</h4>
+      : digitar ? '' : '<div class="cc-aviso">Ainda sem venda no NIOGEN: a leitura no GED360 vai pelo CPF da conversa.</div>';
+    const agora = n && n.em ? quadroAgora(n, `${n.erro ? `<div class="cc-aviso bad">${esc(n.erro)}</div>` : ''}${(n.lista || []).map((b) => `<div class="cc-q${b.casada ? '' : ''}"><h4>Protocolo ${esc(b.protocolo || '—')}${b.casada || n.digitado ? '' : ' · ainda não casado com a venda'}</h4>
         ${linT('Resultado no GED360', BIO_RES[String(b.resultado || '').toUpperCase()] || b.resultado || 'sem resultado ainda')}${linT('Enviada em', b.envio ? dh(b.envio) : '')}${linT('Conferida em', b.conf ? dh(b.conf) : '')}
         ${b.alerta ? `<div class="cc-aviso warn">${esc(b.alerta)}</div>` : ''}</div>`).join('')}
         ${!n.erro && !(n.lista || []).length ? '<div class="cc-aviso warn">O GED360 não tem biometria com este CPF (últimos 15 dias). Se o cliente diz que já fez, peça o print e confira o CPF.</div>' : ''}
         ${n.status ? `<div class="cc-aviso">Na venda: <b>${esc(NG.BIOMETRIA[n.status] || n.status)}</b>${n.mudou ? ' — mudou agora' : ''}</div>` : ''}`) : '';
     const lendo = rodando.bio ? '<div class="cc-lendo">Lendo no GED360… leva uns 10 segundos. Pode minimizar: a leitura termina e fica gravada.</div>' : '';
     if (!bo()) return `${agora}${g}${soBo}`;
+    if (digitar) {
+      return `${lendo}${agora}<form class="cc-q cc-form" data-cc-bio autocomplete="off"><h4 style="grid-column:1/-1">Ler a biometria no GED360 pelo CPF</h4>
+        <label class="inteira">CPF ou CNPJ do titular<input type="text" name="cpf" inputmode="numeric" value="${esc(fmtDoc(pessoal.cpf || ''))}"></label>
+        <span class="cc-dica" style="grid-column:1/-1">O robô lê o Relatório Detalhado do GED360 (últimos 15 dias) e mostra as biometrias deste CPF. Nada é gravado.</span>
+        <div class="cc-botoes" style="grid-column:1/-1"><button type="submit" class="btn btn-acc btn-sm"${rodando.bio ? ' disabled' : ''}>⟳ Ler no GED360</button></div></form>`;
+    }
     const pode = (v && v.id) || (est.cli.conversa_id && pessoal.cpf);
     return `${lendo}${agora}${g}<div class="cc-botoes"><button type="button" class="btn btn-acc btn-sm" data-cc="bio"${rodando.bio || !pode ? ' disabled' : ''} title="${pode ? 'O robô lê o Relatório Detalhado do GED360 (só leitura)' : 'Sem venda e sem CPF na conversa: não dá para procurar no GED360'}">⟳ Ler no GED360 agora</button></div>`;
   }
   async function consultarBio() {
     const v = dados && dados.venda;
     if (rodando.bio) return;
-    const corpoReq = v ? { acao: 'bio', venda_id: v.id } : { acao: 'bio', conversa_id: est.cli.conversa_id };
+    let corpoReq = v ? { acao: 'bio', venda_id: v.id } : { acao: 'bio', conversa_id: est.cli.conversa_id };
+    const fmBio = !v && painel.querySelector('[data-cc-bio]');
+    if (fmBio) {
+      const doc = NG.soDigitos(fmBio.elements.cpf.value);
+      if (!(doc.length === 14 || (doc.length === 11 && NG.documentoValido(doc)))) { NG.toast('CPF ou CNPJ inválido — confira os dígitos.', 'bad'); fmBio.elements.cpf.focus(); return; }
+      pessoal.cpf = doc;
+      corpoReq = { acao: 'bio', cpf: doc };
+    }
     rodando.bio = true; pintarTudo();
     const antes = v ? v.biometria_status : null;
     try {
@@ -675,7 +733,7 @@
       const st = (r.venda || {}).biometria_status || null;
       est.novos.bio = { em: new Date().toISOString(), erro: r.erro ? `${r.erro}${/simult/i.test(r.erro) ? ' — alguém está no GED360 com o login do robô: saia e tente em 1 minuto' : ''} · mostrando a última leitura guardada.` : '',
         lista: (r.biometrias || []).map((b) => ({ protocolo: b.protocolo, resultado: b.resultado, envio: b.data_envio, conf: b.data_conferencia, alerta: b.alerta, casada: b.casada })),
-        status: st, mudou: !!(st && antes && st !== antes), txt: st ? (NG.BIOMETRIA[st] || st) : ((r.biometrias || []).length ? 'lida' : 'sem biometria') };
+        digitado: !!fmBio, status: st, mudou: !!(st && antes && st !== antes), txt: st ? (NG.BIOMETRIA[st] || st) : ((r.biometrias || []).length ? 'lida' : 'sem biometria') };
     } catch (err) {
       est.novos.bio = { em: new Date().toISOString(), erro: NG.msgErro(err), txt: 'erro' };
     }
@@ -716,6 +774,8 @@
     if (!ev.target.matches) return;
     if (ev.target.matches('[data-cc-cred]')) { ev.preventDefault(); consultarCred(false); }
     else if (ev.target.matches('[data-cc-end]')) { ev.preventDefault(); consultarViab(); }
+    else if (ev.target.matches('[data-cc-os]')) { ev.preventDefault(); consultarOsDigitado(); }
+    else if (ev.target.matches('[data-cc-bio]')) { ev.preventDefault(); consultarBio(); }
   });
 
   // Cobertura com o endereço da aba (digitado ou gravado). Cliente sem endereço trocado: o atalho de sempre (leva o CPF junto).
