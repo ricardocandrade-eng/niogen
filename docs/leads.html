@@ -23,9 +23,10 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-7"></script>
+<script src="assets/sidebar.js?v=221126-8"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
+<script src="assets/novavenda.js?v=211126-4b"></script>
 <style>
   .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
   .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
@@ -58,7 +59,7 @@
         <h1>Leads <span id="i-tela"></span></h1>
         <div class="sub">Todo mundo que falou com a gente, com ou sem venda: em que degrau está, de quem é a vez e até quando.</div>
       </div>
-      <div class="cab-acoes" id="cab-acoes"><button type="button" class="btn btn-sm" id="csv">⇩ Exportar a lista</button></div>
+      <div class="cab-acoes" id="cab-acoes"><button type="button" class="btn btn-sm" id="csv">⇩ Exportar a lista</button><button type="button" class="btn btn-acc acao-principal" id="btn-nova">＋ Nova venda</button></div>
     </header>
     <section class="ld-escada" id="escada" aria-label="Escada: quantos chegaram até cada degrau"></section>
     <div class="abas" id="abas" role="tablist"></div>
@@ -221,8 +222,15 @@
   NGFicha.aoMudar(() => carregar());
   NG.botaoAtualizar(() => carregar());
 
+  // 22/11 (novo layout, passo 1): "+ Nova venda" mora aqui — a venda nasce como lead e só entra em Vendas quando a OS é gerada.
+  // A mesma gaveta de sempre (assets/novavenda.js). leads.html#nova (ou #venda-rua, ou ?cep=&numero=) já abre a gaveta.
+  const novaVenda = await NGNovaVenda.montar({ eu, aoSalvar: () => { NG.toast('Venda criada. Ela fica aqui em Leads até a OS ser gerada.', 'ok'); carregar(); } });
+  document.getElementById('btn-nova').addEventListener('click', () => novaVenda.abrir());
+
   await carregar();
   NGFicha.iniciar();
+  if (['#venda-rua', '#nova'].includes(location.hash)) novaVenda.abrir();
+  if (Q.get('cep')) await novaVenda.abrir({ cep: Q.get('cep'), numero: Q.get('numero'), complemento: Q.get('complemento') });
   NG.aoVoltarAba(() => carregar());   // 13/11: trocar de aba só recarrega depois de 1 min
 })();
 </script>

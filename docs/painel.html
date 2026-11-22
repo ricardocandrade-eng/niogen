@@ -28,7 +28,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-7"></script>
+<script src="assets/sidebar.js?v=221126-8"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 </head>
@@ -43,7 +43,7 @@
       </div>
       <div class="cab-acoes">
         <span id="f-periodo"></span>
-        <a class="btn btn-acc acao-principal" href="vendas.html#nova">＋ Nova venda</a>
+        <a class="btn btn-acc acao-principal" href="leads.html#nova">＋ Nova venda</a>
       </div>
     </header>
 
@@ -60,14 +60,14 @@
     <section class="painel" id="canais-7d" aria-labelledby="t-canais" hidden></section>
 
     <section class="painel" aria-labelledby="t-acao">
-      <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="vendas.html?vista=lista&amp;aba=acao" id="ver-acao">ver todas →</a></div>
+      <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="leads.html?aba=acao" id="ver-acao">ver todas →</a></div>
       <div class="lista-acao" id="lista-acao"><div class="carregando">Carregando…</div></div>
     </section>
 
     <div class="painel-grade" id="blocos"></div>
   </main>
 </div>
-<a class="fab" href="vendas.html#nova" aria-label="Nova venda">＋</a>
+<a class="fab" href="leads.html#nova" aria-label="Nova venda">＋</a>
 <script>
 (async function () {
   const { esc, ETAPAS } = NG;
@@ -370,7 +370,7 @@
     const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada') || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
     const semAgenda = osAg.length;
     blocos.push(`<section class="painel bloco-curto">
-      <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="operacoes.html">Operações →</a></div>
+      <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="operacoes.html">Instalações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
       ${semAgenda ? `<span class="prox ${osAg.some((v) => Number(v.horas_sem_agendamento) > 4) ? 'bad' : 'warn'}">${NG.fmtNum(semAgenda)} esperando abrir a OS ou agendar (4 h da biometria)</span>` : ''}
@@ -432,7 +432,7 @@
       const atras = g.filter((x) => x.atrasada).length;
       const cls = atras ? 'bad' : g.length ? '' : 'vazia';
       const prazo = g[0] && g[0].prazo ? ` · prazo ${g[0].prazo}` : '';
-      return `${i ? '<span class="fm-seta" aria-hidden="true">→</span>' : ''}<a class="fm-etapa ${cls}" href="vendas.html?vista=lista&amp;parada=${p.id}" title="${esc(p.dica)}">
+      return `${i ? '<span class="fm-seta" aria-hidden="true">→</span>' : ''}<a class="fm-etapa ${cls}" href="${['qualificado', 'agendamento'].includes(p.id) ? 'leads.html?etapa=qualificado' : 'operacoes.html'}" title="${esc(p.dica)}">
         <span class="fm-nome">${esc(p.nome)}</span>
         <span class="fm-n mono">${NG.fmtNum(g.length)}</span>
         <span class="fm-velha">${velha ? `mais antiga há ${esc(NG.haQuanto(velha.desde))}` : '—'}</span>

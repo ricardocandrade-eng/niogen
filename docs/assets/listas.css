@@ -1,0 +1,44 @@
+/* NIOGEN | docs/assets/listas.css | 22/11/2026 — Claude Code (Fable 5.2)
+   Padrão das telas em lista (Vendas, Instalações): números do topo em faixa fina de uma linha, pílulas de status,
+   filtros, tabela densa em ordem cronológica e rodapé. Usa as variáveis do app.css. */
+
+.main.lista-densa { gap: 12px; }
+
+/* Faixa fina: os números do topo numa linha só (no lugar das caixas grandes). */
+.faixa-fina { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
+.faixa-fina > div { display: flex; gap: 8px; align-items: baseline; padding: 8px 14px; border-right: 1px solid var(--border); white-space: nowrap; }
+.faixa-fina > div:last-child { border-right: 0; }
+.faixa-fina span { font-size: 12px; color: var(--muted); }
+.faixa-fina b { font-family: var(--mono); font-size: 15px; font-weight: 600; color: var(--text); }
+.faixa-fina b.ok { color: var(--ok-fg); } .faixa-fina b.warn { color: var(--warn-fg); } .faixa-fina b.bad { color: var(--bad-fg); }
+.faixa-fina small { font-size: 11px; color: var(--muted); }
+
+/* Tabela densa */
+.lista-densa .lista.padrao { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.lista-densa .tab th { padding: 9px 12px; }
+.lista-densa .tab td { padding: 8px 12px; vertical-align: top; }
+.lista-densa .tab td small { display: block; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.lista-densa .tab td b { font-weight: 600; }
+.lista-densa .tab tr.clicavel { cursor: pointer; }
+.lista-densa .tab tr.clicavel:hover td, .lista-densa .tab tr.clicavel:focus-visible td { background: var(--surface-2); outline: none; }
+.lista-densa .tab tr.cancelada td { color: var(--muted); }
+.lista-densa .tab td.quando { white-space: nowrap; font-family: var(--mono); font-size: 12.5px; }
+.lista-densa .tab td.quando small { font-family: var(--sans); }
+.lista-densa .tab td.os { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+.lista-densa .tab td.breve { color: var(--muted); font-size: 12px; font-style: italic; }
+.lista-densa .tab td.num small { font-family: var(--sans); }
+.lista-densa .chip { white-space: nowrap; display: inline-block; }
+.lista-densa .nio-txt { max-width: 300px; }
+.lista-densa .reag b { font-family: var(--mono); }
+.lista-densa .reag small.semmotivo { font-style: italic; }
+.lista-densa .lido { white-space: nowrap; }
+.lista-densa .btn-linha { font: inherit; font-size: 12px; padding: 2px 10px; margin-top: 3px; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; white-space: nowrap; }
+.lista-densa .btn-linha:hover:not(:disabled) { border-color: var(--accent); }
+.lista-densa .btn-linha:disabled { opacity: .6; cursor: default; }
+.lista-densa .rodape-lista { padding: 8px 12px; }
+.lista-densa .barra-filtros .sel, .lista-densa .barra-filtros .busca { min-height: 36px; }
+.lista-densa .acoes-topo { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lista-densa .acoes-topo small { color: var(--muted); font-size: 12px; }
+.lista-densa details.gaveta { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px 14px; font-size: 13px; }
+.lista-densa details.gaveta summary { cursor: pointer; color: var(--muted); }
+.lista-densa details.gaveta[open] summary { margin-bottom: 8px; }

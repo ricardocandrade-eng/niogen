@@ -30,7 +30,7 @@
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-7"></script>
+<script src="assets/sidebar.js?v=221126-8"></script>
 <script src="assets/novavenda.js?v=211126-4b"></script>
 <style>
   /* ---------- Consulta de cobertura v2: uma tela, sem rolar a página (≥ 1025 px) ---------- */
@@ -277,7 +277,7 @@
   const base = (p) => (p ? NG.fmtDiaISO(p).slice(0, 5) : '—');
   const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
   const seg = (ms) => `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0).replace('.', ',')} s`;
-  const novaVenda = NGNovaVenda.montar({ eu, aoSalvar: () => NG.toast('Venda criada — está em Vendas.', 'ok') });
+  const novaVenda = NGNovaVenda.montar({ eu, aoSalvar: () => NG.toast('Venda criada. Ela fica em Leads até a OS ser gerada.', 'ok') });
   let linkCadastro = null, linkLiberacao = null;
   NG.linkConfig('nio_cadastro_unidade').then((u) => { linkCadastro = u; }).catch(() => {});
   NG.linkConfig('nio_pedido_liberacao').then((u) => { linkLiberacao = u; }).catch(() => {});

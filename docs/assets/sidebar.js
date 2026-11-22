@@ -4,6 +4,8 @@
  * 06/11 (prompt 25): Parceiros PAP (Vendas) e Pagamentos a parceiros (Financeiro) — só admin/backoffice, somem para o vendedor.
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
  * 13/11 (etapa 4b): funil.html volta como o relatório "Funil de vendas" (v_leads); vendas.html vira "Quadro de vendas".
+ * 22/11 (novo layout, passo 1): "Quadro de vendas" passa a se chamar Vendas (só venda com OS gerada) e "Operações", Instalações.
+ * O selo das vendas novas em Lead qualificado foi para Leads (quem ainda não tem OS aparece lá, não mais em Vendas).
  * 06/11 (prompt 27): contadores em "Mari · IA" (conversas aguardando humano — v_mari_aguardando_humano; vermelho se alguma
  * passou de 15 min em horário de contato) e em "Vendas" (novas em Qualificado desde a última visita — usuario_vistos — mais as
  * que precisam de ação). Consulta a cada 60 s (sem Realtime no Supabase Nio) e o total vai para o título da aba.
@@ -29,9 +31,9 @@
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
     ]],
     ['Vendas', [
-      { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html' },   // 0156: todos os leads, com ou sem venda (escada única)
-      { id: 'vendas', ico: '≡', nome: 'Quadro de vendas', href: 'vendas.html', badge: 'vendas' },   // a lista e o quadro das vendas (Nova venda)
-      { id: 'operacoes', ico: '⊞', nome: 'Operações', href: 'operacoes.html', badge: 'agendar' },   // 13/11 (4c): no lugar de Instalações
+      { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html', badge: 'vendas' },   // 0156: todos os leads, com ou sem venda (escada única) · 22/11: o selo das novas veio para cá
+      { id: 'vendas', ico: '≡', nome: 'Vendas', href: 'vendas.html' },   // 22/11: só venda com OS gerada, em ordem cronológica
+      { id: 'operacoes', ico: '⊞', nome: 'Instalações', href: 'operacoes.html', badge: 'agendar' },   // 22/11: as mesmas vendas de Vendas, com foco na instalação
       { id: 'filavero', ico: '☷', nome: 'Fila Vero', href: 'filavero.html', perfis: ['admin', 'backoffice'], esconder: true },   // 16/11 (0242): tela da Fila Vero
     ]],
     ['Acompanhamento', [
@@ -124,8 +126,8 @@
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
     tituloBase = document.title.replace(/^\(\d+\)\s*/, '');
-    if (pagina === 'vendas') {
-      // Abriu Vendas = viu as novas. "Visto em" fica no banco (por usuário), não no navegador.
+    if (pagina === 'leads') {
+      // Abriu Leads = viu as novas (22/11: quem ainda não tem OS aparece em Leads; a chave do visto segue 'vendas'). "Visto em" fica no banco (por usuário), não no navegador.
       await NG.sb.from('usuario_vistos').upsert({ usuario_id: u.id, tela: 'vendas', visto_em: new Date().toISOString() }, { onConflict: 'usuario_id,tela' });
     }
     await avisos(nav);
