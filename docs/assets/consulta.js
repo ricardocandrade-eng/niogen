@@ -40,7 +40,8 @@
   };
 
   // ---------------------------------------------------------------- estado (sessionStorage, nunca com CPF/e-mail/telefone)
-  const novoEst = () => ({ modo: 'fechado', q: '', aba: 'viab', cli: null, lista: null, novos: {} });
+  // end: endereço DIGITADO (dados novos, ou outro endereço do cliente) — só CEP/nº/complemento; CPF nunca vai para o storage.
+  const novoEst = () => ({ modo: 'fechado', q: '', aba: 'viab', cli: null, lista: null, novos: {}, end: null });
   let est = (() => { try { const e = JSON.parse(sessionStorage.getItem(KEY) || 'null'); return e && e.modo ? { ...novoEst(), ...e } : novoEst(); } catch (e) { return novoEst(); } })();
   // Busca por CPF ou telefone (8+ dígitos) não vai para o storage: volta com a caixa vazia, mas com o cliente aberto.
   const qGuardavel = (q) => (NG.soDigitos(q || '').length >= 8 ? '' : (q || ''));
@@ -121,6 +122,16 @@
 .cc-form label.inteira { grid-column: 1 / -1; }
 .cc-form label.ck { flex-direction: row; align-items: center; gap: 8px; font-size: 12px; color: var(--text); }
 .cc-form input[type=text], .cc-form input[type=email], .cc-form input[type=tel] { height: 34px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); font: 13px var(--sans); min-width: 0; }
+.cc-passo { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-top: 1px dashed var(--border); }
+.cc-passo:first-of-type { border-top: 0; padding-top: 2px; }
+.cc-passo-cab { display: flex; align-items: center; gap: 8px; }
+.cc-passo-cab small { color: var(--muted); font-size: 11px; flex: 1; }
+.cc-num { width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 11px var(--dm); background: var(--surface-2); color: var(--muted); }
+.cc-num.ok { background: var(--ok-bg); color: var(--ok-fg); } .cc-num.warn { background: var(--warn-bg); color: var(--warn-fg); } .cc-num.bad { background: var(--bad-bg); color: var(--bad-fg); } .cc-num.info { background: var(--info-bg); color: var(--info-fg); }
+.cc-viz .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cc-viz .chip { cursor: pointer; border: 0; font: 600 11px var(--sans); }
+.cc-novo { border-style: dashed; border-color: var(--accent); }
+.cc-novo-bt { align-self: flex-start; margin-top: 6px; }
 .cc-pe { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
 .cc-pilula { position: fixed; left: 248px; bottom: 18px; z-index: 27; max-width: min(440px, calc(100vw - 340px)); display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px 0 12px; border-radius: 22px; border: 1px solid var(--accent); background: var(--surface); color: var(--text); font: 600 13px var(--sans); cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
 .cc-pilula > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -148,7 +159,7 @@
           <button type="button" class="cc-ic" data-cc="fechar" title="Fechar e limpar" aria-label="Fechar">✕</button></div>
         <form class="cc-busca" data-cc-form autocomplete="off">
           <input type="search" name="q" placeholder="Nome, telefone, CPF ou L-número" aria-label="Buscar cliente" enterkeyhint="search">
-          <span class="cc-dica">Ex.: Maria Silva · 32 98888-7777 · 123.456.789-09 · L-142</span>
+          <span class="cc-dica">Ex.: Maria Silva · 32 98888-7777 · 123.456.789-09 · L-142 — ou um CEP / CPF novo, sem cliente</span>
         </form>
         <div data-cc-meio style="display:flex;flex-direction:column;flex:1;min-height:0"></div>
         <div class="cc-pe">Mostra o que está gravado. "Consultar de novo" lê na Nio pelos mesmos robôs da Cobertura e da ficha — nada aqui muda a situação do lead.</div>
@@ -177,7 +188,7 @@
     const c = est.cli;
     const ocup = Object.keys(rodando).some((k) => rodando[k]) || Object.values(est.novos || {}).some((n) => n && n.job);
     const u = ultimoResultado();
-    pilula.innerHTML = `<span aria-hidden="true">${ocup ? '⏳' : '⌕'}</span><span>${c ? `<b>${esc(NG.primeiroNome(c.nome || 'Cliente'))}</b>${u ? ` · ${esc(u)}` : ''}` : 'Consulta central'}</span><span class="cc-x" data-cc="fechar" title="Fechar e limpar" aria-label="Fechar a consulta">✕</span>`;
+    pilula.innerHTML = `<span aria-hidden="true">${ocup ? '⏳' : '⌕'}</span><span>${c ? `<b>${esc(c.avulso ? 'Dados novos' : NG.primeiroNome(c.nome || 'Cliente'))}</b>${u ? ` · ${esc(u)}` : ''}` : 'Consulta central'}</span><span class="cc-x" data-cc="fechar" title="Fechar e limpar" aria-label="Fechar a consulta">✕</span>`;
     pilula.title = 'Voltar à Consulta central';
   }
   // A frase curta da pílula: a consulta mais recente feita agora; senão, a gravada da aba aberta.
@@ -239,8 +250,20 @@
 
   function escolher(x) {
     est.cli = { conversa_id: x.conversa_id || null, venda_id: x.venda_id || null, nome: x.nome || 'Cliente' };
-    est.novos = {}; est.resumo = ''; dados = null; pessoal = {};
+    est.novos = {}; est.resumo = ''; est.end = null; dados = null; pessoal = {};
     gravar(); pintarMeio(); carregar();
+  }
+  // 22/11 (Ricardo: "queria que ela servisse também para fazer consultas com dados novos"): consulta SEM cliente no NIOGEN —
+  // viabilidade de qualquer endereço e crédito de qualquer CPF (titular autorizou), pelos mesmos robôs. OS e GED360 seguem só
+  // para cliente com venda/conversa (regra 5: a Consulta OS lê só OS de venda registrada no NIOGEN).
+  const vazio = () => ({ conv: null, venda: null, lead: null, os: null, ms: 0 });
+  function avulso(pre) {
+    pre = pre || {};
+    est.cli = { avulso: true, nome: 'Dados novos' };
+    est.novos = {}; est.resumo = ''; est.end = pre.end || null; est.aba = pre.aba || 'viab';
+    dados = vazio(); pessoal = { cpf: pre.cpf || '' };
+    gravar(); pintarMeio();
+    setTimeout(() => { const i = painel.querySelector(est.aba === 'cred' ? '[data-cc-cred] [name=celular]' : '[data-cc-end] [name=cep]'); if (i) i.focus(); }, 30);
   }
 
   // ---------------------------------------------------------------- o que está gravado (1 rodada paralela, ≤ 5 chamadas)
@@ -249,6 +272,7 @@
   async function carregar() {
     const c = est.cli;
     if (!c) return;
+    if (c.avulso) { dados = vazio(); pintarMeio(); if (est.modo === 'minimizado') pintarPilula(); return; }
     const t0 = performance.now();
     const um = (p) => Promise.resolve(p).then((r) => (r && !r.error ? r.data : null), () => null);
     let [conv, venda, lead, os] = await Promise.all([
@@ -277,10 +301,18 @@
     if (est.modo === 'minimizado') pintarPilula();
   }
   const fonte = () => (dados && (dados.venda || dados.conv)) || {};
-  function endereco() {
+  function enderecoGravado() {
     const f = (dados && dados.venda && NG.soDigitos(dados.venda.cep).length === 8) ? dados.venda : (dados && dados.conv) || {};
     return { cep: NG.soDigitos(f.cep || ''), numero: String(f.numero || '').trim(), complemento: String(f.complemento || '').trim() };
   }
+  // O endereço das consultas: o digitado (dados novos ou outro endereço), senão o gravado do cliente.
+  function endereco() {
+    const d = est.end;
+    if (d && NG.soDigitos(d.cep).length === 8) return { cep: NG.soDigitos(d.cep), numero: String(d.numero || '').trim(), complemento: String(d.complemento || '').trim() };
+    return enderecoGravado();
+  }
+  const mesmoEnd = (a, b) => a.cep === b.cep && a.numero.toLowerCase() === b.numero.toLowerCase() && a.complemento.toLowerCase() === b.complemento.toLowerCase();
+  const endTexto = (e) => (e.cep.length === 8 ? `CEP ${NG.fmtCep(e.cep)}${e.numero ? ` · nº ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}` : '');
   function resumoGravado() {
     const f = fonte();
     if (f.nio_viab_resultado) return `Viab.: ${rot(VIAB, f.nio_viab_resultado)[0]}`;
@@ -295,17 +327,24 @@
     if (html) { meio.innerHTML = `<div class="cc-lista">${html}</div>`; return; }
     if (!est.cli) {
       const l = est.lista;
-      meio.innerHTML = `<div class="cc-lista">${l == null ? '<div class="cc-aviso">Digite o nome, o telefone, o CPF ou o L-número do cliente.</div>'
-        : !l.length ? '<div class="cc-aviso warn">Nenhum cliente encontrado. Confira a grafia ou tente pelo telefone.</div>'
-          : l.map((x, k) => `<button type="button" class="cc-res" data-cc-res="${k}"><b>${esc(x.nome || 'Sem nome')}</b><span>${esc([x.etapa, x.cidade, x.em ? haQuanto(x.em) : ''].filter(Boolean).join(' · '))}</span></button>`).join('')}</div>`;
+      const dig = NG.soDigitos(est.q || '');
+      const soNum = /^[\d\s().\-/]+$/.test(String(est.q || '').trim());
+      const atalhos = [
+        soNum && dig.length === 8 ? `<button type="button" class="cc-res cc-novo" data-cc="avulso-cep"><b>⌖ Consultar a viabilidade do CEP ${esc(NG.fmtCep(dig))}</b><span>sem cliente — endereço novo</span></button>` : '',
+        soNum && dig.length === 11 && NG.documentoValido(dig) && bo() ? '<button type="button" class="cc-res cc-novo" data-cc="avulso-cpf"><b>◇ Consultar o crédito deste CPF</b><span>sem cliente — com a autorização do titular</span></button>' : '',
+      ].join('');
+      meio.innerHTML = `<div class="cc-lista">${atalhos}${l == null ? '<div class="cc-aviso">Digite o nome, o telefone, o CPF ou o L-número do cliente.</div>'
+        : !l.length ? (atalhos ? '' : '<div class="cc-aviso warn">Nenhum cliente encontrado. Confira a grafia ou tente pelo telefone.</div>')
+          : l.map((x, k) => `<button type="button" class="cc-res" data-cc-res="${k}"><b>${esc(x.nome || 'Sem nome')}</b><span>${esc([x.etapa, x.cidade, x.em ? haQuanto(x.em) : ''].filter(Boolean).join(' · '))}</span></button>`).join('')}
+        <button type="button" class="btn btn-sm cc-novo-bt" data-cc="avulso" title="Viabilidade de qualquer endereço e crédito de qualquer CPF, sem cliente no NIOGEN">＋ Consultar dados novos (sem cliente)</button></div>`;
       return;
     }
     const c = est.cli, L = (dados && dados.lead) || {};
     const cor = { viab: corViab(), cred: corCred(), os: corOs(), bio: corBio() };
     meio.innerHTML = `
       <div class="cc-cli"><b>${esc(c.nome || 'Cliente')}</b>${c.lead_numero ? `<span class="mono">L-${esc(c.lead_numero)}</span>` : ''}
-        ${L.saida_nome || L.status_nome || L.etapa_nome ? `<span class="chip dim">${esc(L.saida_nome || L.status_nome || L.etapa_nome)}</span>` : ''}
-        <span class="cc-acoes"><button type="button" class="btn btn-sm" data-cc="ficha" title="Abre a ficha deste cliente (a consulta fica minimizada)">Ficha</button>
+        ${c.avulso ? '<span class="chip info">sem cliente no NIOGEN</span>' : L.saida_nome || L.status_nome || L.etapa_nome ? `<span class="chip dim">${esc(L.saida_nome || L.status_nome || L.etapa_nome)}</span>` : ''}
+        <span class="cc-acoes">${c.avulso ? '' : '<button type="button" class="btn btn-sm" data-cc="ficha" title="Abre a ficha deste cliente (a consulta fica minimizada)">Ficha</button>'}
         <button type="button" class="btn btn-sm btn-ghost" data-cc="trocar" title="Buscar outro cliente">Trocar</button></span></div>
       <div class="cc-abas" role="tablist">${ABAS.map(([k, n]) => `<button type="button" class="cc-aba" role="tab" data-cc-aba="${k}" aria-selected="${est.aba === k}">${n}<i class="${cor[k] || ''}"></i></button>`).join('')}</div>
       <div class="cc-corpo" role="tabpanel">${dados ? corpo(est.aba) : '<div class="cc-lendo">Lendo o que está gravado…</div>'}</div>`;
@@ -325,37 +364,117 @@
   const quadroAgora = (n, html) => (n && n.em ? `<div class="cc-q agora"><h4>Consultado agora · ${esc(dh(n.em))} (${esc(haQuanto(n.em))})</h4>${html}</div>` : '');
 
   // ----- Viabilidade
+  // 22/11 (Ricardo: "O retorno da viabilidade deve mostrar o resultado tanto do DFV como do Portal" — "consultar a tela Cobertura"):
+  // os dois passos da Cobertura, com os mesmos rótulos: 1 · Portal (endereço real, decide) e 2 · DFV (fachadas próximas, resgata).
+  const PORTAL_ROT = (p) => ({ viavel: ['Viável', 'ok'], sem_viabilidade: p.cadastro ? ['Viabilidade parcial', 'warn'] : ['Sem viabilidade', 'bad'],
+    rua_divergente: ['Outra rua', 'warn'], complemento_fora_lista: p.escolher ? ['Escolha a unidade', 'info'] : ['Unidade fora da lista', 'warn'],
+    nao_encontrado: ['Endereço não encontrado', 'warn'], posse: ['Endereço já tem Nio', 'warn'] }[p.res] || (p.erro ? ['Não decidiu', 'warn'] : [p.res || '—', 'warn']));
+  const DFV_MATCH = {
+    exato: ['Fachada viável', 'ok', 'a fachada está na base de viáveis do painel'],
+    sem_numero: ['Rua viável', 'ok', 'informe o número para conferir a fachada'],
+    nao_encontrado: ['Elegível · 200 m', 'info', 'número fora da lista, mas há fachadas viáveis no CEP — confira os 200 m no mapa'],
+    vazio: ['Nenhuma viável', 'bad', 'nenhuma fachada viável no CEP — confira o CEP (e o da rua vizinha) no portal'],
+  };
+  const passoV = (num, nome, sub, rotulo, linhas) => `<div class="cc-passo"><div class="cc-passo-cab"><span class="cc-num ${rotulo[1] || ''}">${num}</span>
+      <b>${esc(nome)}</b><small>${esc(sub)}</small>${chip(rotulo)}</div>${linhas}</div>`;
+  function resultadoViab(n) {
+    const p = n.portal || { res: n.res, vel: n.vel, endPortal: n.endPortal, erro: n.erro };
+    const pr = PORTAL_ROT(p);
+    const quando = n.em ? NG.fmtHora(new Date(n.em)) : '';
+    const p1 = passoV(1, 'Portal', 'endereço real · decide', pr,
+      `${p.erro ? `<div class="cc-aviso warn">${esc(p.erro)}</div>` : ''}
+       ${linT('Velocidade', p.vel ? `até ${p.vel}` : '')}${linT('Endereço no portal', p.endPortal)}
+       ${lin('Consultado', esc(`${quando}${p.cache ? ' (cache)' : ''}`))}
+       ${p.cadastro ? '<div class="cc-aviso warn">O portal pediu o <b>cadastro do endereço</b> (tratamento especial) — peça à Nio pelo formulário da Cobertura.</div>' : ''}
+       ${p.escolher ? '<div class="cc-aviso warn">O portal pediu para escolher a unidade/rua. Abra na Cobertura e toque na do cliente — nunca em outra para a consulta passar.</div>' : ''}`);
+    const d = n.dfvInfo;
+    let p2;
+    if (!d) p2 = passoV(2, 'DFV', 'fachadas próximas', ['Indisponível', 'warn'], '<div class="cc-aviso">O painel DFV não respondeu — confira no mapa da Cobertura.</div>');
+    else if (d.fonte === 'base_congelada') {
+      p2 = passoV(2, 'DFV', `base congelada${d.base ? ` (${d.base})` : ''}`, [d.rot, d.cor], `<div class="cc-aviso warn">Painel ao vivo fora — foto antiga. Confira no mapa da Cobertura.</div>
+        ${linT('Bairro', d.onde)}${linT('HP livre', d.hp)}${linT('HCs (já com Nio)', d.hcs)}`);
+    } else {
+      const viz = (d.viz || []).map((x) => `<button type="button" class="chip ok" data-cc-num="${esc(x.n)}" title="Consultar este número">${esc(x.n)}${x.c ? ` · ${esc(x.c)}` : ''}${x.d ? ` · ±${x.d}` : ''}</button>`).join('');
+      p2 = passoV(2, 'DFV', 'fachadas próximas', [d.rot, d.cor], `<span class="cc-dica">${esc(d.txt)}</span>
+        ${d.nota200 ? `<div class="cc-aviso"><b>Regra dos 200 m:</b> ${esc(d.nota200)}</div>` : ''}
+        ${linT('Rua', d.rua)}${linT('Bairro', d.bairro)}${linT('HP livre', d.hp)}${linT('HCs (já com Nio)', d.hcs)}
+        ${linT('Célula', d.celula)}${linT('Faixa de crédito do bairro', d.faixa)}${linT('Classificação', d.classe)}
+        ${d.unidades > 1 ? linT('Unidades viáveis nesta fachada', String(d.unidades)) : ''}
+        ${viz ? `<div class="cc-viz"><span class="cc-dica">Viáveis no CEP: ${esc(String(d.total || (d.viz || []).length))} — as mais perto na numeração (toque para consultar):</span><div class="chips">${viz}</div></div>` : ''}`);
+    }
+    const dec = n.decisao ? `<div class="cc-aviso ${n.decisao.cor}"><b>${esc(n.decisao.rot)}.</b> ${(n.decisao.passos || []).map(esc).join(' ')}</div>` : '';
+    return p1 + p2 + dec;
+  }
+  // Resumo do DFV que fica guardado (só dados da fachada/rua — nada do cliente).
+  function resumoDfv(r, e) {
+    if (!r) return null;
+    if (r.fonte === 'base_congelada') {
+      const x = r.rpc || {};
+      const [rotu, cor] = (NG.DFV_ROTULO || {})[x.resultado] || [x.resultado || '—', 'warn'];
+      return { fonte: 'base_congelada', rot: rotu, cor, base: r.particao ? NG.fmtDiaISO(r.particao).slice(0, 5) : '', onde: x.bairro || '',
+        hp: x.hp_livre != null ? NG.fmtNum(x.hp_livre) : '', hcs: x.hc_tot != null ? NG.fmtNum(x.hc_tot) : '' };
+    }
+    const chave = r.match === 'nao_encontrado' && !r.total_fachadas_no_cep ? 'vazio' : r.match;
+    const [rotu, cor, txt] = DFV_MATCH[chave] || [r.match || '—', 'warn', ''];
+    const f = r.fachada || {}, regra = r.regra_200m || {};
+    const alvo = parseInt(String((e && e.numero) || '').replace(/\D/g, ''), 10);
+    const comp = (x) => [x.complemento, x.complemento2, x.complemento3].filter(Boolean).join(' · ');
+    const viz = r.match === 'exato' ? [] : (r.fachadas_no_cep || []).map((x) => {
+      const nn = parseInt(String(x.numero || '').replace(/\D/g, ''), 10);
+      return { n: String(x.numero || ''), c: comp(x), d: Number.isFinite(alvo) && Number.isFinite(nn) ? Math.abs(nn - alvo) : null };
+    }).filter((x) => x.n).sort((a, b) => (a.d ?? 1e9) - (b.d ?? 1e9)).slice(0, 12);
+    return { fonte: 'ao_vivo', rot: rotu, cor, txt, rua: r.logradouro || '', bairro: r.bairro || '',
+      hp: f.hp_livre != null ? NG.fmtNum(f.hp_livre) : '', hcs: f.hcs != null ? NG.fmtNum(f.hcs) : '', celula: r.celula || '',
+      faixa: r.faixa_credito_bairro || '', classe: r.classificacao ? String(r.classificacao).toLowerCase() : '',
+      nota200: regra.status && regra.status !== 'dentro' ? (regra.nota || '') : '', unidades: (r.unidades || []).length,
+      viz, total: r.total_fachadas_no_cep || 0 };
+  }
   function corpoViab() {
-    const f = fonte(), c = (dados && dados.conv) || {}, e = endereco(), n = est.novos.viab;
-    const endTxt = e.cep.length === 8 ? `CEP ${NG.fmtCep(e.cep)}${e.numero ? ` · nº ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}` : '';
-    const g = `<div class="cc-q"><h4>Gravado no NIOGEN${f.nio_viab_em ? ` · ${esc(dh(f.nio_viab_em))}` : ''}</h4>
+    const f = fonte(), c = (dados && dados.conv) || {}, e = endereco(), eg = enderecoGravado(), n = est.novos.viab;
+    const endTxt = endTexto(eg);
+    const outro = !est.cli.avulso && e.cep.length === 8 && !mesmoEnd(e, eg);
+    const g = est.cli.avulso ? '' : `<div class="cc-q"><h4>Gravado no NIOGEN${f.nio_viab_em ? ` · ${esc(dh(f.nio_viab_em))}` : ''}</h4>
       ${lin('Endereço', endTxt ? esc(endTxt) : '<span class="muted">sem CEP — o lead ainda não deu o endereço</span>')}
       ${lin('Portal (oficial)', f.nio_viab_resultado ? `${chip(rot(VIAB, f.nio_viab_resultado))}${f.nio_viab_velocidade ? ` <span class="muted">${esc(f.nio_viab_velocidade)}</span>` : ''}` : '<span class="muted">não consultado</span>')}
       ${linT('Endereço no portal', f.nio_viab_endereco_portal)}
       ${linT('DFV (mapa da Nio)', dfvTxt((dados.venda && dados.venda.dfv_viabilidade) || f.dfv_resultado))}
       ${c.cobertura_decisao ? linT('Decisão da cobertura', `${String(c.cobertura_decisao).replace(/_/g, ' ')}${c.cobertura_em ? ` · ${dh(c.cobertura_em)}` : ''}`) : ''}</div>`;
     let agora = '';
-    if (n && n.em) {
-      const d = n.dfv ? `${chip(n.dfv === 'viavel' ? ['Fachada viável', 'ok'] : n.dfv === 'elegivel' ? ['Viáveis no CEP (200 m)', 'warn'] : n.dfv === 'sem' ? ['Nada viável no CEP', 'bad'] : ['não respondeu', ''])}` : '';
-      agora = quadroAgora(n, `${lin('Portal (oficial)', n.res ? `${chip(rot(VIAB, n.res))}${n.vel ? ` <span class="muted">${esc(n.vel)}</span>` : ''}` : n.erro ? `<span class="muted">${esc(n.erro)}</span>` : '')}
-        ${linT('Endereço no portal', n.endPortal)}${lin('DFV (mapa da Nio)', d)}
-        ${n.decisao ? `<div class="cc-aviso ${n.decisao.cor}"><b>${esc(n.decisao.rot)}.</b> ${(n.decisao.passos || []).map(esc).join(' ')}</div>` : ''}
-        ${n.escolher ? '<div class="cc-aviso warn">O portal pediu para escolher a unidade/rua. Abra na Cobertura e toque na do cliente — nunca em outra para a consulta passar.</div>' : ''}`);
-    }
-    const lendo = rodando.viab ? `<div class="cc-lendo">${esc(est.novos.viabFila || 'Consultando o portal e o DFV… leva uns 20 segundos. Pode minimizar ou trocar de tela.')}</div>` : '';
-    const pode = e.cep.length === 8;
-    return `${lendo}${agora}${g}<div class="cc-botoes">
-      <button type="button" class="btn btn-acc btn-sm" data-cc="viab"${!pode || rodando.viab ? ' disabled' : ''} title="${pode ? 'Lê de novo no portal da Nio (até a Etapa 2, sem CPF) e no DFV' : 'O lead ainda não tem CEP'}">⟳ Consultar de novo</button>
-      ${(est.cli.venda_id || est.cli.conversa_id) ? '<button type="button" class="btn btn-sm" data-cc="cobertura" title="Abre a tela Cobertura com o endereço deste cliente (mapa, unidades e formulário da Nio)">Abrir na Cobertura ↗</button>' : ''}</div>`;
+    if (n && n.em) agora = quadroAgora(n, resultadoViab(n));
+    const lendo = rodando.viab ? `<div class="cc-lendo">${esc(est.novos.viabFila || 'Consultando o portal… leva uns 20 segundos. Pode minimizar ou trocar de tela.')}</div>
+      ${est.novos.viabDfv ? `<div class="cc-q agora"><h4>DFV já respondeu · o portal ainda está lendo</h4>${resultadoViab({ em: new Date().toISOString(), portal: { res: null, erro: '' }, dfvInfo: est.novos.viabDfv }).replace(/^[\s\S]*?(<div class="cc-passo"><div class="cc-passo-cab"><span class="cc-num[^"]*">2)/, '$1')}</div>` : ''}` : '';
+    const form = `<form class="cc-q cc-form" data-cc-end autocomplete="off"><h4 style="grid-column:1/-1">${est.cli.avulso ? 'Endereço para consultar' : 'Consultar este endereço (pode trocar por outro)'}</h4>
+        <label>CEP<input type="text" name="cep" inputmode="numeric" value="${esc(e.cep.length === 8 ? NG.fmtCep(e.cep) : e.cep)}" placeholder="00000-000"></label>
+        <label>Número<input type="text" name="numero" value="${esc(e.numero)}" placeholder="ex.: 361 ou SN"></label>
+        <label class="inteira">Complemento<input type="text" name="complemento" value="${esc(e.complemento)}" placeholder="ex.: APTO 101, CASA A, FUNDOS"></label>
+        ${outro ? '<span class="cc-dica" style="grid-column:1/-1">Endereço diferente do gravado: o resultado fica só aqui — o cadastro do cliente não muda.</span>' : ''}
+        <div class="cc-botoes" style="grid-column:1/-1">
+          <button type="submit" class="btn btn-acc btn-sm"${rodando.viab ? ' disabled' : ''} title="Lê no portal da Nio (até a Etapa 2, sem CPF) e no DFV">⟳ ${n && n.em ? 'Consultar de novo' : 'Consultar'}</button>
+          ${outro ? '<button type="button" class="btn btn-sm btn-ghost" data-cc="endgravado">Voltar ao gravado</button>' : ''}
+          <button type="button" class="btn btn-sm" data-cc="cobertura" title="Abre a tela Cobertura com este endereço (mapa, unidades e formulário da Nio)">Abrir na Cobertura ↗</button></div></form>`;
+    return `${lendo}${agora}${form}${g}`;
+  }
+  // Lê o endereço do formulário da aba; se mudou (ou é consulta sem cliente), vira est.end.
+  function lerFormEnd() {
+    const fm = painel && painel.querySelector('[data-cc-end]');
+    if (!fm) return endereco();
+    const E = fm.elements;
+    const e = { cep: NG.soDigitos(E.cep.value), numero: E.numero.value.trim(), complemento: E.complemento.value.trim().toUpperCase() };
+    const eg = enderecoGravado();
+    est.end = (est.cli && est.cli.avulso) || !mesmoEnd(e, eg) ? e : null;
+    gravar();
+    return e;
   }
   async function consultarViab() {
-    const e = endereco();
-    if (e.cep.length !== 8 || rodando.viab) return;
+    if (rodando.viab) return;
+    const e = lerFormEnd();
+    if (e.cep.length !== 8) { NG.toast('Informe o CEP com 8 dígitos.', 'bad'); const i = painel.querySelector('[data-cc-end] [name=cep]'); if (i) i.focus(); return; }
     rodando.viab = true;
     est.novos.viab = { em: null, job: null };
     pintarTudo();
     const t0 = performance.now();
     const dfvP = NG.dfvAoVivo(e).then((r) => r, () => null);
+    dfvP.then((r) => { if (rodando.viab) { est.novos.viabDfv = resumoDfv(r, e); pintarTudo(); } });   // DFV na hora (≈1 s), como na Cobertura
     try {
       const s0 = await NG.viabIniciar({ ...e, opcao: '' });
       est.novos.viab.job = s0 && s0.job_id; est.novos.viab.desde = new Date().toISOString(); gravar();
@@ -363,7 +482,9 @@
       const r = await dfvP;
       fecharViab(s, r, e, performance.now() - t0);
     } catch (err) {
-      est.novos.viab = { em: new Date().toISOString(), erro: err.naoInstalado ? 'operador do portal não instalado' : NG.msgErro(err), txt: 'erro' };
+      const r = await dfvP;
+      const erro = err.naoInstalado ? 'operador do portal não instalado' : NG.msgErro(err);
+      est.novos.viab = { em: new Date().toISOString(), erro, txt: 'erro', portal: { erro }, dfvInfo: resumoDfv(r, e) };
       rodando.viab = false; gravar(); pintarTudo();
     }
   }
@@ -373,8 +494,12 @@
     const escolher = !['viavel', 'viavel_predio'].includes(res) && (!!(s.opcoes && s.opcoes.lista && s.opcoes.lista.length) || ['rua_divergente', 'complemento_fora_lista'].includes(res));
     let decisao = null;
     if (res === 'sem_viabilidade') { const d = NG.semViabDecisao(ver, { cadastro: !!s.cadastro_endereco }); decisao = { cor: d.cor, rot: d.rot, passos: d.passos }; }
+    const eUsado = e || endereco();
     est.novos.viab = { em: s.consultado_em || new Date().toISOString(), res, vel: s.velocidade || '', endPortal: (s.endereco && s.endereco.resolvido) || '', dfv: ver, decisao, escolher,
-      erro: res === 'erro' ? (s.motivo || 'erro no operador') : '', txt: rot(VIAB, res)[0] };
+      erro: res === 'erro' ? (s.motivo || 'erro no operador') : '', txt: rot(VIAB, res)[0],
+      portal: { res, vel: s.velocidade || '', endPortal: (s.endereco && s.endereco.resolvido) || '', cache: !!s.cache, cadastro: !!s.cadastro_endereco, escolher,
+        erro: res === 'erro' ? (s.motivo || 'erro no operador') : '' },
+      dfvInfo: resumoDfv(r, eUsado) };
     rodando.viab = false;
     gravar(); pintarTudo();
     if (e) {
@@ -412,7 +537,8 @@
         <label class="inteira">E-mail<input type="email" name="email" value="${esc(p.email || '')}"></label>
         <label class="ck inteira"><input type="checkbox" name="autorizado"> O titular autorizou a consulta de crédito</label>
         <div class="cc-botoes inteira" style="grid-column:1/-1">
-          <button type="submit" class="btn btn-acc btn-sm"${rodando.cred ? ' disabled' : ''}${e.cep.length !== 8 ? ' title="Sem CEP do cliente: use o endereço padrão"' : ''}>⟳ Consultar crédito</button>
+          <span class="cc-dica" style="flex-basis:100%">${e.cep.length === 8 ? `Endereço: ${esc(endTexto(e))} (o da aba Viabilidade)` : 'Sem endereço: preencha na aba Viabilidade ou use o endereço padrão.'}</span>
+          <button type="submit" class="btn btn-acc btn-sm"${rodando.cred ? ' disabled' : ''}${e.cep.length !== 8 ? ' title="Sem CEP: use o endereço padrão"' : ''}>⟳ Consultar crédito</button>
           <button type="button" class="btn btn-sm" data-cc="credpadrao"${rodando.cred ? ' disabled' : ''} title="Mede só o crédito do CPF, num endereço padrão (não diz nada da viabilidade do cliente)">Com o endereço padrão</button></div>
       </form>`;
   }
@@ -464,7 +590,7 @@
       await pausa(passo);
       s = await NG.creditoStatus(s.job_id);
     }
-    delete est.novos[`${aba}Fila`];
+    delete est.novos[`${aba}Fila`]; delete est.novos.viabDfv;
     return s || {};
   }
   async function retomarJobs() {
@@ -487,6 +613,7 @@
   // ----- OS
   function corpoOs() {
     const v = (dados && dados.venda) || null, o = (dados && dados.os) || null, n = est.novos.os;
+    if (est.cli.avulso) return '<div class="cc-aviso">Com dados novos dá para consultar <b>viabilidade</b> e <b>crédito</b>. A OS só é lida para venda registrada no NIOGEN (regra do portal) — busque o cliente pelo nome, CPF ou L-número.</div>';
     if (!v) return '<div class="cc-aviso">Este cliente ainda não tem venda no NIOGEN — não há OS para ler.</div>';
     const dataBR = (iso) => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : ''; };
     const g = `<div class="cc-q"><h4>Última leitura guardada${o && o.mudou_em ? ` · ${esc(dh(o.mudou_em))}` : ''}</h4>
@@ -519,6 +646,7 @@
 
   // ----- GED360 (biometria)
   function corpoBio() {
+    if (est.cli.avulso) return '<div class="cc-aviso">A biometria (GED360) é lida para cliente com venda ou conversa no NIOGEN. Com dados novos, use as abas Viabilidade e Crédito.</div>';
     const v = (dados && dados.venda) || null, n = est.novos.bio;
     const g = v ? `<div class="cc-q"><h4>Gravado na venda${v.biometria_em ? ` · ${esc(dh(v.biometria_em))}` : ''}</h4>
         ${lin('Biometria', v.biometria_status ? chip([NG.BIOMETRIA[v.biometria_status] || v.biometria_status, corBio()]) : '<span class="muted">—</span>')}
@@ -562,6 +690,8 @@
   function clique(ev) {
     const res = ev.target.closest('[data-cc-res]');
     if (res) { escolher(est.lista[Number(res.dataset.ccRes)]); return; }
+    const num = ev.target.closest('[data-cc-num]');
+    if (num) { const fm = painel.querySelector('[data-cc-end]'); if (fm) { fm.elements.numero.value = num.dataset.ccNum; fm.elements.complemento.value = ''; consultarViab(); } return; }
     const aba = ev.target.closest('[data-cc-aba]');
     if (aba) { est.aba = aba.dataset.ccAba; gravar(); pintarMeio(); const b = painel.querySelector(`[data-cc-aba="${est.aba}"]`); if (b) b.focus(); return; }
     const b = ev.target.closest('[data-cc]');
@@ -570,16 +700,33 @@
     if (a === 'fechar') { ev.stopPropagation(); fechar(); return; }
     if (a === 'restaurar') { abrir(); return; }
     if (a === 'min') { minimizar(); return; }
-    if (a === 'trocar') { est.cli = null; dados = null; pessoal = {}; est.novos = {}; est.resumo = ''; gravar(); pintarMeio(); const i = painel.querySelector('input[name=q]'); i.focus(); i.select(); if (est.q) buscar(est.q, true); return; }
+    if (a === 'avulso') { avulso(); return; }
+    if (a === 'avulso-cep') { avulso({ end: { cep: NG.soDigitos(est.q), numero: '', complemento: '' } }); return; }
+    if (a === 'avulso-cpf') { avulso({ cpf: NG.soDigitos(est.q), aba: 'cred' }); return; }
+    if (a === 'endgravado') { est.end = null; gravar(); pintarMeio(); return; }
+    if (a === 'trocar') { est.cli = null; dados = null; pessoal = {}; est.novos = {}; est.resumo = ''; est.end = null; gravar(); pintarMeio(); const i = painel.querySelector('input[name=q]'); i.focus(); i.select(); if (est.q) buscar(est.q, true); return; }
     if (a === 'ficha') { abrirFicha(); return; }
-    if (a === 'cobertura') { NG.consultarOperador({ vendaId: est.cli.venda_id, conversaId: est.cli.conversa_id }); return; }
+    if (a === 'cobertura') { abrirCobertura(); return; }
     if (a === 'viab') { consultarViab(); return; }
     if (a === 'credpadrao') { consultarCred(true); return; }
     if (a === 'os') { consultarOs(); return; }
     if (a === 'bio') consultarBio();
   }
-  document.addEventListener('submit', (ev) => { if (ev.target.matches && ev.target.matches('[data-cc-cred]')) { ev.preventDefault(); consultarCred(false); } });
+  document.addEventListener('submit', (ev) => {
+    if (!ev.target.matches) return;
+    if (ev.target.matches('[data-cc-cred]')) { ev.preventDefault(); consultarCred(false); }
+    else if (ev.target.matches('[data-cc-end]')) { ev.preventDefault(); consultarViab(); }
+  });
 
+  // Cobertura com o endereço da aba (digitado ou gravado). Cliente sem endereço trocado: o atalho de sempre (leva o CPF junto).
+  // Endereço novo: a mesma chave de uso único que a Cobertura já lê (niogen.cobertura.lead, 2 min) — nada na URL.
+  function abrirCobertura() {
+    const e = lerFormEnd();
+    if (!est.cli.avulso && !est.end) { NG.consultarOperador({ vendaId: est.cli.venda_id, conversaId: est.cli.conversa_id }); return; }
+    try { localStorage.setItem('niogen.cobertura.lead', JSON.stringify({ cep: e.cep, numero: e.numero, complemento: e.complemento, em: Date.now() })); } catch (_) { /* */ }
+    const aba = window.open('cobertura.html#lead', '_blank');
+    if (!aba) location.href = 'cobertura.html#lead';
+  }
   function abrirFicha() {
     const c = est.cli;
     if (!c) return;
