@@ -21,6 +21,10 @@
  *   quanto vale · janela) e o botão "Devolver para a Mari" FIXO no cabeçalho e no fim da conversa, com confirmação de um toque
  *   (1º toque arma por 4 s, 2º devolve pela backoffice_conversa → devolver_mari: lembretes e cadência retomam como hoje).
  *   Envio continua só pelo NIOGEN (o link do Chatwoot não aparece no celular). Desktop: nada muda (sem a opção movel).
+ * 22/11 (novo layout, passo 3 — Ricardo: "Pode, só isso"): opção cabUnico = { sub(c), acoes(c) } = UM cabeçalho só, numa linha
+ *   (iniciais · nome · linha de apoio com a janela de 24 h · com quem está · Devolver para a Mari / Passar para o time · botões de quem montou).
+ *   Ligada só na tela Conversas; sem a opção, nada muda (Live e ficha seguem como estão). As etiquetas saem do cabeçalho
+ *   (quem montou mostra onde quiser). A troca de dono usa a mesma ação do interruptor (backoffice_conversa → atribuir).
  */
 (function () {
   'use strict';
@@ -148,6 +152,29 @@
     document.head.appendChild(s);
   }
 
+  // 22/11 (novo layout, passo 3): estilo do cabeçalho único (opção cabUnico), injetado uma vez — só existe onde a opção é ligada.
+  function estiloUnico() {
+    if (document.getElementById('cvp-unico-css')) return;
+    const s = document.createElement('style');
+    s.id = 'cvp-unico-css';
+    s.textContent = `
+.cvp-raiz.unico .cvp-l1 { padding: 10px 14px; }
+.cvp-raiz.unico .cvp-l2 { display: none; }
+.cvp-u { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+.cvp-u-av { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12.5px; background: var(--surface-2); color: var(--muted); }
+.cvp-u-av.time { background: var(--info-bg); color: var(--info-fg); }
+.cvp-u-id { flex: 1 1 80px; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.cvp-u-id b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cvp-u-id small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cvp-u-jan.warn { color: var(--warn-fg); font-weight: 600; }
+.cvp-u .chip { white-space: nowrap; font-size: 12px; }
+.cvp-u .btn { min-height: 30px; white-space: nowrap; }
+.cvp-u .cvp-cw { font-size: 12px; white-space: nowrap; }
+.cvp-u-voltar { display: none; }
+@media (max-width: 900px) { .cvp-u-voltar { display: inline-flex; } }`;
+    document.head.appendChild(s);
+  }
+
   // ---------- leituras da conversa ----------
   const SEL_CONV = 'id, venda_id, telefone, cidade, nome_contato, dados, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at';
   // 12/11 (0145): midia = áudio/foto do cliente no bucket privado. Banco sem a coluna ainda → cai para a lista antiga.
@@ -231,6 +258,8 @@
     const mariEl = $('[data-mari]');
     if (o.cheia) el.classList.add('cheia');
     if (o.movel) el.classList.add('movel');
+    const unico = !!o.cabUnico && !o.movel;   // 22/11: cabeçalho único (só a tela Conversas liga)
+    if (unico) { el.classList.add('unico'); estiloUnico(); }
     const mvCab = $('[data-mvcab]'), ctxEl = $('[data-ctx]'), devEl = $('[data-devolver]');
     const quemEl = $('[data-quem]');
     const ta = $('[data-cv-txt]'), btEnviar = $('[data-cv="enviar"]'), selRap = $('[data-cv="rapida"]'), ajudaEl = $('[data-ajuda]');
@@ -375,7 +404,23 @@
       // 10/11 (Ricardo: "organiza melhor esse cabeçalho, seguindo esses padrões" — os da ficha): linha 1 = ← Lista · nome ·
       // Chatwoot ↗; linha 2 = chips pequenos (status, dono, janela — os dois primeiros trocam pelo próprio chip); linha 3 =
       // etiquetas em chips finos com o "+ etiqueta" do mesmo tamanho.
-      troca('cab', cab, `<div class="cvp-topo">${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
+      if (unico) {
+        // 22/11 (novo layout, passo 3): uma linha só. A linha de apoio e os botões da direita vêm de quem montou (a tela Conversas).
+        const u = o.cabUnico;
+        const ini = (String(nome).trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('') || '?').toUpperCase();
+        const jan = `<span class="cvp-u-jan${jn.aberta ? '' : ' warn'}">${esc(jn.txt.replace('Janela 24 h · ', 'janela ').replace('Janela 24 h fechada', 'janela fechada'))}</span>`;
+        const sub = [jan, typeof u.sub === 'function' ? u.sub(c) : '', c.chatwoot_status === 'resolved' ? 'resolvida' : ''].filter(Boolean).join(' · ');
+        const com = c.nao_contatar ? ['bad', 'Não contatar'] : dn.v === 'eu' ? ['warn', 'Com você'] : dn.v === 'outro' ? ['warn', `Com ${dn.txt}`]
+          : dn.v === 'time' ? ['warn', 'Com o time'] : ['ok', 'Com a Mari'];
+        const btDono = c.nao_contatar ? ''
+          : `<button type="button" class="btn btn-sm" data-cv="dono-bt" data-para="${ladoTime ? 'mari' : 'time'}" title="${esc(ladoTime ? 'A Mari volta a atender: lembretes e cadência retomam.' : 'Passa para o time backoffice: a Mari cala.')}"${st.trocandoDono ? ' disabled' : ''}>${ladoTime ? '↩ Devolver para a Mari' : 'Passar para o time'}</button>`;
+        troca('cab', cab, `<div class="cvp-u">${o.aoFechar ? `<button type="button" class="btn btn-sm cvp-u-voltar" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
+          <span class="cvp-u-av ${ladoTime ? 'time' : 'mari'}" aria-hidden="true">${esc(ini)}</span>
+          <span class="cvp-u-id"><b class="cvp-nome" title="${esc(nome)}">${esc(nome)}</b><small>${sub}</small></span>
+          <span class="chip ${com[0]}" title="${esc(titSw)}">${esc(com[1])}</span>
+          ${btDono}${typeof u.acoes === 'function' ? u.acoes(c) : ''}
+          ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Áudio e foto aparecem aqui na conversa. O Chatwoot fica para vídeo e documento — responda por aqui">Chatwoot ↗</a>` : ''}</div>`);
+      } else troca('cab', cab, `<div class="cvp-topo">${o.aoFechar ? `<button type="button" class="btn btn-sm" data-cv="fechar">${esc(o.rotuloFechar)}</button>` : ''}
         <b class="cvp-nome" title="${esc(nome)}">${esc(nome)}</b>
         ${link ? `<a class="cvp-cw" href="${esc(link)}" target="_blank" rel="noopener" title="Áudio e foto aparecem aqui na conversa. O Chatwoot fica para vídeo e documento — responda por aqui">Chatwoot ↗</a>` : ''}
         ${o.aoConcluir ? '<button type="button" class="btn btn-acc btn-sm" data-cv="concluir" title="Terminou com este cliente? Fecha o caso e abre o próximo da fila. Até apertar aqui, a conversa fica aberta.">✓ Concluir</button>' : ''}</div>
@@ -1064,6 +1109,13 @@
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
       if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.sopro = b.dataset.m === 'sopro'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
       if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
+      if (a === 'dono-bt') {   // 22/11 (cabeçalho único): o mesmo que o interruptor, em botão com o nome da ação
+        if (b.disabled || st.trocandoDono) return;
+        st.trocandoDono = true;
+        b.disabled = true;
+        conversaAcao('atribuir', b.dataset.para === 'mari' ? 'mari' : 'time').finally(() => { st.trocandoDono = false; st.sig.cab = null; desenhar(); });
+        return;
+      }
       if (a === 'dono-sw') {
         if (b.disabled || st.trocandoDono) return;
         const praTime = b.classList.contains('mari');

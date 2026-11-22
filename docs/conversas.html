@@ -1,16 +1,20 @@
 <!doctype html>
-<!-- NIOGEN | docs/conversas.html | 09/11/2026 — Claude Code
-     "Conversas": todas as conversas do WhatsApp num lugar só, como o Chatwoot (Ricardo, 09/11 ~19h40: "tá difícil ter que ir atrás do
-     cliente para falar com ele quando preciso"). À esquerda a lista (v_conversas, 0094: última mensagem, cliente esperando, dono,
-     etapa), com busca e filtros; à direita a conversa — o mesmo componente do Live (assets/conversa.js: status, atribuição,
-     etiquetas, Responder | Nota privada, respostas rápidas, Enter envia). "Abrir a ficha" abre a ficha em gaveta.
-     Endereço direto: conversas.html#c=<id>. Só admin/backoffice (a tabela da Mari só abre para eles).
-     15/11 (NIOGEN no celular · protótipo docs/LAYOUT_conversas_mobile_151126_1304.html, aprovado pelo Ricardo): HOME do app
-     instalado. Em tela ≤ 640 px vira o padrão WhatsApp — lista com avatar, nome, última mensagem com o autor (Mari: / Time:),
-     hora, badge de não lidas (v_conversas.nao_lidas, 0215), selo da janela de 24 h e quanto vale (comissão da venda ou o plano
-     por mês); quentes no topo (esperando resposta, depois janela fechando). A conversa abre em TELA CHEIA (NGConversa movel:
-     cabeçalho fixo com voltar, faixa de contexto, Devolver para a Mari, composer no rodapé); o voltar do Android fecha a
-     conversa. Desktop (> 640 px) fica como estava. -->
+<!-- NIOGEN | docs/conversas.html | 22/11/2026 — Claude Code (Fable 5.2)
+     "Conversas": todas as conversas do WhatsApp num lugar só (Ricardo, 09/11: "tá difícil ter que ir atrás do cliente para falar
+     com ele quando preciso"). Endereço direto: conversas.html#c=<id>. Só admin/backoffice.
+     22/11 (novo layout, passo 3 — especificação aprovada pelo Ricardo em 22/11, protótipo das sete telas): no computador são
+     três colunas — LISTA · CONVERSA · SOBRE O LEAD.
+       · Abre sempre limpa: nenhum filtro fica guardado da visita anterior (só o que vier no endereço: ?filtro= ?dono= ?etapa=
+         ?destino=, usados pelos atalhos de outras telas).
+       · Ordem do WhatsApp: a mensagem mais recente em cima, em TODAS as abas (cliente, time ou Mari).
+       · Abas: Esperando · Minhas · Abertas · Todas. O resto é o botão "Filtros": cada filtro aplicado vira etiqueta com × e há
+         "Limpar tudo". "Encerradas" e "Fora do NIOGEN" viraram o filtro Situação.
+       · Linha: iniciais · nome e hora · prévia da última mensagem · não lidas · UM selo (o mais importante) · com quem está.
+       · Conversa: o componente de sempre (assets/conversa.js), com a opção cabUnico — um cabeçalho só, numa linha. A Live e a
+         ficha não usam a opção e seguem como estão.
+       · "Sobre o lead" (v_leads da conversa, só leitura): próximo passo e de quem é a vez, onde está, a venda, etiquetas.
+     15/11 (NIOGEN no celular): em tela ≤ 640 px segue o padrão WhatsApp — lista com avatar e a conversa em TELA CHEIA
+     (NGConversa movel). Lá só mudam as abas e o botão Filtros. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -29,63 +33,139 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
 <script src="assets/sidebar.js?v=221126-9"></script>
-<script src="assets/conversa.js?v=211126-4c"></script>
+<script src="assets/conversa.js?v=221126-7"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
+<style>
+  /* 22/11 (novo layout, passo 3) — só desta tela. O celular (≤ 640 px) e a tela estreita (≤ 900 px) seguem as regras do app.css. */
+  .cv-busca { display: flex; gap: 8px; align-items: center; }
+  .cv-busca input { flex: 1; min-width: 0; }
+  .cv-busca .btn { flex: 0 0 auto; min-height: 36px; white-space: nowrap; }
+  .cv-busca .btn[aria-expanded="true"], .cv-busca .btn.tem { border-color: var(--accent); color: var(--text); }
+  .cv-painel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--surface-dim); }
+  .cv-painel label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); min-width: 0; }
+  .cv-painel select { height: 32px; min-width: 0; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; padding: 0 6px; }
+  .cv-etqs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .cv-etq { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--info-bg); color: var(--info-fg); }
+  .cv-etq button { border: 0; background: none; color: inherit; font-size: 15px; line-height: 1; cursor: pointer; padding: 2px 5px; border-radius: 999px; }
+  .cv-etq button:hover { background: rgba(255, 255, 255, .12); }
+  .cv-limpar { border: 0; background: none; color: var(--link); font: inherit; font-size: 12px; cursor: pointer; padding: 2px 4px; }
+  @media (min-width: 641px) {
+    .cv-cab h1 { margin: 0; }
+    .cv-filtros { flex-wrap: nowrap; }
+    .cv-filtros button { flex: 1 1 0; min-width: 0; min-height: 30px; padding: 0 4px; border-radius: 8px; white-space: nowrap; }
+    .cv-filtros button.on { border-color: var(--accent); font-weight: 600; }
+    .cv-item.cv-n { flex-direction: row; align-items: flex-start; gap: 10px; padding: 10px 12px 10px 14px; }
+    .cv-item.cv-n.sel { box-shadow: inset 3px 0 0 var(--accent); }
+    .cv-n-av { flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--surface-2); color: var(--muted); }
+    .cv-n-av.time { background: var(--info-bg); color: var(--info-fg); }
+    .cv-n-meio { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .cv-n .cv-l1 { align-items: baseline; gap: 8px; }
+    .cv-n-l2 { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .cv-n-prev { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cv-n.naolida .cv-n-prev, .cv-n.esperando .cv-n-prev { color: var(--text); }
+    .cv-n-nl { flex: 0 0 auto; min-width: 18px; padding: 1px 5px; border-radius: 999px; background: var(--accent); color: #06130b; font-size: 11.5px; font-weight: 700; text-align: center; }
+    .cv-n-l3 { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11.5px; color: var(--muted); }
+    .cv-n-l3 .chip { padding: 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .cv-n-dono { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 0 1 auto; min-width: 0; }
+  }
+  .cv-sobre { display: none; }
+  @media (min-width: 901px) {
+    .cv-trab { grid-template-columns: 340px minmax(0, 1fr); }
+  }
+  @media (min-width: 1240px) {
+    .cv-trab.com-conversa { grid-template-columns: 330px minmax(0, 1fr) 272px; }
+    .cv-trab.com-conversa .cv-sobre { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+    .cv-trab.com-conversa .cvp-venda { display: none !important; }   /* o próximo passo já está na coluna "Sobre o lead" */
+    .cv-trab.com-conversa .cvp-u .cv-so-estreita, .cv-trab.com-conversa .cvp-u .cvp-cw { display: none; }   /* estão na coluna ao lado */
+  }
+  .cv-s-passo { display: flex; flex-direction: column; gap: 5px; padding: 11px 12px; border-radius: 10px; background: var(--surface-dim); border: 1px solid var(--border); }
+  .cv-s-passo.warn { background: var(--warn-bg); border-color: var(--warn-border); }
+  .cv-s-passo.bad { background: var(--bad-bg); border-color: var(--bad-border); }
+  .cv-s-passo.info { background: var(--info-bg); border-color: transparent; }
+  .cv-s-rot { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .cv-s-passo.warn .cv-s-rot, .cv-s-passo.warn small { color: var(--warn-fg); }
+  .cv-s-passo.bad .cv-s-rot, .cv-s-passo.bad small { color: var(--bad-fg); }
+  .cv-s-passo.info .cv-s-rot, .cv-s-passo.info small { color: var(--info-fg); }
+  .cv-s-passo b { font-size: 14px; }
+  .cv-s-passo small { font-size: 12px; color: var(--muted); line-height: 1.4; }
+  .cv-s-grupo { display: flex; flex-direction: column; gap: 7px; }
+  .cv-s-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+  .cv-s-kv > span:first-child { color: var(--muted); flex: 0 0 auto; }
+  .cv-s-kv > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }
+  .cv-s-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cv-s-nada { font-size: 12.5px; color: var(--muted); }
+  .cv-sobre .btn { margin-top: auto; justify-content: center; }
+  .cv-s-cw { font-size: 12px; text-align: center; }
+</style>
 </head>
 <body class="tela-conversas">
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="conversas"></nav>
   <main class="main cv-main">
-    <header class="cab">
+    <header class="cab cv-cab">
       <div>
         <h1>Conversas</h1>
-        <div class="sub">Todas as conversas do WhatsApp. Escolha à esquerda e responda à direita — o NIOGEN cuida do Chatwoot.</div>
+        <div class="sub">Todas as conversas do WhatsApp. A mensagem mais recente fica sempre em cima.</div>
       </div>
       <div class="cab-acoes" id="cab-acoes"></div>
     </header>
     <div class="cv-trab" id="trab">
       <section class="cv-lista" aria-label="Lista de conversas">
-        <div class="cv-busca"><input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou L-142" autocomplete="off" aria-label="Buscar conversa"></div>
-        <div class="cv-filtros" id="filtros" role="tablist"></div>
-        <div class="cv-funil"><select id="f-destino" aria-label="Filtrar por destino"></select><select id="f-etapa" aria-label="Filtrar por etapa"></select><select id="f-dono" aria-label="Filtrar por quem atende"></select></div>
+        <div class="cv-busca">
+          <input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou L-142" autocomplete="off" aria-label="Buscar conversa">
+          <button type="button" class="btn btn-sm" id="bt-filtros" aria-expanded="false" aria-controls="painel">Filtros</button>
+        </div>
+        <div class="cv-filtros" id="filtros" role="tablist" aria-label="Quais conversas"></div>
+        <div class="cv-painel" id="painel" hidden>
+          <label>Quem atende<select id="f-dono"></select></label>
+          <label>Situação<select id="f-sit"></select></label>
+          <label>Etapa<select id="f-etapa"></select></label>
+          <label>Destino<select id="f-destino"></select></label>
+        </div>
+        <div class="cv-etqs" id="etqs" hidden></div>
         <div class="cv-itens" id="itens"><div class="carregando">Carregando…</div></div>
       </section>
       <section class="cv-direita" id="direita">
         <div class="cv-vazia">Escolha uma conversa à esquerda.</div>
       </section>
+      <aside class="cv-sobre" id="sobre" aria-label="Sobre o lead"></aside>
     </div>
   </main>
 </div>
 <script>
 (async function () {
   const { esc } = NG;
+  const T0 = performance.now();
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
   const itensEl = document.getElementById('itens');
   const direita = document.getElementById('direita');
+  const sobreEl = document.getElementById('sobre');
   const trab = document.getElementById('trab');
+  const buscaEl = document.getElementById('busca');
+  const painel = document.getElementById('painel');
+  const btFiltros = document.getElementById('bt-filtros');
   if (!['admin', 'backoffice'].includes(eu.perfil)) { itensEl.innerHTML = '<div class="vazio">As conversas são do backoffice.</div>'; return; }
-  const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* */ } } };
 
   let lista = [];
   let furos = new Set();   // 0102: esperando há 3 min ou mais e fora do Live = "deveria estar no Live"
   let fnome = { etapa: {}, destino: {} };   // 0147: nomes de etapa e destino (config_funil)
-  // 13/11 (Ricardo: "filtro por destino e por etapa"): ?destino=…&etapa=… na URL vale por cima do último usado.
+  // 22/11 (Ricardo: "abre sempre limpa"): nada vem do localStorage. Só o endereço manda (atalhos de outras telas):
+  // ?filtro=esperando|minhas|abertas|todas (e os antigos fora|encerradas, que viraram Situação) · ?dono=mari|time · ?etapa= · ?destino=
   const URLQ = new URLSearchParams(location.search);
-  let fDestino = URLQ.get('destino') ?? ls.ler('niogen.conversas.destino') ?? '';
-  let fEtapa = URLQ.get('etapa') ?? ls.ler('niogen.conversas.etapa') ?? '';
-  // 14/11 (Ricardo: "na tela Conversas não tem filtro por atribuição (backoffice x mari)"): ?dono=mari|time.
-  let fDono = URLQ.get('dono') ?? ls.ler('niogen.conversas.dono') ?? '';
-  if (!['', 'mari', 'time'].includes(fDono)) fDono = '';
+  const ABAS_ID = ['esperando', 'minhas', 'abertas', 'todas'];
+  const f = { dono: URLQ.get('dono') || '', sit: '', etapa: URLQ.get('etapa') || '', destino: URLQ.get('destino') || '' };
+  if (!['', 'mari', 'time'].includes(f.dono)) f.dono = '';
+  let aba = ABAS_ID.includes(URLQ.get('filtro')) ? URLQ.get('filtro') : 'abertas';
+  if (['fora', 'encerradas'].includes(URLQ.get('filtro'))) { f.sit = URLQ.get('filtro'); aba = 'todas'; }
+  if ((f.etapa || f.destino) && !URLQ.get('filtro')) aba = 'todas';
+  let atual = null;     // id da conversa aberta
+  let comp = null;      // NGConversa
+  let lead = null;      // linha da v_leads da conversa aberta (coluna "Sobre o lead")
+  let canais = null;    // nomes das origens (config_canais), lidos uma vez, na 1ª conversa aberta
+
   // Mari = a Mari atende (sem dono no Chatwoot); Time = com o time backoffice ou com uma pessoa (assumida).
   const ladoDono = (c) => (c.dono_tipo === 'mari' ? 'mari' : c.dono_tipo === 'pessoa' || c.dono_tipo === 'time' ? 'time' : '');
-  const doDono = (c) => !fDono || ladoDono(c) === fDono;
-  // 0144: ?filtro=esperando (botão do alerta da faixa de pulso) vale por cima do último filtro usado.
-  const FILTRO_URL = new URLSearchParams(location.search).get('filtro');
-  const IDS_FILTRO = ['esperando', 'minhas', 'abertas', 'fora', 'todas', 'encerradas'];
-  let filtro = IDS_FILTRO.includes(FILTRO_URL) ? FILTRO_URL
-    : IDS_FILTRO.includes(ls.ler('niogen.conversas.filtro')) ? ls.ler('niogen.conversas.filtro') : 'abertas';
-  let atual = null;     // id da conversa aberta
   const MQ = window.matchMedia('(max-width: 640px)');   // 15/11: celular = padrão WhatsApp
   const movel = () => MQ.matches;
   const COR_AV = ['#22c55e', '#6FA8FF', '#F2B84B', '#C79BFF', '#FF8A65', '#4DD0E1'];
@@ -94,22 +174,36 @@
   // janela de 24 h (a mesma conta da conversa: 23 h depois da última fala do cliente)
   const janelaMin = (c) => (c.ult_lead ? (new Date(c.ult_lead).getTime() + 23 * 3600000 - Date.now()) / 60000 : null);
   const durTxt = (min) => (min < 60 ? `${Math.max(1, Math.round(min))} min` : `${Math.floor(min / 60)} h`);
-  const valeTxt = (c) => (c.comissao != null ? NG.fmtMoeda(c.comissao).replace(/,00$/, '') : c.valor_mes != null ? `${NG.fmtMoeda(c.valor_mes).replace(/,00$/, '')}/mês` : '');
-  let comp = null;      // NGConversa
-  const COR = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.cor]));
+  const dinheiro = (v) => NG.fmtMoeda(v).replace(/,00$/, '');
+  const valeTxt = (c) => (c.comissao != null ? dinheiro(c.comissao) : c.valor_mes != null ? `${dinheiro(c.valor_mes)}/mês` : '');
+  const fone = (t) => {
+    const d = NG.soDigitos(t || '').replace(/^55(?=\d{10,11}$)/, '');
+    return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : String(t || '');
+  };
   const NOME_ET = Object.fromEntries(NG.JORNADA.map((e) => [e.n, e.nome]));
-  const ICO_ROBO = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="5" width="10" height="8" rx="2"/><path d="M8 2v3"/></svg>';
-  const ICO_PESSOA = '<svg class="ico-dono" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="2.5"/><path d="M3 14c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/></svg>';
   const minha = (c) => c.dono_tipo === 'pessoa' && NG.ehMeu(c.dono_nome);   // 0181: pelo vínculo do Chatwoot (Configurações › Equipe)
   const aberta = (c) => !c.encerrada && c.chatwoot_status !== 'resolved';
-  const FILTROS = [
-    ['esperando', 'Esperando resposta', (c) => c.cliente_esperando && !c.encerrada],
-    ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada],
-    ['abertas', 'Abertas', aberta],
-    ['fora', '⚠ Fora do NIOGEN', (c) => !!c.funil_alerta],   // 0147: resolvida ou respondida direto no Chatwoot
-    ['todas', 'Todas', () => true],   // 12/11 (Ricardo: "toda conversa precisa aparecer no sistema"): inclui encerradas e silenciadas
-    ['encerradas', 'Encerradas', (c) => c.encerrada],
+  const silenciada = (c) => (c.etiquetas || []).includes('suporte-nio');
+  const saiu = (c) => c.funil_destino && !['em_andamento', 'teste_duplicada', 'instalada'].includes(c.funil_destino);
+  const ABAS = [
+    ['esperando', 'Esperando', (c) => c.cliente_esperando && !c.encerrada, 'O cliente escreveu por último e ninguém respondeu.'],
+    ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada, 'As conversas que estão com você.'],
+    ['abertas', 'Abertas', aberta, 'Tudo que não foi encerrado nem resolvido.'],
+    ['todas', 'Todas', () => true, 'Todas, inclusive encerradas e silenciadas.'],
   ];
+  const SIT = { fora: 'Mexidas fora do NIOGEN', encerradas: 'Encerradas' };
+  const DONO = { mari: 'Mari', time: 'Time backoffice' };
+  // Cada filtro: como a conversa responde a ele. Usado na lista, nas contagens das opções e nas etiquetas.
+  const TESTE = {
+    dono: (c, v) => ladoDono(c) === v,
+    sit: (c, v) => (v === 'fora' ? !!c.funil_alerta : !!c.encerrada),
+    etapa: (c, v) => (c.funil_etapa || 'nova') === v,
+    destino: (c, v) => (c.funil_destino || 'em_andamento') === v,
+  };
+  const passa = (c, menos) => Object.keys(TESTE).every((k) => k === menos || !f[k] || TESTE[k](c, f[k]));
+  const rotFiltro = (k) => (k === 'dono' ? `Atende: ${DONO[f.dono]}` : k === 'sit' ? SIT[f.sit]
+    : k === 'etapa' ? `Etapa: ${fnome.etapa[f.etapa] || f.etapa}` : `Destino: ${fnome.destino[f.destino] || f.destino}`);
+
   const quando = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
@@ -118,75 +212,98 @@
     if (min < 7 * 1440) return NG.fmtDiaSemana(d);
     return NG.fmtData(d).slice(0, 5);
   };
-  const previa = (c) => {
-    const txt = NGConversa.textoTurno(c.ultima_txt) || '—';
-    const quem = c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : '';
-    return quem + txt;
-  };
+  const quemFalou = (c) => (c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : '');
+  const comQuem = (c) => (c.encerrada ? 'encerrada' : c.dono_tipo === 'mari' ? 'com a Mari'
+    : c.dono_tipo === 'pessoa' ? (NG.ehMeu(c.dono_nome) ? 'com você' : `com ${NG.primeiroNome(c.dono_nome) || 'o time'}`)
+      : c.dono_tipo === 'time' ? 'com o time' : 'sem dono');
+  // UM selo por linha: o mais importante para quem vai atender. [classe do chip, texto, explicação]
+  function selo(c) {
+    if (silenciada(c)) return ['dim', '📵 silenciada', 'Silenciada: cliente Nio com suporte ou reclamação. A Mari não responde e a conversa não volta para a Live. Para desfazer: abrir a ficha › Reativar.'];
+    if (c.cliente_esperando && !c.encerrada && c.esperando_min != null) {
+      return furos.has(c.id) ? ['bad', `esperando há ${durTxt(c.esperando_min)} · fora da Live`, 'Cliente esperando e fora da Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.']
+        : ['bad', `esperando há ${durTxt(c.esperando_min)}`, 'O cliente escreveu por último e ainda não teve resposta.'];
+    }
+    if (c.funil_alerta) return ['warn', ({ resolvida_fora_niogen: 'resolvida fora do NIOGEN', mensagem_fora_niogen: 'respondida pelo Chatwoot', atribuida_fora_niogen: 'atribuída pelo Chatwoot', adiada_fora_niogen: 'adiada pelo Chatwoot' })[c.funil_alerta] || 'mexida fora do NIOGEN', NG.FUNIL_ALERTA[c.funil_alerta] || ''];
+    if (c.funil_destino === 'instalada') return ['ok', 'instalada', 'Internet instalada.'];
+    if (saiu(c)) return ['dim', `saída · ${fnome.destino[c.funil_destino] || c.funil_destino}`, c.funil_detalhe || 'O lead saiu do funil.'];
+    if (c.encerrada) return ['dim', 'encerrada', 'Conversa encerrada.'];
+    const jm = janelaMin(c);
+    if (jm != null && jm > 0 && jm <= 240) return ['warn', `janela fecha em ${durTxt(jm)}`, 'Janela de 24 h do WhatsApp: depois dela, só template aprovado.'];
+    const et = fnome.etapa[c.funil_etapa] || NOME_ET[c.etapa] || 'em atendimento';
+    if (jm != null && jm <= 0) return ['dim', `${et} · janela fechada`, 'Janela de 24 h fechada: só template aprovado.'];
+    return ['dim', et, 'Etapa mais alta alcançada.'];
+  }
 
   async function carregar() {
-    const { data, error } = await NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
+    // 22/11 (regra 19): as três leituras saem juntas; a lista aparece assim que a v_conversas chega, e os selos que dependem
+    // das outras duas (nome da etapa, "fora da Live") entram quando elas chegarem.
+    const pc = NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
+    NG.funilNomes().then((fn) => { fnome = fn; if (lista.length) render(); }, () => {});
+    NG.furosJornada().then((fu) => { furos = fu.ids || new Set(); if (lista.length) render(); }, () => {});
+    const { data, error } = await pc;
     if (error) { itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
     lista = (data || []).map((c) => ({ ...c, nome: NG.nomeLegivel(c.nome, c.telefone) }));   // 16/11: nome legível (conversa 119)
-    const [fu, fn] = await Promise.all([NG.furosJornada(), NG.funilNomes()]);
-    furos = fu.ids || new Set();
-    fnome = fn;
     render();
+    if (atual && !movel()) sobre();
+    if (window.NGcvTempo == null) window.NGcvTempo = Math.round(performance.now() - T0);   // regra 19: lista na tela desde o início do script
   }
 
   function render() {
-    const q = document.getElementById('busca').value.trim().toLowerCase();
+    const q = buscaEl.value.trim().toLowerCase();
     const qd = NG.soDigitos(q);
     const casa = (c) => !q || [c.nome, c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) || (qd.length >= 3 && NG.soDigitos(c.telefone).includes(qd));
-    const doFunil = (c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && (!fEtapa || (c.funil_etapa || 'nova') === fEtapa) && doDono(c);
     const porBusca = lista.filter(casa);
-    const base = porBusca.filter(doFunil);
-    // contagem de cada opção com o outro filtro aplicado (o número diz o que você vai ver)
-    const opc = (sel, tipo, atual, outro) => {
-      const campo = tipo === 'destino' ? 'funil_destino' : 'funil_etapa';
-      const pad = tipo === 'destino' ? 'em_andamento' : 'nova';
-      const universo = porBusca.filter(outro);
-      const n = (k) => universo.filter((c) => (c[campo] || pad) === k).length;
-      sel.innerHTML = `<option value="">${tipo === 'destino' ? 'Destino: todos' : 'Etapa: todas'} (${universo.length})</option>`
-        + Object.entries(fnome[tipo] || {}).map(([k, nome]) => `<option value="${esc(k)}"${atual === k ? ' selected' : ''}>${esc(nome)} (${n(k)})</option>`).join('');
-      sel.classList.toggle('on', !!atual);
+    const base = porBusca.filter((c) => passa(c));
+    // Opções do painel: o número diz quantas conversas você vai ver (com os outros filtros aplicados).
+    const opcoes = (k, todos, pares, pad) => {
+      const uni = porBusca.filter((c) => passa(c, k));
+      const sel = document.getElementById(`f-${k}`);
+      if (document.activeElement === sel) return;
+      sel.innerHTML = `<option value="">${esc(todos)} (${uni.length})</option>` + pares.map(([v, nome]) => `<option value="${esc(v)}"${f[k] === v ? ' selected' : ''}>${esc(nome)} (${uni.filter((c) => TESTE[k](c, v)).length})</option>`).join('');
     };
-    opc(document.getElementById('f-destino'), 'destino', fDestino, (c) => (!fEtapa || (c.funil_etapa || 'nova') === fEtapa) && doDono(c));
-    opc(document.getElementById('f-etapa'), 'etapa', fEtapa, (c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && doDono(c));
-    const uDono = porBusca.filter((c) => (!fDestino || (c.funil_destino || 'em_andamento') === fDestino) && (!fEtapa || (c.funil_etapa || 'nova') === fEtapa));
-    const selDono = document.getElementById('f-dono');
-    selDono.innerHTML = [['', `Atendimento: todos (${uDono.length})`], ['mari', `Mari (${uDono.filter((c) => ladoDono(c) === 'mari').length})`], ['time', `Time backoffice (${uDono.filter((c) => ladoDono(c) === 'time').length})`]]
-      .map(([v, t]) => `<option value="${v}"${fDono === v ? ' selected' : ''}>${esc(t)}</option>`).join('');
-    selDono.classList.toggle('on', !!fDono);
-    // 12/11: com busca, acha a conversa em qualquer filtro (encerrada ou silenciada inclusive).
-    const fn = q ? () => true : (FILTROS.find((f) => f[0] === filtro) || FILTROS[2])[2];
-    const silenciada = (c) => (c.etiquetas || []).includes('suporte-nio');
-    document.getElementById('filtros').innerHTML = FILTROS.map(([id, nome, f]) => {
-      const n = base.filter(f).length;
-      return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${filtro === id}" class="${filtro === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
+    opcoes('dono', 'Todos', Object.entries(DONO));
+    opcoes('sit', 'Qualquer uma', Object.entries(SIT));
+    opcoes('etapa', 'Todas', Object.entries(fnome.etapa || {}));
+    opcoes('destino', 'Todos', Object.entries(fnome.destino || {}));
+    // Etiquetas dos filtros aplicados
+    const ativos = Object.keys(TESTE).filter((k) => f[k]);
+    const etqs = document.getElementById('etqs');
+    etqs.hidden = !ativos.length && !q;
+    etqs.innerHTML = ativos.map((k) => `<span class="cv-etq">${esc(rotFiltro(k))}<button type="button" data-tira="${k}" aria-label="Tirar o filtro ${esc(rotFiltro(k))}">×</button></span>`).join('')
+      + (q ? `<span class="cv-etq">Busca: ${esc(buscaEl.value.trim())}<button type="button" data-tira="busca" aria-label="Limpar a busca">×</button></span>` : '')
+      + (ativos.length || q ? '<button type="button" class="cv-limpar" id="limpar">Limpar tudo</button>' : '');
+    btFiltros.classList.toggle('tem', ativos.length > 0);
+    btFiltros.textContent = ativos.length ? `Filtros · ${ativos.length}` : 'Filtros';
+    // 12/11: com busca, acha a conversa em qualquer aba (encerrada ou silenciada inclusive).
+    const naAba = q ? () => true : (ABAS.find((a) => a[0] === aba) || ABAS[2])[2];
+    document.getElementById('filtros').innerHTML = ABAS.map(([id, nome, fn, ajuda]) => {
+      const n = base.filter(fn).length;
+      return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${aba === id}" title="${esc(ajuda)}" class="${aba === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
     }).join('');
-    const l = base.filter(fn).sort((a, b) => (filtro === 'esperando' ? (b.esperando_min || 0) - (a.esperando_min || 0) : new Date(b.ultima_em) - new Date(a.ultima_em)));
-    if (movel()) {
-      // 18/11 (Ricardo: "as mensagens mais recentes não estão subindo para o topo"): o celular segue a mesma ordem do
-      // computador e do WhatsApp — última mensagem no topo. A urgência fica nos selos (🔥 esperando, ⏱ janela) e na aba Esperando.
-      itensEl.innerHTML = l.length ? l.map(itemMovel).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
-      return;
-    }
-    itensEl.innerHTML = l.length ? l.map((c) => `<button type="button" class="cv-item${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
-        <span class="cv-l1"><i class="mv-dot" style="--c:${COR[c.etapa] || '#6E747C'}" title="${esc(NOME_ET[c.etapa] || '')}"></i><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
-        <span class="cv-l2">${esc(previa(c))}</span>
-        <span class="cv-l3">${c.dono_tipo === 'mari' ? `${ICO_ROBO}Mari` : c.dono_tipo ? `${ICO_PESSOA}${esc(NG.ehMeu(c.dono_nome) ? 'você' : c.dono_nome)}` : 'sem dono'}
-          ${c.cidade ? `<span>· ${esc(c.cidade)}</span>` : ''}${silenciada(c) ? '<span class="cv-sil" title="Silenciada: cliente Nio com suporte/reclamação. A Mari não responde e a conversa não volta para o Live. Para desfazer: Abrir a ficha › 🔔 Reativar.">· 📵 silenciada</span>' : c.encerrada ? '<span>· encerrada</span>' : c.chatwoot_status === 'resolved' ? '<span>· resolvida</span>' : ''}
-          ${c.cliente_esperando && !c.encerrada && c.esperando_min != null ? `<span class="cv-esp">esperando ${c.esperando_min < 60 ? `${c.esperando_min} min` : `${Math.floor(c.esperando_min / 60)} h`}</span>` : ''}
-          ${c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino) ? `<span class="cv-dest" title="Destino da conversa${c.funil_detalhe ? ': ' + esc(c.funil_detalhe) : ''}">· ${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>` : c.funil_etapa ? `<span class="cv-etp" title="Etapa mais alta alcançada">· ${esc(fnome.etapa[c.funil_etapa] || c.funil_etapa)}</span>` : ''}
-          ${c.funil_alerta ? `<span class="cv-furo" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">${({ resolvida_fora_niogen: 'resolvida fora do NIOGEN', mensagem_fora_niogen: 'respondida pelo Chatwoot', atribuida_fora_niogen: 'atribuída pelo Chatwoot', adiada_fora_niogen: 'adiada pelo Chatwoot' })[c.funil_alerta] || 'fora do NIOGEN'}</span>` : ''}
-          ${furos.has(c.id) ? '<span class="cv-furo" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>' : ''}</span>
-      </button>`).join('') : '<div class="vazio">Nenhuma conversa neste filtro.</div>';
+    // 22/11 (Ricardo: "ordem como no WhatsApp"): a mensagem mais recente em cima, em todas as abas.
+    const l = base.filter(naAba).sort((a, b) => new Date(b.ultima_em) - new Date(a.ultima_em));
+    const vazio = `<div class="vazio">${q ? 'Nenhuma conversa com essa busca.' : ativos.length ? 'Nenhuma conversa com esses filtros.' : aba === 'esperando' ? 'Ninguém esperando resposta agora.' : 'Nenhuma conversa nesta aba.'}</div>`;
+    itensEl.innerHTML = l.length ? l.map(movel() ? itemMovel : item).join('') : vazio;
+  }
+
+  // 22/11: linha do computador — iniciais · nome e hora · prévia · não lidas · um selo · com quem está
+  function item(c) {
+    const nl = c.nao_lidas || 0;
+    const [cls, txt, tit] = selo(c);
+    const quem = quemFalou(c);
+    return `<button type="button" class="cv-item cv-n${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada ? ' enc' : ''}" data-id="${esc(c.id)}">
+      <span class="cv-n-av ${ladoDono(c) === 'time' ? 'time' : 'mari'}" aria-hidden="true">${esc(iniciais(c.nome))}</span>
+      <span class="cv-n-meio">
+        <span class="cv-l1"><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
+        <span class="cv-n-l2"><span class="cv-n-prev">${esc(quem + (NGConversa.textoTurno(c.ultima_txt) || '—'))}</span>${nl ? `<span class="cv-n-nl" aria-label="${nl} ${nl === 1 ? 'mensagem não lida' : 'mensagens não lidas'}">${nl > 99 ? '99+' : nl}</span>` : ''}</span>
+        <span class="cv-n-l3"><span class="chip ${cls}" title="${esc(tit)}">${esc(txt)}</span><span class="cv-n-dono">· ${esc(comQuem(c))}</span></span>
+      </span>
+    </button>`;
   }
 
   // 15/11: linha do celular (padrão WhatsApp)
   function itemMovel(c) {
-    const quem = c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : '';
+    const quem = quemFalou(c);
     const txt = NGConversa.textoTurno(c.ultima_txt) || '—';
     const nl = c.nao_lidas || 0;
     const jm = janelaMin(c);
@@ -196,7 +313,7 @@
     const vale = valeTxt(c);
     if (vale) selos.push(`<span class="cv-tag dinheiro" title="${c.comissao != null ? 'Comissão prevista da venda' : 'Plano escolhido, por mês'}">${esc(vale)}</span>`);
     selos.push(`<span class="cv-tag dono">${c.dono_tipo === 'mari' ? 'Mari' : c.dono_tipo ? esc(NG.ehMeu(c.dono_nome) ? 'você' : 'humano') : 'sem dono'}</span>`);
-    if ((c.etiquetas || []).includes('suporte-nio')) selos.push('<span class="cv-tag apagada">📵 silenciada</span>');
+    if (silenciada(c)) selos.push('<span class="cv-tag apagada">📵 silenciada</span>');
     else if (c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino)) selos.push(`<span class="cv-tag apagada">${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>`);
     if (c.funil_alerta) selos.push(`<span class="cv-tag ruim" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">mexida no Chatwoot</span>`);
     if (furos.has(c.id)) selos.push('<span class="cv-tag ruim" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>');
@@ -210,21 +327,99 @@
     </button>`;
   }
 
+  // ---------- coluna "Sobre o lead" (22/11): só leitura — v_leads da conversa aberta + o que a lista já trouxe ----------
+  const VEZ = { time: 'é a nossa vez', cliente: 'a vez é do cliente', mari: 'a Mari está cuidando', nio: 'a vez é da Nio' };
+  const fichaHref = (c, id) => (c && c.venda_id ? `#venda=${esc(c.venda_id)}` : `#conversa=${esc(id)}`);
+  const kv = (pares) => pares.filter((p) => p[1] != null && p[1] !== '').map(([k, v]) => `<div class="cv-s-kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
+  function sobre() {
+    if (!atual) { sobreEl.innerHTML = ''; return; }
+    const c = lista.find((x) => x.id === atual) || {};
+    const l = lead && lead.conversa_id === atual ? lead : null;
+    let passo;
+    if (!l) passo = '<div class="cv-s-passo"><span class="cv-s-rot">Próximo passo</span><small>Carregando…</small></div>';
+    else if (l.vazio) passo = `<div class="cv-s-passo"><span class="cv-s-rot">Próximo passo</span><small>${l.falhou ? 'Não deu para ler agora. Abra a ficha para ver o próximo passo.' : 'Esta conversa ainda não virou lead.'}</small></div>`;
+    else if (l.destino && !['em_andamento', 'instalada'].includes(l.destino)) {
+      passo = `<div class="cv-s-passo"><span class="cv-s-rot">Saiu do funil</span><b>${esc(l.saida_nome || fnome.destino[l.destino] || l.destino)}</b>${l.saida_sub ? `<small>${esc(l.saida_sub)}</small>` : ''}${l.volta_em ? `<small>Volta a falar em ${esc(NG.fmtData(l.volta_em))}</small>` : ''}</div>`;
+    } else if (l.em_espera) {
+      passo = `<div class="cv-s-passo info"><span class="cv-s-rot">Em espera</span><b>${esc(l.espera_motivo || 'Em espera')}</b><small>${l.espera_quem ? `Quem destrava: ${esc(l.espera_quem)}` : ''}${l.espera_revisar_em ? `${l.espera_quem ? ' · ' : ''}revisar em ${esc(NG.fmtData(l.espera_revisar_em))}` : ''}</small></div>`;
+    } else {
+      const cls = l.atrasado ? 'bad' : l.vez === 'time' ? 'warn' : '';
+      passo = `<div class="cv-s-passo ${cls}"><span class="cv-s-rot">Próximo passo${VEZ[l.vez] ? ` · ${VEZ[l.vez]}` : ''}</span><b>${esc(l.status_nome || l.etapa_nome || '—')}</b>
+        ${l.status_ajuda ? `<small>${esc(l.status_ajuda)}</small>` : ''}${l.prazo_em ? `<small>Prazo: ${l.atrasado ? 'estourou · ' : ''}${esc(NG.fmtDataHora(l.prazo_em))}</small>` : ''}</div>`;
+    }
+    const ll = l && !l.vazio ? l : {};
+    const origem = ll.origem || c.origem;
+    const onde = kv([
+      ['Etapa', ll.etapa_nome || fnome.etapa[c.funil_etapa] || NOME_ET[c.etapa]],
+      ['Status', ll.status_nome],
+      ['Entrou em', ll.criado_em || c.created_at ? NG.fmtDataHora(ll.criado_em || c.created_at) : ''],
+      ['Origem', origem ? ((canais || {})[origem] || origem) : ''],
+      ['Atende', comQuem(c).replace(/^com /, '')],
+    ]);
+    const valor = ll.valor_mensal != null ? ll.valor_mensal : c.valor_mes;
+    const comis = ll.comissao_prevista != null ? ll.comissao_prevista : c.comissao;
+    const venda = kv([
+      ['Plano', ll.plano || c.plano],
+      ['Mensalidade', valor != null ? dinheiro(valor) : ''],
+      ['Comissão prevista', comis != null ? dinheiro(comis) : ''],
+    ]);
+    const etq = (c.etiquetas || []).filter(Boolean);
+    sobreEl.innerHTML = `${passo}
+      <div class="cv-s-grupo"><span class="cv-s-rot">Onde está</span>${onde}</div>
+      <div class="cv-s-grupo"><span class="cv-s-rot">A venda</span>${venda || '<span class="cv-s-nada">Ainda sem plano escolhido.</span>'}</div>
+      <div class="cv-s-grupo"><span class="cv-s-rot">Contato</span>${kv([['Telefone', fone(c.telefone)], ['Cidade', ll.cidade || c.cidade]])}</div>
+      <div class="cv-s-grupo"><span class="cv-s-rot">Etiquetas</span>${etq.length ? `<div class="cv-s-tags">${etq.map((x) => `<span class="chip dim" title="Só leitura: a etiqueta vem da situação do cliente">${esc(x)}</span>`).join('')}</div>` : '<span class="cv-s-nada">Nenhuma.</span>'}</div>
+      <a class="btn btn-sm" href="${fichaHref(c, atual)}">Abrir a ficha em tela cheia</a>
+      ${NG.linkChatwoot(c.chatwoot_conversation_id) ? `<a class="cv-s-cw" href="${esc(NG.linkChatwoot(c.chatwoot_conversation_id))}" target="_blank" rel="noopener" title="Áudio e foto aparecem aqui na conversa. O Chatwoot fica para vídeo e documento — responda por aqui">Chatwoot ↗</a>` : ''}`;
+  }
+  const COLS_LEAD = 'conversa_id, venda_id, cidade, origem, plano, valor_mensal, comissao_prevista, etapa_nome, status_nome, status_ajuda, destino, vez, prazo_em, atrasado, em_espera, espera_motivo, espera_quem, espera_revisar_em, saida_nome, saida_sub, volta_em, criado_em';
+  async function carregarLead() {
+    const id = atual;
+    if (!id || movel()) return;
+    const [rl, rk] = await Promise.all([
+      NG.sb.from('v_leads').select(COLS_LEAD).eq('conversa_id', id).limit(1),
+      canais ? Promise.resolve(null) : NG.sb.from('config_canais').select('canal, nome'),   // 0302: os nomes dos canais vêm do banco
+    ]);
+    if (rk && !rk.error) canais = Object.fromEntries((rk.data || []).map((k) => [k.canal, k.nome]));
+    if (atual !== id) return;
+    // sem linha na v_leads (ou leitura que falhou): a coluna fica com o que a lista já sabe
+    lead = !rl.error && (rl.data || [])[0] ? { ...rl.data[0] } : { conversa_id: id, vazio: true, falhou: !!rl.error };
+    sobre();
+  }
+
   function abrir(id) {
     if (!id) return;
     if (movel()) { abrirMovel(id); return; }
     atual = id;
-    const c = lista.find((x) => x.id === id);
+    lead = null;
     if (location.hash !== `#c=${id}`) history.replaceState(null, '', `${location.pathname}${location.search}#c=${id}`);
     trab.classList.add('com-conversa');
-    direita.innerHTML = `<div class="cv-topo"><button type="button" class="btn btn-sm cv-voltar" id="voltar">← Conversas</button>
-      ${c && c.venda_id ? `<a class="btn btn-sm" href="#venda=${esc(c.venda_id)}">Abrir a ficha da venda</a>` : `<a class="btn btn-sm" href="#conversa=${esc(id)}">Abrir a ficha</a>`}
-      ${c && (c.funil_destino || 'em_andamento') === 'em_andamento' && !c.encerrada && !['agendada', 'instalada'].includes(c.funil_etapa) ? NG.botaoOperador({ vendaId: c.venda_id, conversaId: c.venda_id ? null : id }) : ''}
-      ${c ? `<span class="apagado">${esc(NOME_ET[c.etapa] || '')}${c.telefone ? ` · ${esc(c.telefone)}` : ''}</span>` : ''}</div><div class="cv-host"></div>`;   // 13/11: ⌖ Consultar (viabilidade e crédito pelo operador), só admin/backoffice e lead em andamento antes da Instalação
-    document.getElementById('voltar').onclick = fechar;
+    direita.innerHTML = '<div class="cv-host"></div>';
     if (comp) comp.destruir();
-    comp = NGConversa.montar(direita.querySelector('.cv-host'), { conversaId: id, nome: c ? c.nome : null, aoMudar: () => carregar() });
+    const linha = () => lista.find((x) => x.id === id);
+    comp = NGConversa.montar(direita.querySelector('.cv-host'), {
+      conversaId: id, nome: linha() ? linha().nome : null, aoFechar: fechar, rotuloFechar: '← Conversas',
+      aoMudar: () => { carregar(); carregarLead(); },
+      // 22/11 (Ricardo: "Pode, só isso"): um cabeçalho só. A linha de apoio e os botões são desta tela.
+      cabUnico: {
+        sub: (cv) => {
+          const c = linha() || {};
+          const l = lead && lead.conversa_id === id && !lead.vazio ? lead : null;
+          const tel = NG.soDigitos((cv && cv.telefone) || c.telefone || '');
+          return [tel ? `final ${tel.slice(-4)}` : '', (l && l.etapa_nome) || fnome.etapa[c.funil_etapa] || NOME_ET[c.etapa] || '', (l && l.status_nome) || ''].filter(Boolean).map(esc).join(' · ');
+        },
+        acoes: () => {
+          const c = linha();
+          // 13/11: ⌖ Consultar (viabilidade e crédito pelo operador), só lead em andamento antes da Instalação
+          const consulta = c && (c.funil_destino || 'em_andamento') === 'em_andamento' && !c.encerrada && !['agendada', 'instalada'].includes(c.funil_etapa)
+            ? NG.botaoOperador({ vendaId: c.venda_id, conversaId: c.venda_id ? null : id }) : '';
+          return `${consulta}<a class="btn btn-sm cv-so-estreita" href="${fichaHref(c, id)}">Abrir a ficha</a>`;
+        },
+      },
+    });
     render();
+    sobre();
+    carregarLead();
   }
   // 15/11: celular — a conversa em tela cheia; o voltar do Android (history) fecha.
   function abrirMovel(id) {
@@ -248,9 +443,11 @@
   function fechar() {
     document.body.classList.remove('mv-thread');
     atual = null;
+    lead = null;
     if (comp) { comp.destruir(); comp = null; }
     trab.classList.remove('com-conversa');
     direita.innerHTML = '<div class="cv-vazia">Escolha uma conversa à esquerda.</div>';
+    sobreEl.innerHTML = '';
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     render();
   }
@@ -259,20 +456,30 @@
   document.getElementById('filtros').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-filtro]');
     if (!b) return;
-    filtro = b.dataset.filtro; ls.gravar('niogen.conversas.filtro', filtro); render();
+    aba = b.dataset.filtro; render();
   });
-  document.getElementById('busca').addEventListener('input', render);
+  buscaEl.addEventListener('input', render);
   // 0296: "L-142" + Enter abre a ficha do lead
-  document.getElementById('busca').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
-  // Destino ou etapa escolhido: a aba vai para Todas (senão "Abertas" esconderia as saídas).
-  document.getElementById('f-dono').addEventListener('change', (ev) => { fDono = ev.target.value; ls.gravar('niogen.conversas.dono', fDono); render(); });
-  ['f-destino', 'f-etapa'].forEach((idSel) => document.getElementById(idSel).addEventListener('change', (ev) => {
-    if (idSel === 'f-destino') { fDestino = ev.target.value; ls.gravar('niogen.conversas.destino', fDestino); }
-    else { fEtapa = ev.target.value; ls.gravar('niogen.conversas.etapa', fEtapa); }
-    if (ev.target.value && filtro !== 'todas') { filtro = 'todas'; ls.gravar('niogen.conversas.filtro', filtro); }
+  buscaEl.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
+  btFiltros.addEventListener('click', () => { painel.hidden = !painel.hidden; btFiltros.setAttribute('aria-expanded', String(!painel.hidden)); });
+  // Situação, etapa ou destino escolhido: a aba vai para Todas (senão "Abertas" esconderia as encerradas e as saídas).
+  Object.keys(TESTE).forEach((k) => document.getElementById(`f-${k}`).addEventListener('change', (ev) => {
+    f[k] = ev.target.value;
+    if (f[k] && k !== 'dono') aba = 'todas';
+    ev.target.blur();
     render();
   }));
-  NGFicha.aoMudar(() => { carregar(); if (comp) comp.recarregar(); });
+  document.getElementById('etqs').addEventListener('click', (ev) => {
+    const t = ev.target.closest('[data-tira]');
+    if (t) { if (t.dataset.tira === 'busca') buscaEl.value = ''; else f[t.dataset.tira] = ''; render(); return; }
+    if (ev.target.closest('#limpar')) {
+      Object.keys(TESTE).forEach((k) => { f[k] = ''; });
+      buscaEl.value = ''; aba = 'abertas';
+      painel.hidden = true; btFiltros.setAttribute('aria-expanded', 'false');
+      render();
+    }
+  });
+  NGFicha.aoMudar(() => { carregar(); carregarLead(); if (comp) comp.recarregar(); });
   NG.botaoAtualizar(() => carregar());
 
   await carregar();
