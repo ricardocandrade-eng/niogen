@@ -108,7 +108,7 @@
         ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
       <div class="nav-foot">
-        ${pagina === 'minhavez' ? '' : `<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button><a href="guia.html#consulta-central" title="Como usar a Consulta central (Guia do Backoffice)">Guia</a></div>`}
+        ${`<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button><a href="guia.html#consulta-central" title="Como usar a Consulta central (Guia do Backoffice)">Guia</a></div>`}
         <div class="nav-status" data-status aria-live="polite"></div>
         <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
       </div>`;
@@ -475,14 +475,14 @@
   // ---------- Consulta central (21/11/2026, Ricardo): viabilidade · crédito · OS · GED360 num painel sobre qualquer tela ----------
   // Botão "Consulta | Guia" no pé do menu e ⌕ na barra do celular. assets/consulta.js só é baixado no 1º clique (regra 19) —
   // ou na abertura da tela se esta aba já tinha a consulta aberta/minimizada (sessionStorage niogen.consulta: volta como estava).
-  // Na Live (fila.html) não aparece até o Ricardo decidir (regra 20: Live só depois de debater).
+  // 22/11 (Ricardo: "Pôr na Live"): aparece também na Live (fila.html).
   let consultaP = null;
   function consultaCarregar() {
     if (window.NGConsulta) return Promise.resolve(window.NGConsulta);
     if (!consultaP) {
       consultaP = new Promise((ok, falhou) => {
         const s = document.createElement('script');
-        s.src = 'assets/consulta.js?v=211126-cc1';
+        s.src = 'assets/consulta.js?v=221126-cc2';
         s.onload = () => ok(window.NGConsulta);
         s.onerror = () => { consultaP = null; falhou(new Error('não carregou')); };
         document.head.appendChild(s);
@@ -491,7 +491,6 @@
     return consultaP;
   }
   function consultaBotao(nav, pagina) {
-    if (pagina === 'minhavez') return;
     try {
       if (!document.getElementById('nav-consulta-estilo')) {
         const st = document.createElement('style');
