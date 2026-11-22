@@ -479,7 +479,7 @@
     if (!consultaP) {
       consultaP = new Promise((ok, falhou) => {
         const s = document.createElement('script');
-        s.src = 'assets/consulta.js?v=221126-cc4';
+        s.src = 'assets/consulta.js?v=221126-cc5';
         s.onload = () => ok(window.NGConsulta);
         s.onerror = () => { consultaP = null; falhou(new Error('não carregou')); };
         document.head.appendChild(s);
@@ -487,6 +487,9 @@
     }
     return consultaP;
   }
+  // 22/11: a lupa da ficha (assets/ficha.js) abre a Consulta central já no cliente da ficha — mesmo carregamento sob demanda.
+  window.NGConsultaAbrir = (cli) => consultaCarregar().then((c) => c && (c.abrirCliente ? c.abrirCliente(cli) : c.abrir()))
+    .catch(() => NG.toast('A Consulta central não carregou — confira a internet e tente de novo.', 'bad'));
   function consultaBotao(nav, pagina) {
     try {
       if (!document.getElementById('nav-consulta-estilo')) {

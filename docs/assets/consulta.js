@@ -805,6 +805,15 @@
     retomarJobs();
   }
 
-  window.NGConsulta = { abrir, minimizar, fechar, alternar, iniciar, estado: () => est.modo };
+  // 22/11 (Ricardo: "acrescenta o botão Consulta na Ficha do cliente"): a lupa da ficha abre a Consulta já neste cliente
+  // (mesmo cliente já aberto: só mostra o painel, sem perder as consultas feitas agora).
+  function abrirCliente(x) {
+    const c = est.cli;
+    const mesmo = c && !c.avulso && x && ((x.venda_id && c.venda_id === x.venda_id) || (x.conversa_id && c.conversa_id === x.conversa_id));
+    if (mesmo || !x || !(x.venda_id || x.conversa_id)) { abrir(); return; }
+    est.modo = 'aberto'; pintarModo(); escolher(x);
+  }
+
+  window.NGConsulta = { abrir, abrirCliente, minimizar, fechar, alternar, iniciar, estado: () => est.modo };
   iniciar();
 })();

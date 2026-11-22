@@ -4959,6 +4959,7 @@
           ${jor ? jor.html : ''}${jor && !jor.aberta ? coleta : ''}
         </section>
         <section class="fc2-col fc2-dados${dadosOn ? ' on' : ''}" aria-label="Dados do cliente">
+          ${window.NGConsultaAbrir ? `<button type="button" class="fc2-lupa" data-f="fc2-consulta" title="Consulta central deste cliente: viabilidade, crédito, OS e GED360 (só leitura)" aria-label="Abrir a Consulta central deste cliente">⌕</button>` : ''}
           <button type="button" class="fc2-rail" data-f="fc2-dados" aria-expanded="${dadosOn}" title="${dadosOn ? 'Recolher os dados do cliente' : 'Abrir os dados do cliente'}"><span class="fc2-rail-sx">${dadosOn ? '›' : '‹'}</span><span class="fc2-rail-t">Dados do cliente</span>${dad && dad.faltam ? `<span class="fc2-rail-n" title="faltam ${dad.faltam}">${dad.faltam}</span>` : '<span class="fc2-rail-ok">✓</span>'}</button>
           <div class="fc2-pan">
           <div class="fc2-colh"><h2>Dados do cliente</h2><span class="fc-sp"></span>${faltaPill}<button type="button" class="fc-x fc2-pan-x" data-f="fc2-dados" aria-label="Recolher os dados">${IC.x}</button></div>
@@ -5073,6 +5074,10 @@
       fc.passo = false; fc.ver = null; fc.conf = false; fc.pend = false; fc.dados = false; fc.rolarEt = true;
       if (fc.aba !== 'jor' && window.matchMedia('(max-width: 900px)').matches) fc.aba = 'jor';
       render(); return;
+    }
+    if (a === 'fc2-consulta') {   // 22/11 (Ricardo): lupa acima do "Dados do cliente" — a Consulta central já neste cliente
+      if (window.NGConsultaAbrir) window.NGConsultaAbrir({ conversa_id: d.conversaId || null, venda_id: d.soConversa ? null : ((d.v || {}).id || null), nome: d.soConversa ? ((d.conv || {}).nome || 'Cliente') : ((d.v || {}).cliente_nome || 'Cliente') });
+      return;
     }
     if (a === 'fc2-dados') {   // 15/11 noite: faixa recolhida dos Dados do cliente — abre para a esquerda / recolhe
       const aberto = b.getAttribute('aria-expanded') === 'true';
