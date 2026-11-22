@@ -4753,9 +4753,13 @@
     let n = 0;
     const conta = (v) => { if (!v) n += 1; return v; };
     const g = (id, tit, linhas, form) => `${grupoH(id, tit, pode && fc.edG !== id)}${fc.edG === id ? form : linhas}`;
-    const contato = g('contato', 'Contato', dl('Nome', x.nome || c.nome_contato) + dl('CPF', conta(x.cpf ? fmtDoc(x.cpf) : null), { mono: true, falta: 'falta — a Mari ainda não pediu', cpv: x.cpf })
+    // 22/11 (caso L-219, Ricardo: "Corrige o nome do WhatsApp na ficha do lead"): o nome do perfil do WhatsApp aparecia como se
+    // fosse o nome do titular já gravado ("nome salvo" na tela, vazio no banco). Agora: sem nome gravado = "falta", com o do
+    // WhatsApp ao lado só como pista; o campo do formulário nasce vazio (a pista vai no placeholder).
+    const nomeFalta = c.nome_contato ? `falta — no WhatsApp: ${c.nome_contato}` : 'falta — nome completo do titular';
+    const contato = g('contato', 'Contato', dl('Nome do titular', conta(x.nome), { falta: nomeFalta }) + dl('CPF', conta(x.cpf ? fmtDoc(x.cpf) : null), { mono: true, falta: 'falta — a Mari ainda não pediu', cpv: x.cpf })
       + dl('WhatsApp', c.telefone ? fmtTel(c.telefone) : null, { mono: true }) + dl('E-mail', conta(x.email)),
-      `<form class="fc2-form" data-form="lead_corr" data-g="contato" novalidate>${inp('Nome', 'nome', x.nome || c.nome_contato, { full: true, auto: true })}${inp('CPF ou CNPJ', 'cpf', x.cpf ? fmtDoc(x.cpf) : '', { mode: 'numeric' })}${inp('E-mail', 'email', x.email, { tipo: 'email' })}
+      `<form class="fc2-form" data-form="lead_corr" data-g="contato" novalidate>${inp('Nome completo do titular (como na Receita)', 'nome', x.nome, { full: true, auto: true, ph: c.nome_contato ? `no WhatsApp: ${c.nome_contato}` : '' })}${inp('CPF ou CNPJ', 'cpf', x.cpf ? fmtDoc(x.cpf) : '', { mode: 'numeric' })}${inp('E-mail', 'email', x.email, { tipo: 'email' })}
         <span class="fc2-nota">O WhatsApp é a própria conversa: não se troca aqui.</span>${formBts('Salvar')}</form>`);
     const ruas = [...new Set([convLogr(c), vc.logradouro].filter(Boolean))];
     const endereco = g('endereco', 'Endereço de instalação', dl('CEP', convCep(c) ? `${convCep(c)}${c.cidade ? ` · ${c.cidade}${c.uf ? `/${c.uf}` : ''}` : ''}` : conta(null), { mono: true, cpv: c.cep })
