@@ -20,31 +20,24 @@
 
   const VERSAO = 'v1.3 · 06/11';
 
+  // 22/11 (Ricardo: "organiza os itens do menu" → "Pela rotina"): seções pelo uso do dia — atender, vender, acompanhar,
+  // financeiro e cadastros. Saíram os itens "em breve" (Placar e Alterar senha; embreve.html segue existindo).
   const MENU = [
-    ['Backoffice', [
-      // 10/11 (Ricardo, 14h14): "Minha vez" passou a se chamar Live (arquivo e rota iguais). Bolinha vermelha discreta à
-      // esquerda do nome; número verde = só obrigação (v_jornada) · selo laranja 🔥 N = oportunidades (0107), nunca somados.
-      // 10/11 17h30 (Ricardo): sem o ☰ — a bolinha vermelha ocupa o lugar do ícone, alinhada com os demais.
+    ['Atendimento', [
       { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
-      { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
-      // 12/11 (Ricardo): Consulta de cobertura veio de Vendas para cá, com nome curto (cabe numa linha). Todos os perfis veem.
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
-    ]],
-    ['Gestão', [
-      { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
-      { id: 'placar', ico: '▤', nome: 'Placar', breve: true },
     ]],
     ['Vendas', [
       { id: 'leads', ico: '☰', nome: 'Leads', href: 'leads.html' },   // 0156: todos os leads, com ou sem venda (escada única)
-      { id: 'funil', ico: '▽', nome: 'Funil de vendas', href: 'funil.html' },   // 13/11 (4b): relatório inteiro na tela (escada única)
       { id: 'vendas', ico: '≡', nome: 'Quadro de vendas', href: 'vendas.html', badge: 'vendas' },   // a lista e o quadro das vendas (Nova venda)
       { id: 'operacoes', ico: '⊞', nome: 'Operações', href: 'operacoes.html', badge: 'agendar' },   // 13/11 (4c): no lugar de Instalações
-      { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
-      { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'filavero', ico: '☷', nome: 'Fila Vero', href: 'filavero.html', perfis: ['admin', 'backoffice'], esconder: true },   // 16/11 (0242): tela da Fila Vero
     ]],
-    ['Mari', [
+    ['Acompanhamento', [
+      { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
+      { id: 'funil', ico: '▽', nome: 'Funil de vendas', href: 'funil.html' },   // 13/11 (4b): relatório inteiro na tela (escada única)
+      { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
     ]],
@@ -53,9 +46,10 @@
       { id: 'conciliacao', ico: '◆', nome: 'Conciliação', href: 'conciliacao.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'pagamentos', ico: '◈', nome: 'Pagamentos a parceiros', href: 'pagamentos.html', perfis: ['admin', 'backoffice'], esconder: true },
     ]],
-    ['Sistema', [
+    ['Cadastros', [
+      { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
       { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },
-      { id: 'senha', ico: '◌', nome: 'Alterar senha', breve: true },
     ]],
   ];
 
@@ -108,7 +102,7 @@
         ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
       <div class="nav-foot">
-        ${`<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button><a href="guia.html#consulta-central" title="Como usar a Consulta central (Guia do Backoffice)">Guia</a></div>`}
+        ${`<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button></div>`}
         <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
       </div>`;
 
@@ -120,8 +114,12 @@
     guiaNovo(nav, pagina);
     balancoBotao();
     setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta
-    // 22/11 (Ricardo: "Remove esse indicador Meta e Mari que ficam no pé do menu lateral"): os selos saíram do menu e da
-    // barra do celular; status_operacao não é mais chamada pelo menu (o pulso da Live segue com Mari e Meta na faixa do topo).
+    // 22/11 (Ricardo): os selos Mari/Meta saíram do pé do menu; ficam só as bolinhas da barra do celular ("Pode manter as
+    // bolinhas no celular"). status_operacao só é chamada com a barra do celular na tela (≤ 760 px).
+    const celular = window.matchMedia('(max-width: 760px)');
+    statusOperacao(nav);
+    setInterval(() => { if (document.visibilityState === 'visible' && celular.matches) statusOperacao(nav); }, 120000);   // 2 min
+    celular.addEventListener('change', (m) => { if (m.matches) statusOperacao(nav); });
 
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
@@ -146,6 +144,7 @@
   // a faixa de pulso já lê tudo a cada 60 s e entrega os selos por NGSidebar.pintarStatus(selos).
   async function statusOperacao(nav) {
     if (document.body && document.body.dataset.pulso) return;
+    if (!window.matchMedia('(max-width: 760px)').matches) return;   // 22/11: só as bolinhas do celular
     try {
       const { data, error } = await NG.sb.rpc('status_operacao');
       pintarStatus(error ? null : data, nav);
@@ -153,11 +152,10 @@
   }
   function pintarStatus(data, navEl) {
     const nav = navEl || document.getElementById('sidebar');
-    const caixa = nav && nav.querySelector('[data-status]');
-    if (!caixa) return;
+    const caixa = nav && nav.querySelector('[data-status]');   // 22/11: não existe mais no menu (só as bolinhas do celular)
     try {
-      if (!data || (!data.mari && !data.meta)) { caixa.hidden = true; return; }
-      caixa.hidden = false;
+      if (!data || (!data.mari && !data.meta)) { if (caixa) caixa.hidden = true; return; }
+      if (caixa) caixa.hidden = false;
       const ks = ['mari', 'meta'].filter((k) => data[k]);   // módulo desligado = selo some (0144)
       const perfil = (NG.usuario || {}).perfil;
       const selo = (k, s) => {
@@ -169,7 +167,7 @@
         return `<${tag} class="st-selo st-${s.nivel}"${link ? ` href="${s.href}"` : ''} title="${NG.esc(titulo)}" aria-label="${NG.esc(titulo)}">`
           + `<i class="mv-dot" style="--c:${ST_COR[s.nivel] || 'var(--muted)'}"></i><span>${NG.esc(s.texto)}</span></${tag}>`;
       };
-      caixa.innerHTML = ks.map((k) => selo(k, data[k])).join('');
+      if (caixa) caixa.innerHTML = ks.map((k) => selo(k, data[k])).join('');
       const topo = document.querySelector('.topo-movel');
       if (topo) {
         let p = topo.querySelector('.st-pontos');
@@ -495,7 +493,7 @@
         const st = document.createElement('style');
         st.id = 'nav-consulta-estilo';
         st.textContent = '.nav-consulta{display:flex;align-items:center;margin:0 0 6px}.nav-consulta .nav-item{flex:1;width:auto;color:var(--text)}.nav-consulta .nav-item .ico{color:var(--accent);font-size:15px}'
-          + '.nav-consulta a{padding:6px 16px 6px 10px;border-left:1px solid var(--border);font:600 11px var(--dm);letter-spacing:.5px;color:var(--muted);text-decoration:none}.nav-consulta a:hover{color:var(--text)}'
+          + ''
           + '.topo-movel .cc-topo{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--accent);font-size:17px;line-height:1;cursor:pointer}';
         document.head.appendChild(st);
       }
