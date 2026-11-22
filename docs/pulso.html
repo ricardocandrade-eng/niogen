@@ -1,10 +1,16 @@
 <!doctype html>
-<!-- NIOGEN | docs/pulso.html | 15/11/2026 13:40 — Claude Code (Opus 5.5)
-     Pulso como ABA do app (pedido do Ricardo, 15/11 · protótipo docs/LAYOUT_conversas_mobile_151126_1304.html e estados de
-     docs/LAYOUT_pulso_live_121126_1035.html). Os 4 elos — Meta Ads · Entrada · Mari · Fluxos n8n — com sinal, número e linha de
-     detalhe (toque abre o detalhe), o funil de hoje e o alerta com a ação. Uma chamada (RPC pulso_operacao, 0144) a cada 60 s
-     com a aba visível; ela também pinta os selos do menu. Só leitura, sem dado de cliente. Admin e backoffice.
-     Na Live do celular sobra só a faixa resumida, que traz para cá. No computador também abre (tela inteira do Pulso). -->
+<!-- NIOGEN | docs/pulso.html | 22/11/2026 — Claude Code (Fable 5.2)
+     Pulso: a máquina do anúncio até a resposta — o que está funcionando e onde parou. Só leitura, sem dado de cliente.
+     Admin e backoffice. Duas chamadas em paralelo (RPC pulso_operacao, 0144, e pulso_extra, 0294) a cada 60 s com a aba
+     visível; a primeira também pinta os selos do menu.
+     22/11 (novo layout, passo 5 — especificação aprovada pelo Ricardo em 22/11, protótipo das sete telas), no COMPUTADOR:
+       · faixa fina: estado geral · funil de hoje · ontem;
+       · o alerta com a ação a tomar, quando houver;
+       · SEIS elos em linha, com o detalhe sempre aberto: Meta Ads · Entrada · Mari · Fluxos n8n · WABA · Fila Vero.
+         WABA e Fila Vero não pesam no estado geral (ele vem só da pulso_operacao, como antes);
+       · a tabela dos fluxos do n8n sempre visível.
+     Esta tela desenha tudo aqui mesmo. O assets/pulso.js (a faixa do topo da Live) NÃO mudou; no celular (≤ 640 px) a tela
+     continua sendo a aba do pulso.js (NGPulso.montarAba), como desde 15/11. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -20,38 +26,249 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
+<link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <script src="config.js?v=121126-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
 <script src="assets/sidebar.js?v=221126-9"></script>
 <script src="assets/pulso.js?v=181126-2"></script>
+<style>
+  /* 22/11 (novo layout, passo 5) — só desta tela, só no computador */
+  .pu-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  #pu-faixa { flex-wrap: wrap; overflow: visible; }
+  #pu-faixa b.txt { font-family: var(--sans); font-size: 14px; }
+  #pu-faixa b.atencao { color: var(--warn-fg); } #pu-faixa b.parado { color: var(--bad-fg); } #pu-faixa b.sem_leitura { color: var(--muted); } #pu-faixa b.ok { color: var(--ok-fg); }
+  .pu-alerta { margin: 0; }
+  .pu-alerta .pl-atxt { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pu-alerta .pl-atxt span { font-size: 12.5px; }
+  .pu-elos { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 1279px) { .pu-elos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 900px) { .pu-elos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .pu-elo { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 13px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+  .pu-elo.atencao { border-color: var(--warn-border); }
+  .pu-elo.parado { border-color: var(--bad-border); }
+  .pu-elo.sem_leitura { opacity: .75; }
+  .pu-e-cab { display: flex; align-items: center; gap: 8px; }
+  .pu-e-nome { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .pu-e-rot { font-size: 13px; font-weight: 600; color: var(--ok-fg); }
+  .pu-elo.atencao .pu-e-rot { color: var(--warn-fg); } .pu-elo.parado .pu-e-rot { color: var(--bad-fg); }
+  .pu-elo.sem_leitura .pu-e-rot, .pu-elo.quieto .pu-e-rot { color: var(--muted); }
+  .pu-e-num { font-family: var(--mono); font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+  .pu-e-lin { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+  .pu-e-lin .nota { font-size: 11.5px; font-style: italic; }
+  .pu-e-link { margin-top: auto; padding-top: 4px; font-size: 12px; }
+  .pu-fluxos td.mono { font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+  .pu-fluxos td.sinal { white-space: nowrap; }
+  .pu-fluxos td.sinal .pl-marca { margin-right: 8px; vertical-align: baseline; }
+  .pu-fluxos td.sinal.atencao { color: var(--warn-fg); } .pu-fluxos td.sinal.parado { color: var(--bad-fg); } .pu-fluxos td.sinal.sem_leitura, .pu-fluxos td.sinal.a_ligar { color: var(--muted); }
+  .pu-fluxos td.sinal small { white-space: normal; max-width: 320px; }
+  .pu-avisos { margin: 0; padding: 10px 14px 0 30px; font-size: 13px; color: var(--warn-fg); }
+  .pu-pe { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+  .pu-pe span { display: inline-flex; align-items: center; gap: 6px; }
+  .pu-pe .pl-marca.pl-ok { animation: none; }
+</style>
 </head>
 <body class="tela-pulso">
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="pulso"></nav>
-  <main class="main pa-main">
+  <main class="main pa-main lista-densa">
     <header class="cab">
       <div>
         <h1>Pulso</h1>
-        <div class="sub">Os quatro elos da operação — e onde parou.</div>
+        <div class="sub">A máquina do anúncio até a resposta: o que está funcionando e onde parou.</div>
       </div>
+      <div class="cab-acoes"><span class="pu-lido" id="pu-lido"></span></div>
     </header>
+    <!-- celular: a aba do pulso.js, como sempre -->
     <div id="pulso-aba" class="pa" hidden></div>
+    <!-- computador: o layout novo -->
+    <div id="pu" hidden style="display:none;flex-direction:column;gap:14px;min-width:0">
+      <section class="faixa-fina" id="pu-faixa" aria-label="Estado geral e funil de hoje"></section>
+      <div id="pu-alerta"></div>
+      <section class="pu-elos" id="pu-elos" aria-label="Os seis elos"></section>
+      <section class="lista padrao" id="fluxos" aria-label="Fluxos do n8n">
+        <ul class="pu-avisos" id="pu-avisos" hidden></ul>
+        <div class="rolagem">
+          <table class="tab pu-fluxos">
+            <thead><tr><th>Fluxo do n8n</th><th>O que faz</th><th>Roda</th><th>Última vez</th><th>Sinal</th></tr></thead>
+            <tbody id="pu-tbody"><tr><td colspan="5" class="vazio">Lendo…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span id="pu-cont"></span><span>Cada fluxo é lido na API do n8n a cada 5 min. Só mari_principal, mari_cadencia e balanco_diario guardam a execução que deu certo; nos outros, o sinal é "ligado e sem erro recente".</span></div>
+      </section>
+      <div class="pu-pe"><span><i class="pl-marca pl-ok" aria-hidden="true"></i>círculo = funcionando</span><span><i class="pl-marca pl-atencao" aria-hidden="true"></i>triângulo = atenção</span><span><i class="pl-marca pl-parado" aria-hidden="true"></i>quadrado = parado</span><span><i class="pl-marca pl-sem_leitura" aria-hidden="true"></i>anel = sem leitura (a leitura envelheceu mais de 3 minutos)</span></div>
+    </div>
   </main>
 </div>
 <script>
 (async function () {
+  const t0 = performance.now();
   const eu = await NG.exigirLogin();
-  const alvo = document.getElementById('pulso-aba');
+  const aba = document.getElementById('pulso-aba');
   if (!['admin', 'backoffice'].includes(eu.perfil)) {
     NGSidebar.montar();
-    alvo.hidden = false;
-    alvo.innerHTML = '<div class="vazio">O Pulso é do backoffice.</div>';
+    aba.hidden = false;
+    aba.innerHTML = '<div class="vazio">O Pulso é do backoffice.</div>';
     return;
   }
   document.body.dataset.pulso = '1';   // a RPC do Pulso também pinta os selos do menu (o menu não chama a sua)
-  NGPulso.montarAba(alvo);
+  // Celular: a aba de sempre (pulso.js). Computador: o layout novo, desenhado aqui.
+  if (window.matchMedia('(max-width: 640px)').matches) { NGPulso.montarAba(aba); NGSidebar.montar(); return; }
   NGSidebar.montar();
+
+  const esc = (s) => NG.esc(s == null ? '' : String(s));
+  const pu = document.getElementById('pu');
+  pu.hidden = false; pu.style.display = 'flex';
+  const VELHO_MS = 3 * 60 * 1000;   // leitura com mais de 3 min = sem leitura (nunca mostrar verde velho)
+  let dados = null, extra = null, recebido = 0, desvio = 0, falhou = false;
+  const NOME = { meta: 'Meta Ads', entrada: 'Entrada', mari: 'Mari', fluxos: 'Fluxos n8n' };
+  const NIVEL_TXT = { ok: 'Tudo funcionando', atencao: 'Atenção', parado: 'Parado', sem_leitura: 'Sem leitura' };
+  const marca = (n) => `<i class="pl-marca pl-${n}" aria-hidden="true"></i>`;
+  const nfmt = (n) => Number(n || 0).toLocaleString('pt-BR');
+  const hm = (iso) => (iso ? new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '—');
+  // "agora" / "há 4 min" / "há 2 h" a partir de um ISO do servidor (corrigido pelo relógio do servidor)
+  function ha(iso) {
+    if (!iso) return null;
+    const min = Math.max(0, (Date.now() - desvio - new Date(iso)) / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${Math.floor(min)} min`;
+    if (min < 48 * 60) return `há ${Math.floor(min / 60)} h`;
+    return `há ${Math.floor(min / 1440)} d`;
+  }
+  const semLeitura = () => (falhou && !dados) || !dados || Date.now() - recebido > VELHO_MS;
+
+  // ---------- os seis elos ----------
+  function elosDaMaquina(cinza) {
+    return ['meta', 'entrada', 'mari', 'fluxos'].filter((k) => dados.elos[k]).map((k) => {
+      const e = dados.elos[k];
+      // textos que dependem do relógio são refeitos aqui, a cada 30 s
+      const principal = k === 'mari' ? (ha(e.ultima_resposta_em) || 'sem resposta') : k === 'fluxos' && e.nivel === 'ok' && e.lido_em ? ha(e.lido_em) : e.principal;
+      const linhas = (e.linhas || []).map((l, i) => (k === 'meta' && i === 1 && e.lido_em ? `lido ${ha(e.lido_em)}` : l));
+      (e.motivos || []).forEach((m) => { if (!linhas.includes(m)) linhas.push(m); });
+      const nota = k === 'entrada' && e.custo_conversa ? `Custo médio por conversa dos últimos dias: R$ ${String(e.custo_conversa).replace('.', ',')}. Esperado = gasto de hoje ÷ esse custo.` : '';
+      const link = k === 'meta' ? ['metaads.html', 'Abrir Meta Ads'] : k === 'entrada' ? ['conversas.html?filtro=abertas', 'Abrir Conversas'] : k === 'mari' ? [e.href || 'mari.html', 'Abrir Mari · IA'] : ['#fluxos', 'Ver a tabela abaixo'];
+      return { nome: NOME[k], n: cinza ? 'sem_leitura' : e.nivel, rotulo: cinza ? 'sem leitura' : e.rotulo, principal, linhas, nota, link };
+    });
+  }
+  // WABA e Fila Vero (pulso_extra, 0294): o nível é só o da própria parte — não mexem no estado geral.
+  const NIVEL_WABA = { GREEN: 'ok', YELLOW: 'atencao', RED: 'parado' };
+  function elosExtras(cinza) {
+    if (!extra) return [];
+    const out = [];
+    const w = extra.waba;
+    const num = extra.fila_vero && extra.fila_vero.numero;
+    if (w || num) {
+      // São DOIS números: o do DISPARO da Fila Vero (lido de hora em hora) e o da Mari (8h e 14h).
+      const ln = num && num.rating ? { r: num.rating, em: num.em, tier: num.tier } : null;
+      const lm = w && w.quality_rating ? { r: w.quality_rating, em: w.lida_em } : null;
+      const r = ln && ln.r;
+      const tier = ln && ln.tier ? `limite de ${String(ln.tier).replace('TIER_', '').toLowerCase()} por dia` : '';
+      out.push({ nome: 'WABA', n: cinza || !r ? 'sem_leitura' : (NIVEL_WABA[r] || 'atencao'), rotulo: cinza ? 'sem leitura' : r === 'GREEN' ? 'qualidade boa' : r === 'YELLOW' ? 'qualidade em atenção' : r === 'RED' ? 'qualidade ruim' : 'sem leitura',
+        principal: r || '—', linhas: [ln && ln.em ? `número do disparo · lido ${ha(ln.em) || '—'}` : 'número do disparo · sem leitura',
+          lm ? `número da Mari: ${lm.r} · lido ${ha(lm.em) || '—'}` : 'número da Mari: sem leitura', tier].filter(Boolean), nota: 'Não entra no estado geral.', link: ['filavero.html', 'Abrir Fila Vero'] });
+    }
+    const f = extra.fila_vero;
+    if (f) {
+      let n = 'quieto', rotulo;
+      if (cinza) { n = 'sem_leitura'; rotulo = 'sem leitura'; }
+      else if (f.enviando) { n = 'ok'; rotulo = 'enviando agora'; }
+      else if (!f.ativo) rotulo = 'pausada';
+      else if (!f.dentro_horario) rotulo = 'fora do horário';
+      else if (f.hoje >= f.ritmo) rotulo = 'cota do dia cumprida';
+      else rotulo = 'ligada, sem envio agora';
+      out.push({ nome: 'Fila Vero', n, marca: n === 'quieto' ? 'sem_leitura' : n, rotulo, principal: `${nfmt(f.hoje)} de ${nfmt(f.ritmo)}`,
+        linhas: ['enviados hoje', f.ultimo_envio_em ? `último envio ${ha(f.ultimo_envio_em)}` : 'nenhum envio ainda'], nota: 'Não entra no estado geral.', link: ['filavero.html', 'Abrir Fila Vero'] });
+    }
+    return out;
+  }
+
+  function pintar() {
+    const cinza = semLeitura();
+    const lido = document.getElementById('pu-lido');
+    if (!dados) {
+      lido.textContent = falhou ? 'não deu para ler' : 'lendo…';
+      document.getElementById('pu-faixa').innerHTML = `<div><span>Estado geral</span><b class="txt sem_leitura">${falhou ? 'Sem leitura' : 'Lendo…'}</b></div>`;
+      document.getElementById('pu-alerta').innerHTML = falhou ? '<div class="pl-alerta pu-alerta pl-n-sem_leitura" role="alert"><div class="pl-atxt"><strong>A tela não consegue ler o estado da máquina.</strong><span>Confira a internet e recarregue a página.</span></div></div>' : '';
+      return;
+    }
+    const seg = Math.max(0, Math.round((Date.now() - recebido) / 1000));
+    lido.textContent = `lido há ${seg < 60 ? `${seg} s` : `${Math.floor(seg / 60)} min`} · atualiza sozinho a cada minuto`;
+    const maquina = elosDaMaquina(cinza), fora2 = elosExtras(cinza);
+    const elos = [...maquina, ...fora2];
+    // ---------- faixa ----------
+    const g = dados.geral;
+    const nG = cinza ? 'sem_leitura' : g.nivel;
+    const ruim = (e) => ['atencao', 'parado'].includes(e.n);
+    const fora = maquina.filter(ruim).length;
+    const extraRuim = fora2.filter(ruim).map((e) => e.nome);
+    const subG = cinza ? `última leitura ${ha(new Date(recebido - desvio).toISOString())}`
+      : [g.nivel !== 'ok' && g.desde ? `desde ${hm(g.desde)}` : '', fora ? `${fora} de ${maquina.length} elos pedindo atenção` : `${maquina.length} elos no ar`,
+        extraRuim.length ? `${extraRuim.join(' e ')} em atenção, fora da conta` : ''].filter(Boolean).join(' · ');
+    const f = dados.funil;
+    document.getElementById('pu-faixa').innerHTML = [
+      `<div title="${esc(cinza ? '' : g.titulo)}"><span>Estado geral</span><b class="txt ${nG}">${esc(NIVEL_TXT[nG] || g.titulo)}</b><small>${esc(subG)}</small></div>`,
+      f ? `<div><span>Funil de hoje</span><b>${nfmt(f.hoje.conversas)} › ${nfmt(f.hoje.qualificadas)} › ${nfmt(f.hoje.vendas)}</b><small>conversas · qualificadas · vendas</small></div>` : '',
+      f ? `<div><span>Ontem fechou em</span><b>${nfmt(f.ontem.conversas)} › ${nfmt(f.ontem.qualificadas)} › ${nfmt(f.ontem.vendas)}</b></div>` : '',
+    ].join('');
+    // ---------- alerta com a ação ----------
+    let al = '';
+    if (cinza) {
+      al = `<div class="pl-alerta pu-alerta pl-n-sem_leitura" role="alert"><div class="pl-atxt"><strong>A tela não consegue ler o estado da máquina${recebido ? ` desde ${hm(new Date(recebido - desvio).toISOString())}` : ''}.</strong>
+        <span>Os números abaixo podem estar velhos. Confira a internet e recarregue a página.</span></div></div>`;
+    } else if (dados.alerta) {
+      const a = dados.alerta;
+      const bt = [];
+      if (a.acao === 'esperando' && a.n > 0) bt.push(`<a class="pl-bt pl-bt-pri" href="conversas.html?filtro=esperando" data-visto>Responder ${a.n === 1 ? 'o cliente' : `os ${a.n} clientes`}</a>`);
+      if (a.acao === 'meta') bt.push('<a class="pl-bt pl-bt-pri" href="metaads.html" data-visto>Abrir Meta Ads</a>');
+      al = `<div class="pl-alerta pu-alerta pl-n-${esc(a.nivel)}" role="alert"><div class="pl-atxt"><strong>${esc(a.texto)}</strong>${a.elo && NOME[a.elo] ? `<span>O detalhe está no elo ${esc(NOME[a.elo])}, logo abaixo.</span>` : ''}</div><div class="pl-abts">${bt.join('')}</div></div>`;
+    }
+    document.getElementById('pu-alerta').innerHTML = al;
+    // ---------- seis elos, com o detalhe aberto ----------
+    document.getElementById('pu-elos').innerHTML = elos.map((e, i) => `<div class="pu-elo ${e.n}">
+        <div class="pu-e-cab">${marca(e.marca || e.n)}<span class="pu-e-nome">${i + 1} · ${esc(e.nome)}</span></div>
+        <span class="pu-e-rot">${esc(e.rotulo)}</span>
+        <span class="pu-e-num">${esc(e.principal)}</span>
+        <div class="pu-e-lin">${e.linhas.map((l) => `<span>${esc(l)}</span>`).join('')}${e.nota ? `<span class="nota">${esc(e.nota)}</span>` : ''}</div>
+        <a class="pu-e-link" href="${esc(e.link[0])}">${esc(e.link[1])}</a></div>`).join('');
+    // ---------- tabela dos fluxos, sempre visível ----------
+    const fl = dados.fluxos || [];
+    const avisos = ((dados.elos.fluxos || {}).motivos || []);
+    const av = document.getElementById('pu-avisos');
+    av.hidden = !avisos.length || cinza;
+    av.innerHTML = avisos.map((m) => `<li>${esc(m)}</li>`).join('');
+    document.getElementById('pu-tbody').innerHTML = fl.length ? fl.map((x) => {
+      const ult = x.salva_ok ? (x.ultimo_ok_em ? `${hm(x.ultimo_ok_em)} · ${ha(x.ultimo_ok_em)}` : 'ainda sem batimento')
+        : (x.ativo_n8n === false ? 'desligado' : x.lido_em ? 'ligado · só guarda erro' : 'ainda sem batimento');
+      const est = cinza ? 'sem_leitura' : x.estado;
+      const erro = x.ultimo_erro && x.estado !== 'ok' ? `<small>${esc(x.ultimo_erro)}</small>` : (x.ultimo_erro_em && x.ultimo_erro ? `<small class="pl-velho">último erro ${esc(hm(x.ultimo_erro_em))} · ${esc(ha(x.ultimo_erro_em))}</small>` : '');
+      const sinal = cinza ? 'sem leitura' : x.sinal === 'ok' ? (x.salva_ok ? 'funcionando' : 'ligado, sem erro recente') : x.sinal;
+      return `<tr><td class="mono">${esc(x.fluxo)}${x.critico ? ' <span class="pl-crit">crítico</span>' : ''}</td><td>${esc(x.descricao)}</td><td class="apagado">${esc(x.roda)}</td>
+        <td class="mono">${esc(ult)}</td><td class="sinal ${esc(est)}">${marca(est === 'a_ligar' ? 'sem_leitura' : est)}${esc(sinal)}${erro}</td></tr>`;
+    }).join('') : '<tr><td colspan="5" class="vazio">Nenhum fluxo lido ainda.</td></tr>';
+    const ruins = fl.filter((x) => x.estado !== 'ok' && x.estado !== 'a_ligar').length;
+    document.getElementById('pu-cont').textContent = `${fl.length} ${fl.length === 1 ? 'fluxo' : 'fluxos'}${ruins ? ` · ${ruins} pedindo atenção` : ' · todos no horário'}`;
+    if (!window.NGpuTempo) { window.NGpuTempo = Math.round(performance.now() - t0); window.NGpuDesdeAbrir = Math.round(performance.now()); }   // regra 19
+  }
+
+  async function ler() {
+    try {
+      const [{ data, error }, ex] = await Promise.all([NG.sb.rpc('pulso_operacao'), NG.sb.rpc('pulso_extra').then((r) => r, () => ({}))]);
+      extra = ex && !ex.error && ex.data ? ex.data : null;   // falhou → WABA e Fila Vero somem; o resto segue
+      if (error || !data) throw error || new Error('vazio');
+      dados = data; recebido = Date.now(); falhou = false;
+      desvio = Date.now() - new Date(data.gerado_em).getTime();
+      if (!Number.isFinite(desvio) || Math.abs(desvio) < 5000) desvio = 0;
+      if (window.NGSidebar && NGSidebar.pintarStatus && data.selos) NGSidebar.pintarStatus(data.selos);
+    } catch (e) { falhou = true; }
+    pintar();
+  }
+  // o clique nos botões do alerta marca o incidente como visto (como na faixa da Live)
+  document.getElementById('pu-alerta').addEventListener('click', (ev) => { if (ev.target.closest('[data-visto]')) NG.sb.rpc('pulso_incidente_visto').then(() => {}, () => {}); });
+  pintar();
+  ler();
+  setInterval(() => { if (document.visibilityState === 'visible') ler(); }, 60000);
+  setInterval(() => { if (document.visibilityState === 'visible') pintar(); }, 10000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - recebido > 30000) ler(); });
 })();
 </script>
 </body>
