@@ -297,9 +297,17 @@
   }
   const COLS = 'conversa_id, venda_id, nome, telefone, cidade, origem, plano, comissao_prevista, etapa, etapa_ordem, etapa_nome, status, status_nome, status_ajuda, destino, vez, prazo_em, atrasado, '
     + 'em_espera, espera_motivo, espera_quem, espera_revisar_em, saida_motivo, saida_nome, saida_ajuda, saida_sub, volta_em, dono, criado_em, ultima_em';
+  // 22/11 (0360, regra 19): para admin/backoffice a lista vem da leads_lista() — as mesmas linhas da v_leads, sem o RLS conferido
+  // linha a linha (~1,3 s → ~0,3 s). Vendedor e parceiro seguem pela visão, com o RLS de sempre. Se a função falhar, cai na visão.
+  const lerLeads = async () => {
+    const daVisao = () => NG.sb.from('v_leads').select(COLS).order('criado_em', { ascending: false }).limit(5000);
+    if (!BO) return daVisao();
+    const r = await NG.sb.rpc('leads_lista').select(COLS).order('criado_em', { ascending: false }).limit(5000);
+    return r.error ? daVisao() : r;
+  };
   async function carregar() {
     const [rl, rc, rk] = await Promise.all([
-      NG.sb.from('v_leads').select(COLS).order('criado_em', { ascending: false }).limit(5000),
+      lerLeads(),
       NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
       NG.sb.from('config_canais').select('canal, nome'),   // 0302: os nomes dos canais vêm do banco
     ]);
@@ -360,10 +368,12 @@
 
   // "+ Nova venda" mora aqui (passo 1): a venda nasce como lead e só entra em Vendas quando a OS é gerada.
   // A mesma gaveta de sempre (assets/novavenda.js). leads.html#nova (ou #venda-rua, ou ?cep=&numero=) já abre a gaveta.
+  // 22/11 (regra 19): a lista começa a carregar JÁ — antes ela esperava a gaveta da Nova venda ler as tabelas dela (~1 s parado).
+  const primeiraCarga = carregar();
   const novaVenda = await NGNovaVenda.montar({ eu, aoSalvar: () => { NG.toast('Venda criada. Ela fica aqui em Leads até a OS ser gerada.', 'ok'); carregar(); } });
   document.getElementById('btn-nova').addEventListener('click', () => novaVenda.abrir());
 
-  await carregar();
+  await primeiraCarga;
   NGFicha.iniciar();
   if (['#venda-rua', '#nova'].includes(location.hash)) novaVenda.abrir();
   if (Q.get('cep')) await novaVenda.abrir({ cep: Q.get('cep'), numero: Q.get('numero'), complemento: Q.get('complemento') });

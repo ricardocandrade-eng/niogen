@@ -237,7 +237,10 @@
   async function carregar() {
     // 22/11 (regra 19): as três leituras saem juntas; a lista aparece assim que a v_conversas chega, e os selos que dependem
     // das outras duas (nome da etapa, "fora da Live") entram quando elas chegarem.
-    const pc = NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500);
+    // 22/11 (0360, regra 19): a lista vem da conversas_lista() — as mesmas linhas da v_conversas, sem o RLS conferido linha a
+    // linha (~1,0–1,4 s → ~0,3 s). A tela é só de admin/backoffice. Se a função falhar, cai na visão, como antes.
+    const pc = NG.sb.rpc('conversas_lista').order('ultima_em', { ascending: false }).limit(500)
+      .then((r) => (r.error ? NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500) : r));
     NG.funilNomes().then((fn) => { fnome = fn; if (lista.length) render(); }, () => {});
     NG.furosJornada().then((fu) => { furos = fu.ids || new Set(); if (lista.length) render(); }, () => {});
     const { data, error } = await pc;
