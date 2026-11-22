@@ -3609,7 +3609,12 @@
     } else if (p.k === 'bio') {
       // 15/11 (Ricardo, caso Grace): "Consultar no GED360 agora" para TODOS os leads — com venda ou só conversa com CPF.
       const btBio = '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="bio-ler">⟳ Consultar no GED360 agora</button><span class="nota-campo">o robô lê o Relatório Detalhado (uns 10 s)</span></div>';
-      corpo = conv ? `${linhaDet('Biometria', cpfConversa() ? 'sem venda ainda — dá para consultar o GED360 pelo CPF da conversa' : 'depois do crédito')}${cpfConversa() && ehBO() ? btBio : ''}`
+      // 22/11 (caso L-219, Ricardo: "Não consigo passar da etapa Biometria. Estou tentando pela Ficha"): no lead sem venda este passo
+      // só consultava o GED360 e não dizia como seguir. A biometria se marca na VENDA: o Virar venda fica aqui também, e a 0353
+      // aplica na hora o que o GED360 já leu (aprovada → o próximo passo é gravar a OS).
+      const btVirarBio = ehBO() && !(d.conv && d.conv.funil_destino && d.conv.funil_destino !== 'em_andamento') && d.conv && /^(aprovado|cartao)/.test(d.conv.credito_resultado || '')
+        ? '<div class="fc-op-bts"><button type="button" class="btn btn-sm btn-acc" data-f="virar-venda" title="Abre a venda deste lead; a biometria que o GED360 já leu vale na hora">Virar venda</button><span class="nota-campo">pedido feito no portal? Este lead ainda não é venda: a biometria e a OS se gravam na venda. Ao virar venda, o que o GED360 já leu (link enviado ou aprovada) entra sozinho.</span></div>' : '';
+      corpo = conv ? `${linhaDet('Biometria', cpfConversa() ? 'sem venda ainda — dá para consultar o GED360 pelo CPF da conversa' : 'depois do crédito')}${cpfConversa() && ehBO() ? btBio : ''}${btVirarBio}`
         : `${linhaDet('Biometria', esc(NG.BIOMETRIA[v.biometria_status] || NG.BIOMETRIA.nao_enviada))}
         ${v.contato_nome ? linhaDet('Quem faz', `<b>${esc(v.cliente_nome)}</b> (titular) — o link chegou no contato de ${esc(NG.primeiroNome(v.contato_nome))}${v.contato_relacao ? ` (${esc(v.contato_relacao)})` : ''}`) : ''}
         ${v.nio_interesse && !v.nio_pedido ? linhaDet('Interesse no portal', `<span class="mono">${esc(v.nio_interesse)}</span> · aprovada a biometria, abrir em Histórico de Pedidos › Interesse e gerar a OS`) : ''}
