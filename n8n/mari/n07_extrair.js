@@ -799,6 +799,16 @@ if (tags.endereco) {
   }
 }
 if (prep.p_complemento) dados.complemento_ok = true;
+// 21/11 (Ricardo, teste L-236: "Primeiro ela olha"): o complemento não se pergunta mais logo depois do endereço — a Mari espera a
+// consulta da Nio (com a lista de unidades, pergunta mostrando as opções). O "Sim" da confirmação do endereço basta para seguir
+// aos planos; o complemento é exigido antes do resumo.
+if (V7 && !(c.dados || {}).endereco_ok) {
+  const histE = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultE = [...histE].reverse().find((h) => h.papel === 'mari');
+  const msgE = norm(String((prep.consolidado || {}).mensagem || '')).replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (ultE && /seu endereco e|e (nessa|essa)[^?]{0,60}\?|o endereco e esse|achei aqui a/.test(norm(ultE.texto))
+    && /^(sim|isso|isso mesmo|exato|correto|certo|e sim|e esse|e essa|sim e|sim isso|s|ss|aham|uhum|positivo|confirmo)( mesmo| sim| ai| esse| essa)*$/.test(msgE)) dados.endereco_ok = true;
+}
 // 16/11 (0233, Ricardo; caso "CS 1" × "Casa A"): unidade a confirmar. O cliente tocou/escreveu uma unidade da lista da Nio →
 // é ela (o operador consulta de novo com a unidade dele). "Nenhuma dessas" (botão, texto ou [ENDERECO: unidade=nenhuma]) →
 // dados.unidade_fora_lista = 'nenhuma' (o gatilho da 0233 manda o time pedir o cadastro à Nio). Nunca escolhe pelo cliente.
@@ -812,6 +822,13 @@ const UNIDADES = (() => {
   if (k(c.complemento) && lista.some((u) => k(u) === k(c.complemento))) return [];
   return lista;
 })();
+// 21/11 (L-236): a fala que pergunta a unidade (lista da Nio) ou o complemento vai sozinha — o sistema não cola nela outra pergunta
+// (data, período, upsell, nome/CPF); a outra fica para a próxima fala.
+function perguntaEndereco(bs) {
+  const t = norm((bs || []).join(' '));
+  if (UNIDADES.length && UNIDADES.some((u) => t.includes(norm(u).replace(/^(apartamento|apto|casa|bloco|loja) /, '')))) return true;
+  return /tem (algum )?complemento|qual (e )?(o )?(seu )?complemento|complemento,? (tipo|como)/.test(t);
+}
 if (UNIDADES.length && !posHandoff) {
   const msgU = String((prep.consolidado || {}).mensagem || '').trim();
   const kU = (x) => norm(x).replace(/[^a-z0-9]/g, '');
@@ -941,15 +958,16 @@ if (Object.keys(dados).length) upd.dados = dados;
 const m = { ...c, ...upd, dados: { ...(c.dados || {}), ...dados } };
 // 18/11 (Ricardo: "Remove da Mari a pergunta de qual operadora… Está travando venda"): a operadora não é mais perguntada.
 // Endereço completo e dentro da área → elegibilidade ok sem depender da tag do modelo; a etapa nunca para em "elegibilidade".
-if (V7 && !m.elegibilidade && m.cep && m.numero && (m.complemento || m.dados.complemento_ok) && ctx.dentroArea !== false) {
+const complOk = !!(m.complemento || m.dados.complemento_ok);
+if (V7 && !m.elegibilidade && m.cep && m.numero && (complOk || m.dados.endereco_ok) && ctx.dentroArea !== false) {
   upd.elegibilidade = 'ok';
   m.elegibilidade = 'ok';
 }
 // 21/11: função içada — o upsell pendente (acima) usa antes desta linha.
 function cpfOk(v) { const x = String(v || '').replace(/\D/g, ''); if (x.length !== 11 || /^(\d)\1{10}$/.test(x)) return false; const dv = (k) => { let s = 0; for (let i = 0; i < k; i++) s += Number(x[i]) * (k + 1 - i); const r = (s * 10) % 11; return r === 10 ? 0 : r; }; return dv(9) === Number(x[9]) && dv(10) === Number(x[10]); }
-const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento
+const temDados = m.dados.nome && cpfOk(m.dados.cpf) && m.dados.telefone && m.dados.email && m.forma_pagamento && complOk
   && (V4 ? m.instalacao_preferencia : m.visita_preferencia);
-if (!m.cep || !m.numero || !(m.complemento || m.dados.complemento_ok)) upd.etapa = (m.cep || m.numero) ? 'endereco' : 'abertura';
+if (!m.cep || !m.numero || !(complOk || (V7 && m.dados.endereco_ok))) upd.etapa = (m.cep || m.numero) ? 'endereco' : 'abertura';
 else if (!m.elegibilidade) upd.etapa = 'elegibilidade';
 else if (!m.plano_escolhido) upd.etapa = 'planos';
 else if (!temDados) upd.etapa = 'coleta';
@@ -1329,7 +1347,8 @@ if (V7 && !cpfOk(m.dados.cpf)) {
   const temCpf = cpfOk((m.dados || {}).cpf);
   const PED_F = /nome completo|\bcpf\b|seus dados sao usados|^fechou\??$|pode me mandar\??$|me passa\??$/;
   const parU = planoAcima(upd.plano_escolhido || c.plano_escolhido);
-  const perguntarUps = V7 && !erro && !handoff && !posHandoff && !temCpf && parU
+  const pergEnd = perguntaEndereco(baloesFinais);   // 21/11 (L-236): a pergunta da unidade/complemento vai sozinha
+  const perguntarUps = V7 && !erro && !handoff && !posHandoff && !temCpf && parU && !pergEnd
     && ((upsellAgora && !c.upsell_oferecido) || (upsPendente && !upsResposta));
   if (perguntarUps) {
     const fA = norm(parU.nAtual); const fB = norm(parU.nAcima);
@@ -1344,7 +1363,7 @@ if (V7 && !cpfOk(m.dados.cpf)) {
     texto = baloesFinais.join('\n\n');
     dados.upsell_perguntas = Number(UPS_DADOS.upsell_perguntas || 0) + 1;
     upd.dados = { ...(upd.dados || {}), upsell_perguntas: dados.upsell_perguntas };
-  } else if (V7 && !erro && !handoff && !posHandoff && upsResposta && !temCpf
+  } else if (V7 && !erro && !handoff && !posHandoff && upsResposta && !temCpf && !pergEnd
     && !baloesFinais.some((b) => /nome completo|\bcpf\b/.test(norm(b)))) {
     const lg = c.lgpd_enviada || upd.lgpd_enviada ? null : 'Seus dados são usados só pro seu pedido com a Nio.';
     baloesFinais.push(['Me manda seu nome completo e CPF que eu já adianto aqui.', lg].filter(Boolean).join('\n\n'));
@@ -1489,7 +1508,7 @@ const PERG_TURNO = /manha ou (a |de |pela |a de )?tarde|manha\b[^?\n]{0,25}\btar
 if (V7 && !posHandoff && !erro && !handoff && m.forma_pagamento && !m.instalacao_preferencia && !upd.instalacao_preferencia
   && tags.botoes !== 'pagamento' && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))
   // 21/11 (L-236): a fala que pergunta a unidade (a lista da Nio chegou agora) vai sozinha — data e período ficam para a próxima.
-  && !(UNIDADES.length && UNIDADES.some((u) => norm(baloesFinais.join(' ')).includes(norm(u).replace(/^(apartamento|apto|casa|bloco|loja) /, ''))))) {
+  && !perguntaEndereco(baloesFinais)) {
   const paras = baloesFinais.join('\n\n').split('\n\n');
   const iPerg = paras.findIndex((p) => PERG_TURNO.test(norm(p)));
   const semTurno = (iPerg >= 0 ? paras.slice(0, iPerg) : paras).filter((p) => p.trim());

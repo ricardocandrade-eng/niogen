@@ -193,7 +193,8 @@ if (!(dados.telefone && telValido(dados.telefone)) && !telValido(foneWa(conv.tel
 if (!dados.email || !emailValido(dados.email) || dados.email_confirmado === false) faltando.push('email');
 if (!conv.forma_pagamento) faltando.push('pagamento');
 if (!(conv.instalacao_preferencia || conv.visita_preferencia)) faltando.push(V4 ? 'instalacao' : 'visita');
-if (V7 && !dados.referencia) faltando.push('referencia');   // o portal exige na etapa 2 (prompt 27 A5)
+if (V7 && !dados.referencia) faltando.push('referencia');
+if (V7 && !(conv.complemento || dados.complemento_ok)) faltando.push('complemento');   // 21/11: pode ficar para depois da consulta da Nio   // o portal exige na etapa 2 (prompt 27 A5)
 const formaTxt = { boleto: 'boleto', dacc: 'débito automático', cartao: 'cartão de crédito' }[conv.forma_pagamento] || null;
 
 const L = [];
@@ -219,7 +220,20 @@ L.push(`telefone_whatsapp: ${foneWa(conv.telefone)} (é o telefone de contato: n
 L.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);
 L.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);
 L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (dados.complemento_ok ? 'não tem' : '—')} | complemento_respondido: ${conv.complemento || dados.complemento_ok ? 'sim' : 'nao'}`);
-L.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);
+// 21/11 (Ricardo, teste L-236: "Primeiro ela olha"): com o endereço confirmado e sem complemento, a Mari espera a consulta da Nio.
+// Voltou com a lista de unidades → pergunta mostrando as opções (linha unidade_a_confirmar); voltou sem lista → pergunta o
+// complemento; ainda não voltou → segue (planos, dados) e pergunta antes do resumo. Sempre como a única pergunta da fala.
+if (V7 && !(conv.complemento || dados.complemento_ok) && dados.endereco_ok) {
+  const detC = conv.cobertura_detalhe || {};
+  const listaC = Array.isArray(detC.unidades) && detC.unidades.length && conv.unidade_conferir_em;
+  const voltou = !!conv.nio_viab_resultado && !!conv.nio_viab_em;
+  L.push(listaC
+    ? 'complemento_agora: LISTA — a consulta da Nio voltou com as unidades do endereço: pergunte qual é a do cliente mostrando as opções (linha unidade_a_confirmar), NESTA resposta, como a ÚNICA pergunta (registre antes o que ele mandou agora; o resto fica para a próxima)'
+    : voltou
+      ? 'complemento_agora: SIM — a consulta da Nio voltou sem lista de unidades: pergunte o complemento NESTA resposta, como a ÚNICA pergunta (registre antes o que ele mandou agora; o resto fica para a próxima)'
+      : 'complemento_agora: DEPOIS — a consulta da Nio ainda não voltou: NÃO pergunte o complemento agora; siga a venda (planos, dados). Se chegar a hora do resumo e ainda faltar, pergunte o complemento antes, como a única pergunta.');
+}
+L.push(`endereco_do_cep:${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);
 L.push(`cidade: ${conv.cidade || '—'} | dentro_area: ${conv.dentro_area === true ? 'SIM' : conv.dentro_area === false ? 'NAO' : 'ainda não sabemos'} | tabela_cidade: ${cluster ? cluster.toUpperCase() : '—'}`);
 L.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}`);
 if (V7) {

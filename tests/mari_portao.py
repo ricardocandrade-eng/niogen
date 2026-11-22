@@ -268,8 +268,17 @@ def ate_planos_jf(c):
     c.diz('36035130')
     r = c.diz('123')
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
-        c.diz('Sim')
+        r = c.diz('Sim')
+    # 21/11 (L-236): depois do Sim a Mari vai direto aos planos (o complemento espera a consulta da Nio). O cliente dá o
+    # complemento por conta própria logo depois; devolve a fala dos planos.
+    if mostrou_planos(r):
+        c.diz('Apto 403, perto da igreja')
+        return r
     return c.diz('Apto 403, perto da igreja')
+
+
+def mostrou_planos(r):
+    return (r.get('interativo') or {}).get('tipo') == 'carrossel' or bool(re.search(r'(?m)^\s*1\)[^\n]*R\$', r.get('resposta') or ''))
 
 
 def fala(r):
@@ -553,7 +562,10 @@ def ate_dados_sem_referencia(c):
     c.diz('36035130')
     r = c.diz('123')
     if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
-        c.diz('Sim')
+        r = c.diz('Sim')
+    if mostrou_planos(r):   # 21/11 (L-236): planos logo depois do Sim
+        c.diz('Apto 403')
+        return r
     return c.diz('Apto 403')
 
 
@@ -638,7 +650,7 @@ def cen_ap(c):   # P43 (21/11, conversa L-222): a unidade que o cliente deu est�
     ate_planos_jf(c)
     comp = conv_row(c, 'complemento').get('complemento') or 'Apto 403'
     lista = json.dumps(['Apto 401', comp, 'Apto 404'], ensure_ascii=False).replace("'", "''")
-    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(),
+    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(), complemento = '{comp}',
                  cobertura_detalhe = jsonb_build_object('portal', 'viavel', 'unidade_a_confirmar', true, 'unidades', '{lista}'::jsonb),
                  unidade_conferir = jsonb_build_object('motivo', 'escolher', 'lista', '{lista}'::jsonb, 'usada', 'Apto 401', 'autor', 'portao'),
                  unidade_conferir_em = now()
@@ -738,6 +750,34 @@ def cen_as(c):   # P46 (21/11, conversa L-236, teste do Ricardo): a lista de uni
     c.exige(not RX_PERG_PERIODO.search(t) and (r.get('interativo') or {}).get('chave') != 'turno', f'[P46] período de novo depois da unidade: «{t[-200:]}»')
 
 
+def cen_at(c):   # P47 (21/11, Ricardo, teste L-236: "primeiro ela olha"): o complemento espera a consulta da Nio
+    # Depois do Sim do endereço a Mari vai direto aos planos, sem perguntar o complemento. A lista de unidades chega → a próxima
+    # fala pergunta a unidade mostrando as opções, como a única pergunta. "Não é nenhuma" → segue a venda.
+    c.diz('Oi')
+    c.diz('36035130')
+    r = c.diz('123')
+    if (r.get('interativo') or {}).get('chave') == 'sim_nao' or '?' in (r.get('resposta') or ''):
+        r = c.diz('Sim')
+    t = fala(r)
+    c.exige(mostrou_planos(r), f'[P47] depois do Sim do endereço não foram os planos: «{t[:220]}»')
+    c.exige(not re.search(r'complemento|apto|apartamento|bloco|casa a', t), f'[P47] perguntou o complemento antes da consulta da Nio: «{t[:220]}»')
+    lista = json.dumps(['Apartamento 101', 'Apartamento 102', 'Apartamento 201'], ensure_ascii=False).replace("'", "''")
+    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(),
+                 cobertura_detalhe = jsonb_build_object('portal', 'viavel', 'unidade_a_confirmar', true, 'unidades', '{lista}'::jsonb),
+                 unidade_conferir = jsonb_build_object('motivo', 'escolher', 'lista', '{lista}'::jsonb, 'usada', 'Apartamento 101', 'autor', 'portao'),
+                 unidade_conferir_em = now()
+           where id = (select id from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1)""", escrita=True)
+    r = c.diz('Quero o plano Nio Ultra')
+    t = fala(r)
+    c.exige(re.search(r'apartamento 10[12]|\b10[12]\b', t), f'[P47] a lista chegou e a Mari não perguntou a unidade com as opções: «{t[:260]}»')
+    c.exige(not re.search(r'nome completo|\bcpf\b', t), f'[P47] pediu nome/CPF junto com a unidade (devia ser a única pergunta): «{t[-200:]}»')
+    c.exige((r.get('interativo') or {}).get('chave') not in ('upsell', 'pagamento', 'data', 'turno'), f'[P47] botões de outra pergunta colados na unidade: {(r.get("interativo") or {}).get("chave")}')
+    r = c.diz('Não é nenhuma dessas, é o 403')
+    t = fala(r)
+    c.exige(not re.search(r'apartamento 10[12]|qual destas', t), f'[P47] perguntou a unidade de novo depois do "nenhuma": «{t[:220]}»')
+    c.exige(re.search(r'nome completo|\bcpf\b', t), f'[P47] não seguiu a venda (nome e CPF) depois do "nenhuma": «{t[:220]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -775,6 +815,8 @@ PORTAO = {
     'ar': (51, cen_ar, 'P45'),
     # 21/11 — conversa L-236 (teste do Ricardo): a lista de unidades chega depois do período; o período não se pergunta de novo
     'as': (52, cen_as, 'P46'),
+    # 21/11 — teste L-236 (Ricardo: "primeiro ela olha"): o complemento espera a consulta da Nio; com a lista, pergunta mostrando as opções
+    'at': (53, cen_at, 'P47'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
