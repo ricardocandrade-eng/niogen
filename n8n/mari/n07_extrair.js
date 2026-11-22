@@ -751,6 +751,25 @@ if (inst && inst !== '—' && !/^null$/i.test(inst)) {
   const dtEsc = (c.dados || {}).instalacao_data;
   upd.instalacao_preferencia = V7 && dtEsc && !/\d{1,2}\/\d{1,2}/.test(inst) ? `${dtEsc}, ${inst}` : inst;           // v4+
 }
+// 21/11 (conversas L-236 e L-217): o período que o cliente respondeu fica gravado pelo próprio código — antes só valia a marca do
+// modelo, e quando ele se ocupava de outra coisa (a lista de unidades que chegou, o pedido do nome) o sistema perguntava de novo.
+// "Manhã"/"Tarde" valem com a data já escolhida ou logo depois da pergunta do período; "Tanto faz", só depois da pergunta do período.
+if (V7 && !upd.instalacao_preferencia && !c.instalacao_preferencia) {
+  const histP = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultP = [...histP].reverse().find((h) => h.papel === 'mari');
+  const pergPer = !!ultP && /qual (turno|periodo)|periodo voce prefere|botoes: manha \/ tarde/.test(norm(ultP.texto));
+  const linhas = String((prep.consolidado || {}).mensagem || '').split(/\n+/).map((l) => norm(l).replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim());
+  const dtMsg = String((prep.consolidado || {}).mensagem || '').split(/\n+/).map((l) => l.trim())
+    .find((l) => /^(dom|seg|ter|qua|qui|sex|s[aá]b)[a-zçá-]*,?\s*\d{1,2}\/\d{1,2}$/i.test(l));
+  const dtP = (c.dados || {}).instalacao_data || dtMsg;
+  let per = null;
+  for (const l of linhas) {
+    const mm = l.match(/^(?:(?:de|pela|a|na|no|periodo da|parte da|turno da)\s+)?(manha|tarde)(?:\s+(?:mesmo|por favor|pfv|pf|obrigad[oa]))*$/);
+    if (mm && (dtP || pergPer)) per = mm[1] === 'manha' ? 'manhã' : 'tarde';
+    else if (pergPer && /^(tanto faz|qualquer( um| uma| periodo| horario| turno)?|qualquer um dos dois|os dois|tanto faz o periodo)$/.test(l)) per = 'tanto faz';
+  }
+  if (per) upd.instalacao_preferencia = dtP && dtP !== 'qualquer data' ? `${dtP}, ${per}` : per;
+}
 
 // v7 (prompt 27): ponto de referência (o portal exige), operadora atual (A10) e a rua confirmada (A2).
 if (V7) {
@@ -1468,7 +1487,9 @@ if (V7 && !posHandoff && (ehRespostaData || ehQualquerData) && !c.instalacao_pre
 // depois saem — o sistema manda os botões (portão 12/11, cenário a).
 const PERG_TURNO = /manha ou (a |de |pela |a de )?tarde|manha\b[^?\n]{0,25}\btarde\b[^\n]{0,40}\?|qual (turno|periodo)|instalacao, voce prefere|(qual|quais) (destas |dessas |das )?datas?\b|qual (data|dia)\b[^?]{0,40}instala|data[^?]{0,30}instala|periodo voce prefere/;
 if (V7 && !posHandoff && !erro && !handoff && m.forma_pagamento && !m.instalacao_preferencia && !upd.instalacao_preferencia
-  && tags.botoes !== 'pagamento' && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))) {
+  && tags.botoes !== 'pagamento' && !baloesFinais.some((b) => RESUMO_RE.test(norm(b)))
+  // 21/11 (L-236): a fala que pergunta a unidade (a lista da Nio chegou agora) vai sozinha — data e período ficam para a próxima.
+  && !(UNIDADES.length && UNIDADES.some((u) => norm(baloesFinais.join(' ')).includes(norm(u).replace(/^(apartamento|apto|casa|bloco|loja) /, ''))))) {
   const paras = baloesFinais.join('\n\n').split('\n\n');
   const iPerg = paras.findIndex((p) => PERG_TURNO.test(norm(p)));
   const semTurno = (iPerg >= 0 ? paras.slice(0, iPerg) : paras).filter((p) => p.trim());

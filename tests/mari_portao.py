@@ -710,6 +710,34 @@ def cen_ar(c):   # P45 (20/11, conversa L-199, Bruno): "temos até dia 18/12 par
     c.exige(bool(row2.get('espera_ate')), f'[P45] o "😉" depois da despedida derrubou a espera: {row2}')
 
 
+def cen_as(c):   # P46 (21/11, conversa L-236, teste do Ricardo): a lista de unidades chegou depois do período; a Mari perguntou
+    # a unidade e, na mesma fala, "E qual período você prefere nesse dia?" de novo (o "Manhã" já tinha vindo).
+    ate_planos_jf(c)
+    r = c.diz('Quero o plano Nio Fibra')
+    if 'por mais r$' in fala(r):
+        c.diz('Fico no Fibra')
+    c.diz('Boleto')
+    c.diz('Ana Teste da Silva, 529.982.247-25')
+    c.diz('anateste@gmail.com')
+    c.diz(data_btn())
+    lista = json.dumps(['Apartamento 101', 'Apartamento 102', 'Apartamento 201'], ensure_ascii=False).replace("'", "''")
+    B.sql(f"""update mari_conversas set cobertura_decisao = 'viavel', nio_viab_resultado = 'viavel', nio_viab_em = now(), complemento = null,
+                 cobertura_detalhe = jsonb_build_object('portal', 'viavel', 'unidade_a_confirmar', true, 'unidades', '{lista}'::jsonb),
+                 unidade_conferir = jsonb_build_object('motivo', 'escolher', 'lista', '{lista}'::jsonb, 'usada', 'Apartamento 101', 'autor', 'portao'),
+                 unidade_conferir_em = now()
+           where id = (select id from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1)""", escrita=True)
+    r = c.diz('Manhã')
+    t = fala(r)
+    c.exige(re.search(r'apartamento 10[12]|10[12]', t), f'[P46] a lista de unidades chegou e a Mari não perguntou a unidade: «{t[:220]}»')
+    c.exige((r.get('interativo') or {}).get('chave') != 'turno', f'[P46] botões de período de novo depois do "Manhã": «{t[-160:]}»')
+    c.exige(not RX_PERG_PERIODO.search(t), f'[P46] perguntou o período de novo junto com a unidade: «{t[-220:]}»')
+    row = conv_row(c, 'instalacao_preferencia')
+    c.exige('manha' in norm(row.get('instalacao_preferencia') or ''), f'[P46] o período "Manhã" não ficou gravado: {row}')
+    r = c.diz('Não é nenhuma dessas, é o 403')
+    t = fala(r)
+    c.exige(not RX_PERG_PERIODO.search(t) and (r.get('interativo') or {}).get('chave') != 'turno', f'[P46] período de novo depois da unidade: «{t[-200:]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -745,6 +773,8 @@ PORTAO = {
     'aq': (50, cen_aq, 'P44'),
     # 21/11 — conversa L-199 (Bruno): o cliente dá um dia para decidir → espera marcada pela Mari (0348)
     'ar': (51, cen_ar, 'P45'),
+    # 21/11 — conversa L-236 (teste do Ricardo): a lista de unidades chega depois do período; o período não se pergunta de novo
+    'as': (52, cen_as, 'P46'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
