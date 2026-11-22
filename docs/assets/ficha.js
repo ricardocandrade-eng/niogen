@@ -874,7 +874,9 @@
       const val = (k) => String(fd.get(k) ?? '').trim();
       const campos = {};
       if (g === 'contato') {
-        if (val('nome') !== String(x.nome || c.nome_contato || '').trim()) campos.nome = val('nome');
+        // 22/11 (caso L-219): o campo vem preenchido com o nome do WhatsApp quando o lead ainda não tem nome gravado; comparar com
+        // ele fazia o Salvar não mandar nada ("nome salvo" na tela, vazio no banco — e o Virar venda acusava "falta o nome").
+        if (val('nome') && val('nome') !== String(x.nome || '').trim()) campos.nome = val('nome');
         if (NG.soDigitos(val('cpf')) !== NG.soDigitos(x.cpf || '')) campos.cpf = val('cpf');
         if (val('email').toLowerCase() !== String(x.email || '').toLowerCase()) campos.email = val('email');
       } else if (g === 'endereco') {
