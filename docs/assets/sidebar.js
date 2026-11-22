@@ -108,6 +108,7 @@
         ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
       <div class="nav-foot">
+        ${pagina === 'minhavez' ? '' : `<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button><a href="guia.html#consulta-central" title="Como usar a Consulta central (Guia do Backoffice)">Guia</a></div>`}
         <div class="nav-status" data-status aria-live="polite"></div>
         <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
       </div>`;
@@ -115,6 +116,7 @@
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
     menuMovel(nav, pagina);
+    consultaBotao(nav, pagina);   // 21/11: Consulta central (depois do menuMovel: o ⌕ vai na barra do celular)
     appMovel(pagina);
     guiaNovo(nav, pagina);
     balancoBotao();
@@ -468,6 +470,53 @@
     nav.addEventListener('click', (ev) => { if (ev.target.closest('a.nav-item')) fechar(); });
     document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && nav.classList.contains('aberto')) { fechar(); btn.focus(); } });
     window.matchMedia('(min-width: 761px)').addEventListener('change', (m) => { if (m.matches) fechar(); });
+  }
+
+  // ---------- Consulta central (21/11/2026, Ricardo): viabilidade · crédito · OS · GED360 num painel sobre qualquer tela ----------
+  // Botão "Consulta | Guia" no pé do menu e ⌕ na barra do celular. assets/consulta.js só é baixado no 1º clique (regra 19) —
+  // ou na abertura da tela se esta aba já tinha a consulta aberta/minimizada (sessionStorage niogen.consulta: volta como estava).
+  // Na Live (fila.html) não aparece até o Ricardo decidir (regra 20: Live só depois de debater).
+  let consultaP = null;
+  function consultaCarregar() {
+    if (window.NGConsulta) return Promise.resolve(window.NGConsulta);
+    if (!consultaP) {
+      consultaP = new Promise((ok, falhou) => {
+        const s = document.createElement('script');
+        s.src = 'assets/consulta.js?v=211126-cc1';
+        s.onload = () => ok(window.NGConsulta);
+        s.onerror = () => { consultaP = null; falhou(new Error('não carregou')); };
+        document.head.appendChild(s);
+      });
+    }
+    return consultaP;
+  }
+  function consultaBotao(nav, pagina) {
+    if (pagina === 'minhavez') return;
+    try {
+      if (!document.getElementById('nav-consulta-estilo')) {
+        const st = document.createElement('style');
+        st.id = 'nav-consulta-estilo';
+        st.textContent = '.nav-consulta{display:flex;align-items:center;margin:0 0 6px}.nav-consulta .nav-item{flex:1;width:auto;color:var(--text)}.nav-consulta .nav-item .ico{color:var(--accent);font-size:15px}'
+          + '.nav-consulta a{padding:6px 16px 6px 10px;border-left:1px solid var(--border);font:600 11px var(--dm);letter-spacing:.5px;color:var(--muted);text-decoration:none}.nav-consulta a:hover{color:var(--text)}'
+          + '.topo-movel .cc-topo{margin-left:auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);color:var(--accent);font-size:17px;line-height:1;cursor:pointer}';
+        document.head.appendChild(st);
+      }
+      const ir = () => consultaCarregar().then((c) => c && c.alternar()).catch(() => NG.toast('A Consulta central não carregou — confira a internet e tente de novo.', 'bad'));
+      const b = nav.querySelector('[data-consulta]');
+      if (b) b.addEventListener('click', () => { if (nav.classList.contains('aberto')) { const m = document.querySelector('.topo-movel .menu-btn'); if (m) m.click(); } ir(); });
+      const topo = document.querySelector('.topo-movel');
+      if (topo && !topo.querySelector('.cc-topo')) {
+        const t = document.createElement('button');
+        t.type = 'button'; t.className = 'cc-topo'; t.textContent = '⌕';
+        t.title = 'Consulta central'; t.setAttribute('aria-label', 'Abrir a Consulta central');
+        t.addEventListener('click', ir);
+        const pontos = topo.querySelector('.st-pontos');
+        topo.insertBefore(t, pontos || null);
+      }
+      let salvo = null;
+      try { salvo = JSON.parse(sessionStorage.getItem('niogen.consulta') || 'null'); } catch (e) { salvo = null; }
+      if (salvo && ['aberto', 'minimizado'].includes(salvo.modo)) consultaCarregar().catch(() => {});
+    } catch (e) { /* o botão nunca derruba o menu */ }
   }
 
   // 15/11: assets/movel.js (barra inferior do celular, instalar, avisos, sessão do app). Carrega uma vez, com o ?v= do CACHE.
