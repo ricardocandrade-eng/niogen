@@ -28,7 +28,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-8"></script>
+<script src="assets/sidebar.js?v=221126-9"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 </head>
@@ -461,7 +461,7 @@
           <span class="fu-nome">${esc(e.nome)}</span><span class="fu-n mono">${NG.fmtNum(n)}</span>
           <span class="fu-pct">${i ? `${ns[i - 1] ? Math.round((n / ns[i - 1]) * 100) : 0}% da anterior` : `${Math.round((n / topo) * 100)}%`}${and ? ` · ${NG.fmtNum(and)} em andamento` : ''}</span></a>`;
     }).join('');
-    el.innerHTML = `<div class="fu-cab"><b>Escada · ${esc(per.rotulo.toLowerCase())}</b> ${NG.dicaTxt(NG.ajuda.painel_escada)}<span>chegaram até cada degrau (leads que entraram no período) · <b>venda = OS aberta</b> (a partir do degrau OS aberta)</span><a class="muted" href="funil.html">Funil de vendas →</a></div>
+    el.innerHTML = `<div class="fu-cab"><b>Escada · ${esc(per.rotulo.toLowerCase())}</b> ${NG.dicaTxt(NG.ajuda.painel_escada)}<span>chegaram até cada degrau (leads que entraram no período) · <b>venda = OS aberta</b> (a partir do degrau OS aberta)</span><a class="muted" href="leads.html?funil=1">Funil de vendas →</a></div>
       <div class="fu-etapas">${itens}</div>`;
   }
 

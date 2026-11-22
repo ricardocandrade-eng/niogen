@@ -27,12 +27,18 @@
 <link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <script>
   // Links antigos: "+ Nova venda" (#nova, #venda-rua, ?cep=) agora abre em Leads.
-  if (['#nova', '#venda-rua'].includes(location.hash) || new URLSearchParams(location.search).get('cep')) location.replace('leads.html' + location.search + (location.hash || '#nova'));
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (['#nova', '#venda-rua'].includes(location.hash) || q.get('cep')) { location.replace('leads.html' + location.search + (location.hash || '#nova')); return; }
+    // Links antigos do funil que morava aqui (vista Quadro, etapa, parada, abas "ação" e "espera"): hoje isso é a tela Leads.
+    if (q.get('vista') === 'quadro' || q.get('etapa') || q.get('parada')) location.replace('leads.html?funil=1' + location.hash);
+    else if (['acao', 'espera'].includes(q.get('aba'))) location.replace('leads.html?aba=' + q.get('aba') + location.hash);
+  })();
 </script>
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-8"></script>
+<script src="assets/sidebar.js?v=221126-9"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 <script src="assets/vendasos.js?v=221126-2"></script>

@@ -1,11 +1,18 @@
 <!doctype html>
-<!-- NIOGEN | docs/leads.html | 13/11/2026 — Claude Code (Fable 5.2)
-     "Leads": todos os leads num lugar só, com ou sem venda — etapa · status · de quem é a vez · prazo · destino.
-     Etapa 4b do plano do sistema fechado (docs/PLANO_sistema_fechado_etapas_121126_2135.md, no Drive).
-     Dados: view v_leads (0156/0157) + config_lead (nomes e o texto dos balões ⓘ). Uma leitura de cada, em paralelo.
-     No topo, a escada de 6 degraus ("chegaram até"): clicar num degrau filtra a lista.
-     Filtros na URL, para o Painel e o Funil apontarem para cá: ?aba= ?etapa= ?status= ?vez= ?saida= ?q=
-     Clique na linha abre a ficha que já existe (#venda= ou #conversa=). Vendedor vê só os leads das próprias vendas (RLS). -->
+<!-- NIOGEN | docs/leads.html | 22/11/2026 — Claude Code (Fable 5.2)
+     "Leads" (novo layout, passo 2). Ricardo, 22/11: "Nova venda vai pro leads. Se gravar OS, vai pra Vendas" e, sobre o Funil,
+     "podemos colocar numa tela só, de forma que o Funil se expande quando clicado. Pode ir para a tela Leads".
+     O que a tela é: quem AINDA NÃO TEM OS (etapas Atendimento a Qualificado), em uma lista só, de quem entrou por último para
+     o mais antigo. Quem tem OS está em Vendas e Instalações. Colunas: entrou em · lead · etapa · status · de quem é a vez ·
+     prazo · plano · origem. Status é coluna e filtro, nunca agrupamento.
+     No topo, o FUNIL em faixa fina de uma linha (os 6 degraus, "chegaram até"); "Funil ▾" abre o relatório inteiro aqui mesmo
+     (números do recorte, % que passou de cada degrau e as saídas por motivo). Clicar num degrau filtra a lista; os dois
+     degraus com OS levam à tela Vendas. O Funil conta o mesmo recorte da lista (período, origem, cidade).
+     funil.html deixou de ser tela: só redireciona para leads.html?funil=1.
+     Dados, numa rodada só: v_leads (colunas da tela, não mais "*") + config_lead + config_canais. Só leitura.
+     Filtros na URL: ?aba= ?etapa= ?status= ?vez= ?saida= ?q= ?origem= ?cidade= ?periodo= ?de= ?ate= ?funil=1
+     Clique na linha abre a ficha única em tela cheia (#venda= ou #conversa=). Vendedor vê só os leads das próprias vendas (RLS).
+     Desenho aprovado: docs/LAYOUT_sete_telas_especificacao_221126_1510.md (Drive). -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -23,179 +30,290 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-8"></script>
+<script src="assets/sidebar.js?v=221126-9"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 <script src="assets/novavenda.js?v=211126-4b"></script>
+<link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <style>
-  .ld-escada { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-  .ld-degrau { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); text-align: left; cursor: pointer; min-width: 0; }
-  .ld-degrau.ativa { border-color: var(--accent); }
-  .ld-degrau b { font-size: 20px; font-family: 'JetBrains Mono', monospace; }
-  .ld-degrau span { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ld-degrau small { font-size: 11px; color: var(--muted); }
-  .ld-barra { height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; margin-top: 4px; }
-  .ld-barra i { display: block; height: 100%; background: var(--accent); }
-  .ld-filtros { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-  .ld-filtros input[type=search] { flex: 1 1 220px; min-width: 180px; }
-  .ld-filtros select, .ld-filtros input { min-height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px; }
-  .ld-tab-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
-  table.tab td small { display: block; color: var(--muted); font-size: 11px; }
-  tr.ld-saida td { opacity: .72; }
-  .ld-vez { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+  /* Funil em faixa: os 6 degraus numa linha; "Funil" abre o relatório embaixo */
+  .fx-funil { display: flex; align-items: stretch; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow-x: auto; scrollbar-width: thin; }
+  .fx-deg { display: flex; gap: 7px; align-items: baseline; padding: 8px 12px; border: 0; border-right: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; white-space: nowrap; font: inherit; text-decoration: none; }
+  .fx-deg:hover { background: var(--surface-2); }
+  .fx-deg.ativa { background: var(--surface-2); box-shadow: inset 0 -2px 0 var(--accent); }
+  .fx-deg span { font-size: 12px; color: var(--muted); }
+  .fx-deg b { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+  .fx-deg small { font-size: 11px; color: var(--muted); }
+  .fx-deg.os b { color: var(--ok-fg); }
+  .fx-abre { margin-left: auto; display: flex; align-items: center; gap: 6px; padding: 0 14px; border: 0; background: transparent; color: var(--link); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .fx-abre:hover { color: var(--link-hover); }
+  .fn-painel { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .fn-painel .faixa-fina { background: var(--surface-dim); }
+  .fn-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 320px; align-items: center; gap: 14px; padding: 2px 6px; border-radius: 8px; min-height: 40px; }
+  .fn-row:hover { background: var(--surface-2); }
+  .fn-nm { min-width: 0; }
+  .fn-nm button, .fn-nm a.ir { color: var(--text); background: none; border: 0; padding: 0; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; }
+  .fn-nm small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fn-nm small .bad-txt { color: var(--bad-fg); }
+  .fn-fz { height: 32px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; text-decoration: none;
+    color: #D7F5C8; font-family: var(--mono); font-size: 15px; font-weight: 600; background: #1E3A24; border: 1px solid #2F6B3A; clip-path: polygon(0 0, 100% 0, 96% 100%, 4% 100%); }
+  .fn-fz.venda { background: #245C2E; border-color: #32E000; color: #fff; }
+  .fn-fz em { font-style: normal; font-family: var(--sans); font-size: 12px; font-weight: 500; color: #A9D79A; }
+  .fn-fz:hover { filter: brightness(1.15); }
+  .fn-cv { text-align: center; font-size: 11.5px; color: var(--muted); line-height: 14px; }
+  .fn-cv b { color: var(--text); font-weight: 600; }
+  .fn-lost { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+  .fn-lost button { font: inherit; font-size: 11.5px; background: var(--bad-bg); color: var(--bad-fg); border: 1px solid var(--bad-border); border-radius: 6px; padding: 2px 7px; cursor: pointer; white-space: nowrap; }
+  .fn-lost button:hover { border-color: var(--bad-dot); }
+  .fn-lost em { font-style: normal; font-size: 12px; color: var(--muted); }
+  .fn-rod { font-size: 12px; color: var(--muted); }
+  .ld-vez { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; display: inline-block; }
   .ld-vez.time { border-color: var(--warn-border); color: var(--warn-fg); background: var(--warn-bg); }
   .ld-vez.cliente { color: var(--info-fg); background: var(--info-bg); border-color: transparent; }
   .ld-vez.nio { color: var(--muted); }
   .ld-vez.mari { color: var(--ok-fg); background: var(--ok-bg); border-color: transparent; }
-  @media (max-width: 760px) { .ld-escada { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .lista-densa td .btn[data-operador] { min-height: 22px; padding: 0 7px; font-size: 12px; margin-left: 6px; vertical-align: baseline; }
+  @media (max-width: 1100px) { .fn-row { grid-template-columns: 150px minmax(0, 1fr) 220px; } }
 </style>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="leads"></nav>
-  <main class="main">
+  <main class="main lista-densa">
     <header class="cab">
       <div>
         <h1>Leads <span id="i-tela"></span></h1>
-        <div class="sub">Todo mundo que falou com a gente, com ou sem venda: em que degrau está, de quem é a vez e até quando.</div>
+        <div class="sub">Quem ainda não tem OS, de quem entrou por último para o mais antigo. Quem já tem OS está em <a href="vendas.html">Vendas</a>.</div>
       </div>
-      <div class="cab-acoes" id="cab-acoes"><button type="button" class="btn btn-sm" id="csv">⇩ Exportar a lista</button><button type="button" class="btn btn-acc acao-principal" id="btn-nova">＋ Nova venda</button></div>
+      <div class="cab-acoes" id="cab-acoes"><button type="button" class="btn btn-sm btn-ghost" id="csv">⇩ Exportar</button><button type="button" class="btn btn-acc acao-principal" id="btn-nova">＋ Nova venda</button></div>
     </header>
-    <section class="ld-escada" id="escada" aria-label="Escada: quantos chegaram até cada degrau"></section>
-    <div class="abas" id="abas" role="tablist"></div>
-    <div class="ld-filtros">
-      <input type="search" id="busca" placeholder="Buscar nome, telefone, cidade, nº do pedido ou L-142" autocomplete="off" aria-label="Buscar lead">
-      <select id="f-status" aria-label="Filtrar por status"></select>
-      <select id="f-vez" aria-label="Filtrar por de quem é a vez"></select>
-      <select id="f-saida" aria-label="Filtrar por motivo de saída"></select>
-      <button type="button" class="btn btn-sm btn-ghost" id="limpar">Limpar filtros</button>
-      <span id="recorte"></span>
+
+    <section class="fx-funil" id="funil-faixa" aria-label="Funil: quantos chegaram até cada degrau"></section>
+    <section class="fn-painel" id="funil-painel" aria-label="Funil de vendas" hidden></section>
+    <div id="abas"></div>
+
+    <div class="barra-filtros">
+      <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="busca" placeholder="Buscar nome, telefone, cidade ou plano · L-142 + Enter abre o lead" autocomplete="off" aria-label="Buscar lead"></label>
+      <select class="sel" id="f-status" aria-label="Filtrar por status"></select>
+      <select class="sel" id="f-vez" aria-label="Filtrar por de quem é a vez"></select>
+      <select class="sel" id="f-saida" aria-label="Filtrar por motivo de saída" hidden></select>
+      <select class="sel" id="f-origem" aria-label="Filtrar por origem"></select>
+      <select class="sel" id="f-cidade" aria-label="Filtrar por cidade"></select>
+      <span id="f-periodo"></span>
+      <button type="button" class="btn btn-sm btn-ghost" id="limpar" hidden>Limpar filtros</button>
     </div>
-    <div class="ld-tab-wrap">
-      <table class="tab">
-        <thead><tr><th>Lead</th><th>Etapa</th><th>Status</th><th>De quem é a vez</th><th>Prazo</th><th>Cidade</th><th>Plano</th><th>Origem</th><th>Dono</th><th>Última</th></tr></thead>
-        <tbody id="tbody"><tr><td colspan="10" class="vazio">Carregando…</td></tr></tbody>
-      </table>
-    </div>
-    <div class="apagado" id="rodape" style="font-size:12px"></div>
+
+    <section class="lista padrao" aria-label="Lista de leads">
+      <div class="rolagem">
+        <table class="tab">
+          <thead><tr><th>Entrou em</th><th>Lead</th><th>Etapa</th><th>Status</th><th>De quem é a vez</th><th>Prazo</th><th>Plano</th><th>Origem</th></tr></thead>
+          <tbody id="tbody"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="rodape"></span><span>Clique na linha para abrir a ficha</span></div>
+    </section>
   </main>
 </div>
 <script>
 (async function () {
+  const t0 = performance.now();
   const { esc } = NG;
+  const A = NG.ajuda;
   const eu = await NG.exigirLogin();
   const BO = ['admin', 'backoffice'].includes(eu.perfil);
   NGSidebar.montar();
   const tbody = document.getElementById('tbody');
   const Q = new URLSearchParams(location.search);
   const f = { aba: Q.get('aba') || 'andamento', etapa: Q.get('etapa') || '', status: Q.get('status') || '', vez: Q.get('vez') || '', saida: Q.get('saida') || '', q: Q.get('q') || '',
-    origem: Q.get('origem') || '', cidade: Q.get('cidade') || '', de: Q.get('de') || '', ate: Q.get('ate') || '' };   // 13/11 (4b): recorte vindo do Funil de vendas
+    origem: Q.get('origem') || '', cidade: Q.get('cidade') || '' };
   if (f.saida && !Q.get('aba')) f.aba = 'saidas';
-  let leads = [], cfg = { etapa: [], status: [], saida: [] }, ajuda = {};
+  let funilAberto = Q.get('funil') === '1';
+  let leads = [], cfg = { etapa: [], status: [], saida: [] };
+  const COM_OS = 5;   // etapa 5 em diante = OS gerada: a venda mora nas telas Vendas e Instalações
+  const QUALIF = 4;   // qualificados = chegaram em Qualificado ou além, menos Já é cliente Nio e Crédito negado (regra da 0147)
   const VEZ = { mari: 'Mari', time: 'Nosso time', cliente: 'Cliente', nio: 'Nio' };
   const VEZ_AJUDA = { mari: 'A Mari está cuidando. Nada a fazer, a não ser que ela peça uma pessoa.', time: 'A próxima ação é nossa. Abra o lead e faça o que o status pede.',
     cliente: 'Estamos esperando o cliente. A Mari lembra sozinha; se passou do prazo, vale uma mensagem ou ligação sua.', nio: 'Estamos esperando a Nio (instalação marcada ou pendência dela).' };
-  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', parceiro: 'Parceiro PAP' };
+  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', parceiro: 'Parceiro PAP', parceiro_pap: 'Parceiro PAP', rua: 'Rua' };
   const ABAS = [
-    ['todos', 'Todos', () => true, 'Todos os leads, menos teste e duplicada.'],
     ['andamento', 'Em andamento', (l) => l.destino === 'em_andamento', 'Leads que ainda podem virar venda.'],
     ['acao', 'Precisam de ação', (l) => l.destino === 'em_andamento' && !l.em_espera && (l.vez === 'time' || l.atrasado), 'A vez é nossa, ou o prazo de alguém estourou. Comece por aqui.'],
     ['espera', 'Em espera', (l) => l.em_espera, 'Travados por terceiro, com motivo e data de revisão. Voltam sozinhos no dia.'],
-    ['saidas', 'Saídas', (l) => l.destino === 'saida', 'Quem saiu, em que degrau parou e por quê.'],
-    ['instaladas', 'Instaladas', (l) => l.destino === 'instalada', 'Instaladas pela Nio: contam na meta e geram comissão.'],
+    ['saidas', 'Saídas', (l) => l.destino === 'saida', 'Quem saiu antes da OS, em que etapa parou e por quê.'],
+    ['todos', 'Todos', () => true, 'Todos os leads sem OS, menos teste e duplicada.'],
   ];
+  if (!ABAS.some((a) => a[0] === f.aba)) f.aba = 'andamento';   // ?aba=instaladas (link antigo): as instaladas estão em Vendas
 
-  document.getElementById('i-tela').innerHTML = NG.dicaTxt('Uma linha por lead. A etapa só sobe. O status diz o que falta; "de quem é a vez" diz quem tem de agir; o prazo fica vermelho quando estoura. Clique na linha para abrir a ficha.');
+  document.getElementById('i-tela').innerHTML = NG.dicaTxt('Uma linha por lead que ainda não tem OS. A etapa só sobe. O status diz o que falta; "de quem é a vez" diz quem tem de agir; o prazo fica vermelho quando estoura. Clique na linha para abrir a ficha.');
+  // Período: vale para a lista e para o Funil. ?de=&ate= (links antigos do Funil) abrem em "Período…".
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: Q.get('de') || Q.get('ate') ? 'custom' : Q.get('periodo') || 'tudo', aoMudar: render });
+  if (Q.get('de') || Q.get('ate')) {
+    const [de, ate] = per.el.querySelectorAll('input[type=date]');
+    de.value = Q.get('de') || ''; ate.value = Q.get('ate') || '';
+    per.el.querySelector('.datas').hidden = false;
+  }
 
   function gravarUrl() {
     const p = new URLSearchParams();
     Object.entries(f).forEach(([k, v]) => { if (v && !(k === 'aba' && v === 'andamento')) p.set(k, v); });
+    const pv = per.valor();
+    if (pv.valor === 'custom') { if (pv.de) p.set('de', pv.de); if (pv.ate) p.set('ate', pv.ate); } else if (pv.valor !== 'tudo') p.set('periodo', pv.valor);
+    if (funilAberto) p.set('funil', '1');
     history.replaceState(null, '', `${location.pathname}${p.toString() ? `?${p}` : ''}${location.hash}`);
   }
-  const reais = () => leads.filter((l) => l.destino !== 'teste_duplicada');
-  function filtrados() {
-    const aba = ABAS.find((a) => a[0] === f.aba) || ABAS[1];
+  // O recorte: período de entrada + origem + cidade. É a base do Funil e da lista.
+  const noRecorte = (l, p) => l.destino !== 'teste_duplicada' && NG.noPeriodo(l.criado_em, p) && (!f.origem || l.origem === f.origem) && (!f.cidade || l.cidade === f.cidade);
+  const semOS = (l) => Number(l.etapa_ordem || 0) < COM_OS;
+  const chegou = (l, ordem) => Number(l.etapa_ordem || 0) >= ordem;
+  function casaBusca(l) {
     const q = f.q.trim().toLowerCase();
+    if (!q) return true;
     const dig = q.replace(/\D/g, '');
-    const ini = f.de ? new Date(`${f.de}T00:00:00-03:00`) : null;
-    const fim = f.ate ? new Date(`${NG.somaDias(f.ate, 1)}T00:00:00-03:00`) : null;
-    return reais().filter((l) => aba[2](l)
-      && (!f.origem || l.origem === f.origem) && (!f.cidade || l.cidade === f.cidade)
-      && (!ini || new Date(l.criado_em) >= ini) && (!fim || new Date(l.criado_em) < fim)
-      && (!f.etapa || l.etapa === f.etapa) && (!f.status || l.status === f.status)
-      && (!f.vez || l.vez === f.vez) && (!f.saida || l.saida_motivo === f.saida)
-      && (!q || [l.nome, l.cidade, l.plano].some((x) => String(x || '').toLowerCase().includes(q)) || (dig.length >= 3 && String(l.telefone || '').includes(dig))));
+    return [l.nome, l.cidade, l.plano].some((x) => String(x || '').toLowerCase().includes(q)) || (dig.length >= 3 && String(l.telefone || '').includes(dig));
   }
+  // Tudo menos a pílula: a base das contagens das pílulas.
+  const base = (R) => R.filter((l) => semOS(l) && casaBusca(l) && (!f.etapa || l.etapa === f.etapa) && (!f.status || l.status === f.status) && (!f.vez || l.vez === f.vez) && (!f.saida || l.saida_motivo === f.saida));
+  const abaFn = () => (ABAS.find((a) => a[0] === f.aba) || ABAS[0])[2];
+  const filtrados = (R) => base(R).filter(abaFn()).sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+  const hora = (x) => new Date(x).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: NG.TZ });
+  const pct = (n, topo) => (topo ? `${String(Math.round((n / topo) * 1000) / 10).replace('.', ',')} %` : '—');
+
   const prazoCel = (l) => {
-    if (l.destino !== 'em_andamento') return '';
+    if (l.destino !== 'em_andamento') return '<span class="apagado">—</span>';
     if (l.em_espera) return `<span class="chip info" title="${esc(`Em espera: ${l.espera_motivo || ''} · quem destrava: ${l.espera_quem || '—'}`)}">⏸ ${l.espera_revisar_em ? `revisar ${esc(NG.fmtData(l.espera_revisar_em))}` : 'em espera'}</span>`;
     if (!l.prazo_em) return '<span class="apagado">—</span>';
     const t = new Date(l.prazo_em);
     return `<span class="chip ${l.atrasado ? 'bad' : t - Date.now() < 3600000 * 4 ? 'warn' : 'dim'}" title="Prazo de quem tem a vez">${l.atrasado ? 'estourou · ' : ''}${esc(NG.fmtDataHora(l.prazo_em))}</span>`;
   };
-  function render() {
-    const R = reais();
-    // escada: chegaram até
-    const topo = R.length || 1;
-    document.getElementById('escada').innerHTML = cfg.etapa.map((e) => {
-      const n = R.filter((l) => l.etapa_ordem >= e.ordem).length;
-      const and = R.filter((l) => l.etapa === e.codigo && l.destino === 'em_andamento').length;
-      const sai = R.filter((l) => l.etapa === e.codigo && l.destino === 'saida').length;
-      return `<button type="button" class="ld-degrau${f.etapa === e.codigo ? ' ativa' : ''}" data-etapa="${esc(e.codigo)}" title="${esc(e.ajuda || '')}">
-        <span>${e.ordem} · ${esc(e.nome)}</span><b>${NG.fmtNum(n)}</b>
-        <small>${Math.round((n / topo) * 100)} % · ${and} em andamento · ${sai} saíram</small>
-        <div class="ld-barra"><i style="width:${Math.max(2, Math.round((n / topo) * 100))}%"></i></div></button>`;
+
+  // ---------- Funil: a faixa de uma linha e o relatório que abre embaixo ----------
+  function renderFunil(R, p) {
+    const topo = R.length;
+    const ns = cfg.etapa.map((e) => R.filter((l) => chegou(l, e.ordem)).length);
+    document.getElementById('funil-faixa').innerHTML = cfg.etapa.map((e, i) => {
+      const txt = `<span>${e.ordem} · ${esc(e.nome)}</span><b>${NG.fmtNum(ns[i])}</b><small>${pct(ns[i], topo)}</small>`;
+      return e.ordem >= COM_OS
+        ? `<a class="fx-deg os" href="vendas.html" title="${esc(`${e.ajuda || ''} Com OS gerada: veja na tela Vendas.`)}">${txt}</a>`
+        : `<button type="button" class="fx-deg${f.etapa === e.codigo ? ' ativa' : ''}" data-etapa="${esc(e.codigo)}" title="${esc(`${e.ajuda || ''} Clique para ver na lista quem está nesta etapa.`)}">${txt}</button>`;
+    }).join('') + `<button type="button" class="fx-abre" id="funil-abre" aria-expanded="${funilAberto}" aria-controls="funil-painel" title="${esc(A.funil_tela || '')}">Funil ${funilAberto ? '▴' : '▾'}</button>`;
+
+    const el = document.getElementById('funil-painel');
+    el.hidden = !funilAberto;
+    if (!funilAberto) { el.innerHTML = ''; return; }
+    // Números do recorte (os mesmos do antigo relatório Funil de vendas)
+    let comp = '';
+    if (p.inicio && p.fim) {
+      const ms = p.fim - p.inicio;
+      const nAnt = leads.filter((l) => noRecorte(l, { inicio: new Date(p.inicio.getTime() - ms), fim: p.inicio })).length;
+      const dif = topo - nAnt;
+      comp = `${dif > 0 ? '+' : ''}${NG.fmtNum(dif)} contra o período anterior (${NG.fmtNum(nAnt)})`;
+    }
+    const qual = R.filter((l) => chegou(l, QUALIF) && !['ja_cliente_nio', 'credito_negado'].includes(l.saida_motivo)).length;
+    const inst = R.filter((l) => l.destino === 'instalada').length;
+    const jogo = R.filter((l) => l.destino === 'em_andamento' && chegou(l, QUALIF));
+    const emJogo = jogo.reduce((s, l) => s + Number(l.comissao_prevista || 0), 0);
+    const sai = R.filter((l) => l.destino === 'saida');
+    const porMot = {};
+    sai.forEach((l) => { porMot[l.saida_nome || 'Sem motivo'] = (porMot[l.saida_nome || 'Sem motivo'] || 0) + 1; });
+    const maior = Object.entries(porMot).sort((a, b) => b[1] - a[1])[0];
+    const numeros = `<div class="faixa-fina">
+      <div title="${esc(A.funil_k_leads || '')}"><span>Leads</span><b>${NG.fmtNum(topo)}</b><small>${esc(comp || per.rotulo.toLowerCase())}</small></div>
+      <div title="${esc(A.funil_k_qualif || '')}"><span>Qualificados</span><b>${NG.fmtNum(qual)}</b><small>${pct(qual, topo)}</small></div>
+      <div title="Leads do recorte que a Nio já instalou."><span>Instaladas</span><b class="ok">${NG.fmtNum(inst)}</b><small>${pct(inst, topo)}</small></div>
+      <div title="${esc(A.funil_k_jogo || '')}"><span>Em jogo agora</span><b class="${emJogo ? 'warn' : ''}">${esc(NG.fmtMoeda(emJogo).replace(/,00$/, ''))}</b><small>${NG.fmtNum(jogo.length)} qualificado${jogo.length === 1 ? '' : 's'} em andamento</small></div>
+      <div title="${esc(A.funil_k_sai || '')}"><span>Saíram</span><b class="${sai.length ? 'bad' : ''}">${NG.fmtNum(sai.length)}</b><small>${pct(sai.length, topo)}${maior ? ` · maior: ${esc(maior[0])} (${maior[1]})` : ''}</small></div></div>`;
+    const linhas = cfg.etapa.map((e, i) => {
+      const n = ns[i];
+      const w = topo ? Math.max(14, (n / topo) * 100) : 14;
+      const and = R.filter((l) => l.etapa === e.codigo && l.destino === 'em_andamento');
+      const atr = and.filter((l) => l.atrasado).length;
+      const perdas = {};
+      R.filter((l) => l.destino === 'saida' && l.etapa === e.codigo).forEach((l) => { const k = l.saida_motivo || ''; (perdas[k] = perdas[k] || { k, nome: l.saida_nome || 'Sem motivo', n: 0 }).n++; });
+      const pl = Object.values(perdas).sort((a, b) => b.n - a.n);
+      const comOS = e.ordem >= COM_OS;
+      const passou = i ? `<div class="fn-cv">↓ <b>${ns[i - 1] ? Math.round((n / ns[i - 1]) * 100) : 0} %</b> passaram</div>` : '';
+      const nome = comOS ? `<a class="ir" href="vendas.html" title="Com OS gerada: veja na tela Vendas">${esc(e.nome)} →</a>` : `<button type="button" data-fn-etapa="${esc(e.codigo)}" data-fn-aba="todos">${esc(e.nome)}</button>`;
+      const barra = comOS ? `<a class="fn-fz venda" style="width:${w}%" href="vendas.html" title="${esc(`${NG.fmtNum(n)} chegaram até ${e.nome} ou além · veja na tela Vendas`)}">${NG.fmtNum(n)}<em>${pct(n, topo)}</em></a>`
+        : `<span class="fn-fz" role="button" tabindex="0" style="width:${w}%" data-fn-etapa="${esc(e.codigo)}" data-fn-aba="todos" title="${esc(`${NG.fmtNum(n)} chegaram até ${e.nome} ou além · clique para ver quem está nesta etapa`)}">${NG.fmtNum(n)}<em>${pct(n, topo)}</em></span>`;
+      return `${passou}<div class="fn-row">
+        <div class="fn-nm">${nome}${NG.dicaTxt(e.ajuda || '')}
+          <small>${and.length ? `${NG.fmtNum(and.length)} em andamento` : 'ninguém parado aqui'}${atr ? ` · <span class="bad-txt">${NG.fmtNum(atr)} atrasado${atr === 1 ? '' : 's'}</span>` : ''}</small></div>
+        <div class="fn-bar">${barra}</div>
+        <div class="fn-lost">${pl.length ? pl.map((x) => (comOS ? `<em>${esc(x.nome)} ${NG.fmtNum(x.n)}</em>`
+          : `<button type="button" data-fn-etapa="${esc(e.codigo)}" data-fn-aba="saidas" data-fn-saida="${esc(x.k)}" title="${esc(`Saíram em ${e.nome}: ${x.nome} · clique para ver na lista`)}">${esc(x.nome)} ${NG.fmtNum(x.n)}</button>`)).join('') : '<em>sem perdas</em>'}</div>
+      </div>`;
     }).join('');
-    document.getElementById('abas').innerHTML = ABAS.map(([id, nome, fn, dica]) =>
-      `<button type="button" class="aba${f.aba === id ? ' ativa' : ''}" role="tab" data-aba="${id}" title="${esc(dica)}">${esc(nome)} · ${NG.fmtNum(R.filter(fn).length)}</button>`).join('');
-    const L = filtrados().sort((a, b) => (b.atrasado - a.atrasado) || ((a.vez === 'time' ? 0 : 1) - (b.vez === 'time' ? 0 : 1)) || (new Date(b.ultima_em || 0) - new Date(a.ultima_em || 0)));
+    el.innerHTML = `${numeros}${topo ? linhas : '<div class="vazio">Nenhum lead neste recorte.</div>'}
+      <div class="fn-rod">Largura = chegaram até a etapa · ↓ % = passaram da etapa anterior · vermelho = saíram ali, por motivo · o Funil conta o período, a origem e a cidade escolhidos nos filtros</div>`;
+  }
+
+  function render() {
+    const p = per.valor();
+    const R = leads.filter((l) => noRecorte(l, p));
+    renderFunil(R, p);
+    const B = base(R);
+    NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome, fn, dica]) => ({ id, nome, n: B.filter(fn).length, alerta: id === 'acao', dica })), f.aba, (id) => { f.aba = id; if (id !== 'saidas') f.saida = ''; render(); });
+    const L = B.filter(abaFn()).sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
     tbody.innerHTML = L.length ? L.slice(0, 500).map((l) => {
       const saida = l.destino === 'saida';
       const chave = l.venda_id ? `venda=${l.venda_id}` : `conversa=${l.conversa_id}`;
-      return `<tr class="clicavel${saida ? ' ld-saida' : ''}" data-abrir="${esc(chave)}" tabindex="0">
-        <td><b>${esc(l.nome)}</b><small>${l.telefone ? `final ${esc(String(l.telefone).slice(-4))}` : ''}${l.venda_id ? ' · com venda' : ''}</small>${BO && l.destino === 'em_andamento' && l.etapa_ordem < 5 ? NG.botaoOperador({ vendaId: l.venda_id, conversaId: l.conversa_id }) : ''}</td>
+      return `<tr class="clicavel${saida ? ' cancelada' : ''}" data-abrir="${esc(chave)}" tabindex="0" title="Abrir a ficha">
+        <td class="quando">${esc(NG.fmtData(l.criado_em))}<small>${esc(hora(l.criado_em))}</small></td>
+        <td><b>${esc(l.nome || '—')}</b>${BO && l.destino === 'em_andamento' ? NG.botaoOperador({ vendaId: l.venda_id, conversaId: l.conversa_id }, '⌖') : ''}<small>${esc([l.telefone ? `final ${String(l.telefone).slice(-4)}` : '', l.cidade].filter(Boolean).join(' · ') || '—')}</small></td>
         <td>${esc(l.etapa_nome || l.etapa)}${saida ? '<small>onde parou</small>' : ''}</td>
-        <td>${saida ? `<span class="chip bad">⛔ ${esc(l.saida_nome || 'Saída')}</span> ${NG.dicaTxt(l.saida_ajuda || '')}<small>${esc(l.saida_sub || '')}${l.volta_em ? ` · volta ${esc(NG.fmtData(l.volta_em))}` : ''}</small>`
-          : l.destino === 'instalada' ? `<span class="chip ok">✅ Instalada</span>${l.cancelada_apos_instalar_em ? '<small>cancelada depois de instalar</small>' : ''}`
-          : `${esc(l.status_nome || l.status)} ${NG.dicaTxt(l.status_ajuda || '')}`}</td>
-        <td>${l.vez ? `<span class="ld-vez ${esc(l.vez)}" title="${esc(VEZ_AJUDA[l.vez] || '')}">${esc(VEZ[l.vez] || l.vez)}</span>` : ''}</td>
-        <td>${prazoCel(l)}</td>
-        <td>${esc(l.cidade || '—')}</td>
+        <td>${saida ? `<span class="chip bad">${esc(l.saida_nome || 'Saída')}</span> ${NG.dicaTxt(l.saida_ajuda || '')}<small>${esc([l.saida_sub, l.volta_em ? `volta ${NG.fmtData(l.volta_em)}` : ''].filter(Boolean).join(' · '))}</small>`
+          : `${esc(l.status_nome || l.status || '—')} ${NG.dicaTxt(l.status_ajuda || '')}`}</td>
+        <td>${l.vez && !saida ? `<span class="ld-vez ${esc(l.vez)}" title="${esc(VEZ_AJUDA[l.vez] || '')}">${esc(VEZ[l.vez] || l.vez)}</span>` : '<span class="apagado">—</span>'}${l.dono ? `<small>dono: ${esc(l.dono)}</small>` : ''}</td>
+        <td>${prazoCel(l)}${l.ultima_em ? `<small title="Última movimentação">últ. ${esc(NG.fmtDataHora(l.ultima_em))}</small>` : ''}</td>
         <td>${esc(l.plano || '—')}${l.comissao_prevista ? `<small>comissão ${esc(NG.fmtMoeda(l.comissao_prevista))}</small>` : ''}</td>
-        <td>${esc(ORIGEM[l.origem] || l.origem || '—')}</td>
-        <td>${esc(l.dono || '—')}</td>
-        <td>${l.ultima_em ? esc(NG.fmtDataHora(l.ultima_em)) : '—'}</td></tr>`;
-    }).join('') : '<tr><td colspan="10" class="vazio">Nenhum lead neste filtro.</td></tr>';
-    const rec = [f.origem && `origem ${ORIGEM[f.origem] || f.origem}`, f.cidade && f.cidade, (f.de || f.ate) && `entrou ${f.de ? NG.fmtDiaISO(f.de) : '…'} a ${f.ate ? NG.fmtDiaISO(f.ate) : '…'}`].filter(Boolean);
-    document.getElementById('recorte').innerHTML = rec.length ? `<span class="chip info">Recorte do Funil: ${esc(rec.join(' · '))}</span> <button type="button" class="btn btn-sm btn-ghost" data-tirar-recorte>Tirar o recorte</button> ${NG.dicaTxt(NG.ajuda.leads_recorte)}` : '';
-    document.getElementById('rodape').textContent = `${NG.fmtNum(L.length)} lead${L.length === 1 ? '' : 's'} neste filtro${L.length > 500 ? ' (mostrando os 500 primeiros — refine a busca)' : ''} · ${NG.fmtNum(R.length)} no total · teste e duplicada ficam de fora`;
-    document.getElementById('busca').value = f.q;
+        <td>${esc(ORIGEM[l.origem] || l.origem || '—')}</td></tr>`;
+    }).join('') : `<tr><td colspan="8" class="vazio">${leads.length ? 'Nenhum lead neste filtro.' : 'Nenhum lead ainda.'}</td></tr>`;
+    const semOsTotal = R.filter(semOS).length;
+    document.getElementById('rodape').textContent = `${NG.fmtNum(L.length)} lead${L.length === 1 ? '' : 's'}${L.length > 500 ? ' (mostrando os 500 primeiros: refine a busca)' : ''} de ${NG.fmtNum(semOsTotal)} sem OS · de quem entrou por último para o mais antigo`;
+    const busca = document.getElementById('busca');
+    if (busca.value !== f.q) busca.value = f.q;
     document.getElementById('f-status').value = f.status;
     document.getElementById('f-vez').value = f.vez;
-    document.getElementById('f-saida').value = f.saida;
+    document.getElementById('f-origem').value = f.origem;
+    document.getElementById('f-cidade').value = f.cidade;
+    const fs = document.getElementById('f-saida');
+    fs.hidden = f.aba !== 'saidas' && !f.saida;
+    fs.value = f.saida;
+    document.getElementById('limpar').hidden = !(f.aba !== 'andamento' || f.q || f.etapa || f.status || f.vez || f.saida || f.origem || f.cidade || p.valor !== 'tudo');
     gravarUrl();
+    if (!window.NGldTempo && leads.length) window.NGldTempo = Math.round(performance.now() - t0);   // regra 19: tempo até a lista
   }
   function montarSelects() {
-    document.getElementById('f-status').innerHTML = '<option value="">Status: todos</option>' + cfg.status.map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)}</option>`).join('');
-    document.getElementById('f-vez').innerHTML = '<option value="">A vez: de qualquer um</option>' + Object.entries(VEZ).map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join('');
-    document.getElementById('f-saida').innerHTML = '<option value="">Saída: qualquer motivo</option>' + cfg.saida.filter((s) => s.codigo !== 'teste_duplicada').map((s) => `<option value="${esc(s.codigo)}">${esc(s.nome)}</option>`).join('');
+    const op = (itens, todos) => `<option value="">${esc(todos)}</option>` + itens.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join('');
+    const etapaOrdem = Object.fromEntries(cfg.etapa.map((e) => [e.codigo, e.ordem]));
+    document.getElementById('f-status').innerHTML = op(cfg.status.map((s) => [s.codigo, s.nome]), 'Status: todos');
+    document.getElementById('f-vez').innerHTML = op(Object.entries(VEZ), 'A vez: de qualquer um');
+    document.getElementById('f-saida').innerHTML = op(cfg.saida.filter((s) => s.codigo !== 'teste_duplicada').map((s) => [s.codigo, s.nome]), 'Saída: qualquer motivo');
+    const origens = [...new Set(leads.map((l) => l.origem).filter(Boolean))].sort();
+    const cidades = [...new Set(leads.map((l) => l.cidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    document.getElementById('f-origem').innerHTML = op(origens.map((o) => [o, ORIGEM[o] || o]), 'Todas as origens');
+    document.getElementById('f-cidade').innerHTML = op(cidades.map((c) => [c, c]), 'Todas as cidades');
+    if (f.etapa && etapaOrdem[f.etapa] >= COM_OS) f.etapa = '';   // link antigo para uma etapa com OS: essas estão em Vendas
   }
+  const COLS = 'conversa_id, venda_id, nome, telefone, cidade, origem, plano, comissao_prevista, etapa, etapa_ordem, etapa_nome, status, status_nome, status_ajuda, destino, vez, prazo_em, atrasado, '
+    + 'em_espera, espera_motivo, espera_quem, espera_revisar_em, saida_motivo, saida_nome, saida_ajuda, saida_sub, volta_em, dono, criado_em, ultima_em';
   async function carregar() {
     const [rl, rc, rk] = await Promise.all([
-      NG.sb.from('v_leads').select('*').order('ultima_em', { ascending: false }).limit(2000),
+      NG.sb.from('v_leads').select(COLS).order('criado_em', { ascending: false }).limit(5000),
       NG.sb.from('config_lead').select('tipo, codigo, nome, ordem, ajuda').order('ordem'),
       NG.sb.from('config_canais').select('canal, nome'),   // 0302: os nomes dos canais vêm do banco
     ]);
     if (rk && !rk.error) (rk.data || []).forEach((k) => { if (!ORIGEM[k.canal]) ORIGEM[k.canal] = k.nome; });
-    if (rl.error) { tbody.innerHTML = `<tr><td colspan="10" class="vazio">${esc(NG.msgErro(rl.error))}</td></tr>`; return; }
+    if (rl.error) { tbody.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(rl.error))}</td></tr>`; return; }
     leads = rl.data || [];
     if (!rc.error) { cfg = { etapa: [], status: [], saida: [] }; (rc.data || []).forEach((k) => cfg[k.tipo] && cfg[k.tipo].push(k)); }
     montarSelects();
     render();
   }
   function csv() {
-    const cols = ['nome', 'telefone', 'cidade', 'origem', 'etapa_nome', 'status_nome', 'destino', 'vez', 'prazo_em', 'saida_nome', 'saida_sub', 'volta_em', 'plano', 'comissao_prevista', 'dono', 'ultima_em'];
-    const linhas = [cols.join(';')].concat(filtrados().map((l) => cols.map((c) => `"${String(l[c] == null ? '' : l[c]).replace(/"/g, '""')}"`).join(';')));
+    const cols = ['criado_em', 'nome', 'telefone', 'cidade', 'origem', 'etapa_nome', 'status_nome', 'destino', 'vez', 'prazo_em', 'saida_nome', 'saida_sub', 'volta_em', 'plano', 'comissao_prevista', 'dono', 'ultima_em'];
+    const L = filtrados(leads.filter((l) => noRecorte(l, per.valor())));
+    const linhas = [cols.join(';')].concat(L.map((l) => cols.map((c) => `"${String(l[c] == null ? '' : l[c]).replace(/"/g, '""')}"`).join(';')));
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     a.download = `niogen_leads_${NG.diaSP().replace(/-/g, '')}.csv`;
@@ -203,26 +321,44 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }
 
-  document.getElementById('escada').addEventListener('click', (ev) => { const b = ev.target.closest('[data-etapa]'); if (!b) return; f.etapa = f.etapa === b.dataset.etapa ? '' : b.dataset.etapa; if (f.etapa && f.aba === 'andamento') f.aba = 'todos'; render(); });
-  document.getElementById('abas').addEventListener('click', (ev) => { const b = ev.target.closest('[data-aba]'); if (!b) return; f.aba = b.dataset.aba; render(); });
-  document.getElementById('busca').addEventListener('input', (ev) => { f.q = ev.target.value; const p = ev.target.selectionStart; render(); ev.target.setSelectionRange(p, p); });
+  // ---------- cliques ----------
+  document.getElementById('funil-faixa').addEventListener('click', (ev) => {
+    if (ev.target.closest('#funil-abre')) { funilAberto = !funilAberto; render(); return; }
+    const b = ev.target.closest('[data-etapa]'); if (!b) return;
+    f.etapa = f.etapa === b.dataset.etapa ? '' : b.dataset.etapa;
+    if (f.etapa && f.aba !== 'saidas') f.aba = 'todos';
+    render();
+  });
+  // No Funil aberto: clicar na etapa ou num motivo de saída filtra a lista aqui embaixo.
+  const doFunil = (ev) => {
+    if (ev.target.closest('.dica')) return;
+    const b = ev.target.closest('[data-fn-etapa]'); if (!b) return;
+    f.etapa = b.dataset.fnEtapa; f.aba = b.dataset.fnAba || 'todos'; f.saida = b.dataset.fnSaida || ''; f.status = ''; f.vez = '';
+    render();
+    document.getElementById('abas').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  document.getElementById('funil-painel').addEventListener('click', doFunil);
+  document.getElementById('funil-painel').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && ev.target.matches('.fn-fz[data-fn-etapa]')) doFunil(ev); });
+  document.getElementById('busca').addEventListener('input', (ev) => { f.q = ev.target.value; render(); });
   // 0296: "L-142" + Enter abre a ficha do lead
   document.getElementById('busca').addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
-  [['f-status', 'status'], ['f-vez', 'vez'], ['f-saida', 'saida']].forEach(([id, k]) => document.getElementById(id).addEventListener('change', (ev) => {
+  [['f-status', 'status'], ['f-vez', 'vez'], ['f-saida', 'saida'], ['f-origem', 'origem'], ['f-cidade', 'cidade']].forEach(([id, k]) => document.getElementById(id).addEventListener('change', (ev) => {
     f[k] = ev.target.value;
     if (k === 'saida' && f.saida) f.aba = 'saidas';
     render();
   }));
-  document.getElementById('limpar').addEventListener('click', () => { Object.assign(f, { etapa: '', status: '', vez: '', saida: '', q: '', origem: '', cidade: '', de: '', ate: '' }); render(); });
-  document.getElementById('recorte').addEventListener('click', (ev) => { if (ev.target.closest('[data-tirar-recorte]')) { Object.assign(f, { origem: '', cidade: '', de: '', ate: '' }); render(); } });
+  document.getElementById('limpar').addEventListener('click', () => {
+    Object.assign(f, { aba: 'andamento', etapa: '', status: '', vez: '', saida: '', q: '', origem: '', cidade: '' });
+    const sel = per.el.querySelector('select'); sel.value = 'tudo'; sel.dispatchEvent(new Event('change'));   // o change já redesenha
+  });
   document.getElementById('csv').addEventListener('click', csv);
   const abrir = (tr) => { location.hash = `#${tr.dataset.abrir}`; };
   tbody.addEventListener('click', (ev) => { if (ev.target.closest('.dica, [data-operador]')) return; const tr = ev.target.closest('tr[data-abrir]'); if (tr) abrir(tr); });
-  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-abrir]'); if (tr && ev.key === 'Enter') abrir(tr); });
+  tbody.addEventListener('keydown', (ev) => { const tr = ev.target.closest('tr[data-abrir]'); if (tr && ev.key === 'Enter' && ev.target === tr) abrir(tr); });
   NGFicha.aoMudar(() => carregar());
   NG.botaoAtualizar(() => carregar());
 
-  // 22/11 (novo layout, passo 1): "+ Nova venda" mora aqui — a venda nasce como lead e só entra em Vendas quando a OS é gerada.
+  // "+ Nova venda" mora aqui (passo 1): a venda nasce como lead e só entra em Vendas quando a OS é gerada.
   // A mesma gaveta de sempre (assets/novavenda.js). leads.html#nova (ou #venda-rua, ou ?cep=&numero=) já abre a gaveta.
   const novaVenda = await NGNovaVenda.montar({ eu, aoSalvar: () => { NG.toast('Venda criada. Ela fica aqui em Leads até a OS ser gerada.', 'ok'); carregar(); } });
   document.getElementById('btn-nova').addEventListener('click', () => novaVenda.abrir());
@@ -231,7 +367,7 @@
   NGFicha.iniciar();
   if (['#venda-rua', '#nova'].includes(location.hash)) novaVenda.abrir();
   if (Q.get('cep')) await novaVenda.abrir({ cep: Q.get('cep'), numero: Q.get('numero'), complemento: Q.get('complemento') });
-  NG.aoVoltarAba(() => carregar());   // 13/11: trocar de aba só recarrega depois de 1 min
+  NG.aoVoltarAba(() => carregar());   // trocar de aba só recarrega depois de 1 min
 })();
 </script>
 </body>

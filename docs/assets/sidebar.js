@@ -4,6 +4,7 @@
  * 06/11 (prompt 25): Parceiros PAP (Vendas) e Pagamentos a parceiros (Financeiro) — só admin/backoffice, somem para o vendedor.
  * 04/11 (prompt 13): Funil saiu do menu — virou a vista Quadro da tela Vendas (funil.html redireciona).
  * 13/11 (etapa 4b): funil.html volta como o relatório "Funil de vendas" (v_leads); vendas.html vira "Quadro de vendas".
+ * 22/11 (novo layout, passo 2): "Funil de vendas" saiu do menu — o Funil é a faixa do topo da tela Leads (funil.html redireciona).
  * 22/11 (novo layout, passo 1): "Quadro de vendas" passa a se chamar Vendas (só venda com OS gerada) e "Operações", Instalações.
  * O selo das vendas novas em Lead qualificado foi para Leads (quem ainda não tem OS aparece lá, não mais em Vendas).
  * 06/11 (prompt 27): contadores em "Mari · IA" (conversas aguardando humano — v_mari_aguardando_humano; vermelho se alguma
@@ -38,7 +39,6 @@
     ]],
     ['Acompanhamento', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
-      { id: 'funil', ico: '▽', nome: 'Funil de vendas', href: 'funil.html' },   // 13/11 (4b): relatório inteiro na tela (escada única)
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
