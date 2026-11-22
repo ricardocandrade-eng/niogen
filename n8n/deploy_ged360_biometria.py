@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # NIOGEN | n8n/deploy_ged360_biometria.py | 10/11/2026 — Claude Code (docs/Prompt_status_portal_extensao_101126_1106.md, parte A2)
-# Workflow n8n "nio_ged360_biometria": a cada 15 min, 24 h, todos os dias (fuso de São Paulo):
+# Workflow n8n "nio_ged360_biometria": a cada 5 min, 24 h (era 15 até 22/11/2026 — Ricardo: "Sim, 5 min", caso L-219), todos os dias (fuso de São Paulo):
 #   login no GED360 / BrPronto (login TT837722 — usuário próprio do robô (Ricardo, 10/11 15h)) → Relatório Detalhado em CSV (Data de Envio dos últimos 15 dias)
 #   → RPC ged360_registrar(p_linhas, p_erro) no Supabase Nio (tabela nio_biometria, casa pelo CPF, aplica o mapa).
 # Regra 5 (exceção do Ricardo, 10/11 12h39): só login + Relatório Detalhado (leitura/CSV). Nenhuma outra tela, nenhum envio de
@@ -185,8 +185,8 @@ def build(ids, agora_path=None):
 
     full = {'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}},
             'redirect': {'redirect': {'followRedirects': False}}, 'timeout': 30000}
-    add('1 · 15 min, 24 h', 'n8n-nodes-base.scheduleTrigger', 1.2,
-        {'rule': {'interval': [{'field': 'cronExpression', 'expression': '*/15 * * * *'}]}}, 0, 0)
+    add('1 · 5 min, 24 h', 'n8n-nodes-base.scheduleTrigger', 1.2,
+        {'rule': {'interval': [{'field': 'cronExpression', 'expression': '*/5 * * * *'}]}}, 0, 0)
     add('2 · GED360 tela de login', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'GET', 'url': LOGIN_PAGINA, 'sendHeaders': True,
         'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': UA}]}, 'options': full}, 220, 0,
@@ -224,7 +224,7 @@ def build(ids, agora_path=None):
             0, 200, webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, 'niogen/ged360_biometria/agora')),
             notes='Chamado pela edge function credito-consulta (acao bio) quando alguém clica no degrau Biometria. Caminho secreto.',
             notesInFlow=True)
-    ordem = ['1 · 15 min, 24 h', '2 · GED360 tela de login', '3 · Cookies da sessão', '4 · GED360 login',
+    ordem = ['1 · 5 min, 24 h', '2 · GED360 tela de login', '3 · Cookies da sessão', '4 · GED360 login',
              '5 · Datas e cookie', '6 · Relatório Detalhado (CSV) e sair', '7 · CSV → linhas', '8 · Supabase ged360_registrar']
     conns = {}
     for o, d in zip(ordem, ordem[1:]):

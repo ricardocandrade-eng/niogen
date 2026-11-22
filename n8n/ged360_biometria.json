@@ -7,19 +7,19 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "*/15 * * * *"
+              "expression": "*/5 * * * *"
             }
           ]
         }
       },
-      "name": "1 · 15 min, 24 h",
+      "name": "1 · 5 min, 24 h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
         0,
         0
       ],
-      "id": "a7273087-819f-5282-ada3-f36b27f0cdbe"
+      "id": "5fb1d205-a26d-5c37-9167-e458518f4c52"
     },
     {
       "parameters": {
@@ -246,7 +246,7 @@
     }
   ],
   "connections": {
-    "1 · 15 min, 24 h": {
+    "1 · 5 min, 24 h": {
       "main": [
         [
           {
