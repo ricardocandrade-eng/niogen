@@ -11,6 +11,16 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.11.0 (22/11/2026) — o portal completa também a venda (migration 0356)
+Desde a 0356 a venda **nasce sozinha** quando o crédito aprovado é gravado num lead que o time conduz — às vezes sem plano e com o
+nome provisório (o do WhatsApp). Por isso a leitura dos campos do portal (0.10.0) passou a valer também com uma **venda aberta no
+painel, antes da OS**: `venda_dados_do_portal` grava só o que está vazio (número, complemento, rua, referência, e-mail, forma,
+plano) e troca o nome provisório pelo nome da Receita. CPF da tela diferente da venda → nada é gravado. Depois da OS, nada.
+- "Gravar OS e agenda" completa a venda antes de gravar; **venda sem plano não grava OS** (o banco diz: "Falta o plano desta venda").
+- O lead com crédito aprovado conduzido pelo time aparece em **Prontas para o portal** (já é venda), com o que falta.
+- O botão "Virar venda" e a Etapa 7 do lead (0.10.0) continuam como reserva, para o lead que não virou venda sozinho.
+- **Não testado no portal real.**
+
 ## 0.10.0 (22/11/2026) — lead sem venda: o portal completa a ficha, e a OS e a agenda gravam à mão no fim (migration 0353)
 Caso L-219 (Ricardo): pedido feito à mão no portal a partir de uma conversa sem venda — "Esses dados não deveriam ter sido escritos
 pelo Portal enquanto o pedido é realizado?" e "não deu certo pegar os dados da OS e agendamento pela extensão. Isso pode ser feito ao

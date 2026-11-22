@@ -2,8 +2,8 @@
 -- titulo: Caso L-219 (22/11, Chatwoot 199): lead conduzido pelo time, sem venda, com o crédito aprovado gravado na ficha e o pedido feito à mão no portal — o GED360 lê o link da biometria e o NIOGEN avisa o cliente UMA vez (antes só avisava venda; o time mandou à mão); aprovada → nota para o time virar venda, sem mensagem ao cliente; e a porta deixa esse lead virar venda (antes: "Este lead já é venda")
 -- tipo: atual
 select sim.lead_pronto('Cintia X79') as c \gset
-select sim.time_no_chatwoot(:'c', '{"agente":"Atendente"}');
-select sim.time_fala_no_chatwoot(:'c', 'Oi, sou do time. Me passa seu CPF e e-mail?');
+-- 0356: com o TIME dono da conversa, o crédito aprovado já cria a venda (cenário X82). Aqui fica o caso que sobra: lead sem
+-- venda e sem dono (a Mari atendendo), com o crédito aprovado gravado pelo backoffice e o pedido feito à mão no portal.
 select sim.como('backoffice');
 select public.lead_registrar_consulta(:'c', 'credito', 'aprovado_todas');
 select sim.fila_rodar();
@@ -92,8 +92,6 @@ select sim.confere('lead em Saída não recebe o aviso da biometria', :n5 = 0, :
 select sim.lead_pronto('Time X79') as t \gset
 select sim._servico();
 update public.mari_conversas set elegibilidade = null, plano_escolhido = null, dados = dados - 'nome' where id = :'t';
-select sim.time_no_chatwoot(:'t', '{"agente":"Atendente"}');
-select sim.time_fala_no_chatwoot(:'t', 'Oi, sou do time. Vamos seguir com o pedido?');
 select sim.como('backoffice');
 select public.lead_registrar_consulta(:'t', 'credito', 'aprovado_todas');
 select sim.fila_rodar();

@@ -1,4 +1,6 @@
 /* NIOGEN | extensao/panel.js | 06/11/2026 — Claude Code (prompt 28) · rev. 08/11/2026 (rolagem + conversas da Mari)
+ * rev. 22/11 (0356, 0.11.0): o que está no portal completa também a VENDA aberta no painel (venda_dados_do_portal: só o que está
+ *   vazio, só antes da OS) — a venda agora nasce sozinha no crédito aprovado, sem plano e com nome provisório.
  * rev. 22/11 (0353, 0.10.0 — caso L-219): lead SEM venda aberto no painel — (1) o que o humano digita/escolhe no pedido do portal
  *   completa a ficha do lead sozinho (lead_dados_do_portal: só o que está vazio); (2) a Etapa 7 grava a OS e a agenda à mão também
  *   para o lead: o botão vira a venda e grava de uma vez; a OS lida do modal só PREENCHE o formulário (quem grava é o clique).
@@ -209,13 +211,44 @@
     S.etapaAuto = msg.etapa || null; S.avisos = msg.avisos || []; S.naHistorico = !!msg.historico;
     if (S.dados) acendeAnteriores();
     desenha();
-    if (ehLeadSemVenda()) sincronizaLidos();   // 0.10.0: a etapa mudou no portal → o que foi digitado completa a ficha do lead
+    if (podeSincronizar()) sincronizaLidos();   // 0.10.0/0.11.0: a etapa mudou no portal → o que foi digitado completa a ficha (lead ou venda)
   });
   // 0.10.0 (22/11, migration 0353 — Ricardo: "Esses dados não deveriam ter sido escritos pelo Portal enquanto o pedido é realizado?")
   // Lead SEM venda aberto no painel: o content.js lê o que está nos campos do Novo Pedido (só leitura) e o banco grava na ficha do
   // lead SÓ o que está vazio, com autor (lead_dados_do_portal). CPF da tela diferente do lead → o banco recusa tudo e o painel avisa.
   const ehLeadSemVenda = () => !S.venda && !!S.conversa && !S.conversa.venda_id && ['admin', 'backoffice'].includes(S.perfil);
+  // 0.11.0 (0356): a venda nasce sozinha no crédito aprovado, às vezes sem plano e com nome provisório → o portal completa a venda também
+  const ehVendaAntesDaOS = () => !!S.venda && !!S.dados && !!S.dados.venda_id && S.dados.status === '0_qualificado' && ['admin', 'backoffice'].includes(S.perfil);
+  const podeSincronizar = () => ehLeadSemVenda() || ehVendaAntesDaOS();
   let planosCache = null, lidoOcupado = false, lidoUltimo = '';
+  async function sincronizaVenda() {
+    const d = S.dados, vid = d.venda_id;
+    const r = await mandar({ tipo: 'lidos?' });
+    const L = (r && r.lidos) || {};
+    const vazio = (x) => !String(x == null ? '' : x).trim();
+    const v = d.viabilidade || {}, k = d.contato || {}, o = d.oferta || {};
+    const campos = {};
+    if (L.nome) campos.nome = L.nome;   // o banco só troca o nome provisório (venda nascida sem o nome do titular)
+    if (L.email && vazio(k.email)) campos.email = L.email;
+    if (L.numero && vazio(v.numero)) campos.numero = L.numero;
+    if (L.complemento && vazio(v.complemento)) campos.complemento = L.complemento;
+    if (L.rua && vazio(v.logradouro)) campos.rua = L.rua;
+    if (L.referencia && vazio(v.referencia)) campos.referencia = L.referencia;
+    if (L.forma && vazio(o.forma_pagamento)) campos.forma = L.forma;
+    if (L.oferta && vazio(o.plano)) { const pl = await planoDoPortal(L.oferta); if (pl) campos.plano = pl; }
+    if (!Object.keys(campos).length) return null;
+    if (L.documento) campos.cpf = L.documento;   // o banco confere se o pedido da tela é desta venda
+    const chave = JSON.stringify([vid, campos]);
+    if (chave === lidoUltimo) return null;
+    lidoUltimo = chave;
+    const g = await rpc('venda_dados_do_portal', { p_venda: vid, p_campos: campos });
+    if (g && (g.mudou || []).length && S.venda && S.dados && S.dados.venda_id === vid) {
+      const nd = await rpc('dados_portal', { p_venda_id: vid }).catch(() => null);
+      if (nd && S.venda && S.dados && S.dados.venda_id === vid) { S.dados = nd; S.venda = { ...S.venda, cliente_nome: (nd.cliente && nd.cliente.nome) || S.venda.cliente_nome }; }
+      aviso(`${g.resumo}${(g.fora || []).length ? ` · não gravei: ${g.fora.join(', ')}` : ''}`, 'ok'); desenha();
+    }
+    return g;
+  }
   async function planoDoPortal(of) {
     if (!of || of.megas == null || of.preco == null) return null;
     if (!planosCache) planosCache = await api('/rest/v1/config_planos?select=codigo,velocidade_mb,preco,preco_cartao&ativo=eq.true').catch(() => null);
@@ -224,9 +257,10 @@
     return casam.length === 1 ? casam[0].codigo : null;   // nenhuma ou mais de uma: não chuta — o plano fica para a ficha
   }
   async function sincronizaLidos() {
-    if (lidoOcupado || !ehLeadSemVenda()) return null;
+    if (lidoOcupado || !podeSincronizar()) return null;
     lidoOcupado = true;
     try {
+      if (ehVendaAntesDaOS()) return await sincronizaVenda();
       const c = S.conversa, d = c.dados || {};
       const r = await mandar({ tipo: 'lidos?' });
       const L = (r && r.lidos) || {};
@@ -1141,6 +1175,7 @@
         S.osForm = f; S.etapaManual = 7; S.ocupado = true; desenha();
       }
       if (!vendaId) throw new Error('Abra a venda no painel para gravar a OS e a agenda.');
+      if (!virou) await sincronizaLidos();   // 0.11.0: venda nascida sem plano — o que está no portal entra antes da OS
       const r = await rpc('backoffice_momento', { p_venda: vendaId, p_momento: 'os_agendar',
         p_dados: { os, dia: f.dia, periodo: f.periodo || '08:00', forma: f.forma, origem: 'extensao', sem_aviso: !!f.semAviso } });
       S.registro = { ...(S.registro || {}), os_agendar: (r && r.resumo) || 'OS gravada' };
