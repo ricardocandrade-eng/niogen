@@ -11,6 +11,26 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.10.0 (22/11/2026) — lead sem venda: o portal completa a ficha, e a OS e a agenda gravam à mão no fim (migration 0353)
+Caso L-219 (Ricardo): pedido feito à mão no portal a partir de uma conversa sem venda — "Esses dados não deveriam ter sido escritos
+pelo Portal enquanto o pedido é realizado?" e "não deu certo pegar os dados da OS e agendamento pela extensão. Isso pode ser feito ao
+final, manualmente mesmo".
+- **O portal completa a ficha do lead.** Com uma **conversa sem venda** aberta no painel, o `content.js` lê (só leitura do DOM, sem
+  clique e sem rede) o que está nos campos do Novo Pedido — nome da Receita, número, complemento, rua, referência, e-mail, forma de
+  pagamento e a oferta marcada — e, a cada troca de etapa, o painel chama `lead_dados_do_portal`, que grava **só o que está vazio**
+  na ficha do lead, com autor e registro na conversa. Nunca troca o que já estava gravado. **CPF da tela diferente do lead → nada é
+  gravado** e o painel avisa. A viabilidade gravada não é zerada.
+- **Plano:** a oferta marcada casa com a tabela pela velocidade e pelo preço; se não casar com exatamente um plano, o plano fica
+  para a ficha (o painel não chuta).
+- **Etapa 7 também para o lead.** O formulário "nº da OS · dia · período · forma" aparece para a conversa sem venda e o botão vira
+  **Virar venda e gravar OS e agenda**: completa a ficha, abre a venda e grava a OS e a agenda de uma vez. Se faltar algo, o banco
+  diz tudo de uma vez ("falta gravar na ficha do lead: plano, nome do titular…").
+- **OS lida do modal, com lead sem venda:** só **preenche** o formulário da Etapa 7 (antes: "abra a venda no painel"); quem grava é
+  o seu clique. Com venda aberta nada mudou (0.9.0).
+- **Não testado no portal real:** a leitura usa os mesmos campos que o "Preencher" e a condução já conhecem; a oferta marcada é o
+  ponto mais incerto. O que não for lido continua podendo ser gravado na ficha (✎).
+- Regra 5: nenhum clique novo no portal, nada na rede; o dado lido fica só em memória e zera na Etapa 1 de um pedido novo.
+
 ## 0.9.0 (20/11/2026) — a OS e a agenda gravam sozinhas (etapa C do plano "o retorno do portal grava sozinho")
 Ricardo: "a OS e o agendamento [podem] ser gravados pela extensão… OS até dá pra ser automático. Já o agendamento é na tela
 anterior, que abre aquele calendário que clicamos na data e ao lado os turnos".

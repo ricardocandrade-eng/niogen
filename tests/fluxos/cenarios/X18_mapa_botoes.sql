@@ -18,8 +18,12 @@ select sim.lead_com_venda('Rui X18') as c \gset
 select sim.como('backoffice');
 select coalesce((select situacao from public.v_lead_situacao where venda_id = sim.venda(:'c')), '?') as s1 \gset
 select sim.confere('venda nova está em "rodar crédito"', :'s1' = 'qualificado_credito', :'s1');
+-- 0353 (L-219): em qualificado_credito o Virar venda passou a valer (lead sem venda com crédito aprovado). Quem já é venda
+-- não ganha outra: o núcleo devolve a mesma venda (repetido).
+select sim.venda(:'c') as v1 \gset
 select coalesce(sim.recusa(format($q$select public.lead_virar_venda(%L)$q$, :'c')), '') as r1 \gset
-select sim.confere('Virar venda recusado: "já é venda"', :'r1' like '%já é venda%', coalesce(nullif(:'r1', ''), 'aceitou'));
+select sim.confere('Virar venda em quem já é venda não cria outra venda', :'r1' = '' and sim.venda(:'c') = :'v1'
+  and (select count(*) from public.vendas where origem_ref = 'mari:' || :'c') = 1, coalesce(nullif(:'r1', ''), 'aceitou'));
 select coalesce(sim.recusa(format($q$select public.backoffice_momento(%L, 'agendar', '{"dia":"2026-12-01","periodo":"08:00"}')$q$, sim.venda(:'c'))), '') as r2 \gset
 select sim.confere('Agendar antes da OS recusado com a frase', :'r2' like 'A agenda vem junto com a OS%', coalesce(nullif(:'r2', ''), 'aceitou'));
 select public.porta_botoes(:'c', sim.venda(:'c')) as b1 \gset

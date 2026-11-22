@@ -1,4 +1,7 @@
 /* NIOGEN | extensao/panel.js | 06/11/2026 — Claude Code (prompt 28) · rev. 08/11/2026 (rolagem + conversas da Mari)
+ * rev. 22/11 (0353, 0.10.0 — caso L-219): lead SEM venda aberto no painel — (1) o que o humano digita/escolhe no pedido do portal
+ *   completa a ficha do lead sozinho (lead_dados_do_portal: só o que está vazio); (2) a Etapa 7 grava a OS e a agenda à mão também
+ *   para o lead: o botão vira a venda e grava de uma vez; a OS lida do modal só PREENCHE o formulário (quem grava é o clique).
  * rev. 14/11 (0194, 0.7.0): ordem real do portal — forma de pagamento → agenda → nº da OS → link da biometria. Etapa 7 · Abrir OS ganha
  *   o registro "Gravar OS e agenda" (nº da OS, dia, período, forma de pagamento; momento os_agendar). Crédito aprovado não avisa mais a biometria.
  * rev. 08/11: (1) "Preencher esta etapa" rola o painel até a etapa seguinte quando a etapa fechou; (2) orelha "Conversas da Mari":
@@ -206,7 +209,53 @@
     S.etapaAuto = msg.etapa || null; S.avisos = msg.avisos || []; S.naHistorico = !!msg.historico;
     if (S.dados) acendeAnteriores();
     desenha();
+    if (ehLeadSemVenda()) sincronizaLidos();   // 0.10.0: a etapa mudou no portal → o que foi digitado completa a ficha do lead
   });
+  // 0.10.0 (22/11, migration 0353 — Ricardo: "Esses dados não deveriam ter sido escritos pelo Portal enquanto o pedido é realizado?")
+  // Lead SEM venda aberto no painel: o content.js lê o que está nos campos do Novo Pedido (só leitura) e o banco grava na ficha do
+  // lead SÓ o que está vazio, com autor (lead_dados_do_portal). CPF da tela diferente do lead → o banco recusa tudo e o painel avisa.
+  const ehLeadSemVenda = () => !S.venda && !!S.conversa && !S.conversa.venda_id && ['admin', 'backoffice'].includes(S.perfil);
+  let planosCache = null, lidoOcupado = false, lidoUltimo = '';
+  async function planoDoPortal(of) {
+    if (!of || of.megas == null || of.preco == null) return null;
+    if (!planosCache) planosCache = await api('/rest/v1/config_planos?select=codigo,velocidade_mb,preco,preco_cartao&ativo=eq.true').catch(() => null);
+    const perto = (x) => x != null && Math.abs(Number(x) - Number(of.preco)) < 0.005;
+    const casam = (planosCache || []).filter((pl) => Number(pl.velocidade_mb) === Number(of.megas) && (perto(pl.preco) || perto(pl.preco_cartao)));
+    return casam.length === 1 ? casam[0].codigo : null;   // nenhuma ou mais de uma: não chuta — o plano fica para a ficha
+  }
+  async function sincronizaLidos() {
+    if (lidoOcupado || !ehLeadSemVenda()) return null;
+    lidoOcupado = true;
+    try {
+      const c = S.conversa, d = c.dados || {};
+      const r = await mandar({ tipo: 'lidos?' });
+      const L = (r && r.lidos) || {};
+      const vazio = (x) => !String(x == null ? '' : x).trim();
+      const campos = {};
+      if (L.nome && vazio(d.nome)) campos.nome = L.nome;
+      if (L.email && vazio(d.email)) campos.email = L.email;
+      if (L.numero && vazio(c.numero)) campos.numero = L.numero;
+      if (L.complemento && vazio(c.complemento)) campos.complemento = L.complemento;
+      if (L.rua && vazio(d.rua_confirmada) && vazio((c.endereco_cep || {}).logradouro)) campos.rua = L.rua;
+      if (L.referencia && vazio(d.referencia)) campos.referencia = L.referencia;
+      if (L.forma && vazio(c.forma_pagamento)) campos.forma = L.forma;
+      if (L.oferta && vazio(c.plano_escolhido)) { const pl = await planoDoPortal(L.oferta); if (pl) campos.plano = pl; }
+      if (L.documento && vazio(d.cpf)) campos.cpf = L.documento;
+      if (!Object.keys(campos).length) return null;
+      if (L.documento) campos.cpf = L.documento;   // sempre vai junto: o banco confere se o pedido da tela é deste lead
+      const chave = JSON.stringify([c.id, campos]);
+      if (chave === lidoUltimo) return null;   // já mandei exatamente isto
+      lidoUltimo = chave;
+      const g = await rpc('lead_dados_do_portal', { p_conversa: c.id, p_campos: campos });
+      if (g && (g.mudou || []).length && S.conversa && S.conversa.id === c.id && !S.venda) {
+        const q = await api(`/rest/v1/mari_conversas?select=${encodeURIComponent(COLS_CONV)}&id=eq.${encodeURIComponent(c.id)}`).catch(() => null);
+        if (q && q[0] && S.conversa && S.conversa.id === c.id && !S.venda) { S.conversa = q[0]; S.dados = dadosDaConversa(q[0], await planoDaConversa(q[0])); }
+        aviso(`${g.resumo}${(g.fora || []).length ? ` · não gravei: ${g.fora.join(', ')}` : ''}`, 'ok'); desenha();
+      }
+      return g;
+    } catch (e) { aviso(`Dados do portal não gravados na ficha: ${e.message}`, 'bad'); desenha(); return null; }
+    finally { lidoOcupado = false; }
+  }
   // 20/11 (etapa C): o portal mostrou o nº da OS (modal do fim do pedido) → grava sozinho na venda aberta no painel: OS + dia +
   // período + forma quando o humano tocou no calendário (os_agendar); só a OS quando não (momento 'os' — a agenda chega pela Consulta
   // OS). Uma vez por OS (storage da sessão). A porta recusa o que não vale (biometria pendente, cartão sem forma cartão…) e o aviso diz.
@@ -219,6 +268,13 @@
     const os = String(msg.os || '').replace(/\D/g, '');
     if (os.length < 6) return;
     if (!['admin', 'backoffice'].includes(S.perfil)) return;
+    if (ehLeadSemVenda()) {   // 0.10.0: lead sem venda — a leitura só preenche o formulário da Etapa 7; quem grava é o clique
+      const a = S.osForm || {};
+      S.osForm = { os, dia: /^\d{4}-\d{2}-\d{2}$/.test(msg.dia || '') ? msg.dia : (a.dia || ''), periodo: ['08:00', '13:00'].includes(msg.periodo) ? msg.periodo : (a.periodo || '08:00'),
+        forma: msg.forma || a.forma || S.conversa.forma_pagamento || '', semAviso: !!a.semAviso };
+      S.etapaManual = 7;
+      aviso(`O portal mostrou a OS ${os}. Confira o dia, o período e a forma na Etapa 7 e clique em "Virar venda e gravar OS e agenda".`, 'ok'); desenha(); return;
+    }
     if (!S.dados || !S.dados.venda_id) { aviso(`O portal mostrou a OS ${os}. Abra a venda no painel para ela ser gravada sozinha (ou grave na ficha).`, 'bad'); desenha(); return; }
     const chave = `os_lida:${S.dados.venda_id}:${os}`;
     try { const j = await chrome.storage.session.get(chave); if (j && j[chave]) return; } catch (e) { /* segue */ }
@@ -464,6 +520,7 @@
     if (!window.confirm('Abrir a venda deste lead?\n\nUse quando o pedido foi (ou vai ser) aberto no portal. A venda nasce em Qualificado e aí você grava a OS e a agenda (etapa 7).')) return;
     S.ocupado = true; aviso(''); desenha();
     try {
+      await sincronizaLidos();   // 0.10.0: o que está no portal completa a ficha antes de virar venda
       const r = await rpc('lead_virar_venda', { p_conversa: c.id });
       const vid = r && r.venda_id;
       if (!vid) throw new Error('A venda não foi criada.');
@@ -1040,11 +1097,12 @@
   // Nio manda o link da biometria; o NIOGEN avisa o cliente. Os valores ficam só em memória até gravar.
   function registroOS(idVenda) {
     const linkFicha = idVenda ? h('a', { class: 'btn btn-sm', target: '_blank', rel: 'noopener', href: `${NIOGEN_URL}/vendas.html#venda=${encodeURIComponent(idVenda)}` }, 'Abrir a ficha') : null;
-    if (!S.venda || !idVenda) return h('div', { class: 'dica' }, h('div', {}, 'Abra a venda no painel para gravar a OS e a agenda aqui.'), linkFicha);
+    const lead = ehLeadSemVenda();   // 0.10.0: lead sem venda — o botão vira a venda e grava a OS e a agenda de uma vez
+    if ((!S.venda || !idVenda) && !lead) return h('div', { class: 'dica' }, h('div', {}, 'Abra a venda no painel para gravar a OS e a agenda aqui.'), linkFicha);
     const f = S.osForm = S.osForm || { os: '', dia: '', periodo: '08:00', forma: (S.dados.oferta || {}).forma_pagamento || '', semAviso: false };
     const feito = (S.registro || {}).os_agendar;
     if (feito) return h('div', { class: 'registro' }, h('span', { class: 'sub ok' }, `✓ ${feito}`), linkFicha);
-    const pOs = porta('momento:os_agendar');
+    const pOs = lead ? null : porta('momento:os_agendar');   // lead: a situação muda ao virar venda — quem responde é o banco, no clique
     if (pOs && !pOs.ok) return h('div', { class: 'registro' }, h('span', { class: 'sub' }, `Gravar a OS não vale agora: ${pOs.frase || 'não vale nesta situação'}`), linkFicha);
     const inp = (k, attrs) => h('input', { ...attrs, value: f[k] || '', oninput: (ev) => { f[k] = ev.target.value; } });
     const sel = (k, opts) => h('select', { onchange: (ev) => { f[k] = ev.target.value; } },
@@ -1057,7 +1115,8 @@
       h('label', { class: 'sub' }, 'Forma de pagamento escolhida', sel('forma', [['', 'Escolher…'], ...Object.entries(FORMAS).map(([k, x]) => [k, x[0]])])),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: !!f.semAviso, onchange: (ev) => { f.semAviso = ev.target.checked; } }),
         ' Já avisei o cliente da biometria (o NIOGEN não manda o aviso)'),
-      h('div', { class: 'acoes' }, h('button', { class: 'btn btn-sm btn-acc', type: 'button', disabled: S.ocupado, title: pOs && pOs.efeito ? `Vai acontecer: ${pOs.efeito}` : null, onclick: gravaOS }, 'Gravar OS e agenda → vira Venda'), linkFicha),
+      h('div', { class: 'acoes' }, h('button', { class: 'btn btn-sm btn-acc', type: 'button', disabled: S.ocupado, title: pOs && pOs.efeito ? `Vai acontecer: ${pOs.efeito}` : null, onclick: gravaOS }, lead ? 'Virar venda e gravar OS e agenda' : 'Gravar OS e agenda → vira Venda'), linkFicha),
+      lead ? h('span', { class: 'sub' }, 'Este lead ainda não é venda no NIOGEN: o botão abre a venda (com o que a ficha tem) e grava a OS e a agenda de uma vez. Precisa da biometria aprovada.') : null,
       pOs && pOs.efeito ? h('span', { class: 'sub efeito' }, `Vai acontecer · ${pOs.efeito}`) : null,
       h('span', { class: 'sub' }, f.forma === 'cartao' ? 'Cartão: depois da biometria a Nio manda o link do cadastro do cartão; a Mari avisa o cliente.' : 'A Nio manda o link da biometria; o NIOGEN avisa o cliente e lembra no D+1.'));
   }
@@ -1068,14 +1127,27 @@
     if (!/^\d{4}-\d{2}-\d{2}$/.test(f.dia || '')) { aviso('Informe o dia agendado no portal.', 'bad'); desenha(); return; }
     if (!f.forma) { aviso('Escolha a forma de pagamento escolhida no portal.', 'bad'); desenha(); return; }
     S.ocupado = true; aviso(''); desenha();
+    let virou = false;
     try {
-      const r = await rpc('backoffice_momento', { p_venda: S.dados.venda_id, p_momento: 'os_agendar',
+      let vendaId = S.dados.venda_id;
+      if (!vendaId && ehLeadSemVenda()) {   // 0.10.0: lead sem venda → completa a ficha com o que está no portal, vira venda e segue
+        await sincronizaLidos();
+        const c = S.conversa;
+        const v = await rpc('lead_virar_venda', { p_conversa: c.id });
+        vendaId = v && v.venda_id;
+        if (!vendaId) throw new Error('A venda não foi criada.');
+        virou = true; c.venda_id = vendaId;
+        await abreVenda({ venda_id: vendaId, cliente_nome: nomeConversa(c) });
+        S.osForm = f; S.etapaManual = 7; S.ocupado = true; desenha();
+      }
+      if (!vendaId) throw new Error('Abra a venda no painel para gravar a OS e a agenda.');
+      const r = await rpc('backoffice_momento', { p_venda: vendaId, p_momento: 'os_agendar',
         p_dados: { os, dia: f.dia, periodo: f.periodo || '08:00', forma: f.forma, origem: 'extensao', sem_aviso: !!f.semAviso } });
       S.registro = { ...(S.registro || {}), os_agendar: (r && r.resumo) || 'OS gravada' };
       S.feitas[7] = true; salvaJornada();
       await carregaPorta();
-      aviso(`${(r && r.resumo) || 'OS gravada no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
-    } catch (e) { aviso(e.message, 'bad'); }
+      aviso(`${virou ? 'Venda aberta · ' : ''}${(r && r.resumo) || 'OS gravada no NIOGEN'}${r && r.aviso ? ` · ${r.aviso}` : ''}`, r && r.aviso ? 'bad' : 'ok');
+    } catch (e) { aviso(virou ? `A venda foi aberta, mas a OS não gravou: ${e.message}` : e.message, 'bad'); }
     S.ocupado = false; desenha();
   }
 

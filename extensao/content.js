@@ -15,6 +15,10 @@
  *  5. (0.4.0, Ricardo 10/11 11h02) No Histórico de Pedidos: cliques SÓ na lista branca de cliqueFiltro() (Filtros, campos e opções do
  *     filtro, datas, Filtrar, próxima página) para LER a tabela. Detalhar, Carregar, Salvar, Atualizar Pedido, Novo Pedido, Funil e
  *     Tramitações: recusados no código.
+ *  6. (0.10.0, Ricardo 22/11: "Esses dados não deveriam ter sido escritos pelo Portal enquanto o pedido é realizado?") O que o HUMANO
+ *     digita/escolhe no Novo Pedido (nome, número, complemento, rua, referência, e-mail, forma e oferta marcada) é LIDO do DOM e fica
+ *     só em memória (LIDO), até o painel pedir ("lidos?") para completar a ficha do lead. Só leitura: nenhum clique, nada na rede,
+ *     nada guardado nem logado; zera quando um pedido novo começa (Etapa 1) ou o painel fecha a venda.
  */
 (() => {
   'use strict';
@@ -907,11 +911,49 @@
     try { chrome.runtime.sendMessage({ tipo: 'portal_os_lida', os, dia: OSL.dia, periodo: OSL.periodo, forma: OSL.forma, texto: T.redigir(pp.texto).slice(0, 200) }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ }
   }
 
+  // ------------------------------------------------------------------ 0.10.0 (22/11): o que está nos campos do portal → ficha do lead
+  // SÓ LÊ o DOM (valor dos campos visíveis). Nenhum clique, nada na rede. Fica em memória até o painel pedir; a função do banco
+  // (lead_dados_do_portal) grava só o que está vazio na ficha e recusa tudo se o CPF da tela não for o do lead.
+  const LIDO = {};
+  const zeraLido = () => { for (const k of Object.keys(LIDO)) delete LIDO[k]; };
+  function lerCampos(comOferta) {
+    try {
+      const val = (el) => (el && typeof el.value === 'string' ? el.value.trim() : '');
+      if (acharCampo(['Informe a matrícula do vendedor']) && Object.keys(LIDO).length) zeraLido();   // Etapa 1 = pedido novo
+      const cep = digitos(val(campoPorNomes('cep', 'Endereço ou CEP'))); if (cep.length === 8) LIDO.cep = cep;
+      const sn = porNome('semNumero');
+      const num = val(campoPorNomes('numero', 'Número'));
+      if (sn && sn.checked) LIDO.numero = 'SN'; else if (num && num.length <= 20) LIDO.numero = num;
+      const sel = [...document.querySelectorAll('select')].find((s) => /omplement/i.test(`${s.name} ${s.id}`) && visivelBox(s));
+      const comp = sel ? (((sel.options[sel.selectedIndex] || {}).textContent) || '').trim()
+        : val([...document.querySelectorAll('input[placeholder="Complemento"], input[placeholder*="omplement" i], input[name*="omplement" i]')].find(visivelBox));
+      if (comp && !/^(selecione|escolha|sem complemento)/i.test(comp)) LIDO.complemento = comp;
+      const ref = val(campoPorNomes('referencia', 'Referência')); if (ref && !/^sem refer/i.test(ref)) LIDO.referencia = ref;
+      const rua = val(document.querySelector('input[placeholder="Endereço de instalação"]')); if (rua) LIDO.rua = rua;
+      const doc = digitos(val(campoPorNomes('documento', 'CPF/CNPJ', 'CPF'))); if (doc.length === 11 || doc.length === 14) LIDO.documento = doc;
+      const nome = nomeNaTela(); if (nome && /\S+\s+\S+/.test(nome)) LIDO.nome = nome;
+      const em = val(porNome('email')); if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) LIDO.email = em.toLowerCase();
+      const radios = [...document.querySelectorAll('input[name="radio-group"]')];
+      const marcado = radios.find((r) => r.checked);
+      if (marcado) { const f = T.FORMA_RADIO[String(marcado.value || '').toUpperCase()]; if (f) LIDO.forma = f; }
+      if (comOferta && radios.length) {   // Etapa 5: a oferta marcada (uma só) — o painel casa com a tabela de planos
+        const marc = cartoesOferta().filter((o) => { const cx = o.el.querySelector('input[type="radio"], input[type="checkbox"]'); return cx && cx.checked && cx.name !== 'radio-group'; });
+        if (marc.length === 1) LIDO.oferta = { nome: String(marc[0].nome || '').slice(0, 80), megas: marc[0].megas, preco: marc[0].preco };
+      }
+    } catch (e) { /* só leitura: nunca atrapalha o portal */ }
+    return LIDO;
+  }
+  // lê ANTES de a tela mudar: no clique (Avançar/Continuar trocam a etapa) e quando um campo muda
+  let tLido = null;
+  document.addEventListener('click', () => { lerCampos(true); }, { capture: true, passive: true });
+  for (const ev of ['change', 'input']) document.addEventListener(ev, () => { clearTimeout(tLido); tLido = setTimeout(() => lerCampos(ev === 'change'), 400); }, { capture: true, passive: true });
+
   // ------------------------------------------------------------------ conversa com o painel
   let ultimo = '';
   function empurraEstado(forca) {
     const estado = { tipo: 'estado', etapa: detectarEtapa(), avisos: detectarAvisos(), historico: naHistorico() };
     try { checarOS(estado.etapa); } catch (e) { /* só leitura */ }
+    lerCampos(false);
     const chave = JSON.stringify([estado.etapa, estado.avisos.map((a) => a.codigo), estado.historico]);
     if (!forca && chave === ultimo) return;
     ultimo = chave;
@@ -924,7 +966,8 @@
   chrome.runtime.onMessage.addListener((msg, remetente, responde) => {
     if (!msg || typeof msg !== 'object') return false;
     if (msg.tipo === 'estado?') { empurraEstado(true); responde({ ok: true }); return false; }
-    if (msg.tipo === 'limpar') { limparDestaques(); responde({ ok: true }); return false; }
+    if (msg.tipo === 'limpar') { limparDestaques(); zeraLido(); responde({ ok: true }); return false; }
+    if (msg.tipo === 'lidos?') { responde({ ok: true, lidos: { ...lerCampos(true) }, etapa: detectarEtapa() }); return false; }
     if (msg.tipo === 'historico_ler') {
       const prog = (texto) => { try { chrome.runtime.sendMessage({ tipo: 'historico_progresso', texto }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ } };
       lerHistorico(prog).then((r) => responde(r), (e) => responde({ ok: false, pedidos: [], feitas: [], erro: e.message, parou_em: 'início' }));
