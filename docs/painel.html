@@ -31,11 +31,63 @@
 <script src="assets/sidebar.js?v=221126-10"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
+<style>
+  /* 22/11 (Ricardo: "vários cards soltos, tudo jogado"): o Painel passa a ter quatro blocos com título, cada um num painel só,
+     com as divisões por fio (sem caixa dentro de caixa). Nenhum número, link ou regra mudou — só a arrumação. */
+  .pn-bloco { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pn-h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .pn-h2 em { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+  .pn-painel { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; min-width: 0; }
+  /* 1 · o mês: a meta grande à esquerda, os números do período ao lado */
+  .pn-topo { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); }
+  .pn-topo .fm-meta { gap: 8px; padding: 18px 22px; border-right: 1px solid var(--border); border-bottom: 0; justify-content: center; }
+  .pn-topo .fm-meta .rot { font-size: 12px; }
+  .pn-topo .fm-meta .val { font-size: 16px; font-family: var(--mono); }
+  .pn-topo .fm-meta .val b { font-size: 46px; line-height: 1; letter-spacing: -.03em; }
+  .pn-topo .fm-meta .barra { height: 8px; border-radius: 4px; margin: 0; }
+  .pn-topo .fm-meta .barra i { border-radius: 4px; background: #2AAE48; min-width: 4px; }
+  .pn-topo .kpis { display: flex; flex-wrap: wrap; gap: 0; align-content: stretch; }
+  .pn-topo .kpi { flex: 1 1 180px; min-width: 0; padding: 16px 18px; gap: 4px; border: 0; border-radius: 0; background: none; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); justify-content: center; }
+  .pn-topo .kpi .rot { font-size: 12px; text-transform: none; letter-spacing: 0; }
+  .pn-topo .kpi .val { font-size: 26px; line-height: 1.1; }
+  .pn-topo .kpi.bad { background: var(--bad-bg); } .pn-topo .kpi.warn { background: var(--warn-bg); }
+  @media (max-width: 900px) { .pn-topo { grid-template-columns: minmax(0, 1fr); } .pn-topo .fm-meta { border-right: 0; border-bottom: 1px solid var(--border); } }
+  /* 2 · o caminho da venda: duas faixas de degraus no mesmo painel */
+  .pn-faixa { padding: 12px 18px 14px; }
+  .pn-faixa + .pn-faixa { border-top: 1px solid var(--border); }
+  .pn-faixa:empty { display: none; }
+  .pn-faixa .fu-cab, .pn-rot { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 12.5px; color: var(--muted); margin: 0 0 8px; }
+  .pn-rot b, .pn-faixa .fu-cab > b { color: var(--text); font-size: 13px; font-weight: 600; }
+  .pn-faixa .funil-mes { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+  .pn-faixa .fm-seta, .pn-faixa .fu-seta { display: none; }
+  .pn-faixa .fm-etapas, .pn-faixa .fu-etapas { gap: 0; }
+  .pn-faixa .fm-etapa, .pn-faixa .fu-etapa { padding: 4px 14px 4px 14px; gap: 2px; border: 0; border-left: 1px solid var(--border); border-radius: 0; background: none; text-decoration: none; color: inherit; }
+  .pn-faixa .fm-etapa:first-child, .pn-faixa .fu-etapa:first-child { border-left: 0; padding-left: 0; }
+  .pn-faixa .fm-etapa .fm-n, .pn-faixa .fu-n { font-size: 24px; }
+  .pn-faixa .fm-etapa:hover .fm-nome, .pn-faixa .fu-etapa:hover .fu-nome { color: var(--link); }
+  .pn-faixa .fm-etapa.bad { background: none; } .pn-faixa .fm-etapa.bad .fm-nome { color: var(--bad-fg); }
+  .pn-faixa .fu-etapa.venda { border-left: 2px solid var(--accent); }
+  .pn-faixa .fu-etapa.venda .fu-nome { color: var(--text); font-weight: 600; }
+  @media (max-width: 700px) { .pn-faixa .fm-etapa, .pn-faixa .fu-etapa { border-left: 0; padding-left: 0; } }
+  /* 3 · para fazer agora: a lista à esquerda, o dia à direita */
+  .pn-duas { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 1000px) { .pn-duas { grid-template-columns: minmax(0, 1fr); } }
+  .pn-duas > .painel { border-radius: 14px; padding: 16px 18px; }
+  .pn-pilha > .painel, .pn-cels > .painel { border: 0; border-radius: 0; background: none; padding: 16px 18px; }
+  .pn-pilha > .painel + .painel { border-top: 1px solid var(--border); }
+  .pn-pilha:empty, .pn-cels:empty { display: none; }
+  /* 4 · acompanhar: os blocos curtos lado a lado, num painel só */
+  .pn-cels { display: flex; flex-wrap: wrap; }
+  .pn-cels > .painel { flex: 1 1 250px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .pn .painel-op:not([hidden]) { margin: 0; border-radius: 12px; }
+  .pn #canais-7d, .pn #pn-resumo > .painel { border-radius: 14px; padding: 16px 18px; }
+  .pn .rolagem { overflow-x: auto; }   /* a tabela de canais rola dentro do painel no celular, sem alargar a página */
+</style>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="painel"></nav>
-  <main class="main com-fab">
+  <main class="main com-fab pn">
     <header class="cab">
       <div>
         <h1 id="titulo">Painel</h1>
@@ -49,22 +101,44 @@
 
     <!-- 0102: alarmes da operação (só admin/backoffice): respostas fora do NIOGEN hoje · qualidade do número da WABA Nio -->
     <section class="alarmes-op" id="alarmes-op" aria-label="Alarmes da operação" hidden></section>
-    <section class="faixa-meta" id="faixa-meta" aria-label="Meta do mês e vendas paradas"><div class="carregando">Carregando…</div></section>
-    <!-- 0087: funil do mês — quantos entraram em cada etapa (lead qualificado ≠ venda; venda = OS aberta) -->
-    <section class="funil-mes" id="funil-mes" aria-label="Funil do mês"></section>
+    <section class="pn-bloco" aria-labelledby="t-topo">
+      <h2 class="pn-h2" id="t-topo">A meta e o período</h2>
+      <div class="pn-painel pn-topo">
+        <div id="pn-meta" aria-label="Meta do mês"><div class="fm-meta"><span class="nota-campo">Carregando…</span></div></div>
+        <div class="kpis" id="kpis" aria-label="Resumo do período"></div>
+      </div>
+    </section>
 
-    <section class="kpis quatro" id="kpis" aria-label="Resumo do período"></section>
+    <section class="pn-bloco" aria-labelledby="t-caminho">
+      <h2 class="pn-h2" id="t-caminho">O caminho da venda</h2>
+      <div class="pn-painel">
+        <!-- 0087: quantos entraram em cada etapa (lead qualificado ≠ venda; venda = OS aberta) -->
+        <div class="pn-faixa"><div class="funil-mes" id="funil-mes" aria-label="Funil do período"></div></div>
+        <div class="pn-faixa"><div class="pn-rot"><b>Paradas agora</b><span>vendas abertas esperando em cada etapa, e há quanto tempo a mais antiga espera</span></div>
+          <div class="fm-etapas" id="pn-paradas" aria-label="Vendas paradas por etapa"></div></div>
+      </div>
+    </section>
+    <section class="pn-bloco" aria-labelledby="t-fazer">
+      <h2 class="pn-h2" id="t-fazer">Para fazer agora</h2>
+      <div class="pn-duas">
+        <section class="painel" aria-labelledby="t-acao">
+          <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="leads.html?aba=acao" id="ver-acao">ver todas →</a></div>
+          <div class="lista-acao" id="lista-acao"><div class="carregando">Carregando…</div></div>
+        </section>
+        <div class="pn-painel pn-pilha" id="pn-lado"></div>
+      </div>
+    </section>
+
     <!-- 0107: 🔥 oportunidades (só admin/backoffice) — mostradas · enviadas · responderam · qualificaram · pedidos (7 dias no mouse) -->
     <a class="painel-op" id="op-linha" href="fila.html" hidden></a>
     <!-- 0302: medidor de canais (só admin/backoffice) — custo por venda de cada canal nos últimos 7 dias -->
     <section class="painel" id="canais-7d" aria-labelledby="t-canais" hidden></section>
 
-    <section class="painel" aria-labelledby="t-acao">
-      <div class="q-linha"><h2 id="t-acao">Precisam de ação agora</h2><a class="muted" href="leads.html?aba=acao" id="ver-acao">ver todas →</a></div>
-      <div class="lista-acao" id="lista-acao"><div class="carregando">Carregando…</div></div>
+    <section class="pn-bloco" aria-labelledby="t-acomp">
+      <h2 class="pn-h2" id="t-acomp">Acompanhar</h2>
+      <div class="pn-painel pn-cels" id="blocos"></div>
     </section>
-
-    <div class="painel-grade" id="blocos"></div>
+    <div id="pn-resumo"></div>
   </main>
 </div>
 <a class="fab" href="leads.html#nova" aria-label="Nova venda">＋</a>
@@ -154,6 +228,9 @@
     if (!linhas.length) { el.hidden = true; return; }
     const R = (x) => (x == null ? '—' : NG.fmtMoeda(Number(x)));
     const n = (x) => NG.fmtNum(Number(x || 0));
+    // 22/11: canal ativo sem nenhum movimento nos 7 dias sai da tabela e vira uma linha só, embaixo (a tabela mostrava 8 linhas de zeros)
+    const mexeu = (k) => Number(k.conversas) || Number(k.qualificados) || Number(k.vendas) || Number(k.instaladas) || Number(k.gasto) || Number(k.comissao_prevista);
+    const comMov = linhas.filter(mexeu), semMov = linhas.filter((k) => !mexeu(k));
     const tot = linhas.reduce((s, k) => ({ c: s.c + (k.conversas || 0), v: s.v + (k.vendas || 0), i: s.i + (k.instaladas || 0), g: s.g + Number(k.gasto || 0) }), { c: 0, v: 0, i: 0, g: 0 });
     const desc = linhas.find((k) => k.canal === 'desconhecida');
     const pct = tot.c && desc ? Math.round((desc.conversas / tot.c) * 100) : 0;
@@ -162,9 +239,10 @@
       : k.custo_conversa != null ? `${R(k.custo_conversa)} <small>/conversa</small>` : '—');
     el.innerHTML = `<div class="q-linha"><h2 id="t-canais">Canais · 7 dias</h2><small>${n(tot.c)} conversas · ${n(tot.v)} vendas · ${n(tot.i)} instaladas · ${R(tot.g)} gastos${pct ? ` · <b>${pct}% sem origem</b>` : ''} · <a class="muted" href="configuracoes.html#canais">custos e origens →</a></small></div>
       <div class="rolagem"><table class="tab"><thead><tr><th>Canal</th><th class="num">Conversas</th><th class="num">Qualificados</th><th class="num">Vendas</th><th class="num">Instaladas</th><th class="num">Gasto</th><th class="num">Custo por venda</th><th class="num col-media">Comissão prevista</th></tr></thead>
-      <tbody>${linhas.map((k) => `<tr><td><a href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a></td>
+      <tbody>${comMov.map((k) => `<tr><td><a href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a></td>
         <td class="num mono">${n(k.conversas)}</td><td class="num mono">${n(k.qualificados)}</td><td class="num mono">${n(k.vendas)}</td><td class="num mono">${n(k.instaladas)}</td>
-        <td class="num mono">${k.gasto == null ? '—' : R(k.gasto)}</td><td class="num mono">${custo(k)}</td><td class="num mono col-media">${Number(k.comissao_prevista) ? R(k.comissao_prevista) : '—'}</td></tr>`).join('')}</tbody></table></div>`;
+        <td class="num mono">${k.gasto == null ? '—' : R(k.gasto)}</td><td class="num mono">${custo(k)}</td><td class="num mono col-media">${Number(k.comissao_prevista) ? R(k.comissao_prevista) : '—'}</td></tr>`).join('')}</tbody></table></div>
+      ${semMov.length ? `<small class="nota-campo">Sem movimento nos 7 dias: ${semMov.map((k) => `<a class="muted" href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a>`).join(' · ')}</small>` : ''}`;
     el.hidden = false;
   }
 
@@ -278,6 +356,7 @@
 
     renderFaixa();
     renderEscada(p);
+    document.getElementById('t-topo').innerHTML = `A meta de ${esc(nomeMes)} <em>e os números de ${esc(per.rotulo.toLowerCase())}</em>`;
 
     // ---------- KPIs do período (a mesma conta da tela Vendas: vendidas pela data da venda) ----------
     const V = vendas.filter((v) => v.vendido_em && v.status !== 'saida' && NG.noPeriodo(v.vendido_em, p));
@@ -291,7 +370,7 @@
     const verm = acao.filter((j) => j.nivel === 'agora').length;
     const faltam = Math.max(0, meta - inst.length);
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: meta ? 'Instaladas · meta' : 'Instaladas', val: NG.fmtNum(inst.length), de: meta || null, pct: meta ? (inst.length / meta) * 100 : null,
+      p.valor === 'mes' ? '' : NG.kpi({ rot: meta ? 'Instaladas · meta' : 'Instaladas', val: NG.fmtNum(inst.length), de: meta || null, pct: meta ? (inst.length / meta) * 100 : null,
         nota: meta ? (faltam ? `faltam ${NG.fmtNum(faltam)} em ${esc(nomeMes)}` : 'meta batida ✓') : esc(per.rotulo.toLowerCase()),
         dica: 'A meta do mês conta instaladas (data da instalação, sem Saída) — é o que paga comissão.' }),
       NG.kpi({ rot: 'Vendas brutas', val: NG.fmtNum(V.length), nota: `${NG.fmtNum(aguard)} esperando a instalação`,
@@ -320,10 +399,10 @@
     va.href = ['admin', 'backoffice'].includes(eu.perfil) ? 'fila.html' : 'leads.html?aba=acao';   // 13/11 (4b): a lista é a Leads
 
     // ---------- blocos curtos ----------
-    const blocos = [];
+    const blocos = [], lado = [], pe = [];
     // Resumo de ontem (onda 3.2, só admin): o mesmo texto que o n8n vai mandar às 8h quando o canal for decidido.
     if (ehAdmin) {
-      blocos.push(`<section class="painel bloco-curto resumo-ontem">
+      pe.push(`<section class="painel bloco-curto resumo-ontem">
         <div class="q-linha"><h2 title="resumo_diario(ontem): vendas do dia, Meta Ads, conversas paradas, prazos do contrato e ritmo da meta. Sem CPF nem telefone.">Resumo de ontem</h2><button type="button" class="btn btn-sm" id="copiar-resumo"${resumo && resumo.texto ? '' : ' disabled'}>Copiar</button></div>
         ${resumo === undefined ? '<span class="nota-campo">Carregando…</span>' : !resumo ? '' : resumo.erro ? `<span class="nota-campo">${esc(resumo.erro)}</span>`
           : `<pre class="resumo-txt">${esc(resumo.texto)}</pre><span class="nota-campo">Às 8h (seg–sáb) este resumo chega no seu WhatsApp.</span>`}
@@ -356,7 +435,7 @@
     const espera = vendas.map((v) => ({ v, pe: NG.pendencia(v) })).filter((x) => x.pe)
       .sort((a, b) => a.pe.revisar_em.localeCompare(b.pe.revisar_em));
     const vencidas = espera.filter((x) => x.pe.vencida).length;
-    blocos.push(`<section class="painel bloco-curto">
+    lado.push(`<section class="painel bloco-curto">
       <div class="q-linha"><h2 title="${esc(NG.ajuda.pendencia)}">Em espera</h2><a class="muted" href="leads.html?aba=espera">Leads →</a></div>
       <a class="bc-num" href="leads.html?aba=espera" style="text-decoration:none"><span class="mono">${NG.fmtNum(espera.length)}</span><span class="muted">em espera · <span class="${vencidas ? 'bad-txt' : ''}">${NG.fmtNum(vencidas)} vencida${vencidas === 1 ? '' : 's'}</span></span></a>
       ${espera.slice(0, 4).map(({ v, pe }) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="${pe.vencida ? 'bad-txt' : 'muted'}">${pe.vencida ? '⏰ revisar hoje' : `revisar ${esc(pe.diaTxt)}`} · ${esc(pe.quemTxt)}${pe.revisoes >= 2 ? ` · ⚠️ ${pe.revisoes}×` : ''}</span></a>`).join('')}
@@ -369,7 +448,7 @@
     const feitasHoje = vendas.filter((v) => v.instalado_em && NG.diaSP(v.instalado_em) === hoje).length;
     const osAg = vendas.filter((v) => ((v.status === '0_qualificado' && v.biometria_status === 'validada') || (['1_vendido', '2_aguardando_instalacao'].includes(v.status) && !v.instalacao_agendada_para)));   // 0096: OS ou agendamento pendente
     const semAgenda = osAg.length;
-    blocos.push(`<section class="painel bloco-curto">
+    lado.unshift(`<section class="painel bloco-curto">
       <div class="q-linha"><h2>Instalações de hoje</h2><a class="muted" href="operacoes.html">Instalações →</a></div>
       <div class="bc-num"><span class="mono">${NG.fmtNum(instHoje.length)}</span><span class="muted">agendada${instHoje.length === 1 ? '' : 's'} · ${NG.fmtNum(feitasHoje)} instalada${feitasHoje === 1 ? '' : 's'} hoje</span></div>
       ${instHoje.slice(0, 4).map((v) => `<a class="bc-linha" href="#venda=${v.id}"><span>${esc(NG.primeiroNome(v.cliente_nome))}</span><span class="muted">${esc(NG.janela(v.instalacao_agendada_para))} · ${esc(v.bairro || '')}</span></a>`).join('')}
@@ -396,6 +475,8 @@
     </section>`);
     if (veMari) blocos.unshift('<section class="painel bloco-curto" id="and-card"><span class="nota-campo">Carregando o andamento na Nio…</span></section>');
     document.getElementById('blocos').innerHTML = blocos.join('');
+    document.getElementById('pn-lado').innerHTML = lado.join('');
+    document.getElementById('pn-resumo').innerHTML = pe.join('');
     if (alarmes) renderAlarmes();
     const bc = document.getElementById('copiar-resumo');
     if (bc) bc.onclick = async () => {
@@ -407,7 +488,7 @@
   // ---------- faixa "primeira venda" (onda 2.1): meta × instaladas, ritmo e paradas por etapa ----------
   // Não depende do Período: é sempre o mês corrente (a meta é mensal) e as vendas abertas agora.
   function renderFaixa() {
-    const el = document.getElementById('faixa-meta');
+    const el = document.getElementById('pn-meta');
     const nomeMes = new Intl.DateTimeFormat('pt-BR', { timeZone: NG.TZ, month: 'long' }).format(new Date());
     let meta = '';
     if (!ritmo) meta = '<div class="fm-meta"><span class="nota-campo">Meta do mês indisponível agora.</span></div>';
@@ -439,7 +520,8 @@
         ${atras ? `<span class="fm-atraso">${NG.fmtNum(atras)} fora do prazo${esc(prazo)}</span>` : ''}
       </a>`;
     }).join('');
-    el.innerHTML = `${meta}<div class="fm-etapas" aria-label="Vendas paradas por etapa">${etapas}</div>`;
+    el.innerHTML = meta;
+    document.getElementById('pn-paradas').innerHTML = etapas;
   }
 
   // 13/11 (etapa 4b): a escada no Painel — quantos chegaram até cada degrau no Período, a mesma conta da Leads e do Funil de vendas.

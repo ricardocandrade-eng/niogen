@@ -33,50 +33,69 @@
 <script src="assets/sidebar.js?v=221126-10"></script>
 <script src="assets/vendasos.js?v=221126-2"></script>
 <style>
-  .pc-h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
-  .pc-bloco { display: flex; flex-direction: column; gap: 8px; }
-  /* Hoje: a única exceção à faixa fina — caixas médias */
-  .pc-hoje { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
-  @media (max-width: 1100px) { .pc-hoje { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-  @media (max-width: 640px) { .pc-hoje { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  .pc-cx { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
-  .pc-cx span { font-size: 12px; color: var(--muted); }
-  .pc-cx b { font-family: var(--mono); font-size: 22px; font-weight: 600; }
-  #pc-mes { flex-wrap: wrap; overflow: visible; }
-  #pc-mes > div { flex: 1 1 auto; }
-  #pc-mes b.bad { color: var(--bad-fg); } #pc-mes b.ok { color: var(--ok-fg); }
-  /* Vendas por dia */
-  .pc-graf { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
-  .pc-graf-cab { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
-  .pc-graf-cab h2 { margin: 0; font-size: 14px; font-weight: 600; }
-  .pc-graf-cab span { font-size: 12px; color: var(--muted); }
-  .pc-barras { display: flex; align-items: flex-end; gap: 2px; height: 104px; border-bottom: 1px solid var(--border-strong); }
-  .pc-dia { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 3px; border-radius: 4px 4px 0 0; }
-  .pc-dia:hover { background: var(--surface-2); }
-  .pc-dia span { font-family: var(--mono); font-size: 11.5px; color: var(--text); }
-  .pc-dia i { display: block; width: 100%; max-width: 22px; border-radius: 4px 4px 0 0; background: var(--link); }
-  .pc-dia.futuro { opacity: .35; }
-  .pc-eixo { display: flex; gap: 2px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-  .pc-eixo span { flex: 1; min-width: 0; text-align: center; white-space: nowrap; }
-  .pc-eixo span.hoje { color: var(--text); font-weight: 600; }
-  /* Quebras */
-  .pc-quebras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  @media (max-width: 1000px) { .pc-quebras { grid-template-columns: minmax(0, 1fr); } }
-  .pc-q { border-radius: 12px; background: var(--surface); border: 1px solid var(--border); overflow-x: auto; }
-  .pc-q table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .pc-q th { padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .pc-q td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
-  .pc-q tr:last-child td { border-bottom: 0; }
-  .pc-q th.num, .pc-q td.num { text-align: right; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
-  .pc-q th.num { font-family: var(--sans); font-size: 11px; }
-  .pc-q td.nome { font-weight: 500; }
-  .pc-q td.nome a { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); }
-  .pc-q td.nome a:hover { color: var(--link); }
-  .pc-q .bar { display: flex; align-items: center; gap: 8px; min-width: 110px; }
-  .pc-q .bar > div { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); }
-  .pc-q .bar > div i { display: block; height: 100%; border-radius: 4px; background: var(--link); }
-  .pc-q .bar span { flex: 0 0 22px; text-align: right; font-family: var(--mono); font-size: 12.5px; }
-  .pc-q td.vazio { color: var(--muted); text-align: center; padding: 16px; }
+  /* 22/11 (Ricardo: "vários cards soltos ou gráficos em barras, tudo jogado"): a tela passa a ter TRÊS blocos, cada um num
+     painel só, com as divisões por fio (sem caixa dentro de caixa): Hoje · O mês (meta + curva + números) · De onde vêm. */
+  .pc-h2 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .pc-h2 em { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+  .pc-bloco { display: flex; flex-direction: column; margin-top: 6px; }
+  .pc-painel { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+  /* células em linha, separadas por fio; quebram sem deixar buraco */
+  .pc-cels { display: flex; flex-wrap: wrap; }
+  .pc-cel { flex: 1 1 190px; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .pc-cel > span { font-size: 12px; color: var(--muted); }
+  .pc-cel > b { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
+  .pc-cel > small { font-size: 12px; color: var(--muted); }
+  .pc-cel > small b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+  .pc-cel.menor > b { font-size: 20px; }
+  @media (max-width: 640px) { .pc-cel { flex-basis: 140px; padding: 12px 14px; } .pc-cel > b { font-size: 21px; } .pc-cel.menor > b { font-size: 18px; } .pc-curva { padding: 14px 10px 10px; } .pc-q { flex-basis: 100%; } }
+  /* o mês: meta à esquerda, curva à direita, num painel só */
+  .pc-heroi { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); }
+  @media (max-width: 900px) { .pc-heroi { grid-template-columns: minmax(0, 1fr); } }
+  .pc-meta { display: flex; flex-direction: column; gap: 10px; padding: 20px 22px; border-right: 1px solid var(--border); }
+  @media (max-width: 900px) { .pc-meta { border-right: 0; border-bottom: 1px solid var(--border); } }
+  .pc-meta .rot { font-size: 12px; color: var(--muted); }
+  .pc-meta .num { display: flex; align-items: baseline; gap: 10px; font-family: var(--mono); }
+  .pc-meta .num b { font-size: 52px; font-weight: 600; line-height: 1; letter-spacing: -.03em; }
+  .pc-meta .num span { font-size: 16px; color: var(--muted); }
+  .pc-meta .barra { position: relative; height: 8px; border-radius: 4px; background: var(--surface-2); }
+  .pc-meta .barra i { display: block; height: 100%; border-radius: 4px; background: var(--pc-inst); min-width: 4px; }
+  .pc-meta .barra u { position: absolute; top: -3px; bottom: -3px; width: 2px; border-radius: 1px; background: var(--text); }
+  .pc-meta .leg { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px; color: var(--muted); }
+  .pc-meta dl { margin: 6px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 12.5px; }
+  .pc-meta dt { color: var(--muted); }
+  .pc-meta dd { margin: 0; text-align: right; }
+  .pc-meta dd b { font-family: var(--mono); font-weight: 600; }
+  .pc-meta dd.bad b { color: var(--bad-fg); } .pc-meta dd.ok b { color: var(--ok-fg); }
+  .pc-meta dd small { display: block; font-size: 11.5px; color: var(--muted); }
+  .pc-curva { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 12px; min-width: 0; }
+  .pc-curva-cab { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+  .pc-curva-cab h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .pc-leg { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .pc-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .pc-leg i.linha { width: 16px; height: 0; border-radius: 0; border-top: 2px dashed var(--muted); vertical-align: 3px; }
+  #pc-svg { display: block; width: 100%; height: 220px; }
+  #pc-svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+  #pc-svg text.forte { fill: var(--text); font-weight: 600; }
+  .pc-dica { position: absolute; z-index: 2; pointer-events: none; min-width: 170px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: 12px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+  .pc-dica b { font-family: var(--mono); }
+  .pc-dica strong { display: block; margin-bottom: 2px; }
+  .pc-dica i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .pc-mes { border-top: 1px solid var(--border); }
+  :root { --pc-venda: #4C97EA; --pc-inst: #2AAE48; }
+  /* de onde vêm: cinco colunas num painel só */
+  .pc-quebras { display: flex; flex-wrap: wrap; }
+  .pc-q { flex: 1 1 210px; min-width: 0; padding: 14px 18px 16px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .pc-q h3 { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .pc-q ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .pc-q li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: baseline; }
+  .pc-q .nome { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pc-q a.nome { color: inherit; text-decoration: none; }
+  .pc-q a.nome:hover { color: var(--link); text-decoration: underline; }
+  .pc-q .n { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+  .pc-q .bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--surface-2); }
+  .pc-q .bar i { display: block; height: 100%; border-radius: 2px; background: var(--pc-venda); min-width: 4px; }
+  .pc-q small { grid-column: 1 / -1; font-size: 11.5px; color: var(--muted); }
+  .pc-q .vazio { color: var(--muted); font-size: 12.5px; }
   .pc-pe { color: var(--muted); font-size: 12px; }
 </style>
 </head>
@@ -94,21 +113,29 @@
 
     <section class="pc-bloco" aria-labelledby="t-hoje">
       <h2 class="pc-h2" id="t-hoje">Hoje</h2>
-      <div class="pc-hoje" id="pc-hoje"><div class="pc-cx"><span>Carregando…</span><b>—</b></div></div>
+      <div class="pc-painel pc-cels" id="pc-hoje"><div class="pc-cel"><span>Carregando…</span><b>—</b></div></div>
     </section>
 
     <section class="pc-bloco" aria-labelledby="t-mes">
       <h2 class="pc-h2" id="t-mes">O mês</h2>
-      <div class="faixa-fina" id="pc-mes"><div><span>Carregando…</span></div></div>
+      <div class="pc-painel">
+        <div class="pc-heroi">
+          <div class="pc-meta" id="pc-meta"><span class="rot">Carregando…</span></div>
+          <div class="pc-curva" id="pc-curva">
+            <div class="pc-curva-cab"><h3 id="t-graf">O mês até aqui</h3>
+              <div class="pc-leg"><span><i style="background:var(--pc-venda)"></i>Vendas com OS</span><span><i style="background:var(--pc-inst)"></i>Instaladas</span><span id="pc-leg-meta"><i class="linha"></i>Caminho da meta</span></div></div>
+            <svg id="pc-svg" role="img"></svg>
+            <div class="pc-dica" id="pc-dica" hidden></div>
+          </div>
+        </div>
+        <div class="pc-cels pc-mes" id="pc-mes"></div>
+      </div>
     </section>
 
-    <section class="pc-graf" aria-labelledby="t-graf">
-      <div class="pc-graf-cab"><h2 id="t-graf">Vendas por dia</h2><span>OS geradas em cada dia · passe o mouse na barra para ver o dia</span></div>
-      <div class="pc-barras" id="pc-barras" role="img"></div>
-      <div class="pc-eixo" id="pc-eixo" aria-hidden="true"></div>
+    <section class="pc-bloco" aria-labelledby="t-onde">
+      <h2 class="pc-h2" id="t-onde">De onde vêm as vendas</h2>
+      <div class="pc-painel pc-quebras" id="pc-quebras"></div>
     </section>
-
-    <div class="pc-quebras" id="pc-quebras"></div>
     <div class="pc-pe" id="pc-pe"></div>
   </main>
 </div>
@@ -148,7 +175,7 @@
   function pintarHoje() {
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', timeZone: NG.TZ }).replace(/\D/g, '');
     const sem = new Date(`${hoje}T12:00:00-03:00`).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: NG.TZ });
-    document.getElementById('t-hoje').textContent = `Hoje · ${sem} ${NG.fmtDiaISO(hoje).slice(0, 5)} · até ${Number(agora)}h`;
+    document.getElementById('t-hoje').innerHTML = `Hoje <em>${esc(sem)}, ${esc(NG.fmtDiaISO(hoje).slice(0, 5))} · até as ${Number(agora)}h</em>`;
     const nConv = (dia) => (conv ? conv.filter((c) => diaDe(c.created_at) === dia).length : null);
     const nQual = (dia) => (conv ? conv.filter((c) => c.handoff_motivo === 'dados_completos' && diaDe(c.handoff_em) === dia).length : null);
     const nOS = (dia) => d.vendas.filter((v) => diaOS(v) === dia).length;
@@ -157,7 +184,7 @@
     const ad = (dia) => ads.find((r) => r.dia === dia) || null;
     const aH = ad(hoje), aO = ad(ontem);
     const v = (x) => (x == null ? (completo ? '—' : '…') : N(x));
-    const cx = (rot, val, nota, dica) => `<div class="pc-cx"${dica ? ` title="${esc(dica)}"` : ''}><span>${esc(rot)}</span><b>${esc(val)}</b><span>${esc(nota)}</span></div>`;
+    const cx = (rot, val, nota, dica) => `<div class="pc-cel"${dica ? ` title="${esc(dica)}"` : ''}><span>${esc(rot)}</span><b>${esc(val)}</b><small>${esc(nota)}</small></div>`;
     document.getElementById('pc-hoje').innerHTML = [
       cx('Conversas novas', v(nConv(hoje)), `ontem: ${v(nConv(ontem))} no dia todo`, 'Conversas que a Mari recebeu hoje, de qualquer origem.'),
       cx('Qualificadas', v(nQual(hoje)), `ontem: ${v(nQual(ontem))}`, 'A Mari passou ao time com os dados completos.'),
@@ -175,56 +202,54 @@
     const metaLinha = metas.find((m) => String(m.mes).slice(0, 7) === mes);
     const meta = atual && ritmo && ritmo.meta ? Number(ritmo.meta) : metaLinha ? Number(metaLinha.meta_vendas) : null;
     const inst = atual && ritmo && ritmo.instaladas != null ? Number(ritmo.instaladas) : instMes;
-    document.getElementById('t-mes').textContent = `${nomeMes(mes)} de ${mes.slice(0, 4)}${atual ? '' : ' · mês fechado'}`;
-    const it = [];
-    it.push(`<div title="A meta do mês é de instaladas (a mesma do Painel)."><span>Instaladas no mês</span><b>${N(inst)}${meta ? ` <small>de ${N(meta)}</small>` : ''}</b><small>${pl(vm.length, 'venda com OS', 'vendas com OS')}</small></div>`);
+    document.getElementById('t-mes').innerHTML = `${esc(nomeMes(mes))} de ${mes.slice(0, 4)}${atual ? '' : ' <em>mês fechado</em>'}`;
+    const aguard = vm.filter((v) => !['instalada', 'cancelada'].includes(st(v))).length;
+    // -- a meta, grande, à esquerda
+    const pctMeta = meta ? Math.max(0, Math.min(100, (inst / meta) * 100)) : 0;
+    const nDias = diasNoMes(mes), diaH = atual ? Number(hoje.slice(8, 10)) : nDias;
+    const esperado = meta ? (meta * diaH) / nDias : null;
+    const linhas = [];
     if (atual && ritmo && meta) {
       const un = ritmo.dias_uteis ? 'dias úteis' : 'dias';
-      it.push(`<div title="Quantas instalações por dia faltam para fechar a meta."><span>Para bater a meta</span><b>${dec(ritmo.por_dia)} por dia</b><small>faltam ${N(ritmo.faltam)} em ${N(ritmo.dias_restantes)} ${un}</small></div>`);
-      it.push(`<div title="Instalações por dia, até hoje, e onde o mês fecha se o ritmo não mudar."><span>Ritmo atual</span><b class="${Number(ritmo.projecao) >= meta ? 'ok' : 'bad'}">${dec(ritmo.ritmo_dia)} por dia</b><small>nesse ritmo fecha o mês em ${N(ritmo.projecao)}</small></div>`);
+      const bate = Number(ritmo.projecao) >= meta;
+      linhas.push(`<dt title="Quantas instalações por dia faltam para fechar a meta.">Para bater a meta</dt><dd><b>${dec(ritmo.por_dia)} por dia</b><small>faltam ${N(ritmo.faltam)} em ${N(ritmo.dias_restantes)} ${un}</small></dd>`);
+      linhas.push(`<dt title="Instalações por dia, até hoje, e onde o mês fecha se o ritmo não mudar.">Ritmo de hoje</dt><dd class="${bate ? 'ok' : 'bad'}"><b>${dec(ritmo.ritmo_dia)} por dia</b><small>nesse ritmo o mês fecha em ${N(ritmo.projecao)}</small></dd>`);
     }
+    linhas.push(`<dt title="Vendas com OS gerada no mês.">Vendas com OS</dt><dd><b>${N(vm.length)}</b><small>${aguard ? `${pl(aguard, 'esperando', 'esperando')} a instalação` : 'nenhuma esperando a instalação'}</small></dd>`);
+    document.getElementById('pc-meta').innerHTML = `<span class="rot" title="A meta do mês é de instaladas (a mesma do Painel).">Instaladas em ${esc(nomeMes(mes))}</span>
+      <div class="num"><b>${N(inst)}</b>${meta ? `<span>de ${N(meta)}</span>` : ''}</div>
+      ${meta ? `<div class="barra" title="${atual ? `Para estar no caminho da meta, hoje seriam ${N(Math.round(esperado))} instaladas.` : ''}"><i style="width:${pctMeta}%"></i>${atual ? `<u style="left:calc(${Math.min(100, (esperado / meta) * 100)}% - 1px)"></u>` : ''}</div>
+      <div class="leg"><span>${Math.round(pctMeta)} % da meta</span>${atual ? `<span>no caminho da meta: ${N(Math.round(esperado))} hoje</span>` : ''}</div>` : '<div class="leg"><span>sem meta cadastrada para o mês</span></div>'}
+      <dl>${linhas.join('')}</dl>`;
+    // -- os outros números do mês, numa linha só, no pé do mesmo painel
+    const it = [];
+    const cel = (rot, val, nota, dica) => `<div class="pc-cel menor" title="${esc(dica)}"><span>${esc(rot)}</span><b>${val}</b><small>${nota}</small></div>`;
     const com = vm.map(comissao);
     const total = com.reduce((s, c) => s + (c.valor || 0), 0), paga = com.filter((c) => c.id === 'paga').reduce((s, c) => s + (c.valor || 0), 0);
-    it.push(`<div title="Comissão da Nio das vendas com OS do mês (prevista, confirmada ou paga)."><span>Comissão do mês</span><b>${R(total)}</b><small>${paga ? `${R(paga)} já paga pela Nio` : 'nada pago ainda'}</small></div>`);
+    it.push(cel('Comissão do mês', esc(R(total)), paga ? `${esc(R(paga))} já paga pela Nio` : 'nada pago ainda', 'Comissão da Nio das vendas com OS do mês (prevista, confirmada ou paga).'));
+    // Custo por venda de anúncio (Ricardo, 22/11): o mesmo critério do Meta Ads
+    const gastoMes = ads.filter((r) => r.dia.slice(0, 7) === mes).reduce((s, r) => s + Number(r.gasto || 0), 0);
+    const vAds = vm.filter((v) => v.origem === 'meta_ads').length;
+    it.push(cel('Custo por venda de anúncio', !completo ? '…' : vAds ? esc(R(Math.round(gastoMes / vAds))) : '—', `${completo ? esc(R(gastoMes)) : '…'} gastos · ${pl(vAds, 'venda de anúncio', 'vendas de anúncio')}`, 'Gasto do mês em anúncio dividido pelas vendas com OS que vieram de anúncio.'));
+    // Conversão do mês (Ricardo, 22/11)
+    if (conv) {
+      const cM = conv.filter((c) => diaDe(c.created_at).slice(0, 7) === mes).length;
+      const qM = conv.filter((c) => c.handoff_motivo === 'dados_completos' && diaDe(c.handoff_em).slice(0, 7) === mes).length;
+      it.push(cel('Conversas › qualificadas › vendas', `${N(cM)} › ${N(qM)} › ${N(vm.length)}`, `${pct(vm.length, cM)} das conversas viram venda`, 'Conversas novas no mês › qualificadas no mês › vendas com OS no mês. O percentual é sobre as conversas.'));
+    } else it.push(cel('Conversas › qualificadas › vendas', completo ? '—' : '…', '&nbsp;', 'Conversas novas no mês › qualificadas no mês › vendas com OS no mês.'));
     // Mês passado (Ricardo, 22/11): o mesmo dia do mês anterior
     const ant = mesAnterior(mes);
     const corte = atual ? `${ant}-${String(Math.min(Number(hoje.slice(8, 10)), diasNoMes(ant))).padStart(2, '0')}` : `${ant}-31`;
     const vAnt = d.vendas.filter((v) => doMes(v, ant) && diaOS(v) <= corte).length;
     const iAnt = d.vendas.filter((v) => v.instalado_em && diaDe(v.instalado_em).slice(0, 7) === ant && diaDe(v.instalado_em) <= corte).length;
-    it.push(`<div title="${atual ? `Até o dia ${Number(corte.slice(8))} de ${nomeMes(ant)}, para comparar com hoje.` : `${nomeMes(ant)} inteiro.`}"><span>${atual ? `${nomeMes(ant)}, até o dia ${Number(corte.slice(8))}` : `${nomeMes(ant)} inteiro`}</span><b>${pl(vAnt, 'venda', 'vendas')}</b><small>${pl(iAnt, 'instalada', 'instaladas')}</small></div>`);
-    // Custo por venda de anúncio (Ricardo, 22/11): o mesmo critério do Meta Ads
-    const gastoMes = ads.filter((r) => r.dia.slice(0, 7) === mes).reduce((s, r) => s + Number(r.gasto || 0), 0);
-    const vAds = vm.filter((v) => v.origem === 'meta_ads').length;
-    it.push(`<div title="Gasto do mês em anúncio dividido pelas vendas com OS que vieram de anúncio."><span>Custo por venda de anúncio</span><b>${!completo ? '…' : vAds ? R(Math.round(gastoMes / vAds)) : '—'}</b><small>${completo ? R(gastoMes) : '…'} gastos · ${pl(vAds, 'venda de anúncio', 'vendas de anúncio')}</small></div>`);
-    // Conversão do mês (Ricardo, 22/11)
-    if (conv) {
-      const cM = conv.filter((c) => diaDe(c.created_at).slice(0, 7) === mes).length;
-      const qM = conv.filter((c) => c.handoff_motivo === 'dados_completos' && diaDe(c.handoff_em).slice(0, 7) === mes).length;
-      it.push(`<div title="Conversas novas no mês › qualificadas no mês › vendas com OS no mês. O percentual é sobre as conversas."><span>Conversão do mês</span><b>${N(cM)} › ${N(qM)} › ${N(vm.length)}</b><small>${pct(qM, cM)} qualificam · ${pct(vm.length, cM)} viram venda</small></div>`);
-    }
+    it.push(cel(atual ? `${nomeMes(ant)}, até o dia ${Number(corte.slice(8))}` : `${nomeMes(ant)} inteiro`, esc(pl(vAnt, 'venda', 'vendas')), esc(pl(iAnt, 'instalada', 'instaladas')), atual ? `Até o dia ${Number(corte.slice(8))} de ${nomeMes(ant)}, para comparar com hoje.` : `${nomeMes(ant)} inteiro.`));
     document.getElementById('pc-mes').innerHTML = it.join('');
 
-    // ---------- vendas por dia ----------
-    const n = diasNoMes(mes);
-    const porDia = Array.from({ length: n }, () => 0);
-    vm.forEach((v) => { porDia[Number(diaOS(v).slice(8, 10)) - 1] += 1; });
-    const max = Math.max(1, ...porDia);
-    const melhor = porDia.indexOf(Math.max(...porDia));
-    const diaHoje = atual ? Number(hoje.slice(8, 10)) : null;
-    document.getElementById('t-graf').textContent = `Vendas por dia · ${nomeMes(mes)}`;
-    const barras = document.getElementById('pc-barras');
-    barras.setAttribute('aria-label', `Vendas por dia em ${nomeMes(mes)}: ${pl(vm.length, 'venda', 'vendas')}${vm.length ? `, o melhor dia foi ${String(melhor + 1).padStart(2, '0')}/${mes.slice(5, 7)} com ${porDia[melhor]}` : ''}`);
-    barras.innerHTML = porDia.map((q, i) => {
-      const futuro = diaHoje != null && i + 1 > diaHoje;
-      const dd = `${String(i + 1).padStart(2, '0')}/${mes.slice(5, 7)}`;
-      return `<div class="pc-dia${futuro ? ' futuro' : ''}" title="${dd} · ${futuro ? 'ainda não chegou' : pl(q, 'venda', 'vendas')}">${q ? `<span>${q}</span>` : ''}<i style="height:${Math.round((q / max) * 72)}px"></i></div>`;
-    }).join('');
-    document.getElementById('pc-eixo').innerHTML = porDia.map((q, i) => {
-      const dia = i + 1;
-      return `<span class="${dia === diaHoje ? 'hoje' : ''}">${dia === diaHoje ? 'hoje' : (dia === 1 || dia % 5 === 0) && !(diaHoje && Math.abs(dia - diaHoje) === 1) ? dia : ''}</span>`;
-    }).join('');
+    // ---------- a curva do mês: vendas e instaladas acumuladas contra o caminho da meta ----------
+    curva = { vm, meta, atual };
+    desenharCurva();
 
-    // ---------- quebras ----------
+    // ---------- de onde vêm ----------
     const quebra = (titulo, chave, link) => {
       const g = new Map();
       vm.forEach((v) => {
@@ -235,17 +260,17 @@
       });
       const linhas = [...g.values()].sort((a, b) => b.n - a.n || b.com - a.com || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
       const mx = Math.max(1, ...linhas.map((l) => l.n));
-      return `<section class="pc-q"><table><thead><tr><th>${esc(titulo)}</th><th style="width:34%">Vendas</th><th class="num">Instaladas</th><th class="num">Comissão</th></tr></thead><tbody>
-        ${linhas.length ? linhas.map((l) => {
-          const href = atual && link ? link(l) : null;
-          return `<tr><td class="nome">${href ? `<a href="${esc(href)}" title="Abrir a tela Vendas com este filtro">${esc(l.nome)}</a>` : esc(l.nome)}</td>
-            <td><div class="bar"><div><i style="width:${Math.round((l.n / mx) * 100)}%"></i></div><span>${N(l.n)}</span></div></td>
-            <td class="num">${N(l.inst)}</td><td class="num">${R(l.com)}</td></tr>`;
-        }).join('') : '<tr><td colspan="4" class="vazio">Nenhuma venda com OS no mês.</td></tr>'}</tbody></table></section>`;
+      return `<section class="pc-q"><h3>${esc(titulo)}</h3>${linhas.length ? `<ul>${linhas.map((l) => {
+        const href = atual && link ? link(l) : null;
+        return `<li>${href ? `<a class="nome" href="${esc(href)}" title="Abrir a tela Vendas com este filtro">${esc(l.nome)}</a>` : `<span class="nome" title="${esc(l.nome)}">${esc(l.nome)}</span>`}<span class="n">${N(l.n)}</span>
+          <div class="bar"><i style="width:${Math.round((l.n / mx) * 100)}%"></i></div>
+          <small>${pl(l.inst, 'instalada', 'instaladas')} · ${esc(R(l.com))}</small></li>`;
+      }).join('')}</ul>` : '<div class="vazio">Nenhuma venda com OS no mês.</div>'}</section>`;
     };
+    document.getElementById('t-onde').innerHTML = `De onde vêm as vendas <em>${pl(vm.length, 'venda com OS', 'vendas com OS')} em ${esc(nomeMes(mes))} · instaladas e comissão embaixo de cada linha</em>`;
     const FORMA = { cartao: 'Cartão', boleto: 'Boleto', dacc: 'Débito em conta' };
     document.getElementById('pc-quebras').innerHTML = [
-      quebra('Por vendedor', (v) => [v.vendedor_id || '', v.vendedor_nome || 'Sem vendedor (veio pela Mari)'], (l) => (l.k ? `vendas.html?vendedor=${encodeURIComponent(l.k)}` : null)),
+      quebra('Por vendedor', (v) => [v.vendedor_id || '', v.vendedor_nome || 'Sem vendedor (Mari)'], (l) => (l.k ? `vendas.html?vendedor=${encodeURIComponent(l.k)}` : null)),
       quebra('Por origem', (v) => [v.origem || '', NG.ORIGENS[v.origem] || v.origem || 'Sem origem'], (l) => (l.k ? `vendas.html?origem=${encodeURIComponent(l.k)}` : null)),
       quebra('Por plano', (v) => [v.plano_id || '', d.nomeCurto[v.plano_id] || v.plano_nome || 'Sem plano']),
       quebra('Por forma de pagamento', (v) => [v.forma_pagamento || '', FORMA[v.forma_pagamento] || v.forma_pagamento || 'Não informada']),
@@ -253,6 +278,68 @@
     ].join('');
     document.getElementById('pc-pe').textContent = `Venda = OS gerada, pela data da OS. ${atual ? 'Clicar num vendedor, numa origem ou numa cidade abre a tela Vendas já filtrada.' : ''}`;
   }
+
+  // ---------- a curva: acumulado de vendas (OS) e de instaladas, dia a dia, contra a reta da meta ----------
+  let curva = null;
+  function desenharCurva() {
+    if (!curva) return;
+    const { vm, meta, atual } = curva;
+    const svg = document.getElementById('pc-svg'), dica = document.getElementById('pc-dica');
+    const W = Math.max(320, Math.round(svg.getBoundingClientRect().width || 600)), H = 220;
+    const m = { t: 16, r: 104, b: 24, l: 30 };
+    const n = diasNoMes(mes), ate = atual ? Number(hoje.slice(8, 10)) : n;
+    const vd = Array.from({ length: n }, () => 0), id = Array.from({ length: n }, () => 0);
+    vm.forEach((v) => { vd[Number(diaOS(v).slice(8, 10)) - 1] += 1; });
+    d.vendas.forEach((v) => { if (v.instalado_em && diaDe(v.instalado_em).slice(0, 7) === mes) id[Number(diaDe(v.instalado_em).slice(8, 10)) - 1] += 1; });
+    const cv = [0], ci = [0];
+    for (let i = 0; i < ate; i += 1) { cv.push(cv[i] + vd[i]); ci.push(ci[i] + id[i]); }
+    const topo = Math.max(meta || 0, cv[ate], ci[ate], 4);
+    const passo = topo <= 8 ? 2 : topo <= 20 ? 5 : topo <= 50 ? 10 : topo <= 120 ? 25 : 50;
+    const ymax = Math.ceil(topo / passo) * passo;
+    const x = (dia) => m.l + (dia / n) * (W - m.l - m.r);
+    const y = (q) => m.t + (1 - q / ymax) * (H - m.t - m.b);
+    const pts = (arr) => arr.map((q, i) => `${x(i).toFixed(1)},${y(q).toFixed(1)}`).join(' ');
+    let g = '';
+    for (let q = 0; q <= ymax; q += passo) g += `<line x1="${m.l}" x2="${x(n)}" y1="${y(q)}" y2="${y(q)}" stroke="var(--border)" stroke-width="1"${q ? ' stroke-dasharray="2 4"' : ''}/><text x="${m.l - 8}" y="${y(q) + 4}" text-anchor="end">${q}</text>`;
+    for (let dia = 1; dia <= n; dia += 1) if ((dia === 1 || dia % 5 === 0) && !(atual && Math.abs(x(dia) - x(ate)) < 30)) g += `<text x="${x(dia)}" y="${H - 6}" text-anchor="middle">${dia}</text>`;
+    if (atual) g += `<line x1="${x(ate)}" x2="${x(ate)}" y1="${m.t}" y2="${y(0)}" stroke="var(--border-strong)" stroke-width="1"/><text class="forte" x="${x(ate)}" y="${H - 6}" text-anchor="middle">hoje</text>`;
+    if (meta) g += `<line x1="${x(0)}" y1="${y(0)}" x2="${x(n)}" y2="${y(meta)}" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" stroke-linecap="round" opacity=".7"/><text x="${x(n) + 8}" y="${y(meta) + 4}">meta ${N(meta)}</text>`;
+    g += `<polygon points="${x(0)},${y(0)} ${pts(cv)} ${x(ate)},${y(0)}" fill="var(--pc-venda)" opacity=".10"/>`;
+    g += `<polyline points="${pts(cv)}" fill="none" stroke="var(--pc-venda)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    g += `<polyline points="${pts(ci)}" fill="none" stroke="var(--pc-inst)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    // ponta de cada linha com o número ao lado (sem depender só da cor); se as duas pontas ficam coladas, afasta os rótulos
+    let yv = y(cv[ate]), yi = y(ci[ate]);
+    if (Math.abs(yv - yi) < 15) { const meio = (yv + yi) / 2, cima = cv[ate] >= ci[ate]; yv = meio + (cima ? -8 : 8); yi = meio + (cima ? 8 : -8); }
+    const ponta = (q, yy, cor, txt) => `<circle cx="${x(ate)}" cy="${y(q)}" r="4.5" fill="${cor}" stroke="var(--surface)" stroke-width="2"/><text class="forte" x="${x(ate) + 10}" y="${yy + 4}">${txt}</text>`;
+    g += ponta(cv[ate], yv, 'var(--pc-venda)', pl(cv[ate], 'venda', 'vendas'));
+    g += ponta(ci[ate], yi, 'var(--pc-inst)', pl(ci[ate], 'instalada', 'instaladas'));
+    g += `<line id="pc-mira" y1="${m.t}" y2="${y(0)}" stroke="var(--text)" stroke-width="1" opacity=".5" visibility="hidden"/><rect id="pc-alvo" x="${m.l}" y="${m.t}" width="${x(n) - m.l}" height="${y(0) - m.t}" fill="transparent"/>`;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('aria-label', `${nomeMes(mes)}: ${pl(cv[ate], 'venda com OS', 'vendas com OS')} e ${pl(ci[ate], 'instalada', 'instaladas')}${atual ? ' até hoje' : ''}${meta ? `, contra a meta de ${N(meta)} instaladas` : ''}.`);
+    svg.innerHTML = g;
+    document.getElementById('pc-leg-meta').hidden = !meta;
+    document.getElementById('t-graf').textContent = atual ? 'O mês até aqui' : `Como foi ${nomeMes(mes)}`;
+    const mira = svg.querySelector('#pc-mira'), alvo = svg.querySelector('#pc-alvo');
+    const some = () => { dica.hidden = true; mira.setAttribute('visibility', 'hidden'); };
+    alvo.addEventListener('mousemove', (e) => {
+      const r = svg.getBoundingClientRect();
+      const px = ((e.clientX - r.left) / r.width) * W;
+      const dia = Math.max(1, Math.min(ate, Math.ceil(((px - m.l) / (x(n) - m.l)) * n)));
+      mira.setAttribute('x1', x(dia)); mira.setAttribute('x2', x(dia)); mira.setAttribute('visibility', 'visible');
+      dica.innerHTML = `<strong>${String(dia).padStart(2, '0')}/${mes.slice(5, 7)}${vd[dia - 1] || id[dia - 1] ? ` · no dia: ${[vd[dia - 1] ? pl(vd[dia - 1], 'venda', 'vendas') : '', id[dia - 1] ? pl(id[dia - 1], 'instalada', 'instaladas') : ''].filter(Boolean).join(' e ')}` : ''}</strong>
+        <div><i style="background:var(--pc-venda)"></i>Vendas até o dia: <b>${N(cv[dia])}</b></div>
+        <div><i style="background:var(--pc-inst)"></i>Instaladas até o dia: <b>${N(ci[dia])}</b></div>
+        ${meta ? `<div class="muted">No caminho da meta: <b>${N(Math.round((meta * dia) / n))}</b></div>` : ''}`;
+      dica.hidden = false;
+      const caixa = svg.parentElement.getBoundingClientRect();
+      const esq = r.left - caixa.left + (x(dia) / W) * r.width;
+      dica.style.top = `${r.top - caixa.top + 8}px`;
+      dica.style.left = esq + 190 > caixa.width ? `${esq - dica.offsetWidth - 12}px` : `${esq + 12}px`;
+    });
+    alvo.addEventListener('mouseleave', some);
+  }
+  let rz = null;
+  window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(desenharCurva, 120); });
 
   async function carregar() {
     const iniAnt = `${mesAnterior(mesAnterior(mesAtual))}-01`;   // dois meses para trás: dá o mês atual, o passado e a comparação
@@ -265,7 +352,7 @@
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: hoje }),
       NG.sb.from('config_metas').select('mes, meta_vendas'),
     ]);
-    if (dados.erro) { document.getElementById('pc-mes').innerHTML = `<div><span>${esc(NG.msgErro(dados.erro))}</span></div>`; NG.toast(NG.msgErro(dados.erro), 'bad'); return; }
+    if (dados.erro) { document.getElementById('pc-meta').innerHTML = `<span class="rot">${esc(NG.msgErro(dados.erro))}</span>`; NG.toast(NG.msgErro(dados.erro), 'bad'); return; }
     d = dados;
     ritmo = rr && !rr.error ? rr.data : null;
     metas = rm && !rm.error ? rm.data || [] : [];
