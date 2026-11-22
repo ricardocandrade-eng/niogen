@@ -728,7 +728,7 @@ def cen_as(c):   # P46 (21/11, conversa L-236, teste do Ricardo): a lista de uni
            where id = (select id from mari_conversas where telefone = '{c.tel}' order by created_at desc limit 1)""", escrita=True)
     r = c.diz('Manhã')
     t = fala(r)
-    c.exige(re.search(r'apartamento 10[12]|10[12]', t), f'[P46] a lista de unidades chegou e a Mari não perguntou a unidade: «{t[:220]}»')
+    c.exige(re.search(r'apartamento 10[12]|\b10[12]\b', t), f'[P46] a lista de unidades chegou e a Mari não perguntou a unidade: «{t[:220]}»')
     c.exige((r.get('interativo') or {}).get('chave') != 'turno', f'[P46] botões de período de novo depois do "Manhã": «{t[-160:]}»')
     c.exige(not RX_PERG_PERIODO.search(t), f'[P46] perguntou o período de novo junto com a unidade: «{t[-220:]}»')
     row = conv_row(c, 'instalacao_preferencia')
