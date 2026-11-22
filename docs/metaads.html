@@ -1,12 +1,21 @@
 <!doctype html>
-<!-- NIOGEN | docs/metaads.html | 03/11/2026 · 05/11 rodada noturna — Meta Ads › Bairros prioritários no padrão de telas.
-     KPIs, abas por situação (Todos · Marcados · Aprovação ≥ 50 % · < 50 %), busca + marcar os N primeiros + raio mínimo,
-     tabela padrão ordenável com marcação, cartões no celular; o conjunto para o Gerenciador de Anúncios abre em gaveta.
-     Fonte: v_dfv_bairros (base DFV da Nio no Supabase).
-     06/11 (depois do prompt 22): vista "Desempenho" (padrão), do mockup MetaAds.dc.html — período, 5 KPIs (gasto × verba do mês,
-     conversas da Meta, qualificadas pela Mari, vendas com biometria, fora da área), anúncios por campanha/conjunto e o dia a dia.
-     Fonte: meta_ads_diario + meta_ads_anuncios (n8n meta_ads_coleta, a cada 15 min) e v_meta_ads_dia (migration 0034).
-     Só leitura: nada aqui pausa, ativa ou muda verba. "Bairros prioritários" virou a 2ª vista, sem mudança de comportamento. -->
+<!-- NIOGEN | docs/metaads.html | 22/11/2026 — Claude Code (Fable 5.2)
+     Meta Ads: quanto custa cada venda que veio de anúncio e o que precisa de ação agora. Só leitura: nada aqui pausa, ativa
+     ou muda verba (isso é do agente de tráfego, que avisa em seguida).
+     22/11 (novo layout, passo 4 — especificação aprovada pelo Ricardo em 22/11, protótipo das sete telas):
+       · Faixa fina: custo por venda · gasto · verba do mês · saldo em aberto · retorno à Meta.
+       · "Precisa de ação": frases simples (o que está acontecendo, o fato, o que fazer), sem os códigos R1–R5. Os limites
+         continuam vindo de config_meta_ads_regras; o que está perto do limite aparece como "Atenção".
+       · UMA tabela por anúncio: gasto · conversas · com CEP atendido · qualificadas · vendas (OS) · custo por venda, com a
+         linha "Sem anúncio identificado" (Ricardo, 22/11: "Sim, mostrar a linha") e a linha de total.
+       · VENDA = OS GERADA (Ricardo, 22/11: "Sim, OS gerada"), pela data da OS — o mesmo critério das telas Vendas e
+         Instalações. Antes a tela contava venda com biometria aprovada.
+       · Quatro gavetas recolhidas: Dia a dia · Para onde vai a verba · O que a Meta recebeu · Bairros prioritários
+         (Ricardo: "Pode continuar, mas recolhido"). ?vista=bairros abre a gaveta dos bairros.
+       · Saíram da tela: o funil em fita e o quadro "Gatilhos do agente · quanto falta".
+     Dados, numa rodada só (regra 19): meta_ads_diario, meta_ads_anuncios, v_meta_ads_dia, config_meta_ads_regras,
+     meta_ads_conta_saldo, v_meta_capi_painel, v_meta_ads_posicionamento_7d, meta_ads_posicionamento_diario, mari_conversas,
+     vendas, meta_ads_conjuntos, v_mari_conversa_anuncio. Bairros (v_dfv_bairros) só quando a gaveta abre. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -21,177 +30,118 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
+<link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=201126-16"></script>
 <script src="assets/sidebar.js?v=221126-9"></script>
 <style>
-  /* As vistas embrulham os blocos da tela: repetem o espaçamento do .main (gap 18px) que o wrapper anulava. */
-  .vista { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
-  .vista[hidden] { display: none; }
-
-  /* Saúde da campanha (07/11). Layout (07/11, pedidos do Ricardo): cabeçalho + 5 KPIs + Saúde na 1ª tela, sem rolar;
-     a Saúde ocupa a altura livre da janela (min-height posto pelo JS) e a sobra vira folga DENTRO das listas
-     (posicionamentos e gatilhos se espalham), nunca buraco vazio. "Campanhas e anúncios" fica abaixo da dobra. */
-  .cab-acoes #vistas { margin: 0; }
-  .saude { gap: calc(10px + var(--f, 0px) / 25); padding: calc(12px + var(--f, 0px) / 35) 16px; }
-  .saude-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .semaforo { width: 13px; height: 13px; border-radius: 50%; flex: 0 0 13px; background: var(--muted); box-shadow: 0 0 0 3px var(--surface-2); }
-  .semaforo.ok { background: var(--accent); } .semaforo.warn { background: var(--warn-dot); } .semaforo.bad { background: var(--bad-dot); }
-  .saude-cab h2 { font-size: 15px; } .saude-cab .resumo { font-size: 13px; color: var(--muted); flex: 1 1 320px; min-width: 0; }
-  .saude-cab .info { font-size: 11px; color: var(--muted); cursor: help; white-space: nowrap; }
-  /* "A Meta recebeu" (0186): o caminho de volta, em uma linha de itens. Vermelho só com erro ou fila parada há mais de 1 h. */
-  #capi { padding: 12px 16px; gap: 10px; }
-  #capi.ruim { border-color: var(--bad-border); background: var(--bad-bg); }
-  #capi #capi-corpo { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px 18px; }
-  .linha-folga { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-  .linha-folga .rot { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .linha-folga .val { font-size: 13px; }
-  .linha-folga.alerta .val { color: var(--bad-fg); }
-  .saude-grade { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr); gap: 16px 22px; }
-  .saude-col { display: flex; flex-direction: column; gap: calc(12px + var(--f, 0px) / 10); min-width: 0; }
-  .bloco { display: flex; flex-direction: column; gap: calc(6px + var(--f, 0px) / 35); min-width: 0; }
-  .bloco.cresce { flex: 1; }
-  /* a sobra que a folga (--f) não absorveu (pequena) se reparte entre as linhas, sem buraco no pé da coluna */
-  .bloco.cresce > .lista-folga { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
-  /* --f: folga extra conforme a altura da janela (0 em ~720 px; ~270 px numa tela de 990 px; teto 360 px) */
-  .saude { --f: clamp(0px, calc(100vh - 700px), 380px); }
-  .saude-col h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  /* os cartões de alerta crescem até preencher a coluna (texto centralizado, pode quebrar linha) — sem vão embaixo */
-  #s-alertas > .al { flex: 1 1 0; max-height: 170px; align-content: center; }
-  #s-alertas > .al span { white-space: normal; }
-  #s-alertas { display: flex; flex-direction: column; justify-content: flex-start !important; gap: calc(6px + var(--f, 0px) / 35); }
-  .al { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: calc(1px + var(--f, 0px) / 90) 10px; padding: calc(7px + var(--f, 0px) / 25) 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); }
-  .al::before { content: ''; grid-row: 1 / span 3; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--muted); }
-  .al.bad { background: var(--bad-bg); border-color: var(--bad-border); } .al.bad::before { background: var(--bad-dot); }
-  .al.warn { background: var(--warn-bg); border-color: var(--warn-border); } .al.warn::before { background: var(--warn-dot); }
-  .al.dim { opacity: .7; }
-  .al b { font-size: 13px; font-weight: 600; } .al.bad b { color: var(--bad-fg); } .al.warn b { color: var(--warn-fg); }
-  .al span { font-size: 12px; color: var(--muted); grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .al .prop { color: var(--text); }
-  .gat { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: calc(2px + var(--f, 0px) / 60) 10px; align-items: center; padding: calc(4px + var(--f, 0px) / 20) 0; border-bottom: 1px solid var(--border); }
-  .gat:last-child { border-bottom: 0; }
-  .gat .cod { font-family: var(--dm); font-size: 11px; color: var(--muted); }
-  .gat .nome { font-size: calc(13px + var(--f, 0px) / 180); } .gat .val { font-family: var(--mono); font-size: 12px; text-align: right; }
-  .gat .trilho { grid-column: 2 / -1; height: calc(4px + var(--f, 0px) / 110); border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-  .gat .trilho i { display: block; height: 100%; background: var(--link); }
-  .gat .trilho i.warn { background: var(--warn-dot); } .gat .trilho i.bad { background: var(--bad-dot); }
-  .gat small { grid-column: 2 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gat.sem-dado .nome, .gat.sem-dado .val { color: var(--muted); }
-  .posic { gap: calc(3px + var(--f, 0px) / 20); }
-  .pl { display: grid; grid-template-columns: minmax(0, 170px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: calc(12px + var(--f, 0px) / 160); }
-  .pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pl .barra { height: calc(8px + var(--f, 0px) / 55); border-radius: 5px; background: var(--surface-2); overflow: hidden; }
-  .pl .barra i { display: block; height: 100%; background: var(--link); }
-  .pl.alerta-on .barra i { background: var(--bad-dot); } .pl.parado { opacity: .5; }
-  .pl .num { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
-  .pl .num b { color: var(--text); font-weight: 600; }
-  /* Funil visual (07/11): fita que afina etapa a etapa, uma cor por fase (rampa ordinal azul validada no fundo escuro:
-     #9ec5f4 Meta Ads · #3987e5 Mari · #184f95 Venda — dataviz/validate_palette --ordinal, tudo PASS). Texto sempre em tinta
-     de texto, nunca na cor da série. Espessura em escala log (impressões aos milhares, vendas às unidades). */
-  .funil-vis { gap: 6px; padding: calc(10px + var(--f, 0px) / 40) 16px; --f: clamp(0px, calc(100vh - 700px), 380px); }
-  .fv-cab { display: flex; align-items: center; gap: 8px; }
-  .fv-cab h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .fv-cab .info { font-size: 11px; color: var(--muted); cursor: help; }
-  .fv { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); column-gap: 0; row-gap: 3px; }
-  .fv-fase { font-size: 10.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
-             padding: 0 8px 3px; border-bottom: 2px solid var(--fase); margin: 0 3px; }
-  .fv-et { padding: 4px 8px 0; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 6px; align-items: baseline; }
-  .fv-et b { font-family: var(--mono); font-size: calc(17px + var(--f, 0px) / 40); font-weight: 600; color: var(--text); }
-  .fv-et i { font-style: normal; font-family: var(--dm); font-size: 11px; color: var(--muted); text-align: right; }
-  .fv-et small { grid-column: 1 / -1; font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .fv-et.zero b { color: var(--bad-fg); }
-  .fv-fita { grid-column: 1 / -1; width: 100%; height: calc(34px + var(--f, 0px) / 10); display: block; margin-top: 2px; }
-  .fv-fita polygon { transition: opacity .15s; } .fv-fita polygon:hover { opacity: .8; }
-  @media (max-width: 900px) {
-    .fv { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .fv-fase, .fv-fita { display: none; }
-    .saude-grade { grid-template-columns: minmax(0, 1fr); }
-    .cab-acoes #vistas { width: 100%; }
-    .saude { min-height: 0 !important; }
-  }
+  .ma-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .ma-lido.velho { color: var(--warn-fg); }
+  .faixa-fina b small { font-family: var(--sans); font-weight: 400; }
+  #faixa { flex-wrap: wrap; overflow: visible; }
+  #faixa > div { flex: 1 1 auto; }
+  /* Precisa de ação */
+  .ma-acoes { display: flex; flex-direction: column; gap: 8px; }
+  .ma-acoes h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .ma-ac { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; padding: 10px 16px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .ma-ac.agora { border-color: var(--bad-border); }
+  .ma-ac.atencao { border-color: var(--warn-border); }
+  .ma-ac.resolvido { opacity: .65; }
+  .ma-ac .chip { flex: 0 0 auto; font-size: 12px; }
+  .ma-ac-t { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .ma-ac-t b { font-size: 14px; font-weight: 600; }
+  .ma-ac-t span { font-size: 12.5px; color: var(--muted); }
+  .ma-ac-f { flex: 0 1 320px; font-size: 13px; }
+  .ma-nada { padding: 10px 16px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; color: var(--muted); }
+  /* Tabela por anúncio */
+  .ma-tab td.num, .ma-tab th.num { text-align: right; font-family: var(--mono); font-size: 12.5px; white-space: nowrap; }
+  .ma-tab th.num { font-family: var(--sans); font-size: inherit; }
+  .ma-tab td.custo { font-weight: 600; font-size: 13px; }
+  .ma-tab td.custo.sem { font-weight: 400; color: var(--muted); font-family: var(--sans); }
+  .ma-tab tr.sem-ad td { color: var(--muted); }
+  .ma-tab tr.total td { background: var(--surface-2); font-weight: 600; border-top: 1px solid var(--border-strong); }
+  .ma-tab tr.parado td:first-child b { font-weight: 500; }
+  .ma-ver { border: 0; background: none; color: var(--link); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+  /* Gavetas */
+  .ma-gavetas { display: flex; flex-direction: column; gap: 8px; }
+  .lista-densa details.gaveta summary { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .lista-densa details.gaveta summary b { color: var(--text); font-size: 14px; font-weight: 600; }
+  .lista-densa details.gaveta summary span { font-size: 12.5px; }
+  .ma-g-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .ma-g-tab th, .ma-g-tab td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  .ma-g-tab th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ma-g-tab th:first-child, .ma-g-tab td:first-child { text-align: left; }
+  .ma-g-tab td { font-family: var(--mono); }
+  .ma-g-tab td:first-child { font-family: var(--sans); }
+  .ma-rol { overflow-x: auto; }
+  .ma-pl { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 12.5px; padding: 4px 0; }
+  .ma-pl > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ma-pl .barra { height: 9px; border-radius: 5px; background: var(--surface-2); overflow: hidden; }
+  .ma-pl .barra i { display: block; height: 100%; background: var(--link); }
+  .ma-pl.alerta-on .barra i { background: var(--bad-dot); } .ma-pl.parado { opacity: .5; }
+  .ma-pl .n { font-family: var(--mono); text-align: right; color: var(--muted); white-space: nowrap; }
+  .ma-pl .n b { color: var(--text); font-weight: 600; }
+  .ma-capi { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 18px; }
+  .ma-capi > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .ma-capi .rot { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ma-capi .val { font-size: 13px; }
+  .ma-capi .alerta .val { color: var(--bad-fg); }
+  .ma-nota { font-size: 12px; color: var(--muted); margin: 8px 0 0; line-height: 1.5; }
+  .ma-b-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  #g-bairros .vista { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .ma-pe { color: var(--muted); font-size: 12px; }
 </style>
 </head>
 <body>
 <div class="app">
   <nav class="nav" id="sidebar" data-pagina="meta"></nav>
-  <main class="main com-fab">
+  <main class="main lista-densa">
     <header class="cab">
       <div>
-        <h1 id="titulo">Meta Ads</h1>
-        <div class="sub" id="sub">Carregando…</div>
+        <h1>Meta Ads</h1>
+        <div class="sub">Quanto custa cada venda que veio de anúncio, e o que precisa de ação agora.</div>
       </div>
       <div class="cab-acoes">
-        <div id="vistas" aria-label="Vista"></div>
+        <span class="ma-lido" id="lido"></span>
         <span id="f-periodo"></span>
-        <button type="button" class="btn btn-acc acao-principal" id="ver-conjunto" hidden>Conjunto para o Gerenciador</button>
       </div>
     </header>
 
-    <div id="vista-desempenho" class="vista">
-      <section class="kpis seis" id="kpis-d" aria-label="Resumo do período"></section>
-      <!-- 0186: o caminho de volta. Antes disto a Meta não recebia nenhum resultado e otimizava por "conversa iniciada". -->
-      <section class="painel" aria-labelledby="t-capi" id="capi">
-        <div class="saude-cab"><h2 id="t-capi">A Meta recebeu</h2>
-          <span class="resumo" id="capi-resumo">Carregando…</span>
-          <span class="info" title="O que o NIOGEN devolveu à Meta pela API de Conversões para mensagens: CEP em cidade atendida (ViewContent), rua com rede (QualifiedLead — é por este que a campanha deve otimizar), qualificada (LeadSubmitted) e OS gravada (Purchase, só para medir). Vai só o telefone com hash SHA-256 e o id do clique; nada de nome, CPF, e-mail, endereço ou CEP. Conversa que não veio de anúncio não tem id de clique: entra como &quot;sem clique&quot; e não é enviada. Envio de 5 em 5 min pelo workflow meta_capi_envio.">ⓘ</span></div>
-        <div id="capi-corpo" class="lista-folga"><div class="carregando">Carregando…</div></div>
-      </section>
-      <section class="painel funil-vis" aria-labelledby="t-funil">
-        <div class="fv-cab"><h3 id="t-funil">Funil · anúncio → venda</h3>
-          <span class="info" title="Espessura da fita em escala logarítmica suavizada (de milhares de impressões a poucas vendas): mostra a ordem, não a proporção exata — os números valem. O % é sobre a etapa anterior; a Mari conta as conversas pelo critério dela, então essa etapa não tem %. Cores: uma por fase (Meta Ads, Mari, Venda).">ⓘ</span></div>
-        <div class="fv" id="fv" role="img" aria-label="Funil do anúncio à venda"></div>
-      </section>
-      <section class="painel saude" aria-labelledby="t-saude" id="saude">
-        <div class="saude-cab"><span class="semaforo" id="s-sinal" aria-hidden="true"></span><h2 id="t-saude">Saúde da campanha</h2>
-          <span class="resumo" id="s-resumo">Carregando…</span>
-          <span class="info" id="s-atualizado" title="Tudo aqui é leitura. Ações (pausar, tirar posicionamento, verba) o Claude Code/Cowork faz e avisa (CLAUDE.md regra 16). Rascunhos do Gerenciador não aparecem: a API da Meta não mostra.">ⓘ</span></div>
-        <div class="saude-grade">
-          <div class="saude-col"><div class="bloco cresce"><h3>Precisam de ação agora</h3><div class="lista-folga" id="s-alertas"><div class="carregando">Carregando…</div></div></div></div>
-          <div class="saude-col"><div class="bloco cresce"><h3>Gatilhos do agente · quanto falta</h3><div class="lista-folga" id="s-gatilhos"></div></div></div>
-          <div class="saude-col"><div class="bloco cresce"><h3>Para onde vai a verba · posicionamentos, 7 dias</h3><div class="posic lista-folga" id="s-posic"></div></div></div>
-        </div>
-      </section>
-      <section class="lista padrao" aria-labelledby="t-anuncios">
-        <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-anuncios" class="secao-tit">Campanhas e anúncios</h2></div>
-        <div class="rolagem">
-          <table class="tab">
-            <thead><tr>
-              <th>Anúncio</th>
-              <th>Status</th>
-              <th class="num">Gasto</th>
-              <th class="num col-media">Impressões</th>
-              <th class="num col-media">Cliques</th>
-              <th class="num">Conversas</th>
-              <th class="num">R$/conversa</th>
-            </tr></thead>
-            <tbody id="tbody-ads"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
-          </table>
-        </div>
-        <div class="rodape-lista"><span id="atualizado"></span><span>Conversas = iniciadas no WhatsApp, contadas pela Meta</span></div>
-      </section>
-      <section class="lista padrao" aria-labelledby="t-dias">
-        <div class="q-linha" style="padding:12px 14px 0"><h2 id="t-dias" class="secao-tit">Dia a dia · Meta × Mari × vendas</h2></div>
-        <div class="rolagem">
-          <table class="tab">
-            <thead><tr>
-              <th>Dia</th>
-              <th class="num">Gasto</th>
-              <th class="num">Conversas Meta</th>
-              <th class="num">Conversas Mari</th>
-              <th class="num col-media">Com CEP</th>
-              <th class="num col-media">Fora da área</th>
-              <th class="num">Qualificadas</th>
-              <th class="num">Vendas (biometria ok)</th>
-            </tr></thead>
-            <tbody id="tbody-dias"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
-          </table>
-        </div>
-        <div class="rodape-lista"><span>Mari = conversas com origem "anúncio" (mensagem pronta "Vi o anúncio"); qualificada = passou para o time com dados completos</span><span>Por anúncio só depois da atribuição pelo ad_id</span></div>
-      </section>
-    </div>
+    <section class="faixa-fina" id="faixa" aria-label="Resumo do período"><div><span>Carregando…</span></div></section>
 
-    <div id="vista-bairros" class="vista" hidden>
+    <section class="ma-acoes" aria-labelledby="t-acoes">
+      <h2 id="t-acoes">Precisa de ação</h2>
+      <div id="acoes" class="ma-acoes"><div class="ma-nada">Carregando…</div></div>
+    </section>
+
+    <section class="lista padrao" aria-label="Resultado por anúncio">
+      <div class="rolagem">
+        <table class="tab ma-tab">
+          <thead><tr>
+            <th>Anúncio</th>
+            <th>Situação</th>
+            <th class="num">Gasto</th>
+            <th class="num" title="Conversas iniciadas no WhatsApp, contadas pela Meta.">Conversas</th>
+            <th class="num" title="Conversas em que o cliente deu um CEP de rua que a Nio atende.">Com CEP atendido</th>
+            <th class="num" title="A Mari passou ao time com os dados completos.">Qualificadas</th>
+            <th class="num" title="Vendas com OS gerada, pela data da OS (o mesmo critério da tela Vendas).">Vendas (OS)</th>
+            <th class="num" title="Gasto do anúncio dividido pelas vendas com OS. O menor fica em cima.">Custo por venda ↑</th>
+          </tr></thead>
+          <tbody id="tbody-ads"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="rodape-lista"><span id="contagem-ads"></span><span id="ver-parados"></span></div>
+    </section>
+
+    <section class="ma-gavetas" aria-label="Mais detalhes">
+      <details class="gaveta" id="g-dias"><summary><b>Dia a dia</b><span id="r-dias">…</span></summary><div class="ma-rol" id="c-dias"></div></details>
+      <details class="gaveta" id="g-posic"><summary><b>Para onde vai a verba</b><span id="r-posic">…</span></summary><div id="c-posic"></div></details>
+      <details class="gaveta" id="g-capi"><summary><b>O que a Meta recebeu de volta</b><span id="r-capi">…</span></summary><div id="c-capi"></div></details>
+      <details class="gaveta" id="g-bairros"><summary><b>Bairros prioritários</b><span id="r-bairros">a lista de bairros por pontuação e o conjunto para colar no Gerenciador</span></summary>
+        <div class="vista">
+          <div class="ma-b-topo"><span class="ma-nota" id="sub-bairros" style="margin:0">Carregando…</span>
+            <button type="button" class="btn btn-acc btn-sm" id="ver-conjunto">Conjunto para o Gerenciador</button></div>
     <section class="kpis quatro" id="kpis" aria-label="Resumo dos bairros"></section>
 
     <div id="abas"></div>
@@ -230,7 +180,11 @@
         Centro = média das fachadas; raio = 1,5 × a dispersão delas. Bairro com aprovação abaixo de 50 % fica marcado: não comprar lead barato lá (75 % do churn do canal é involuntário) —
         vai para o PAP de rua com o DFV na mão. Fonte: base DFV da Nio no Supabase, recalculada a cada carga.</span>
     </details>
-    </div>
+        </div>
+      </details>
+    </section>
+
+    <div class="ma-pe">Esta tela só mostra. Pausar, mudar verba ou tirar posicionamento é feito pelo agente de tráfego, que avisa em seguida.</div>
   </main>
 </div>
 <button type="button" class="fab" id="fab" aria-label="Conjunto para o Gerenciador" hidden>⧉</button>
@@ -246,38 +200,12 @@
 </aside>
 <script>
 (async function () {
+  const t0 = performance.now();
   const { esc } = NG;
   await NG.exigirLogin();
   NGSidebar.montar();
 
-  // ───────────── vistas: Desempenho (padrão) · Bairros prioritários ─────────────
-  const SUB = { desempenho: 'Carregando…', bairros: 'Carregando…' };
-  const setSub = (v, txt) => { SUB[v] = txt; if (vista === v) document.getElementById('sub').textContent = txt; };
-  let vista = new URLSearchParams(location.search).get('vista') === 'bairros' ? 'bairros' : 'desempenho';
-  let bairrosIniciado = false;
-  function abrirVista(v) {
-    vista = v;
-    NG.abasPilulas(document.getElementById('vistas'), [
-      { id: 'desempenho', nome: 'Desempenho', n: nAnuncios },
-      { id: 'bairros', nome: 'Bairros prioritários', n: nBairros },
-    ], vista, abrirVista);
-    document.getElementById('vista-desempenho').hidden = v !== 'desempenho';
-    document.getElementById('vista-bairros').hidden = v !== 'bairros';
-    if (v === 'desempenho') requestAnimationFrame(() => typeof esticarSaude === 'function' && esticarSaude());
-    document.getElementById('f-periodo').hidden = v !== 'desempenho';
-    document.getElementById('ver-conjunto').hidden = v !== 'bairros';
-    document.getElementById('fab').hidden = v !== 'bairros';
-    document.getElementById('titulo').textContent = v === 'bairros' ? 'Meta Ads · Bairros prioritários' : 'Meta Ads';
-    document.getElementById('sub').textContent = SUB[v];
-    const u = new URL(location.href);
-    if (v === 'bairros') u.searchParams.set('vista', 'bairros'); else u.searchParams.delete('vista');
-    history.replaceState(null, '', u);
-    if (v === 'bairros' && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); }
-  }
-  let nAnuncios = null, nBairros = null;
-
-  // ───────────── Desempenho ─────────────
-  let VERBA_MES = 2000;     // reserva; o valor vem de config_meta_ads_regras.verba_mes (0058, prompt 29)
+  let VERBA_MES = 2000;     // reserva; o valor vem de config_meta_ads_regras.verba_mes (0058)
   const STATUS_AD = {
     ACTIVE: ['ok', 'Ativo'], PAUSED: ['dim', 'Pausado'], CAMPAIGN_PAUSED: ['dim', 'Campanha pausada'], ADSET_PAUSED: ['dim', 'Conjunto pausado'],
     IN_PROCESS: ['info', 'Processando'], PENDING_REVIEW: ['info', 'Em análise'], PREAPPROVED: ['info', 'Pré-aprovado'],
@@ -285,193 +213,15 @@
     ARCHIVED: ['dim', 'Arquivado'], DELETED: ['dim', 'Apagado'],
   };
   const chipStatus = (s) => { const [c, t] = STATUS_AD[s] || ['dim', s || '—']; return `<span class="chip ${c}">${esc(t)}</span>`; };
-  const porConversa = (g, n) => (n > 0 ? NG.fmtMoeda(Math.round((g / n) * 100) / 100) : '—');
-  const pctTxt = (a, b) => (b > 0 ? `${NG.fmtNum((a / b) * 100)} %` : '—');
+  const R = (v) => NG.fmtMoeda(v).replace(/,00$/, '');
+  const N = (v) => NG.fmtNum(Number(v || 0));
+  const dividir = (g, n) => (n > 0 ? R(Math.round((g / n) * 100) / 100) : null);
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => carregarDesempenho() });
+  const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
+  const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => carregar() });
+  let verParados = false, ultimo = null;
 
-  // Card "Saldo em aberto" (0078, pedido do Ricardo 08/11): saldo da CA Nio e próxima cobrança ("R$ limite ou data", o que vier
-  // primeiro). O limite vem só da API, lido a cada coleta; sem leitura → "limite: ver no BM" e o alerta fica só pela data.
-  // Pisca (âmbar) quando saldo ≥ alerta_pct % do limite OU a cobrança está a ≤ alerta_dias dias. Sem dado ou coleta > 1 h: cinza.
-  function cardSaldo(s, r) {
-    const alertaPct = Number.isFinite(r.meta_cobranca_alerta_pct) ? r.meta_cobranca_alerta_pct : 85;
-    const alertaDias = Number.isFinite(r.meta_cobranca_alerta_dias) ? r.meta_cobranca_alerta_dias : 2;
-    const velho = !s || (Date.now() - new Date(s.coletado_em)) > 3600000;
-    if (velho) {
-      return `<div class="kpi saldo-meta sem-leitura" title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora.">
-        <span class="rot">Saldo em aberto</span><span class="val">—</span>
-        <span class="nota">sem leitura da Meta${s ? ` · última ${esc(NG.quando(s.coletado_em))} ${esc(NG.fmtHora(s.coletado_em))}` : ''}</span></div>`;
-    }
-    const saldo = Number(s.saldo), lim = s.limite_cobranca != null ? Number(s.limite_cobranca) : null;
-    const dias = s.proxima_cobranca_em ? Math.round((new Date(`${s.proxima_cobranca_em}T12:00:00-03:00`) - new Date(`${NG.diaSP()}T12:00:00-03:00`)) / 86400000) : null;
-    const pct = lim ? (saldo / lim) * 100 : null;
-    const motivos = [];
-    if (pct != null && pct >= alertaPct) motivos.push(`${NG.fmtNum(Math.round(pct))} % do limite`);
-    if (dias != null && dias <= alertaDias) motivos.push(dias <= 0 ? 'cobra hoje' : `cobra em ${dias} dia${dias === 1 ? '' : 's'}`);
-    const data = s.proxima_cobranca_em ? NG.fmtDiaISO(s.proxima_cobranca_em).slice(0, 5) : '—';
-    const prox = `${lim != null ? `${esc(NG.fmtMoeda(lim))} ou ` : ''}${esc(data)}${s.fonte_data === 'config' ? ' <small class="fonte">(config)</small>' : ''}`;
-    const min = Math.max(0, Math.round((Date.now() - new Date(s.coletado_em)) / 60000));
-    return `<div class="kpi saldo-meta${motivos.length ? ' pisca' : ''}" title="${esc(motivos.length ? `Cobrança chegando: ${motivos.join(' · ')}` : 'Saldo da conta de anúncios Nio (o que a Meta vai cobrar no cartão).')}">
-      <span class="rot">Saldo em aberto</span>
-      <span class="val">${esc(NG.fmtMoeda(saldo))}</span>
-      ${s.imposto_estimado != null ? `<span class="nota">+ ${esc(NG.fmtMoeda(Number(s.imposto_estimado)))} imposto estimado</span>` : ''}
-      <span class="nota"><b>Próxima cobrança</b> ${prox}${lim == null ? ' · limite: ver no BM' : ''}</span>
-      <span class="nota">atualizado há ${min} min</span>
-    </div>`;
-  }
-
-  async function carregarDesempenho() {
-    const p = per.valor();
-    let qDiario = NG.sb.from('meta_ads_diario').select('*');
-    if (p.de) qDiario = qDiario.gte('dia', p.de);
-    if (p.ate) qDiario = qDiario.lte('dia', p.ate);
-    const [rDiario, rAds, rDias, rVerba, rSaldo, rRegras] = await Promise.all([
-      qDiario, NG.sb.from('meta_ads_anuncios').select('*'), NG.sb.from('v_meta_ads_dia').select('*').order('dia', { ascending: false }),
-      NG.sb.from('config_meta_ads_regras').select('valor').eq('parceiro_id', 'dharma').eq('chave', 'verba_mes').maybeSingle(),
-      NG.sb.from('meta_ads_conta_saldo').select('*').order('coletado_em', { ascending: false }).limit(1),
-      NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma').in('chave', ['meta_cobranca_alerta_pct', 'meta_cobranca_alerta_dias']),
-    ]);
-    if (!rVerba.error && rVerba.data && Number(rVerba.data.valor) > 0) VERBA_MES = Number(rVerba.data.valor);
-    const erro = rDiario.error || rAds.error || rDias.error;
-    if (erro) {
-      document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`;
-      document.getElementById('tbody-dias').innerHTML = '<tr><td colspan="8" class="vazio">—</td></tr>';
-      setSub('desempenho', 'Conta Nio · não deu para ler o desempenho');
-      return;
-    }
-    const diario = rDiario.data || [];
-    const ads = rAds.data || [];
-    const noPer = (d) => (!p.de || d >= p.de) && (!p.ate || d <= p.ate);
-    const dias = (rDias.data || []).filter((r) => noPer(r.dia));
-    const mes = NG.diaSP().slice(0, 8) + '01';
-    const gastoMes = soma((rDias.data || []).filter((r) => r.dia >= mes), 'gasto');
-
-    // KPIs (mockup: o número que manda é o custo por venda com biometria, não o custo por conversa)
-    const gasto = soma(dias, 'gasto');
-    const convMeta = soma(dias, 'conversas_meta');
-    const convMari = soma(dias, 'conversas_mari');
-    const qualif = soma(dias, 'qualificadas');
-    const vendasBio = soma(dias, 'vendas_biometria');
-    const vendas = soma(dias, 'vendas');
-    const fora = soma(dias, 'fora_area');
-    document.getElementById('kpis-d').innerHTML = [
-      cardSaldo((rSaldo.data || [])[0], Object.fromEntries((rRegras.data || []).map((x) => [x.chave, Number(x.valor)]))),
-      NG.kpi({ rot: `Gasto · ${per.rotulo}`, val: NG.fmtMoeda(gasto), pct: (gastoMes / VERBA_MES) * 100,
-        nota: `${NG.fmtMoeda(gastoMes)} de ${NG.fmtMoeda(VERBA_MES)} no mês`, cls: gastoMes > VERBA_MES ? 'bad' : '' }),
-      NG.kpi({ rot: 'Conversas iniciadas', val: NG.fmtNum(convMeta), nota: `${porConversa(gasto, convMeta)} por conversa (Meta)`,
-        dica: 'Conversas no WhatsApp contadas pela Meta (janela de 7 dias do clique). A Mari conta as dela à parte, na tabela do dia a dia.' }),
-      NG.kpi({ rot: 'Qualificadas pela Mari', val: `${NG.fmtNum(qualif)} <small>${pctTxt(qualif, convMari)}</small>`,
-        nota: `${porConversa(gasto, qualif)} por qualificada · ${NG.fmtNum(convMari)} na Mari`,
-        dica: 'Conversa da Mari com origem "anúncio" que passou para o time com os dados completos (handoff dados_completos — a Mari criou a venda em 0 · Qualificado). Desistência e já cliente Nio não contam.' }),
-      NG.kpi({ rot: 'Vendas (biometria ok)', val: NG.fmtNum(vendasBio),
-        nota: `${porConversa(gasto, vendasBio)} por venda · ${NG.fmtNum(vendas)} venda${vendas === 1 ? '' : 's'} no funil`,
-        dica: 'Vendas com origem "anúncio" e biometria aprovada, pelo dia em que a venda foi criada. É este custo que decide.' }),
-      NG.kpi({ rot: 'Fora da área', val: `${NG.fmtNum(fora)} <small>${pctTxt(fora, convMari)}</small>`, cls: fora > 0 ? 'warn' : '',
-        nota: fora > 0 ? 'público largo demais? conferir o raio' : 'nenhuma conversa fora da área' }),
-    ].join('');
-
-    // Anúncios por campanha › conjunto (inclui os sem entrega no período)
-    const linhas = new Map();
-    ads.forEach((a) => linhas.set(a.ad_id, { ...a, gasto: 0, impressoes: 0, cliques: 0, conversas: 0 }));
-    diario.forEach((d) => {
-      const l = linhas.get(d.ad_id) || { ad_id: d.ad_id, ad_nome: d.ad_nome, adset_id: d.adset_id, adset_nome: d.adset_nome,
-        campanha_id: d.campanha_id, campanha_nome: d.campanha_nome, status_efetivo: null, gasto: 0, impressoes: 0, cliques: 0, conversas: 0 };
-      l.gasto += Number(d.gasto || 0); l.impressoes += d.impressoes || 0; l.cliques += d.cliques || 0; l.conversas += d.conversas || 0;
-      linhas.set(d.ad_id, l);
-    });
-    const todas = [...linhas.values()].filter((l) => l.gasto > 0 || !['ARCHIVED', 'DELETED'].includes(l.status_efetivo));
-    nAnuncios = todas.filter((l) => l.status_efetivo === 'ACTIVE').length;
-    const grupos = new Map();
-    todas.forEach((l) => {
-      const k = `${l.campanha_nome || '—'}\u0000${l.adset_nome || '—'}`;
-      if (!grupos.has(k)) grupos.set(k, []);
-      grupos.get(k).push(l);
-    });
-    const chaves = [...grupos.keys()].sort();
-    document.getElementById('tbody-ads').innerHTML = chaves.length ? chaves.map((k) => {
-      const [camp, conj] = k.split('\u0000');
-      const ls = grupos.get(k).sort((a, b) => b.gasto - a.gasto || String(a.ad_nome).localeCompare(String(b.ad_nome)));
-      const g = soma(ls, 'gasto'), c = soma(ls, 'conversas');
-      return `<tr class="apagado"><td colspan="7" style="font-size:12px;background:var(--surface-2)"><b>${esc(camp)}</b> › ${esc(conj)}
-          · ${NG.fmtMoeda(g)} · ${NG.fmtNum(c)} conversa${c === 1 ? '' : 's'}</td></tr>`
-        + ls.map((l) => `<tr>
-          <td class="cli"><b>${esc(l.ad_nome || l.ad_id)}</b><small class="mono">${esc(l.ad_id)}</small></td>
-          <td>${chipStatus(l.status_efetivo)}</td>
-          <td class="num">${NG.fmtMoeda(l.gasto)}</td>
-          <td class="num col-media">${NG.fmtNum(l.impressoes)}</td>
-          <td class="num col-media">${NG.fmtNum(l.cliques)}</td>
-          <td class="num">${NG.fmtNum(l.conversas)}</td>
-          <td class="num">${porConversa(l.gasto, l.conversas)}</td>
-        </tr>`).join('');
-    }).join('') : '<tr><td colspan="7" class="vazio">Nenhum anúncio coletado ainda — a coleta roda a cada 15 min.</td></tr>';
-
-    // Dia a dia
-    document.getElementById('tbody-dias').innerHTML = dias.length ? dias.map((r) => `<tr>
-        <td>${NG.fmtDiaISO(r.dia)}</td>
-        <td class="num">${NG.fmtMoeda(r.gasto)}</td>
-        <td class="num">${NG.fmtNum(r.conversas_meta)}</td>
-        <td class="num">${NG.fmtNum(r.conversas_mari)}</td>
-        <td class="num col-media">${NG.fmtNum(r.com_cep)}</td>
-        <td class="num col-media">${r.fora_area ? `<span class="chip warn">${NG.fmtNum(r.fora_area)}</span>` : '0'}</td>
-        <td class="num">${NG.fmtNum(r.qualificadas)}</td>
-        <td class="num">${NG.fmtNum(r.vendas_biometria)}${r.vendas > r.vendas_biometria ? ` <small class="apagado">de ${NG.fmtNum(r.vendas)}</small>` : ''}</td>
-      </tr>`).join('') : '<tr><td colspan="8" class="vazio">Nada no período.</td></tr>';
-
-    const ult = diario.concat(ads).reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
-    document.getElementById('atualizado').textContent = ult ? `Atualizado ${NG.fmtDataHora(ult)} · coleta a cada 15 min` : 'Coleta a cada 15 min';
-    const ativas = new Set(todas.filter((l) => l.status_efetivo === 'ACTIVE').map((l) => l.campanha_nome));
-    setSub('desempenho', `Conta Nio · ${ativas.size ? `${[...ativas].join(', ')} ativa${ativas.size > 1 ? 's' : ''}` : 'nenhuma campanha ativa'}`
-      + ' · o número que manda é o custo por venda com biometria');
-    if (vista === 'desempenho') abrirVista('desempenho');
-    await Promise.all([carregarSaude(p, dias, ads), carregarCapi()]);
-  }
-
-  // ───────────── A Meta recebeu (0186) ─────────────
-  // O caminho de volta: o que o NIOGEN devolveu à Meta pela API de Conversões para mensagens. Vermelho com erro de envio
-  // ou com evento parado na fila há mais de 1 h (o workflow roda de 5 em 5 min). Leitura de uma view só (v_meta_capi_painel).
-  const CAPI_EV = [
-    ['cidade', 'CEP em cidade atendida', 'ViewContent — o CEP que o cliente deu é de uma das cidades da campanha.'],
-    ['viaveis', 'Rua com rede', 'QualifiedLead — é por este que a campanha deve otimizar: é o degrau mais fundo que ainda tem volume e já exclui fora da área, sem cobertura e já cliente Nio.'],
-    ['qualificadas', 'Qualificadas', 'LeadSubmitted — a Mari passou ao time com os dados completos.'],
-    ['vendas', 'Vendas (OS)', 'Purchase — OS gravada. Com ~1 por semana não dá volume para a Meta otimizar: vai junto só para medir.'],
-  ];
-  async function carregarCapi() {
-    const corpo = document.getElementById('capi-corpo');
-    const { data, error } = await NG.sb.from('v_meta_capi_painel').select('*').maybeSingle();
-    const sec = document.getElementById('capi');
-    if (error || !data) {
-      sec.classList.remove('ruim');
-      document.getElementById('capi-resumo').textContent = error ? NG.msgErro(error) : 'sem leitura';
-      corpo.innerHTML = '<div class="vazio">Não deu para ler o que a Meta recebeu.</div>';
-      return;
-    }
-    const d = data;
-    const ruim = (d.erros_7d || 0) > 0 || (d.atrasados || 0) > 0;
-    sec.classList.toggle('ruim', ruim);
-    const linhas = CAPI_EV.map(([k, rot, dica]) => `<div class="linha-folga" title="${esc(dica)}">
-        <span class="rot">${esc(rot)}</span>
-        <span class="val"><b>${NG.fmtNum(d[`${k}_hoje`] || 0)}</b> hoje · ${NG.fmtNum(d[`${k}_7d`] || 0)} em 7 dias</span>
-      </div>`).join('');
-    const extras = `<div class="linha-folga" title="Conversa que não veio de anúncio: não tem id de clique, então não há o que enviar. Não é erro.">
-        <span class="rot">Sem clique (não enviadas)</span>
-        <span class="val">${NG.fmtNum(d.sem_clique_hoje || 0)} hoje · ${NG.fmtNum(d.sem_clique_7d || 0)} em 7 dias</span></div>
-      <div class="linha-folga${(d.erros_7d || 0) > 0 ? ' alerta' : ''}" title="Envio recusado pela Meta depois de 3 tentativas. Avisar o Claude Code; não reenviar à mão.">
-        <span class="rot">Erros de envio</span>
-        <span class="val">${NG.fmtNum(d.erros_hoje || 0)} hoje · ${NG.fmtNum(d.erros_7d || 0)} em 7 dias</span></div>
-      <div class="linha-folga${(d.atrasados || 0) > 0 ? ' alerta' : ''}">
-        <span class="rot">Na fila agora</span>
-        <span class="val">${NG.fmtNum(d.na_fila || 0)}${(d.atrasados || 0) > 0 ? ` · <b>${NG.fmtNum(d.atrasados)} há mais de 1 h</b>` : ''}</span></div>`;
-    corpo.innerHTML = linhas + extras;
-    const quando = d.ultimo_envio ? `último envio ${NG.quando(d.ultimo_envio)} ${NG.fmtHora(d.ultimo_envio)}` : 'nenhum envio ainda';
-    document.getElementById('capi-resumo').textContent =
-      `${NG.fmtNum(d.enviados_7d || 0)} evento${(d.enviados_7d || 0) === 1 ? '' : 's'} em 7 dias · ${quando}`
-      + (ruim ? ' · precisa de olhada' : '');
-  }
-
-  // ───────────── Saúde da campanha (07/11) ─────────────
-  // Regras do agente (doc da campanha 1 §7.1) aplicadas ao que já existe; limites em config_meta_ads_regras (0054/0055).
-  // R1 e R3 usam o anúncio de cada conversa (v_mari_conversa_anuncio, 0057 — referral pela cópia do webhook no app NIOGEN).
-  // Sem nenhuma conversa atribuída ainda, aparecem "aguardando o 1º referral".
   const NOME_POSIC = {
     'whatsapp|status': 'Status do WhatsApp', 'instagram|feed': 'Feed do Instagram', 'instagram|instagram_stories': 'Stories do Instagram',
     'instagram|instagram_reels': 'Reels do Instagram', 'instagram|instagram_explore': 'Explorar do Instagram', 'instagram|instagram_explore_grid_home': 'Explorar do Instagram',
@@ -482,235 +232,283 @@
   };
   const nomePosic = (r) => NOME_POSIC[`${r.plataforma}|${r.posicao}`] || `${r.plataforma} · ${r.posicao}`;
   const barraPct = (v) => `${Math.max(0, Math.min(100, v * 100)).toFixed(0)}%`;
-  // taxa pequena (CTR 0,3 %) não pode virar "0 %": 1 casa abaixo de 10 %
-  const pctFunil = (v) => v.toLocaleString('pt-BR', { maximumFractionDigits: v < 10 ? 1 : 0 });
 
-  // A Saúde ocupa a altura que sobra na janela (o resto da tela vem depois, rolando). Em tela estreita, altura natural.
-  function esticarSaude() {
-    const el = document.getElementById('saude');
-    if (!el || el.offsetParent === null) return;
-    if (innerWidth <= 900) { el.style.minHeight = ''; return; }
-    const topo = el.getBoundingClientRect().top + scrollY;
-    el.style.minHeight = `${Math.max(0, Math.floor(innerHeight - topo - 18))}px`;
-  }
-  addEventListener('resize', esticarSaude);
+  // Os quatro eventos devolvidos à Meta pela API de Conversões (0186)
+  const CAPI_EV = [
+    ['cidade', 'CEP em cidade atendida', 'O CEP que o cliente deu é de uma das cidades da campanha.'],
+    ['viaveis', 'Rua com rede', 'É por este que a campanha deve otimizar: já exclui fora da área, sem cobertura e já cliente Nio.'],
+    ['qualificadas', 'Qualificadas', 'A Mari passou ao time com os dados completos.'],
+    ['vendas', 'Vendas (OS)', 'OS gravada. Com poucas por semana não dá volume para a Meta otimizar: vai junto só para medir.'],
+  ];
 
-  // Funil visual: números em cima, fita embaixo (trapézios que afinam até a etapa seguinte, 2 px de vão entre eles).
-  const FASES = [{ nome: 'Meta Ads', de: 0, ate: 3, cor: '#9ec5f4' }, { nome: 'Mari', de: 3, ate: 7, cor: '#3987e5' },
-    { nome: 'Venda', de: 7, ate: 8, cor: '#184f95' }];
-  function desenharFunil(passos) {
-    const el = document.getElementById('fv');
-    const n = passos.length, W = 1000, H = 40, meio = H / 2;
-    const max = Math.max(1, ...passos.map(([, v]) => Number(v) || 0));
-    // log suavizado (expoente 0,6): mantém a ordem e deixa o afunilamento visível nas etapas pequenas
-    const alt = (v) => (v == null || !Number(v) ? 2 : Math.max(3, Math.pow(Math.log10(Number(v) + 1) / Math.log10(max + 1), 0.6) * (H - 2)));
-    const fase = (i) => FASES.find((f) => i >= f.de && i < f.ate);
-    const larg = W / n, vao = 2.5;
-    const fita = passos.map(([r, v, ant], i) => {
-      const h0 = alt(v), h1 = i < n - 1 ? alt(passos[i + 1][1]) : h0;
-      const x0 = i * larg + vao, x1 = (i + 1) * larg - vao;
-      const pts = [[x0, meio - h0 / 2], [x1, meio - h1 / 2], [x1, meio + h1 / 2], [x0, meio + h0 / 2]].map((q) => q.map((c) => c.toFixed(1)).join(',')).join(' ');
-      const pct = i === 0 || v == null || !ant ? '' : ` · ${pctFunil((v / ant) * 100)} % da etapa anterior`;
-      return `<polygon points="${pts}" fill="${fase(i).cor}"><title>${esc(fase(i).nome)} · ${esc(r)}: ${v == null ? '—' : NG.fmtNum(v)}${pct}</title></polygon>`;
-    }).join('');
-    el.innerHTML = FASES.map((f) => `<span class="fv-fase" style="grid-column:${f.de + 1} / ${f.ate + 1}; --fase:${f.cor}">${esc(f.nome)}</span>`).join('')
-      + passos.map(([r, v, ant], i) => `<div class="fv-et${v === 0 && i > 0 ? ' zero' : ''}" title="${esc(`${fase(i).nome} · ${r}`)}">
-          <b>${v == null ? '—' : NG.fmtNum(v)}</b><i>${i === 0 || v == null || !ant ? '' : `${pctFunil((v / ant) * 100)} %`}</i><small>${esc(r)}</small></div>`).join('')
-      + `<svg class="fv-fita" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="false">${fita}</svg>`;
-  }
-
-  async function carregarSaude(p, dias, ads) {
-    let qConv = NG.sb.from('mari_conversas').select('created_at, cep, dentro_area, elegibilidade, handoff_motivo, handoff_em, venda_id').eq('origem', 'meta_ads');
-    if (p.de) qConv = qConv.gte('created_at', `${p.de}T00:00:00-03:00`);
-    if (p.ate) qConv = qConv.lte('created_at', `${p.ate}T23:59:59-03:00`);
-    const seteAtras = (() => { const d = new Date(`${NG.diaSP()}T12:00:00-03:00`); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
-    let qPosDia = NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto, cliques_link');
-    if (p.de) qPosDia = qPosDia.gte('dia', p.de < seteAtras ? p.de : seteAtras); else qPosDia = qPosDia.gte('dia', '2000-01-01');
-    const [rCfg, rPos, rPosDia, rTudo, rConv, rVendas, rConj, rAtrib] = await Promise.all([
+  async function carregar() {
+    const p = per.valor();
+    const noPer = (d) => !!d && (!p.de || d >= p.de) && (!p.ate || d <= p.ate);
+    const trinta = NG.somaDias(NG.diaSP(), -30);
+    // Uma rodada só (regra 19). O gasto por anúncio vem inteiro (a campanha é pequena) e o período é filtrado aqui:
+    // os avisos usam a campanha desde o início; a tabela, o período escolhido.
+    const [rTudo, rAds, rDias, rCfg, rSaldo, rCapi, rPos, rPosDia, rConv, rVendas, rConj, rAtrib] = await Promise.all([
+      NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas, atualizado_em'),
+      NG.sb.from('meta_ads_anuncios').select('ad_id, ad_nome, adset_id, adset_nome, campanha_nome, status_efetivo, atualizado_em'),
+      NG.sb.from('v_meta_ads_dia').select('dia, gasto, conversas_meta, conversas_mari, com_cep, fora_area, qualificadas').order('dia', { ascending: false }),
       NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'),
-      NG.sb.from('v_meta_ads_posicionamento_7d').select('*'),
-      qPosDia,
-      NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas'),
-      qConv,
-      NG.sb.from('vendas').select('id, status, motivo_saida, biometria_status').eq('origem', 'meta_ads'),
-      NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056; sem ela, cai no histórico
-      NG.sb.from('v_mari_conversa_anuncio').select('ad_id, adset_id, referral_em, cep, dentro_area, venda_id, venda_status, biometria_status'),  // 0057
+      NG.sb.from('meta_ads_conta_saldo').select('saldo, imposto_estimado, limite_cobranca, proxima_cobranca_em, fonte_data, coletado_em').order('coletado_em', { ascending: false }).limit(1),
+      NG.sb.from('v_meta_capi_painel').select('*').maybeSingle(),
+      NG.sb.from('v_meta_ads_posicionamento_7d').select('plataforma, posicao, gasto, conversas, fatia_gasto, alerta, atualizado_em'),
+      NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto').gte('dia', trinta),
+      NG.sb.from('mari_conversas').select('id, created_at, cep, dentro_area, elegibilidade, handoff_motivo, venda_id').eq('origem', 'meta_ads'),
+      NG.sb.from('vendas').select('id, motivo_saida, nio_os, nio_os_em').eq('origem', 'meta_ads'),
+      NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056
+      NG.sb.from('v_mari_conversa_anuncio').select('conversa_id, ad_id, adset_id, referral_em, cep, dentro_area, venda_id'),   // 0057
     ]);
-    const erro = rCfg.error || rPos.error || rPosDia.error || rTudo.error;
-    const alvoA = document.getElementById('s-alertas');
-    if (erro) { alvoA.innerHTML = `<div class="vazio-curto">${esc(NG.msgErro(erro))}</div>`; document.getElementById('s-resumo').textContent = 'não deu para ler'; return; }
+    const erro = rTudo.error || rAds.error || rDias.error || rCfg.error;
+    if (erro) {
+      document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`;
+      document.getElementById('acoes').innerHTML = '<div class="ma-nada">Não deu para ler o desempenho.</div>';
+      return;
+    }
     const L = Object.fromEntries((rCfg.data || []).map((c) => [c.chave, Number(c.valor)]));
+    if (L.verba_mes > 0) VERBA_MES = L.verba_mes;
+    const tudo = rTudo.data || [];
+    const ads = rAds.data || [];
+    const diasTodos = rDias.data || [];
+    const dias = diasTodos.filter((r) => noPer(r.dia));
     const conv = rConv.error ? null : (rConv.data || []);          // RLS: só admin/backoffice leem a Mari
-    const vendasPorId = new Map((rVendas.error ? [] : rVendas.data || []).map((v) => [v.id, v]));
+    const atrib = rAtrib.error ? null : (rAtrib.data || []).filter((a) => a.ad_id);
+    const vendas = rVendas.error ? [] : (rVendas.data || []);
+    const vendaPorId = new Map(vendas.map((v) => [v.id, v]));
+    const comOS = (v) => !!(v && v.nio_os);   // 22/11 (Ricardo): venda = OS gerada
+    const adDaConversa = new Map((atrib || []).map((a) => [a.conversa_id, a]));
+    const adDaVenda = new Map((atrib || []).filter((a) => a.venda_id).map((a) => [a.venda_id, a]));
+    const convPer = (conv || []).filter((c) => noPer(diaDe(c.created_at)));
+    const vendasPer = vendas.filter((v) => comOS(v) && noPer(diaDe(v.nio_os_em)));
 
-    // campanha inteira (desde o início): gasto e conversas por anúncio
+    // ---------- tabela por anúncio (período) ----------
+    const linhas = new Map();
+    const linha = (id, base) => {
+      if (!linhas.has(id)) linhas.set(id, { ad_id: id, ad_nome: base.ad_nome, adset_nome: base.adset_nome, adset_id: base.adset_id, status_efetivo: base.status_efetivo || null, gasto: 0, conversas: 0, cep: 0, qualif: 0, vendas: 0 });
+      return linhas.get(id);
+    };
+    ads.forEach((a) => linha(a.ad_id, a));
+    tudo.filter((d) => noPer(d.dia)).forEach((d) => { const l = linha(d.ad_id, d); l.gasto += Number(d.gasto || 0); l.conversas += d.conversas || 0; });
+    const sem = { conversas: 0, cep: 0, qualif: 0, vendas: 0 };   // "Sem anúncio identificado"
+    convPer.forEach((c) => {
+      const a = adDaConversa.get(c.id);
+      const alvo = a && linhas.has(a.ad_id) ? linhas.get(a.ad_id) : a ? linha(a.ad_id, { ad_nome: `anúncio ${a.ad_id}` }) : sem;
+      if (alvo === sem) sem.conversas += 1;
+      if (c.cep && c.dentro_area === true) alvo.cep += 1;
+      if (c.handoff_motivo === 'dados_completos') alvo.qualif += 1;
+    });
+    vendasPer.forEach((v) => {
+      const a = adDaVenda.get(v.id);
+      (a && linhas.has(a.ad_id) ? linhas.get(a.ad_id) : sem).vendas += 1;
+    });
+    const todas = [...linhas.values()];
+    const teve = (l) => l.gasto > 0 || l.conversas > 0 || l.cep > 0 || l.qualif > 0 || l.vendas > 0;
+    const visiveis = todas.filter((l) => teve(l) || l.status_efetivo === 'ACTIVE');
+    const parados = todas.filter((l) => !teve(l) && l.status_efetivo !== 'ACTIVE' && !['ARCHIVED', 'DELETED'].includes(l.status_efetivo));
+    const custo = (l) => (l.vendas > 0 ? l.gasto / l.vendas : null);
+    // menor custo por venda em cima; depois, sem venda, quem mais gastou
+    const ordem = (a, b) => { const ca = custo(a), cb = custo(b); return ca != null && cb != null ? ca - cb : ca != null ? -1 : cb != null ? 1 : b.gasto - a.gasto || String(a.ad_nome).localeCompare(String(b.ad_nome)); };
+    const tr = (l, cls) => `<tr class="${cls || ''}">
+        <td><b>${esc(l.ad_nome || l.ad_id)}</b><small>${esc(l.adset_nome || '—')}</small></td>
+        <td>${chipStatus(l.status_efetivo)}</td>
+        <td class="num">${R(l.gasto)}</td>
+        <td class="num">${N(l.conversas)}</td>
+        <td class="num">${conv ? N(l.cep) : '—'}</td>
+        <td class="num">${conv ? N(l.qualif) : '—'}</td>
+        <td class="num">${N(l.vendas)}</td>
+        <td class="num custo${custo(l) == null ? ' sem' : ''}">${custo(l) == null ? 'sem venda' : R(Math.round(custo(l)))}</td>
+      </tr>`;
+    const gasto = soma(dias, 'gasto') || soma(visiveis, 'gasto');
+    const convMeta = soma(dias, 'conversas_meta') || soma(visiveis, 'conversas');
+    const tot = { cep: soma(visiveis, 'cep') + sem.cep, qualif: soma(visiveis, 'qualif') + sem.qualif, vendas: vendasPer.length };
+    const temSem = sem.conversas > 0 || sem.vendas > 0;
+    const corpo = visiveis.sort(ordem).map((l) => tr(l)).join('')
+      + (verParados ? parados.sort(ordem).map((l) => tr(l, 'parado')).join('') : '')
+      + (temSem ? `<tr class="sem-ad" title="Conversa ou venda com origem Meta Ads em que o WhatsApp não informou de qual anúncio veio. O gasto já está nas linhas dos anúncios.">
+          <td><b>Sem anúncio identificado</b><small>conversas contadas pela Mari; o gasto está nos anúncios acima</small></td><td></td>
+          <td class="num">—</td><td class="num">${N(sem.conversas)}</td><td class="num">${N(sem.cep)}</td><td class="num">${N(sem.qualif)}</td><td class="num">${N(sem.vendas)}</td><td class="num custo sem">—</td></tr>` : '');
+    const nAtivos = todas.filter((l) => l.status_efetivo === 'ACTIVE').length;
+    const nConj = new Set(visiveis.map((l) => l.adset_nome).filter(Boolean)).size;
+    document.getElementById('tbody-ads').innerHTML = (corpo || '<tr><td colspan="8" class="vazio">Nenhum anúncio com entrega no período.</td></tr>')
+      + `<tr class="total"><td>Total do período<small>${pl(visiveis.length, 'anúncio', 'anúncios')} · ${pl(nConj, 'conjunto', 'conjuntos')}</small></td><td></td>
+          <td class="num">${R(gasto)}</td><td class="num">${N(convMeta)}</td><td class="num">${conv ? N(tot.cep) : '—'}</td><td class="num">${conv ? N(tot.qualif) : '—'}</td>
+          <td class="num">${N(tot.vendas)}</td><td class="num custo${tot.vendas ? '' : ' sem'}">${tot.vendas ? R(Math.round(gasto / tot.vendas)) : 'sem venda'}</td></tr>`;
+    document.getElementById('contagem-ads').textContent = `${pl(nAtivos, 'anúncio no ar', 'anúncios no ar')} · ${per.rotulo.toLowerCase()} · venda = OS gerada, pela data da OS`;
+    document.getElementById('ver-parados').innerHTML = parados.length ? `<button type="button" class="ma-ver" id="bt-parados">${verParados ? 'Esconder' : 'Mostrar'} ${pl(parados.length, 'anúncio pausado sem entrega', 'anúncios pausados sem entrega')}</button>` : '';
+
+    // ---------- campanha desde o início: os limites do agente (config_meta_ads_regras) ----------
     const porAd = new Map();
-    (rTudo.data || []).forEach((d) => {
+    const conjGasto = new Map(), conjNome = new Map(), conjVendas = new Map(), cepOk = new Map();
+    tudo.forEach((d) => {
       const a = porAd.get(d.ad_id) || { nome: d.ad_nome, conj: d.adset_nome, gasto: 0, conversas: 0 };
       a.gasto += Number(d.gasto || 0); a.conversas += d.conversas || 0; porAd.set(d.ad_id, a);
+      conjGasto.set(d.adset_id, (conjGasto.get(d.adset_id) || 0) + Number(d.gasto || 0)); conjNome.set(d.adset_id, d.adset_nome);
     });
     const gastoTotal = [...porAd.values()].reduce((s, a) => s + a.gasto, 0);
     const convTotal = [...porAd.values()].reduce((s, a) => s + a.conversas, 0);
     const cpcTotal = convTotal ? gastoTotal / convTotal : null;
-    const maiorAd = [...porAd.values()].sort((a, b) => b.gasto - a.gasto)[0];
-
-    // atribuição por anúncio (0057): CEP válido por anúncio (R1) e vendas com biometria por conjunto (R3)
-    const atrib = rAtrib.error ? null : (rAtrib.data || []);
-    const cepOk = new Map(), conjGasto = new Map(), conjVendas = new Map(), conjNome = new Map();
-    (rTudo.data || []).forEach((d) => {
-      conjGasto.set(d.adset_id, (conjGasto.get(d.adset_id) || 0) + Number(d.gasto || 0));
-      conjNome.set(d.adset_id, d.adset_nome);
-    });
     (atrib || []).forEach((a) => {
       if (a.cep && a.dentro_area === true) cepOk.set(a.ad_id, (cepOk.get(a.ad_id) || 0) + 1);
-      if (a.biometria_status === 'aprovada') conjVendas.set(a.adset_id, (conjVendas.get(a.adset_id) || 0) + 1);
+      if (a.venda_id && comOS(vendaPorId.get(a.venda_id))) conjVendas.set(a.adset_id, (conjVendas.get(a.adset_id) || 0) + 1);
     });
     const temAtrib = !!(atrib && atrib.length);
-    // R1 conta o gasto só desde a 1ª conversa atribuída: antes disso nenhuma conversa tinha anúncio, e o anúncio
-    // pareceria "sem CEP" sem ser.
-    const inicioAtrib = temAtrib ? atrib.reduce((m, a) => (a.referral_em < m ? a.referral_em : m), atrib[0].referral_em).slice(0, 10) : null;
+    // O gasto "sem CEP atendido" só conta desde a 1ª conversa com anúncio identificado (antes, nenhuma conversa tinha anúncio).
+    const comRef = (atrib || []).filter((a) => a.referral_em);
+    const inicioAtrib = comRef.length ? comRef.reduce((m, a) => (a.referral_em < m ? a.referral_em : m), comRef[0].referral_em).slice(0, 10) : null;
     const gastoDesde = new Map();
-    (rTudo.data || []).filter((d) => inicioAtrib && d.dia >= inicioAtrib)
-      .forEach((d) => gastoDesde.set(d.ad_id, (gastoDesde.get(d.ad_id) || 0) + Number(d.gasto || 0)));
-    // R1: entre os anúncios ainda sem CEP válido, o que mais gastou desde o início da atribuição
-    const r1Ad = [...porAd.entries()].filter(([id]) => !cepOk.get(id)).map(([id, a]) => ({ id, ...a, gastoAtrib: gastoDesde.get(id) || 0 }))
-      .sort((a, b) => b.gastoAtrib - a.gastoAtrib)[0];
-    // R3: conjunto com mais vendas atribuídas (até 3 vendas mostra quanto falta para avaliar)
-    const r3 = [...conjGasto.entries()].map(([id, g]) => ({ id, nome: conjNome.get(id), gasto: g, vendas: conjVendas.get(id) || 0 }))
-      .sort((a, b) => (b.vendas - a.vendas) || (b.gasto - a.gasto))[0];
+    tudo.filter((d) => inicioAtrib && d.dia >= inicioAtrib).forEach((d) => gastoDesde.set(d.ad_id, (gastoDesde.get(d.ad_id) || 0) + Number(d.gasto || 0)));
+    const statusAd = new Map(ads.map((a) => [a.ad_id, a.status_efetivo]));
+    const semCep = [...porAd.entries()].filter(([id]) => !cepOk.get(id) && statusAd.get(id) === 'ACTIVE').map(([id, a]) => ({ id, ...a, gastoAtrib: gastoDesde.get(id) || 0 }))
+      .sort((a, b) => b.gastoAtrib - a.gastoAtrib);
+    const conjCaro = [...conjGasto.entries()].map(([id, g]) => ({ id, nome: conjNome.get(id), gasto: g, vendas: conjVendas.get(id) || 0 }))
+      .filter((c) => c.vendas >= 3 && c.gasto / c.vendas > L.conjunto_custo_venda_max).sort((a, b) => b.gasto / b.vendas - a.gasto / a.vendas)[0];
 
-    // posicionamentos: último dia com gasto (posicionamento que parou de receber verba = excluído ou sem entrega)
-    const ultDia = (rPosDia.data || []).reduce((m, r) => (r.dia > m ? r.dia : m), '');
+    // posicionamentos (7 dias)
+    const posDia = rPosDia.error ? [] : (rPosDia.data || []);
+    const ultDia = posDia.reduce((m, r) => (r.dia > m ? r.dia : m), '');
     const ultGasto = new Map();
-    (rPosDia.data || []).forEach((r) => {
-      const k = `${r.plataforma}|${r.posicao}`;
-      if (Number(r.gasto) > 0 && (!ultGasto.has(k) || r.dia > ultGasto.get(k))) ultGasto.set(k, r.dia);
-    });
-    // Tirado = a plataforma não está configurada em nenhum conjunto ativo (meta_ads_conjuntos, 0056). Conjunto com
-    // publisher_platforms vazio é automático (tudo vale). Sem a tabela, cai no histórico: sem gasto desde antes do último dia.
+    posDia.forEach((r) => { const k = `${r.plataforma}|${r.posicao}`; if (Number(r.gasto) > 0 && (!ultGasto.has(k) || r.dia > ultGasto.get(k))) ultGasto.set(k, r.dia); });
+    // Tirado = a plataforma não está em nenhum conjunto ativo (meta_ads_conjuntos). Conjunto sem lista é automático (tudo vale).
     const conjAtivos = rConj.error ? null : (rConj.data || []).filter((c) => c.status_efetivo === 'ACTIVE');
-    const plataformasOn = conjAtivos && conjAtivos.length && !conjAtivos.some((c) => !(c.publisher_platforms || []).length)
-      ? new Set(conjAtivos.flatMap((c) => c.publisher_platforms)) : null;
+    const plataformasOn = conjAtivos && conjAtivos.length && !conjAtivos.some((c) => !(c.publisher_platforms || []).length) ? new Set(conjAtivos.flatMap((c) => c.publisher_platforms)) : null;
     const tirado = (r) => !!(plataformasOn && !plataformasOn.has(r.plataforma));
     const semVerba = (r) => { const u = ultGasto.get(`${r.plataforma}|${r.posicao}`); return !!(u && ultDia && u < ultDia); };
     const parou = (r) => tirado(r) || semVerba(r);
-    const motivoParou = (r) => (tirado(r) ? 'tirado dos conjuntos' : `sem verba desde ${NG.fmtDiaISO(ultGasto.get(`${r.plataforma}|${r.posicao}`))}`);
-    const pos = (rPos.data || []).slice().sort((a, b) => Number(b.gasto) - Number(a.gasto));
+    const pos = (rPos.error ? [] : rPos.data || []).slice().sort((a, b) => Number(b.gasto) - Number(a.gasto));
 
-    // qualidade (R5), no período do filtro
+    // qualidade das conversas, no período
     let q = null;
     if (conv) {
-      const jaCliente = conv.filter((c) => c.handoff_motivo === 'ja_cliente_nio').length;
-      const semCob = conv.filter((c) => c.dentro_area === false || c.elegibilidade === 'fora_area'
-        || (c.venda_id && vendasPorId.get(c.venda_id)?.motivo_saida === 'Sem cobertura')).length;
-      const comCep = conv.filter((c) => c.cep).length;
-      const dentro = conv.filter((c) => c.cep && c.dentro_area === true).length;
-      // 07/11 (Ricardo): mesmo critério da tela Mari e do arquivo do Agente de Tráfego — só handoff com dados completos.
-      const qualif = conv.filter((c) => c.handoff_motivo === 'dados_completos').length;
-      q = { total: conv.length, jaCliente, semCob, comCep, dentro, qualif, aprov: Math.max(0, conv.length - jaCliente - semCob) };
+      const jaCliente = convPer.filter((c) => c.handoff_motivo === 'ja_cliente_nio').length;
+      const semCob = convPer.filter((c) => c.dentro_area === false || c.elegibilidade === 'fora_area' || (c.venda_id && (vendaPorId.get(c.venda_id) || {}).motivo_saida === 'Sem cobertura')).length;
+      q = { total: convPer.length, jaCliente, semCob };
     }
 
-    // ── alertas
-    const al = [];
+    // ---------- saldo e retorno ----------
+    const s = (rSaldo.data || [])[0];
+    const saldoVelho = !s || (Date.now() - new Date(s.coletado_em)) > 3600000;
+    const alertaPct = Number.isFinite(L.meta_cobranca_alerta_pct) ? L.meta_cobranca_alerta_pct : 85;
+    const alertaDias = Number.isFinite(L.meta_cobranca_alerta_dias) ? L.meta_cobranca_alerta_dias : 2;
+    const saldo = s ? Number(s.saldo) : null, lim = s && s.limite_cobranca != null ? Number(s.limite_cobranca) : null;
+    const diasCob = s && s.proxima_cobranca_em ? Math.round((new Date(`${s.proxima_cobranca_em}T12:00:00-03:00`) - new Date(`${NG.diaSP()}T12:00:00-03:00`)) / 86400000) : null;
+    const motivosSaldo = [];
+    if (!saldoVelho && lim && (saldo / lim) * 100 >= alertaPct) motivosSaldo.push(`${N(Math.round((saldo / lim) * 100))} % do limite de ${R(lim)}`);
+    if (!saldoVelho && diasCob != null && diasCob <= alertaDias) motivosSaldo.push(diasCob <= 0 ? 'cobra hoje' : `cobra em ${pl(diasCob, 'dia', 'dias')}`);
+    const capi = rCapi.error ? null : rCapi.data;
+    const capiRuim = !!capi && ((capi.erros_7d || 0) > 0 || (capi.atrasados || 0) > 0);
+
+    // ---------- Precisa de ação: frases simples ----------
+    const ac = [];
+    const add = (nivel, titulo, fato, fazer) => ac.push({ nivel, titulo, fato, fazer });
     pos.filter((r) => r.alerta).forEach((r) => {
-      const fato = `${NG.fmtMoeda(r.gasto)} · ${NG.fmtNum(Number(r.fatia_gasto) * 100)} % da verba em 7 dias · 0 conversas`;
-      if (parou(r)) al.push({ cls: 'dim', t: `${nomePosic(r)} — ${motivoParou(r)}`, f: fato, pr: 'Resolvido. Sai daqui quando o gasto dele sair da janela de 7 dias.' });
-      else al.push({ cls: 'bad', t: `${nomePosic(r)} come verba sem conversa`, f: fato, pr: 'R2 → tirar o posicionamento dos conjuntos (meta/campanha1_jf.py --posicionamentos)' });
+      const fato = `${R(r.gasto)} em 7 dias, ${N(Number(r.fatia_gasto) * 100)} % da verba, nenhuma conversa`;
+      if (parou(r)) add('resolvido', `${nomePosic(r)}: ${tirado(r) ? 'já foi tirado dos conjuntos' : 'já está sem verba'}`, fato, 'Nada a fazer. Sai daqui quando o gasto dele sair dos últimos 7 dias.');
+      else add('agora', `${nomePosic(r)} gasta sem trazer conversa`, fato, 'O agente tira esse posicionamento dos conjuntos.');
     });
     const problema = ads.filter((a) => ['DISAPPROVED', 'WITH_ISSUES', 'PENDING_BILLING_INFO'].includes(a.status_efetivo));
-    if (problema.length) al.push({ cls: 'bad', t: `${problema.length} anúncio${problema.length > 1 ? 's' : ''} com problema na Meta`, f: problema.map((a) => a.ad_nome).join(', '), pr: 'Conferir no Gerenciador' });
+    if (problema.length) add('agora', `${pl(problema.length, 'anúncio com problema', 'anúncios com problema')} na Meta`, problema.map((a) => a.ad_nome).join(', '), 'Conferir no Gerenciador de Anúncios.');
+    if (capiRuim) add('agora', 'A Meta não está recebendo os resultados', [(capi.erros_7d || 0) > 0 ? `${pl(capi.erros_7d, 'envio recusado', 'envios recusados')} em 7 dias` : '', (capi.atrasados || 0) > 0 ? `${pl(capi.atrasados, 'evento parado', 'eventos parados')} na fila há mais de 1 hora` : ''].filter(Boolean).join(' · '), 'Avisar o Claude Code. Não reenviar à mão.');
+    if (gastoTotal >= L.campanha_gasto_avaliar && convTotal === 0) add('agora', 'A campanha não trouxe nenhuma conversa', `${R(gastoTotal)} gastos desde o início`, 'Rever a arte e o público.');
+    if (temAtrib) semCep.forEach((a) => {
+      if (a.gastoAtrib >= L.anuncio_gasto_pausa) add('agora', `Anúncio "${a.nome}" gasta sem trazer CEP atendido`, `${R(a.gastoAtrib)} desde ${NG.fmtDiaISO(inicioAtrib).slice(0, 5)}; o limite é ${R(L.anuncio_gasto_pausa)} · ${a.conj || ''}`, 'O agente pausa esse anúncio.');
+      else if (a.gastoAtrib >= 0.7 * L.anuncio_gasto_pausa) add('atencao', `Anúncio "${a.nome}" ainda sem CEP atendido`, `${R(a.gastoAtrib)} gastos; o limite para pausar é ${R(L.anuncio_gasto_pausa)}`, `Se chegar a ${R(L.anuncio_gasto_pausa)} sem CEP atendido, o agente pausa.`);
+    });
+    const pioresPos = pos.filter((r) => !r.alerta && !parou(r) && Number(r.conversas) === 0 && Math.min(Number(r.fatia_gasto) / L.posic_fatia_min, Number(r.gasto) / L.posic_gasto_min) >= 0.7);
+    pioresPos.forEach((r) => add('atencao', `${nomePosic(r)} está perto do limite sem trazer conversa`, `${R(r.gasto)} em 7 dias, ${N(Number(r.fatia_gasto) * 100)} % da verba`, `Com ${R(L.posic_gasto_min)} e ${N(L.posic_fatia_min * 100)} % da verba sem conversa, o agente tira o posicionamento.`));
     if (gastoTotal >= L.campanha_gasto_avaliar && cpcTotal != null && cpcTotal > L.campanha_custo_conversa_max)
-      al.push({ cls: 'warn', t: 'Custo por conversa acima do limite', f: `${NG.fmtMoeda(cpcTotal)} por conversa com ${NG.fmtMoeda(gastoTotal)} gastos (limite ${NG.fmtMoeda(L.campanha_custo_conversa_max)})`, pr: 'R4 → juntar num conjunto só com os 2–3 melhores anúncios' });
-    if (gastoTotal >= L.campanha_gasto_avaliar && convTotal === 0)
-      al.push({ cls: 'bad', t: 'Nenhuma conversa', f: `${NG.fmtMoeda(gastoTotal)} gastos sem conversa`, pr: 'R4 → rever criativo e público' });
-    if (temAtrib && r1Ad && r1Ad.gastoAtrib >= L.anuncio_gasto_pausa)
-      al.push({ cls: 'bad', t: `${r1Ad.nome} sem CEP válido`, f: `${NG.fmtMoeda(r1Ad.gastoAtrib)} desde ${NG.fmtDiaISO(inicioAtrib)} · ${r1Ad.conj || ''}`, pr: 'R1 → pausar o anúncio' });
-    if (temAtrib && r3 && r3.vendas >= 3 && r3.gasto / r3.vendas > L.conjunto_custo_venda_max)
-      al.push({ cls: 'warn', t: `${r3.nome}: venda cara`, f: `${NG.fmtMoeda(r3.gasto / r3.vendas)} por venda com biometria (${r3.vendas} vendas)`, pr: 'R3 → rever público e raio do conjunto' });
+      add('atencao', 'Cada conversa está saindo cara', `${R(cpcTotal)} por conversa, com ${R(gastoTotal)} gastos; o limite é ${R(L.campanha_custo_conversa_max)}`, 'Juntar a verba num conjunto só, com os 2 ou 3 melhores anúncios.');
+    if (conjCaro) add('atencao', `No conjunto "${conjCaro.nome}", a venda está saindo cara`, `${R(conjCaro.gasto / conjCaro.vendas)} por venda com OS (${pl(conjCaro.vendas, 'venda', 'vendas')}); o limite é ${R(L.conjunto_custo_venda_max)}`, 'Rever o público e o raio do conjunto.');
     if (q && q.total && (q.jaCliente + q.semCob) > 0)
-      al.push({ cls: 'warn', t: `${q.jaCliente + q.semCob} de ${q.total} conversa${q.total > 1 ? 's' : ''} sem aproveitamento`,
-        f: [q.jaCliente && `${q.jaCliente} já cliente Nio`, q.semCob && `${q.semCob} sem cobertura`].filter(Boolean).join(' · ') + ` · ${per.rotulo}`,
-        pr: 'R5 → aviso: conferir raio × base DFV (fato, não causa)' });
-    const ordem = { bad: 0, warn: 1, dim: 2 };
-    al.sort((a, b) => ordem[a.cls] - ordem[b.cls]);
-    alvoA.innerHTML = (al.some((a) => a.cls !== 'dim') ? '' : '<div class="vazio-curto">Nada pendente agora ✓</div>')
-      + al.map((a) => `<div class="al ${a.cls}" title="${esc(`${a.t} — ${a.f} — ${a.pr}`)}"><b>${esc(a.t)}</b><span>${esc(a.f)}</span><span class="prop">${esc(a.pr)}</span></div>`).join('');
+      add('atencao', `${N(q.jaCliente + q.semCob)} de ${pl(q.total, 'conversa não serve', 'conversas não servem')} para vender`, [q.jaCliente && `${pl(q.jaCliente, 'já é cliente Nio', 'já são clientes Nio')}`, q.semCob && `${pl(q.semCob, 'mora', 'moram')} onde não há cobertura`].filter(Boolean).join(' · ') + ` · ${per.rotulo.toLowerCase()}`, 'Conferir o raio do público com o mapa de cobertura.');
+    if (motivosSaldo.length) add('atencao', 'A cobrança da Meta está chegando', `${R(saldo)} em aberto · ${motivosSaldo.join(' · ')}`, 'Conferir se o cartão tem limite para a cobrança.');
+    const ORD = { agora: 0, atencao: 1, resolvido: 2 };
+    ac.sort((a, b) => ORD[a.nivel] - ORD[b.nivel]);
+    const ROT = { agora: ['bad', 'Agora'], atencao: ['warn', 'Atenção'], resolvido: ['dim', 'Resolvido'] };
+    const nAc = ac.filter((a) => a.nivel !== 'resolvido').length;
+    document.getElementById('t-acoes').textContent = nAc ? `Precisa de ação · ${nAc}` : 'Precisa de ação';
+    document.getElementById('acoes').innerHTML = (nAc ? '' : '<div class="ma-nada">Nada pedindo ação agora ✓</div>')
+      + ac.map((a) => `<div class="ma-ac ${a.nivel}"><span class="chip ${ROT[a.nivel][0]}">${ROT[a.nivel][1]}</span>
+        <div class="ma-ac-t"><b>${esc(a.titulo)}</b><span>${esc(a.fato)}</span></div><span class="ma-ac-f">${esc(a.fazer)}</span></div>`).join('');
 
-    // ── gatilhos (quanto falta)
-    const corBarra = (f) => (f >= 1 ? 'bad' : f >= 0.7 ? 'warn' : '');
-    const gat = (cod, nome, val, frac, nota, semDado, cor) => `<div class="gat${semDado ? ' sem-dado' : ''}"><span class="cod">${cod}</span><span class="nome">${esc(nome)}</span>
-      <span class="val">${val}</span>${semDado ? '' : `<span class="trilho"><i class="${cor ?? corBarra(frac)}" style="width:${barraPct(frac)}"></i></span>`}<small title="${String(nota).replace(/"/g, '&quot;')}">${nota}</small></div>`;
-    const ativosPos = pos.filter((r) => !parou(r) && r.conversas === 0);
-    const piorPos = ativosPos.sort((a, b) => Number(b.fatia_gasto) - Number(a.fatia_gasto))[0];
-    const fracPos = piorPos ? Math.min(Number(piorPos.fatia_gasto) / L.posic_fatia_min, Number(piorPos.gasto) / L.posic_gasto_min) : 0;
-    const fase1 = gastoTotal < L.campanha_gasto_avaliar;
-    document.getElementById('s-gatilhos').innerHTML = [
-      !atrib ? gat('R1', 'Anúncio sem CEP válido → pausar', 'sem acesso', 0, 'só admin e backoffice leem a atribuição', true)
-        : !temAtrib ? gat('R1', 'Anúncio sem CEP válido → pausar', 'aguardando', 0,
-          `nenhuma conversa com anúncio identificado ainda (cópia do webhook no app NIOGEN) · maior gasto hoje: ${esc(maiorAd?.nome || '—')}`, true)
-        : gat('R1', 'Anúncio sem CEP válido → pausar', r1Ad ? `${NG.fmtMoeda(r1Ad.gastoAtrib)} / ${NG.fmtMoeda(L.anuncio_gasto_pausa)}` : '—',
-          r1Ad ? r1Ad.gastoAtrib / L.anuncio_gasto_pausa : 0,
-          r1Ad ? `${esc(r1Ad.nome)} (${esc(r1Ad.conj || '')}) · 0 CEP válido · gasto desde ${NG.fmtDiaISO(inicioAtrib)}` : 'todos os anúncios com CEP válido'),
-      gat('R2', 'Posicionamento sem conversa → tirar', piorPos ? `${NG.fmtNum(Number(piorPos.fatia_gasto) * 100)} % / ${NG.fmtNum(L.posic_fatia_min * 100)} %` : '—', fracPos,
-        piorPos ? `pior ativo: ${esc(nomePosic(piorPos))}, ${NG.fmtMoeda(piorPos.gasto)} (dispara com ≥ ${NG.fmtMoeda(L.posic_gasto_min)} e ≥ ${NG.fmtNum(L.posic_fatia_min * 100)} %)` : 'nenhum posicionamento ativo sem conversa'),
-      !temAtrib ? gat('R3', 'Conjunto com venda cara → rever', atrib ? 'aguardando' : 'sem acesso', 0,
-          `custo por venda por conjunto (limite ${NG.fmtMoeda(L.conjunto_custo_venda_max)}) começa com a 1ª conversa atribuída`, true)
-        : r3 && r3.vendas >= 3 ? gat('R3', 'Conjunto com venda cara → rever', `${NG.fmtMoeda(r3.gasto / r3.vendas)} / ${NG.fmtMoeda(L.conjunto_custo_venda_max)}`,
-          (r3.gasto / r3.vendas) / L.conjunto_custo_venda_max, `${esc(r3.nome)} · ${NG.fmtNum(r3.vendas)} vendas com biometria`)
-        : gat('R3', 'Conjunto com venda cara → rever', `${NG.fmtNum(r3 ? r3.vendas : 0)} / 3 vendas`, r3 ? r3.vendas / 3 : 0,
-          `${esc(r3?.nome || '—')} · avalia o custo por venda depois de 3 vendas com biometria`, false, ''),
-      gat('R4', fase1 ? 'Campanha: 1ª avaliação' : 'Campanha: custo por conversa', fase1 ? `${NG.fmtMoeda(gastoTotal)} / ${NG.fmtMoeda(L.campanha_gasto_avaliar)}`
-        : `${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} / ${NG.fmtMoeda(L.campanha_custo_conversa_max)}`,
-        fase1 ? gastoTotal / L.campanha_gasto_avaliar : (cpcTotal != null ? cpcTotal / L.campanha_custo_conversa_max : 1),
-        fase1 ? `cedo para julgar · hoje ${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} por conversa (bom ≤ ${NG.fmtMoeda(L.conversa_custo_meta)})` : `desde o início · ${NG.fmtNum(convTotal)} conversas`,
-        false, fase1 ? '' : undefined),
-      q ? gat('R5', 'Conversas aproveitáveis', `${NG.fmtNum(q.aprov)} / ${NG.fmtNum(q.total)}`, q.total ? q.aprov / q.total : 0,
-        `${per.rotulo} · fora: já cliente Nio, sem cobertura`, false, q.total && q.aprov / q.total < 0.5 ? 'warn' : '') :gat('R5', 'Conversas aproveitáveis', 'sem acesso', 0, 'só admin e backoffice leem as conversas da Mari', true),
+    // ---------- faixa fina ----------
+    const mes = `${NG.diaSP().slice(0, 8)}01`;
+    const gastoMes = soma(diasTodos.filter((r) => r.dia >= mes), 'gasto');
+    const cv = tot.vendas ? gasto / tot.vendas : null;
+    const cobra = s && s.proxima_cobranca_em ? `cobra em ${NG.fmtDiaISO(s.proxima_cobranca_em).slice(0, 5)}${lim != null ? ` ou ao chegar em ${R(lim)}` : ''}` : (lim != null ? `cobra ao chegar em ${R(lim)}` : '');
+    document.getElementById('faixa').innerHTML = [
+      `<div title="Gasto do período dividido pelas vendas com OS gerada no período. É este número que decide."><span>Custo por venda</span><b class="${cv == null ? '' : 'ok'}">${cv == null ? '—' : R(Math.round(cv))}</b><small>${tot.vendas ? pl(tot.vendas, 'venda com OS', 'vendas com OS') : 'nenhuma venda com OS'}</small></div>`,
+      `<div title="Conversas iniciadas no WhatsApp, contadas pela Meta."><span>Gasto · ${esc(per.rotulo.toLowerCase())}</span><b>${R(gasto)}</b><small>${pl(convMeta, 'conversa', 'conversas')}${convMeta ? ` · ${dividir(gasto, convMeta)} cada` : ''}</small></div>`,
+      `<div title="Gasto do mês contra a verba combinada."><span>Verba do mês</span><b class="${gastoMes > VERBA_MES ? 'bad' : ''}">${R(gastoMes)}</b><small>de ${R(VERBA_MES)}</small></div>`,
+      saldoVelho ? `<div title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora."><span>Saldo em aberto</span><b>—</b><small>sem leitura da Meta</small></div>`
+        : `<div title="O que a Meta vai cobrar no cartão.${s.imposto_estimado != null ? ` Mais ${R(Number(s.imposto_estimado))} de imposto estimado.` : ''}"><span>Saldo em aberto</span><b class="${motivosSaldo.length ? 'warn' : ''}">${R(saldo)}</b><small>${esc(cobra)}</small></div>`,
+      !capi ? '<div><span>Retorno à Meta</span><b>—</b><small>sem leitura</small></div>'
+        : `<div title="O que o NIOGEN devolve à Meta para ela aprender quem vira venda. Detalhe na gaveta “O que a Meta recebeu de volta”."><span>Retorno à Meta</span><b class="${capiRuim ? 'bad' : 'ok'}" style="font-family:var(--sans);font-size:13px">${capiRuim ? 'com problema' : 'em dia'}</b><small>${capiRuim ? 'veja em Precisa de ação' : 'sem erro de envio'}</small></div>`,
     ].join('');
+    ultimo = [...tudo, ...ads].reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
+    pintarLido();
 
-    // ── funil do período
-    const imp = soma(dias, 'impressoes');
-    const clLink = (rPosDia.data || []).filter((r) => (!p.de || r.dia >= p.de) && (!p.ate || r.dia <= p.ate)).reduce((s, r) => s + (r.cliques_link || 0), 0);
-    const cMeta = soma(dias, 'conversas_meta');
-    const vBio = soma(dias, 'vendas_biometria');
-    // 3º elemento = base do % (passo anterior). A Mari conta conversas por um critério diferente da Meta (mensagem pronta
-    // "Vi o anúncio", inclusive testes), então o passo "na Mari" não tem % sobre o da Meta.
-    const passos = [
-      ['Impressões', imp, null], ['Cliques no link', clLink, imp], ['Conversas (Meta)', cMeta, clLink],
-      ['Conversas na Mari', q ? q.total : soma(dias, 'conversas_mari'), 0], ['Com CEP', q ? q.comCep : soma(dias, 'com_cep'), null],
-      ['Dentro da área (DFV)', q ? q.dentro : null, null], ['Qualificadas', q ? q.qualif : soma(dias, 'qualificadas'), null], ['Venda c/ biometria', vBio, null],
-    ];
-    passos.forEach((ps, i) => { if (ps[2] === null && i > 0) ps[2] = passos[i - 1][1]; });
-    document.getElementById('t-funil').textContent = `Funil · anúncio → venda · ${per.rotulo}`;
-    desenharFunil(passos);
+    // ---------- gaveta: dia a dia ----------
+    const porDia = (lista, fn) => { const m = new Map(); lista.forEach((x) => { const d = fn(x); if (d) m.set(d, (m.get(d) || 0) + 1); }); return m; };
+    const osDia = porDia(vendasPer, (v) => diaDe(v.nio_os_em));
+    const cepDia = conv ? porDia(convPer.filter((c) => c.cep && c.dentro_area === true), (c) => diaDe(c.created_at)) : null;
+    const melhor = [...osDia.entries()].sort((a, b) => b[1] - a[1])[0];
+    document.getElementById('r-dias').textContent = `${pl(dias.length, 'dia', 'dias')}${melhor ? ` · melhor dia: ${NG.fmtDiaSemana(`${melhor[0]}T12:00:00-03:00`).toLowerCase()} ${NG.fmtDiaISO(melhor[0]).slice(0, 5)}, com ${pl(melhor[1], 'venda', 'vendas')}` : ' · nenhuma venda com OS no período'}`;
+    document.getElementById('c-dias').innerHTML = dias.length ? `<table class="ma-g-tab"><thead><tr><th>Dia</th><th>Gasto</th><th>Conversas (Meta)</th><th>Conversas (Mari)</th><th>Com CEP atendido</th><th>Fora da área</th><th>Qualificadas</th><th>Vendas (OS)</th></tr></thead><tbody>
+      ${dias.map((r) => `<tr><td>${esc(NG.fmtDiaISO(r.dia))}</td><td>${R(r.gasto)}</td><td>${N(r.conversas_meta)}</td><td>${N(r.conversas_mari)}</td><td>${cepDia ? N(cepDia.get(r.dia) || 0) : '—'}</td>
+        <td>${r.fora_area ? `<span class="chip warn">${N(r.fora_area)}</span>` : '0'}</td><td>${N(r.qualificadas)}</td><td>${N(osDia.get(r.dia) || 0)}</td></tr>`).join('')}</tbody></table>
+      <p class="ma-nota">Conversas (Mari) = as que a Mari recebeu com origem "anúncio". Qualificada = passou ao time com os dados completos. Venda = OS gerada naquele dia.</p>` : '<div class="vazio-curto">Nada no período.</div>';
 
-    // ── posicionamentos (7 dias)
-    const maxG = Math.max(1, ...pos.map((r) => Number(r.gasto)));
-    document.getElementById('s-posic').innerHTML = pos.length ? pos.filter((r) => Number(r.gasto) >= 0.5 || r.conversas > 0).map((r) => `<div class="pl${r.alerta && !parou(r) ? ' alerta-on' : ''}${parou(r) ? ' parado' : ''}">
-        <span>${esc(nomePosic(r))}${parou(r) ? ` <small class="apagado">· ${esc(tirado(r) ? 'tirado' : 'sem verba')}</small>` : ''}</span>
-        <span class="barra" title="${NG.fmtNum(Number(r.fatia_gasto) * 100)} % do gasto"><i style="width:${barraPct(Number(r.gasto) / maxG)}"></i></span>
-        <span class="num"><b>${NG.fmtMoeda(r.gasto)}</b> · ${NG.fmtNum(r.conversas)} conv</span></div>`).join('')
-      : '<div class="vazio-curto">Sem dados por posicionamento ainda — a coleta roda a cada 15 min.</div>';
+    // ---------- gaveta: para onde vai a verba (7 dias) ----------
+    // a visão traz uma linha por campanha: aqui o lugar aparece uma vez só, com a soma das campanhas
+    const juntos = new Map();
+    pos.forEach((r) => {
+      const k = `${r.plataforma}|${r.posicao}`;
+      const j = juntos.get(k) || { plataforma: r.plataforma, posicao: r.posicao, gasto: 0, conversas: 0, alerta: false, linhas: [] };
+      j.gasto += Number(r.gasto || 0); j.conversas += Number(r.conversas || 0); j.linhas.push(r); juntos.set(k, j);
+    });
+    const gastoPos = [...juntos.values()].reduce((t, j) => t + j.gasto, 0) || 1;
+    const posVis = [...juntos.values()].map((j) => ({ ...j, fatia_gasto: j.gasto / gastoPos, alerta: j.linhas.some((r) => r.alerta && !parou(r)), parado: j.linhas.every(parou) }))
+      .filter((r) => r.gasto >= 0.5 || r.conversas > 0).sort((a, b) => b.gasto - a.gasto);
+    const maxG = Math.max(1, ...posVis.map((r) => r.gasto));
+    document.getElementById('r-posic').textContent = posVis.length ? posVis.slice(0, 4).map((r) => `${nomePosic(r)} ${N(Number(r.fatia_gasto) * 100)} %`).join(' · ') : 'sem dados por posicionamento ainda';
+    document.getElementById('c-posic').innerHTML = posVis.length ? posVis.map((r) => `<div class="ma-pl${r.alerta ? ' alerta-on' : ''}${r.parado ? ' parado' : ''}">
+        <span>${esc(nomePosic(r))}${r.parado ? ` <small class="apagado">· ${tirado(r) ? 'tirado' : 'sem verba'}</small>` : ''}</span>
+        <span class="barra" title="${N(Number(r.fatia_gasto) * 100)} % do gasto"><i style="width:${barraPct(Number(r.gasto) / maxG)}"></i></span>
+        <span class="n"><b>${R(r.gasto)}</b> · ${pl(r.conversas, 'conversa', 'conversas')}</span></div>`).join('') + '<p class="ma-nota">Últimos 7 dias, por lugar onde o anúncio apareceu. Em vermelho, o que gasta sem trazer conversa; apagado, o que já foi tirado.</p>'
+      : '<div class="vazio-curto">Sem dados por posicionamento ainda. A coleta roda a cada 15 min.</div>';
 
-    // ── semáforo + resumo
-    const emAnalise = ads.filter((a) => ['PENDING_REVIEW', 'IN_PROCESS', 'PREAPPROVED'].includes(a.status_efetivo)).length;
-    const ativos = ads.filter((a) => a.status_efetivo === 'ACTIVE').length;
-    const nBad = al.filter((a) => a.cls === 'bad').length, nWarn = al.filter((a) => a.cls === 'warn').length;
-    const sinal = nBad ? 'bad' : (nWarn || emAnalise || fase1 || (cpcTotal != null && cpcTotal > L.conversa_custo_meta)) ? 'warn' : 'ok';
-    document.getElementById('s-sinal').className = `semaforo ${sinal}`;
-    document.getElementById('s-sinal').title = { ok: 'Tudo dentro dos limites', warn: 'Atenção', bad: 'Precisa de ação' }[sinal];
-    document.getElementById('s-resumo').textContent = [
-      nBad ? `${nBad} alerta${nBad > 1 ? 's' : ''} pedindo ação` : nWarn ? `${nWarn} ponto${nWarn > 1 ? 's' : ''} de atenção` : 'nenhum alerta',
-      fase1 ? `cedo para julgar (${NG.fmtMoeda(gastoTotal)} de ${NG.fmtMoeda(L.campanha_gasto_avaliar)})` : `${NG.fmtMoeda(gastoTotal)} gastos`,
-      `${cpcTotal != null ? NG.fmtMoeda(cpcTotal) : '—'} por conversa (bom ≤ ${NG.fmtMoeda(L.conversa_custo_meta)})`,
-      emAnalise ? `${emAnalise} anúncio${emAnalise > 1 ? 's' : ''} em análise na Meta` : `${ativos} anúncio${ativos === 1 ? '' : 's'} no ar`,
-    ].join(' · ');
-    const ultP = pos.reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
-    document.getElementById('s-atualizado').textContent = ultP ? `ⓘ atualizado ${NG.fmtDataHora(ultP)}` : 'ⓘ';
-    esticarSaude();
+    // ---------- gaveta: o que a Meta recebeu de volta ----------
+    if (!capi) { document.getElementById('r-capi').textContent = 'sem leitura'; document.getElementById('c-capi').innerHTML = '<div class="vazio-curto">Não deu para ler o que a Meta recebeu.</div>'; }
+    else {
+      const d = capi;
+      document.getElementById('r-capi').textContent = `${N(d.viaveis_7d)} com rua atendida · ${N(d.qualificadas_7d)} qualificadas · ${pl(d.vendas_7d, 'venda', 'vendas')} em 7 dias · ${(d.erros_7d || 0) > 0 ? pl(d.erros_7d, 'erro', 'erros') : 'nenhum erro'}`;
+      document.getElementById('c-capi').innerHTML = `<div class="ma-capi">${CAPI_EV.map(([k, rot, dica]) => `<div title="${esc(dica)}"><span class="rot">${esc(rot)}</span><span class="val"><b>${N(d[`${k}_hoje`])}</b> hoje · ${N(d[`${k}_7d`])} em 7 dias</span></div>`).join('')}
+        <div title="Conversa que não veio de anúncio: não tem id de clique, então não há o que enviar. Não é erro."><span class="rot">Sem clique (não enviadas)</span><span class="val">${N(d.sem_clique_hoje)} hoje · ${N(d.sem_clique_7d)} em 7 dias</span></div>
+        <div class="${(d.erros_7d || 0) > 0 ? 'alerta' : ''}" title="Envio recusado pela Meta depois de 3 tentativas. Avisar o Claude Code; não reenviar à mão."><span class="rot">Erros de envio</span><span class="val">${N(d.erros_hoje)} hoje · ${N(d.erros_7d)} em 7 dias</span></div>
+        <div class="${(d.atrasados || 0) > 0 ? 'alerta' : ''}"><span class="rot">Na fila agora</span><span class="val">${N(d.na_fila)}${(d.atrasados || 0) > 0 ? ` · <b>${N(d.atrasados)} há mais de 1 h</b>` : ''}</span></div></div>
+        <p class="ma-nota">${d.ultimo_envio ? `Último envio ${esc(NG.quando(d.ultimo_envio))} ${esc(NG.fmtHora(d.ultimo_envio))}. ` : 'Nenhum envio ainda. '}Vai só o telefone embaralhado (hash), nunca o número aberto. Só fica vermelho com erro ou fila parada há mais de 1 hora.</p>`;
+    }
+    if (!window.NGmaTempo) { window.NGmaTempo = Math.round(performance.now() - t0); window.NGmaDesdeAbrir = Math.round(performance.now()); }   // regra 19
   }
+  function pintarLido() {
+    const el = document.getElementById('lido');
+    if (!ultimo) { el.textContent = ''; return; }
+    const min = Math.max(0, Math.round((Date.now() - new Date(ultimo)) / 60000));
+    el.textContent = `lido da Meta há ${min < 60 ? `${min} min` : min < 2880 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} dias`}`;
+    el.title = `Última coleta: ${NG.fmtDataHora(ultimo)}. A coleta roda a cada 15 min.`;
+    el.classList.toggle('velho', min > 60);
+  }
+  setInterval(pintarLido, 60000);
+  document.getElementById('ver-parados').addEventListener('click', (ev) => { if (ev.target.closest('#bt-parados')) { verParados = !verParados; carregar(); } });
 
-  // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a vista abre) ─────────────
+  // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a gaveta abre) ─────────────
+  // A gaveta substitui a antiga vista "Bairros prioritários": estes três nomes existem só para o código dos bairros seguir igual.
+  const vista = 'bairros';
+  let nBairros = null;
+  const setSub = (v, txt) => { document.getElementById('sub-bairros').textContent = txt; };
+  const abrirVista = () => { if (nBairros != null) document.getElementById('r-bairros').textContent = `${NG.fmtNum(nBairros)} bairros na base · marque e copie o conjunto para o Gerenciador`; };
   async function iniciarBairros() {
   const tbody = document.getElementById('tbody');
   const { data, error } = await NG.sb.from('v_dfv_bairros').select('*').eq('uf', 'MG').eq('municipio', 'JUIZ DE FORA');
@@ -815,7 +613,7 @@
   document.getElementById('limpar').addEventListener('click', () => { marcados.clear(); render(); });
   minRaio.addEventListener('change', conjunto);
   fBusca.addEventListener('input', render);
-  NG.ligarOrdenacao(document.querySelector('.lista.padrao thead'), ord, render);
+  NG.ligarOrdenacao(document.querySelector('#g-bairros .lista.padrao thead'), ord, render);
   const gav = document.getElementById('gaveta-conj');
   const abrirConj = () => { conjunto(); NG.gaveta.abrir(gav, { foco: false }); };
   document.getElementById('ver-conjunto').addEventListener('click', abrirConj);
@@ -830,10 +628,13 @@
   bairros.filter((b) => !baixo(b)).slice(0, 7).forEach((b) => marcados.add(b.bairro));
   render();
   }
+  const gBairros = document.getElementById('g-bairros');
+  let bairrosIniciado = false;
+  gBairros.addEventListener('toggle', () => { if (gBairros.open && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); } });
+  if (new URLSearchParams(location.search).get('vista') === 'bairros') { gBairros.open = true; requestAnimationFrame(() => gBairros.scrollIntoView({ block: 'start' })); }
 
-  abrirVista(vista);
-  NG.botaoAtualizar(() => carregarDesempenho());   // 09/11: dados frescos sem F5 (Desempenho e Saúde)
-  carregarDesempenho();
+  NG.botaoAtualizar(() => carregar());
+  carregar();
 })();
 </script>
 </body>

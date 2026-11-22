@@ -75,6 +75,7 @@
             <th>Cliente</th>
             <th>Plano</th>
             <th>Vendedor</th>
+            <th title="De onde veio a venda: Meta Ads, indicação, rua, parceiro PAP, Fila Vero…">Origem</th>
             <th>Nº da OS</th>
             <th>Status</th>
             <th class="num">Comissão da Nio</th>
@@ -172,13 +173,14 @@
         <td class="quando">${esc(NG.fmtData(quando))}<small>${esc(hora(quando))}</small></td>
         <td><b>${esc(v.cliente_nome || '—')}</b><small>${esc(local(v) || '—')}</small></td>
         <td><b>${esc(planoCurto(v))}</b><small>${esc(V.formaTxt(v) || '—')}</small></td>
-        <td>${esc(v.vendedor_nome || '—')}<small>${esc(NG.origemTxt(v))}</small></td>
+        <td>${esc(v.vendedor_nome || '—')}</td>
+        <td>${esc(NG.origemTxt(v))}</td>
         <td class="os">${esc(v.nio_os)}</td>
         <td>${V.chip(s)}${nota ? `<small>${esc(nota)}</small>` : ''}</td>
         <td class="num" title="${esc(c.dica)}">${c.valor == null ? '—' : esc(fmtR(c.valor))}<small><span class="chip ${c.cls}">${esc(c.txt)}</span></small></td>
         <td class="breve">em breve</td>
       </tr>`;
-    }).join('') : `<tr><td colspan="8" class="vazio">${d.vendas.length ? 'Nenhuma venda neste filtro.' : 'Nenhuma venda com OS gerada ainda.'}</td></tr>`;
+    }).join('') : `<tr><td colspan="9" class="vazio">${d.vendas.length ? 'Nenhuma venda neste filtro.' : 'Nenhuma venda com OS gerada ainda.'}</td></tr>`;
     document.getElementById('contagem').textContent = `${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'venda' : 'vendas'} · da OS mais recente para a mais antiga`;
     btLimpar.hidden = !(fBusca.value || fVendedor.value || fOrigem.value || fComissao.value || aba !== 'todas');
     if (!window.NGvdTempo && d.vendas.length) window.NGvdTempo = Math.round(performance.now() - t0);   // regra 19: tempo até a lista

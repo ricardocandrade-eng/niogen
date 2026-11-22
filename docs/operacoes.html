@@ -43,6 +43,18 @@
   .op-radar-t { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 12px; }
   .op-radar-t th, .op-radar-t td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); }
   .op-radar-t td:nth-child(2) { width: 45%; }
+  /* 22/11 (Ricardo: "indicação de que a atualização no Portal está sendo verificada e, se mudar algo, indicar de forma clara, na própria linha") */
+  .op-aviso { display: block; margin-top: 4px; font-size: 11.5px; line-height: 1.4; white-space: normal; max-width: 230px; }
+  .op-aviso.lendo, .op-aviso.fila { color: var(--info-fg); }
+  .op-aviso.igual { color: var(--muted); }
+  .op-aviso.mudou { color: var(--ok-fg); font-weight: 600; }
+  .op-aviso.erro { color: var(--bad-fg); }
+  .op-gira { display: inline-block; animation: op-gira 1.1s linear infinite; }
+  @keyframes op-gira { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .op-gira { animation: none; } }
+  .lista-densa .tab tr.op-mudou td { background: rgba(50, 224, 0, .06); }
+  .lista-densa .tab tr.op-mudou td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .op-mudou-chip { display: block; margin-top: 4px; padding: 4px 8px; border-radius: 8px; background: var(--ok-bg); color: var(--ok-fg); font-size: 11.5px; line-height: 1.4; max-width: 300px; white-space: normal; }
   .op-barra { display: inline-block; height: 8px; border-radius: 4px; background: var(--accent); vertical-align: middle; margin-right: 6px; min-width: 2px; }
 </style>
 </head>
@@ -109,6 +121,10 @@
   NG.preencherSelect(fConf, [['confirmou', 'Confirmou'], ['remarcar', 'Pediu para remarcar'], ['nada', 'Não respondeu']], 'Cliente: todos');
   const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: 'mes', aoMudar: render });
   let d = { vendas: [], os: {}, leituras: {}, nomeCurto: {} }, conf = {}, regras = {}, ritmo = null, osabEm = null, varr = null, radar = null, lendo = {}, reag = {}, aba = 'todas';
+  // 22/11 (Ricardo): o que a consulta ao Portal fez em cada linha, enquanto a tela está aberta. Só exibição, nada é gravado aqui.
+  //   aviso[id] = { tipo: 'lendo' | 'fila' | 'igual' | 'mudou' | 'erro', txt, em }
+  //   foto[id]  = como a OS estava antes da consulta (para dizer O QUE mudou)
+  let aviso = {}, foto = {}, varrDesde = null;
 
   const hoje = () => NG.diaSP();
   const amanha = () => NG.somaDias(NG.diaSP(), 1);
@@ -143,13 +159,27 @@
     const rel = dd === hoje() ? 'hoje' : dd === amanha() ? 'amanhã' : NG.fmtDiaSemana(`${dd}T12:00:00-03:00`).toLowerCase();
     return `<b>${esc(NG.fmtDiaISO(dd))}</b><small>${esc([rel, V.turno(v, os(v))].filter(Boolean).join(' · '))}</small>`;
   }
+  // ---------- 22/11: o que mudou na Nio entre a foto de antes e a leitura de agora ----------
+  const CAMPOS_OS = ['estado', 'status_ordem', 'status_agendamento', 'agendamento_data', 'janela', 'pendencia'];
+  const fotoDe = (v) => { const o = os(v) || {}; return { ...Object.fromEntries(CAMPOS_OS.map((k) => [k, o[k] || ''])), ref: o.referencia_em || o.mudou_em || '' }; };
+  function diferenca(a, b) {
+    const p = [];
+    if (a.agendamento_data !== b.agendamento_data) p.push(`data ${a.agendamento_data ? dm(a.agendamento_data) : 'sem data'} → ${b.agendamento_data ? dm(b.agendamento_data) : 'sem data'}`);
+    if (a.janela !== b.janela && b.janela) p.push(`turno ${b.janela}`);
+    if (a.status_ordem !== b.status_ordem) p.push(`status ${a.status_ordem || '—'} → ${b.status_ordem || '—'}`);
+    if (a.status_agendamento !== b.status_agendamento) p.push(`agendamento ${a.status_agendamento || '—'} → ${b.status_agendamento || '—'}`);
+    if (a.pendencia !== b.pendencia) p.push(b.pendencia ? `pendência: ${b.pendencia}` : 'a pendência saiu');
+    if (!p.length && a.estado !== b.estado) p.push('o estado da OS mudou');
+    return p.join(' · ');
+  }
+  const agoraHm = () => hm(new Date());
   function colStatus(v, s) {
     const o = os(v);
     const nio = V.textoNio(o);
     const extra = s === 'pendencia' ? V.pendenciaTxt(v, o) : s === 'cancelada' ? ((o && o.motivo_cancelamento) || v.cancelada_apos_instalar_motivo || v.motivo_saida || '') : '';
     const bio = aberta(v) && ['pendente', 'com_risco'].includes(v.biometria_status) ? 'biometria pendente' : '';
     return `${V.chip(s)}${bio ? ` <span class="chip warn" title="O cliente ainda não fez a biometria da Nio.">${bio}</span>` : ''}
-      <small class="nio-txt" title="O texto que a Nio mostra na OS (status da ordem · situação do agendamento)">${nio ? `Nio: ${esc(nio)}` : 'OS ainda não lida na Nio'}</small>${extra ? `<small class="nio-txt">${esc(extra)}</small>` : ''}`;
+      <small class="nio-txt" title="O texto que a Nio mostra na OS (status da ordem · situação do agendamento)">${nio ? `Nio: ${esc(nio)}` : 'OS ainda não lida na Nio'}</small>${extra ? `<small class="nio-txt">${esc(extra)}</small>` : ''}${(aviso[v.id] || {}).tipo === 'mudou' ? `<span class="op-mudou-chip" role="status"><b>● Mudou na Nio às ${esc(aviso[v.id].em)}</b><br>${esc(aviso[v.id].txt)}</span>` : ''}`;
   }
   function colReag(v) {
     const r = reag[v.id] || [];
@@ -168,8 +198,16 @@
     const o = os(v);
     const quando = o && (o.referencia_em || o.mudou_em);
     const txt = quando ? `${esc(NG.fmtData(quando))} <small style="display:inline">${esc(hm(quando))}</small>` : '<span class="apagado">nunca</span>';
-    const bt = podeLer(v) ? `<br><button type="button" class="btn-linha" data-os-ler="${esc(v.id)}" ${lendo[v.id] ? 'disabled' : ''} title="${esc(A.ops_os_agora)}">${lendo[v.id] ? 'lendo na Nio…' : '⟳ Atualizar'}</button>` : '';
-    return `<span title="${quando ? esc(`Lido por ${o.origem_ultima === 'osab' ? 'OSAB' : 'Operador de OS'}; última mudança ${NG.fmtDataHora(o.mudou_em)}`) : ''}">${txt}</span>${bt}`;
+    const a = aviso[v.id];
+    const ocupado = lendo[v.id] || (a && a.tipo === 'fila');
+    const bt = podeLer(v) ? `<br><button type="button" class="btn-linha" data-os-ler="${esc(v.id)}" ${ocupado ? 'disabled' : ''} title="${esc(A.ops_os_agora)}">⟳ Atualizar</button>` : '';
+    // O aviso da consulta ao Portal, na própria linha: consultando · na fila · sem mudança · mudou · não deu
+    const av = !a ? '' : a.tipo === 'lendo' ? '<span class="op-aviso lendo" role="status"><span class="op-gira" aria-hidden="true">⟳</span> Consultando o Portal da Nio… leva uns 15 segundos</span>'
+      : a.tipo === 'fila' ? '<span class="op-aviso fila" role="status"><span class="op-gira" aria-hidden="true">⟳</span> Na fila: o Portal está sendo consultado, OS por OS</span>'
+        : a.tipo === 'igual' ? `<span class="op-aviso igual" role="status">✓ Conferida às ${esc(a.em)}: nada mudou</span>`
+          : a.tipo === 'mudou' ? `<span class="op-aviso mudou" role="status">● Mudou às ${esc(a.em)}: veja o status</span>`
+            : `<span class="op-aviso erro" role="status">⚠ ${esc(a.txt)}</span>`;
+    return `<span title="${quando ? esc(`Lido por ${o.origem_ultima === 'osab' ? 'OSAB' : 'Operador de OS'}; última mudança ${NG.fmtDataHora(o.mudou_em)}`) : ''}">${txt}</span>${bt}${av}`;
   }
 
   function renderFaixa(b) {
@@ -217,7 +255,7 @@
     const lista = b.filter((v) => naAba(v, aba));
     tbody.innerHTML = lista.length ? lista.map((v) => {
       const s = st(v);
-      return `<tr class="clicavel ${s === 'cancelada' ? 'cancelada' : ''}" data-id="${esc(v.id)}" tabindex="0" title="Abrir a ficha">
+      return `<tr class="clicavel ${s === 'cancelada' ? 'cancelada' : ''}${(aviso[v.id] || {}).tipo === 'mudou' ? ' op-mudou' : ''}" data-id="${esc(v.id)}" tabindex="0" title="Abrir a ficha">
         <td class="quando">${colInstalacao(v, s)}</td>
         <td><b>${esc(v.cliente_nome || '—')}</b><small>${esc(local(v) || '—')}</small><small class="mono">OS ${esc(v.nio_os)} · ${esc(NG.fmtData(V.dataOS(v)))}</small></td>
         <td>${colStatus(v, s)}</td>
@@ -274,6 +312,7 @@
     varr = rs && !rs.error ? rs.data : null;
     radar = rb && !rb.error ? rb.data : null;
     vigiarVarredura();
+    conferirVarredura();
     renderOsab();
     renderRadar();
     if (!window.NGopTempo) { window.NGopTempo = Math.round(performance.now() - t0); window.NGopDesdeAbrir = Math.round(performance.now()); }
@@ -281,14 +320,53 @@
   }
 
   // ---------- Atualizar: uma OS (na linha) e todas (no topo) ----------
+  // 22/11 (Ricardo): a consulta de UMA OS não abre mais janela — a linha diz "Consultando o Portal…" e, no fim, o que mudou
+  // (ou que nada mudou). A leitura é a mesma de antes (NG.osConsultar → Operador de OS); quem grava é o banco.
   async function lerOs(id) {
     if (lendo[id]) return;
-    lendo[id] = true; render();
-    const v = d.vendas.find((x) => x.id === id) || {};
-    await NG.osModal(id, v.cliente_nome);
+    const v = d.vendas.find((x) => x.id === id);
+    if (!v) return;
+    lendo[id] = true;
+    const antes = fotoDe(v);
+    aviso[id] = { tipo: 'lendo' };
+    render();
+    let s = null, erro = '';
+    try { s = await NG.osConsultar(id); } catch (e) { erro = e.naoInstalado ? 'Operador fora do ar: consulte direto no portal.' : NG.msgErro(e); }
     delete lendo[id];
+    if (erro || !s || s.resultado !== 'lida') {
+      aviso[id] = { tipo: 'erro', txt: erro || NG.osResumo(s).txt, em: agoraHm() };
+      render();
+      return;
+    }
     NG.limparCache();
     await carregar();   // a leitura nova pode trazer data, status ou pendência: a lista inteira é refeita
+    const v2 = d.vendas.find((x) => x.id === id);
+    const g = s.registro || {};
+    const dif = v2 ? diferenca(antes, fotoDe(v2)) : '';
+    if (g.ok === false) aviso[id] = { tipo: 'erro', txt: g.erro || 'A leitura não foi gravada.', em: agoraHm() };
+    else if (dif || g.mudou === true) aviso[id] = { tipo: 'mudou', txt: [dif || g.efeito || 'a OS mudou na Nio', g.excecao && g.acao ? `O que fazer: ${g.acao}` : ''].filter(Boolean).join(' · '), em: agoraHm() };
+    else aviso[id] = { tipo: 'igual', em: agoraHm() };
+    render();
+  }
+  // "Atualizar todas": enquanto o Operador lê, cada OS aberta mostra "Na fila"; lida, a linha troca para "nada mudou" ou "mudou".
+  // Sabe-se que uma OS foi lida quando o "Lido na Nio" dela passa do horário em que a leitura foi pedida.
+  function conferirVarredura() {
+    const rodando = !!(varr && varr.motivo === 'em_andamento');
+    if (rodando && !varrDesde) {
+      varrDesde = (varr.andamento && varr.andamento.pedida_em) || new Date().toISOString();
+      d.vendas.filter(podeLer).forEach((v) => { if (!lendo[v.id]) { foto[v.id] = fotoDe(v); aviso[v.id] = { tipo: 'fila' }; } });
+    }
+    if (!varrDesde) return;
+    d.vendas.forEach((v) => {
+      const a = aviso[v.id];
+      if (!a || a.tipo !== 'fila') return;
+      const agora = fotoDe(v);
+      if (agora.ref && new Date(agora.ref) > new Date(varrDesde)) {
+        const dif = diferenca(foto[v.id] || agora, agora);
+        aviso[v.id] = dif ? { tipo: 'mudou', txt: dif, em: hm(agora.ref) } : { tipo: 'igual', em: hm(agora.ref) };
+      } else if (!rodando) delete aviso[v.id];   // a leitura acabou e esta OS não foi lida: o aviso sai (o total fica no topo)
+    });
+    if (!rodando) varrDesde = null;
   }
   let vigia = null;
   function vigiarVarredura() {   // só pergunta ao banco enquanto há varredura rodando; terminou, para
@@ -300,7 +378,9 @@
         if (error || !data) return;
         const acabou = data.motivo !== 'em_andamento';
         varr = data;
-        if (acabou) { clearInterval(vigia); vigia = null; NG.limparCache(); await carregar(); const u = data.ultima || {}; NG.toast(u.estado === 'falhou' ? 'A leitura não terminou. Veja o pulso do Operador de OS.' : `Pronto: ${u.lidas || 0} de ${u.na_fila || 0} OS lidas na Nio, ${u.mudaram || 0} com mudança.`, u.estado === 'falhou' ? 'bad' : 'ok'); }
+        // 22/11: a lista é relida a cada volta (só enquanto a leitura roda) para a linha de cada OS mostrar que já foi conferida
+        NG.limparCache(); await carregar();
+        if (acabou) { clearInterval(vigia); vigia = null; const u = data.ultima || {}; NG.toast(u.estado === 'falhou' ? 'A leitura não terminou. Veja o pulso do Operador de OS.' : `Pronto: ${u.lidas || 0} de ${u.na_fila || 0} OS lidas na Nio, ${u.mudaram || 0} com mudança.`, u.estado === 'falhou' ? 'bad' : 'ok'); }
       }, 10000);
     } else if (!rodando && vigia) { clearInterval(vigia); vigia = null; }
   }
@@ -312,6 +392,7 @@
     if (data.ok) NG.toast(`Pedido feito: o Operador de OS começa em até 1 minuto (${data.abertas || 0} OS, ~12 s cada).`, 'ok');
     else NG.toast(data.motivo === 'em_andamento' ? 'Já há uma leitura de todas as OS em andamento.' : data.motivo === 'intervalo' ? `Leitura feita há pouco. Libera às ${hm(data.libera_em)}.` : 'Nenhuma OS aberta para ler.', 'bad');
     vigiarVarredura();
+    conferirVarredura();
     render();
   }
 
