@@ -109,7 +109,6 @@
       </div>
       <div class="nav-foot">
         ${`<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button><a href="guia.html#consulta-central" title="Como usar a Consulta central (Guia do Backoffice)">Guia</a></div>`}
-        <div class="nav-status" data-status aria-live="polite"></div>
         <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
       </div>`;
 
@@ -121,8 +120,8 @@
     guiaNovo(nav, pagina);
     balancoBotao();
     setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta
-    statusOperacao(nav);
-    setInterval(() => { if (document.visibilityState === 'visible') statusOperacao(nav); }, 120000);   // 2 min, só com a aba visível
+    // 22/11 (Ricardo: "Remove esse indicador Meta e Mari que ficam no pé do menu lateral"): os selos saíram do menu e da
+    // barra do celular; status_operacao não é mais chamada pelo menu (o pulso da Live segue com Mari e Meta na faixa do topo).
 
     // Prompt 27: avisos de Mari (aguardando humano) e Vendas (novas + precisam de ação). O Realtime não está ligado no
     // Supabase Nio (publicação vazia): consulta a cada 60 s. O total vai também para o título da aba: "(3) Vendas · NIOGEN".
