@@ -4807,7 +4807,7 @@
     const dn = donoConversa(cv);
     const ehAdmin = (NG.usuario || {}).perfil === 'admin';
     let cab, trilha, agora, cards, over = '';
-    let band = '', jor = null, dad = null, overs = '';   // ficha nova (14/11)
+    let band = '', jor = null, dad = null, overs = '', coleta = '';   // ficha nova (14/11)
     let agBts = '';   // 17/11 (passo 6): os botões do passo, à vista no card Agora
     if (!conv) {
       const v = d.v;
@@ -4903,6 +4903,8 @@
         : bandHtml(tom, P.silenciada ? 'silenciada' : (E ? E.curto : 'conversa sem venda'), P.silenciada ? 'Cliente Nio · suporte — fora do Live' : (P.j.o_que_fazer || 'Mari atendendo'),
           feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari: ${P.q.itens_validados ?? 0} de ${P.q.itens_total ?? 0}`, botao, chipC);
       const itensH = P.itens.length ? `<div class="f-itens fc-itens-v">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : '';
+      // 22/11 (Ricardo): os dados que a Mari já coletou, numa linha estreita logo abaixo da Jornada, sempre à vista.
+      coleta = P.itens.length ? `<div class="fc2-coleta" aria-label="Dados coletados pela Mari"><b>Dados ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}</b>${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}" title="${it.estado === 'validado' ? 'confirmado' : it.estado === 'vazio' ? 'falta' : 'coletado, falta confirmar'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : '';
       jor = jornadaHtml(P.passosConv, { st: P.nivel === 'agora' ? 'now' : 'done', ruaConferir: !!rc, abrir: rc ? 'viab' : null,
         d: `${dn.tipo === 'mari' ? 'Mari atendendo' : dn.tipo === 'time' ? 'com o time' : dn.tipo === 'pessoa' ? 'com uma pessoa do time' : 'conversa'} · dados ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`,
         det: `${itensH}<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da conversa (assumir, espera, Saída…)</button></div>` });
@@ -4933,7 +4935,7 @@
         <section class="fc2-col fc2-jor${jor && jor.aberta ? ' et-on' : ''}" aria-label="Jornada da venda">
           ${band ? `<div class="fc2-agcard" aria-label="Agora">${band.html}${gedLinha()}${agBts || btSaidaAg() ? `<div class="fc2-agb">${agBts}${btSaidaAg()}</div>` : ''}<p class="fc-efeito"></p></div>` : ''}
           <div class="fc2-colh"><h2>Jornada da venda</h2><span class="fc-sp"></span><span class="fc2-cont">${jor ? `${jor.feitas} de ${jor.total}` : ''}</span></div>
-          ${jor ? jor.html : ''}
+          ${jor ? jor.html : ''}${jor && !jor.aberta ? coleta : ''}
         </section>
         <section class="fc2-col fc2-dados${dadosOn ? ' on' : ''}" aria-label="Dados do cliente">
           <button type="button" class="fc2-rail" data-f="fc2-dados" aria-expanded="${dadosOn}" title="${dadosOn ? 'Recolher os dados do cliente' : 'Abrir os dados do cliente'}"><span class="fc2-rail-sx">${dadosOn ? '›' : '‹'}</span><span class="fc2-rail-t">Dados do cliente</span>${dad && dad.faltam ? `<span class="fc2-rail-n" title="faltam ${dad.faltam}">${dad.faltam}</span>` : '<span class="fc2-rail-ok">✓</span>'}</button>
