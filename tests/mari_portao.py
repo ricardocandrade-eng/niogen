@@ -650,6 +650,38 @@ def cen_ap(c):   # P43 (21/11, conversa L-222): a unidade que o cliente deu est�
         c.exige((r.get('interativo') or {}).get('chave') != 'unidade', f'[P43] botões de unidade com a unidade já certa ({msg!r})')
 
 
+
+def data_btn():
+    """Botão de data como a Mari oferece (D+1, sem domingo): 'Sáb, 21/11'."""
+    hoje = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3))).date()
+    d = hoje + datetime.timedelta(days=1)
+    if d.weekday() == 6:
+        d += datetime.timedelta(days=1)
+    return f"{['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][d.weekday()]}, {d:%d/%m}"
+
+
+RX_PERG_PERIODO = re.compile(r'qual (turno|periodo)|periodo (voce )?prefere|manha ou (a |de )?tarde')
+
+
+def cen_aq(c):   # P44 (19/11, conversa L-217, Jussara): o cliente respondeu "Manhã" antes do nome e a Mari perguntou o período mais 2 vezes
+    # A Mari pediu nome e CPF junto com os botões de data; a cliente mandou o CPF, tocou a data e "Manhã" — e as duas falas
+    # seguintes (pedindo o nome, depois o e-mail) voltaram com "E qual período você prefere nesse dia?" e os botões.
+    ate_planos_jf(c)
+    r = c.diz('Quero o plano Nio Essencial')
+    if 'por mais r$' in fala(r):
+        c.diz('Fico no Essencial')
+    c.diz('Boleto')
+    c.diz('529.982.247-25')
+    c.diz(data_btn())
+    c.diz('Manhã')
+    for msg in ('Ana Teste da Silva', 'anateste@gmail.com', 'Sim'):
+        r = c.diz(msg)
+        t = fala(r)
+        c.exige((r.get('interativo') or {}).get('chave') != 'turno', f'[P44] botões de período de novo depois do "Manhã" ({msg!r}): «{t[-160:]}»')
+        c.exige(not RX_PERG_PERIODO.search(t), f'[P44] perguntou o período de novo depois do "Manhã" ({msg!r}): «{t[-200:]}»')
+    row = conv_row(c, 'instalacao_preferencia')
+    c.exige('manha' in norm(row.get('instalacao_preferencia') or ''), f'[P44] o período "Manhã" não ficou gravado: {row}')
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -681,6 +713,8 @@ PORTAO = {
     'am': (46, cen_am, 'P39'), 'an': (47, cen_an, 'P40'),
     # 21/11 — conversa L-222 (#202): upsell sem pedir CPF junto; frase não vira nome; unidade da lista não se pergunta de novo
     'ao': (48, cen_ao, 'P41 P42'), 'ap': (49, cen_ap, 'P43'),
+    # 21/11 — conversa L-217 (Jussara): período respondido antes do nome não se pergunta de novo
+    'aq': (50, cen_aq, 'P44'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
