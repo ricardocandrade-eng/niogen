@@ -255,6 +255,8 @@
       NG.sb.from('mari_turnos').select('id', { count: 'exact', head: true }).eq('conversa_id', cid).in('papel', ['lead', 'mari', 'humano']),
       NG.sb.from('chatwoot_acoes').select('id, payload, erro, criada_em').eq('conversa_id', cid).eq('status', 'bloqueada').order('criada_em', { ascending: false }).limit(1),
       ultimaFalaTime(cid),   // 0103: sugestão do motivo quando o cliente só confirmou
+      // 22/11 (Ricardo): os dados coletados pela Mari também na ficha de venda (linha abaixo da Jornada) — 1 leitura, em paralelo
+      NG.sb.from('v_mari_quadro').select('itens, itens_total, itens_validados').eq('id', cid).maybeSingle().then((x) => x, () => null),
     ]);
     // 21/11 (fase 2, passo 4b (b) — ficha em até 1,0 s; medido no ar: a jornada_live leva 1,3–1,7 s e segurava a ficha inteira
     // quando não estava em memória — página da venda, 1ª ficha da aba). A ficha usa a linha em memória ou a última vista na aba
@@ -348,7 +350,7 @@
       v.instalado_em ? opc(NG.sb.from('v_adimplencia').select('faturas').eq('venda_id', id).maybeSingle()) : null,
       bo && v.comissao_paga != null ? opc(NG.sb.from('v_conciliacao').select('*').eq('venda_id', id).maybeSingle()) : null,
     ]);
-    const [rcad, rnm, rbq, rut] = rconv || [null, { count: 0 }, { data: [] }, null];
+    const [rcad, rnm, rbq, rut, rqd] = rconv || [null, { count: 0 }, { data: [] }, null, null];
     const nomeCurto = planoLista ? planoLista.nome_curto || null : ((rpCurto && rpCurto.data) || {}).nome_curto || null;
     const nomeDe = Object.fromEntries(ru.map((u) => [u.id, u.nome]));
     let parc = null;
@@ -376,6 +378,7 @@
     const pendAberta = (rph.data || []).find((p) => !p.encerrada_em) || null;
     const res = {
       jor: jo || null,
+      q: rqd && !rqd.error && rqd.data ? rqd.data : {},
       lead, din, leadCfg: lcfg || [],
       andamento: andRow || null,
       osTrilha: osTri && Array.isArray(osTri.data) ? osTri.data : (Array.isArray(osTri) ? osTri : []),
@@ -4668,6 +4671,13 @@
     if (!infoHtml && !acaoHtml) return html || '';
     return `<div class="fc2-dc${infoHtml && acaoHtml ? '' : ' so1'}">${infoHtml ? `<section class="fc2-dc-info"><h3>O que se sabe</h3>${infoHtml}</section>` : ''}${acaoHtml ? `<section class="fc2-dc-acao"><h3>O que fazer</h3>${acaoHtml}</section>` : ''}</div>`;
   }
+  // 22/11 (Ricardo): os dados que a Mari já coletou, numa linha estreita logo abaixo da Jornada, sempre à vista (lead e venda).
+  function coletaHtml(q) {
+    const its = q && Array.isArray(q.itens) ? q.itens.filter((x) => x.obrigatorio !== false) : [];
+    if (!its.length) return '';
+    const CL = { validado: 'ok', coletado: 'meio', vazio: 'no' };
+    return `<div class="fc2-coleta" aria-label="Dados coletados pela Mari"><b>Dados ${esc(q.itens_validados ?? 0)}/${esc(q.itens_total ?? 0)}</b>${its.map((it) => `<span class="f-item ${CL[it.estado] || 'no'}" title="${it.estado === 'validado' ? 'confirmado' : it.estado === 'vazio' ? 'falta' : 'coletado, falta confirmar'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>`;
+  }
   function jornadaHtml(passos, at) {
     const L = trilhaPassos(passos);
     const aberta = fc.etapa || null;
@@ -4859,6 +4869,7 @@
       jor = jornadaHtml(passosVenda(v), { st: 'done', d: `${E ? E.etapaNome : 'venda'} · conversa com ${dn.tipo === 'mari' ? 'a Mari' : dn.tipo === 'time' ? 'o time' : dn.tipo === 'pessoa' ? 'uma pessoa do time' : '—'}`,
         det: `<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da venda (pendência, devolver, Saída…)</button></div>` });
       dad = dadosVendaHtml(v);
+      coleta = coletaHtml(d.q);
       overs = `${verTudo(v)}${passoOver(v, p)}${confOver(v)}${fc.pend ? `<div class="fc2-pendw">${pendOver()}</div>` : ''}`;
     } else {
       const P = conversaPartes();
@@ -4903,8 +4914,7 @@
         : bandHtml(tom, P.silenciada ? 'silenciada' : (E ? E.curto : 'conversa sem venda'), P.silenciada ? 'Cliente Nio · suporte — fora do Live' : (P.j.o_que_fazer || 'Mari atendendo'),
           feitoUltimo ? feitoUltimo.resumo : `Dados coletados pela Mari: ${P.q.itens_validados ?? 0} de ${P.q.itens_total ?? 0}`, botao, chipC);
       const itensH = P.itens.length ? `<div class="f-itens fc-itens-v">${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : '';
-      // 22/11 (Ricardo): os dados que a Mari já coletou, numa linha estreita logo abaixo da Jornada, sempre à vista.
-      coleta = P.itens.length ? `<div class="fc2-coleta" aria-label="Dados coletados pela Mari"><b>Dados ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}</b>${P.itens.map((it) => `<span class="f-item ${P.ESTADO[it.estado] || 'no'}" title="${it.estado === 'validado' ? 'confirmado' : it.estado === 'vazio' ? 'falta' : 'coletado, falta confirmar'}">${it.estado === 'validado' ? '✓' : it.estado === 'vazio' ? '○' : '◐'} ${esc(it.nome)}</span>`).join('')}</div>` : '';
+      coleta = coletaHtml(P.q);
       jor = jornadaHtml(P.passosConv, { st: P.nivel === 'agora' ? 'now' : 'done', ruaConferir: !!rc, abrir: rc ? 'viab' : null,
         d: `${dn.tipo === 'mari' ? 'Mari atendendo' : dn.tipo === 'time' ? 'com o time' : dn.tipo === 'pessoa' ? 'com uma pessoa do time' : 'conversa'} · dados ${P.q.itens_validados ?? 0}/${P.q.itens_total ?? 0}`,
         det: `${itensH}<div class="fc2-det-bts"><button type="button" class="btn btn-sm" data-f="fc-passo">Ações da conversa (assumir, espera, Saída…)</button></div>` });
