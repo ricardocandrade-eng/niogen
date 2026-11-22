@@ -168,12 +168,28 @@ end $$;
 
 -- As rotinas de relógio: a fila (1 min) e a varredura de 10 min (n8n indicacao_rotina → indicacao_tick, que também fecha
 -- conversa de Saída e de instalado). Devolve quantas ordens ao Chatwoot foram executadas.
+-- 21/11 (F1, F2 e X37 vermelhos à noite): as rotinas da pós-instalação e da indicação só mandam no horário dos toques
+-- (config_regras.mari_horario_toques, 9h–21h desde a 0304). O relógio do simulador é o de verdade, então depois das 21h nada saía
+-- e o resto do cenário quebrava. Fora do horário, o tique roda a rotina com o relógio de agora e a janela aberta o dia todo só
+-- durante a chamada (adiantar o relógio fazia vencer outras esperas, como o "insistir" da indicação). Quem testa o próprio
+-- horário (H6, X38, X53, B8) chama as rotinas com hora fixa (sim.hora), não passa por aqui.
+create or replace function sim._indicacao_tick_no_horario() returns void language plpgsql as $$
+declare v jsonb;
+begin
+  if public.mari_no_horario(now(), null) then perform public.indicacao_tick(now()); return; end if;
+  select valor into v from public.config_regras where chave = 'mari_horario_toques';
+  update public.config_regras set valor = coalesce(v, '{}'::jsonb) || '{"abre": "00:00", "fecha": "24:00", "todos_os_dias": true}'::jsonb
+   where chave = 'mari_horario_toques';
+  perform public.indicacao_tick(now());
+  update public.config_regras set valor = v where chave = 'mari_horario_toques';
+end $$;
+
 create or replace function sim.tique() returns int language plpgsql as $$
 declare n int;
 begin
   perform sim._servico();
   n := sim.fila_rodar();
-  perform public.indicacao_tick(now());
+  perform sim._indicacao_tick_no_horario();   -- 21/11: era indicacao_tick(now()) — à noite a pós-instalação ficava agendada (F1, F2, X37)
   return n + sim.fila_rodar();
 end $$;
 
