@@ -212,13 +212,23 @@
     NG.mudou('live', LIVE_MAX_MS);   // 14/11 (0190): marca o carimbo desta carga — o timer só refaz se o banco mudar depois
     const pOp = NG.rpcOportunidades();   // 0108: em paralelo com a jornada
     const pOpc = NG.oportunidadesCanal();
-    const [r, ap, rf, fn, rcf, rosa, rosn, rfeitos, rsit] = await Promise.all([NG.jornada(), NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
+    // 22/11 (0358, debate da Live — Ricardo: "A + C: uma chamada, pacote menor"): as 8 leituras que não são a jornada vêm num pacote
+    // só (live_carga) — 2 idas e voltas a Oregon em vez de 9. Sem o pacote (perfil de fora ou 0358 fora do ar), as 8 chamadas de antes.
+    const oito = () => Promise.all([NG.sb.from('v_andamento_pendencias').select('*').order('desde'),
       NG.sb.from('v_leads').select('conversa_id, venda_id, etapa, etapa_nome, status_nome, destino, saida_motivo, saida_nome, saida_sub').limit(3000),
       NG.sb.rpc('live_na_mira'), NG.sb.rpc('live_conferir'),
       NG.sb.from('v_os_andamento').select('venda_id, estado_nome, status_ordem, status_agendamento, agendamento_data, janela, pendencia, acao, excecao, mudou_em').not('venda_id', 'is', null),
       NG.sb.from('v_vendas').select('id, nio_os, nio_pedido, comissao_prevista').in('status', ['0_qualificado', '1_vendido', '2_aguardando_instalacao']),
       NG.sb.from('porta_sombra').select('id', { count: 'exact', head: true }).eq('por', eu.id).gte('em', `${NG.diaSP()}T00:00:00-03:00`),
       NG.sb.rpc('live_situacoes')]);   // 0342: a situação gravada de cada lead (~ms)
+    const pacote = async () => {
+      const k = await NG.sb.rpc('live_carga');
+      const d = k && !k.error && k.data;
+      if (!d || typeof d !== 'object') return oito();
+      const ok = (x) => ({ data: x || [], error: null });
+      return [ok(d.pendencias), ok(d.leads), ok(d.mira), ok(d.conferir), ok(d.os), ok(d.vendas), { count: Number(d.feitos) || 0, error: null }, ok(d.situacoes)];
+    };
+    const [r, [ap, rf, fn, rcf, rosa, rosn, rfeitos, rsit]] = await Promise.all([NG.jornada(), pacote()]);
     if (rfeitos && !rfeitos.error) feitosHoje = rfeitos.count || 0;
     if (rosn && !rosn.error) { osNum = {}; comVenda = {}; (rosn.data || []).forEach((v) => { osNum[v.id] = String(v.nio_os || v.nio_pedido || ''); comVenda[v.id] = v.comissao_prevista; }); }
     if (rosa && !rosa.error) { osa = {}; (rosa.data || []).forEach((o) => { const a = osa[o.venda_id]; if (!a || String(o.mudou_em) > String(a.mudou_em)) osa[o.venda_id] = o; }); }
