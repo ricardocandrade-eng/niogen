@@ -45,7 +45,6 @@ CODE = {
     '6m · Mídia?': 'c06m_midia.js',                 # 12/11 (0146): F2 com imagem / F3 em voz, A/B
     '6q · Resultado mídia': 'c06q_resultado_midia.js',
     '9b · Itens futuro': 'c09b_futuro_itens.js',
-    '9d · Montar etiquetas': 'c09d_futuro_etiquetas.js',
     '9h · Conferir': 'c09h_futuro_conferir.js',
 }
 
@@ -177,12 +176,11 @@ def build(ids):
     add('4e · Ler cutucada', 'n8n-nodes-base.code', 2, {'jsCode': JS_CUTUCADA_LER}, 2090, 40)
     code('5 · Montar envio', 1320, 300)
     iff('5s · Sem envio real?', '={{ $json.semEnvio === true || !!$json.erro }}', 1540, 300)
-    add('6g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'GET',
-        'url': '=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}',
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'options': {'timeout': 10000}}, 1760, 500, credentials=cw_cred, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — guard: relê a conversa antes de enviar (só roda com _modoCadencia = chatwoot).')
+    # 21/11 (fase 2, passo 4 — 0346): o guard pergunta ao BANCO, pela situação do lead, não ao Chatwoot ao vivo. Sem resposta, não envia.
+    rpc('6g · Porta pode falar?', 'mari_pode_falar',
+        "={{ JSON.stringify({ p_conversa_cw: String($json.chatwootConversationId), p_para: 'lembrete', p_passo: $json.passo || null }) }}",
+        1760, 500, onError='continueRegularOutput')
+    nodes[-1]['parameters']['options']['timeout'] = 10000
     code('6h · Guard Chatwoot', 1980, 500)
     iff('6i · Parar escada?', '={{ $json.parar === true }}', 2200, 500)
     rpc('6p · Supabase parar', 'mari_cadencia_parar',
@@ -217,32 +215,14 @@ def build(ids):
         'p_texto: $json.texto || null, p_excecao: $json.excecao || null }) }}', 3080, 300)
 
     # ── 9 · Interesse futuro (prompt 28, 0052): etiqueta interesse-futuro + nota privada, só no modo chatwoot ──
-    cw_base = "'https://app.chatwoot.com/api/v1/accounts/' + $json.conta + '/conversations/' + $json.cw"
     iff('9 · Futuro? (modo chatwoot)', "={{ $('2 · Interruptor').first().json.modo === 'chatwoot' }}", 660, 900)
     rpc('9a · Supabase futuro', 'mari_futuro_pendentes', '={{ JSON.stringify({ p_limite: 20 }) }}', 880, 900,
         onError='continueRegularOutput')
     code('9b · Itens futuro', 1100, 900)
-    add('9c · Chatwoot ler', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'GET', 'url': '={{ ' + cw_base + ' }}',
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'options': {'timeout': 10000}}, 1320, 900, credentials=cw_cred, onError='continueRegularOutput')
-    code('9d · Montar etiquetas', 1540, 900)
-    iff('9e · Etiquetar?', '={{ $json.ok === true }}', 1760, 900)
-    add('9f · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST', 'url': '={{ ' + cw_base + " + '/labels' }}",
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ labels: $json.labels }) }}',
-        'options': {'timeout': 10000}}, 1980, 900, credentials=cw_cred, onError='continueRegularOutput',
-        notes='POST /labels SUBSTITUI a lista: o 9d já mandou as atuais + interesse-futuro.')
-    add('9g · Chatwoot nota', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST',
-        'url': "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $('9d · Montar etiquetas').item.json.conta + "
-               "'/conversations/' + $('9d · Montar etiquetas').item.json.cw + '/messages' }}",
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json',
-        'jsonBody': "={{ JSON.stringify({ content: $('9d · Montar etiquetas').item.json.nota, message_type: 'outgoing', private: true }) }}",
-        'options': {'timeout': 10000}}, 2200, 900, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Nota PRIVADA (o cliente não vê).')
+    # 21/11 (fase 2, passo 4 — 0346): etiqueta interesse-futuro + nota privada viram ordens na fila pela porta (mari_chatwoot_pedir).
+    rpc('9f · Porta interesse futuro', 'mari_chatwoot_pedir',
+        "={{ JSON.stringify({ p_conversa_cw: String($json.cw), p_pedido: 'interesse_futuro', p_nota: $json.nota || null }) }}",
+        1980, 900, onError='continueRegularOutput')
     code('9h · Conferir', 2420, 900)
     iff('9i · Marcar?', '={{ $json.marcar === true }}', 2640, 900)
     rpc('9j · Supabase marcar', 'mari_futuro_marcar',
@@ -265,8 +245,8 @@ def build(ids):
         ('4e · Ler cutucada', 0, '5 · Montar envio'),
         ('5 · Montar envio', 0, '5s · Sem envio real?'),
         ('5s · Sem envio real?', 0, '8 · Supabase registrar'),
-        ('5s · Sem envio real?', 1, '6g · Chatwoot conversa'),
-        ('6g · Chatwoot conversa', 0, '6h · Guard Chatwoot'),
+        ('5s · Sem envio real?', 1, '6g · Porta pode falar?'),
+        ('6g · Porta pode falar?', 0, '6h · Guard Chatwoot'),
         ('6h · Guard Chatwoot', 0, '6i · Parar escada?'),
         ('6i · Parar escada?', 0, '6p · Supabase parar'),
         ('6i · Parar escada?', 1, '6e · Enviar?'),
@@ -288,12 +268,8 @@ def build(ids):
         ('2a · Admin?', 1, '9 · Futuro? (modo chatwoot)'),
         ('9 · Futuro? (modo chatwoot)', 0, '9a · Supabase futuro'),
         ('9a · Supabase futuro', 0, '9b · Itens futuro'),
-        ('9b · Itens futuro', 0, '9c · Chatwoot ler'),
-        ('9c · Chatwoot ler', 0, '9d · Montar etiquetas'),
-        ('9d · Montar etiquetas', 0, '9e · Etiquetar?'),
-        ('9e · Etiquetar?', 0, '9f · Chatwoot etiquetas'),
-        ('9f · Chatwoot etiquetas', 0, '9g · Chatwoot nota'),
-        ('9g · Chatwoot nota', 0, '9h · Conferir'),
+        ('9b · Itens futuro', 0, '9f · Porta interesse futuro'),
+        ('9f · Porta interesse futuro', 0, '9h · Conferir'),
         ('9h · Conferir', 0, '9i · Marcar?'),
         ('9i · Marcar?', 0, '9j · Supabase marcar'),
     ]

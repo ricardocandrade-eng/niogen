@@ -757,62 +757,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/labels",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_chatwoot_pedir",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ labels: [] }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($('2 · Entrada').first().json.chatwootConversationId), p_pedido: 'zerar' }) }}",
         "options": {
-          "timeout": 15000
+          "timeout": 20000
         }
       },
-      "name": "2p · Chatwoot etiquetas",
+      "name": "2p · Porta zerar",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1650,
         800
       ],
-      "id": "b6c929ae-a089-59b5-88c5-e19704839f17",
+      "id": "bed4126c-c224-513a-b4a2-d3bf7cc826ca",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput",
-      "notes": "Comando #zerar — tira as etiquetas (handoff, handoff-venda…) para o próximo teste começar limpo."
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/toggle_status",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ status: 'resolved' }) }}",
-        "options": {
-          "timeout": 15000
-        }
-      },
-      "name": "2u · Chatwoot resolver",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1870,
-        800
-      ],
-      "id": "d93a163a-e315-5a8b-9f16-703a13e362f4",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
-        }
-      },
-      "onError": "continueRegularOutput",
-      "notes": "Comando #zerar — resolve a conversa (a automação 24387 tira dono e time); o próximo \"oi\" reabre sem dono."
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -849,34 +818,36 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_pode_falar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($json.chatwootConversationId), p_para: 'resposta' }) }}",
         "options": {
           "timeout": 10000
         }
       },
-      "name": "2g · Chatwoot conversa",
+      "name": "2g · Porta pode falar?",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         880,
         300
       ],
-      "id": "c269aa5e-bbe8-57ba-80ac-de0d8fa081d4",
+      "id": "2854d75b-48c4-55f2-bc0d-5a2f4abead07",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput",
-      "notes": "MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial \"Chatwoot Nio — Mari bot\"."
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n02h_guard_humano.js — nó \"2h · Guard humano\" do mari_principal (04/11/2026)\n// Padrão Renata (no2 §0a): humano atribuído, time atribuído ou conversa resolvida = Mari calada.\n// 05/11 (prompt 16, adendo 2): etiqueta `nao-contatar` também cala a Mari, mesmo sem dono.\n// Modo 'teste': não há Chatwoot → sempre \"sem humano\".\n// Modo 'chatwoot': lê a resposta do nó \"2g · Chatwoot conversa\" (GET da conversa). Sem resposta → a foto do webhook (15/11).\n\n// 12/11 (0145): com mídia, a entrada que vale é a do 2b8 · Juntar mídia (texto com a transcrição + lista de mídia).\nconst e = (() => { try { if ($('2b8 · Juntar mídia').isExecuted) return $('2b8 · Juntar mídia').first().json; } catch (x) { /* sem mídia */ } return $('2 · Entrada').first().json; })();\nif (e.modo !== 'chatwoot') return [{ json: { ...e, humano: false, guard: 'sem humano (modo teste)' } }];\n\nconst c = $input.first().json || {};\n// 15/11 (revisão dos fluxos, M6): era fail-open — com o GET do Chatwoot falhando a Mari respondia mesmo com uma pessoa na\n// conversa. Agora, sem resposta do Chatwoot, vale a foto da conversa que veio no próprio webhook da mensagem (e.cwStatus).\nconst temDados = c && (c.id !== undefined || c.status !== undefined || c.meta !== undefined);\nconst foto = !temDados && e.cwStatus ? e.cwStatus : null;\nconst assignee = foto ? (foto.p_agente ? { id: foto.p_agente } : null) : (c.meta?.assignee || c.assignee || null);\nconst teamId = foto ? (foto.p_time || null) : (c.meta?.team?.id ?? c.team_id ?? null);\nconst status = foto ? (foto.p_status || null) : (c.status || null);\n\nconst labels = foto ? (Array.isArray(foto.p_etiquetas) ? foto.p_etiquetas : []) : (Array.isArray(c.labels) ? c.labels : []);\n\nlet motivo = null;\nif (labels.includes('nao-contatar')) motivo = 'etiqueta nao-contatar';   // adendo 2: não falar, mesmo sem dono\nelse if (assignee && (assignee.id ?? assignee.account_id)) motivo = 'humano atribuído';\nelse if (teamId && !labels.includes('handoff-venda')) motivo = 'time atribuído';\nelse if (status === 'resolved') motivo = 'conversa resolvida';\n\n// Janela pós-handoff (Ricardo, 07/11 23h30 — migration 0061): venda passada ao backoffice (etiqueta handoff-venda, time\n// atribuído pela automação) e AINDA SEM DONO → segue para o 3a; quem decide é o mari_entrada (handoff dados_completos há\n// menos de N min — config_mari_textos.pos_handoff_minutos — e nenhuma fala do nosso time desde então). Fora disso ele\n// devolve silêncio e a mensagem fica registrada, como no 2r. Alguém do time assumiu (dono) → calada, como sempre.\nif (!motivo && teamId) return [{ json: { ...e, humano: false, guard: 'time sem dono + handoff-venda — janela pós-handoff (banco decide)' } }];\n\nif (motivo) return [{ json: { ...e, humano: true, encerrar: true, saida: { silencio: true, motivo } } }];\nreturn [{ json: { ...e, humano: false, guard: 'sem humano' } }];\n"
+        "jsCode": "// NIOGEN | n8n/mari/n02h_guard_humano.js — nó \"2h · Guard humano\" do mari_principal (04/11/2026; porta 21/11/2026)\n// 21/11 (fase 2, passo 4 — 0346): o guard deixa de ler o Chatwoot ao vivo e lê a resposta do BANCO ao \"pode falar?\" (nó 2g, RPC\n// mari_pode_falar), que decide pela situação do lead e pelo NIOGEN: humano, time, não contatar, janela pós-handoff, Saída.\n// Saídas iguais às de antes: humano=true + saida.silencio → 2r registra calado; humano=false → 3a · Supabase entrada.\n// Sem resposta do banco, a Mari NÃO fala (Ricardo, 21/11: \"Sim, fica calada\").\n// Modo 'teste': não há Chatwoot → sempre \"sem humano\".\n// 12/11 (0145): com mídia, a entrada que vale é a do 2b8 · Juntar mídia (texto com a transcrição + lista de mídia).\nconst e = (() => { try { if ($('2b8 · Juntar mídia').isExecuted) return $('2b8 · Juntar mídia').first().json; } catch (x) { /* sem mídia */ } return $('2 · Entrada').first().json; })();\nif (e.modo !== 'chatwoot') return [{ json: { ...e, humano: false, guard: 'sem humano (modo teste)' } }];\n\nconst r = $input.first().json || {};\nif (typeof r.pode !== 'boolean') {\n  return [{ json: { ...e, humano: true, encerrar: true, saida: { silencio: true, motivo: 'banco sem resposta (pode falar?) — Mari calada' } } }];\n}\nif (!r.pode) return [{ json: { ...e, humano: true, encerrar: true, saida: { silencio: true, motivo: r.motivo || 'banco: não falar' }, situacao: r.situacao || null } }];\nreturn [{ json: { ...e, humano: false, guard: r.motivo || 'pode falar', situacao: r.situacao || null } }];\n"
       },
       "name": "2h · Guard humano",
       "type": "n8n-nodes-base.code",
@@ -1788,7 +1759,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n09d_handoff_chatwoot.js — nó \"9d · Montar handoff Chatwoot\" do mari_principal (05/11/2026, prompt 16 Parte G)\n// Adendo 2: todo handoff deixa rastro visível no Chatwoot — etiquetas, nota privada com o briefing e (venda/humano) o time backoffice.\n// As automações da conta (24387 resolvida → liberar · 24389 handoff-venda → backoffice · 24390 handoff-humano → backoffice +\n// prioridade alta) já existem e NÃO são criadas nem alteradas por aqui.\n// Só monta os pedidos; os nós 9e/9f/9h chamam a API (onError = segue, o handoff nunca derruba a resposta ao cliente).\n\nconst TIME_BACKOFFICE = 15102;\nconst NIOGEN = 'https://niogen.dharmatelecom.com.br/vendas.html';\n\nconst e = $('2 · Entrada').first().json;\nconst s = $('10 · Salvar turno').first().json;\nconst h = $('9 · Handoff').first().json || {};\nconst b = $input.first().json || {};   // linha de mari_conversas (9b)\nlet conv = {};\ntry { conv = $('2g · Chatwoot conversa').first().json || {}; } catch (err) { conv = {}; }\n\nconst motivo = (b.handoff_motivo || s.r?.handoff?.motivo || '').trim();\n// v7 (prompt 27 A7): a nota começa pelo \"1º PASSO: consultar viabilidade no portal\" (posto pelo 7 · Extrair) e some\n// \"DFV: conferir manualmente\" / \"portal: não consultado — conferir manualmente\" (linhas antigas do banco).\nconst briefing = String(b.handoff_briefing || '').split('\\n')\n  .filter((l) => !/^\\s*(Viabilidade Nio — |DFV: conferir manualmente|DFV: sem base)/.test(l)).join('\\n').trim();\nconst vendaId = h.venda_id || b.venda_id || null;\n\nconst VENDA = ['dados_completos'];\nconst HUMANO = ['pedido_humano', 'objecao', 'urgencia_alta'];\nconst SAIDA = ['recusa_compra', 'fora_de_area', 'sem_cobertura', 'interesse_caindo', 'multiplos_decisores', 'sem_contato'];\n\nlet tipo;\nif (VENDA.includes(motivo)) tipo = 'venda';\nelse if (HUMANO.includes(motivo)) tipo = 'humano';\nelse if (motivo === 'ja_cliente_nio') tipo = 'saida';   // 17/11 (Ricardo): cliente Nio é de ninguém, em qualquer tom — somos revenda\nelse if (SAIDA.includes(motivo)) tipo = 'saida';\nelse tipo = 'humano';                                                                      // motivo desconhecido: na dúvida, gente\n\nconst novas = tipo === 'venda' ? ['handoff', 'handoff-venda'] : tipo === 'humano' ? ['handoff', 'handoff-humano'] : ['handoff'];\nconst atuais = Array.isArray(conv.labels) ? conv.labels : [];\nconst labels = [...new Set([...atuais, ...novas])];\n\nconst NOME = {\n  dados_completos: 'dados completos (venda)', pedido_humano: 'pediu humano', objecao: 'objeção', urgencia_alta: 'urgência alta',\n  ja_cliente_nio: 'já é cliente Nio', recusa_compra: 'recusou a compra', fora_de_area: 'fora da área', sem_cobertura: 'sem cobertura',\n  interesse_caindo: 'interesse caindo', multiplos_decisores: 'mais de um decisor', sem_contato: 'sem contato',\n};\n// Prompt 18 (C8): a revenda não cobra nem manda link de pagamento.\n// Prompt 19: o link da biometria também não é nosso — a própria Nio dispara (WhatsApp + e-mail) na hora do pedido.\n// O briefing vem do modelo; o prompt v6 já proíbe, e isto tira o resto (\"enviar o link de biometria e de pagamento\").\nconst semPagamento = (t) => String(t || '')\n  .replace(/\\s*(?:,|\\be\\b|\\bou\\b)\\s*(?:o\\s+|um\\s+)?(?:link\\s+)?(?:de|do)\\s+pagamento(?:\\s+seguro)?/gi, '')\n  .replace(/\\b(?:enviar|mandar|encaminhar)\\s+(?:ao\\s+cliente\\s+|para\\s+o\\s+cliente\\s+|pro\\s+cliente\\s+)?(?:o\\s+)?links?\\s+(?:de|da|do)\\s+(?:biometria|pagamento)(?:\\s+seguro)?/gi,\n    'avisar o cliente do link da biometria que a Nio dispara')\n  .replace(/\\blinks?\\s+de\\s+pagamento(?:\\s+seguro)?/gi, 'link da biometria (da Nio)');\n\n// Prompt 18 (B4): dados completos e venda NÃO criada (duplicidade ou outro erro) → a nota começa com o aviso e traz o\n// link da venda que já existe, para o backoffice decidir.\nconst naoCriada = motivo === 'dados_completos' && !h.venda_id && h.ok === false;\nconst existente = h.venda_existente_id || null;\n// 15/11 (handoff curto): o 7 · Extrair já escreve a nota pronta, com título (🟢/🟡/⚪), viabilidade, crédito, \"👉 Fazer\n// agora\", alertas e resumo — uma linha cada, sem linha em branco no meio. Briefing antigo (sem título) segue o formato de antes.\nconst curto = /^(🟢|🟡|⚪)/u.test(briefing);\nconst nota = curto\n  ? [\n    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}${existente ? `\\nVenda que já existe: ${NIOGEN}#venda=${existente}` : ''}` : null,\n    semPagamento(briefing),\n    vendaId ? `Ficha: ${NIOGEN}#venda=${vendaId}` : null,\n  ].filter(Boolean).join('\\n\\n')\n  : [\n    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}` : null,\n    naoCriada && existente ? `Venda que já existe: ${NIOGEN}#venda=${existente}` : null,\n    `MARI → BACKOFFICE · ${NOME[motivo] || motivo || 'handoff'}`,\n    semPagamento(briefing) || '(sem briefing gravado — ver a conversa)',\n    // B3: a nota termina com o link da ficha no NIOGEN.\n    vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,\n  ].filter(Boolean).join('\\n\\n');\n\n// v7 (prompt 27 A9): no handoff de dados completos, o contato do Chatwoot ganha o nome completo — só se o nome atual não\n// parecer nome de pessoa (\"Família\", emoji, vazio, número…). Nunca troca um nome de pessoa.\nconst nomeAtual = String(e.nome || '').trim();\nlet nomeNovo = null;\ntry { nomeNovo = (s.r?.upd?.dados?.nome) || ((($('5b · Motor').first().json.ctx || {}).conversa || {}).dados || {}).nome || null; } catch (err) { nomeNovo = null; }\nconst NAO_PESSOA = /^(fam[ií]lia|casa|eu|m[ãa]e|pai|amor|vida|cliente|whatsapp|contato|teste|oi|ol[áa]|\\.+|-+)$/i;\nconst pareceNome = (n) => /^[A-Za-zÀ-ÿ'´`.\\- ]{3,}$/.test(n) && /[A-Za-zÀ-ÿ]{2,}/.test(n) && !NAO_PESSOA.test(n);\nconst renomear = motivo === 'dados_completos' && e.contatoId && nomeNovo && !pareceNome(nomeAtual)\n  ? { id: e.contatoId, name: String(nomeNovo).trim() } : null;\n\nreturn [{ json: {\n  renomear,\n  conta: e.config?.CHATWOOT_NIO_ACCOUNT,\n  conversa: e.chatwootConversationId,\n  labels, nota, tipo, motivo, vendaId, naoCriada, vendaExistenteId: existente,\n  atribuirTime: tipo === 'venda' || tipo === 'humano',\n  teamId: TIME_BACKOFFICE,\n} }];\n"
+        "jsCode": "// NIOGEN | n8n/mari/n09d_handoff_chatwoot.js — nó \"9d · Montar handoff Chatwoot\" do mari_principal (05/11/2026, prompt 16 Parte G)\n// Adendo 2: todo handoff deixa rastro visível no Chatwoot — etiquetas, nota privada com o briefing e (venda/humano) o time backoffice.\n// As automações da conta (24387 resolvida → liberar · 24389 handoff-venda → backoffice · 24390 handoff-humano → backoffice +\n// prioridade alta) já existem e NÃO são criadas nem alteradas por aqui.\n// Só monta o pedido; desde 21/11 (0346) o nó 9e pede ao banco (mari_chatwoot_pedir), que põe etiquetas, nota e time na fila pela porta.\n\nconst TIME_BACKOFFICE = 15102;\nconst NIOGEN = 'https://niogen.dharmatelecom.com.br/vendas.html';\n\nconst e = $('2 · Entrada').first().json;\nconst s = $('10 · Salvar turno').first().json;\nconst h = $('9 · Handoff').first().json || {};\nconst b = $input.first().json || {};   // linha de mari_conversas (9b)\n\nconst motivo = (b.handoff_motivo || s.r?.handoff?.motivo || '').trim();\n// v7 (prompt 27 A7): a nota começa pelo \"1º PASSO: consultar viabilidade no portal\" (posto pelo 7 · Extrair) e some\n// \"DFV: conferir manualmente\" / \"portal: não consultado — conferir manualmente\" (linhas antigas do banco).\nconst briefing = String(b.handoff_briefing || '').split('\\n')\n  .filter((l) => !/^\\s*(Viabilidade Nio — |DFV: conferir manualmente|DFV: sem base)/.test(l)).join('\\n').trim();\nconst vendaId = h.venda_id || b.venda_id || null;\n\nconst VENDA = ['dados_completos'];\nconst HUMANO = ['pedido_humano', 'objecao', 'urgencia_alta'];\nconst SAIDA = ['recusa_compra', 'fora_de_area', 'sem_cobertura', 'interesse_caindo', 'multiplos_decisores', 'sem_contato'];\n\nlet tipo;\nif (VENDA.includes(motivo)) tipo = 'venda';\nelse if (HUMANO.includes(motivo)) tipo = 'humano';\nelse if (motivo === 'ja_cliente_nio') tipo = 'saida';   // 17/11 (Ricardo): cliente Nio é de ninguém, em qualquer tom — somos revenda\nelse if (SAIDA.includes(motivo)) tipo = 'saida';\nelse tipo = 'humano';                                                                      // motivo desconhecido: na dúvida, gente\n\nconst novas = tipo === 'venda' ? ['handoff', 'handoff-venda'] : tipo === 'humano' ? ['handoff', 'handoff-humano'] : ['handoff'];\n// 21/11 (0346): só as etiquetas novas — o banco as põe por add, sem tocar nas que já existem (nada de lista inteira).\nconst labels = novas;\n\nconst NOME = {\n  dados_completos: 'dados completos (venda)', pedido_humano: 'pediu humano', objecao: 'objeção', urgencia_alta: 'urgência alta',\n  ja_cliente_nio: 'já é cliente Nio', recusa_compra: 'recusou a compra', fora_de_area: 'fora da área', sem_cobertura: 'sem cobertura',\n  interesse_caindo: 'interesse caindo', multiplos_decisores: 'mais de um decisor', sem_contato: 'sem contato',\n};\n// Prompt 18 (C8): a revenda não cobra nem manda link de pagamento.\n// Prompt 19: o link da biometria também não é nosso — a própria Nio dispara (WhatsApp + e-mail) na hora do pedido.\n// O briefing vem do modelo; o prompt v6 já proíbe, e isto tira o resto (\"enviar o link de biometria e de pagamento\").\nconst semPagamento = (t) => String(t || '')\n  .replace(/\\s*(?:,|\\be\\b|\\bou\\b)\\s*(?:o\\s+|um\\s+)?(?:link\\s+)?(?:de|do)\\s+pagamento(?:\\s+seguro)?/gi, '')\n  .replace(/\\b(?:enviar|mandar|encaminhar)\\s+(?:ao\\s+cliente\\s+|para\\s+o\\s+cliente\\s+|pro\\s+cliente\\s+)?(?:o\\s+)?links?\\s+(?:de|da|do)\\s+(?:biometria|pagamento)(?:\\s+seguro)?/gi,\n    'avisar o cliente do link da biometria que a Nio dispara')\n  .replace(/\\blinks?\\s+de\\s+pagamento(?:\\s+seguro)?/gi, 'link da biometria (da Nio)');\n\n// Prompt 18 (B4): dados completos e venda NÃO criada (duplicidade ou outro erro) → a nota começa com o aviso e traz o\n// link da venda que já existe, para o backoffice decidir.\nconst naoCriada = motivo === 'dados_completos' && !h.venda_id && h.ok === false;\nconst existente = h.venda_existente_id || null;\n// 15/11 (handoff curto): o 7 · Extrair já escreve a nota pronta, com título (🟢/🟡/⚪), viabilidade, crédito, \"👉 Fazer\n// agora\", alertas e resumo — uma linha cada, sem linha em branco no meio. Briefing antigo (sem título) segue o formato de antes.\nconst curto = /^(🟢|🟡|⚪)/u.test(briefing);\nconst nota = curto\n  ? [\n    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}${existente ? `\\nVenda que já existe: ${NIOGEN}#venda=${existente}` : ''}` : null,\n    semPagamento(briefing),\n    vendaId ? `Ficha: ${NIOGEN}#venda=${vendaId}` : null,\n  ].filter(Boolean).join('\\n\\n')\n  : [\n    naoCriada ? `⚠️ VENDA NÃO CRIADA — ${h.motivo_recusa || 'erro ao gravar a venda'}` : null,\n    naoCriada && existente ? `Venda que já existe: ${NIOGEN}#venda=${existente}` : null,\n    `MARI → BACKOFFICE · ${NOME[motivo] || motivo || 'handoff'}`,\n    semPagamento(briefing) || '(sem briefing gravado — ver a conversa)',\n    // B3: a nota termina com o link da ficha no NIOGEN.\n    vendaId ? `Ficha no NIOGEN: ${NIOGEN}#venda=${vendaId}` : null,\n  ].filter(Boolean).join('\\n\\n');\n\n// v7 (prompt 27 A9): no handoff de dados completos, o contato do Chatwoot ganha o nome completo — só se o nome atual não\n// parecer nome de pessoa (\"Família\", emoji, vazio, número…). Nunca troca um nome de pessoa.\nconst nomeAtual = String(e.nome || '').trim();\nlet nomeNovo = null;\ntry { nomeNovo = (s.r?.upd?.dados?.nome) || ((($('5b · Motor').first().json.ctx || {}).conversa || {}).dados || {}).nome || null; } catch (err) { nomeNovo = null; }\nconst NAO_PESSOA = /^(fam[ií]lia|casa|eu|m[ãa]e|pai|amor|vida|cliente|whatsapp|contato|teste|oi|ol[áa]|\\.+|-+)$/i;\nconst pareceNome = (n) => /^[A-Za-zÀ-ÿ'´`.\\- ]{3,}$/.test(n) && /[A-Za-zÀ-ÿ]{2,}/.test(n) && !NAO_PESSOA.test(n);\nconst renomear = motivo === 'dados_completos' && e.contatoId && nomeNovo && !pareceNome(nomeAtual)\n  ? { id: e.contatoId, name: String(nomeNovo).trim() } : null;\n\nreturn [{ json: {\n  renomear,\n  conta: e.config?.CHATWOOT_NIO_ACCOUNT,\n  conversa: e.chatwootConversationId,\n  labels, nota, tipo, motivo, vendaId, naoCriada, vendaExistenteId: existente,\n  atribuirTime: tipo === 'venda' || tipo === 'humano',\n  teamId: TIME_BACKOFFICE,\n} }];\n"
       },
       "name": "9d · Montar handoff Chatwoot",
       "type": "n8n-nodes-base.code",
@@ -1802,62 +1773,31 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/conversations/{{ $('9d · Montar handoff Chatwoot').first().json.conversa }}/labels",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_chatwoot_pedir",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ labels: $('9d · Montar handoff Chatwoot').first().json.labels }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($('9d · Montar handoff Chatwoot').first().json.conversa), p_pedido: 'handoff_' + ($('9d · Montar handoff Chatwoot').first().json.tipo || 'humano'), p_nota: $('9d · Montar handoff Chatwoot').first().json.nota || null }) }}",
         "options": {
-          "timeout": 10000
+          "timeout": 20000
         }
       },
-      "name": "9e · Chatwoot etiquetas",
+      "name": "9e · Porta handoff",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         7260,
         -100
       ],
-      "id": "365064d7-b090-5793-b890-e03d54703f28",
+      "id": "27a82619-c033-53eb-8297-3a9d71f8bb88",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput",
-      "notes": "Adendo 2 — união das etiquetas atuais (lidas no 2g) com handoff / handoff-venda / handoff-humano."
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/conversations/{{ $('9d · Montar handoff Chatwoot').first().json.conversa }}/messages",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: $('9d · Montar handoff Chatwoot').first().json.nota, message_type: 'outgoing', private: true }) }}",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "name": "9f · Chatwoot nota",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        7480,
-        -100
-      ],
-      "id": "627f9620-a908-5993-b706-08b0ab5bbca0",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
-        }
-      },
-      "onError": "continueRegularOutput",
-      "notes": "Adendo 2 — nota PRIVADA com o briefing (o cliente não vê; o 2 · Entrada ignora mensagem privada)."
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -1920,69 +1860,6 @@
         }
       },
       "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "7e13d288-d45a-52f3-807b-5bf6f95aa1ec",
-              "leftValue": "={{ $('9d · Montar handoff Chatwoot').first().json.atribuirTime === true }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "name": "9g · Atribuir time?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        7700,
-        -100
-      ],
-      "id": "d897c3ea-8b57-5dae-bddb-8efc20e2203a"
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/conversations/{{ $('9d · Montar handoff Chatwoot').first().json.conversa }}/assignments",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ team_id: $('9d · Montar handoff Chatwoot').first().json.teamId }) }}",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "name": "9h · Chatwoot time",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        7920,
-        -200
-      ],
-      "id": "e820831c-ab08-53df-9679-140652142013",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
-        }
-      },
-      "onError": "continueRegularOutput",
-      "notes": "Adendo 2 — time backoffice (15102), só handoff-venda e handoff-humano. Automações da conta não são mexidas."
     },
     {
       "parameters": {
@@ -2839,18 +2716,7 @@
       "main": [
         [
           {
-            "node": "2p · Chatwoot etiquetas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "2p · Chatwoot etiquetas": {
-      "main": [
-        [
-          {
-            "node": "2u · Chatwoot resolver",
+            "node": "2p · Porta zerar",
             "type": "main",
             "index": 0
           }
@@ -2861,7 +2727,7 @@
       "main": [
         [
           {
-            "node": "2g · Chatwoot conversa",
+            "node": "2g · Porta pode falar?",
             "type": "main",
             "index": 0
           }
@@ -2875,7 +2741,7 @@
         ]
       ]
     },
-    "2g · Chatwoot conversa": {
+    "2g · Porta pode falar?": {
       "main": [
         [
           {
@@ -3374,25 +3240,14 @@
       "main": [
         [
           {
-            "node": "9e · Chatwoot etiquetas",
+            "node": "9e · Porta handoff",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "9e · Chatwoot etiquetas": {
-      "main": [
-        [
-          {
-            "node": "9f · Chatwoot nota",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9f · Chatwoot nota": {
+    "9e · Porta handoff": {
       "main": [
         [
           {
@@ -3414,35 +3269,6 @@
         ],
         [
           {
-            "node": "9g · Atribuir time?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9k · Chatwoot nome": {
-      "main": [
-        [
-          {
-            "node": "9g · Atribuir time?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9g · Atribuir time?": {
-      "main": [
-        [
-          {
-            "node": "9h · Chatwoot time",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
             "node": "11 · Saída",
             "type": "main",
             "index": 0
@@ -3450,7 +3276,7 @@
         ]
       ]
     },
-    "9h · Chatwoot time": {
+    "9k · Chatwoot nome": {
       "main": [
         [
           {

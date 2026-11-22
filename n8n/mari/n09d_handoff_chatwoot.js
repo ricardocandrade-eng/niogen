@@ -2,7 +2,7 @@
 // Adendo 2: todo handoff deixa rastro visível no Chatwoot — etiquetas, nota privada com o briefing e (venda/humano) o time backoffice.
 // As automações da conta (24387 resolvida → liberar · 24389 handoff-venda → backoffice · 24390 handoff-humano → backoffice +
 // prioridade alta) já existem e NÃO são criadas nem alteradas por aqui.
-// Só monta os pedidos; os nós 9e/9f/9h chamam a API (onError = segue, o handoff nunca derruba a resposta ao cliente).
+// Só monta o pedido; desde 21/11 (0346) o nó 9e pede ao banco (mari_chatwoot_pedir), que põe etiquetas, nota e time na fila pela porta.
 
 const TIME_BACKOFFICE = 15102;
 const NIOGEN = 'https://niogen.dharmatelecom.com.br/vendas.html';
@@ -11,8 +11,6 @@ const e = $('2 · Entrada').first().json;
 const s = $('10 · Salvar turno').first().json;
 const h = $('9 · Handoff').first().json || {};
 const b = $input.first().json || {};   // linha de mari_conversas (9b)
-let conv = {};
-try { conv = $('2g · Chatwoot conversa').first().json || {}; } catch (err) { conv = {}; }
 
 const motivo = (b.handoff_motivo || s.r?.handoff?.motivo || '').trim();
 // v7 (prompt 27 A7): a nota começa pelo "1º PASSO: consultar viabilidade no portal" (posto pelo 7 · Extrair) e some
@@ -33,8 +31,8 @@ else if (SAIDA.includes(motivo)) tipo = 'saida';
 else tipo = 'humano';                                                                      // motivo desconhecido: na dúvida, gente
 
 const novas = tipo === 'venda' ? ['handoff', 'handoff-venda'] : tipo === 'humano' ? ['handoff', 'handoff-humano'] : ['handoff'];
-const atuais = Array.isArray(conv.labels) ? conv.labels : [];
-const labels = [...new Set([...atuais, ...novas])];
+// 21/11 (0346): só as etiquetas novas — o banco as põe por add, sem tocar nas que já existem (nada de lista inteira).
+const labels = novas;
 
 const NOME = {
   dados_completos: 'dados completos (venda)', pedido_humano: 'pediu humano', objecao: 'objeção', urgencia_alta: 'urgência alta',

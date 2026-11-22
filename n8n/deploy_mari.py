@@ -421,27 +421,18 @@ def build(ids):
                     "+ '. Manda um oi que ela começa do zero.' } }) }}",
         'options': {'timeout': 20000}}, 1430, 800, credentials=wa_cred, onError='continueRegularOutput',
         notes='Comando #zerar (0062) — aviso pela Graph API (credencial "WABA Nio (Nio_API)"): não passa pelo Chatwoot, sem eco.')
-    add('2p · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST',
-        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/labels",
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify({ labels: [] }) }}',
-        'options': {'timeout': 15000}}, 1650, 800, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Comando #zerar — tira as etiquetas (handoff, handoff-venda…) para o próximo teste começar limpo.')
-    add('2u · Chatwoot resolver', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST',
-        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $('2 · Entrada').first().json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $('2 · Entrada').first().json.chatwootConversationId }}/toggle_status",
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'resolved' }) }}",
-        'options': {'timeout': 15000}}, 1870, 800, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Comando #zerar — resolve a conversa (a automação 24387 tira dono e time); o próximo "oi" reabre sem dono.')
+    # 21/11 (fase 2, passo 4 — 0346): o #zerar não mexe mais no Chatwoot direto; pede ao banco, que põe as ordens na fila pela
+    # porta (etiquetas e resolver). onError = segue: o aviso ao testador já saiu no 2o.
+    rpc('2p · Porta zerar', 'mari_chatwoot_pedir',
+        "={{ JSON.stringify({ p_conversa_cw: String($('2 · Entrada').first().json.chatwootConversationId), p_pedido: 'zerar' }) }}",
+        1650, 800, onError='continueRegularOutput')
     iff('2m · Modo chatwoot?', "={{ $json.modo === 'chatwoot' }}", 660, 200)
-    add('2g · Chatwoot conversa', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'GET',
-        'url': "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'options': {'timeout': 10000}}, 880, 300, credentials=cw_cred, onError='continueRegularOutput',
-        notes='MODO CHATWOOT — GET da conversa para o guard de humano/time/resolvida. Credencial "Chatwoot Nio — Mari bot".')
+    # 21/11 (fase 2, passo 4 — 0346; Ricardo: "Sim, fica calada"): "pode falar?" é pergunta ao BANCO, pela situação do lead,
+    # não ao Chatwoot ao vivo. Tempo-limite 10 s; sem resposta, o 2h cala a Mari. Só no modo chatwoot (o ensaio não passa aqui).
+    rpc('2g · Porta pode falar?', 'mari_pode_falar',
+        "={{ JSON.stringify({ p_conversa_cw: String($json.chatwootConversationId), p_para: 'resposta' }) }}",
+        880, 300, onError='continueRegularOutput')
+    nodes[-1]['parameters']['options']['timeout'] = 10000
     code('2h · Guard humano', 1100, 200)
     iff('2i · Humano?', '={{ $json.humano === true }}', 1320, 200)
     # Mari calada (humano/time/resolvida): a fala do cliente entra no histórico mesmo assim, sem resposta.
@@ -516,20 +507,12 @@ def build(ids):
         'options': {'timeout': 10000}}, 6820, -100, credentials=sb_cred, alwaysOutputData=True, onError='continueRegularOutput')
     code('9d · Montar handoff Chatwoot', 7040, -100)
     CW = "=https://app.chatwoot.com/api/v1/accounts/{{ $('9d · Montar handoff Chatwoot').first().json.conta }}/conversations/{{ $('9d · Montar handoff Chatwoot').first().json.conversa }}"
-    add('9e · Chatwoot etiquetas', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST', 'url': CW + '/labels',
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json',
-        'jsonBody': "={{ JSON.stringify({ labels: $('9d · Montar handoff Chatwoot').first().json.labels }) }}",
-        'options': {'timeout': 10000}}, 7260, -100, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Adendo 2 — união das etiquetas atuais (lidas no 2g) com handoff / handoff-venda / handoff-humano.')
-    add('9f · Chatwoot nota', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST', 'url': CW + '/messages',
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json',
-        'jsonBody': "={{ JSON.stringify({ content: $('9d · Montar handoff Chatwoot').first().json.nota, message_type: 'outgoing', private: true }) }}",
-        'options': {'timeout': 10000}}, 7480, -100, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Adendo 2 — nota PRIVADA com o briefing (o cliente não vê; o 2 · Entrada ignora mensagem privada).')
+    # 21/11 (fase 2, passo 4 — 0346): etiquetas (add, nunca a lista inteira), nota privada e time viram ORDENS NA FILA pela porta
+    # (mari_chatwoot_pedir). O time passa a ser dono no NIOGEN antes das ordens. onError = segue (nunca derruba a resposta).
+    rpc('9e · Porta handoff', 'mari_chatwoot_pedir',
+        "={{ JSON.stringify({ p_conversa_cw: String($('9d · Montar handoff Chatwoot').first().json.conversa), "
+        "p_pedido: 'handoff_' + ($('9d · Montar handoff Chatwoot').first().json.tipo || 'humano'), "
+        "p_nota: $('9d · Montar handoff Chatwoot').first().json.nota || null }) }}", 7260, -100, onError='continueRegularOutput')
     # v7 (prompt 27 A9): nome completo no contato do Chatwoot quando o atual não parece nome de pessoa.
     iff('9j · Renomear contato?', "={{ !!$('9d · Montar handoff Chatwoot').first().json.renomear }}", 7590, -250)
     add('9k · Chatwoot nome', 'n8n-nodes-base.httpRequest', 4.2, {
@@ -539,14 +522,6 @@ def build(ids):
         'sendBody': True, 'specifyBody': 'json',
         'jsonBody': "={{ JSON.stringify({ name: $('9d · Montar handoff Chatwoot').first().json.renomear.name }) }}",
         'options': {'timeout': 10000}}, 7700, -350, credentials=cw_user, onError='continueRegularOutput')
-    iff('9g · Atribuir time?', "={{ $('9d · Montar handoff Chatwoot').first().json.atribuirTime === true }}", 7700, -100)
-    add('9h · Chatwoot time', 'n8n-nodes-base.httpRequest', 4.2, {
-        'method': 'POST', 'url': CW + '/assignments',
-        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
-        'sendBody': True, 'specifyBody': 'json',
-        'jsonBody': "={{ JSON.stringify({ team_id: $('9d · Montar handoff Chatwoot').first().json.teamId }) }}",
-        'options': {'timeout': 10000}}, 7920, -200, credentials=cw_cred, onError='continueRegularOutput',
-        notes='Adendo 2 — time backoffice (15102), só handoff-venda e handoff-humano. Automações da conta não são mexidas.')
     code('11 · Saída', 6600, 300)
     iff('11m · Modo teste?', "={{ $json.modo !== 'chatwoot' }}", 6820, 300)
     add('12t · Responder (teste)', 'n8n-nodes-base.respondToWebhook', 1.1, {
@@ -649,11 +624,10 @@ def build(ids):
         ('2n · Zerou?', 0, '2o · WABA aviso zerar'),
         ('2n · Zerou?', 1, '2w · Seguir entrada'),
         ('2w · Seguir entrada', 0, '2m · Modo chatwoot?'),
-        ('2o · WABA aviso zerar', 0, '2p · Chatwoot etiquetas'),
-        ('2p · Chatwoot etiquetas', 0, '2u · Chatwoot resolver'),
-        ('2m · Modo chatwoot?', 0, '2g · Chatwoot conversa'),
+        ('2o · WABA aviso zerar', 0, '2p · Porta zerar'),
+        ('2m · Modo chatwoot?', 0, '2g · Porta pode falar?'),
         ('2m · Modo chatwoot?', 1, '2h · Guard humano'),
-        ('2g · Chatwoot conversa', 0, '2h · Guard humano'),
+        ('2g · Porta pode falar?', 0, '2h · Guard humano'),
         ('2h · Guard humano', 0, '2i · Humano?'),
         ('2i · Humano?', 0, '2r · Supabase registrar calado'),
         ('2r · Supabase registrar calado', 0, '11 · Saída'),
@@ -702,15 +676,11 @@ def build(ids):
         ('9c · Chatwoot handoff?', 0, '9b · Supabase briefing'),
         ('9c · Chatwoot handoff?', 1, '11 · Saída'),
         ('9b · Supabase briefing', 0, '9d · Montar handoff Chatwoot'),
-        ('9d · Montar handoff Chatwoot', 0, '9e · Chatwoot etiquetas'),
-        ('9e · Chatwoot etiquetas', 0, '9f · Chatwoot nota'),
-        ('9f · Chatwoot nota', 0, '9j · Renomear contato?'),
+        ('9d · Montar handoff Chatwoot', 0, '9e · Porta handoff'),
+        ('9e · Porta handoff', 0, '9j · Renomear contato?'),
         ('9j · Renomear contato?', 0, '9k · Chatwoot nome'),
-        ('9j · Renomear contato?', 1, '9g · Atribuir time?'),
-        ('9k · Chatwoot nome', 0, '9g · Atribuir time?'),
-        ('9g · Atribuir time?', 0, '9h · Chatwoot time'),
-        ('9g · Atribuir time?', 1, '11 · Saída'),
-        ('9h · Chatwoot time', 0, '11 · Saída'),
+        ('9j · Renomear contato?', 1, '11 · Saída'),
+        ('9k · Chatwoot nome', 0, '11 · Saída'),
         ('11 · Saída', 0, '11m · Modo teste?'),
         ('11m · Modo teste?', 0, '12t · Responder (teste)'),
         ('11m · Modo teste?', 0, '12x · Interativo?'),

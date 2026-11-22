@@ -342,34 +342,36 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "=https://app.chatwoot.com/api/v1/accounts/{{ $json.config.CHATWOOT_NIO_ACCOUNT }}/conversations/{{ $json.chatwootConversationId }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_pode_falar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($json.chatwootConversationId), p_para: 'lembrete', p_passo: $json.passo || null }) }}",
         "options": {
           "timeout": 10000
         }
       },
-      "name": "6g · Chatwoot conversa",
+      "name": "6g · Porta pode falar?",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1760,
         500
       ],
-      "id": "f434599c-a4f1-5bf3-b3cf-cfcde27e0ca4",
+      "id": "c9a7cf11-2ba3-57e0-9fe1-98a0029e3dce",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput",
-      "notes": "MODO CHATWOOT — guard: relê a conversa antes de enviar (só roda com _modoCadencia = chatwoot)."
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/cadencia/c06_guard.js — nó \"6h · Guard Chatwoot\" do mari_cadencia (04/11/2026)\n// Antes de QUALQUER envio real, relê a conversa no Chatwoot (padrão noF1 da Renata):\n// humano atribuído, time atribuído, conversa resolvida ou etiqueta nao-contatar → para a escada (mari_cadencia_parar) e não envia.\n// Sem resposta do Chatwoot (nó 6g desligado ou erro) → NÃO envia: vira falha (não queima o passo).\nconst m = $('5 · Montar envio').first().json;\nconst cw = $input.first().json || {};\nconst temDados = cw && (cw.id !== undefined || cw.status !== undefined) && !cw.conversaId;\n\nif (!temDados) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, erro: 'guard do Chatwoot sem resposta (nó desligado ou erro) — não enviado' } }];\n}\nconst humano = !!(cw.meta && cw.meta.assignee) || !!cw.assignee_id;\nconst time = !!cw.team_id || !!(cw.meta && cw.meta.team);\nconst resolvida = cw.status === 'resolved';\nconst naoContatar = Array.isArray(cw.labels) && cw.labels.includes('nao-contatar');   // adendo 2 (05/11): não tocar\n// 15/11 (Ricardo, caso Ivon: a véspera da instalação não saiu com a conversa assumida pelo time): os avisos da VENDA — aviso\n// do agendamento, véspera, cartão e biometria — saem com a conversa em qualquer estado (decisão da 0114, que o guard não seguia):\n// só \"não contatar\" barra. E nunca \"param a escada\" (não são escada de venda).\nconst PASSOS_VENDA = ['INSTALACAO', 'VESPERA', 'CARTAO', 'CARTAO2', 'BIO1', 'BIOVOLTA'];\nconst daVenda = PASSOS_VENDA.includes(String(m.passo || ''));\nconst parar = daVenda ? false : (humano || time || resolvida || naoContatar);\nif (daVenda && naoContatar) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, humano, time, resolvida, naoContatar, erro: 'aviso da venda não enviado: etiqueta nao-contatar' } }];\n}\nreturn [{ json: { ...m, parar, enviar: !parar, humano, time, resolvida, naoContatar, daVenda } }];\n"
+        "jsCode": "// NIOGEN | n8n/cadencia/c06_guard.js — nó \"6h · Guard Chatwoot\" do mari_cadencia (04/11/2026; porta 21/11/2026)\n// 21/11 (fase 2, passo 4 — 0346): antes de QUALQUER envio real, pergunta ao BANCO \"pode falar?\" (nó 6g, RPC mari_pode_falar com\n// p_para 'lembrete' e o passo), que responde pela situação do lead: pessoa ou time na conversa, não contatar, Saída → para a escada\n// (mari_cadencia_parar) e não envia; aviso da venda (INSTALACAO, VESPERA, CARTAO…) sai mesmo com o time e nunca para a escada.\n// Sem resposta do banco → NÃO envia: vira falha (não queima o passo). Ricardo, 21/11: \"Sim, fica calada\".\nconst m = $('5 · Montar envio').first().json;\nconst r = $input.first().json || {};\nconst PASSOS_VENDA = ['INSTALACAO', 'VESPERA', 'CARTAO', 'CARTAO2', 'BIO1', 'BIOVOLTA'];\nconst daVenda = PASSOS_VENDA.includes(String(m.passo || ''));\nif (typeof r.pode !== 'boolean') {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, erro: 'banco sem resposta (pode falar?) — não enviado' } }];\n}\nconst naoContatar = !!r.nao_contatar;\nconst humano = !!r.pessoa;\nconst time = !!r.time;\nconst parar = daVenda ? false : !!r.parar;\nconst resolvida = parar && !humano && !time && !naoContatar;   // \"parou pela situação\" (Saída, instalada…): o 6p registra como hoje\nif (!r.pode && !parar) {\n  return [{ json: { ...m, parar: false, enviar: false, ok: false, humano, time, resolvida, naoContatar, daVenda, situacao: r.situacao || null,\n    erro: 'não enviado: ' + (r.motivo || 'banco') } }];\n}\nreturn [{ json: { ...m, parar, enviar: !!r.pode && !parar, humano, time, resolvida, naoContatar, daVenda, situacao: r.situacao || null,\n  motivo: r.motivo || null } }];\n"
       },
       "name": "6h · Guard Chatwoot",
       "type": "n8n-nodes-base.code",
@@ -774,139 +776,36 @@
     },
     {
       "parameters": {
-        "method": "GET",
-        "url": "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $json.conta + '/conversations/' + $json.cw }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "name": "9c · Chatwoot ler",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        1320,
-        900
-      ],
-      "id": "cb89f2d2-8b44-54a8-b97c-f30e6ce8221e",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
-        }
-      },
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "// NIOGEN | n8n/cadencia/c09d_futuro_etiquetas.js — nó \"9d · Montar etiquetas\" do mari_cadencia (07/11/2026, prompt 28)\n// Recebe a conversa lida no Chatwoot (nó 9c) e monta a lista de etiquetas = as atuais + interesse-futuro.\n// O POST /labels do Chatwoot SUBSTITUI a lista inteira — por isso a união. Sem resposta do Chatwoot → não mexe.\nconst ETIQUETA = 'interesse-futuro';\nconst out = [];\n$input.all().forEach((it, i) => {\n  const base = $('9b · Itens futuro').itemMatching(i).json;\n  const cw = it.json || {};\n  const leu = cw && (cw.id !== undefined || cw.status !== undefined) && !cw.conversaId;\n  if (!leu) { out.push({ json: { ...base, ok: false, erro: 'Chatwoot sem resposta ao ler a conversa' } }); return; }\n  const atuais = Array.isArray(cw.labels) ? cw.labels.map(String) : [];\n  const labels = atuais.includes(ETIQUETA) ? atuais : [...atuais, ETIQUETA];\n  out.push({ json: { ...base, ok: true, labels } });\n});\nreturn out;\n"
-      },
-      "name": "9d · Montar etiquetas",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1540,
-        900
-      ],
-      "id": "1af8ba08-1deb-5a7a-a541-99653260a391"
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose"
-          },
-          "conditions": [
-            {
-              "id": "b14fc9ec-b538-53c7-95bc-57f20a97c606",
-              "leftValue": "={{ $json.ok === true }}",
-              "rightValue": "",
-              "operator": {
-                "type": "boolean",
-                "operation": "true",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "name": "9e · Etiquetar?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [
-        1760,
-        900
-      ],
-      "id": "fdb45006-8da3-52e9-883e-edba8b1c0a17"
-    },
-    {
-      "parameters": {
         "method": "POST",
-        "url": "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $json.conta + '/conversations/' + $json.cw + '/labels' }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/mari_chatwoot_pedir",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ labels: $json.labels }) }}",
+        "jsonBody": "={{ JSON.stringify({ p_conversa_cw: String($json.cw), p_pedido: 'interesse_futuro', p_nota: $json.nota || null }) }}",
         "options": {
-          "timeout": 10000
+          "timeout": 20000
         }
       },
-      "name": "9f · Chatwoot etiquetas",
+      "name": "9f · Porta interesse futuro",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
         1980,
         900
       ],
-      "id": "7fa84c33-5308-5c28-a84b-d31c763ec486",
+      "id": "0c940678-5c45-5f9c-a8f1-54e3e436d580",
       "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput",
-      "notes": "POST /labels SUBSTITUI a lista: o 9d já mandou as atuais + interesse-futuro."
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ 'https://app.chatwoot.com/api/v1/accounts/' + $('9d · Montar etiquetas').item.json.conta + '/conversations/' + $('9d · Montar etiquetas').item.json.cw + '/messages' }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ content: $('9d · Montar etiquetas').item.json.nota, message_type: 'outgoing', private: true }) }}",
-        "options": {
-          "timeout": 10000
-        }
-      },
-      "name": "9g · Chatwoot nota",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [
-        2200,
-        900
-      ],
-      "id": "8dd03db8-fd36-5e6e-913c-4464c563a071",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "rMBPTco4UoFYPu0b",
-          "name": "Chatwoot Nio — Mari bot"
-        }
-      },
-      "onError": "continueRegularOutput",
-      "notes": "Nota PRIVADA (o cliente não vê)."
-    },
-    {
-      "parameters": {
-        "jsCode": "// NIOGEN | n8n/cadencia/c09h_futuro_conferir.js — nó \"9h · Conferir\" do mari_cadencia (07/11/2026, prompt 28)\n// Recebe a resposta da nota privada (nó 9g). Só marca a conversa (mari_futuro_marcar) quando a etiqueta (9f) e a\n// nota (9g) voltaram ok — senão a próxima rodada tenta de novo. Falha vai para o log da execução, sem marcar.\nconst out = [];\n$input.all().forEach((it, i) => {\n  const base = $('9d · Montar etiquetas').itemMatching(i).json;\n  const et = $('9f · Chatwoot etiquetas').itemMatching(i).json || {};\n  const nota = it.json || {};\n  const etOk = Array.isArray(et.payload) && et.payload.includes('interesse-futuro');\n  const notaOk = !!nota.id && nota.private === true;\n  out.push({ json: { ...base, marcar: etOk && notaOk,\n    erro: etOk && notaOk ? null : `etiqueta ${etOk ? 'ok' : 'falhou'} · nota ${notaOk ? 'ok' : 'falhou'}` } });\n});\nreturn out;\n"
+        "jsCode": "// NIOGEN | n8n/cadencia/c09h_futuro_conferir.js — nó \"9h · Conferir\" do mari_cadencia (07/11/2026; porta 21/11/2026)\n// 21/11 (fase 2, passo 4 — 0346): a etiqueta interesse-futuro e a nota não vão mais direto ao Chatwoot: o nó 9f pede ao banco\n// (RPC mari_chatwoot_pedir, pedido 'interesse_futuro'), que põe as duas ordens na fila pela porta (etiqueta por add, nunca a\n// lista inteira). Marca a conversa (mari_futuro_marcar) só quando o banco aceitou; senão a próxima rodada tenta de novo.\nconst out = [];\n$input.all().forEach((it, i) => {\n  const base = $('9b · Itens futuro').itemMatching(i).json;\n  const r = it.json || {};\n  const ok = r.ok === true;\n  out.push({ json: { ...base, marcar: ok, erro: ok ? null : 'porta: ' + (r.erro || 'sem resposta do banco') } });\n});\nreturn out;\n"
       },
       "name": "9h · Conferir",
       "type": "n8n-nodes-base.code",
@@ -1154,14 +1053,14 @@
         ],
         [
           {
-            "node": "6g · Chatwoot conversa",
+            "node": "6g · Porta pode falar?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "6g · Chatwoot conversa": {
+    "6g · Porta pode falar?": {
       "main": [
         [
           {
@@ -1369,58 +1268,14 @@
       "main": [
         [
           {
-            "node": "9c · Chatwoot ler",
+            "node": "9f · Porta interesse futuro",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "9c · Chatwoot ler": {
-      "main": [
-        [
-          {
-            "node": "9d · Montar etiquetas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9d · Montar etiquetas": {
-      "main": [
-        [
-          {
-            "node": "9e · Etiquetar?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9e · Etiquetar?": {
-      "main": [
-        [
-          {
-            "node": "9f · Chatwoot etiquetas",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9f · Chatwoot etiquetas": {
-      "main": [
-        [
-          {
-            "node": "9g · Chatwoot nota",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "9g · Chatwoot nota": {
+    "9f · Porta interesse futuro": {
       "main": [
         [
           {
