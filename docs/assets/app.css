@@ -3683,11 +3683,10 @@ button.fc-id:hover { color: inherit; }
    Até 900 px as colunas viram a lista de antes, uma embaixo da outra. */
 .fc2-jl.fc2-jl-on { display: none; }
 /* 22/11 (Ricardo): linha estreita abaixo da Jornada com os dados que a Mari já coletou — sempre à vista, sem abrir o Atendimento. */
-.fc2-coleta { flex: none; display: flex; align-items: center; gap: 4px 12px; padding: 7px 14px; border-top: 1px solid #1D232B;
-  white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
-.fc2-coleta::-webkit-scrollbar { display: none; }
-.fc2-coleta b { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #9AA4B0; }
-@media (max-width: 900px) { .fc2-coleta { flex-wrap: wrap; white-space: normal; } }
+/* 22/11 (Ricardo: "em 2 linhas… sem ter que rolar pro lado"): quebra de linha em vez de rolagem lateral. */
+.fc2-coleta { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 12px; padding: 6px 14px; border-top: 1px solid #1D232B; }
+.fc2-coleta .f-item { white-space: nowrap; }
+.fc2-coleta b { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #9AA4B0; white-space: nowrap; }
 /* 20/11 (Ricardo: "expande o card que se abre sobre o card Agora também… espaço maior"): etapa aberta ocupa a coluna inteira;
    o Agora e o título da Jornada voltam ao fechar a etapa (Voltar / ✕). */
 .fc2-jor.et-on > .fc2-agcard, .fc2-jor.et-on > .fc2-colh { display: none; }
