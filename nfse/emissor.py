@@ -51,8 +51,10 @@ LEIAUTES = ('20260209', '20261020')
 
 AMBIENTES = {
     # tpAmb 2 = homologação (produção restrita); 1 = produção. Bases conforme a página "APIs - Produção Restrita e Produção".
-    'restrita': {'tpAmb': '2', 'sefin': 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional', 'leiaute': '20261020'},
-    'producao': {'tpAmb': '1', 'sefin': 'https://sefin.nfse.gov.br/SefinNacional', 'leiaute': '20260209'},
+    'restrita': {'tpAmb': '2', 'sefin': 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional', 'leiaute': '20261020',
+                 'adn': 'https://adn.producaorestrita.nfse.gov.br'},
+    'producao': {'tpAmb': '1', 'sefin': 'https://sefin.nfse.gov.br/SefinNacional', 'leiaute': '20260209',
+                 'adn': 'https://adn.nfse.gov.br'},
 }
 
 ALG = {
@@ -351,6 +353,7 @@ class Sefin:
         import requests
         from cryptography.hazmat.primitives import serialization
         self.base = AMBIENTES[ambiente]['sefin']
+        self.adn = AMBIENTES[ambiente]['adn']
         self._dir = tempfile.TemporaryDirectory(prefix='nfse_')
         pem = pathlib.Path(self._dir.name) / 'cliente.pem'
         # PEM temporário só durante a sessão (o requests não aceita a chave em memória); apagado no fim
@@ -390,6 +393,42 @@ class Sefin:
         r = self.s.get(f'{self.base}/nfse/{chave}', timeout=self.timeout)
         return r.status_code, _json(r)
 
+    def danfse(self, chave):
+        """PDF oficial (DANFSe) no ADN. O caminho GET /danfse/{chave} NÃO está no manual oficial lido (23/11/2026): é o usado
+        pelos emissores conhecidos. Se não responder PDF, documentacao() traz o Swagger real (só abre com o certificado)."""
+        r = self.s.get(f'{self.adn}/danfse/{chave}', timeout=self.timeout, headers={'Accept': 'application/pdf'})
+        return r.status_code, r.headers.get('Content-Type', ''), r.content
+
+    def documentacao(self):
+        """Baixa (com o certificado) as páginas de documentação das APIs e os arquivos que o Swagger UI usa para achar o
+        swagger.json; segue as referências a .json encontradas. Só leitura."""
+        import re as _re
+        bases = [self.base, self.base.replace('/API/SefinNacional', '/SefinNacional'), self.adn + '/contribuintes', self.adn + '/danfse',
+                 self.adn]
+        sufixos = ['/docs/index.html', '/docs/', '/docs/swagger-initializer.js', '/docs/index.js', '/swagger/v1/swagger.json',
+                   '/docs/v1/swagger.json', '/swagger/index.html', '/swagger/docs/v1']
+        out, fila, vistos = {}, [b + s_ for b in bases for s_ in sufixos], set()
+        while fila and len(vistos) < 60:
+            url = fila.pop(0)
+            if url in vistos:
+                continue
+            vistos.add(url)
+            try:
+                r = self.s.get(url, timeout=self.timeout)
+                txt = r.text[:300000]
+                out[url] = (r.status_code, r.headers.get('Content-Type', ''), txt)
+                if r.status_code == 200:
+                    for ref in _re.findall(r"""["']([^"'\s]*?(?:swagger|openapi)[^"'\s]*?\.json)["']""", txt):
+                        fila.append(ref if ref.startswith('http') else requests_join(url, ref))
+            except Exception as e:  # noqa: BLE001
+                out[url] = (0, type(e).__name__, str(e)[:300])
+        return out
+
+
+def requests_join(base, ref):
+    from urllib.parse import urljoin
+    return urljoin(base, ref)
+
 
 def _json(r):
     try:
@@ -428,7 +467,14 @@ def main():
     c.add_argument('--ambiente', choices=list(AMBIENTES), default='restrita')
     c.add_argument('--chave', required=True)
     c.add_argument('--saida')
+    pd = sub.add_parser('danfse', help='baixa o PDF oficial (DANFSe) de uma NFS-e pela chave')
+    pd.add_argument('--ambiente', choices=list(AMBIENTES), default='restrita')
+    pd.add_argument('--chave', required=True)
+    pd.add_argument('--saida', required=True, help='pasta onde gravar o PDF (fora do repo)')
     sub.add_parser('certificado', help='mostra titular, CNPJ e validade do certificado A1 (sem a chave)')
+    dc = sub.add_parser('docs', help='baixa a documentação (Swagger) das APIs com o certificado — só leitura')
+    dc.add_argument('--ambiente', choices=list(AMBIENTES), default='restrita')
+    dc.add_argument('--saida', required=True)
     a = ap.parse_args()
 
     try:
@@ -438,6 +484,37 @@ def main():
                               'valido_de': cert.not_valid_before_utc.isoformat(), 'valido_ate': cert.not_valid_after_utc.isoformat()},
                              ensure_ascii=False, indent=1))
             return 0
+        if a.cmd == 'docs':
+            chave, cert, cadeia = carregar_pfx()
+            sf = Sefin(a.ambiente, chave, cert, cadeia)
+            try:
+                docs = sf.documentacao()
+            finally:
+                sf.fechar()
+            dest = pathlib.Path(a.saida) / f'docs_{a.ambiente}.json'
+            dest.write_text(json.dumps(docs, ensure_ascii=False, indent=1), encoding='utf-8')
+            print(json.dumps({'arquivo': str(dest), 'respostas': {u: v[0] for u, v in docs.items()}}, ensure_ascii=False, indent=1))
+            return 0
+        if a.cmd == 'danfse':
+            chave, cert, cadeia = carregar_pfx()
+            sf = Sefin(a.ambiente, chave, cert, cadeia)
+            try:
+                st, tipo, corpo = sf.danfse(a.chave)
+                if st == 200 and corpo[:5] == b'%PDF-':
+                    arq = pathlib.Path(a.saida) / f'DANFSe_{a.chave}.pdf'
+                    arq.write_bytes(corpo)
+                    print(json.dumps({'ok': True, 'pdf': str(arq), 'bytes': len(corpo)}, ensure_ascii=False, indent=1))
+                    return 0
+                # não veio PDF: guarda a resposta e a documentação real da API para conferir o caminho
+                docs = sf.documentacao()
+            finally:
+                sf.fechar()
+            dest = pathlib.Path(a.saida) / 'danfse_diagnostico.json'
+            dest.write_text(json.dumps({'tentativa': {'status': st, 'tipo': tipo, 'corpo': corpo[:3000].decode('utf-8', 'replace')},
+                                        'documentacao': docs}, ensure_ascii=False, indent=1), encoding='utf-8')
+            print(json.dumps({'ok': False, 'status': st, 'tipo': tipo, 'inicio': corpo[:300].decode('utf-8', 'replace'),
+                              'diagnostico': str(dest)}, ensure_ascii=False, indent=1))
+            return 1
         if a.cmd == 'consultar':
             chave, cert, cadeia = carregar_pfx()
             sf = Sefin(a.ambiente, chave, cert, cadeia)
