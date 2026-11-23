@@ -103,6 +103,9 @@
   .ma-b-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   #g-bairros .vista { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .ma-pe { color: var(--muted); font-size: 12px; }
+  /* 23/11 (0369): as gavetas recolhíveis desta tela herdavam o .gaveta do app.css (a gaveta lateral fixa, escondida) e
+     não apareciam desde 22/11 — aqui elas voltam a ficar no fluxo da página, recolhidas como a especificação pedia */
+  .ma-gavetas details.gaveta { position: static; transform: none; visibility: visible; width: auto; z-index: auto; display: block; transition: none; }
   .ma-aba { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .ma-aba[hidden] { display: none; }
   .ma-tab td small.apagado, .ma-tab td .sub-l { display: block; font-size: 11.5px; color: var(--muted); font-family: var(--sans); font-weight: 400; }
