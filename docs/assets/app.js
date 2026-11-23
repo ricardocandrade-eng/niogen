@@ -1180,6 +1180,29 @@
     location.replace('metaads.html');
     return true;
   }
+  // 23/11: "ver como a Agência" — só para admin e só nesta aba. Troca o DESENHO da tela pelo da agência (menu, colunas, blocos);
+  // o banco continua lendo como admin. Entra por ?como=agencia (link no Meta Ads), sai pelo botão da faixa ou por ?como=eu.
+  const COMO = 'ng.como';
+  function comoAgencia(u) {
+    try {
+      const q = new URLSearchParams(location.search).get('como');
+      if (q === 'agencia') sessionStorage.setItem(COMO, 'agencia');
+      if (q === 'eu') sessionStorage.removeItem(COMO);
+      if (q) history.replaceState(null, '', location.pathname);
+      if (!u || u.perfil !== 'admin' || sessionStorage.getItem(COMO) !== 'agencia') return u;
+    } catch (e) { return u; }
+    const faixa = () => {
+      if (document.getElementById('ng-previa')) return;
+      const d = document.createElement('div');
+      d.id = 'ng-previa';
+      d.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9999;background:#b45309;color:#fff;font:600 13px/1.2 system-ui,sans-serif;padding:8px 8px 8px 16px;border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.45);display:flex;gap:12px;align-items:center;white-space:nowrap';
+      d.innerHTML = '<span>Você está vendo como a Agência</span><button type="button" style="background:#fff;color:#7c2d12;border:0;border-radius:999px;padding:7px 12px;font:inherit;cursor:pointer">Voltar à minha visão</button>';
+      d.querySelector('button').addEventListener('click', () => { try { sessionStorage.removeItem(COMO); } catch (e) { /* */ } location.href = 'metaads.html'; });
+      document.body.appendChild(d);
+    };
+    if (document.body) faixa(); else document.addEventListener('DOMContentLoaded', faixa);
+    return { ...u, perfil: 'agencia', previa: true };
+  }
   async function exigirLogin() {
     const { data } = await sb.auth.getSession();
     if (!data.session) {
@@ -1195,7 +1218,7 @@
     let guardado = null;
     try { guardado = JSON.parse(localStorage.getItem(EU_CACHE) || 'null'); } catch (e) { guardado = null; }
     if (guardado && guardado.id === uid && guardado.u && guardado.u.ativo) {
-      usuarioAtual = { ...guardado.u, email: data.session.user.email };
+      usuarioAtual = comoAgencia({ ...guardado.u, email: data.session.user.email });
       if (foraDaAgencia(usuarioAtual)) return new Promise(() => {});
       busca().then(async ({ data: u, error }) => {
         if (error) return;
@@ -1219,7 +1242,7 @@
       return new Promise(() => {});
     }
     try { localStorage.setItem(EU_CACHE, JSON.stringify({ id: uid, u })); } catch (e) { /* sem armazenamento */ }
-    usuarioAtual = { ...u, email: data.session.user.email };
+    usuarioAtual = comoAgencia({ ...u, email: data.session.user.email });
     if (foraDaAgencia(usuarioAtual)) return new Promise(() => {});
     return usuarioAtual;
   }
