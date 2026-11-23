@@ -319,6 +319,12 @@ if (out.p_cep && out.p_cep !== conv.cep) {
   }
 }
 
+// 23/11 (L-259, P48): o cliente disse que NÃO SABE o CEP ("Eu não sei cep", "não lembro o CEP", "tô sem o CEP"). Com a rua
+// também não achada pelo nome, o 7 · Extrair passa ao consultor na hora (a Mari pediu o CEP 3 vezes e seguiu para o CPF).
+if (!cepAtual && /\bn(?:ao|um)\s+(?:sei|sabe|lembro|tenho|conheco|faco ideia)\b[^.?!\n]{0,25}\bcep\b|\bcep\b[^.?!\n]{0,20}\bn(?:ao|um)\s+(?:sei|lembro|tenho)\b|\bsem\s+(?:o\s+)?cep\b/.test(normR(msg))) {
+  out.naoSabeCep = true;
+}
+
 // (A2) Rua do CEP diferente da rua que o cliente escreveu: a Mari pergunta qual é antes de seguir (uma vez — depois
 // da resposta ela grava [ENDERECO: rua_confirmada=…]).
 const ruaCep = (out.p_viacep && out.p_viacep.logradouro) || (conv.endereco_cep && conv.endereco_cep.logradouro) || null;

@@ -764,6 +764,28 @@ def cen_at(c):   # P47 (23/11, conversa L-259): rua com erro de digitação e cl
     c.exige(str(row.get('numero') or '') == '120', f'[P47] o número 120, dito junto da rua, se perdeu: {row}')
 
 
+def cen_au(c):   # P48 (23/11, conversa L-259): rua que não existe no cadastro + "não sei o CEP" → consultor na hora, sem pedir CPF
+    # A Mari pediu o CEP 3 vezes, disse que "só com o nome da rua não consigo" e seguiu para nome, CPF, e-mail e pagamento sem
+    # endereço, sem cobertura e sem plano; o time recebeu "VENDA PRONTA". Agora: passa ao consultor, que localiza o endereço.
+    c.diz('Olá! Posso ter mais informações sobre isso?')
+    c.diz('💰 Ver os planos')
+    c.diz('Uba Minas Gerais')
+    r = c.diz('Rua Zebulon Xavier Quaresma, 10')
+    t = fala(r)
+    c.exige(not RX_PEDE_DADOS.search(t), f'[P48] pediu nome/CPF sem ter o endereço: «{t[:220]}»')
+    c.exige(not re.search(r'so (com|pel)o nome', t), f'[P48] disse que não dá pra buscar pelo nome: «{t[:220]}»')
+    r = c.diz('Eu não sei o cep')
+    t = fala(r)
+    h = r.get('handoff') or {}
+    c.exige(h.get('motivo') == 'pedido_humano', f'[P48] não passou ao consultor (handoff={h.get("motivo")!r}): «{t[:220]}»')
+    c.exige('localizar o seu endereco' in t, f'[P48] fala sem "localizar o seu endereço": «{t[:220]}»')
+    c.exige(not RX_PEDE_DADOS.search(t), f'[P48] pediu nome/CPF: «{t[:220]}»')
+    row = conv_row(c, 'status, handoff_briefing')
+    c.exige(row.get('status') == 'handoff_realizado', f'[P48] conversa não ficou com o time: {row.get("status")!r}')
+    b = row.get('handoff_briefing') or ''
+    c.exige('VENDA PRONTA' not in b and 'Achar o CEP' in b, f'[P48] aviso ao time errado: «{b[:260]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -803,6 +825,8 @@ PORTAO = {
     'as': (52, cen_as, 'P46'),
     # 23/11 — conversa L-259: rua com erro de digitação, cliente sem CEP; cidade dos planos entra na busca
     'at': (53, cen_at, 'P47'),
+    # 23/11 — conversa L-259: rua não achada + "não sei o CEP" → consultor na hora (nunca segue para o CPF sem endereço)
+    'au': (54, cen_au, 'P48'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

@@ -670,6 +670,29 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
     dados.credito_antifraude_avisado = true;
   }
 }
+// 23/11 (L-259, P48 — Ricardo: "Sim, corrigir"): o cliente NÃO SABE o CEP e a rua que ele escreveu não foi achada pelo nome.
+// A Mari pediu o CEP 3 vezes, disse que "só com o nome da rua não consigo" e seguiu para nome, CPF, e-mail e pagamento sem
+// endereço, sem cobertura e sem plano — e o time recebeu "VENDA PRONTA". Agora ela passa NA HORA ao consultor, que localiza o
+// endereço (Google/Correios), grava na ficha e segue a venda. Determinístico; a fala do modelo é trocada.
+{
+  const cc = ctx.conversa || {};
+  const ddS = cc.dados || {};
+  if (prep.ruaNaoAchada) dados.rua_nao_achada = String(prep.ruaNaoAchada).slice(0, 120);
+  const ruaNA = prep.ruaNaoAchada || ddS.rua_nao_achada || null;
+  const naSaidaS = !!cc.funil_destino && !['em_andamento', 'instalada'].includes(cc.funil_destino);
+  if (V7 && !posHandoff && !erro && !handoffYaml && !naSaidaS && !cc.cep && !prep.p_cep && prep.naoSabeCep && ruaNA
+    && !prep.opcoesRua && !prep.ruaPedeNumero && !prep.ruaSemCidade) {
+    const pn = cc.nome_confiavel ? String(cc.nome_contato || '').trim().split(/\s+/)[0] : '';
+    const prazoS = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
+    const cidS = cc.cidade || ddS.planos_cidade || '';
+    texto = `Sem problema${pn ? `, ${pn}` : ''}! 😊\n\n`
+      + `Vou pedir pro nosso consultor localizar o seu endereço por aqui, e ele te chama ${prazoS} pra seguir com você.`;
+    handoffYaml = { motivo_handoff: 'pedido_humano',
+      briefing_humano: `RESUMO: Cliente não sabe o CEP e a rua «${String(ruaNA).slice(0, 80)}»${cidS ? ` (${cidS})` : ''} não foi achada pelo nome. `
+        + 'SUGESTÃO: Achar o CEP da rua (Google ou Correios), gravar na ficha, consultar a cobertura e seguir a venda com o cliente.' };
+    tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+  }
+}
 const hy = handoffYaml || {};
 const nome = d.nome || hy.nome;
 const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');

@@ -227,6 +227,11 @@ if (V7) {
   if (prep.opcoesRua) L.push(`opcoes_de_rua (busca pela rua que o cliente escreveu, sem CEP — ofereça numeradas, uma por linha, com o CEP): ${prep.opcoesRua.map((o, i) => `${i + 1}) ${o.logradouro} · ${o.bairro} · CEP ${o.cep}`).join(' | ')}`);
   if (prep.ruaSemCidade) L.push(`rua_sem_cep: o cliente passou a rua «${prep.ruaSemCidade}» sem CEP e sem cidade — pergunte a cidade (ou o CEP).`);
   if (prep.ruaNaoAchada) L.push(`rua_sem_cep: não achei a rua «${prep.ruaNaoAchada}» pelo nome — peça o CEP.`);
+  // 23/11 (L-259, P48): sem endereço resolvido a Mari seguiu para nome, CPF, e-mail e pagamento. Trava no estado.
+  if ((prep.ruaNaoAchada || dados.rua_nao_achada) && !conv.cep && !prep.p_cep && !prep.opcoesRua) {
+    L.push('endereco_pendente: SIM — a rua do cliente ainda não foi achada. Enquanto não houver CEP, NÃO peça nome, CPF, e-mail, pagamento nem data, '
+      + 'não prometa localizar o CEP você mesma e nunca diga que não dá pra buscar pelo nome da rua: peça o CEP ou o nome certinho da rua e o bairro.');
+  }
   // 07/11 (correção de raiz da conversa #1): CEP achado pela rua já está gravado — a Mari só confirma, mostrando o CEP.
   if (prep.cepDaBusca) L.push(`cep_achado_pela_rua: SIM — busquei a rua «${prep.cepDaBusca.rua}» e achei UMA opção só, já gravada: ${prep.cepDaBusca.logradouro} · ${prep.cepDaBusca.bairro} · CEP ${prep.cepDaBusca.cep}. Na confirmação do endereço (Passo 2) escreva a rua, o bairro E o CEP; não peça o CEP. Se o cliente disser que não é, peça o CEP certo.`);
   if (prep.ruaPedeNumero) L.push(`rua_sem_cep: a rua «${prep.ruaPedeNumero}» tem vários CEPs, um por faixa de número — pergunte o número da casa (ou o CEP) antes de seguir; não ofereça opções de CEP.`);
