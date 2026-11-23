@@ -11,6 +11,15 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.11.1 (23/11/2026) — a forma de pagamento é a do pedido, não a do rádio pré-marcado (caso L-248)
+No L-248 a leitura dos campos gravou **boleto** na venda às 11:58 — o rádio que o portal já deixa marcado na Etapa 5 — antes de o
+cliente responder "cartão" (12:00). Como a leitura só grava o que está vazio, a troca para cartão nunca chegou ao NIOGEN: a OS foi
+gravada no boleto (R$ 110 em vez de R$ 95) e o aviso do cartão não saiu.
+- A leitura dos campos **não grava mais a forma de pagamento** (venda e lead).
+- A forma vai **com a OS**: a que a pessoa tocou no portal; sem toque, a que estava marcada na Etapa 5 na última leitura. A porta
+  grava a forma da OS por cima da venda.
+- Condução: venda sem forma **para na Etapa 5** com "pergunte ao cliente e marque você a forma" (antes: "forma não reconhecida").
+
 ## 0.11.0 (22/11/2026) — o portal completa também a venda (migration 0356)
 Desde a 0356 a venda **nasce sozinha** quando o crédito aprovado é gravado num lead que o time conduz — às vezes sem plano e com o
 nome provisório (o do WhatsApp). Por isso a leitura dos campos do portal (0.10.0) passou a valer também com uma **venda aberta no

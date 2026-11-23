@@ -908,7 +908,7 @@
     const os = T.lerOS(`${pp.titulo}\n${pp.texto}`);
     if (!os || os === OSL.enviada) return;
     OSL.enviada = os;
-    try { chrome.runtime.sendMessage({ tipo: 'portal_os_lida', os, dia: OSL.dia, periodo: OSL.periodo, forma: OSL.forma, texto: T.redigir(pp.texto).slice(0, 200) }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ }
+    try { chrome.runtime.sendMessage({ tipo: 'portal_os_lida', os, dia: OSL.dia, periodo: OSL.periodo, forma: T.formaNaOS(OSL.forma, LIDO.forma), texto: T.redigir(pp.texto).slice(0, 200) }, () => void chrome.runtime.lastError); } catch (e) { /* painel fechado */ }
   }
 
   // ------------------------------------------------------------------ 0.10.0 (22/11): o que está nos campos do portal → ficha do lead

@@ -142,6 +142,8 @@
   // valores do radio-group do portal (credito.py): BOLETO · CREDITO · DACC. DACC = conta corrente: o humano digita → para.
   function formaDaVenda(forma) {
     const f = norm(forma);
+    // 0.11.1 (L-248, 23/11): venda sem forma = o cliente ainda não escolheu. O rádio que o portal já deixa marcado não é a escolha dele.
+    if (!f) return { ok: false, motivo: 'sem_forma', texto: 'A venda ainda não tem a forma de pagamento: pergunte ao cliente e marque você a forma no portal (o que o portal já deixa marcado não é a escolha dele).' };
     if (f === 'boleto') return { ok: true, valor: 'BOLETO' };
     if (f === 'cartao' || f === 'credito' || f === 'cartao de credito') return { ok: true, valor: 'CREDITO' };
     if (f === 'dacc' || f.includes('debito')) return { ok: false, motivo: 'dacc', texto: 'Venda em DACC (débito em conta): banco, agência e conta são você que digita.' };
@@ -276,8 +278,11 @@
     return iso(ano, mes + 1, d);
   }
   const FORMA_RADIO = { BOLETO: 'boleto', CREDITO: 'cartao', DACC: 'dacc' };
+  // 0.11.1 (L-248): a forma que vai com a OS é a do pedido que o humano gravou — a que ele tocou no portal; sem toque, a que estava
+  // marcada na Etapa 5 na última leitura. Ela corrige a da venda (a porta grava a forma da OS por cima).
+  const formaNaOS = (tocada, lida) => tocada || lida || null;
 
   raiz.NIOGEN_TRAVAS = { norm, textoBotao, LISTA_NEGRA, BOTOES, POPUP, naListaNegra, popupSeguro, conferirClique, classificarPopup, MOTIVO_POPUP,
     temNumero, escolherOpcao, alvoComplemento, alvoEndereco, formaDaVenda, lerOferta, casarOferta, megas, preco,
-    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas, lerOS, periodoDoTexto, diaDoCalendario, FORMA_RADIO };
+    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas, lerOS, periodoDoTexto, diaDoCalendario, FORMA_RADIO, formaNaOS };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

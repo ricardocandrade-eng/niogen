@@ -234,7 +234,8 @@
     if (L.complemento && vazio(v.complemento)) campos.complemento = L.complemento;
     if (L.rua && vazio(v.logradouro)) campos.rua = L.rua;
     if (L.referencia && vazio(v.referencia)) campos.referencia = L.referencia;
-    if (L.forma && vazio(o.forma_pagamento)) campos.forma = L.forma;
+    // 0.11.1 (L-248, 23/11): a forma NÃO vem da leitura dos campos — o rádio que o portal deixa marcado (boleto) foi gravado antes
+    // de o cliente escolher cartão, e como só grava o vazio nunca mais corrigiu. A forma vai com a OS (a do pedido gravado).
     if (L.oferta && vazio(o.plano)) { const pl = await planoDoPortal(L.oferta); if (pl) campos.plano = pl; }
     if (!Object.keys(campos).length) return null;
     if (L.documento) campos.cpf = L.documento;   // o banco confere se o pedido da tela é desta venda
@@ -272,7 +273,7 @@
       if (L.complemento && vazio(c.complemento)) campos.complemento = L.complemento;
       if (L.rua && vazio(d.rua_confirmada) && vazio((c.endereco_cep || {}).logradouro)) campos.rua = L.rua;
       if (L.referencia && vazio(d.referencia)) campos.referencia = L.referencia;
-      if (L.forma && vazio(c.forma_pagamento)) campos.forma = L.forma;
+      // 0.11.1: forma de pagamento fora da leitura (ver sincronizaVenda) — vai com a OS.
       if (L.oferta && vazio(c.plano_escolhido)) { const pl = await planoDoPortal(L.oferta); if (pl) campos.plano = pl; }
       if (L.documento && vazio(d.cpf)) campos.cpf = L.documento;
       if (!Object.keys(campos).length) return null;

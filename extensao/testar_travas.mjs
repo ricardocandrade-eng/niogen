@@ -108,6 +108,10 @@ caso('rede: carrinho em POST barrado', B('https://x/api/aberturaos/carrinho/9f3a
 caso('DACC para', !T.formaDaVenda('dacc').ok && T.formaDaVenda('dacc').motivo === 'dacc');
 caso('boleto → BOLETO', T.formaDaVenda('boleto').valor === 'BOLETO');
 caso('cartão → CREDITO', T.formaDaVenda('cartao').valor === 'CREDITO');
+caso('venda sem forma para (o rádio do portal não é a escolha do cliente)', !T.formaDaVenda('').ok && T.formaDaVenda(null).motivo === 'sem_forma');
+caso('forma da OS: a tocada vence a lida', T.formaNaOS('cartao', 'boleto') === 'cartao');
+caso('forma da OS: sem toque, a marcada na Etapa 5', T.formaNaOS(null, 'cartao') === 'cartao');
+caso('forma da OS: nada lido → nada', T.formaNaOS(null, undefined) === null);
 const cartoes = [
   T.lerOferta('NIO FIBRA ESSENCIAL\n500 Mega\nR$ 99,99/mês\nCom fidelidade'),
   T.lerOferta('NIO FIBRA ULTRA\n1 Giga\nR$ 149,99/mês\nCom fidelidade'),

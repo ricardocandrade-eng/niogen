@@ -7,6 +7,7 @@ select public.backoffice_momento(sim.venda(:'c'), 'os_agendar', jsonb_build_obje
 select sim.fila_rodar();
 select sim.como('servico');
 select count(*) from sim.cadencia(sim.meio_dia());
+select sim.fila_rodar();   -- 0366: o alerta de golpe sai logo depois da confirmação da instalação (é do agendamento, não da pendência)
 select count(*) as antes from sim.envios where conversa = :'c' \gset
 select sim._servico();
 update public.vendas set nio_pendencia_cod = 'CLIENTE_AUSENTE', nio_pendencia_desc = 'técnico não encontrou o cliente' where id = sim.venda(:'c');

@@ -8,6 +8,7 @@ select sim.fila_rodar();
 select sim.como('servico');
 select count(*) from sim.cadencia(sim.meio_dia());
 select count(*) from sim.cadencia(sim.meio_dia());
+select sim.fila_rodar();   -- 0366: o alerta de golpe sai logo depois da confirmação da instalação (a fila roda a cada minuto)
 select sim.confere('o aviso da instalação saiu uma vez', sim.envios_de(:'c', 'cadencia:INSTALACAO') = 1, 'INSTALACAO: ' || sim.envios_de(:'c', 'cadencia:INSTALACAO'));
 select sim.passa(:'c', '2 days');
 select sim.tique();
