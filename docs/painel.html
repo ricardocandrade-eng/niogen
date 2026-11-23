@@ -28,7 +28,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-1"></script>
-<script src="assets/sidebar.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-2"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=221126-6"></script>
 <style>
@@ -218,18 +218,22 @@
     render();
   }
 
-  // 0302: "Canais · 7 dias" — uma linha por canal ativo (ou com conversa na janela), ordenada pelo custo por venda (canais_resumo).
-  // Sem venda: mostra o custo por conversa; sem gasto: "—". Clique abre a Leads filtrada pela origem.
+  // 0302: "Canais · 7 dias" — uma linha por canal ativo (ou com conversa na janela).
+  // 0369 (Ricardo, 23/11): + Status (no ar · sem entrega · fora do ar · nunca subiu, com a data de subiu_em) e Retorno (comissão
+  // prevista ÷ gasto; vazio sem gasto — orgânico e indicação têm retorno indefinido, nem 0 nem ∞). Ordem do banco (canais_resumo):
+  // no ar em cima, maior retorno, menor custo por venda instalada. O nome do canal que tem aba na tela Canais (config_canais.aba)
+  // abre essa aba; os outros seguem abrindo a Leads filtrada pela origem.
   async function carregarCanais() {
     const el = document.getElementById('canais-7d');
     const { data, error } = await NG.sb.from('v_canais_7d').select('*');
     if (error || !data) { el.hidden = true; return; }
-    const linhas = data.filter((k) => k.ativo || k.conversas || k.vendas || k.gasto);
+    const linhas = data.filter((k) => k.ativo || k.conversas || k.vendas || k.gasto || k.status === 'fora_do_ar');
     if (!linhas.length) { el.hidden = true; return; }
     const R = (x) => (x == null ? '—' : NG.fmtMoeda(Number(x)));
     const n = (x) => NG.fmtNum(Number(x || 0));
     // 22/11: canal ativo sem nenhum movimento nos 7 dias sai da tabela e vira uma linha só, embaixo (a tabela mostrava 8 linhas de zeros)
-    const mexeu = (k) => Number(k.conversas) || Number(k.qualificados) || Number(k.vendas) || Number(k.instaladas) || Number(k.gasto) || Number(k.comissao_prevista);
+    // 0369: canal pago (com aba) fica sempre na tabela — é nele que "no ar sem retorno" e "fora do ar" precisam aparecer
+    const mexeu = (k) => k.aba || Number(k.conversas) || Number(k.qualificados) || Number(k.vendas) || Number(k.instaladas) || Number(k.gasto) || Number(k.comissao_prevista);
     const comMov = linhas.filter(mexeu), semMov = linhas.filter((k) => !mexeu(k));
     const tot = linhas.reduce((s, k) => ({ c: s.c + (k.conversas || 0), v: s.v + (k.vendas || 0), i: s.i + (k.instaladas || 0), g: s.g + Number(k.gasto || 0) }), { c: 0, v: 0, i: 0, g: 0 });
     const desc = linhas.find((k) => k.canal === 'desconhecida');
@@ -237,12 +241,22 @@
     const custo = (k) => (k.custo_venda_instalada != null ? `${R(k.custo_venda_instalada)} <small>/instalada</small>`
       : k.custo_venda != null ? `${R(k.custo_venda)} <small>/venda</small>`
       : k.custo_conversa != null ? `${R(k.custo_conversa)} <small>/conversa</small>` : '—');
+    const ST = { no_ar: ['ok', 'no ar'], sem_entrega: ['warn', 'sem entrega'], fora_do_ar: ['bad', 'fora do ar'], nunca_subiu: ['dim', 'nunca subiu'] };
+    const status = (k) => { const [c, t] = ST[k.status] || ['dim', k.status || '—'];
+      const desde = k.subiu_em ? NG.fmtDiaISO(k.subiu_em).slice(0, 5) : '';
+      const dica = k.status === 'sem_entrega' ? 'Ligado, mas sem gasto hoje nem ontem: a campanha pode ter parado sem ninguém perceber.' : k.subiu_em ? `Subiu em ${NG.fmtDiaISO(k.subiu_em)}.` : '';
+      return `<span class="chip ${c}" title="${esc(dica)}">${esc(t)}</span>${desde && k.status !== 'nunca_subiu' ? ` <small class="muted">desde ${esc(desde)}</small>` : ''}`; };
+    const retorno = (k) => (k.retorno == null ? '<span class="muted" title="Sem gasto no período: retorno indefinido.">—</span>'
+      : `<b class="${Number(k.retorno) >= 1 ? 'ok' : Number(k.retorno) > 0 ? '' : 'bad'}" title="Comissão prevista ÷ gasto: cada R$ 1 gasto voltou R$ ${esc(NG.fmtNum(Number(k.retorno)))} de comissão prevista.">${esc(NG.fmtNum(Number(k.retorno)))}×</b>`);
+    const nome = (k) => (k.aba ? `<a href="metaads.html#${encodeURIComponent(k.aba)}" title="Abre a aba ${esc(k.nome)} da tela Canais: por que este canal está assim.">${esc(k.nome)}</a>`
+      : `<a href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a>`);
     el.innerHTML = `<div class="q-linha"><h2 id="t-canais">Canais · 7 dias</h2><small>${n(tot.c)} conversas · ${n(tot.v)} vendas · ${n(tot.i)} instaladas · ${R(tot.g)} gastos${pct ? ` · <b>${pct}% sem origem</b>` : ''} · <a class="muted" href="configuracoes.html#canais">custos e origens →</a></small></div>
-      <div class="rolagem"><table class="tab"><thead><tr><th>Canal</th><th class="num">Conversas</th><th class="num">Qualificados</th><th class="num">Vendas</th><th class="num">Instaladas</th><th class="num">Gasto</th><th class="num">Custo por venda</th><th class="num col-media">Comissão prevista</th></tr></thead>
-      <tbody>${comMov.map((k) => `<tr><td><a href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a></td>
+      <div class="rolagem"><table class="tab"><thead><tr><th>Canal</th><th>Status</th><th class="num">Conversas</th><th class="num">Qualificados</th><th class="num">Vendas</th><th class="num">Instaladas</th><th class="num">Gasto</th><th class="num">Custo por venda</th><th class="num col-media">Comissão prevista</th><th class="num" title="Comissão prevista ÷ gasto. Vazio quando o canal não gastou.">Retorno</th></tr></thead>
+      <tbody>${comMov.map((k) => `<tr><td>${nome(k)}</td><td>${status(k)}</td>
         <td class="num mono">${n(k.conversas)}</td><td class="num mono">${n(k.qualificados)}</td><td class="num mono">${n(k.vendas)}</td><td class="num mono">${n(k.instaladas)}</td>
-        <td class="num mono">${k.gasto == null ? '—' : R(k.gasto)}</td><td class="num mono">${custo(k)}</td><td class="num mono col-media">${Number(k.comissao_prevista) ? R(k.comissao_prevista) : '—'}</td></tr>`).join('')}</tbody></table></div>
-      ${semMov.length ? `<small class="nota-campo">Sem movimento nos 7 dias: ${semMov.map((k) => `<a class="muted" href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a>`).join(' · ')}</small>` : ''}`;
+        <td class="num mono">${k.gasto == null ? '—' : R(k.gasto)}</td><td class="num mono">${custo(k)}</td><td class="num mono col-media">${Number(k.comissao_prevista) ? R(k.comissao_prevista) : '—'}</td>
+        <td class="num mono">${retorno(k)}</td></tr>`).join('')}</tbody></table></div>
+      ${semMov.length ? `<small class="nota-campo">Sem movimento nos 7 dias: ${semMov.map((k) => `<a class="muted" href="leads.html?aba=todos&amp;origem=${encodeURIComponent(k.canal)}">${esc(k.nome)}</a>${k.status === 'fora_do_ar' ? ' (fora do ar)' : ''}`).join(' · ')}</small>` : ''}`;
     el.hidden = false;
   }
 

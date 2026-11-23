@@ -25,7 +25,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="assets/app.js?v=231126-1"></script>
-<script src="assets/sidebar.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-2"></script>
 <script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
 </head>
@@ -1002,7 +1002,7 @@ Guardar?`)) return;
     document.getElementById('cn-lista').innerHTML = CN.canais.map((k) => `<tr><td><b>${esc(k.nome)}</b> <span class="mono apagado">${esc(k.canal)}</span></td><td>${esc(TIPO_CANAL[k.tipo] || k.tipo)}</td>
       <td>${k.ativo ? `sim${k.subiu_em ? ` · desde ${esc(NG.fmtDiaISO(k.subiu_em))}` : ''}` : '<span class="apagado">ainda não</span>'}</td><td class="apagado">${esc(k.nota || '')}</td></tr>`).join('');
     document.getElementById('cn-custos').innerHTML = CN.custos.length ? CN.custos.map((c) => `<tr><td>${esc(NG.fmtDiaISO(c.dia))}</td><td>${esc(nome[c.canal] || c.canal)}</td>
-      <td class="num mono">${NG.fmtMoeda(Number(c.valor))}</td><td class="apagado">${c.origem_do_dado === 'meta_ads_diario' ? 'coleta da Meta' : 'digitado'}</td></tr>`).join('')
+      <td class="num mono">${NG.fmtMoeda(Number(c.valor))}</td><td class="apagado">${c.origem_do_dado === 'meta_ads_diario' ? 'coleta da Meta' : c.origem_do_dado === 'google_ads_diario' ? 'coleta do Google' : 'digitado'}</td></tr>`).join('')
       : '<tr><td colspan="4" class="vazio">Nenhum custo ainda.</td></tr>';
     document.getElementById('cn-origem').innerHTML = CN.origem.length ? CN.origem.map((c) => `<tr><td>${esc(NG.fmtDataHora(c.created_at))}</td>
       <td>${esc((c.dados && c.dados.nome) || c.nome_contato || 'sem nome')} <span class="mono apagado">${esc(c.telefone || '')}</span></td>

@@ -20,6 +20,11 @@
        · A agência (perfil `agencia`) vê a tela igual, menos o saldo em aberto da conta.
        · Gaveta nova "Por que os leads saíram": anúncio × motivo de saída, só contagem (meta_ads_motivos_saida), carregada
          quando a gaveta abre. Admin, backoffice e agência.
+     23/11 (migration 0369 — tela Canais, prompt docs/Prompt_tela_canais_google_ads_231126_1620.md): o menu passa a chamar
+       "Canais", com uma aba por canal de mídia paga — #meta (padrão, a tela de antes, sem mudança de comportamento) e #google
+       (campanhas, parcela de impressões e perdida por classificação, palavras-chave, dia a dia; "Coleta não configurada"
+       enquanto o google_ads_coleta estiver desligado). Sem aba "Todos os canais": a comparação é o card do Painel, que abre
+       a aba do canal pelo nome. A aba Google só carrega quando abre (a Meta segue com as mesmas chamadas).
      Dados, numa rodada só (regra 19): meta_ads_diario, meta_ads_anuncios, meta_ads_dia(), config_meta_ads_regras,
      meta_ads_conta_saldo (menos a agência), v_meta_ads_posicionamento_7d, meta_ads_posicionamento_diario, meta_ads_conjuntos
      e meta_ads_resultado(). Bairros (v_dfv_bairros) e motivos de saída só quando a gaveta abre. -->
@@ -28,7 +33,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f14">
-<title>Meta Ads · NIOGEN</title>
+<title>Canais · NIOGEN</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -41,7 +46,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-2"></script>
-<script src="assets/sidebar.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-2"></script>
 <style>
   .ma-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .ma-lido.velho { color: var(--warn-fg); }
@@ -98,6 +103,9 @@
   .ma-b-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   #g-bairros .vista { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .ma-pe { color: var(--muted); font-size: 12px; }
+  .ma-aba { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .ma-aba[hidden] { display: none; }
+  .ma-tab td small.apagado, .ma-tab td .sub-l { display: block; font-size: 11.5px; color: var(--muted); font-family: var(--sans); font-weight: 400; }
 </style>
 </head>
 <body>
@@ -106,8 +114,8 @@
   <main class="main lista-densa">
     <header class="cab">
       <div>
-        <h1>Meta Ads</h1>
-        <div class="sub">Quanto custa cada venda que veio de anúncio, e o que precisa de ação agora.</div>
+        <h1>Canais</h1>
+        <div class="sub">Por canal de mídia paga: se está no ar, quanto custa cada venda e o que precisa de ação agora. A comparação entre canais fica no card “Canais · 7 dias” do Painel.</div>
       </div>
       <div class="cab-acoes">
         <span class="ma-lido" id="lido"></span>
@@ -115,6 +123,42 @@
       </div>
     </header>
 
+    <div class="abas pilulas" id="abas-canal" role="tablist" aria-label="Canal">
+      <button type="button" class="aba ativa" role="tab" data-aba="meta" aria-selected="true">Meta Ads</button>
+      <button type="button" class="aba" role="tab" data-aba="google" aria-selected="false">Google Ads</button>
+    </div>
+
+    <div id="aba-google" class="ma-aba" hidden>
+      <section class="faixa-fina" id="g-faixa" aria-label="Resumo do Google Ads no período"><div><span>Carregando…</span></div></section>
+      <section class="ma-acoes" aria-labelledby="g-t-acoes">
+        <h2 id="g-t-acoes">Precisa de ação</h2>
+        <div id="g-acoes" class="ma-acoes"><div class="ma-nada">Carregando…</div></div>
+      </section>
+      <section class="lista padrao" aria-label="Campanhas do Google Ads">
+        <div class="rolagem">
+          <table class="tab ma-tab">
+            <thead><tr>
+              <th>Campanha</th><th>Situação</th>
+              <th class="num" title="Orçamento diário · estratégia de lances · teto de CPC.">Orçamento</th>
+              <th class="num">Custo</th><th class="num">Impressões</th><th class="num">Cliques</th>
+              <th class="num" title="Cliques ÷ impressões.">CTR</th><th class="num">CPC médio</th>
+              <th class="num" title="Conversões contadas pelo Google (clique no botão do WhatsApp da página). Medição de mídia: não cria lead.">Conversões</th>
+              <th class="num" title="Das buscas em que o anúncio podia aparecer, em quantas apareceu (média dos dias do período).">Parcela de impr.</th>
+              <th class="num" title="Parcela perdida porque a classificação do anúncio (lance × qualidade) não bastou.">Perdida por classif.</th>
+            </tr></thead>
+            <tbody id="g-tbody-camp"><tr><td colspan="11" class="vazio">Carregando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="rodape-lista"><span id="g-contagem"></span></div>
+      </section>
+      <section class="ma-gavetas" aria-label="Mais detalhes do Google Ads">
+        <details class="gaveta" id="g-palavras" open><summary><b>Palavras-chave</b><span id="g-r-palavras">…</span></summary><div class="ma-rol" id="g-c-palavras"></div></details>
+        <details class="gaveta" id="g-dias-g"><summary><b>Dia a dia</b><span id="g-r-dias">…</span></summary><div class="ma-rol" id="g-c-dias"></div></details>
+      </section>
+      <div class="ma-pe">Esta aba só mostra. A coleta lê o Google Ads a cada 15 min e não muda campanha, lance, orçamento nem palavra-chave.</div>
+    </div>
+
+    <div id="aba-meta" class="ma-aba">
     <section class="faixa-fina" id="faixa" aria-label="Resumo do período"><div><span>Carregando…</span></div></section>
 
     <section class="ma-acoes" aria-labelledby="t-acoes">
@@ -193,6 +237,7 @@
     </section>
 
     <div class="ma-pe" id="ma-pe">Esta tela só mostra. Pausar, mudar verba ou tirar posicionamento é feito pelo agente de tráfego, que avisa em seguida.</div>
+    </div>
   </main>
 </div>
 <button type="button" class="fab" id="fab" aria-label="Conjunto para o Gerenciador" hidden>⧉</button>
@@ -231,7 +276,8 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
   const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { carregar(); motivosMudou(); } });
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { carregar(); motivosMudou(); if (gCarregou) carregarGoogle(); } });
+  let gCarregou = false, abaAtual = 'meta', gUltimo = null;   // 0369: aba do canal
   let verParados = false, ultimo = null;
   const nomeAd = new Map();   // ad_id → [anúncio, conjunto] (para a gaveta dos motivos)
 
@@ -494,13 +540,157 @@
   }
   function pintarLido() {
     const el = document.getElementById('lido');
-    if (!ultimo) { el.textContent = ''; return; }
-    const min = Math.max(0, Math.round((Date.now() - new Date(ultimo)) / 60000));
-    el.textContent = `lido da Meta há ${min < 60 ? `${min} min` : min < 2880 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} dias`}`;
-    el.title = `Última coleta: ${NG.fmtDataHora(ultimo)}. A coleta roda a cada 15 min.`;
-    el.classList.toggle('velho', min > 60);
+    const google = abaAtual === 'google';
+    const ult = google ? gUltimo : ultimo;
+    if (!ult) { el.textContent = ''; return; }
+    const min = Math.max(0, Math.round((Date.now() - new Date(ult)) / 60000));
+    el.textContent = `lido ${google ? 'do Google' : 'da Meta'} há ${min < 60 ? `${min} min` : min < 2880 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} dias`}`;
+    el.title = `Última coleta: ${NG.fmtDataHora(ult)}. A coleta roda a cada 15 min.`;
+    el.classList.toggle('velho', min > (google ? 45 : 60));
   }
   setInterval(pintarLido, 60000);
+
+  // ───────────── Abas por canal de mídia paga (0369, Ricardo 23/11) ─────────────
+  // #meta (padrão) · #google. O card "Canais · 7 dias" do Painel abre direto a aba do canal. A aba Google só carrega quando abre:
+  // a Meta Ads, que é a padrão, segue com as mesmas chamadas de antes (regra 19).
+  function mostrarAba(aba) {
+    abaAtual = aba === 'google' ? 'google' : 'meta';
+    document.querySelectorAll('#abas-canal .aba').forEach((b) => { const on = b.dataset.aba === abaAtual; b.classList.toggle('ativa', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    document.getElementById('aba-meta').hidden = abaAtual !== 'meta';
+    document.getElementById('aba-google').hidden = abaAtual !== 'google';
+    document.title = `${abaAtual === 'google' ? 'Google Ads' : 'Meta Ads'} · Canais · NIOGEN`;
+    if (abaAtual === 'google' && !gCarregou) { gCarregou = true; carregarGoogle(); }
+    pintarLido();
+  }
+  document.getElementById('abas-canal').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.aba'); if (!b) return;
+    history.replaceState(null, '', `${location.pathname}${location.search}#${b.dataset.aba}`);
+    mostrarAba(b.dataset.aba);
+  });
+  window.addEventListener('hashchange', () => mostrarAba(location.hash.slice(1)));
+
+  const ST_CAMP = { ENABLED: ['ok', 'Ativa'], PAUSED: ['dim', 'Pausada'], REMOVED: ['dim', 'Removida'] };
+  const VEIC = { ELIGIBLE: null, LIMITED: ['warn', 'Limitada'], NOT_ELIGIBLE: ['bad', 'Não qualificada'], PENDING: ['info', 'Pendente'], ENDED: ['dim', 'Encerrada'], PAUSED: null };
+  const VEIC_PAL = { ELIGIBLE: null, RARELY_SERVED: ['warn', 'Não qualificada: baixo volume'] };
+  const LANCE = { MAXIMIZE_CLICKS: 'Maximizar cliques', TARGET_SPEND: 'Maximizar cliques', MANUAL_CPC: 'CPC manual', MAXIMIZE_CONVERSIONS: 'Maximizar conversões', TARGET_CPA: 'CPA desejado', TARGET_IMPRESSION_SHARE: 'Parcela de impressões desejada', MAXIMIZE_CONVERSION_VALUE: 'Maximizar valor' };
+  const CORRESP = { EXACT: 'exata', PHRASE: 'frase', BROAD: 'ampla' };
+  const pct = (v) => (v == null ? '—' : `${N(Math.round(Number(v) * 1000) / 10)} %`);
+  const chip = (par) => (par ? `<span class="chip ${par[0]}">${esc(par[1])}</span>` : '');
+  const R2 = (v) => NG.fmtMoeda(Number(v || 0));
+
+  async function carregarGoogle() {
+    const p = per.valor();
+    const noPer = (d) => !!d && (!p.de || d >= p.de) && (!p.ate || d <= p.ate);
+    const veCusto = ['admin', 'backoffice'].includes(eu.perfil);
+    const [rCamp, rDia, rPal, rConta, rDias, rMao] = await Promise.all([
+      NG.sb.from('google_ads_campanhas').select('campanha_id, nome, status, status_veiculacao, motivos_status, tipo, orcamento_diario, estrategia_lances, teto_cpc, atualizado_em'),
+      NG.sb.from('google_ads_diario').select('dia, campanha_id, campanha_nome, impressoes, cliques, custo, conversoes, parcela_impressoes, parcela_perdida_classificacao, parcela_perdida_orcamento, atualizado_em'),
+      NG.sb.from('google_ads_palavras').select('grupo_nome, palavra, correspondencia, status, status_veiculacao, aprovacao, impressoes_7d, cliques_7d, custo_7d, conversoes_7d'),
+      agencia ? Promise.resolve({ data: [] }) : NG.sb.from('google_ads_conta').select('status, limite_aprovado, gasto_servido, saldo, anuncios_reprovados, anuncios_limitados, coletado_em').order('coletado_em', { ascending: false }).limit(1),
+      NG.sb.rpc('google_ads_dia'),
+      veCusto ? NG.sb.from('canal_custo_dia').select('dia, valor, obs').eq('canal', 'google_ads').order('dia', { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
+    ]);
+    const erro = rCamp.error || rDia.error || rPal.error;
+    if (erro) { document.getElementById('g-tbody-camp').innerHTML = `<tr><td colspan="11" class="vazio">${esc(NG.msgErro(erro))}</td></tr>`; return; }
+    const camp = rCamp.data || [], dia = rDia.data || [], pal = rPal.data || [];
+    const conta = (rConta.data || [])[0] || null;
+    const dias = (rDias.error ? [] : rDias.data || []).filter((d) => noPer(d.dia)).sort((a, b) => (a.dia < b.dia ? 1 : -1));
+    const mao = (rMao.data || []).filter((d) => noPer(d.dia));
+    const coletou = camp.length > 0 || dia.length > 0 || !!conta;
+    gUltimo = [conta && conta.coletado_em, ...camp.map((c) => c.atualizado_em), ...dia.map((d) => d.atualizado_em)].filter(Boolean).sort().pop() || null;
+    pintarLido();
+
+    // Coleta ainda não ligada: explica e mostra o custo digitado à mão — nunca tela vazia sem explicação
+    if (!coletou) {
+      const totMao = soma(mao, 'valor');
+      document.getElementById('g-faixa').innerHTML = `<div><span>Coleta</span><b style="font-family:var(--sans);font-size:13px">não configurada</b><small>o gasto vem do que foi digitado à mão</small></div>`
+        + `<div><span>Custo à mão · ${esc(per.rotulo.toLowerCase())}</span><b>${veCusto ? R(totMao) : '—'}</b><small>${veCusto ? pl(mao.length, 'dia digitado', 'dias digitados') : 'só admin e backoffice veem'}</small></div>`
+        + `<div><span>Vendas (OS)</span><b>${N(soma(dias, 'vendas'))}</b><small>${pl(soma(dias, 'conversas_mari'), 'conversa', 'conversas')} da Mari com origem Google</small></div>`;
+      document.getElementById('g-acoes').innerHTML = `<div class="ma-ac atencao"><span class="chip warn">Coleta</span><div class="ma-ac-t"><b>Coleta do Google Ads não configurada</b><span>O fluxo google_ads_coleta está pronto e desligado no n8n: falta a credencial OAuth do Google Ads (cliente “n8n NIOGEN”, projeto niogen-514022), que passa pelo consentimento no navegador do Ricardo.</span></div><span class="ma-ac-f">${veCusto ? 'Até lá, o custo do dia vai à mão em <a href="configuracoes.html#canais">Configurações › Canais</a>.' : 'Até lá, o custo vem do que a Dharma digita.'}</span></div>`;
+      document.getElementById('g-tbody-camp').innerHTML = `<tr><td colspan="11" class="vazio">Sem leitura do Google Ads ainda — a coleta não foi ligada.</td></tr>`;
+      document.getElementById('g-contagem').textContent = '';
+      document.getElementById('g-r-palavras').textContent = 'chegam com a coleta';
+      document.getElementById('g-c-palavras').innerHTML = '<div class="vazio-curto">As palavras-chave e o status de cada uma chegam com a coleta.</div>';
+      pintarDiasGoogle(dias, mao, veCusto);
+      return;
+    }
+
+    // ---------- por campanha, no período ----------
+    const porC = new Map(camp.map((c) => [c.campanha_id, { ...c, custo: 0, impr: 0, cliq: 0, conv: 0, pi: [], pc: [], po: [] }]));
+    dia.filter((d) => noPer(d.dia)).forEach((d) => {
+      if (!porC.has(d.campanha_id)) porC.set(d.campanha_id, { campanha_id: d.campanha_id, nome: d.campanha_nome, custo: 0, impr: 0, cliq: 0, conv: 0, pi: [], pc: [], po: [] });
+      const c = porC.get(d.campanha_id);
+      c.custo += Number(d.custo || 0); c.impr += d.impressoes || 0; c.cliq += d.cliques || 0; c.conv += Number(d.conversoes || 0);
+      if (d.parcela_impressoes != null) c.pi.push(Number(d.parcela_impressoes));
+      if (d.parcela_perdida_classificacao != null) c.pc.push(Number(d.parcela_perdida_classificacao));
+      if (d.parcela_perdida_orcamento != null) c.po.push(Number(d.parcela_perdida_orcamento));
+    });
+    const media = (l) => (l.length ? l.reduce((s, x) => s + x, 0) / l.length : null);
+    const linhasC = [...porC.values()].filter((c) => c.status !== 'REMOVED' || c.custo > 0).sort((a, b) => (a.status === 'ENABLED' ? 0 : 1) - (b.status === 'ENABLED' ? 0 : 1) || b.custo - a.custo);
+    const tot = linhasC.reduce((t, c) => ({ custo: t.custo + c.custo, impr: t.impr + c.impr, cliq: t.cliq + c.cliq, conv: t.conv + c.conv }), { custo: 0, impr: 0, cliq: 0, conv: 0 });
+    document.getElementById('g-tbody-camp').innerHTML = (linhasC.map((c) => `<tr>
+        <td><b>${esc(c.nome || c.campanha_id)}</b><small>${esc([c.tipo === 'SEARCH' ? 'Pesquisa' : c.tipo, c.campanha_id].filter(Boolean).join(' · '))}</small></td>
+        <td>${chip(ST_CAMP[c.status] || ['dim', c.status || '—'])} ${chip(VEIC[c.status_veiculacao] === undefined ? ['dim', c.status_veiculacao || ''] : VEIC[c.status_veiculacao])}</td>
+        <td class="num">${c.orcamento_diario != null ? `${R2(c.orcamento_diario)}/dia` : '—'}<small class="apagado">${esc(LANCE[c.estrategia_lances] || c.estrategia_lances || '')}${c.teto_cpc != null ? ` · teto ${R2(c.teto_cpc)}` : ''}</small></td>
+        <td class="num">${R2(c.custo)}</td><td class="num">${N(c.impr)}</td><td class="num">${N(c.cliq)}</td>
+        <td class="num">${c.impr ? pct(c.cliq / c.impr) : '—'}</td><td class="num">${c.cliq ? R2(c.custo / c.cliq) : '—'}</td>
+        <td class="num">${N(Math.round(c.conv * 10) / 10)}</td>
+        <td class="num custo">${pct(media(c.pi))}</td><td class="num">${pct(media(c.pc))}</td></tr>`).join('') || '<tr><td colspan="11" class="vazio">Nenhuma campanha.</td></tr>')
+      + `<tr class="total"><td>Total do período</td><td></td><td></td><td class="num">${R2(tot.custo)}</td><td class="num">${N(tot.impr)}</td><td class="num">${N(tot.cliq)}</td>
+          <td class="num">${tot.impr ? pct(tot.cliq / tot.impr) : '—'}</td><td class="num">${tot.cliq ? R2(tot.custo / tot.cliq) : '—'}</td><td class="num">${N(Math.round(tot.conv * 10) / 10)}</td><td></td><td></td></tr>`;
+    const nAtivas = camp.filter((c) => c.status === 'ENABLED').length;
+    document.getElementById('g-contagem').textContent = `${pl(nAtivas, 'campanha ativa', 'campanhas ativas')} · ${per.rotulo.toLowerCase()} · conta 756-012-0293`;
+
+    // ---------- faixa fina ----------
+    const vendas = soma(dias, 'vendas'), convMari = soma(dias, 'conversas_mari');
+    const cv = vendas ? tot.custo / vendas : null;
+    const mes = `${NG.diaSP().slice(0, 8)}01`;
+    const custoMes = dia.filter((d) => d.dia >= mes).reduce((s, d) => s + Number(d.custo || 0), 0);
+    document.getElementById('g-faixa').innerHTML = [
+      `<div title="Custo do período dividido pelas vendas com OS gerada no período (origem Google)."><span>Custo por venda</span><b class="${cv == null ? '' : 'ok'}">${cv == null ? '—' : R(Math.round(cv))}</b><small>${vendas ? pl(vendas, 'venda com OS', 'vendas com OS') : 'nenhuma venda com OS'}</small></div>`,
+      `<div><span>Custo · ${esc(per.rotulo.toLowerCase())}</span><b>${R(tot.custo)}</b><small>${pl(tot.cliq, 'clique', 'cliques')} · ${pl(convMari, 'conversa', 'conversas')} na Mari</small></div>`,
+      `<div><span>Custo do mês</span><b>${R(custoMes)}</b><small>desde ${NG.fmtDiaISO(mes).slice(0, 5)}</small></div>`,
+      agencia ? '' : `<div title="Orçamento da conta (pré-pago) menos o que já foi servido."><span>Saldo pré-pago</span><b>${conta && conta.saldo != null ? R(conta.saldo) : '—'}</b><small>${conta && conta.limite_aprovado != null ? `de ${R(conta.limite_aprovado)}` : 'sem orçamento de conta'}</small></div>`,
+    ].filter(Boolean).join('');
+
+    // ---------- Precisa de ação ----------
+    const ac = [];
+    const add = (nivel, titulo, fato, fazer) => ac.push({ nivel, titulo, fato, fazer });
+    if (conta && conta.status && conta.status !== 'ENABLED') add('agora', 'A conta do Google Ads está parada', `situação: ${conta.status.toLowerCase()}`, 'Ver em Faturamento no Google Ads.');
+    if (conta && conta.saldo != null && Number(conta.saldo) <= 0) add('agora', 'O pré-pago do Google acabou', 'os anúncios param até recarregar', 'Recarregar o pré-pago no Google Ads.');
+    if (!nAtivas) add('agora', 'Nenhuma campanha do Google no ar', pl(camp.length, 'campanha', 'campanhas') + ' na conta, nenhuma ativa', 'Conferir no Google Ads se a pausa foi de propósito.');
+    if (conta && conta.anuncios_reprovados > 0) add('agora', `${pl(conta.anuncios_reprovados, 'anúncio reprovado', 'anúncios reprovados')} no Google`, 'reprovado não entrega', 'Ver o motivo da política no Google Ads e corrigir o anúncio.');
+    const piMedia = media(linhasC.flatMap((c) => c.pi)), pcMedia = media(linhasC.flatMap((c) => c.pc));
+    if (pcMedia != null && pcMedia >= 0.5) add('atencao', 'A campanha perde a maior parte das buscas pela classificação', `aparece em ${pct(piMedia)} das buscas; perde ${pct(pcMedia)} por lance ou qualidade`, 'Subir o teto de CPC ou melhorar o anúncio e a página — mais verba sozinha não resolve.');
+    const baixo = pal.filter((k) => k.status === 'ENABLED' && k.status_veiculacao === 'RARELY_SERVED');
+    if (baixo.length) add('atencao', `${pl(baixo.length, 'palavra-chave não qualificada', 'palavras-chave não qualificadas')} por baixo volume`, baixo.slice(0, 4).map((k) => k.palavra).join(', ') + (baixo.length > 4 ? '…' : ''), 'Trocar por termos com mais busca na região.');
+    if (tot.custo >= 100 && !vendas) add('atencao', 'O Google gastou sem trazer venda no período', `${R(tot.custo)} · ${pl(convMari, 'conversa', 'conversas')} na Mari`, 'Comparar com o Meta no card Canais do Painel antes de mexer na verba.');
+    const ROT = { agora: ['bad', 'Agora'], atencao: ['warn', 'Atenção'] };
+    ac.sort((a, b) => (a.nivel === 'agora' ? 0 : 1) - (b.nivel === 'agora' ? 0 : 1));
+    document.getElementById('g-t-acoes').textContent = ac.length ? `Precisa de ação · ${ac.length}` : 'Precisa de ação';
+    document.getElementById('g-acoes').innerHTML = ac.length ? ac.map((a) => `<div class="ma-ac ${a.nivel}"><span class="chip ${ROT[a.nivel][0]}">${ROT[a.nivel][1]}</span>
+        <div class="ma-ac-t"><b>${esc(a.titulo)}</b><span>${esc(a.fato)}</span></div><span class="ma-ac-f">${esc(a.fazer)}</span></div>`).join('') : '<div class="ma-nada">Nada pedindo ação agora ✓</div>';
+
+    // ---------- palavras-chave ----------
+    const pals = pal.filter((k) => k.status !== 'REMOVED').sort((a, b) => Number(b.custo_7d) - Number(a.custo_7d) || b.impressoes_7d - a.impressoes_7d);
+    document.getElementById('g-r-palavras').textContent = `${pl(pals.filter((k) => k.status === 'ENABLED').length, 'ativa', 'ativas')}${baixo.length ? ` · ${N(baixo.length)} com baixo volume` : ''} · números dos últimos 7 dias`;
+    document.getElementById('g-c-palavras').innerHTML = pals.length ? `<table class="ma-g-tab"><thead><tr><th>Palavra-chave</th><th>Situação</th><th>Custo</th><th>Impressões</th><th>Cliques</th><th>Conversões</th></tr></thead><tbody>
+      ${pals.map((k) => `<tr><td>${esc(k.palavra || '—')} <small class="apagado">· ${esc(CORRESP[k.correspondencia] || k.correspondencia || '')}${k.grupo_nome ? ` · ${esc(k.grupo_nome)}` : ''}</small></td>
+        <td style="text-align:left">${chip(ST_CAMP[k.status] ? [ST_CAMP[k.status][0], k.status === 'ENABLED' ? 'Ativa' : ST_CAMP[k.status][1]] : ['dim', k.status || '—'])} ${chip(VEIC_PAL[k.status_veiculacao] === undefined ? ['dim', k.status_veiculacao || ''] : VEIC_PAL[k.status_veiculacao])}${k.aprovacao && k.aprovacao !== 'APPROVED' ? ` ${chip(['bad', k.aprovacao === 'DISAPPROVED' ? 'Reprovada' : k.aprovacao])}` : ''}</td>
+        <td>${R2(k.custo_7d)}</td><td>${N(k.impressoes_7d)}</td><td>${N(k.cliques_7d)}</td><td>${N(Math.round(Number(k.conversoes_7d) * 10) / 10)}</td></tr>`).join('')}</tbody></table>` : '<div class="vazio-curto">Nenhuma palavra-chave lida.</div>';
+    pintarDiasGoogle(dias, mao, veCusto);
+  }
+  function pintarDiasGoogle(dias, mao, veCusto) {
+    const maoDia = new Map(mao.map((m) => [m.dia, Number(m.valor)]));
+    const lista = dias.slice();
+    maoDia.forEach((v, d) => { if (!lista.some((x) => x.dia === d)) lista.push({ dia: d, custo: 0, impressoes: 0, cliques: 0, conversoes_google: 0, conversas_mari: 0, com_cep: 0, qualificadas: 0, vendas: 0 }); });
+    lista.sort((a, b) => (a.dia < b.dia ? 1 : -1));
+    const fonte = (r) => (Number(r.custo) > 0 || r.impressoes ? ['coleta', Number(r.custo)] : maoDia.has(r.dia) ? ['à mão', maoDia.get(r.dia)] : ['', 0]);
+    document.getElementById('g-r-dias').textContent = `${pl(lista.length, 'dia', 'dias')} · ${pl(soma(lista, 'vendas'), 'venda com OS', 'vendas com OS')}`;
+    document.getElementById('g-c-dias').innerHTML = lista.length ? `<table class="ma-g-tab"><thead><tr><th>Dia</th><th>Custo</th><th>Fonte</th><th>Impressões</th><th>Cliques</th><th>Conversões (Google)</th><th>Conversas (Mari)</th><th>Com CEP atendido</th><th>Qualificadas</th><th>Vendas (OS)</th></tr></thead><tbody>
+      ${lista.map((r) => { const [f, v] = fonte(r); return `<tr><td>${esc(NG.fmtDiaISO(r.dia))}</td><td>${f === 'à mão' && !veCusto ? '—' : R2(v)}</td><td>${esc(f || '—')}</td><td>${N(r.impressoes)}</td><td>${N(r.cliques)}</td><td>${N(Math.round(Number(r.conversoes_google || 0) * 10) / 10)}</td><td>${N(r.conversas_mari)}</td><td>${N(r.com_cep)}</td><td>${N(r.qualificadas)}</td><td>${N(r.vendas)}</td></tr>`; }).join('')}</tbody></table>
+      <p class="ma-nota">Fonte do custo: a coleta, quando o dia veio do Google; senão, o digitado em Configurações › Canais — nunca os dois somados. Conversão do Google é medição de mídia e não cria lead; a origem do lead vem da marca (GADS) na 1ª mensagem.</p>` : '<div class="vazio-curto">Nada no período.</div>';
+  }
   document.getElementById('ver-parados').addEventListener('click', (ev) => { if (ev.target.closest('#bt-parados')) { verParados = !verParados; carregar(); } });
 
   // ───────────── Por que os leads saíram (0361) ─────────────
@@ -677,7 +867,8 @@
   gBairros.addEventListener('toggle', () => { if (gBairros.open && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); } });
   if (new URLSearchParams(location.search).get('vista') === 'bairros') { gBairros.open = true; requestAnimationFrame(() => gBairros.scrollIntoView({ block: 'start' })); }
 
-  NG.botaoAtualizar(() => carregar());
+  NG.botaoAtualizar(() => { carregar(); if (gCarregou) carregarGoogle(); });
+  mostrarAba(location.hash.slice(1));   // 0369: o card Canais do Painel abre metaads.html#google
   carregar();
 })();
 </script>

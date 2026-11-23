@@ -45,7 +45,7 @@
       { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice', 'agencia'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
-      { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
+      { id: 'meta', ico: '▲', nome: 'Canais', href: 'metaads.html' },   // 23/11 (0369): Meta Ads virou Canais, com uma aba por canal pago
     ]],
     ['Financeiro', [
       { id: 'adimplencia', ico: '◇', nome: 'Adimplência', href: 'adimplencia.html', perfis: ['admin', 'backoffice'], esconder: true },
@@ -164,9 +164,9 @@
     const nav = navEl || document.getElementById('sidebar');
     const caixa = nav && nav.querySelector('[data-status]');   // 22/11: não existe mais no menu (só as bolinhas do celular)
     try {
-      if (!data || (!data.mari && !data.meta)) { if (caixa) caixa.hidden = true; return; }
+      if (!data || (!data.mari && !data.meta && !data.google)) { if (caixa) caixa.hidden = true; return; }
       if (caixa) caixa.hidden = false;
-      const ks = ['mari', 'meta'].filter((k) => data[k]);   // módulo desligado = selo some (0144)
+      const ks = ['mari', 'meta', 'google'].filter((k) => data[k]);   // módulo desligado = selo some (0144) · 0369: google só depois da 1ª coleta
       const perfil = (NG.usuario || {}).perfil;
       const selo = (k, s) => {
         const motivo = (s.motivos || []).join(' · ');

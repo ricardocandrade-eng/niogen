@@ -1,0 +1,396 @@
+{
+  "name": "google_ads_coleta",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "name": "1 · A cada 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "81de2789-f00c-574f-bec9-012d79f839e3"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-google-ads-coleta",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1w · Rodar agora (teste)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        220
+      ],
+      "id": "dc9a6526-88d9-56a6-948f-3db27027dcda",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "80d92dcc-f56f-5956-946a-a154bce4f584"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT campaign.id, campaign.name, campaign.status, campaign.primary_status, campaign.primary_status_reasons, campaign.advertising_channel_type, campaign.bidding_strategy_type, campaign.target_spend.cpc_bid_ceiling_micros, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Google campanhas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        100
+      ],
+      "id": "86e1bf2d-dd98-5916-93db-e0d6ee9293d3",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: \"SELECT segments.date, campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.search_impression_share, metrics.search_rank_lost_impression_share, metrics.search_budget_lost_impression_share FROM campaign WHERE segments.date BETWEEN '\" + $now.setZone('America/Sao_Paulo').minus({ days: 2 }).toFormat('yyyy-MM-dd') + \"' AND '\" + $now.setZone('America/Sao_Paulo').toFormat('yyyy-MM-dd') + \"'\" }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "3 · Google dia a dia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        100
+      ],
+      "id": "c46bcd2b-70fa-5eca-a3f7-3d4233603799",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT campaign.id, ad_group.id, ad_group.name, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status, ad_group_criterion.system_serving_status, ad_group_criterion.approval_status FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.status != 'REMOVED'\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "4 · Google palavras",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        100
+      ],
+      "id": "ece72a7d-970c-51ad-95fe-650e10bbcef9",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT ad_group.id, ad_group_criterion.criterion_id, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions FROM keyword_view WHERE segments.date DURING LAST_7_DAYS\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "5 · Google palavras 7 dias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        100
+      ],
+      "id": "c52cce95-bea0-53d5-87f5-304bc5e029c3",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.status FROM customer\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "6 · Google conta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        100
+      ],
+      "id": "75f123e3-9df1-5438-95f4-87527a224e67",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT account_budget.status, account_budget.approved_spending_limit_micros, account_budget.amount_served_micros FROM account_budget WHERE account_budget.status = 'APPROVED'\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "7 · Google orçamento da conta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        100
+      ],
+      "id": "8587bf38-a859-58ce-90ca-bb5c501d1a49",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleOAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"SELECT ad_group_ad.ad.id, ad_group_ad.policy_summary.approval_status FROM ad_group_ad WHERE ad_group_ad.status = 'ENABLED'\"}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "8 · Google anúncios",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        100
+      ],
+      "id": "8d37b659-e7f8-5563-89fd-7c8d5d5c2264",
+      "retryOnFail": false,
+      "maxTries": 2,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = (n) => { try { const j = $(n).first().json; return Array.isArray(j.results) ? j.results : []; } catch (e) { return []; } };\nconst m = (v) => (v == null ? null : Math.round(Number(v) / 10000) / 100);   // micros → reais (2 casas)\nconst camp = r('2 · Google campanhas').map((x) => ({\n  id: String(x.campaign.id), conta_id: '7560120293', nome: x.campaign.name, status: x.campaign.status,\n  status_veiculacao: x.campaign.primaryStatus || null, motivos_status: x.campaign.primaryStatusReasons || [],\n  tipo: x.campaign.advertisingChannelType || null, estrategia_lances: x.campaign.biddingStrategyType || null,\n  teto_cpc: m(x.campaign.targetSpend && x.campaign.targetSpend.cpcBidCeilingMicros),\n  orcamento_diario: m(x.campaignBudget && x.campaignBudget.amountMicros),\n}));\nconst diario = r('3 · Google dia a dia').map((x) => ({\n  dia: x.segments.date, campanha_id: String(x.campaign.id), campanha_nome: x.campaign.name,\n  impressoes: Number(x.metrics.impressions || 0), cliques: Number(x.metrics.clicks || 0), custo: m(x.metrics.costMicros) || 0,\n  conversoes: Number(x.metrics.conversions || 0),\n  parcela_impressoes: x.metrics.searchImpressionShare ?? null,\n  parcela_perdida_classificacao: x.metrics.searchRankLostImpressionShare ?? null,\n  parcela_perdida_orcamento: x.metrics.searchBudgetLostImpressionShare ?? null,\n}));\nconst met = new Map();\nr('5 · Google palavras 7 dias').forEach((x) => {\n  const k = `${x.adGroup.id}|${x.adGroupCriterion.criterionId}`;\n  const a = met.get(k) || { i: 0, c: 0, g: 0, v: 0 };\n  a.i += Number(x.metrics.impressions || 0); a.c += Number(x.metrics.clicks || 0);\n  a.g += Number(x.metrics.costMicros || 0); a.v += Number(x.metrics.conversions || 0); met.set(k, a);\n});\nconst palavras = r('4 · Google palavras').map((x) => {\n  const k = `${x.adGroup.id}|${x.adGroupCriterion.criterionId}`; const a = met.get(k) || { i: 0, c: 0, g: 0, v: 0 };\n  return { grupo_id: String(x.adGroup.id), criterio_id: String(x.adGroupCriterion.criterionId), campanha_id: String(x.campaign.id),\n    grupo_nome: x.adGroup.name, palavra: x.adGroupCriterion.keyword && x.adGroupCriterion.keyword.text,\n    correspondencia: x.adGroupCriterion.keyword && x.adGroupCriterion.keyword.matchType, status: x.adGroupCriterion.status,\n    status_veiculacao: x.adGroupCriterion.systemServingStatus || null, aprovacao: x.adGroupCriterion.approvalStatus || null,\n    impressoes_7d: a.i, cliques_7d: a.c, custo_7d: m(a.g) || 0, conversoes_7d: a.v };\n});\nconst cli = (r('6 · Google conta')[0] || {}).customer || {};\nconst orc = r('7 · Google orçamento da conta').map((x) => x.accountBudget || {});\nconst ads = r('8 · Google anúncios').map((x) => (x.adGroupAd && x.adGroupAd.policySummary && x.adGroupAd.policySummary.approvalStatus) || '');\nconst conta = { id: '7560120293', nome: cli.descriptiveName || null, moeda: cli.currencyCode || null, status: cli.status || null,\n  limite_aprovado: orc.length ? m(orc.reduce((s, b) => s + Number(b.approvedSpendingLimitMicros || 0), 0)) : null,\n  gasto_servido: orc.length ? m(orc.reduce((s, b) => s + Number(b.amountServedMicros || 0), 0)) : null,\n  anuncios_reprovados: ads.filter((s) => s === 'DISAPPROVED').length,\n  anuncios_limitados: ads.filter((s) => s === 'APPROVED_LIMITED' || s === 'AREA_OF_INTEREST_ONLY').length };\nreturn [{ json: { p_campanhas: camp, p_diario: diario, p_palavras: palavras, p_conta: conta } }];"
+      },
+      "name": "9 · Normalizar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        100
+      ],
+      "id": "cf9bbbe3-e237-5e57-91f4-acfc64998b62"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/google_ads_gravar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "name": "10 · Supabase gravar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        100
+      ],
+      "id": "3b89ac35-b4a9-5c5d-b92a-f09b24d2ff1d",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "1 · A cada 15 min": {
+      "main": [
+        [
+          {
+            "node": "2 · Google campanhas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Google campanhas": {
+      "main": [
+        [
+          {
+            "node": "3 · Google dia a dia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Google dia a dia": {
+      "main": [
+        [
+          {
+            "node": "4 · Google palavras",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4 · Google palavras": {
+      "main": [
+        [
+          {
+            "node": "5 · Google palavras 7 dias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Google palavras 7 dias": {
+      "main": [
+        [
+          {
+            "node": "6 · Google conta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Google conta": {
+      "main": [
+        [
+          {
+            "node": "7 · Google orçamento da conta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Google orçamento da conta": {
+      "main": [
+        [
+          {
+            "node": "8 · Google anúncios",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Google anúncios": {
+      "main": [
+        [
+          {
+            "node": "9 · Normalizar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9 · Normalizar": {
+      "main": [
+        [
+          {
+            "node": "10 · Supabase gravar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1w · Rodar agora (teste)": {
+      "main": [
+        [
+          {
+            "node": "2 · Google campanhas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": false
+}
