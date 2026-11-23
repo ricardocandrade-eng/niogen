@@ -53,7 +53,8 @@ class Nota:
 
     def t(self, caminho, base=None):
         e = (base if base is not None else self.inf).find(caminho, NS)
-        return e.text.strip() if e is not None and e.text else None
+        # espaços repetidos no meio do texto (o XML de produção trouxe "TERREO              PAVMTO1") viram um só, como no oficial
+        return ' '.join(e.text.split()) if e is not None and e.text and e.text.strip() else None
 
     def d(self, caminho):
         return self.t(caminho, self.dps)
@@ -292,19 +293,34 @@ def gerar_pdf(xml_bytes):
     f.titulo_secao('TRIBUTAÇÃO FEDERAL (EXCETO CBS)', [('IRRF', real(d('n:valores/n:trib/n:tribFed/n:vRetIRRF'))),
                                                      ('Contribuição Previdenciária - Retida', real(d('n:valores/n:trib/n:tribFed/n:vRetCP'))),
                                                      ('Contribuições Sociais - Retidas', real(d('n:valores/n:trib/n:tribFed/n:vRetCSLL')))])
+    pc = 'n:valores/n:trib/n:tribFed/n:piscofins/'
+    f.grade([('PIS - Débito Apuração Própria', real(d(pc + 'n:vPis'))), ('COFINS - Débito Apuração Própria', real(d(pc + 'n:vCofins'))),
+             ('Descrição Contrib. Sociais - Retidas', nz(d('n:valores/n:trib/n:tribFed/n:xContribSoc')))])
+    # IBS/CBS: mesmos campos do DANFSe oficial (as notas da Dharma de 2026 não trazem o grupo; ficam "-")
+    ib = 'n:IBSCBS/'
     f.linha(f.y)
-    f.titulo_secao('TRIBUTAÇÃO IBS/CBS', [('CST / cClassTrib', f'{nz(d("n:IBSCBS/n:valores/n:trib/n:CST"))} / '
-                                                              f'{nz(d("n:IBSCBS/n:valores/n:trib/n:cClassTrib"))}'),
-                                         ('Valor Total Apurado - IBS', real(n.t('n:IBSCBS/n:totCIBS/n:gIBS/n:vIBSTot'))),
-                                         ('Valor Total Apurado - CBS', real(n.t('n:IBSCBS/n:totCIBS/n:gCBS/n:vCBS')))])
+    f.titulo_secao('TRIBUTAÇÃO IBS/CBS', [('CST / cClassTrib', f'{nz(d(ib + "n:valores/n:trib/n:CST"))} / '
+                                                              f'{nz(d(ib + "n:valores/n:trib/n:cClassTrib"))}'),
+                                         ('Indicador de Operação / Código IBGE Incidência / Município Incidência / Sigla UF',
+                                          f'{nz(d(ib + "n:cIndOp"))} / {nz(n.t(ib + "n:cLocalidadeIncid"))} / '
+                                          f'{nz(n.t(ib + "n:xLocalidadeIncid"))} / -'), ('', '')])
+    f.grade([('Exclusões e Reduções da Base de Cálculo', real(n.t(ib + 'n:valores/n:vCalcReeRepRes'))),
+             ('Base de Cálculo Após Exclusões e Reduções', real(n.t(ib + 'n:valores/n:vBC'))),
+             ('Red. Alíquota IBS / Red. Alíquota CBS', '- / - / -'), ('Alíquota - IBS UF / IBS Mun', '- / -')])
+    f.grade([('Alíq. Efetiva Municipal - IBS', '-'), ('Valor Apurado Municipal - IBS', real(n.t(ib + 'n:totCIBS/n:gIBS/n:gIBSMunTot/n:vIBSMun'))),
+             ('Alíq. Efetiva Estadual - IBS', '-'), ('Valor Apurado Estadual - IBS', real(n.t(ib + 'n:totCIBS/n:gIBS/n:gIBSUFTot/n:vIBSUF')))])
+    f.grade([('Valor Total Apurado - IBS', real(n.t(ib + 'n:totCIBS/n:gIBS/n:vIBSTot'))), ('Alíquota - CBS', '-'),
+             ('Alíquota Efetiva - CBS', '-'), ('Valor Total Apurado - CBS', real(n.t(ib + 'n:totCIBS/n:gCBS/n:vCBS')))])
 
     # valores
     f.linha(f.y)
-    f.titulo_secao('VALOR TOTAL DA NFS-e', [('Valor da Operação / Serviço', real(d('n:valores/n:vServPrest/n:vServ'))),
+    f.titulo_secao('VALOR TOTAL DA NFS-e', [('VALOR DA OPERAÇÃO / SERVIÇO', real(d('n:valores/n:vServPrest/n:vServ'))),
                                            ('Desconto Incondicionado', real(d('n:valores/n:vDescCondIncond/n:vDescIncond'))),
                                            ('Desconto Condicionado', real(d('n:valores/n:vDescCondIncond/n:vDescCond')))])
+    ibscbs = sum(float(n.t(ib + c) or 0) for c in ('n:totCIBS/n:gIBS/n:vIBSTot', 'n:totCIBS/n:gCBS/n:vCBS'))
     f.grade([('Total das Retenções (ISSQN / Federais)', real(n.t('n:valores/n:vTotalRet'))),
-             ('VALOR LÍQUIDO DA NFS-e', real(n.t('n:valores/n:vLiq')))])
+             ('VALOR LÍQUIDO DA NFS-e', real(n.t('n:valores/n:vLiq'))), ('Total do IBS/CBS', real(ibscbs)),
+             ('VALOR LÍQUIDO DA NFS-e + IBS/CBS', real(n.t(ib + 'n:totCIBS/n:vTotNF') or 0))])
 
     # informações complementares
     f.linha(f.y)
