@@ -234,18 +234,38 @@
     return ['dim', et, 'Etapa mais alta alcançada.'];
   }
 
+  // 22/11 (regra 19, Ricardo: "Resolve o tempo de Conversas"): medido — a função responde em ~0,25 s; o que pesava era o tamanho
+  // da resposta (239 conversas inteiras = 223 KB → ~0,65 s). Na PRIMEIRA abertura, na aba Abertas e sem filtro, a tela pede antes
+  // só as abertas (as ~50 que aparecem), pinta, e a lista completa chega logo atrás (os contadores das outras abas mostram "…"
+  // nesse intervalo). Depois disso, e em qualquer outro caso, é uma leitura só, como antes.
+  let primeira = true, parcial = false;
+  const lerLista = (soAbertas) => {
+    const filtro = (qy) => (soAbertas ? qy.eq('encerrada', false).or('chatwoot_status.is.null,chatwoot_status.neq.resolved') : qy);
+    return filtro(NG.sb.rpc('conversas_lista')).order('ultima_em', { ascending: false }).limit(500)
+      .then((r) => (r.error ? filtro(NG.sb.from('v_conversas').select('*')).order('ultima_em', { ascending: false }).limit(500) : r));
+  };
+  const guardar = (data) => { lista = (data || []).map((c) => ({ ...c, nome: NG.nomeLegivel(c.nome, c.telefone) })); };   // 16/11: nome legível (conversa 119)
   async function carregar() {
     // 22/11 (regra 19): as três leituras saem juntas; a lista aparece assim que a v_conversas chega, e os selos que dependem
     // das outras duas (nome da etapa, "fora da Live") entram quando elas chegarem.
     // 22/11 (0360, regra 19): a lista vem da conversas_lista() — as mesmas linhas da v_conversas, sem o RLS conferido linha a
     // linha (~1,0–1,4 s → ~0,3 s). A tela é só de admin/backoffice. Se a função falhar, cai na visão, como antes.
-    const pc = NG.sb.rpc('conversas_lista').order('ultima_em', { ascending: false }).limit(500)
-      .then((r) => (r.error ? NG.sb.from('v_conversas').select('*').order('ultima_em', { ascending: false }).limit(500) : r));
+    const emDuas = primeira && aba === 'abertas' && !Object.keys(TESTE).some((k) => f[k]) && !buscaEl.value.trim();
+    primeira = false;
+    const pc = lerLista(false);
+    if (emDuas) {
+      const ra = await lerLista(true);
+      if (!ra.error && !lista.length) {
+        parcial = true; guardar(ra.data); render();
+        if (window.NGcvTempo == null) window.NGcvTempo = Math.round(performance.now() - T0);   // regra 19: lista na tela
+      }
+    }
     NG.funilNomes().then((fn) => { fnome = fn; if (lista.length) render(); }, () => {});
     NG.furosJornada().then((fu) => { furos = fu.ids || new Set(); if (lista.length) render(); }, () => {});
     const { data, error } = await pc;
-    if (error) { itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
-    lista = (data || []).map((c) => ({ ...c, nome: NG.nomeLegivel(c.nome, c.telefone) }));   // 16/11: nome legível (conversa 119)
+    if (error) { if (parcial) { parcial = false; render(); NG.toast(NG.msgErro(error), 'bad'); return; } itensEl.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
+    parcial = false;
+    guardar(data);
     render();
     if (atual && !movel()) sobre();
     if (window.NGcvTempo == null) window.NGcvTempo = Math.round(performance.now() - T0);   // regra 19: lista na tela desde o início do script
@@ -281,7 +301,8 @@
     const naAba = q ? () => true : (ABAS.find((a) => a[0] === aba) || ABAS[2])[2];
     document.getElementById('filtros').innerHTML = ABAS.map(([id, nome, fn, ajuda]) => {
       const n = base.filter(fn).length;
-      return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${aba === id}" title="${esc(ajuda)}" class="${aba === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${n}</b></button>`;
+      const conta = parcial && id !== 'abertas' ? '…' : n;   // a lista completa ainda está chegando: só o número das Abertas já é certo
+      return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${aba === id}" title="${esc(ajuda)}" class="${aba === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${conta}</b></button>`;
     }).join('');
     // 22/11 (Ricardo: "ordem como no WhatsApp"): a mensagem mais recente em cima, em todas as abas.
     const l = base.filter(naAba).sort((a, b) => new Date(b.ultima_em) - new Date(a.ultima_em));
