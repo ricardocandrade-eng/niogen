@@ -285,8 +285,12 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
   const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { carregar(); motivosMudou(); if (gCarregou) carregarGoogle(); } });
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { if (mCarregou) carregar(); motivosMudou(); if (gCarregou) carregarGoogle(); } });
   let gCarregou = false, abaAtual = 'meta', gUltimo = null;   // 0369: aba do canal
+  // 23/11 (regra 19): cada aba carrega só quando abre — a Google, aberta direto pelo card do Painel, não carrega mais a Meta escondida
+  // (26 → menos chamadas). O config_meta_ads_regras é lido uma vez e serve às duas abas; o ↻ Atualizar lê de novo.
+  let mCarregou = false, cfgRegras = null;
+  const lerCfg = () => (cfgRegras = cfgRegras || NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'));
   let CFGG = {};   // 0372: limites do aviso de clique → conversa (config_meta_ads_regras)
   let verParados = false, ultimo = null;
   const nomeAd = new Map();   // ad_id → [anúncio, conjunto] (para a gaveta dos motivos)
@@ -320,7 +324,7 @@
       NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas, atualizado_em'),
       NG.sb.from('meta_ads_anuncios').select('ad_id, ad_nome, adset_id, adset_nome, campanha_nome, status_efetivo, atualizado_em'),
       NG.sb.rpc('meta_ads_dia'),   // 0361: o dia a dia, sem coluna de venda nem de comissão
-      NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'),
+      lerCfg(),
       agencia ? Promise.resolve({ data: [] })   // 0361: o saldo em aberto é cobrança nossa; a agência não lê (o banco também nega)
         : NG.sb.from('meta_ads_conta_saldo').select('saldo, imposto_estimado, limite_cobranca, proxima_cobranca_em, fonte_data, coletado_em').order('coletado_em', { ascending: false }).limit(1),
       NG.sb.from('v_meta_ads_posicionamento_7d').select('plataforma, posicao, gasto, conversas, fatia_gasto, alerta, atualizado_em'),
@@ -564,6 +568,7 @@
     document.getElementById('aba-google').hidden = abaAtual !== 'google';
     document.title = `${abaAtual === 'google' ? 'Google Ads' : 'Meta Ads'} · Canais · NIOGEN`;
     if (abaAtual === 'google' && !gCarregou) { gCarregou = true; carregarGoogle(); }
+    if (abaAtual === 'meta' && !mCarregou) { mCarregou = true; carregar(); }
     pintarLido();
   }
   document.getElementById('abas-canal').addEventListener('click', (ev) => {
@@ -642,7 +647,7 @@
       agencia ? Promise.resolve({ data: [] }) : NG.sb.from('google_ads_conta').select('status, limite_aprovado, gasto_servido, saldo, anuncios_reprovados, anuncios_limitados, coletado_em').order('coletado_em', { ascending: false }).limit(1),
       NG.sb.rpc('google_ads_dia'),
       veCusto ? NG.sb.from('canal_custo_dia').select('dia, valor, obs').eq('canal', 'google_ads').order('dia', { ascending: false }).limit(60) : Promise.resolve({ data: [] }),
-      NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma').in('chave', ['clique_conversa_min_cliques', 'clique_conversa_taxa_min']),   // 0372
+      lerCfg(),   // 0372: os limites do aviso de clique → conversa (a mesma leitura da aba Meta)
     ]);
     CFGG = Object.fromEntries((rCfgG.data || []).map((c) => [c.chave, Number(c.valor)]));
     const erro = rCamp.error || rDia.error || rPal.error;
@@ -929,9 +934,8 @@
   gBairros.addEventListener('toggle', () => { if (gBairros.open && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); } });
   if (new URLSearchParams(location.search).get('vista') === 'bairros') { gBairros.open = true; requestAnimationFrame(() => gBairros.scrollIntoView({ block: 'start' })); }
 
-  NG.botaoAtualizar(() => { carregar(); if (gCarregou) carregarGoogle(); });
-  mostrarAba(location.hash.slice(1));   // 0369: o card Canais do Painel abre metaads.html#google
-  carregar();
+  NG.botaoAtualizar(() => { cfgRegras = null; if (mCarregou) carregar(); if (gCarregou) carregarGoogle(); });
+  mostrarAba(location.hash.slice(1));   // 0369: o card Canais do Painel abre metaads.html#google · carrega só a aba aberta
 })();
 </script>
 </body>
