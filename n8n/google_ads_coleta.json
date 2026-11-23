@@ -48,7 +48,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -68,8 +68,8 @@
       "id": "86e1bf2d-dd98-5916-93db-e0d6ee9293d3",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": true,
@@ -79,7 +79,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -99,8 +99,8 @@
       "id": "c46bcd2b-70fa-5eca-a3f7-3d4233603799",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": true,
@@ -110,7 +110,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -130,8 +130,8 @@
       "id": "ece72a7d-970c-51ad-95fe-650e10bbcef9",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": false,
@@ -143,7 +143,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -163,8 +163,8 @@
       "id": "c52cce95-bea0-53d5-87f5-304bc5e029c3",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": false,
@@ -176,7 +176,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -196,8 +196,8 @@
       "id": "75f123e3-9df1-5438-95f4-87527a224e67",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": false,
@@ -209,7 +209,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -229,8 +229,8 @@
       "id": "8587bf38-a859-58ce-90ca-bb5c501d1a49",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": false,
@@ -242,7 +242,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://googleads.googleapis.com/v22/customers/7560120293/googleAds:search",
+        "url": "https://googleads.googleapis.com/v25/customers/7560120293/googleAds:search",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "googleOAuth2Api",
         "sendBody": true,
@@ -262,8 +262,8 @@
       "id": "8d37b659-e7f8-5563-89fd-7c8d5d5c2264",
       "credentials": {
         "googleOAuth2Api": {
-          "id": "Pq1NJDnXWbq0L1XN",
-          "name": "Google Ads Nio — NIOGEN"
+          "id": "GdWDFtffFXEkca2J",
+          "name": "Google account"
         }
       },
       "retryOnFail": false,
@@ -434,5 +434,5 @@
     "timezone": "America/Sao_Paulo",
     "errorWorkflow": "Nsb1dcL3HWQpKSav"
   },
-  "active": false
+  "active": true
 }

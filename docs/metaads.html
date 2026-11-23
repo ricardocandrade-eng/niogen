@@ -573,7 +573,7 @@
   window.addEventListener('hashchange', () => mostrarAba(location.hash.slice(1)));
 
   const ST_CAMP = { ENABLED: ['ok', 'Ativa'], PAUSED: ['dim', 'Pausada'], REMOVED: ['dim', 'Removida'] };
-  const VEIC = { ELIGIBLE: null, LIMITED: ['warn', 'Limitada'], NOT_ELIGIBLE: ['bad', 'Não qualificada'], PENDING: ['info', 'Pendente'], ENDED: ['dim', 'Encerrada'], PAUSED: null };
+  const VEIC = { ELIGIBLE: null, LEARNING: ['info', 'Aprendendo'], LIMITED: ['warn', 'Limitada'], NOT_ELIGIBLE: ['bad', 'Não qualificada'], PENDING: ['info', 'Pendente'], ENDED: ['dim', 'Encerrada'], PAUSED: null };
   const VEIC_PAL = { ELIGIBLE: null, RARELY_SERVED: ['warn', 'Não qualificada: baixo volume'] };
   const LANCE = { MAXIMIZE_CLICKS: 'Maximizar cliques', TARGET_SPEND: 'Maximizar cliques', MANUAL_CPC: 'CPC manual', MAXIMIZE_CONVERSIONS: 'Maximizar conversões', TARGET_CPA: 'CPA desejado', TARGET_IMPRESSION_SHARE: 'Parcela de impressões desejada', MAXIMIZE_CONVERSION_VALUE: 'Maximizar valor' };
   const CORRESP = { EXACT: 'exata', PHRASE: 'frase', BROAD: 'ampla' };

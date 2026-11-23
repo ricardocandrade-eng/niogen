@@ -46,7 +46,7 @@ CRED_KEY = 'google_ads'
 SB = dm.SB
 CONTA = '7560120293'                 # 756-012-0293 (Nio Internet)
 # Versão da API do Google Ads: conferir na 1ª rodada (o Google aposenta versões com ~1 ano). Mudou → trocar aqui e "estrutura".
-GADS_VERSAO = 'v22'
+GADS_VERSAO = 'v25'
 GADS = f'https://googleads.googleapis.com/{GADS_VERSAO}/customers/{CONTA}/googleAds:search'
 # Se o login do OAuth enxergar a conta só pela MCC 404-290-1239 (vínculo pedido em 23/11), a API pede o cabeçalho
 # login-customer-id com o id da MCC: preencher aqui (sem traços) e rodar "estrutura". Acesso direto à conta: deixar vazio.
