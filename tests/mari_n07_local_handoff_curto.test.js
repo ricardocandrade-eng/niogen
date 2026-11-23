@@ -62,16 +62,37 @@ caso('briefing antigo (sem rótulos)', rodar(venda('lead completo'), VIAVEL), (b
 caso('dados completos sem cobertura nem plano', rodar(venda(), { cep: null, numero: null, plano_escolhido: null }), (b) => {
   assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
   assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta cobertura e plano/);
-  assert.match(b, /Fazer agora: Consultar a viabilidade/);
+  assert.match(b, /Fazer agora: Consultar a viabilidade/); assert.match(b, /⚠️ sem plano escolhido/);
 });
 caso('dados completos, viável, sem plano', rodar(venda(), { ...VIAVEL, plano_escolhido: null, credito_resultado: 'aprovado_todas', credito_endereco: 'cliente', credito_consultas: 1 }), (b) => {
   assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
   assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta plano/);
-  assert.match(b, /sem plano escolhido/);
+  assert.match(b, /Combinar o plano com o cliente/);
 });
 caso('dados completos, com plano, cobertura não viável', rodar(venda(), { cobertura_decisao: 'elegivel_200m' }), (b) => {
   assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
   assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta cobertura/);
 });
-console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntudo verde');
+// 23/11 (L-259, 2ª parte): sem plano, o "Fazer agora" não manda abrir o pedido; e a despedida não diz "tudo certo, abre o seu pedido".
+{
+  const APROV = { ...VIAVEL, credito_resultado: 'aprovado_todas', credito_endereco: 'cliente', credito_consultas: 1 };
+  const r1 = rodar(venda(), { ...APROV, plano_escolhido: null });
+  caso('viável e aprovado, sem plano: Fazer agora pede o plano', r1, (b) => {
+    assert.match(b, /Fazer agora: Combinar o plano com o cliente/);
+    assert.ok(!/Fazer agora: Abrir o pedido/.test(b), 'mandou abrir o pedido');
+  });
+  caso('despedida sem plano', r1, () => {
+    assert.ok(!/tudo certo|abre o seu pedido/i.test(r1.texto), `despedida: ${r1.texto}`);
+    assert.match(r1.texto, /confirma com você o plano/); assert.match(r1.texto, /em até 2 horas/);
+    assert.ok(!/biometria/i.test(r1.texto), 'falou de biometria');
+  });
+  const r2 = rodar(venda(), { cep: null, numero: null, plano_escolhido: null });
+  caso('despedida sem cobertura nem plano', r2, () => {
+    assert.ok(!/tudo certo|abre o seu pedido/i.test(r2.texto), `despedida: ${r2.texto}`);
+    assert.match(r2.texto, /confirma com você a cobertura no seu endereço e o plano/);
+  });
+  const r3 = rodar(venda(), APROV);
+  caso('venda pronta: despedida de sempre', r3, () => { assert.match(r3.texto, /tudo certo por aqui/); assert.match(r3.texto, /abre o seu pedido/); });
+}
+console.log(falhas ?`\n${falhas} FALHA(S)` : '\ntudo verde');
 process.exit(falhas ? 1 : 0);

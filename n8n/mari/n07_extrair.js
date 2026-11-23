@@ -1029,6 +1029,7 @@ if (V7 && !motivo && !erro) {
 }
 
 let handoff = null;
+let faltaDespedida = [];   // 23/11 (L-259): o que falta numa venda "dados_completos" (cobertura, plano) — muda a despedida
 if (motivo) {
   const notaDfv = {
     viavel: 'DFV viável',
@@ -1096,6 +1097,7 @@ if (motivo) {
     const fpCod = { boleto: 'BOLETO', cartao: 'CREDITO', debito: 'DACC' }[fp] || null;
     const fpTxt = { boleto: 'boleto', cartao: 'cartão', debito: 'débito em conta' }[fp] || null;
     const venda = motivo === 'dados_completos';
+    const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
     let fazer;
     if (c.nio_pedido_aberto === 'sim' || cr === 'pedido_em_andamento') fazer = 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).';
     else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
@@ -1119,6 +1121,8 @@ if (motivo) {
     else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
     else if (cr === 'aprovado_parcial' && fpCod && !formasCod.includes(fpCod))
       fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;
+    // 23/11 (L-259): sem plano escolhido não se abre pedido — a mesma trava está em docs/assets/ficha.js (handoffLinhas).
+    else if (!pl) fazer = 'Combinar o plano com o cliente e gravar na ficha antes de abrir o pedido.';
     else fazer = `Abrir o pedido no portal${fpTxt ? ` no ${fpTxt}` : ''} e avisar o cliente do link da biometria que a Nio manda.`;
 
     // alertas: só os que mudam o que o BKO faz
@@ -1131,9 +1135,9 @@ if (motivo) {
     if (dd.pista_nio) alertas.push(`cliente citou Nio/Oi (${String(dd.pista_nio).slice(0, 80)}) — conferir posse no portal`);
     if (dd.rua_informada && dd.rua_confirmada && norm(dd.rua_informada) !== norm(dd.rua_confirmada)) alertas.push(`rua: escreveu «${dd.rua_informada}», confirmou «${dd.rua_confirmada}»`);
     // 23/11 (L-259): "VENDA PRONTA" só com cobertura viável E plano escolhido. Sem um dos dois, o título diz o que falta.
-    const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
     const faltaVenda = venda ? [dec !== 'viavel' ? 'cobertura' : null, !pl ? 'plano' : null].filter(Boolean) : [];
-    if (venda && !pl) alertas.unshift('sem plano escolhido — combinar o plano com o cliente antes de abrir o pedido');
+    if (venda && !pl && !/^Combinar o plano/.test(fazer)) alertas.unshift('sem plano escolhido');
+    faltaDespedida = faltaVenda;
     if (venda && !dd.referencia) alertas.push('sem ponto de referência — pedir ao cliente');
     if (tags.sinal_urgencia) alertas.push(`urgência: ${String(tags.sinal_urgencia).slice(0, 80)}`);
     if (atencaoMari) alertas.push(atencaoMari);
@@ -1185,6 +1189,16 @@ if (motivo) {
   }
 }
 
+// 23/11 (L-259): dados completos sem cobertura viável ou sem plano = a despedida não promete pedido nem biometria. Texto fixo.
+if (V7 && handoff && motivo === 'dados_completos' && faltaDespedida.length) {
+  const dd = { ...(c.dados || {}), ...dados };
+  const p1 = String(dd.nome || '').trim().split(/\s+/)[0];
+  const nm = p1 && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : null;
+  const prazoF = ctx.dentroHorario ? 'em até 2 horas' : 'no próximo horário de atendimento';
+  const oQue = faltaDespedida.map((f) => (f === 'cobertura' ? 'a cobertura no seu endereço' : 'o plano')).join(' e ');
+  texto = `Pronto${nm ? `, ${nm}` : ''}, anotei tudo por aqui!\n\nAntes de abrir o seu pedido, o nosso consultor confirma com você ${oQue}. Ele te chama aqui mesmo ${prazoF}.`;
+  baloes = [texto];
+}
 // 10/11 (Ricardo, 09/11 23h46): fora da área = comunica, agradece e despede, num balão só — nada de televendas, "anotei",
 // "vou passar pra Nio" ou "te aviso quando chegar". Texto fixo (não depende do modelo).
 if (V7 && handoff && motivo === 'fora_de_area') {

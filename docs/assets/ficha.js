@@ -4479,7 +4479,7 @@
   // Viabilidade, crédito e o "Fazer agora" da venda são refeitos com as colunas da conversa de AGORA — o crédito que chegou
   // depois do handoff já aparece. A tabela do "Fazer agora" é a mesma do n8n/mari/n07_extrair.js e da 0206 (mari_credito_gravar).
   const HO_FORMA = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito em conta' };
-  function handoffLinhas(cv) {
+  function handoffLinhas(cv, semPlano) {
     const vel = cv.nio_viab_velocidade ? ` até ${cv.nio_viab_velocidade}` : '';
     const dec = cv.cobertura_decisao || ({ viavel: 'viavel', sem_viabilidade: 'sem_cobertura', nao_encontrado: 'unidade_fora_lista' }[cv.nio_viab_resultado]) || null;
     const viab = { viavel: `✅ Viabilidade: VIÁVEL${vel} (portal)`, elegivel_200m: '⚠️ Viabilidade: só pelos 200 m (portal sem viabilidade, DFV com fachada viável)',
@@ -4512,6 +4512,8 @@
     else if (cr === 'negado') fazer = n >= 2 ? 'Ver com o cliente outra pessoa da casa como titular; sem saída, encerrar pela Saída.' : 'Oferecer outra pessoa da casa como titular (CPF do parente → 1 nova consulta).';
     else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
     else if (cr === 'aprovado_parcial' && fpCod && !fcod.includes(fpCod)) fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;
+    // 23/11 (L-259): sem plano escolhido não se abre pedido — a mesma trava do n8n/mari/n07_extrair.js.
+    else if (semPlano) fazer = 'Combinar o plano com o cliente e gravar na ficha antes de abrir o pedido.';
     else fazer = `Abrir o pedido no portal${fpTxt ? ` no ${fpTxt}` : ''} e avisar o cliente do link da biometria que a Nio manda.`;
     return { viab, cred, fazer };
   }
@@ -4527,7 +4529,7 @@
     const v = d.soConversa ? null : d.v;
     // pedido já aberto (OS ou etapa adiante): o quadro vira registro — o "Fazer agora" de antes já foi feito.
     const passou = !!(v && (v.nio_os || ['2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme', 'saida'].includes(v.status)));
-    const L = handoffLinhas(cv);
+    const L = handoffLinhas(cv, !cv.plano_escolhido && !(v && (v.plano_id || v.plano_nome)));
     const salvo = (re) => (linhas.find((l) => re.test(l)) || '').trim();
     const dn = donoConversa(cv);
     const comMari = !tem && dn.tipo === 'mari';
