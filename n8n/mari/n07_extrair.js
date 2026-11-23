@@ -246,6 +246,27 @@ const FRASES_ROBO = [['prezad', '"Prezado"'], ['informamos', '"Informamos"'], ['
   ['fico a disposicao', '"Fico à disposição"'], ['estou aqui para ajudar', '"Estou aqui para ajudar"'],
   ['como posso te ajudar hoje', '"Como posso te ajudar hoje?"'], ['certamente', '"Certamente"'], ['excelente pergunta', '"Excelente pergunta"']];
 
+// 23/11 (L-270): taxa de instalação só quando o cliente pergunta. Devolve o texto da violação ou null.
+function taxaSemPergunta(t) {
+  const semBloco = String(t || '').replace(/As condições do seu plano:[\s\S]*?A velocidade real depende do aparelho e do Wi-Fi\./g, ' ');
+  const n = norm(semBloco);
+  const cli = norm(String((prep.consolidado || {}).mensagem || ''));
+  const perguntouFid = /fidelid|multa|cancel|sair antes|sai antes|desist|permanen|contrato|compromisso|carencia|quebr|tempo minimo|prazo minimo|ficar preso|obrigad/.test(cli);
+  if (perguntouFid) return null;
+  const perguntouInst = /\btaxa|instala|adesao|habilita/.test(cli);
+  const taxas = new Set([540, ...(ctx.planos || []).map((p) => Number(p.taxa_habilitacao)).filter(Boolean)].map((x) => String(Math.round(x))));
+  const citaValor = [...n.matchAll(/r\$\s*(\d+)/g)].some((m) => taxas.has(m[1]));
+  const citaRegra = /\bmulta\b|proporcional|fidelidade|\bisent\w*[^.?!\n]{0,40}\bmeses\b|\bmeses\b[^.?!\n]{0,40}\bisent/.test(n);
+  const citaTaxa = /\btaxa\b/.test(n);
+  if (!perguntouInst && (citaTaxa || citaValor || citaRegra)) {
+    return 'falou de taxa de instalação, multa ou fidelidade sem o cliente perguntar — tire isso: responda só o preço do plano e o que vem incluso (Bloco 4, TAXA DE INSTALAÇÃO)';
+  }
+  if (perguntouInst && (citaValor || citaRegra)) {
+    return 'o cliente perguntou só da instalação: diga "A instalação é isenta 😊", sem valor em R$, sem meses, multa ou fidelidade, e siga a venda (o valor e a regra só se ele perguntar de fidelidade, multa ou de sair antes)';
+  }
+  return null;
+}
+
 // Trava de valor/plano fora da tabela (07/11). Devolve o que não bate, para o pedido de reescrita.
 function foraDaTabela(t) {
   const n = norm(t);
@@ -427,6 +448,13 @@ function violacoesDe(t) {
   } else if (V7 && handoffYaml && !objecaoDaMsg && !naoQuero && !posHandoff && contornosAntes === 0 && msgObj.replace(/[^a-z]/g, '').length >= 3
     && ['recusa_compra', 'interesse_caindo'].includes(norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, ''))) {
     v.push('aceitou o primeiro "não" do cliente sem nenhum argumento — ele não disse "não quero" nem pediu para parar: tire o [HANDOFF], valide em meia frase, responda ao motivo que ele deu com UM argumento do Bloco 4b (sem motivo claro: preço fixo até janeiro/2030), termine com uma pergunta leve e emita [OBJECAO: outra]. Se ele recusar de novo, aí sim despedida recusa_compra');
+  }
+  // 23/11 (L-270, Ricardo: "falar nisso espanta o cliente"): a Mari não puxa a taxa de instalação. Fora do bloco de
+  // condições, taxa/multa/proporcional/fidelidade só se o cliente perguntou de fidelidade, multa ou de sair antes; se ele
+  // perguntou só da instalação, vale "a instalação é isenta", sem valor nem meses.
+  if (V7) {
+    const vTaxa = taxaSemPergunta(t);
+    if (vTaxa) v.push(vTaxa);
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
@@ -1101,16 +1129,21 @@ if (motivo) {
     if (c.nio_pedido_aberto === 'sim' && dd.pedido_aberto_resposta) alertas.push(`sobre o pedido aberto, o cliente disse «${String(dd.pedido_aberto_resposta).slice(0, 120)}»`);
     if (dd.pista_nio) alertas.push(`cliente citou Nio/Oi (${String(dd.pista_nio).slice(0, 80)}) — conferir posse no portal`);
     if (dd.rua_informada && dd.rua_confirmada && norm(dd.rua_informada) !== norm(dd.rua_confirmada)) alertas.push(`rua: escreveu «${dd.rua_informada}», confirmou «${dd.rua_confirmada}»`);
+    // 23/11 (L-259): "VENDA PRONTA" só com cobertura viável E plano escolhido. Sem um dos dois, o título diz o que falta.
+    const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
+    const faltaVenda = venda ? [dec !== 'viavel' ? 'cobertura' : null, !pl ? 'plano' : null].filter(Boolean) : [];
+    if (venda && !pl) alertas.unshift('sem plano escolhido — combinar o plano com o cliente antes de abrir o pedido');
     if (venda && !dd.referencia) alertas.push('sem ponto de referência — pedir ao cliente');
     if (tags.sinal_urgencia) alertas.push(`urgência: ${String(tags.sinal_urgencia).slice(0, 80)}`);
     if (atencaoMari) alertas.push(atencaoMari);
 
     // título
-    const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
     const nomeT = String(dd.nome || c.nome_contato || '').trim().split(/\s+/).slice(0, 2).join(' ');
     const NOMEM = { pedido_humano: 'PEDIU ATENDIMENTO', objecao: 'OBJEÇÃO', urgencia_alta: 'URGENTE', recusa_compra: 'RECUSOU',
       fora_de_area: 'FORA DA ÁREA', sem_cobertura: 'SEM COBERTURA', interesse_caindo: 'ESFRIANDO', multiplos_decisores: 'OUTRO DECIDE', ja_cliente_nio: 'JÁ É CLIENTE NIO' };
-    const titulo = venda
+    const titulo = venda && faltaVenda.length
+      ? `🟡 DADOS COLETADOS${nomeT ? ` · ${nomeT}` : ''} · falta ${faltaVenda.join(' e ')}`
+      : venda
       ? `🟢 VENDA PRONTA${nomeT ? ` · ${nomeT}` : ''}${pl ? ` · ${pl.nome}` : ''}${fpTxt ? ` · ${fpTxt}` : ''}`
       : `${['pedido_humano', 'objecao', 'urgencia_alta'].includes(motivo) ? '🟡' : '⚪'} ${NOMEM[motivo] || 'HANDOFF'}${nomeT ? ` · ${nomeT}` : ''}`;
     topo = [titulo, viabLinha, credLinha, `👉 Fazer agora: ${fazer}`, alertas.length ? `⚠️ ${alertas.slice(0, 3).join(' · ')}` : null].filter(Boolean);

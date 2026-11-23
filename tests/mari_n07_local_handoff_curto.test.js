@@ -58,5 +58,20 @@ caso('pediu humano com sugestão', rodar('Vou te passar pro nosso time 😊\n[HA
   + 'briefing_humano: "RESUMO: quer falar de preço com alguém. SUGESTÃO: ligar e mostrar o plano de 300 Mega da tabela. ATENÇÃO: a esposa decide junto."\n[/HANDOFF]', VIAVEL),
   (b) => { assert.match(b, /^🟡 PEDIU ATENDIMENTO · Eli Teste/); assert.match(b, /Fazer agora: Ligar e mostrar o plano de 300 Mega/); assert.match(b, /a esposa decide junto/); assert.match(b, /^Resumo: quer falar de preço/m); });
 caso('briefing antigo (sem rótulos)', rodar(venda('lead completo'), VIAVEL), (b) => assert.match(b, /^Resumo: lead completo$/m));
+// 23/11 (L-259): "VENDA PRONTA" só com cobertura viável E plano escolhido; sem um dos dois, o título diz o que falta.
+caso('dados completos sem cobertura nem plano', rodar(venda(), { cep: null, numero: null, plano_escolhido: null }), (b) => {
+  assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
+  assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta cobertura e plano/);
+  assert.match(b, /Fazer agora: Consultar a viabilidade/);
+});
+caso('dados completos, viável, sem plano', rodar(venda(), { ...VIAVEL, plano_escolhido: null, credito_resultado: 'aprovado_todas', credito_endereco: 'cliente', credito_consultas: 1 }), (b) => {
+  assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
+  assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta plano/);
+  assert.match(b, /sem plano escolhido/);
+});
+caso('dados completos, com plano, cobertura não viável', rodar(venda(), { cobertura_decisao: 'elegivel_200m' }), (b) => {
+  assert.ok(!/VENDA PRONTA/.test(b), 'título de venda pronta');
+  assert.match(b, /^🟡 DADOS COLETADOS · Eli Teste · falta cobertura/);
+});
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntudo verde');
 process.exit(falhas ? 1 : 0);
