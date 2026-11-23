@@ -15,6 +15,8 @@
  * 09/11 (0082, prompt fluxo único): "Live" (fila.html) é a 1ª do menu para admin/backoffice.
  * 09/11 (0090, jornada única): Live, Funil e Mari contam pela MESMA regra — v_jornada.precisa_acao.
  * Uso: <nav class="nav" id="sidebar" data-pagina="vendas"></nav> e NGSidebar.montar() depois do login.
+ * 23/11 (0361, perfil agencia): a agência da Meta Ads vê só Meta Ads, Placar e Tabela — sem Guia, Consulta, balanço, selos e
+ * contadores (nada disso é dela, e o banco não devolve).
  * 15/11 (NIOGEN no celular): item "Pulso" (pulso.html, a aba do Pulso) no Backoffice, e carga de assets/movel.js (barra inferior,
  * instalar, avisos Web Push e sessão do app) — um lugar só, sem tocar no <head> de cada tela.
  */
@@ -40,7 +42,7 @@
     ]],
     ['Acompanhamento', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
-      { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
+      { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice', 'agencia'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Meta Ads', href: 'metaads.html' },
@@ -69,7 +71,10 @@
     return `${f({ weekday: 'short' }).replace('.', '')} ${f({ day: '2-digit', month: '2-digit' })} · ${f({ hour: '2-digit', minute: '2-digit' })} · ${VERSAO}`;
   }
 
+  const MENU_AGENCIA = ['meta', 'placar', 'tabela'];   // 0361
+  const souAgencia = () => (NG.usuario || {}).perfil === 'agencia';
   function item(it, ativo) {
+    if (souAgencia() && !MENU_AGENCIA.includes(it.id)) return '';
     // esconder: o item some (em vez de "em breve") para quem não tem o perfil — ex.: vendedor não vê a Mari.
     if (it.esconder && it.perfis && !it.perfis.includes((NG.usuario || {}).perfil)) return '';
     const conteudo = `<span class="ico" aria-hidden="true">${it.vivo ? '<span class="live-dot"></span>' : it.ico}</span>${NG.esc(it.nome)}` +
@@ -96,7 +101,7 @@
         <h2>NIO<span>GEN</span></h2>
         <p>Renascer. Reconstruir. Crescer.</p>
         <p class="clock" data-relogio>${relogio()}</p>
-        <a class="nav-guia${pagina === 'guia' ? ' ativo' : ''}" href="guia.html" data-guia title="Como trabalhar com a Mari, o Chatwoot e o NIOGEN">Guia do Backoffice<span class="novo" data-guia-novo hidden>• atualizado</span></a>
+        ${souAgencia() ? '' : `<a class="nav-guia${pagina === 'guia' ? ' ativo' : ''}" href="guia.html" data-guia title="Como trabalhar com a Mari, o Chatwoot e o NIOGEN">Guia do Backoffice<span class="novo" data-guia-novo hidden>• atualizado</span></a>`}
       </div>
       <div class="nav-user">
         <div class="nav-avatar" aria-hidden="true">${NG.esc(iniciais(u.nome))}</div>
@@ -106,15 +111,16 @@
         ${MENU.map(([sec, itens]) => { const h = itens.map((it) => item(it, it.id === pagina)).join(''); return h ? `<div class="nav-sec">${sec}</div>${h}` : ''; }).join('')}
       </div>
       <div class="nav-foot">
-        ${`<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button></div>`}
+        ${souAgencia() ? '' : `<div class="nav-consulta"><button type="button" class="nav-item" data-consulta title="Consulta central: viabilidade, crédito, OS e GED360 de um cliente, sem sair desta tela"><span class="ico" aria-hidden="true">⌕</span>Consulta</button></div>`}
         <button type="button" class="nav-item" data-sair><span class="ico" aria-hidden="true">⏏</span>Sair</button>
       </div>`;
 
     nav.querySelector('[data-sair]').addEventListener('click', NG.sair);
     setInterval(() => { const r = nav.querySelector('[data-relogio]'); if (r) r.textContent = relogio(); }, 30000);
     menuMovel(nav, pagina);
-    consultaBotao(nav, pagina);   // 21/11: Consulta central (depois do menuMovel: o ⌕ vai na barra do celular)
     appMovel(pagina);
+    if (souAgencia()) return;   // 0361: Consulta, guia, balanço, selos e contadores são do time
+    consultaBotao(nav, pagina);   // 21/11: Consulta central (depois do menuMovel: o ⌕ vai na barra do celular)
     guiaNovo(nav, pagina);
     balancoBotao();
     setInterval(() => { if (document.visibilityState === 'visible') balancoBotao(); }, 300000);   // 5 min: pega o das 7h45 com a tela aberta

@@ -13,9 +13,16 @@
        · Quatro gavetas recolhidas: Dia a dia · Para onde vai a verba · O que a Meta recebeu · Bairros prioritários
          (Ricardo: "Pode continuar, mas recolhido"). ?vista=bairros abre a gaveta dos bairros.
        · Saíram da tela: o funil em fita e o quadro "Gatilhos do agente · quanto falta".
-     Dados, numa rodada só (regra 19): meta_ads_diario, meta_ads_anuncios, v_meta_ads_dia, config_meta_ads_regras,
-     meta_ads_conta_saldo, v_meta_capi_painel, v_meta_ads_posicionamento_7d, meta_ads_posicionamento_diario, mari_conversas,
-     vendas, meta_ads_conjuntos, v_mari_conversa_anuncio. Bairros (v_dfv_bairros) só quando a gaveta abre. -->
+     23/11 (migration 0361 — perfil `agencia`, decisões do Ricardo em 22/11):
+       · A tela não lê mais linha de conversa nem de venda: o que vinha de mari_conversas, vendas, v_mari_conversa_anuncio e
+         v_meta_capi_painel chega CONTADO por dia e por anúncio pela função meta_ads_resultado(), e o dia a dia por
+         meta_ads_dia(). Vale para todos os perfis (um número só, calculado num lugar só).
+       · A agência (perfil `agencia`) vê a tela igual, menos o saldo em aberto da conta.
+       · Gaveta nova "Por que os leads saíram": anúncio × motivo de saída, só contagem (meta_ads_motivos_saida), carregada
+         quando a gaveta abre. Admin, backoffice e agência.
+     Dados, numa rodada só (regra 19): meta_ads_diario, meta_ads_anuncios, meta_ads_dia(), config_meta_ads_regras,
+     meta_ads_conta_saldo (menos a agência), v_meta_ads_posicionamento_7d, meta_ads_posicionamento_diario, meta_ads_conjuntos
+     e meta_ads_resultado(). Bairros (v_dfv_bairros) e motivos de saída só quando a gaveta abre. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -33,8 +40,8 @@
 <link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-10"></script>
+<script src="assets/app.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-1"></script>
 <style>
   .ma-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .ma-lido.velho { color: var(--warn-fg); }
@@ -136,6 +143,7 @@
 
     <section class="ma-gavetas" aria-label="Mais detalhes">
       <details class="gaveta" id="g-dias"><summary><b>Dia a dia</b><span id="r-dias">…</span></summary><div class="ma-rol" id="c-dias"></div></details>
+      <details class="gaveta" id="g-motivos"><summary><b>Por que os leads saíram</b><span id="r-motivos">leads de anúncio que foram para Saída, por anúncio e por motivo</span></summary><div class="ma-rol" id="c-motivos"></div></details>
       <details class="gaveta" id="g-posic"><summary><b>Para onde vai a verba</b><span id="r-posic">…</span></summary><div id="c-posic"></div></details>
       <details class="gaveta" id="g-capi"><summary><b>O que a Meta recebeu de volta</b><span id="r-capi">…</span></summary><div id="c-capi"></div></details>
       <details class="gaveta" id="g-bairros"><summary><b>Bairros prioritários</b><span id="r-bairros">a lista de bairros por pontuação e o conjunto para colar no Gerenciador</span></summary>
@@ -184,7 +192,7 @@
       </details>
     </section>
 
-    <div class="ma-pe">Esta tela só mostra. Pausar, mudar verba ou tirar posicionamento é feito pelo agente de tráfego, que avisa em seguida.</div>
+    <div class="ma-pe" id="ma-pe">Esta tela só mostra. Pausar, mudar verba ou tirar posicionamento é feito pelo agente de tráfego, que avisa em seguida.</div>
   </main>
 </div>
 <button type="button" class="fab" id="fab" aria-label="Conjunto para o Gerenciador" hidden>⧉</button>
@@ -202,8 +210,10 @@
 (async function () {
   const t0 = performance.now();
   const { esc } = NG;
-  await NG.exigirLogin();
+  const eu = await NG.exigirLogin();
+  const agencia = eu.perfil === 'agencia';   // 0361: a agência da Meta Ads — só contagens, sem o saldo em aberto
   NGSidebar.montar();
+  if (agencia) document.getElementById('ma-pe').textContent = 'Esta tela só mostra, em números: nenhum dado de cliente passa por aqui. Venda = OS gerada.';
 
   let VERBA_MES = 2000;     // reserva; o valor vem de config_meta_ads_regras.verba_mes (0058)
   const STATUS_AD = {
@@ -219,8 +229,9 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
   const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => carregar() });
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { carregar(); motivosMudou(); } });
   let verParados = false, ultimo = null;
+  const nomeAd = new Map();   // ad_id → [anúncio, conjunto] (para a gaveta dos motivos)
 
   const NOME_POSIC = {
     'whatsapp|status': 'Status do WhatsApp', 'instagram|feed': 'Feed do Instagram', 'instagram|instagram_stories': 'Stories do Instagram',
@@ -247,19 +258,18 @@
     const trinta = NG.somaDias(NG.diaSP(), -30);
     // Uma rodada só (regra 19). O gasto por anúncio vem inteiro (a campanha é pequena) e o período é filtrado aqui:
     // os avisos usam a campanha desde o início; a tabela, o período escolhido.
-    const [rTudo, rAds, rDias, rCfg, rSaldo, rCapi, rPos, rPosDia, rConv, rVendas, rConj, rAtrib] = await Promise.all([
+    const [rTudo, rAds, rDias, rCfg, rSaldo, rPos, rPosDia, rConj, rRes] = await Promise.all([
       NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas, atualizado_em'),
       NG.sb.from('meta_ads_anuncios').select('ad_id, ad_nome, adset_id, adset_nome, campanha_nome, status_efetivo, atualizado_em'),
-      NG.sb.from('v_meta_ads_dia').select('dia, gasto, conversas_meta, conversas_mari, com_cep, fora_area, qualificadas').order('dia', { ascending: false }),
+      NG.sb.rpc('meta_ads_dia'),   // 0361: o dia a dia, sem coluna de venda nem de comissão
       NG.sb.from('config_meta_ads_regras').select('chave, valor').eq('parceiro_id', 'dharma'),
-      NG.sb.from('meta_ads_conta_saldo').select('saldo, imposto_estimado, limite_cobranca, proxima_cobranca_em, fonte_data, coletado_em').order('coletado_em', { ascending: false }).limit(1),
-      NG.sb.from('v_meta_capi_painel').select('*').maybeSingle(),
+      agencia ? Promise.resolve({ data: [] })   // 0361: o saldo em aberto é cobrança nossa; a agência não lê (o banco também nega)
+        : NG.sb.from('meta_ads_conta_saldo').select('saldo, imposto_estimado, limite_cobranca, proxima_cobranca_em, fonte_data, coletado_em').order('coletado_em', { ascending: false }).limit(1),
       NG.sb.from('v_meta_ads_posicionamento_7d').select('plataforma, posicao, gasto, conversas, fatia_gasto, alerta, atualizado_em'),
       NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto').gte('dia', trinta),
-      NG.sb.from('mari_conversas').select('id, created_at, cep, dentro_area, elegibilidade, handoff_motivo, venda_id').eq('origem', 'meta_ads'),
-      NG.sb.from('vendas').select('id, motivo_saida, nio_os, nio_os_em').eq('origem', 'meta_ads'),
       NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056
-      NG.sb.from('v_mari_conversa_anuncio').select('conversa_id, ad_id, adset_id, referral_em, cep, dentro_area, venda_id'),   // 0057
+      // 0361: o que vem das conversas e das vendas de anúncio, já contado por dia × anúncio (nenhuma linha de cliente)
+      NG.sb.rpc('meta_ads_resultado'),
     ]);
     const erro = rTudo.error || rAds.error || rDias.error || rCfg.error;
     if (erro) {
@@ -271,17 +281,14 @@
     if (L.verba_mes > 0) VERBA_MES = L.verba_mes;
     const tudo = rTudo.data || [];
     const ads = rAds.data || [];
-    const diasTodos = rDias.data || [];
+    const diasTodos = (rDias.data || []).slice().sort((a, b) => (a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : 0));
     const dias = diasTodos.filter((r) => noPer(r.dia));
-    const conv = rConv.error ? null : (rConv.data || []);          // RLS: só admin/backoffice leem a Mari
-    const atrib = rAtrib.error ? null : (rAtrib.data || []).filter((a) => a.ad_id);
-    const vendas = rVendas.error ? [] : (rVendas.data || []);
-    const vendaPorId = new Map(vendas.map((v) => [v.id, v]));
-    const comOS = (v) => !!(v && v.nio_os);   // 22/11 (Ricardo): venda = OS gerada
-    const adDaConversa = new Map((atrib || []).map((a) => [a.conversa_id, a]));
-    const adDaVenda = new Map((atrib || []).filter((a) => a.venda_id).map((a) => [a.venda_id, a]));
-    const convPer = (conv || []).filter((c) => noPer(diaDe(c.created_at)));
-    const vendasPer = vendas.filter((v) => comOS(v) && noPer(diaDe(v.nio_os_em)));
+    // 0361: contagens prontas. conversas = [{ dia, ad_id, n, cep_ok, qualif, ja_cliente, sem_cob }] (ad_id nulo = o WhatsApp não
+    // disse o anúncio) · vendas = [{ dia, ad_id, n }] (venda de anúncio com OS gerada, pelo dia da OS — Ricardo, 22/11).
+    const res = rRes.error || !rRes.data ? null : rRes.data;
+    const conv = res ? res.conversas || [] : null;
+    const convPer = (conv || []).filter((c) => noPer(c.dia));
+    const vendasPer = ((res && res.vendas) || []).filter((v) => noPer(v.dia));
 
     // ---------- tabela por anúncio (período) ----------
     const linhas = new Map();
@@ -290,19 +297,17 @@
       return linhas.get(id);
     };
     ads.forEach((a) => linha(a.ad_id, a));
+    tudo.forEach((d) => { if (!nomeAd.has(d.ad_id)) nomeAd.set(d.ad_id, [d.ad_nome, d.adset_nome]); });
+    ads.forEach((a) => nomeAd.set(a.ad_id, [a.ad_nome, a.adset_nome]));
     tudo.filter((d) => noPer(d.dia)).forEach((d) => { const l = linha(d.ad_id, d); l.gasto += Number(d.gasto || 0); l.conversas += d.conversas || 0; });
     const sem = { conversas: 0, cep: 0, qualif: 0, vendas: 0 };   // "Sem anúncio identificado"
     convPer.forEach((c) => {
-      const a = adDaConversa.get(c.id);
-      const alvo = a && linhas.has(a.ad_id) ? linhas.get(a.ad_id) : a ? linha(a.ad_id, { ad_nome: `anúncio ${a.ad_id}` }) : sem;
-      if (alvo === sem) sem.conversas += 1;
-      if (c.cep && c.dentro_area === true) alvo.cep += 1;
-      if (c.handoff_motivo === 'dados_completos') alvo.qualif += 1;
+      const alvo = c.ad_id && linhas.has(c.ad_id) ? linhas.get(c.ad_id) : c.ad_id ? linha(c.ad_id, { ad_nome: `anúncio ${c.ad_id}` }) : sem;
+      if (alvo === sem) sem.conversas += c.n;
+      alvo.cep += c.cep_ok;
+      alvo.qualif += c.qualif;
     });
-    vendasPer.forEach((v) => {
-      const a = adDaVenda.get(v.id);
-      (a && linhas.has(a.ad_id) ? linhas.get(a.ad_id) : sem).vendas += 1;
-    });
+    vendasPer.forEach((v) => { (v.ad_id && linhas.has(v.ad_id) ? linhas.get(v.ad_id) : sem).vendas += v.n; });
     const todas = [...linhas.values()];
     const teve = (l) => l.gasto > 0 || l.conversas > 0 || l.cep > 0 || l.qualif > 0 || l.vendas > 0;
     const visiveis = todas.filter((l) => teve(l) || l.status_efetivo === 'ACTIVE');
@@ -322,7 +327,7 @@
       </tr>`;
     const gasto = soma(dias, 'gasto') || soma(visiveis, 'gasto');
     const convMeta = soma(dias, 'conversas_meta') || soma(visiveis, 'conversas');
-    const tot = { cep: soma(visiveis, 'cep') + sem.cep, qualif: soma(visiveis, 'qualif') + sem.qualif, vendas: vendasPer.length };
+    const tot = { cep: soma(visiveis, 'cep') + sem.cep, qualif: soma(visiveis, 'qualif') + sem.qualif, vendas: soma(vendasPer, 'n') };
     const temSem = sem.conversas > 0 || sem.vendas > 0;
     const corpo = visiveis.sort(ordem).map((l) => tr(l)).join('')
       + (verParados ? parados.sort(ordem).map((l) => tr(l, 'parado')).join('') : '')
@@ -340,7 +345,9 @@
 
     // ---------- campanha desde o início: os limites do agente (config_meta_ads_regras) ----------
     const porAd = new Map();
-    const conjGasto = new Map(), conjNome = new Map(), conjVendas = new Map(), cepOk = new Map();
+    const conjGasto = new Map(), conjNome = new Map();
+    // 0361: CEP atendido por anúncio e vendas com OS por conjunto, desde o início da campanha, já contados no banco
+    const cepOk = new Map(Object.entries((res && res.cep_ok_ad) || {})), conjVendas = new Map(Object.entries((res && res.vendas_conjunto) || {}));
     tudo.forEach((d) => {
       const a = porAd.get(d.ad_id) || { nome: d.ad_nome, conj: d.adset_nome, gasto: 0, conversas: 0 };
       a.gasto += Number(d.gasto || 0); a.conversas += d.conversas || 0; porAd.set(d.ad_id, a);
@@ -349,14 +356,9 @@
     const gastoTotal = [...porAd.values()].reduce((s, a) => s + a.gasto, 0);
     const convTotal = [...porAd.values()].reduce((s, a) => s + a.conversas, 0);
     const cpcTotal = convTotal ? gastoTotal / convTotal : null;
-    (atrib || []).forEach((a) => {
-      if (a.cep && a.dentro_area === true) cepOk.set(a.ad_id, (cepOk.get(a.ad_id) || 0) + 1);
-      if (a.venda_id && comOS(vendaPorId.get(a.venda_id))) conjVendas.set(a.adset_id, (conjVendas.get(a.adset_id) || 0) + 1);
-    });
-    const temAtrib = !!(atrib && atrib.length);
+    const temAtrib = !!(res && res.tem_atrib);
     // O gasto "sem CEP atendido" só conta desde a 1ª conversa com anúncio identificado (antes, nenhuma conversa tinha anúncio).
-    const comRef = (atrib || []).filter((a) => a.referral_em);
-    const inicioAtrib = comRef.length ? comRef.reduce((m, a) => (a.referral_em < m ? a.referral_em : m), comRef[0].referral_em).slice(0, 10) : null;
+    const inicioAtrib = (res && res.inicio_atrib) || null;
     const gastoDesde = new Map();
     tudo.filter((d) => inicioAtrib && d.dia >= inicioAtrib).forEach((d) => gastoDesde.set(d.ad_id, (gastoDesde.get(d.ad_id) || 0) + Number(d.gasto || 0)));
     const statusAd = new Map(ads.map((a) => [a.ad_id, a.status_efetivo]));
@@ -380,11 +382,7 @@
 
     // qualidade das conversas, no período
     let q = null;
-    if (conv) {
-      const jaCliente = convPer.filter((c) => c.handoff_motivo === 'ja_cliente_nio').length;
-      const semCob = convPer.filter((c) => c.dentro_area === false || c.elegibilidade === 'fora_area' || (c.venda_id && (vendaPorId.get(c.venda_id) || {}).motivo_saida === 'Sem cobertura')).length;
-      q = { total: convPer.length, jaCliente, semCob };
-    }
+    if (conv) q = { total: soma(convPer, 'n'), jaCliente: soma(convPer, 'ja_cliente'), semCob: soma(convPer, 'sem_cob') };
 
     // ---------- saldo e retorno ----------
     const s = (rSaldo.data || [])[0];
@@ -396,7 +394,7 @@
     const motivosSaldo = [];
     if (!saldoVelho && lim && (saldo / lim) * 100 >= alertaPct) motivosSaldo.push(`${N(Math.round((saldo / lim) * 100))} % do limite de ${R(lim)}`);
     if (!saldoVelho && diasCob != null && diasCob <= alertaDias) motivosSaldo.push(diasCob <= 0 ? 'cobra hoje' : `cobra em ${pl(diasCob, 'dia', 'dias')}`);
-    const capi = rCapi.error ? null : rCapi.data;
+    const capi = res ? res.capi || null : null;
     const capiRuim = !!capi && ((capi.erros_7d || 0) > 0 || (capi.atrasados || 0) > 0);
 
     // ---------- Precisa de ação: frases simples ----------
@@ -409,7 +407,7 @@
     });
     const problema = ads.filter((a) => ['DISAPPROVED', 'WITH_ISSUES', 'PENDING_BILLING_INFO'].includes(a.status_efetivo));
     if (problema.length) add('agora', `${pl(problema.length, 'anúncio com problema', 'anúncios com problema')} na Meta`, problema.map((a) => a.ad_nome).join(', '), 'Conferir no Gerenciador de Anúncios.');
-    if (capiRuim) add('agora', 'A Meta não está recebendo os resultados', [(capi.erros_7d || 0) > 0 ? `${pl(capi.erros_7d, 'envio recusado', 'envios recusados')} em 7 dias` : '', (capi.atrasados || 0) > 0 ? `${pl(capi.atrasados, 'evento parado', 'eventos parados')} na fila há mais de 1 hora` : ''].filter(Boolean).join(' · '), 'Avisar o Claude Code. Não reenviar à mão.');
+    if (capiRuim) add('agora', 'A Meta não está recebendo os resultados', [(capi.erros_7d || 0) > 0 ? `${pl(capi.erros_7d, 'envio recusado', 'envios recusados')} em 7 dias` : '', (capi.atrasados || 0) > 0 ? `${pl(capi.atrasados, 'evento parado', 'eventos parados')} na fila há mais de 1 hora` : ''].filter(Boolean).join(' · '), agencia ? 'Avisar a Dharma.' : 'Avisar o Claude Code. Não reenviar à mão.');
     if (gastoTotal >= L.campanha_gasto_avaliar && convTotal === 0) add('agora', 'A campanha não trouxe nenhuma conversa', `${R(gastoTotal)} gastos desde o início`, 'Rever a arte e o público.');
     if (temAtrib) semCep.forEach((a) => {
       if (a.gastoAtrib >= L.anuncio_gasto_pausa) add('agora', `Anúncio "${a.nome}" gasta sem trazer CEP atendido`, `${R(a.gastoAtrib)} desde ${NG.fmtDiaISO(inicioAtrib).slice(0, 5)}; o limite é ${R(L.anuncio_gasto_pausa)} · ${a.conj || ''}`, 'O agente pausa esse anúncio.');
@@ -441,18 +439,18 @@
       `<div title="Gasto do período dividido pelas vendas com OS gerada no período. É este número que decide."><span>Custo por venda</span><b class="${cv == null ? '' : 'ok'}">${cv == null ? '—' : R(Math.round(cv))}</b><small>${tot.vendas ? pl(tot.vendas, 'venda com OS', 'vendas com OS') : 'nenhuma venda com OS'}</small></div>`,
       `<div title="Conversas iniciadas no WhatsApp, contadas pela Meta."><span>Gasto · ${esc(per.rotulo.toLowerCase())}</span><b>${R(gasto)}</b><small>${pl(convMeta, 'conversa', 'conversas')}${convMeta ? ` · ${dividir(gasto, convMeta)} cada` : ''}</small></div>`,
       `<div title="Gasto do mês contra a verba combinada."><span>Verba do mês</span><b class="${gastoMes > VERBA_MES ? 'bad' : ''}">${R(gastoMes)}</b><small>de ${R(VERBA_MES)}</small></div>`,
-      saldoVelho ? `<div title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora."><span>Saldo em aberto</span><b>—</b><small>sem leitura da Meta</small></div>`
+      agencia ? '' : saldoVelho ? `<div title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora."><span>Saldo em aberto</span><b>—</b><small>sem leitura da Meta</small></div>`
         : `<div title="O que a Meta vai cobrar no cartão.${s.imposto_estimado != null ? ` Mais ${R(Number(s.imposto_estimado))} de imposto estimado.` : ''}"><span>Saldo em aberto</span><b class="${motivosSaldo.length ? 'warn' : ''}">${R(saldo)}</b><small>${esc(cobra)}</small></div>`,
       !capi ? '<div><span>Retorno à Meta</span><b>—</b><small>sem leitura</small></div>'
         : `<div title="O que o NIOGEN devolve à Meta para ela aprender quem vira venda. Detalhe na gaveta “O que a Meta recebeu de volta”."><span>Retorno à Meta</span><b class="${capiRuim ? 'bad' : 'ok'}" style="font-family:var(--sans);font-size:13px">${capiRuim ? 'com problema' : 'em dia'}</b><small>${capiRuim ? 'veja em Precisa de ação' : 'sem erro de envio'}</small></div>`,
-    ].join('');
+    ].filter(Boolean).join('');
     ultimo = [...tudo, ...ads].reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
     pintarLido();
 
     // ---------- gaveta: dia a dia ----------
-    const porDia = (lista, fn) => { const m = new Map(); lista.forEach((x) => { const d = fn(x); if (d) m.set(d, (m.get(d) || 0) + 1); }); return m; };
-    const osDia = porDia(vendasPer, (v) => diaDe(v.nio_os_em));
-    const cepDia = conv ? porDia(convPer.filter((c) => c.cep && c.dentro_area === true), (c) => diaDe(c.created_at)) : null;
+    const porDia = (lista, k) => { const m = new Map(); lista.forEach((x) => { if (x.dia && x[k]) m.set(x.dia, (m.get(x.dia) || 0) + x[k]); }); return m; };
+    const osDia = porDia(vendasPer, 'n');
+    const cepDia = conv ? porDia(convPer, 'cep_ok') : null;
     const melhor = [...osDia.entries()].sort((a, b) => b[1] - a[1])[0];
     document.getElementById('r-dias').textContent = `${pl(dias.length, 'dia', 'dias')}${melhor ? ` · melhor dia: ${NG.fmtDiaSemana(`${melhor[0]}T12:00:00-03:00`).toLowerCase()} ${NG.fmtDiaISO(melhor[0]).slice(0, 5)}, com ${pl(melhor[1], 'venda', 'vendas')}` : ' · nenhuma venda com OS no período'}`;
     document.getElementById('c-dias').innerHTML = dias.length ? `<table class="ma-g-tab"><thead><tr><th>Dia</th><th>Gasto</th><th>Conversas (Meta)</th><th>Conversas (Mari)</th><th>Com CEP atendido</th><th>Fora da área</th><th>Qualificadas</th><th>Vendas (OS)</th></tr></thead><tbody>
@@ -502,6 +500,50 @@
   }
   setInterval(pintarLido, 60000);
   document.getElementById('ver-parados').addEventListener('click', (ev) => { if (ev.target.closest('#bt-parados')) { verParados = !verParados; carregar(); } });
+
+  // ───────────── Por que os leads saíram (0361) ─────────────
+  // Leads de anúncio que CHEGARAM no período da tela e foram para Saída, por anúncio × motivo. Só contagem: não há lead para
+  // abrir (a agência não tem ficha). Carrega quando a gaveta abre; mudou o período com ela aberta, recarrega.
+  const gMot = document.getElementById('g-motivos');
+  const R_MOT = 'leads de anúncio que foram para Saída, por anúncio e por motivo';
+  let motPeriodo = null;
+  if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) gMot.hidden = true;
+  async function carregarMotivos() {
+    const p = per.valor();
+    const chave = `${p.de || ''}|${p.ate || ''}`;
+    if (motPeriodo === chave) return;
+    motPeriodo = chave;
+    const alvo = document.getElementById('c-motivos');
+    alvo.innerHTML = '<div class="vazio-curto">Carregando…</div>';
+    const { data, error } = await NG.sb.rpc('meta_ads_motivos_saida', { p_de: p.de || null, p_ate: p.ate || null });
+    if (motPeriodo !== chave) return;
+    if (error || !data) { motPeriodo = null; alvo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'Sem leitura dos motivos.')}</div>`; return; }
+    const linhasBanco = data.linhas || [];
+    const usados = new Set(linhasBanco.map((l) => l.motivo));
+    const cols = (data.motivos || []).filter((m) => usados.has(m.codigo));
+    linhasBanco.forEach((l) => { if (!cols.some((m) => m.codigo === l.motivo)) cols.push({ codigo: l.motivo, nome: l.motivo }); });
+    const porAdM = new Map();
+    (data.leads || []).forEach((l) => porAdM.set(l.ad_id || '', { ad_id: l.ad_id, leads: l.leads, saidas: l.saidas, m: {} }));
+    linhasBanco.forEach((l) => { const x = porAdM.get(l.ad_id || ''); if (x) x.m[l.motivo] = l.n; });
+    const todosM = [...porAdM.values()];
+    const linhasM = todosM.filter((x) => x.saidas > 0).sort((a, b) => (a.ad_id ? 0 : 1) - (b.ad_id ? 0 : 1) || b.saidas - a.saidas);
+    const totLeads = soma(todosM, 'leads'), totSai = soma(todosM, 'saidas');
+    const totCol = (m) => linhasM.reduce((s, x) => s + (x.m[m.codigo] || 0), 0);
+    if (!totSai) {
+      document.getElementById('r-motivos').textContent = `nenhuma saída entre ${pl(totLeads, 'lead de anúncio', 'leads de anúncio')} · ${per.rotulo.toLowerCase()}`;
+      alvo.innerHTML = '<div class="vazio-curto">Nenhum lead de anúncio que chegou no período foi para Saída.</div>';
+      return;
+    }
+    const maior = cols.slice().sort((a, b) => totCol(b) - totCol(a))[0];
+    document.getElementById('r-motivos').textContent = `${pl(totSai, 'saída', 'saídas')} em ${pl(totLeads, 'lead de anúncio', 'leads de anúncio')} · o que mais tira: ${maior.nome.toLowerCase()} (${N(totCol(maior))}) · ${per.rotulo.toLowerCase()}`;
+    const nome = (x) => (x.ad_id ? nomeAd.get(x.ad_id) || [`anúncio ${x.ad_id}`, ''] : ['Sem anúncio identificado', 'o WhatsApp não disse de qual anúncio veio']);
+    alvo.innerHTML = `<table class="ma-g-tab"><thead><tr><th>Anúncio</th><th title="Leads de anúncio que chegaram no período.">Leads</th><th title="Quantos desses foram para Saída.">Saíram</th>${cols.map((m) => `<th>${esc(m.nome)}</th>`).join('')}</tr></thead><tbody>
+      ${linhasM.map((x) => `<tr><td>${esc(nome(x)[0])}${nome(x)[1] ? ` <small class="apagado">· ${esc(nome(x)[1])}</small>` : ''}</td><td>${N(x.leads)}</td><td><b>${N(x.saidas)}</b></td>${cols.map((m) => `<td>${x.m[m.codigo] ? N(x.m[m.codigo]) : '<span class="apagado">·</span>'}</td>`).join('')}</tr>`).join('')}
+      <tr><td><b>Total do período</b></td><td><b>${N(totLeads)}</b></td><td><b>${N(totSai)}</b></td>${cols.map((m) => `<td><b>${N(totCol(m))}</b></td>`).join('')}</tr></tbody></table>
+      <p class="ma-nota">Leads de anúncio que chegaram no período e já foram para Saída, pelo motivo registrado. Fachada não atendida = a rua não tem rede · cidade não atendida = fora da área · sem resposta = parou de responder. Só contagem: nenhum dado de cliente. Quem ainda está em atendimento não entra em "Saíram".</p>`;
+  }
+  function motivosMudou() { if (gMot.open) carregarMotivos(); else { motPeriodo = null; document.getElementById('r-motivos').textContent = R_MOT; } }
+  gMot.addEventListener('toggle', () => { if (gMot.open) carregarMotivos(); });
 
   // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a gaveta abre) ─────────────
   // A gaveta substitui a antiga vista "Bairros prioritários": estes três nomes existem só para o código dos bairros seguir igual.

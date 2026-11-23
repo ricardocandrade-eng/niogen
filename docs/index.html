@@ -22,7 +22,7 @@
 </script>
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=201126-16"></script>
+<script src="assets/app.js?v=231126-1"></script>
 </head>
 <body>
 <main class="login">
@@ -58,6 +58,7 @@
   async function telaInicial() {
     let volta = null;
     try { volta = sessionStorage.getItem('ng.voltar'); sessionStorage.removeItem('ng.voltar'); } catch (e) { /* */ }
+    try { const { data } = await NG.sb.rpc('sou_agencia'); if (data === true) return 'metaads.html'; } catch (e) { /* */ }   // 0361: a agência entra pelo Meta Ads
     if (volta && /^[a-z]+\.html([?#].*)?$/i.test(volta)) return volta;
     if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true) {
       try { const { data } = await NG.sb.rpc('meu_perfil'); if (['admin', 'backoffice'].includes(data)) return 'conversas.html'; } catch (e) { /* */ }

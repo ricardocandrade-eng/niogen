@@ -20,8 +20,8 @@
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-10"></script>
+<script src="assets/app.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-1"></script>
 </head>
 <body>
 <div class="app">
@@ -59,7 +59,10 @@
 <script>
 (async function () {
   const { esc } = NG;
-  await NG.exigirLogin();
+  const eu = await NG.exigirLogin();
+  // 23/11 (0361): a agência da Meta Ads vê planos, preços, cidades e regras de comunicação — SEM comissão e sem a aba Bônus.
+  // Para ela os planos e os adicionais vêm de tabela_agencia(), que já não traz a comissão (o banco não manda).
+  const agencia = eu.perfil === 'agencia';
   NGSidebar.montar();
 
   // Condições que não são número de tabela (TABELA_VIGENTE §1, §2, §5 e §6).
@@ -107,12 +110,20 @@
   ];
 
   const hoje = NG.diaSP();
-  const [rp, ra, rb, rr] = await Promise.all([
-    NG.sb.from('config_planos').select('*').lte('vigencia_inicio', hoje).order('preco'),
-    NG.sb.from('config_adicionais').select('*').order('id'),
-    NG.sb.from('config_bonus').select('*').lte('valido_de', hoje).order('id'),
-    NG.sb.from('config_area').select('*').eq('ativo', true).order('cidade'),
-  ]);
+  let rp, ra, rb, rr;
+  if (agencia) {
+    const [rt, rArea] = await Promise.all([NG.sb.rpc('tabela_agencia'), NG.sb.from('config_area').select('*').eq('ativo', true).order('cidade')]);
+    const d = rt.data || {};
+    rp = { data: d.planos || [], error: rt.error || (rt.data ? null : { message: 'Sem leitura da tabela.' }) };
+    ra = { data: d.adicionais || [] }; rb = { data: [] }; rr = rArea;
+  } else {
+    [rp, ra, rb, rr] = await Promise.all([
+      NG.sb.from('config_planos').select('*').lte('vigencia_inicio', hoje).order('preco'),
+      NG.sb.from('config_adicionais').select('*').order('id'),
+      NG.sb.from('config_bonus').select('*').lte('valido_de', hoje).order('id'),
+      NG.sb.from('config_area').select('*').eq('ativo', true).order('cidade'),
+    ]);
+  }
   const erro = [rp, ra, rb, rr].find((r) => r.error);
   if (erro) { document.getElementById('secoes').innerHTML = `<div class="placeholder">${esc(NG.msgErro(erro.error))}</div>`; return; }
 
@@ -122,7 +133,7 @@
   const area = rr.data || [];
   const m = NG.fmtMoeda;
   const ini = planos.map((p) => p.vigencia_inicio).sort().pop();
-  document.getElementById('sub').textContent = `Portfólio e política comercial da Nio para a Dharma (PAP) · tabela vigente desde ${NG.fmtDiaISO(ini)}`;
+  document.getElementById('sub').textContent = `${agencia ? 'Planos, preços e regras de comunicação da Nio' : 'Portfólio e política comercial da Nio para a Dharma (PAP)'} · tabela vigente desde ${NG.fmtDiaISO(ini)}`;
   document.getElementById('n-cidades').textContent = area.length;
   const cidades = (cl) => area.filter((a) => a.cluster === cl);
   const bonusDe = (tipo, cluster, codigo) => {
@@ -140,7 +151,7 @@
     NG.kpi({ rot: 'Varejo a partir de', val: esc(m(minPreco(ativosDe('varejo').filter((p) => p.cluster === 'regular')))),
       nota: `${esc(m(minPreco(ativosDe('varejo').filter((p) => p.cluster === 'regular'), true)))} no cartão · BTU desde ${esc(m(minPreco(ativosDe('varejo').filter((p) => p.cluster === 'btu'))))}` }),
     NG.kpi({ rot: 'Empresas a partir de', val: esc(m(minPreco(ativosDe('empresas')))), nota: 'MEI e não-MEI (CNPJ)' }),
-    NG.kpi({ rot: 'Comissão por venda', val: `até ${esc(m(Math.max(...planos.filter((p) => p.ativo).map((p) => Number(p.comissao)))))}`, nota: '+ bônus · ver aba Bônus' }),
+    agencia ? '' : NG.kpi({ rot: 'Comissão por venda', val: `até ${esc(m(Math.max(...planos.filter((p) => p.ativo).map((p) => Number(p.comissao)))))}`, nota: '+ bônus · ver aba Bônus' }),
   ].join('');
 
   // ---------- filtros ----------
@@ -163,15 +174,15 @@
       <td class="col-media">${esc(p.velocidade || '—')}</td>
       <td class="num">${m(p.preco)}</td>
       <td class="num">${p.preco_cartao != null ? m(p.preco_cartao) : '<span class="apagado">mesmo</span>'}</td>
-      <td class="num">${m(p.comissao)}</td>
+      ${agencia ? '' : `<td class="num">${m(p.comissao)}</td>`}
     </tr>`;
   const cartaoPlano = (p) => `<button type="button" class="cartao ${p.ativo ? '' : 'saida'}" data-plano="${p.id}">
       <div class="cli"><b>${esc(p.nome_curto || p.nome)}</b><small>${esc(p.velocidade || '')}</small></div>
       <div class="valor">${m(p.preco)}</div>
       <div class="l2">${tabelaDe(p)}<span>${p.preco_cartao != null ? `cartão ${m(p.preco_cartao)}` : 'mesmo preço no cartão'}</span></div>
-      <div class="l2"><span>comissão ${m(p.comissao)}</span>${varianteTxt(p) ? `<span>· ${esc(varianteTxt(p))}</span>` : ''}</div>
+      <div class="l2">${agencia ? '' : `<span>comissão ${m(p.comissao)}</span>`}${varianteTxt(p) ? `<span>${agencia ? '' : '· '}${esc(varianteTxt(p))}</span>` : ''}</div>
     </button>`;
-  const COLS_PLANO = '<th data-ord="plano">Plano</th><th data-ord="tabela">Tabela</th><th class="col-media">Velocidade</th><th data-ord="preco" class="num">Boleto/débito</th><th class="num">Cartão</th><th data-ord="comissao" data-dir="desc" class="num">Comissão</th>';
+  const COLS_PLANO = '<th data-ord="plano">Plano</th><th data-ord="tabela">Tabela</th><th class="col-media">Velocidade</th><th data-ord="preco" class="num">Boleto/débito</th><th class="num">Cartão</th>' + (agencia ? '' : '<th data-ord="comissao" data-dir="desc" class="num">Comissão</th>');
   const CHAVES_PLANO = {
     // Família → Regular antes de BTU → com fidelidade antes de sem → preço.
     plano: (p) => FAMILIAS.indexOf(p.familia) * 10000 + (p.cluster === 'btu' ? 1000 : 0) + (/nfid/.test(p.variante || '') ? 500 : 0) + Number(p.preco),
@@ -206,18 +217,18 @@
       pe: () => `<section class="painel"><h2>Condições do Varejo</h2><span class="painel-sub">${esc(hab('varejo'))} Sem fidelidade: mesmos preços, a taxa de habilitação vai à vista na 1ª fatura (direito do consumidor, não é foco de venda).</span>${lista(CONDICOES.varejo.map(esc))}
         <h2>Vencimento e cobrança</h2>${lista(CONDICOES.cobranca.map(esc))}</section>` },
     empresas: { nome: 'Empresas', ord: { chave: 'plano', dir: 1 }, cols: COLS_PLANO, chaves: CHAVES_PLANO, itens: () => planosDe('empresas'), tr: linhaPlano, cartao: cartaoPlano, un: ['plano', 'planos'],
-      pe: () => `<section class="painel"><h2>Condições de Empresas</h2><span class="painel-sub">${esc(hab('empresas'))} NMEI (PJ não-MEI) recebe o bônus NMEI por cima da comissão — aba Bônus. O Fibra 400 Mega não tem versão BTU.</span>${lista(CONDICOES.empresas.map(esc))}</section>` },
+      pe: () => `<section class="painel"><h2>Condições de Empresas</h2><span class="painel-sub">${esc(hab('empresas'))} ${agencia ? '' : 'NMEI (PJ não-MEI) recebe o bônus NMEI por cima da comissão — aba Bônus. '}O Fibra 400 Mega não tem versão BTU.</span>${lista(CONDICOES.empresas.map(esc))}</section>` },
     adicionais: { nome: 'Adicionais', ord: { chave: 'nome', dir: 1 }, un: ['serviço', 'serviços'],
-      cols: '<th data-ord="nome">Serviço</th><th class="col-media">Portfólio</th><th data-ord="preco" class="num">Preço ao cliente</th><th class="num">Por contrato</th><th data-ord="comissao" data-dir="desc" class="num">Comissão</th><th>Situação</th>',
+      cols: '<th data-ord="nome">Serviço</th><th class="col-media">Portfólio</th><th data-ord="preco" class="num">Preço ao cliente</th><th class="num">Por contrato</th>' + (agencia ? '' : '<th data-ord="comissao" data-dir="desc" class="num">Comissão</th>') + '<th>Situação</th>',
       chaves: { nome: (a) => a.nome, preco: (a) => Number(a.preco || 0), comissao: (a) => Number(a.comissao || 0) },
       itens: linhasAd,
       tr: (a) => `<tr class="${a.ativo ? '' : 'saida'}"><td class="cli"><b>${esc(a.nome)}</b>${a.max_por_contrato > 1 ? `<small>por ponto, até ${a.max_por_contrato}</small>` : ''}</td>
         <td class="col-media">${esc(portTxt(a))}</td><td class="num">${a.preco != null ? m(a.preco) + '/mês' : '—'}</td>
-        <td class="num">${a.max_por_contrato > 1 ? 'até ' + a.max_por_contrato : '1'}</td><td class="num">${m(a.comissao)}</td>
+        <td class="num">${a.max_por_contrato > 1 ? 'até ' + a.max_por_contrato : '1'}</td>${agencia ? '' : `<td class="num">${m(a.comissao)}</td>`}
         <td>${a.ativo ? '<span class="pill ativo">vende</span>' : '<span class="pill saida">fora de venda</span>'}</td></tr>`,
       cartao: (a) => `<div class="cartao ${a.ativo ? '' : 'saida'}"><div class="cli"><b>${esc(a.nome)}</b><small>${esc(portTxt(a))}</small></div>
-        <div class="valor">${a.preco != null ? m(a.preco) : '—'}</div><div class="l2"><span>comissão ${m(a.comissao)}</span>${a.max_por_contrato > 1 ? `<span>· até ${a.max_por_contrato} por contrato</span>` : ''}${a.ativo ? '' : '<span>· fora de venda</span>'}</div></div>`,
-      pe: () => '<span class="nota-campo">Cobrados à parte, na mensalidade. A comissão é por item vendido junto com o plano.</span>' },
+        <div class="valor">${a.preco != null ? m(a.preco) : '—'}</div><div class="l2">${agencia ? '' : `<span>comissão ${m(a.comissao)}</span>`}${a.max_por_contrato > 1 ? `<span>${agencia ? '' : '· '}até ${a.max_por_contrato} por contrato</span>` : ''}${a.ativo ? '' : '<span>· fora de venda</span>'}</div></div>`,
+      pe: () => `<span class="nota-campo">Cobrados à parte, na mensalidade.${agencia ? '' : ' A comissão é por item vendido junto com o plano.'}</span>` },
     bonus: { nome: 'Bônus', ord: { chave: 'nome', dir: 1 }, un: ['bônus', 'bônus'],
       topo: () => `<section class="painel"><h2>Como a comissão é paga</h2><span class="painel-sub">Política Comercial PAP de 22/10/2026 (cancela e substitui o Anexo II de 20/08) e contrato da Dharma.</span>${lista(REGRAS_COMISSAO)}</section>`,
       cols: '<th data-ord="nome">Bônus</th><th class="num">Regular</th><th class="num">Especial/BTU</th><th>Regra</th>',
@@ -236,7 +247,7 @@
       cartao: (c) => `<div class="cartao"><div class="cli"><b>${esc(c.tema)}</b></div><div class="l2"><span class="ok-txt">✅ ${esc(c.pode)}</span></div><div class="l2"><span class="bad-txt">❌ ${esc(c.nunca)}</span></div></div>`,
       pe: () => `<section class="painel"><h2>Abordagem do cliente</h2><span class="painel-sub">Contrato da Dharma com a Nio (regras de abordagem e comunicação). Valem para vendedor, Mari e anúncios.</span>${lista(ABORDAGEM)}</section>` },
   };
-  const ORDEM = ['varejo', 'empresas', 'adicionais', 'bonus', 'comunicacao'];
+  const ORDEM = agencia ? ['varejo', 'empresas', 'adicionais', 'comunicacao'] : ['varejo', 'empresas', 'adicionais', 'bonus', 'comunicacao'];
   document.getElementById('secoes').innerHTML = ORDEM.map((id) => {
     const s = SECOES[id];
     return `<div class="tb-secao" data-secao="${id}" hidden>
@@ -255,7 +266,7 @@
   });
 
   let aba = ORDEM.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'varejo';
-  if (location.hash === '#politica') aba = 'bonus';   // link antigo da aba "Política comercial"
+  if (location.hash === '#politica' && !agencia) aba = 'bonus';   // link antigo da aba "Política comercial"
 
   function render() {
     NG.abasPilulas(document.getElementById('abas'), ORDEM.map((id) => ({ id, nome: SECOES[id].nome, n: SECOES[id].itens().length })), aba, (id) => {
@@ -299,12 +310,12 @@
       <section class="d-sec"><h3>Preço ao cliente</h3>
         ${linha('Boleto / débito', `<span class="mono">${m(p.preco)}</span>`)}${linha('Cartão', `<span class="mono">${p.preco_cartao != null ? m(p.preco_cartao) : m(p.preco) + ' (mesmo)'}</span>`)}
         ${linha('Habilitação', esc(p.taxa_a_vista ? `${m(p.taxa_habilitacao)} à vista na 1ª fatura` : `${m(p.taxa_habilitacao)} isenta ficando ${p.isencao_meses} meses`))}</section>
-      <section class="d-sec"><h3>Comissão</h3>
+      ${agencia ? '' : `<section class="d-sec"><h3>Comissão</h3>
         ${linha('Por venda', `<span class="mono">${m(p.comissao)}</span>`)}
         ${linha('Na instalação', `<span class="mono">${m(Number(p.comissao) + tr)}</span>${tr ? ` <small class="apagado">com ${m(tr)} de transição</small>` : ''}`)}
         ${nmei != null ? linha('Bônus NMEI', `<span class="mono">+ ${m(nmei)}</span> <small class="apagado">PJ não-MEI</small>`) : ''}
         ${linha('M-10', m10 != null ? `+ ${m(m10)} no 10º mês ${NG.dica('m10')}` : '—')}
-        <span class="nota-campo">Prevista = nominal + adicionais + transição + NMEI. O M-10 nunca entra na prevista.</span></section>
+        <span class="nota-campo">Prevista = nominal + adicionais + transição + NMEI. O M-10 nunca entra na prevista.</span></section>`}
       <section class="d-sec"><h3>Condições</h3>${lista((p.portfolio === 'empresas' ? CONDICOES.empresas : CONDICOES.varejo).map(esc))}</section>`;
     NG.gaveta.abrir(gav, { foco: false });
   }

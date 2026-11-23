@@ -11,7 +11,11 @@
      Venda = OS gerada, pela data da OS (o critério das telas Vendas, Instalações e Meta Ads). A META do mês é de INSTALADAS
      e vem do mesmo lugar que o Painel usa (RPC painel_meta_ritmo) — os dois nunca divergem; o Painel não mudou.
      Dados, numa rodada só (regra 19): v_vendas + v_os_andamento + config_planos (NGVendasOS.carregar), painel_meta_ritmo,
-     config_metas, mari_conversas (só datas e motivo do handoff) e v_meta_ads_dia. Nenhuma gravação, sem consulta nova no banco. -->
+     config_metas, placar_conversas_dia() e meta_ads_dia(). Nenhuma gravação.
+     23/11 (migration 0361 — perfil `agencia`, decisões do Ricardo em 22/11): a agência da Meta Ads também abre o Placar,
+     SEM comissão e SEM a quebra por vendedor. Para ela as vendas vêm de placar_agencia(): sem nome, telefone, CPF, endereço,
+     vendedor, nº de pedido nem comissão (o banco não manda; não é a tela que esconde). As conversas e as qualificadas por
+     dia passam a vir contadas do banco para todos (placar_conversas_dia), em vez das linhas de mari_conversas. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -29,8 +33,8 @@
 <link rel="stylesheet" href="assets/listas.css?v=221126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=201126-16"></script>
-<script src="assets/sidebar.js?v=221126-10"></script>
+<script src="assets/app.js?v=231126-1"></script>
+<script src="assets/sidebar.js?v=231126-1"></script>
 <script src="assets/vendasos.js?v=221126-2"></script>
 <style>
   /* 22/11 (Ricardo: "vários cards soltos ou gráficos em barras, tudo jogado"): a tela passa a ter TRÊS blocos, cada um num
@@ -146,9 +150,22 @@
   const V = NGVendasOS;
   const eu = await NG.exigirLogin();
   NGSidebar.montar();
-  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+  const agencia = eu.perfil === 'agencia';   // 0361: sem comissão, sem vendedor e sem atalho para a tela Vendas
+  if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) {
     document.querySelector('main').innerHTML = '<header class="cab"><div><h1>Placar</h1></div></header><div class="vazio">O Placar é do admin e do backoffice.</div>';
     return;
+  }
+  // 0361: as vendas da agência, já sem dado de cliente. `n` é só um número de ordem; a OS de cada venda vem escolhida do banco.
+  async function carregarAgencia() {
+    const { data, error } = await NG.sb.rpc('placar_agencia');
+    if (error) return { erro: error, vendas: [], os: {}, nomeCurto: {} };
+    const vendas = (data || []).map((v) => ({ ...v, id: v.n }));
+    const os = {}, nomeCurto = {};
+    vendas.forEach((v) => {
+      if (v.os_estado || v.os_agendamento_data) os[v.id] = { estado: v.os_estado, agendamento_data: v.os_agendamento_data };
+      if (v.plano_nome_curto) nomeCurto[v.plano_id] = v.plano_nome_curto;
+    });
+    return { vendas, os, nomeCurto };
   }
   const fMes = document.getElementById('f-mes');
   const R = (v) => NG.fmtMoeda(v).replace(/,00$/, '');
@@ -176,8 +193,9 @@
     const agora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', timeZone: NG.TZ }).replace(/\D/g, '');
     const sem = new Date(`${hoje}T12:00:00-03:00`).toLocaleDateString('pt-BR', { weekday: 'long', timeZone: NG.TZ });
     document.getElementById('t-hoje').innerHTML = `Hoje <em>${esc(sem)}, ${esc(NG.fmtDiaISO(hoje).slice(0, 5))} · até as ${Number(agora)}h</em>`;
-    const nConv = (dia) => (conv ? conv.filter((c) => diaDe(c.created_at) === dia).length : null);
-    const nQual = (dia) => (conv ? conv.filter((c) => c.handoff_motivo === 'dados_completos' && diaDe(c.handoff_em) === dia).length : null);
+    const doDia = (dia) => conv.find((c) => c.dia === dia) || {};
+    const nConv = (dia) => (conv ? doDia(dia).conversas || 0 : null);
+    const nQual = (dia) => (conv ? doDia(dia).qualificadas || 0 : null);
     const nOS = (dia) => d.vendas.filter((v) => diaOS(v) === dia).length;
     const aberta = (v) => !['instalada', 'cancelada'].includes(st(v));
     const nInst = (dia) => d.vendas.filter((v) => (aberta(v) && V.diaInstalacao(v, d.os[v.id]) === dia) || (v.instalado_em && diaDe(v.instalado_em) === dia)).length;
@@ -226,15 +244,16 @@
     const cel = (rot, val, nota, dica) => `<div class="pc-cel menor" title="${esc(dica)}"><span>${esc(rot)}</span><b>${val}</b><small>${nota}</small></div>`;
     const com = vm.map(comissao);
     const total = com.reduce((s, c) => s + (c.valor || 0), 0), paga = com.filter((c) => c.id === 'paga').reduce((s, c) => s + (c.valor || 0), 0);
-    it.push(cel('Comissão do mês', esc(R(total)), paga ? `${esc(R(paga))} já paga pela Nio` : 'nada pago ainda', 'Comissão da Nio das vendas com OS do mês (prevista, confirmada ou paga).'));
+    if (!agencia) it.push(cel('Comissão do mês', esc(R(total)), paga ? `${esc(R(paga))} já paga pela Nio` : 'nada pago ainda', 'Comissão da Nio das vendas com OS do mês (prevista, confirmada ou paga).'));
     // Custo por venda de anúncio (Ricardo, 22/11): o mesmo critério do Meta Ads
     const gastoMes = ads.filter((r) => r.dia.slice(0, 7) === mes).reduce((s, r) => s + Number(r.gasto || 0), 0);
     const vAds = vm.filter((v) => v.origem === 'meta_ads').length;
     it.push(cel('Custo por venda de anúncio', !completo ? '…' : vAds ? esc(R(Math.round(gastoMes / vAds))) : '—', `${completo ? esc(R(gastoMes)) : '…'} gastos · ${pl(vAds, 'venda de anúncio', 'vendas de anúncio')}`, 'Gasto do mês em anúncio dividido pelas vendas com OS que vieram de anúncio.'));
     // Conversão do mês (Ricardo, 22/11)
     if (conv) {
-      const cM = conv.filter((c) => diaDe(c.created_at).slice(0, 7) === mes).length;
-      const qM = conv.filter((c) => c.handoff_motivo === 'dados_completos' && diaDe(c.handoff_em).slice(0, 7) === mes).length;
+      const doMesC = conv.filter((c) => String(c.dia).slice(0, 7) === mes);
+      const cM = doMesC.reduce((s, c) => s + (c.conversas || 0), 0);
+      const qM = doMesC.reduce((s, c) => s + (c.qualificadas || 0), 0);
       it.push(cel('Conversas › qualificadas › vendas', `${N(cM)} › ${N(qM)} › ${N(vm.length)}`, `${pct(vm.length, cM)} das conversas viram venda`, 'Conversas novas no mês › qualificadas no mês › vendas com OS no mês. O percentual é sobre as conversas.'));
     } else it.push(cel('Conversas › qualificadas › vendas', completo ? '—' : '…', '&nbsp;', 'Conversas novas no mês › qualificadas no mês › vendas com OS no mês.'));
     // Mês passado (Ricardo, 22/11): o mesmo dia do mês anterior
@@ -261,22 +280,22 @@
       const linhas = [...g.values()].sort((a, b) => b.n - a.n || b.com - a.com || String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
       const mx = Math.max(1, ...linhas.map((l) => l.n));
       return `<section class="pc-q"><h3>${esc(titulo)}</h3>${linhas.length ? `<ul>${linhas.map((l) => {
-        const href = atual && link ? link(l) : null;
+        const href = atual && link && !agencia ? link(l) : null;
         return `<li>${href ? `<a class="nome" href="${esc(href)}" title="Abrir a tela Vendas com este filtro">${esc(l.nome)}</a>` : `<span class="nome" title="${esc(l.nome)}">${esc(l.nome)}</span>`}<span class="n">${N(l.n)}</span>
           <div class="bar"><i style="width:${Math.round((l.n / mx) * 100)}%"></i></div>
-          <small>${pl(l.inst, 'instalada', 'instaladas')} · ${esc(R(l.com))}</small></li>`;
+          <small>${pl(l.inst, 'instalada', 'instaladas')}${agencia ? '' : ` · ${esc(R(l.com))}`}</small></li>`;
       }).join('')}</ul>` : '<div class="vazio">Nenhuma venda com OS no mês.</div>'}</section>`;
     };
-    document.getElementById('t-onde').innerHTML = `De onde vêm as vendas <em>${pl(vm.length, 'venda com OS', 'vendas com OS')} em ${esc(nomeMes(mes))} · instaladas e comissão embaixo de cada linha</em>`;
+    document.getElementById('t-onde').innerHTML = `De onde vêm as vendas <em>${pl(vm.length, 'venda com OS', 'vendas com OS')} em ${esc(nomeMes(mes))} · ${agencia ? 'instaladas' : 'instaladas e comissão'} embaixo de cada linha</em>`;
     const FORMA = { cartao: 'Cartão', boleto: 'Boleto', dacc: 'Débito em conta' };
     document.getElementById('pc-quebras').innerHTML = [
-      quebra('Por vendedor', (v) => [v.vendedor_id || '', v.vendedor_nome || 'Sem vendedor (Mari)'], (l) => (l.k ? `vendas.html?vendedor=${encodeURIComponent(l.k)}` : null)),
+      agencia ? '' : quebra('Por vendedor', (v) => [v.vendedor_id || '', v.vendedor_nome || 'Sem vendedor (Mari)'], (l) => (l.k ? `vendas.html?vendedor=${encodeURIComponent(l.k)}` : null)),
       quebra('Por origem', (v) => [v.origem || '', NG.ORIGENS[v.origem] || v.origem || 'Sem origem'], (l) => (l.k ? `vendas.html?origem=${encodeURIComponent(l.k)}` : null)),
       quebra('Por plano', (v) => [v.plano_id || '', d.nomeCurto[v.plano_id] || v.plano_nome || 'Sem plano']),
       quebra('Por forma de pagamento', (v) => [v.forma_pagamento || '', FORMA[v.forma_pagamento] || v.forma_pagamento || 'Não informada']),
       quebra('Por cidade', (v) => [v.cidade || '', v.cidade || 'Sem cidade'], (l) => (l.k ? `vendas.html?q=${encodeURIComponent(l.k)}` : null)),
     ].join('');
-    document.getElementById('pc-pe').textContent = `Venda = OS gerada, pela data da OS. ${atual ? 'Clicar num vendedor, numa origem ou numa cidade abre a tela Vendas já filtrada.' : ''}`;
+    document.getElementById('pc-pe').textContent = `Venda = OS gerada, pela data da OS. ${agencia ? 'Só números: nenhum dado de cliente passa por aqui.' : atual ? 'Clicar num vendedor, numa origem ou numa cidade abre a tela Vendas já filtrada.' : ''}`;
   }
 
   // ---------- a curva: acumulado de vendas (OS) e de instaladas, dia a dia, contra a reta da meta ----------
@@ -345,10 +364,11 @@
     const iniAnt = `${mesAnterior(mesAnterior(mesAtual))}-01`;   // dois meses para trás: dá o mês atual, o passado e a comparação
     // Regra 19: tudo sai junto, mas a tela pinta assim que as vendas e a meta chegam (as mais rápidas); os números que
     // dependem das conversas da Mari e do gasto em anúncio entram em seguida, sem segurar o resto.
-    const pConv = NG.sb.from('mari_conversas').select('created_at, handoff_motivo, handoff_em').gte('created_at', `${iniAnt}T00:00:00-03:00`).limit(10000).then((r) => r, (e) => ({ error: e }));
-    const pAds = NG.sb.from('v_meta_ads_dia').select('dia, gasto, conversas_meta').gte('dia', iniAnt).then((r) => r, (e) => ({ error: e }));
+    // 0361: conversas e qualificadas chegam contadas por dia ([{ dia, conversas, qualificadas }]), sem linha de conversa.
+    const pConv = NG.sb.rpc('placar_conversas_dia', { p_desde: iniAnt }).then((r) => r, (e) => ({ error: e }));
+    const pAds = NG.sb.rpc('meta_ads_dia').then((r) => (r.error ? r : { data: (r.data || []).filter((x) => x.dia >= iniAnt) }), (e) => ({ error: e }));
     const [dados, rr, rm] = await Promise.all([
-      V.carregar(),
+      agencia ? carregarAgencia() : V.carregar(),
       NG.sb.rpc('painel_meta_ritmo', { p_hoje: hoje }),
       NG.sb.from('config_metas').select('mes, meta_vendas'),
     ]);

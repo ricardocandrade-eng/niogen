@@ -442,7 +442,7 @@
     pendencia:'Em espera: a venda depende de um terceiro (Nio, Rogério, cliente) e fica na etapa com o motivo e a data de revisão. Sai de "Precisam de ação" até a data; na data volta em vermelho para todos. A cadência da Mari fica pausada. Só admin/backoffice abre e encerra.',
   };
   const opcoes = (mapa, atual, vazio = '—') => `<option value="">${vazio}</option>${Object.entries(mapa).map(([k, t]) => `<option value="${k}" ${atual === k ? 'selected' : ''}>${t}</option>`).join('')}`;
-  const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice' };
+  const PERFIS = { admin: 'Admin', vendedor: 'Vendedor', backoffice: 'Backoffice', agencia: 'Agência' };
 
   const MOTIVOS_SAIDA = [
     'Sem cobertura', 'Já é cliente Nio', 'Concorrente', 'Preço', 'Sem contato (cadência esgotada)',
@@ -1170,6 +1170,16 @@
 
   // ---------- sessão ----------
   let usuarioAtual = null;
+  // 23/11 (0361): o perfil `agencia` (a agência da Meta Ads) só abre estas telas; qualquer outra, pedida pelo endereço, volta
+  // para o Meta Ads. É conforto de tela: quem segura o dado é o banco (para tudo o que já existia, a agência não tem perfil).
+  const TELAS_AGENCIA = ['metaads.html', 'placar.html', 'tabela.html'];
+  function foraDaAgencia(u) {
+    if (!u || u.perfil !== 'agencia') return false;
+    const aqui = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    if (TELAS_AGENCIA.includes(aqui)) return false;
+    location.replace('metaads.html');
+    return true;
+  }
   async function exigirLogin() {
     const { data } = await sb.auth.getSession();
     if (!data.session) {
@@ -1186,6 +1196,7 @@
     try { guardado = JSON.parse(localStorage.getItem(EU_CACHE) || 'null'); } catch (e) { guardado = null; }
     if (guardado && guardado.id === uid && guardado.u && guardado.u.ativo) {
       usuarioAtual = { ...guardado.u, email: data.session.user.email };
+      if (foraDaAgencia(usuarioAtual)) return new Promise(() => {});
       busca().then(async ({ data: u, error }) => {
         if (error) return;
         if (!u || !u.ativo) { limparLocal(); await sb.auth.signOut(); location.replace('index.html?erro=perfil'); return; }
@@ -1209,6 +1220,7 @@
     }
     try { localStorage.setItem(EU_CACHE, JSON.stringify({ id: uid, u })); } catch (e) { /* sem armazenamento */ }
     usuarioAtual = { ...u, email: data.session.user.email };
+    if (foraDaAgencia(usuarioAtual)) return new Promise(() => {});
     return usuarioAtual;
   }
   const EU_CACHE = 'niogen.eu';
@@ -1362,7 +1374,7 @@
 
   // ---------- dados comuns ----------
   async function carregarUsuarios() {
-    const { data } = await sb.from('usuarios').select('id, nome, perfil').eq('ativo', true).order('nome');
+    const { data } = await sb.from('usuarios').select('id, nome, perfil').eq('ativo', true).neq('perfil', 'agencia').order('nome');   // 0361: a agência não é do time
     return data || [];
   }
   function preencherSelect(sel, valores, rotuloTodos) {
