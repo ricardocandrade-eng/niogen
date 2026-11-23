@@ -1,6 +1,10 @@
 # NIOGEN | .github/workflows/pages.yml | 03/11/2026
 # Publica a pasta docs/ no GitHub Pages. O docs/config.js não é versionado:
 # é gerado aqui a partir de SUPABASE_NIO_URL (repo variable) e SUPABASE_NIO_ANON (repo secret).
+# rev. 23/11/2026 (Claude Code): upload e deploy em DOIS jobs (build → deploy), como o modelo oficial do GitHub.
+#   Num job só, o deploy-pages pedia o artefato 0,3–0,5 s depois do upload e a API ainda respondia "0 artifact(s)"
+#   ("No artifacts named github-pages were found") — 5 falhas em 23/11, todas resolvidas só no re-run.
+#   concurrency sem cancel-in-progress: com várias sessões fazendo push, um deploy no meio não é mais cancelado (o seguinte espera).
 name: Pages
 
 on:
@@ -16,14 +20,11 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -40,5 +41,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
