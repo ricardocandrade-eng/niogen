@@ -177,7 +177,7 @@
   const REL = [
     { id: 'osab', nome: 'OSAB · pedidos e instalação', chave: 'PEDIDO', desc: 'Atualiza situação, pendência, data de instalação e venda válida. Diário (e-mail ou portal do empresário).' },
     { id: 'dfv_hp', nome: 'DFV · base HP/HC (viabilidade)', chave: 'COD_SURVEY + número + complemento', desc: 'Só endereços viáveis; substitui a partição inteira do município. CSV de ~45 MB, também reconhecido no botão principal. Aplicar pela tela: em breve (carga pelo CLI).' },
-    { id: 'extrato', nome: 'Extrato quinzenal · Pedidos × Linha a Linha', chave: 'CONTRATO + NUM_OS_PEDIDO_SIEBEL', desc: 'Comissão, estorno e bônus por linha. Chega por e-mail. O NIOGEN guarda o arquivo como veio; a Conciliação liga quando as chaves forem conferidas com o 1º arquivo real.', bruto: true },
+    { id: 'extrato', nome: 'Extrato quinzenal · Pedidos × Linha a Linha', chave: 'NUM_OS_PEDIDO_SIEBEL = OS da venda', desc: 'Comissão, estorno e bônus por linha. Chega por e-mail. Importa-se na tela Conciliação (desde 23/11/2026), que casa cada linha com a venda pela OS.', bruto: true },
     { id: 'fpd', nome: 'FPD · 1ª, 2ª e 3ª fatura', chave: 'ID_CONTRATO', desc: '1 linha por fatura. Mensal (e-mail ou sistema da Nio). O NIOGEN guarda o arquivo como veio; a Adimplência liga depois da conferência das chaves.', bruto: true },
     { id: 'churn', nome: 'CHURN · retiradas', chave: 'NR_ORDEM', desc: 'Tipo (vol/invol), motivo, safra. Só indicador de qualidade (churn não estorna). Em .xlsx ou .xlsb. O NIOGEN guarda o arquivo como veio.', bruto: true },
     { id: 'faturas', nome: 'Extrato mensal de faturas (4ª à 10ª)', chave: '—', desc: 'Sem ele as bolinhas 4–10 da Adimplência e o bônus M-10 ficam cegos depois do 3º mês.', pedir: true },
@@ -311,6 +311,11 @@
     return null;
   }
   async function guardarRelatorio(tipo, f) {
+    // 0371: o extrato quinzenal tem porta própria (extrato_importar), que guarda o arquivo e já concilia — feita na tela Conciliação
+    if (tipo === 'extrato') {
+      if (confirm(`"${f.name}" é o extrato quinzenal da Nio. Ele se importa na tela Conciliação, que já casa cada linha com a venda.\n\nAbrir a Conciliação?`)) location.href = 'conciliacao.html';
+      return;
+    }
     const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false });
     const abas = {}, colunas = {}, linhas = [];
     wb.SheetNames.forEach((n) => {

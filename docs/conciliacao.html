@@ -8,6 +8,9 @@
      Dados: views v_conciliacao + v_conciliacao_ciclos e tabela nio_contestacoes (rascunho
      supabase/rascunhos/0022_adimplencia_conciliacao_RASCUNHO.sql — NÃO aplicado). Sem as views: estado vazio + chave "dados de exemplo"
      (assets/exemplos/conciliacao_exemplo.json, faixa amarela EXEMPLO). Admin e backoffice; vendedor não vê.
+     23/11 (0371): LIGADA com o 1º extrato real (1QNOV26). "⇪ Importar extrato da Nio" lê o .xlsx no navegador e manda as abas à
+     extrato_importar (a única porta: guarda o arquivo, troca o ciclo, casa pela OS); as views v_conciliacao / v_conciliacao_ciclos e
+     a tabela nio_contestacoes vêm da 0371 (não do rascunho 0022). Contestação só por contestacao_registrar / contestacao_mudar.
      06/11 (prompt 25): bloco "Margem por canal" (v_margem_canal) no fim da tela — comissão Nio prevista/paga × pago e previsto a parceiros.
      Independe das views da conciliação (que ainda não existem): aparece mesmo com a tela em estado vazio. -->
 <html lang="pt-BR">
@@ -25,6 +28,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
 <script src="config.js?v=111126-12"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-1"></script>
 <script src="assets/sidebar.js?v=231126-2"></script>
@@ -46,14 +50,14 @@
       </div>
       <div class="cab-acoes">
         <label class="chave" title="Mostra pedidos e valores inventados, só para ver o layout"><input type="checkbox" id="f-exemplo" role="switch"> dados de exemplo</label>
-        <a class="btn acao-principal desab" aria-disabled="true" title="A importação do pedido / linha a linha ainda não existe: aguarda o 1º arquivo da Nio e a aprovação do SQL">⇪ Importar pedido da Nio</a>
+        <label class="btn btn-acc acao-principal" style="cursor:pointer" title="O arquivo quinzenal da Nio (abas PEDIDO e LINHA_A_LINHA). Reimportar o mesmo ciclo troca o anterior.">⇪ Importar extrato da Nio<input type="file" id="f-extrato" accept=".xlsx,.xls,.xlsb" hidden></label>
       </div>
     </header>
 
     <section class="vazio-tela" id="vazio" hidden aria-live="polite">
-      <span class="pill saida">aguardando arquivo</span>
-      <p><b>Aguardando o 1º arquivo de pedido da Nio.</b> Quando chegar o extrato quinzenal (Pedidos × Linha a Linha), cada venda ativada aparece aqui com a comissão prevista, o que a Nio pagou, a diferença e o prazo para contestar.</p>
-      <span class="nota-campo">Depende da importação do extrato quinzenal. O SQL está em rascunho, não aplicado; a chave do pedido (CONTRATO × NUM_OS_PEDIDO_SIEBEL) só o 1º arquivo real confirma.</span>
+      <span class="pill saida">sem venda instalada</span>
+      <p><b>Nenhuma venda instalada nem extrato importado.</b> Cada venda instalada aparece aqui com a comissão prevista; quando o extrato quinzenal da Nio (Pedidos × Linha a Linha) é importado, ao lado vem o que a Nio pagou, a diferença e o prazo para contestar.</p>
+      <span class="nota-campo">O extrato chega por e-mail. Importe pelo botão "⇪ Importar extrato da Nio" — a linha da Nio casa com a venda pela OS.</span>
       <button type="button" class="btn btn-ghost" id="ver-exemplo">Ver com dados de exemplo</button>
     </section>
 
@@ -377,8 +381,11 @@
     const total = cs.reduce((s, c) => s + Number(c.valor_pedido), 0);
     const det = cs.map((c) => {
       const ci = cicloDe(c.ciclo.slice(0, 8) + (c.ciclo.endsWith('1Q') ? '01' : '16'));
-      const st = c.dt_compensacao ? `pago em ${NG.fmtDiaISO(c.dt_compensacao).slice(0, 5)}` : c.numero_nf ? `NF ${c.numero_nf} emitida` : (c.status_pedido || 'aguardando NF');
-      return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(c.documento_compras || '—')}</span> · ${esc(NG.fmtMoeda(c.valor_pedido))} · ${esc(st)}${c.previsao_pg ? ` · previsão ${esc(NG.fmtDiaISO(c.previsao_pg).slice(0, 5))}` : ''}</span>`;
+      const st = c.dt_compensacao ? `pago em ${NG.fmtDiaISO(c.dt_compensacao).slice(0, 5)}` : c.numero_nf ? `NF ${c.numero_nf} emitida`
+        : `NF a emitir${c.status_pedido ? ` (Nio: ${c.status_pedido})` : ''}`;
+      const soma = c.soma_linhas != null && Math.abs(Number(c.soma_linhas) - Number(c.valor_pedido)) >= 0.005
+        ? ` · <b class="bad-txt">linha a linha soma ${esc(NG.fmtMoeda(c.soma_linhas))}</b>` : '';
+      return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(c.documento_compras || '—')}</span> · ${esc(NG.fmtMoeda(c.valor_pedido))} · ${esc(st)}${c.previsao_pg ? ` · previsão ${esc(NG.fmtDiaISO(c.previsao_pg).slice(0, 5))}` : ''}${soma}</span>`;
     }).join('');
     const falta = ids.length > cs.length ? '<span>1 quinzena ainda sem pedido</span>' : '';
     // "NF a emitir" enquanto alguma quinzena do ciclo não tem NF; com todas emitidas, "NF do ciclo".
@@ -456,7 +463,9 @@
         <span>Motivo</span><span>${esc(MOTIVO_TXT[c.motivo] || humano(c.motivo))}</span>
         <span>Valor</span><span class="mono">${esc(NG.fmtMoeda(c.valor))}</span>
         <span>Situação</span><span>${esc(c.status || 'aberta')}</span>
-        ${c.descricao ? `<span>Descrição</span><span>${esc(c.descricao)}</span>` : ''}</div>
+        ${c.prazo_em ? `<span>Prazo</span><span>${esc(NG.fmtDiaISO(c.prazo_em))}</span>` : ''}
+        ${c.descricao ? `<span>Descrição</span><span>${esc(c.descricao)}</span>` : ''}
+        ${c.resposta ? `<span>Resposta</span><span>${esc(c.resposta)}</span>` : ''}</div>
         <p class="muted">Registro interno. O envio à Nio (e-mail ao Rogério / Pipefy) é feito por fora, por quem abriu.</p></section>`;
     } else if (contestavel(l)) {
       const sugerido = s === 'falta' ? 'nao_veio' : (l.linhas || []).some(ehRecompra) ? 'multa_indevida' : (l.linhas || []).some(ehEstorno) ? 'estorno_indevido'
@@ -477,8 +486,13 @@
       ${contest}`;
     const bts = [];
     if (l.venda_id && !exemplo) bts.push('<button type="button" class="btn btn-ghost" id="d-ficha">Abrir a ficha da venda</button>');
-    bts.push(`<div class="dir">${contestavel(l) && !l.contestacao ? '<button type="submit" form="form-contestacao" class="btn btn-acc">Registrar contestação</button>' : '<button type="button" class="btn" data-fechar>Fechar</button>'}</div>`);
+    const passos = !exemplo && l.contestacao && l.contestacao.id ? ({ aberta: [['enviada', 'Marcar enviada', 'btn-acc'], ['cancelada', 'Cancelar', 'btn-ghost']],
+      enviada: [['aceita', 'Nio aceitou', 'btn-acc'], ['recusada', 'Nio recusou', 'btn-ghost'], ['cancelada', 'Cancelar', 'btn-ghost']] }[l.contestacao.status] || []) : [];
+    bts.push(`<div class="dir">${contestavel(l) && !l.contestacao ? '<button type="submit" form="form-contestacao" class="btn btn-acc">Registrar contestação</button>'
+      : passos.length ? passos.map(([st, t, c]) => `<button type="button" class="btn ${c}" data-contestacao="${st}">${esc(t)}</button>`).join('')
+      : '<button type="button" class="btn" data-fechar>Fechar</button>'}</div>`);
     document.getElementById('d-botoes').innerHTML = bts.join('');
+    document.querySelectorAll('#d-botoes [data-contestacao]').forEach((b) => b.addEventListener('click', () => mudarContestacao(l, b.dataset.contestacao)));
     const bf = document.getElementById('d-ficha');
     if (bf) bf.addEventListener('click', () => { NG.gaveta.fechar(); NG.abrirVenda(l.venda_id); });
     const form = document.getElementById('form-contestacao');
@@ -495,13 +509,55 @@
       abrirGaveta(l);
       return;
     }
-    const { error } = await NG.sb.from('nio_contestacoes').insert(Object.assign({
-      ciclo: l.ciclo, venda_id: l.venda_id, nio_pedido: l.nio_pedido, nio_contrato: l.nio_contrato, prazo_em: prazoDia(l),
-    }, reg));
+    // 0371: só pela porta do banco (prazo e fato gerador calculados lá; recusa prazo vencido e contestação repetida)
+    const { error } = await NG.sb.rpc('contestacao_registrar', {
+      p_ciclo: l.ciclo, p_venda: l.venda_id, p_nio_pedido: l.nio_pedido, p_nio_contrato: l.nio_contrato,
+      p_motivo: reg.motivo, p_valor: reg.valor, p_descricao: reg.descricao,
+    });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
-    NG.toast('Contestação registrada. Envie à Nio pelo canal combinado.', 'ok');
+    NG.toast('Contestação registrada. Envie à Nio pelo canal combinado e marque "Enviada".', 'ok');
     await carregar();
   }
+  // aberta → enviada → aceita | recusada; aberta ou enviada → cancelada (0371, contestacao_mudar)
+  async function mudarContestacao(l, status) {
+    const pede = { enviada: 'Como foi enviada? (ex.: e-mail ao Rogério em 24/11)', aceita: 'O que a Nio respondeu?', recusada: 'O que a Nio respondeu?', cancelada: 'Por que cancelar?' }[status];
+    const resp = prompt(pede, '');
+    if (resp === null) return;
+    const { error } = await NG.sb.rpc('contestacao_mudar', { p_id: l.contestacao.id, p_status: status, p_resposta: resp });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`Contestação ${status}.`, 'ok');
+    await carregar();
+  }
+
+  // ---------- importar o extrato (0371: extrato_importar) ----------
+  document.getElementById('f-extrato').addEventListener('change', async (ev) => {
+    const f = ev.target.files[0];
+    ev.target.value = '';
+    if (!f) return;
+    let abas = {};
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false });
+      wb.SheetNames.forEach((n) => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: null, raw: true, blankrows: false });
+        if (rows.length) abas[n.trim().toUpperCase()] = rows;
+      });
+    } catch (e) { NG.toast(`Não consegui ler o arquivo: ${e.message}`, 'bad'); return; }
+    const ll = abas.LINHA_A_LINHA || [];
+    if (!ll.length) { NG.toast('O arquivo não tem a aba LINHA_A_LINHA: não parece o extrato quinzenal da Nio.', 'bad'); return; }
+    const num = (x) => Number(String(x ?? '').replace(/[R$\s]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')) || 0;
+    const soma = ll.reduce((s, r) => s + num(r.COMISSAO), 0);
+    const ped = (abas.PEDIDO || []).reduce((s, r) => s + num(r.VALOR), 0);
+    const rot = `${ll[0].QUINZENA || ''}${ll[0].MES || ''}${String(ll[0].ANO || '').slice(2)}`;
+    if (!confirm(`Extrato ${rot} · "${f.name}"\n\n${NG.fmtNum(ll.length)} linhas na linha a linha · soma ${NG.fmtMoeda(soma)}\nPedido da Nio: ${abas.PEDIDO ? NG.fmtMoeda(ped) : 'sem aba PEDIDO'}\n\nCada linha casa com a venda pela OS. Reimportar o mesmo ciclo troca o que veio antes. Nada muda na venda.\n\nImportar?`)) return;
+    NG.toast('Importando o extrato…', 'ok');
+    const { data: r, error } = await NG.sb.rpc('extrato_importar', { p_arquivo: f.name, p_abas: abas });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast(`${r.ciclo_nio}: ${r.casadas} ${r.casadas === 1 ? 'linha casada' : 'linhas casadas'} · ${r.sem_venda} sem venda · `
+      + (r.bate_pedido ? 'a soma bate com o pedido' : `ATENÇÃO: soma ${NG.fmtMoeda(r.total_linhas)} ≠ pedido ${NG.fmtMoeda(r.valor_pedido)}`), r.bate_pedido && !r.sem_venda ? 'ok' : 'bad');
+    if (exemplo) ligarExemplo(false);
+    fCiclo.value = `q:${r.ciclo}`;
+    await carregar();
+  });
 
   // ---------- interação ----------
   const porChave = (c) => linhas.find((l) => l.chave === c);
