@@ -46,7 +46,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
-<link rel="stylesheet" href="assets/listas.css?v=221126-1">
+<link rel="stylesheet" href="assets/listas.css?v=231126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-2"></script>
@@ -107,9 +107,7 @@
   .ma-b-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   #g-bairros .vista { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .ma-pe { color: var(--muted); font-size: 12px; }
-  /* 23/11 (0369): as gavetas recolhíveis desta tela herdavam o .gaveta do app.css (a gaveta lateral fixa, escondida) e
-     não apareciam desde 22/11 — aqui elas voltam a ficar no fluxo da página, recolhidas como a especificação pedia */
-  .ma-gavetas details.gaveta { position: static; transform: none; visibility: visible; width: auto; z-index: auto; display: block; transition: none; }
+  /* 23/11: as gavetas recolhíveis aparecem pela regra de listas.css (antes havia um conserto local aqui) */
   .ma-desde { font-size: 11.5px; color: var(--muted); }
   .ma-tratados { font-size: 12px; color: var(--muted); padding: 2px 4px; line-height: 1.5; }
   .ma-aba { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

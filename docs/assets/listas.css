@@ -39,6 +39,9 @@
 .lista-densa .barra-filtros .sel, .lista-densa .barra-filtros .busca { min-height: 36px; }
 .lista-densa .acoes-topo { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lista-densa .acoes-topo small { color: var(--muted); font-size: 12px; }
-.lista-densa details.gaveta { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px 14px; font-size: 13px; }
+/* 23/11: a gaveta recolhível (<details class="gaveta">) herdava o .gaveta do app.css — a gaveta lateral fixa, escondida — e não aparecia
+   desde o layout de 22/11 (Canais e Instalações). Aqui ela volta ao fluxo da página, para todas as telas. */
+.lista-densa details.gaveta { position: static; transform: none; visibility: visible; width: auto; z-index: auto; display: block; transition: none;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 8px 14px; font-size: 13px; }
 .lista-densa details.gaveta summary { cursor: pointer; color: var(--muted); }
 .lista-densa details.gaveta[open] summary { margin-bottom: 8px; }

@@ -29,7 +29,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/app.css?v=221126-3">
-<link rel="stylesheet" href="assets/listas.css?v=221126-1">
+<link rel="stylesheet" href="assets/listas.css?v=231126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-1"></script>
@@ -39,9 +39,6 @@
 <script src="assets/vendasos.js?v=221126-2"></script>
 <style>
   /* radar da biometria da Nio (gaveta recolhida no fim da tela) */
-  /* 23/11: a gaveta recolhível herdava o .gaveta do app.css (a gaveta lateral fixa, escondida) e não aparecia desde 22/11 —
-     aqui ela volta ao fluxo da página, recolhida (o mesmo conserto da tela Canais) */
-  #radar details.gaveta { position: static; transform: none; visibility: visible; width: auto; z-index: auto; display: block; transition: none; }
   .op-radar-n { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 0 0 10px; }
   .op-radar-t { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 12px; }
   .op-radar-t th, .op-radar-t td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); }
