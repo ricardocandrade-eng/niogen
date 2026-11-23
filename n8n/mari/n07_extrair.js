@@ -184,13 +184,14 @@ function blocoCondicoes() {
   const taxa = pl && pl.taxa_habilitacao != null ? Number(pl.taxa_habilitacao) : 540;
   const taxaTxt = `R$ ${Number.isInteger(taxa) ? taxa : taxa.toFixed(2).replace('.', ',')}`;
   const meses = pl ? pl.isencao_meses : 12;
-  const linhaTaxa = meses
-    ? `• Taxa de instalação isenta, com fidelidade de ${meses} meses`
+  // 23/11 (L-270, Ricardo: "Tirar a linha"): plano com fidelidade não tem mais linha de taxa no quadro — taxa e fidelidade
+  // só se o cliente perguntar. A versão sem fidelidade (que o cliente pediu) continua dizendo a taxa na 1ª fatura.
+  const linhaTaxa = meses ? null
     : `• Taxa de instalação (${taxaTxt}) cobrada na 1ª fatura (versão sem fidelidade)`;
   const wifi = pl && pl.wifi ? String(pl.wifi).trim() : 'Wi-Fi';
   return [COND_ABRE, '',
     '• Preço fixo até janeiro/2030',
-    linhaTaxa,
+    ...(linhaTaxa ? [linhaTaxa] : []),
     `• Roteador ${wifi} incluído, sem custo`,
     '• 1ª fatura 25 dias depois da instalação (no cartão, no dia da instalação)',
     '', 'A velocidade real depende do aparelho e do Wi-Fi.'].join('\n');

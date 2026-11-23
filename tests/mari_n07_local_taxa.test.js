@@ -41,5 +41,16 @@ caso('perguntou se cancelar antes: pode explicar', rodar('Se cancelar antes dos 
   'e se eu cancelar antes?'), false);
 caso('bloco de condições continua', rodar('Fechado, então: Nio Fibra por R$95 por mês no cartão.\n||\n[CONDICOES]\n||\nFechou? Me manda seu nome completo e CPF que eu já adianto aqui.',
   'quero o fibra'), false);
+// 23/11 (Ricardo: "Tirar a linha"): o quadro de condições não fala mais de taxa nem de fidelidade.
+{
+  const r = rodar('Fechado, então: Nio Fibra por R$95 por mês no cartão.\n||\n[CONDICOES]\n||\nFechou? Me manda seu nome completo e CPF que eu já adianto aqui.', 'quero o fibra');
+  const txt = JSON.stringify(r);
+  try {
+    assert.ok(/As condições do seu plano/.test(txt), 'quadro não saiu');
+    assert.ok(/Preço fixo até janeiro\/2030/.test(txt) && /Roteador/.test(txt), 'quadro sem preço fixo ou roteador');
+    assert.ok(!/Taxa de instala|fidelidade/i.test(txt), 'quadro ainda fala de taxa ou fidelidade');
+    console.log('ok  quadro de condições sem a linha da taxa');
+  } catch (e) { falhas++; console.log(`FALHOU  quadro de condições sem a linha da taxa: ${e.message}`); }
+}
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntudo verde');
 process.exit(falhas ? 1 : 0);
