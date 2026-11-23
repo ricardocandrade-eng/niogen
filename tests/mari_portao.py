@@ -738,6 +738,32 @@ def cen_as(c):   # P46 (21/11, conversa L-236, teste do Ricardo): a lista de uni
     c.exige(not RX_PERG_PERIODO.search(t) and (r.get('interativo') or {}).get('chave') != 'turno', f'[P46] período de novo depois da unidade: «{t[-200:]}»')
 
 
+def cen_at(c):   # P47 (23/11, conversa L-259): rua com erro de digitação e cliente que não sabe o CEP
+    # A cliente escreveu "Travessa gorasiu de Castro Brandão" (o cadastro é "Rua Gorasil de Castro Brandão", CEP 36506-150). A busca
+    # voltou vazia (e, sem a cidade dos planos, ia para Juiz de Fora); a Mari pediu o CEP 3 vezes, disse que "só com o nome da rua
+    # não consigo" e seguiu para o CPF sem endereço, sem cobertura e sem plano.
+    c.diz('Olá! Posso ter mais informações sobre isso?')
+    c.diz('💰 Ver os planos')
+    c.diz('Uba Minas Gerais')
+    r = c.diz('Travessa gorasiu de Castro Brandão número 120 bairro centro')
+    t = fala(r)
+    row = conv_row(c, "cep, numero, dados->'opcoes_rua' as opcoes")
+    cep = str(row.get('cep') or '').replace('-', '')
+    opc = row.get('opcoes') or []
+    if isinstance(opc, str):
+        opc = json.loads(opc)
+    ceps = [str(o.get('cep') or '').replace('-', '') for o in opc]
+    c.exige(cep == '36506150' or '36506150' in ceps, f'[P47] a rua com erro de digitação não foi achada (cep={cep!r}, opções={ceps}): «{t[:220]}»')
+    c.exige(not re.search(r'nao (consegui|achei|encontrei)|so (com|pel)o nome', t), f'[P47] disse que não achou a rua: «{t[:220]}»')
+    c.exige('gorasil' in t, f'[P47] não mostrou a rua achada ao cliente: «{t[:220]}»')
+    if cep != '36506150' and '36506150' in ceps:
+        c.diz(str(ceps.index('36506150') + 1))
+        row = conv_row(c, 'cep, numero')
+        cep = str(row.get('cep') or '').replace('-', '')
+    c.exige(cep == '36506150', f'[P47] o CEP da rua escolhida não foi gravado: {row}')
+    c.exige(str(row.get('numero') or '') == '120', f'[P47] o número 120, dito junto da rua, se perdeu: {row}')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -775,6 +801,8 @@ PORTAO = {
     'ar': (51, cen_ar, 'P45'),
     # 21/11 — conversa L-236 (teste do Ricardo): a lista de unidades chega depois do período; o período não se pergunta de novo
     'as': (52, cen_as, 'P46'),
+    # 23/11 — conversa L-259: rua com erro de digitação, cliente sem CEP; cidade dos planos entra na busca
+    'at': (53, cen_at, 'P47'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

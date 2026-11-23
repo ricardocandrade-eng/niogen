@@ -162,7 +162,10 @@ const refazBusca = !out.p_cep && !!conv.cep && dadosConv.cep_origem === 'busca_r
 const ruaBusca = refazBusca ? ruaAgora : ruaCli;
 const recusada = !refazBusca && ruaBusca && (out.opcoesRecusadas || dadosConv.opcoes_rua_recusadas === normR(ruaBusca));
 if (!out.p_cep && (!conv.cep || refazBusca) && etapaEndereco && ruaBusca && !recusada) {
+  // 23/11 (L-259, P47): a cidade que o cliente disse para ver os planos (dados.planos_cidade) vale antes do palpite
+  // "anúncio = Juiz de Fora" — a cliente de Ubá teve a rua procurada em Juiz de Fora.
   const cidade = (refazBusca ? null : conv.cidade)
+    || dadosConv.planos_cidade
     || (/juiz de fora|\bjf\b/i.test([msg, ...(r.historico || []).map((h) => h.texto)].join(' ')) ? 'Juiz de Fora' : null)
     || (['meta_ads', 'instagram', 'facebook'].includes(conv.origem) ? 'Juiz de Fora' : null)
     || conv.cidade;
@@ -176,6 +179,34 @@ if (!out.p_cep && (!conv.cep || refazBusca) && etapaEndereco && ruaBusca && !rec
       let lst = inteiro.length >= 3 ? await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, inteiro), json: true, timeout: 6000 }) : [];
       if ((!Array.isArray(lst) || !lst.length) && busca.length >= 3 && busca !== normR(inteiro)) {
         lst = await this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, busca), json: true, timeout: 6000 });
+      }
+      // 23/11 (L-259, P47): nome com erro de digitação ("gorasiu" × "Gorasil"). O ViaCEP só acha a palavra escrita igual
+      // ao cadastro; sem resultado, busca de novo tirando uma palavra de cada vez (ou, com uma palavra só, pelo começo
+      // dela) e fica só com a rua cujo nome bate com TODAS as palavras do cliente, cada uma com até 1 letra de diferença
+      // (2 em palavra de 8+) ou o mesmo som (l/u no fim, s/z, letra dobrada). Palavra trocada não passa: nunca chuta.
+      if (!Array.isArray(lst) || !lst.length) {
+        const tk = palavras(ruaBusca);
+        const consultas = tk.length >= 2
+          ? tk.map((_, i) => tk.filter((__, j) => j !== i).join(' '))
+          : tk.filter((w) => w.length >= 6).map((w) => w.slice(0, Math.max(4, w.length - 3)));
+        const unicas = [...new Set(consultas.filter((q) => q.length >= 3))].slice(0, 5);
+        const voltas = await Promise.all(unicas.map((q) => this.helpers.httpRequest({ method: 'GET', url: VIA(cidade, q), json: true, timeout: 5000 }).catch(() => [])));
+        const som = (w) => w.replace(/ph/g, 'f').replace(/[wv]/g, 'v').replace(/y/g, 'i').replace(/z/g, 's').replace(/h/g, '')
+          .replace(/l$/, 'u').replace(/(.)\1+/g, '$1');
+        const dist = (a, b) => {   // Levenshtein
+          const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+          for (let j = 1; j <= b.length; j++) d[0][j] = j;
+          for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+          }
+          return d[a.length][b.length];
+        };
+        const parecida = (a, b) => a === b || som(a) === som(b) || dist(a, b) <= (Math.min(a.length, b.length) >= 8 ? 2 : Math.min(a.length, b.length) >= 5 ? 1 : 0);
+        const bate = (x) => { const nome = palavras(x.logradouro); return tk.every((w) => nome.some((n) => parecida(w, n))); };
+        const achadas = voltas.flatMap((v) => (Array.isArray(v) ? v : [])).filter((x) => x && x.cep && x.logradouro && bate(x));
+        // Entre as que batem, só as de nome mais curto ("Rua Halfeld", não a "Rua Altivo Halfeld").
+        const menor = Math.min(...achadas.map((x) => palavras(x.logradouro).length));
+        lst = achadas.filter((x) => palavras(x.logradouro).length === menor);
       }
       const vistos = new Set();
       let cands = (Array.isArray(lst) ? lst : []).filter((x) => x && x.cep && !vistos.has(x.cep) && vistos.add(x.cep));
