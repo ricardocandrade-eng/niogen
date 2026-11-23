@@ -379,17 +379,25 @@
       return;
     }
     const total = cs.reduce((s, c) => s + Number(c.valor_pedido), 0);
+    // 0373: a Nio não devolve NF nem pagamento — cada pedido tem o seu botão (NF → envio → pagamento)
     const det = cs.map((c) => {
       const ci = cicloDe(c.ciclo.slice(0, 8) + (c.ciclo.endsWith('1Q') ? '01' : '16'));
-      const st = c.dt_compensacao ? `pago em ${NG.fmtDiaISO(c.dt_compensacao).slice(0, 5)}` : c.numero_nf ? `NF ${c.numero_nf} emitida`
-        : `NF a emitir${c.status_pedido ? ` (Nio: ${c.status_pedido})` : ''}`;
       const soma = c.soma_linhas != null && Math.abs(Number(c.soma_linhas) - Number(c.valor_pedido)) >= 0.005
         ? ` · <b class="bad-txt">linha a linha soma ${esc(NG.fmtMoeda(c.soma_linhas))}</b>` : '';
-      return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(c.documento_compras || '—')}</span> · ${esc(NG.fmtMoeda(c.valor_pedido))} · ${esc(st)}${c.previsao_pg ? ` · previsão ${esc(NG.fmtDiaISO(c.previsao_pg).slice(0, 5))}` : ''}${soma}</span>`;
+      const peds = (c.pedidos && c.pedidos.length ? c.pedidos : [{ documento_compras: c.documento_compras, item: '10', valor: c.valor_pedido }]);
+      return peds.map((p) => {
+        const dia = (d) => NG.fmtDiaISO(d).slice(0, 5);
+        const st = p.pago_em ? `pago em ${dia(p.pago_em)} · ${NG.fmtMoeda(p.pago_valor)}`
+          : p.nf_numero ? `NF ${p.nf_numero} de ${dia(p.nf_emitida_em)}${p.nf_enviada_em ? ` · enviada ${dia(p.nf_enviada_em)} · pagamento previsto até ${dia(p.previsao_pg)}` : ' · falta marcar o envio à Nio'}`
+          : 'NF a emitir';
+        const acao = exemplo || !p.documento_compras ? '' : p.pago_em ? ''
+          : `<button type="button" class="btn btn-acc btn-sm" data-pedido="${esc(c.ciclo)}|${esc(p.documento_compras)}|${esc(p.item)}">${p.nf_numero && p.nf_enviada_em ? 'Registrar pagamento' : p.nf_numero ? 'Marcar envio · pagamento' : 'Registrar NF'}</button>`;
+        return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(p.documento_compras || '—')}</span>${p.item && p.item !== '10' ? ` item ${esc(p.item)}` : ''} · ${esc(NG.fmtMoeda(p.valor))} · ${esc(st)}${soma} ${acao}</span>`;
+      }).join('');
     }).join('');
     const falta = ids.length > cs.length ? '<span>1 quinzena ainda sem pedido</span>' : '';
     // "NF a emitir" enquanto alguma quinzena do ciclo não tem NF; com todas emitidas, "NF do ciclo".
-    const rot = cs.every((c) => c.numero_nf || c.dt_compensacao) && ids.length === cs.length ? 'NF do ciclo' : 'NF a emitir';
+    const rot = cs.every((c) => c.dt_compensacao) && ids.length === cs.length ? 'Pago' : cs.every((c) => c.numero_nf) && ids.length === cs.length ? 'NF do ciclo' : 'NF a emitir';
     el.innerHTML = `<span class="nf">${rot}: <b>${esc(NG.fmtMoeda(total))}</b></span>${det}${falta}<span>A NF só depois do pedido da Nio · processamento em até 10 dias úteis</span>`;
   }
 
@@ -527,6 +535,59 @@
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast(`Contestação ${status}.`, 'ok');
     await carregar();
+  }
+
+  // ---------- NF e pagamento do pedido (0373: ciclo_nf_registrar / ciclo_pagamento_registrar) ----------
+  document.getElementById('rodape-ciclo').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-pedido]');
+    if (!b) return;
+    const [ciclo, doc, item] = b.dataset.pedido.split('|');
+    const c = ciclos[ciclo];
+    const p = ((c && c.pedidos) || []).find((x) => x.documento_compras === doc && String(x.item) === item) || { documento_compras: doc, item, valor: c && c.valor_pedido };
+    abrirPedido(c, p);
+  });
+  function abrirPedido(c, p) {
+    abertaChave = null;
+    const hoje = NG.diaSP();
+    const temNf = !!p.nf_numero;
+    document.getElementById('d-titulo').textContent = `Pedido ${p.documento_compras}`;
+    document.getElementById('d-sub').textContent = `${c.ciclo_nio || c.ciclo} · item ${p.item} · ${NG.fmtMoeda(p.valor)}`;
+    const nf = `<form class="secao" id="form-nf">
+        <h3 class="secao-tit">Nota fiscal</h3>
+        <label class="campo"><span>Número da NF</span><input name="numero" required value="${esc(p.nf_numero || '')}" inputmode="numeric"></label>
+        <label class="campo"><span>Emitida em</span><input name="emitida" type="date" required max="${hoje}" value="${esc(p.nf_emitida_em || hoje)}"></label>
+        <label class="campo"><span>Enviada à Nio em (e-mail para recebimentonfes)</span><input name="enviada" type="date" max="${hoje}" value="${esc(p.nf_enviada_em || '')}"></label>
+        <p class="muted">Título do e-mail: <b class="mono">DHARMA TELECOM LTDA ${esc(c.ciclo_nio || '')}</b> · Observação da NF: <b class="mono">PEDIDO DE COMPRA: ${esc(p.documento_compras)} ITEM: ${esc(p.item)}</b>. O pagamento vem em até 10 dias úteis do envio.</p>
+      </form>`;
+    const pg = temNf && p.nf_enviada_em ? `<form class="secao" id="form-pg">
+        <h3 class="secao-tit">Pagamento recebido</h3>
+        <label class="campo"><span>Caiu na conta em</span><input name="pago" type="date" required max="${hoje}" value="${hoje}"></label>
+        <label class="campo"><span>Valor recebido (R$)</span><input name="valor" type="number" min="0.01" step="0.01" required value="${Number(p.valor || 0).toFixed(2)}" inputmode="decimal"></label>
+      </form>` : '';
+    document.getElementById('d-corpo').innerHTML = `<div class="faixa ${temNf ? 'amarelo' : 'vermelho'}"><b>${temNf ? (p.nf_enviada_em ? 'Aguardando pagamento' : 'NF emitida, falta enviar') : 'NF a emitir'}</b><span>A Nio não informa a NF nem o pagamento: o registro é daqui.</span></div>${nf}${pg}`;
+    document.getElementById('d-botoes').innerHTML = `<div class="dir">${pg ? '<button type="submit" form="form-pg" class="btn btn-acc">Registrar pagamento</button>' : ''}<button type="submit" form="form-nf" class="btn ${pg ? 'btn-ghost' : 'btn-acc'}">Salvar NF</button></div>`;
+    document.getElementById('form-nf').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(ev.target);
+      const { error } = await NG.sb.rpc('ciclo_nf_registrar', { p_documento: p.documento_compras, p_item: String(p.item), p_numero: String(fd.get('numero')).trim(),
+        p_emitida_em: fd.get('emitida'), p_enviada_em: fd.get('enviada') || null });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+      NG.toast('NF registrada.', 'ok');
+      NG.gaveta.fechar();
+      await carregar();
+    });
+    const fp = document.getElementById('form-pg');
+    if (fp) fp.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fd = new FormData(fp);
+      const { data: r, error } = await NG.sb.rpc('ciclo_pagamento_registrar', { p_documento: p.documento_compras, p_item: String(p.item),
+        p_pago_em: fd.get('pago'), p_valor: Number(fd.get('valor')) });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+      NG.toast(r.bate ? 'Pagamento registrado: bate com o pedido.' : `Pagamento registrado, mas ${NG.fmtMoeda(r.pago)} ≠ pedido ${NG.fmtMoeda(r.valor_pedido)}: conferir e contestar.`, r.bate ? 'ok' : 'bad');
+      NG.gaveta.fechar();
+      await carregar();
+    });
+    NG.gaveta.abrir(gaveta, {});
   }
 
   // ---------- importar o extrato (0371: extrato_importar) ----------
