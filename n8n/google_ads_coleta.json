@@ -66,6 +66,12 @@
         100
       ],
       "id": "86e1bf2d-dd98-5916-93db-e0d6ee9293d3",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000
@@ -91,6 +97,12 @@
         100
       ],
       "id": "c46bcd2b-70fa-5eca-a3f7-3d4233603799",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": true,
       "maxTries": 2,
       "waitBetweenTries": 5000
@@ -116,6 +128,12 @@
         100
       ],
       "id": "ece72a7d-970c-51ad-95fe-650e10bbcef9",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": false,
       "maxTries": 2,
       "waitBetweenTries": 5000,
@@ -143,6 +161,12 @@
         100
       ],
       "id": "c52cce95-bea0-53d5-87f5-304bc5e029c3",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": false,
       "maxTries": 2,
       "waitBetweenTries": 5000,
@@ -170,6 +194,12 @@
         100
       ],
       "id": "75f123e3-9df1-5438-95f4-87527a224e67",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": false,
       "maxTries": 2,
       "waitBetweenTries": 5000,
@@ -197,6 +227,12 @@
         100
       ],
       "id": "8587bf38-a859-58ce-90ca-bb5c501d1a49",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": false,
       "maxTries": 2,
       "waitBetweenTries": 5000,
@@ -224,6 +260,12 @@
         100
       ],
       "id": "8d37b659-e7f8-5563-89fd-7c8d5d5c2264",
+      "credentials": {
+        "googleOAuth2Api": {
+          "id": "Pq1NJDnXWbq0L1XN",
+          "name": "Google Ads Nio — NIOGEN"
+        }
+      },
       "retryOnFail": false,
       "maxTries": 2,
       "waitBetweenTries": 5000,
