@@ -39,6 +39,9 @@
 <script src="assets/vendasos.js?v=221126-2"></script>
 <style>
   /* radar da biometria da Nio (gaveta recolhida no fim da tela) */
+  /* 23/11: a gaveta recolhível herdava o .gaveta do app.css (a gaveta lateral fixa, escondida) e não aparecia desde 22/11 —
+     aqui ela volta ao fluxo da página, recolhida (o mesmo conserto da tela Canais) */
+  #radar details.gaveta { position: static; transform: none; visibility: visible; width: auto; z-index: auto; display: block; transition: none; }
   .op-radar-n { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 0 0 10px; }
   .op-radar-t { width: 100%; max-width: 640px; border-collapse: collapse; font-size: 12px; }
   .op-radar-t th, .op-radar-t td { text-align: left; padding: 3px 8px; border-bottom: 1px solid var(--border); }
