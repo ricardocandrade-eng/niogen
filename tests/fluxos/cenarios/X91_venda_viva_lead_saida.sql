@@ -17,3 +17,14 @@ select sim.confere('lead em Saída e venda viva: acusa (falha) com o nome', :'n1
 update public.lead_estado set situacao = :'sit0' where conversa_id = :'c';
 select x ->> 'texto' as t2 from jsonb_array_elements(public.conferencia_itens()) x where x ->> 'codigo' = 'venda_viva_lead_saida' \gset
 select sim.confere('com o lead de volta ao andamento: não acusa mais', :'t2' not like ('%' || :'nome' || '%'), :'t2');
+
+-- 0368: a mesma venda num telefone de teste (lista telefones_teste) é teste aberto → amarelo, pedindo a Saída · Teste
+select telefone as tel from public.mari_conversas where id = :'c' \gset
+update public.config_mari_textos set texto = coalesce(texto, '') || ',' || :'tel' where chave = 'telefones_teste';
+update public.lead_estado set situacao = 'saida_definitiva' where conversa_id = :'c';
+select x ->> 'nivel' as n3, x ->> 'texto' as t3, coalesce(x ->> 'fazer', '') as f3 from jsonb_array_elements(public.conferencia_itens()) x where x ->> 'codigo' = 'venda_viva_lead_saida' \gset
+select sim.confere('venda de telefone de teste: aviso amarelo de teste aberto, não falha',
+  :'t3' like ('%de teste aberta(s): %' || :'nome' || '%') and :'t3' not like ('%Saída: %' || :'nome' || '%')
+  and (:'n3' = 'atencao' or :'t3' like '%seguem no funil%') and :'f3' <> '', :'n3' || ' · ' || :'t3');
+update public.lead_estado set situacao = :'sit0' where conversa_id = :'c';
+update public.config_mari_textos set texto = replace(texto, ',' || :'tel', '') where chave = 'telefones_teste';
