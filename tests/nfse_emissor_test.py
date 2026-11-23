@@ -54,15 +54,28 @@ def cert_teste(cnpj='11222333000181'):
 
 
 emissao = dt.datetime(2026, 11, 18, 9, 49, 24, tzinfo=E.SP)
-dps = E.montar_dps(CFG, ambiente='restrita', serie='1', numero='1', valor='380', competencia='2026-11-18',
+dps = E.montar_dps(CFG, ambiente='producao', serie='1', numero='1', valor='380', competencia='2026-11-18',
                    itens=[('4500156375', '10')], emissao=emissao + dt.timedelta(minutes=5))
-E.validar(dps)
-confere('DPS sem assinatura passa no XSD oficial v1.01', True)
+E.validar(dps, '20260209')
+confere('DPS sem assinatura passa no XSD oficial v1.01 (leiaute 20260209, produção)', True)
+novo = E.montar_dps(CFG, ambiente='restrita', serie='1', numero='1', valor='380', competencia='2026-11-18',
+                    itens=[('4500156375', '10')], emissao=emissao + dt.timedelta(minutes=5))
+E.validar(novo, '20261020')
+filhos = [etree.QName(x).localname for x in novo.find(f'{{{E.NS}}}infDPS')]
+cserv = [etree.QName(x).localname for x in novo.find(f'.//{{{E.NS}}}cServ')]
+confere('leiaute 20261020 (restrita): passa no XSD, finNFSe=0 depois do tpEmit e xDescServ por último no cServ',
+        filhos[filhos.index('tpEmit') + 1] == 'finNFSe' and novo.findtext(f'.//{{{E.NS}}}finNFSe') == '0' and cserv[-1] == 'xDescServ',
+        f'{filhos} {cserv}')
+try:
+    E.validar(dps, '20261020')
+    confere('a DPS do leiaute antigo NÃO passa no XSD novo (o que a Sefin recusou com E1235)', False)
+except E.ErroNFSe as e:
+    confere('a DPS do leiaute antigo NÃO passa no XSD novo (o que a Sefin recusou com E1235)', 'finNFSe' in str(e) or 'cLocEmi' in str(e), str(e))
 inf = dps.find(f'{{{E.NS}}}infDPS')
 g = lambda caminho: inf.findtext(caminho, namespaces={'n': E.NS})  # noqa: E731
 confere('Id = DPS + município + 2 + CNPJ + série(5) + número(15)',
         inf.get('Id') == 'DPS' + '3136702' + '2' + '11222333000181' + '00001' + '000000000000001', inf.get('Id'))
-confere('tpAmb 2 na produção restrita', g('n:tpAmb') == '2')
+confere('tpAmb 1 na produção', g('n:tpAmb') == '1')
 confere('prestador sem xNome e sem endereço (E0121)', inf.find(f'{{{E.NS}}}prest/{{{E.NS}}}xNome') is None
         and inf.find(f'{{{E.NS}}}prest/{{{E.NS}}}end') is None)
 confere('descrição no padrão da Nio', g('n:serv/n:cServ/n:xDescServ') == 'PEDIDO DE COMPRA: 4500156375 ITEM: 10')
@@ -86,11 +99,12 @@ recusa('valor zero é recusado', lambda: E.montar_dps(CFG, ambiente='restrita', 
 
 k, c = cert_teste()
 confere('CNPJ lido do certificado (CN)', E.cnpj_do_certificado(c) == '11222333000181')
-for alg in ('sha1', 'sha256'):
-    d = E.montar_dps(CFG, ambiente='restrita', serie='1', numero='3', valor='380', competencia='2026-11-18',
+for alg, amb, lei in (('sha1', 'producao', '20260209'), ('sha256', 'producao', '20260209'), ('sha1', 'restrita', '20261020')):
+    d = E.montar_dps(CFG, ambiente=amb, serie='1', numero='3', valor='380', competencia='2026-11-18',
                      itens=[('4500156375', '10')], emissao=emissao)
     E.assinar(d, k, c, alg)
-    E.validar(d)
+    E.validar(d, lei)
+    alg = f'{alg} {lei}'
     xml = E.serializar(d)
     confere(f'[{alg}] DPS assinada passa no XSD', True)
     confere(f'[{alg}] sem prefixo de namespace (E1228)', b'xmlns:' not in xml and b'<ds:' not in xml)

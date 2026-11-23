@@ -5,7 +5,7 @@
 # Fontes (lidas antes de escrever — regra 21):
 #   · Manual dos Contribuintes — Guia das APIs do Emissor Público Nacional (gov.br/nfse): POST /nfse (geração síncrona),
 #     GET /nfse/{chaveAcesso}, GET|HEAD /dps/{id}; o certificado da conexão identifica o ator.
-#   · Esquemas XSD v1.01 (nfse-esquemas_xsd-v1-01-20260209, copiados em nfse/xsd/1.01) — leiaute exato da DPS.
+#   · Esquemas XSD v1.01 (nfse-esquemas_xsd-v1-01-20260209, copiados em nfse/xsd/1.01-20260209; o da produção restrita de 20/10/2026 em nfse/xsd/1.01-20261020) — leiaute exato da DPS.
 #   · Anexo I v1.01 (RN_RECEPCAO_DPS e RN DPS_NFS-e): mTLS com e-CNPJ ICP-Brasil (E1200–E1209); XML em UTF-8, gzip + base64,
 #     SEM prefixo de namespace (E1228); DPS assinada com o certificado do emitente (E0714–E0718); série 00001–49999 =
 #     "aplicativo próprio" (E0010 — o Emissor Web usa 70000–79999, por isso a NF nº 1 saiu na série 70000); série + número +
@@ -41,12 +41,18 @@ NS = 'http://www.sped.fazenda.gov.br/nfse'
 DS = 'http://www.w3.org/2000/09/xmldsig#'
 VERSAO = '1.01'
 VER_APLIC = 'NIOGEN-1.0'
-XSD = pathlib.Path(__file__).parent / 'xsd' / VERSAO / f'DPS_v{VERSAO}.xsd'
+# Dois leiautes da mesma versão 1.01 (o atributo versao continua "1.01"):
+#   · 20260209 — "Documentação atual" (produção) em 23/11/2026;
+#   · 20261020 — "Produção restrita" desde 20/10/2026 (NT 009, Reforma Tributária): finNFSe obrigatório no infDPS
+#     (depois de tpEmit/cMotivoEmisTI) e xDescServ como último campo do cServ. Achado na 1ª rodada na produção restrita
+#     (E1235, 23/11/2026). Quando a produção trocar de leiaute, basta mudar 'leiaute' de AMBIENTES['producao'].
+XSD_DIR = pathlib.Path(__file__).parent / 'xsd'
+LEIAUTES = ('20260209', '20261020')
 
 AMBIENTES = {
     # tpAmb 2 = homologação (produção restrita); 1 = produção. Bases conforme a página "APIs - Produção Restrita e Produção".
-    'restrita': {'tpAmb': '2', 'sefin': 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional'},
-    'producao': {'tpAmb': '1', 'sefin': 'https://sefin.nfse.gov.br/SefinNacional'},
+    'restrita': {'tpAmb': '2', 'sefin': 'https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional', 'leiaute': '20261020'},
+    'producao': {'tpAmb': '1', 'sefin': 'https://sefin.nfse.gov.br/SefinNacional', 'leiaute': '20260209'},
 }
 
 ALG = {
@@ -101,9 +107,13 @@ def descricao_pedido(itens):
 
 
 # ───────────────────────── a DPS ─────────────────────────
-def montar_dps(cfg, *, ambiente, serie, numero, valor, competencia, itens, emissao=None):
+def montar_dps(cfg, *, ambiente, serie, numero, valor, competencia, itens, emissao=None, leiaute=None):
     """Monta a DPS (sem assinatura) na ordem exata do XSD v1.01. cfg = JSON de config; itens = [(pedido, item), …]."""
     amb = AMBIENTES[ambiente]
+    leiaute = leiaute or amb['leiaute']
+    if leiaute not in LEIAUTES:
+        raise ErroNFSe(f'Leiaute desconhecido: {leiaute}')
+    novo = leiaute >= '20261020'
     prest, toma, serv = cfg['prestador'], cfg['tomador'], cfg['servico']
     cnpj = so_digitos(prest['cnpj'])
     if len(cnpj) != 14:
@@ -132,6 +142,8 @@ def montar_dps(cfg, *, ambiente, serie, numero, valor, competencia, itens, emiss
     E('nDPS', inf, numero)
     E('dCompet', inf, comp.isoformat())
     E('tpEmit', inf, '1')                    # 1 = prestador
+    if novo:
+        E('finNFSe', inf, '0')               # 0 = NFS-e regular (único valor do leiaute)
     E('cLocEmi', inf, c_loc)
 
     p = E('prest', inf)
@@ -173,9 +185,12 @@ def montar_dps(cfg, *, ambiente, serie, numero, valor, competencia, itens, emiss
     E('cTribNac', cs, so_digitos(serv['cod_trib_nacional']))
     if serv.get('cod_trib_municipal'):
         E('cTribMun', cs, so_digitos(serv['cod_trib_municipal']).zfill(3))
-    E('xDescServ', cs, descricao_pedido(itens))
+    if not novo:
+        E('xDescServ', cs, descricao_pedido(itens))
     if serv.get('cod_nbs'):
         E('cNBS', cs, so_digitos(serv['cod_nbs']))
+    if novo:
+        E('xDescServ', cs, descricao_pedido(itens))   # no leiaute de 20/10/2026 é o último do cServ
 
     v = E('valores', inf)
     vsp = E('vServPrest', v)
@@ -207,28 +222,28 @@ def _el(tag, pai, texto):
     return e
 
 
-_ESQUEMA = None
+_ESQUEMAS = {}
 
 
-def _esquema():
+def _esquema(leiaute):
     """XSD oficial v1.01 (sem rede). Alguns padrões do XSD da Receita vêm como '^…$' (ex.: TSSerieDPS); em XSD, ^ e $ são
     caracteres literais e nenhum valor passaria. A Sefin os trata como âncoras — aqui, numa cópia temporária, eles são tirados
     (o arquivo oficial em nfse/xsd fica intacto)."""
-    global _ESQUEMA
-    if _ESQUEMA is None:
+    if leiaute not in _ESQUEMAS:
+        base = XSD_DIR / f'{VERSAO}-{leiaute}'
         tmp = pathlib.Path(tempfile.mkdtemp(prefix='nfse_xsd_'))
-        for f in XSD.parent.glob('*.xsd'):
+        for f in base.glob('*.xsd'):
             t = f.read_text(encoding='utf-8')
             t = re.sub(r'(<xs:pattern value=")\^([^"]*?)\$(")', r'\1\2\3', t)
             (tmp / f.name).write_text(t, encoding='utf-8')
         parser = etree.XMLParser(load_dtd=False, no_network=True, resolve_entities=True)
-        _ESQUEMA = etree.XMLSchema(etree.parse(str(tmp / XSD.name), parser))
-    return _ESQUEMA
+        _ESQUEMAS[leiaute] = etree.XMLSchema(etree.parse(str(tmp / f'DPS_v{VERSAO}.xsd'), parser))
+    return _ESQUEMAS[leiaute]
 
 
-def validar(dps):
-    """Valida contra o XSD oficial v1.01."""
-    esquema = _esquema()
+def validar(dps, leiaute):
+    """Valida contra o XSD oficial v1.01 do leiaute (20260209 ou 20261020)."""
+    esquema = _esquema(leiaute)
     if not esquema.validate(dps):
         raise ErroNFSe('DPS fora do esquema: ' + '; '.join(f'{e.line}: {e.message}' for e in list(esquema.error_log)[:5]))
 
@@ -402,6 +417,7 @@ def main():
         p.add_argument('--item', action='append', help='item de cada pedido (padrão 10)')
         p.add_argument('--config')
         p.add_argument('--assinatura', choices=list(ALG), default='sha1')
+        p.add_argument('--leiaute', choices=LEIAUTES, help='padrão: o do ambiente (restrita 20261020, producao 20260209)')
         p.add_argument('--saida', help='pasta para gravar o XML (fora do repo)')
 
     comuns(sub.add_parser('montar', help='gera, valida e assina o XML (nada sai da máquina)'))
@@ -436,14 +452,16 @@ def main():
 
         cfg = carregar_config(a.config)
         itens = list(zip(a.pedido, (a.item or []) + ['10'] * (len(a.pedido) - len(a.item or []))))
-        dps = montar_dps(cfg, ambiente=a.ambiente, serie=a.serie, numero=a.numero, valor=a.valor, competencia=a.competencia, itens=itens)
-        validar(dps)
+        leiaute = a.leiaute or AMBIENTES[a.ambiente]['leiaute']
+        dps = montar_dps(cfg, ambiente=a.ambiente, serie=a.serie, numero=a.numero, valor=a.valor, competencia=a.competencia,
+                         itens=itens, leiaute=leiaute)
+        validar(dps, leiaute)
         chave, cert, cadeia = carregar_pfx()
         cn = cnpj_do_certificado(cert)
         if cn and cn != so_digitos(cfg['prestador']['cnpj']):
             raise ErroNFSe('O certificado não é do prestador da config (E0718: a DPS é assinada pelo emitente).')
         assinar(dps, chave, cert, a.assinatura)
-        validar(dps)
+        validar(dps, leiaute)
         xml = serializar(dps)
         conferir_assinatura(xml)
         id_ = dps.find(f'{{{NS}}}infDPS').get('Id')
@@ -451,7 +469,7 @@ def main():
             (pathlib.Path(a.saida) / f'{id_}.xml').write_bytes(xml)
         if a.cmd == 'montar':
             print(json.dumps({'ok': True, 'id': id_, 'ambiente': a.ambiente, 'bytes': len(xml), 'assinatura': a.assinatura,
-                              'xsd': 'válido', 'saida': a.saida}, ensure_ascii=False, indent=1))
+                              'xsd': f'válido (leiaute {leiaute})', 'saida': a.saida}, ensure_ascii=False, indent=1))
             return 0
 
         if not a.confirmo:
