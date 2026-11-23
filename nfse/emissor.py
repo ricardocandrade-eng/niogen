@@ -441,6 +441,15 @@ def xml_da_resposta(campo_b64):
     return gzip.decompress(base64.b64decode(campo_b64))
 
 
+def gravar_danfse(xml_nfse, pasta):
+    """Gera o PDF (DANFSe) a partir do XML oficial da NFS-e e grava na pasta. Ver nfse/danfse.py."""
+    from danfse import gerar_pdf
+    pdf, n = gerar_pdf(xml_nfse)
+    arq = pathlib.Path(pasta) / f'DANFSe_{n.chave}.pdf'
+    arq.write_bytes(pdf)
+    return arq
+
+
 # ───────────────────────── linha de comando ─────────────────────────
 def main():
     ap = argparse.ArgumentParser(description='NFS-e Nacional da comissão da Nio (NIOGEN). Nada é enviado sem "enviar --confirmo".')
@@ -505,15 +514,20 @@ def main():
                     arq.write_bytes(corpo)
                     print(json.dumps({'ok': True, 'pdf': str(arq), 'bytes': len(corpo)}, ensure_ascii=False, indent=1))
                     return 0
-                # não veio PDF: guarda a resposta e a documentação real da API para conferir o caminho
-                docs = sf.documentacao()
+                # o serviço de PDF do ADN não respondeu (em 23/11: 503 em produção, inexistente na restrita) → busca o XML
+                # oficial da nota na Sefin (GET /nfse/{chave}, só leitura) e gera o DANFSe aqui (nfse/danfse.py)
+                st2, j = sf.consultar(a.chave)
             finally:
                 sf.fechar()
-            dest = pathlib.Path(a.saida) / 'danfse_diagnostico.json'
-            dest.write_text(json.dumps({'tentativa': {'status': st, 'tipo': tipo, 'corpo': corpo[:3000].decode('utf-8', 'replace')},
-                                        'documentacao': docs}, ensure_ascii=False, indent=1), encoding='utf-8')
-            print(json.dumps({'ok': False, 'status': st, 'tipo': tipo, 'inicio': corpo[:300].decode('utf-8', 'replace'),
-                              'diagnostico': str(dest)}, ensure_ascii=False, indent=1))
+            if st2 == 200 and j.get('nfseXmlGZipB64'):
+                xml_nfse = xml_da_resposta(j['nfseXmlGZipB64'])
+                (pathlib.Path(a.saida) / f'NFSe_{a.chave}.xml').write_bytes(xml_nfse)
+                arq = gravar_danfse(xml_nfse, a.saida)
+                print(json.dumps({'ok': True, 'pdf': str(arq), 'origem': f'gerado aqui a partir do XML (ADN respondeu {st})'},
+                                 ensure_ascii=False, indent=1))
+                return 0
+            print(json.dumps({'ok': False, 'adn': st, 'tipo': tipo, 'consulta_xml': st2,
+                              'resposta': {k: v for k, v in j.items() if k != 'nfseXmlGZipB64'}}, ensure_ascii=False, indent=1))
             return 1
         if a.cmd == 'consultar':
             chave, cert, cadeia = carregar_pfx()
@@ -561,9 +575,12 @@ def main():
         finally:
             sf.fechar()
         if st in (200, 201) and j.get('chaveAcesso'):
+            pdf = None
             if a.saida and j.get('nfseXmlGZipB64'):
-                (pathlib.Path(a.saida) / f'NFSe_{j["chaveAcesso"]}.xml').write_bytes(xml_da_resposta(j['nfseXmlGZipB64']))
-            print(json.dumps({'emitida': True, 'id': id_, 'status': st, 'chaveAcesso': j['chaveAcesso'],
+                xml_nfse = xml_da_resposta(j['nfseXmlGZipB64'])
+                (pathlib.Path(a.saida) / f'NFSe_{j["chaveAcesso"]}.xml').write_bytes(xml_nfse)
+                pdf = str(gravar_danfse(xml_nfse, a.saida))
+            print(json.dumps({'emitida': True, 'id': id_, 'status': st, 'chaveAcesso': j['chaveAcesso'], 'pdf': pdf,
                               'resposta': {k: v for k, v in j.items() if k != 'nfseXmlGZipB64'}}, ensure_ascii=False, indent=1))
             return 0
         print(json.dumps({'emitida': False, 'id': id_, 'status': st, 'resposta': j}, ensure_ascii=False, indent=1))
