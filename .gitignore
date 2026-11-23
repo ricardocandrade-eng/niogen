@@ -26,3 +26,11 @@ extensao/config.js
 
 # Claude Code: permissões locais (não versionar)
 .claude/settings.local.json
+
+# NFS-e (23/11/2026): certificado A1, config com dados do prestador/tomador e XMLs emitidos nunca entram no repo
+*.pfx
+*.p12
+*.PFX
+*.P12
+nfse/saida/
+nfse_config.json
