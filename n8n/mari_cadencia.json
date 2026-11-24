@@ -172,7 +172,7 @@
           "conditions": [
             {
               "id": "1c8f04b4-f44f-595b-b055-7dcba187fb8d",
-              "leftValue": "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) && $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
+              "leftValue": "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) && !($json.proximo_passo === 'F1' && /se n[aã]o for o momento/i.test(String($json.texto || ''))) && $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
               "rightValue": "",
               "operator": {
                 "type": "boolean",

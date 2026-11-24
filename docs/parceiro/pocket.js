@@ -113,7 +113,7 @@
         <a class="bt" href="#cadastro" data-ir-cadastro style="margin-top:6px">Quero ser parceiro</a></div>
       <div class="cartao" style="gap:10px">
         <div class="rot">Quem é a Nio</div>
-        <p style="font-size:16px;line-height:1.5">A <b>Nio Internet</b> é uma empresa nova de internet por fibra óptica que já nasceu com <b style="color:var(--verde)">mais de 4 milhões de clientes</b>.
+        <p style="font-size:16px;line-height:1.5">A <b>Nio Internet</b> é uma empresa nova de internet por fibra óptica que já nasceu com <b style="color:var(--verde)">mais de 3 milhões de clientes</b>, em quase 300 cidades.
           Rede 100% fibra, suporte 24 horas e tudo resolvido pelo App Nio.</p></div>
       <div class="lista"><div class="rot">Por que o cliente fecha com a Nio</div>
         <div class="vant">${vant.map(([i, t, d]) => `<div class="vant-item"><span class="vant-ico">${ICO_NIO[i]}</span><div><b>${t}</b><p>${d}</p></div></div>`).join('')}</div></div>

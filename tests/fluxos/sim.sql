@@ -561,6 +561,7 @@ begin
     cep = '36010000', numero = n::text, cidade = 'Juiz de Fora', uf = 'MG', dentro_area = true,
     endereco_cep = jsonb_build_object('logradouro', 'Rua Simulada', 'bairro', 'Centro', 'localidade', 'Juiz de Fora', 'uf', 'MG'),
     elegibilidade = 'ok', segmento = 'varejo', plano_escolhido = 'V-REG-SUP', forma_pagamento = 'boleto', etapa = 'resumo',
+    instalacao_preferencia = 'manhã',   -- 0381: no resumo a conversa real já tem a preferência de período (o aviso do crédito pede quando falta)
     nio_viab_resultado = 'viavel', nio_viab_velocidade = '1 Giga', nio_viab_em = now(),
     dados = coalesce(dados, '{}'::jsonb) || jsonb_build_object('nome', p_nome, 'cpf', sim.cpf(n), 'email', 'sim' || n || '@exemplo.test', 'telefone_confirmado', true)
   where id = c;

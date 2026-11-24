@@ -160,6 +160,10 @@ def build(ids):
     cl_cred = {'anthropicApi': {'id': cred.get('claude', ''), 'name': dm.CRED_CLAUDE}}
     iff('4a · Escrever cutucada?',
         "={{ $json.acao === 'texto' && ['L15','F1','F2','F3','F4','F5'].includes($json.proximo_passo) "
+        # 24/11 (0381, B4 1.4): a 1ª cutucada de quem recebeu a abertura e não deu endereço é a SAÍDA HONESTA (BYAF, chave
+        # abertura_lembrete_byaf via mari_cadencia_texto): vai como está, sem o Claude reescrever em empurrão. Reconhecida pela
+        # frase "se não for o momento" da chave — trocar a frase lá = trocar aqui.
+        "&& !($json.proximo_passo === 'F1' && /se n[aã]o for o momento/i.test(String($json.texto || ''))) "
         "&& $('2 · Interruptor').first().json.modo === 'chatwoot' && !String($json.telefone || '').startsWith('5500000000') }}",
         1210, 120)
     rpc('4b · Supabase contexto', 'mari_cutucada_contexto',

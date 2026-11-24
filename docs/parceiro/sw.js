@@ -2,7 +2,7 @@
  * Service worker do Pocket do Parceiro (escopo /parceiro/). Cache só dos arquivos estáticos do Pocket.
  * Supabase, ViaCEP e CDN passam direto pela rede. BUMPAR o CACHE a cada publicação (pocket-DDMMAA-N).
  */
-const CACHE = 'pocket-191126-7';
+const CACHE = 'pocket-241126-1';
 const ARQUIVOS = ['./', 'index.html', 'pocket.css', 'pocket.js', 'graficos.js', 'manifest.webmanifest', '../assets/markdown.js', '../assets/icon.svg'];
 
 self.addEventListener('install', (ev) => {

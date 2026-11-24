@@ -555,6 +555,20 @@ def build(ids):
     # ── v7 (prompts 26 + 27): carrossel / botões pela Graph API, depois dos balões ──
     # Modo chatwoot: sempre que o 7 · Extrair montou um interativo. Rota de teste: só com enviar_real + "tel real" (ensaio).
     iff('12x · Interativo?', "={{ $('11 · Saída').first().json.enviarInterativo === true }}", 8140, 300, executeOnce=True)
+    # 24/11 (0381, abertura B4): a 2ª parte da abertura (corpo + botões) sai depois do "digitando" da Graph API (typing indicator,
+    # na mensagem do cliente — também marca como lida) e de uma pausa de interativo.pausaS segundos (config abertura_pausa_s).
+    # Qualquer outro interativo (carrossel, botões do fechamento) passa direto, como antes.
+    iff('12p · Pausa abertura?', "={{ Number(((($('11 · Saída').first().json.interativo) || {}).pausaS) || 0) > 0 }}", 8250, 80, executeOnce=True)
+    add('12q · WABA digitando', 'n8n-nodes-base.httpRequest', 4.2, {
+        'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
+        'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+        'sendBody': True, 'specifyBody': 'json',
+        'jsonBody': "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('11 · Saída').first().json.wamid, typing_indicator: { type: 'text' } }) }}",
+        'options': {'timeout': 10000}}, 8470, -40, credentials=wa_cred, onError='continueRegularOutput',
+        notes='0381 — "digitando" da Graph API (WABA Nio) na mensagem do cliente, antes da 2ª parte da abertura B4. Falhou → segue a pausa.')
+    add('12r · Digitando abertura', 'n8n-nodes-base.wait', 1.1,
+        {'amount': "={{ Math.min(15, Number(((($('11 · Saída').first().json.interativo) || {}).pausaS) || 0)) }}", 'unit': 'seconds'}, 8690, -40,
+        webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/12r'))))
     code('12y · Montar interativo', 8360, 300)
     add('12z · WABA enviar', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
@@ -697,7 +711,11 @@ def build(ids):
         ('12b · Um balão', 1, '12w · Digitando'),          # saída 1 = laço; saída 0 = acabou
         ('12w · Digitando', 0, '12c · Chatwoot enviar'),
         ('12c · Chatwoot enviar', 0, '12b · Um balão'),
-        ('12x · Interativo?', 0, '12y · Montar interativo'),
+        ('12x · Interativo?', 0, '12p · Pausa abertura?'),
+        ('12p · Pausa abertura?', 0, '12q · WABA digitando'),
+        ('12p · Pausa abertura?', 1, '12y · Montar interativo'),
+        ('12q · WABA digitando', 0, '12r · Digitando abertura'),
+        ('12r · Digitando abertura', 0, '12y · Montar interativo'),
         ('12y · Montar interativo', 0, '12z · WABA enviar'),
         ('12z · WABA enviar', 0, '12v · Resultado interativo'),
         ('12v · Resultado interativo', 0, '12h · Tem conversa?'),

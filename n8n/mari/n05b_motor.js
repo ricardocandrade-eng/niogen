@@ -260,6 +260,14 @@ if (V4) {
     L.push(`cobertura_decisao (uso interno, nunca citar portal/sistema/consulta): ${cd}`
       + (unid.length ? ` | unidades_cadastradas: ${unid.join('; ')}` : '')
       + ` | consultas_de_endereco: ${conv.viab_consultas || 0} de 3`);
+    // 24/11 (0381, B4 1.3 — opção 3 do Ricardo): no viável, a frase da cobertura leva a prova social da Nio, pelo BAIRRO da
+    // viabilidade/CEP (sem bairro, "aí"). Nunca número de instalações. Vazio em config = desligado.
+    const ps = String((inter.textos || {}).viabilidade_prova_social || '').trim();
+    if (cd === 'viavel' && ps) {
+      const bairro = String((conv.endereco_cep || {}).bairro || '').trim();
+      const frasePs = ps.replace(/\{no_bairro\}/g, bairro ? `no ${bairro}` : 'aí').replace(/\{bairro\}/g, bairro || 'seu bairro');
+      L.push(`prova_social_viavel: no lugar de "A Nio atende o seu endereço ✅", use esta frase quase como está (uma vez só na conversa): «${frasePs}» — e siga o passo em que a conversa está; não invente número de instalações nem cite a empresa revendedora.`);
+    }
     // 16/11 (0233, Ricardo; caso "CS 1" × "Casa A"): viável no endereço, mas a unidade do cliente não está IGUAL na lista
     // fechada da Nio (ou ele não disse). A Mari mostra as opções e o cliente escolhe — nunca escolhe por ele.
     const uc = conv.unidade_conferir || {};
@@ -410,6 +418,15 @@ if (V7 && (conv.dados || {}).abertura && !conv.cep) {
     ? `saudação + botões "${String(tx0.abertura_botoes || 'rua,planos,humano')}"`
     : 'saudação + pedido do CEP e do número da casa'}) JÁ FOI ENVIADA pelo sistema — `
     + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
+  // 24/11 (0381, B4): a abertura disse "a partir de R$ X" — o preço que vale é o da cidade do cliente, depois do CEP (trava BTU).
+  if ((conv.dados || {}).abertura_preco) {
+    L.push(`abertura_preco_citado: a 1ª mensagem disse "a partir de R$ ${(conv.dados || {}).abertura_preco}" (plano de entrada, sem o desconto do cartão). `
+      + 'O preço que vale é SEMPRE o da cidade do cliente, que só sai depois do CEP: se a cidade dele tiver outro preço, mostre o da cidade, '
+      + 'sem repetir nem comentar o da abertura. O desconto do cartão só se cita em cidade Regular, quando o cliente tiver cartão ou perguntar.');
+  }
+  if ((conv.dados || {}).abertura_botao === 'comercio') {
+    L.push('abertura_botao: o cliente tocou "Pro comércio" — a internet é para um comércio/empresa. Siga o segmento como sempre; nada de plano, condição ou prazo que não esteja na tabela.');
+  }
   // 19/11 (0328, Ricardo: "perguntar a cidade e não o CEP" no "💰 Ver os planos"): o sistema pediu a cidade e/ou já mostrou os
   // planos dela (preço da cidade), antes do CEP.
   const dAb = conv.dados || {};
@@ -538,6 +555,9 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
     { id: 'ab:humano', chave: 'humano', title: tx.abertura_botao_humano || '💬 Falar com alguém' },
     { id: 'ab:cliente', chave: 'cliente', title: tx.abertura_botao_cliente || '🏠 Sou cliente Nio' },
     { id: 'ab:2030', chave: 'trava2030', title: tx.abertura_botao_2030 || '🔒 Preço até 2030' },
+    // 24/11 (0381, abertura B4): o 1º toque não custa nada — casa ou comércio. A resposta pede o endereço (loop aberto do mapa).
+    { id: 'ab:casa', chave: 'casa', title: tx.abertura_botao_casa || '🏡 Pra minha casa' },
+    { id: 'ab:comercio', chave: 'comercio', title: tx.abertura_botao_comercio || '🏪 Pro comércio' },
     // 19/11 (0328): o "rua" virou "📍 Tem na minha rua?" — o título antigo segue reconhecido (menu antigo na tela do cliente).
     { id: 'ab:rua', chave: 'rua', title: '📍 Ver minha rua' },
   ];
@@ -617,6 +637,17 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
         }
       }
     }
+  } else if (tocado && ['casa', 'comercio'].includes(tocado.chave) && !conv.cep) {
+    // 24/11 (0381, B4): "🏡 Pra minha casa" / "🏪 Pro comércio" → pede a rua e o bairro (ou o CEP). Comércio: mesma tabela vigente —
+    // nada de plano, condição ou prazo de PJ inventado (regra 1); o Claude segue o segmento como sempre.
+    textoFixo = {
+      texto: tocado.chave === 'casa'
+        ? (tx.abertura_resp_casa || 'Perfeito, residencial então.\n\nTô com o mapa aberto aqui — me manda a rua e o bairro (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na sua porta 😉')
+        : (tx.abertura_resp_comercio || 'Perfeito, pro seu comércio então.\n\nTô com o mapa aberto aqui — me manda a rua e o bairro do comércio (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na porta 😉'),
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: tocado.chave },
+      upd: dadosAb.abertura_botao ? {} : { dados: { abertura_botao: tocado.chave } },
+      modelo: 'abertura_b2',
+    };
   } else if (tocado && !cluster) {
     // "📍 Ver minha rua" / "💰 Ver os planos": a cidade ainda não é conhecida → pede só o CEP (ou rua e bairro), sem preço.
     // Cidade já conhecida → o toque segue para o Claude (mostra os planos da cidade).
@@ -676,7 +707,38 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       const fb = comNome(tx.abertura_fallback || 'Oi, {nome}, tudo bem? 😊\n\nAqui é a Mari, da Nio. Fiquei feliz com sua mensagem!\n\nMe manda seu CEP (ou o nome da rua e o bairro) que eu já te mostro os planos daí 😉');
       // 13/11 (0188): formato 'texto' (padrão) — saudação + pedido do CEP e do número, uma mensagem só, sem botões.
       const corpoTexto = comNome(tx.abertura_corpo_texto || 'Oi, {nome}, tudo bem? 😊 Aqui é a Mari, da Nio.\n\nMe manda seu CEP e o número da casa que eu já vejo o que tem aí pra você. Se não lembrar o CEP, pode mandar a rua e o bairro.');
-      textoFixo = FORMATO === 'texto' ? {
+      // 24/11 (0381, docs/Prompt_mari_abertura_b4_241126_1125.md): ABERTURA B4 em duas mensagens. 1ª (texto, na hora): a âncora
+      // no gancho do anúncio que trouxe o lead (referral da 0057 → mari_contexto.anuncio; o pedaço _H1_/_HA_… do nome do anúncio,
+      // mapa em abertura_ancora_mapa); sem referral, "Oi! Tudo bem? 👋". 2ª (botões, depois do "digitando" de abertura_pausa_s, nós
+      // 12p–12r): o preço "a partir de" — SÓ com referral de um conjunto mapeado em abertura_preco_conjuntos (as cidades dele são todas
+      // do mesmo cluster); o valor é o plano de varejo mais barato desse cluster em config_planos, nunca fixo (Regular: R$ 110). Sem
+      // referral ou conjunto fora do mapa: o corpo SEM preço. O preço da cidade continua saindo só depois do CEP (trava de sempre).
+      // Sem nome do contato (decisão de 14/11). Volta sem deploy: abertura_versao = 'b3_191126'.
+      const B4 = /^b4/.test(B2) && !!tx.abertura_corpo_b4 && FORMATO === 'botoes';
+      const parMapa = (s) => Object.fromEntries(String(s || '').split(',').map((x) => x.split('=').map((y) => y.trim())).filter((x) => x[0] && x[1]));
+      const an = B4 && db.anuncio && db.anuncio.ad_id ? db.anuncio : null;
+      const mg = an ? String(an.ad_nome || '').match(/_(H[0-9A-Z]+)_/i) : null;
+      const gancho = mg ? parMapa(tx.abertura_ancora_mapa)[mg[1].toUpperCase()] || null : null;
+      const ancora = an ? ((gancho && tx[`abertura_ancora_${gancho}`]) || tx.abertura_ancora_anuncio || 'Oi! Vi que você chegou pelo nosso anúncio 👋')
+        : (tx.abertura_ancora_padrao || 'Oi! Tudo bem? 👋');
+      const clAn = an && an.adset_id ? parMapa(tx.abertura_preco_conjuntos)[String(an.adset_id)] || null : null;
+      const precosAn = clAn ? ((inter.planos_cidade || {})[clAn] || []).map((p) => Number(p.preco)).filter((n) => n > 0) : [];
+      const precoEnt = precosAn.length ? Math.min(...precosAn) : null;
+      const brl0 = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ','));
+      const corpoB4 = precoEnt ? String(tx.abertura_corpo_b4).replace(/\{preco_entrada\}/g, brl0(precoEnt))
+        : String(tx.abertura_corpo_b4_sem_preco || 'Aqui é a Mari, da Nio 😊\n\nOs planos de fibra vão de 600 Mega a 1 Giga, e o valor que você fechar agora fica travado até janeiro de 2030, sem reajuste todo ano.');
+      const perguntaB4 = tx.abertura_pergunta_b4 || 'Já abri aqui o mapa da Nio pra conferir seu endereço — me diz só uma coisa antes:';
+      const pedidoB4 = tx.abertura_fallback_pedido || 'Me manda a rua e o bairro (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na sua porta 😉';
+      const pausaB4 = Math.max(0, Math.min(15, Number(tx.abertura_pausa_s ?? 6) || 0));
+      textoFixo = B4 ? {
+        texto: ancora,
+        interativo: { tipo: 'botoes', chave: 'abertura', corpo: `${corpoB4}\n\n${perguntaB4}`.slice(0, 1024),
+          botoes: BOT_AB.map((b) => ({ id: b.id, title: b.title })),
+          resumo: `botões: ${BOT_AB.map((b) => b.title).join(' / ')}`, fallbackTexto: `${corpoB4}\n\n${pedidoB4}`, pausaS: pausaB4 },
+        tags: { abertura: B2, ancora: gancho || (an ? 'anuncio' : 'padrao'), ad_id: an ? an.ad_id : null, preco_abertura: precoEnt },
+        upd: { dados: Object.assign({ abertura: B2 }, precoEnt ? { abertura_preco: precoEnt, abertura_preco_cluster: clAn } : {}) },
+        modelo: 'abertura_b2',
+      } : FORMATO === 'texto' ? {
         texto: corpoTexto,
         tags: { abertura: B2, abertura_formato: 'texto' },
         upd: { dados: { abertura: B2 } },

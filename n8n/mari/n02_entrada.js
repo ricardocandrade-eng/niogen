@@ -233,6 +233,8 @@ if (ex('1 · Webhook Mari teste')) {
     ...(anexos.some((a) => a.baixar) || !anexos.some((a) => a.tipo === 'local') ? {}
       : { midia: anexos.filter((a) => a.tipo === 'local').map((a) => ({ tipo: 'local', lat: a.lat, lng: a.lng, nome: a.nome })) }),
     msgId,
+    // 24/11 (0381, abertura B4): o wamid da mensagem do cliente — o 12q manda o "digitando" da Graph API antes da 2ª parte da abertura
+    wamid: String(msg.source_id || p.source_id || '') || null,
   };
   if (!/^\d{10,15}$/.test(entrada.telefone)) return soStatus;
   // 08/11 (0062): "#zerar" = comando de teste — encerra a conversa da Mari e a próxima mensagem começa do zero. Quem pode

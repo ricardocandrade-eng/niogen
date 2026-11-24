@@ -803,6 +803,25 @@ def cen_av(c):   # P49 (24/11, conversa L-276, Nelma, #241): cidade fora da áre
     c.exige(not re.search(r'\bcep\b', t), f'[P49] a despedida pede CEP: «{t[:220]}»')
 
 
+def cen_aw(c):   # P50 (24/11, abertura B4 — trava pedida pelo Ricardo, 11h55: "muito cuidado com isso"): a abertura disse "a partir de
+    # R$ 110" (Regular) e o cliente é de cidade BTU (Oferta 50 %) → o que sai é o preço DA CIDADE (R$ 55–100), nunca o R$ 110 repetido.
+    # A rota de teste não tem referral de anúncio: o preço da abertura é gravado como o 5b grava (dados.abertura_preco).
+    c.diz('Oi! Vi o anúncio e quero saber mais.')
+    B.sql(f"""update mari_conversas set dados = coalesce(dados, '{{}}'::jsonb) || '{{"abertura_preco": 110, "abertura_preco_cluster": "regular"}}'::jsonb """
+          f"where telefone = '{c.tel}'", escrita=True)
+    c.diz('🏡 Pra minha casa')
+    r = c.diz('Moro em Araguari, quero ver os planos')
+    t = fala(r)
+    if not re.search(r'r\$\s*\d', t):   # a Mari pode pedir o CEP antes dos planos — o preço só sai com a cidade
+        r = c.diz('O CEP é 38440-000, número 100')
+        t = fala(r)
+        if not re.search(r'r\$\s*\d', t):
+            r = c.diz('Sim')
+            t = fala(r)
+    c.exige(not re.search(r'r\$\s*110\b', t), f'[P50] repetiu o R$ 110 da abertura numa cidade BTU: «{t[:260]}»')
+    c.exige(not re.search(r'no cart[aã]o', t), f'[P50] citou desconto do cartão numa cidade BTU: «{t[:260]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -846,6 +865,8 @@ PORTAO = {
     'au': (54, cen_au, 'P48'),
     # 24/11 — conversa L-276 (Nelma, #241): cidade fora da área dita pelo texto → fora_de_area na hora, sem pedir CEP
     'av': (55, cen_av, 'P49'),
+    # 24/11 — abertura B4: preço "a partir de" na abertura + cliente de cidade BTU → o preço da cidade, nunca o da abertura
+    'aw': (56, cen_aw, 'P50'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

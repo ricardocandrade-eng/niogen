@@ -69,5 +69,6 @@ return [{ json: {
   // v7: quem recebe a mensagem interativa — WhatsApp real (modo chatwoot) ou o celular liberado no ensaio ("tel real").
   interativo: saida.interativo || null,
   telefone: e.telefone || null,
+  wamid: e.wamid || null,   // 0381: "digitando" (12q) antes da 2ª parte da abertura B4
   enviarInterativo: !!saida.interativo && (e.modo === 'chatwoot' || e.enviarReal === true),
 } }];
