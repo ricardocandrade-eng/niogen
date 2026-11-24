@@ -843,7 +843,10 @@
           "name": "Supabase Nio (service role)"
         }
       },
-      "onError": "continueRegularOutput"
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -945,7 +948,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1021,7 +1027,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1235,7 +1244,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1265,7 +1277,10 @@
         }
       },
       "onError": "continueRegularOutput",
-      "alwaysOutputData": true
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1519,7 +1534,10 @@
           "name": "Supabase Nio (service role)"
         }
       },
-      "alwaysOutputData": true
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1593,7 +1611,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1634,7 +1655,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {
@@ -1695,7 +1719,10 @@
           "id": "p59RBqdhm80tQqJq",
           "name": "Supabase Nio (service role)"
         }
-      }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     },
     {
       "parameters": {

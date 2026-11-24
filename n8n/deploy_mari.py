@@ -497,6 +497,16 @@ def build(ids):
         "={{ JSON.stringify({ p_conversa: $('10 · Salvar turno').first().json.r.conversaId, "
         "p_motivo: $('10 · Salvar turno').first().json.r.handoff.motivo, "
         "p_lead: $('10 · Salvar turno').first().json.r.handoff.lead }) }}", 6380, 200)
+    # 24/11 (L-287, #248; Ricardo: "Sim, pode fazer"): às 21h17:55 UTC o Supabase recusou a conexão por um instante
+    # (Cloudflare "origin down") e o 7b, sem nova tentativa, derrubou a execução — a resposta pronta do Claude se perdeu e
+    # só o alarme de Mari calada avisou. As chamadas ao banco do caminho da resposta tentam de novo: 3 vezes, 2 s entre elas.
+    # Custo aceito: se a 1ª chamada gravou e só a volta falhou (raro), a repetição pode duplicar uma linha — melhor que
+    # perder a resposta ao cliente.
+    for _n in nodes:
+        if _n['name'] in ('2g · Porta pode falar?', '3a · Supabase entrada', '3c · Supabase consolidar', '4b · Supabase contexto',
+                          '4c · Supabase interativo', '7b · Supabase pendentes', '7f · Supabase abortar',
+                          '10b · Supabase salvar turno', '9 · Handoff'):
+            _n.update(retryOnFail=True, maxTries=3, waitBetweenTries=2000)
     # Adendo 2 (prompt 16, Parte G): rastro do handoff no Chatwoot — etiquetas, nota privada, time backoffice.
     # Só no modo chatwoot; cada chamada com onError = segue (o handoff nunca derruba a resposta ao cliente).
     iff('9c · Chatwoot handoff?', "={{ $('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.chatwootConversationId }}", 6600, 0)
