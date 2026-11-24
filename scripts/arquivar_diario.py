@@ -312,7 +312,7 @@ class Plano:
         self.esperado = []   # (descrição, linha que tem de existir, arquivo onde procurar ou None=qualquer)
 
 
-def planejar(pasta, agora):
+def planejar(pasta, agora, topo_max=TOPO_MAX):
     P = Plano()
     p_diario = os.path.join(pasta, DIARIO)
     p_caixa = os.path.join(pasta, CAIXA)
@@ -352,8 +352,8 @@ def planejar(pasta, agora):
     # ---- ordenar e cortar o topo ----
     concorrem = [r for r in regs if r['quando'] is not None] + recentes
     concorrem.sort(key=chave, reverse=True)
-    topo = concorrem[:TOPO_MAX]
-    descem = concorrem[TOPO_MAX:] + antigos_cx
+    topo = concorrem[:topo_max]
+    descem = concorrem[topo_max:] + antigos_cx
 
     novo_topo = []
     for k, r in enumerate(topo):
@@ -558,12 +558,13 @@ def main():
     g.add_argument('--aplicar', action='store_true', help='faz backup, escreve e confere a conta')
     ap.add_argument('--pasta', default=os.environ.get('NIOGEN_PASTA', PASTA_PADRAO))
     ap.add_argument('--backup', default=os.environ.get('NIOGEN_BACKUP_DIARIO', BACKUP_PADRAO))
+    ap.add_argument('--topo', type=int, default=TOPO_MAX, help='registros que ficam no topo (0 = desce todos; usado na virada para o retrato)')
     ap.add_argument('--agora', help='data/hora de referência DD/MM/AAAA HH:MM (teste)')
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding='utf-8')
     agora = dt.datetime.strptime(a.agora, '%d/%m/%Y %H:%M') if a.agora else dt.datetime.now().replace(second=0, microsecond=0)
 
-    P = planejar(a.pasta, agora)
+    P = planejar(a.pasta, agora, a.topo)
     print('arquivar_diario — %s — %s' % ('APLICAR' if a.aplicar else 'conferir (não escreve nada)', agora.strftime('%d/%m/%Y %H:%M')))
     print('\n'.join(P.rel))
     c = P.conta
