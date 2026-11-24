@@ -7,7 +7,7 @@ sem build) sobre o **Supabase Nio**, que é o banco único (NIOGEN e Mari leem e
 
 **Publicado:** https://niogen.dharmatelecom.com.br/ · Supabase Nio: `https://zlrfwbkblytnokuexjti.supabase.co`
 
-Governança (Diário, INFRA, regras do contrato) fica na pasta do Drive `dharmapro-nio/`. O `CLAUDE.md` daqui é espelho do de lá.
+Governança (Diário, INFRA, regras do contrato) fica fora deste repositório, que é público. O `CLAUDE.md` daqui é só um ponteiro para as regras.
 
 ## O que tem na v0
 

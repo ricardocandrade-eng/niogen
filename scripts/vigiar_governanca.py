@@ -21,7 +21,7 @@ SECAO_REGISTRO = '## Registro'
 RE_ULTIMA = re.compile(r'^>?\s*Última atualização:')
 RE_ANTERIOR = re.compile(r'^>?\s*Anterior:')
 RE_INFRA_LOG = re.compile(r'^>\s*(Revisão anterior|Revisão|Anterior):')
-RE_REGISTRO = re.compile(r'^- \*\*(\d{2})/(\d{2}) (\d{1,2})h(\d{2}) \((.+)')
+RE_REGISTRO = re.compile(r'^- \*\*(\d{2})/(\d{2})(?:/\d{4})?,? ~?(\d{1,2})h(\d{2}) (?:pelo relógio do PC )?\((.+)')
 
 
 def ler(caminho):
@@ -96,12 +96,14 @@ def vigiar(pasta, hoje):
                                   % (semana(hoje), i + 1, t[:90]))
                     continue
                 n += 1
+                if '~' in t[:t.find('(')]:
+                    continue  # hora estimada (~) não serve de régua de ordem: a regra 7 pede a hora lida do relógio do PC
                 try:
                     quando = dt.datetime(ano, int(m.group(2)), int(m.group(1)), int(m.group(3)), int(m.group(4)))
                 except ValueError:
                     avisos.append('Registro %s linha %d: data/hora inválida' % (semana(hoje), i + 1))
                     continue
-                if anterior and quando < anterior:
+                if anterior and quando < anterior - dt.timedelta(minutes=10):  # sessões em paralelo: minutos de folga
                     avisos.append('Registro %s linha %d fora de ordem (%s depois de %s) — a nova vai sempre embaixo'
                                   % (semana(hoje), i + 1, quando.strftime('%d/%m %Hh%M'), anterior.strftime('%d/%m %Hh%M')))
                 anterior = max(anterior, quando) if anterior else quando
@@ -127,6 +129,24 @@ def vigiar(pasta, hoje):
         avisos.append('Cópias de conflito do Drive: %s — comparar com o original e tirar da pasta' % ', '.join(conflitos[:6]))
     else:
         ok.append('Sem cópias de conflito (* (1).md)')
+
+    # 6. Histórico no repo privado niogen-governanca: nada parado sem commit há mais de 24 h
+    gd = os.environ.get('NIOGEN_GOV_GIT', r'C:\Users\ricar\Documents\GitHub\niogen-governanca.git')
+    if os.path.isdir(gd) and os.path.normcase(os.path.abspath(pasta)) == os.path.normcase(os.path.abspath(PASTA_PADRAO)):
+        import subprocess
+        r = subprocess.run(['git', '--git-dir', gd, '-c', 'core.quotepath=false', 'status', '--porcelain', '-z'],
+                           capture_output=True)
+        nomes = [x[3:] for x in r.stdout.decode('utf-8', 'replace').split('\0') if len(x) > 3]
+        velhos = []
+        agora = dt.datetime.now().timestamp()
+        for n in nomes:
+            cam = os.path.join(pasta, n)
+            if os.path.isfile(cam) and agora - os.path.getmtime(cam) > 24 * 3600:
+                velhos.append(n)
+        if velhos:
+            avisos.append('Governança sem commit há mais de 24 h: %s — python scripts/governanca.py commit "…"' % ', '.join(velhos[:6]))
+        else:
+            ok.append('Governança: %d arquivo(s) mudado(s) desde o último commit, nenhum há mais de 24 h' % len(nomes))
     return avisos, ok
 
 
