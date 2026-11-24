@@ -11,7 +11,10 @@
      23/11 (0371): LIGADA com o 1º extrato real (1QNOV26). "⇪ Importar extrato da Nio" lê o .xlsx no navegador e manda as abas à
      extrato_importar (a única porta: guarda o arquivo, troca o ciclo, casa pela OS); as views v_conciliacao / v_conciliacao_ciclos e
      a tabela nio_contestacoes vêm da 0371 (não do rascunho 0022). Contestação só por contestacao_registrar / contestacao_mudar.
-     06/11 (prompt 25): bloco "Margem por canal" (v_margem_canal) no fim da tela — comissão Nio prevista/paga × pago e previsto a parceiros.
+     24/11: "Margem por canal" SAIU da tela (Ricardo: "Conciliação é apenas parte financeira" → "Tirar de vez"; a view fica, a
+     conferência 23 a usa). A lista virou "Linha a linha": cada venda com plano, data da venda e da instalação, e embaixo uma linha
+     por tipo de crédito/débito (comissão, bônus, estorno, multa…), previsto × pago; o exportar sai por tipo.
+     06/11 (prompt 25, histórico): bloco "Margem por canal" (v_margem_canal) no fim da tela — comissão Nio prevista/paga × pago e previsto a parceiros.
      Independe das views da conciliação (que ainda não existem): aparece mesmo com a tela em estado vazio. -->
 <html lang="pt-BR">
 <head>
@@ -123,6 +126,23 @@
   .cq-ped.espera { border-style: dashed; }
   @media (max-width: 640px) { .cq-passos { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; } .cq-passo:nth-child(2)::after { display: none; } }
 
+  /* 24/11: espaço entre os blocos da tela (o #conteudo era um bloco comum, sem vão) */
+  #conteudo { display: flex; flex-direction: column; gap: 18px; }
+  .cq-lista-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 6px; }
+  .cq-lista-cab h2 { margin: 0; font-size: 17px; font-weight: 700; }
+  .cq-lista-cab small { font-size: 12.5px; color: var(--muted); }
+  #conteudo > #abas + .barra-filtros, #conteudo > .cq-lista-cab + #abas { margin-top: -8px; }
+  /* linha por tipo, embaixo de cada venda */
+  .cq-tab tr.tipo td { padding-top: 5px; padding-bottom: 5px; font-size: 12.5px; background: var(--surface-dim); border-top: 0; }
+  .cq-tab tr.tipo td:first-child { padding-left: 30px; color: var(--muted); }
+  .cq-tab tr.tipo.ult td { padding-bottom: 9px; }
+  .cq-tipo { display: inline-flex; align-items: center; gap: 7px; }
+  .cq-tipo i { font-style: normal; font-family: var(--dm); font-size: 10px; font-weight: 600; letter-spacing: .05em; padding: 1px 6px; border-radius: 5px; }
+  .cq-tipo i.cr { background: var(--info-bg); color: var(--info-fg); }
+  .cq-tipo i.db { background: var(--bad-bg); color: var(--bad-fg); }
+  .cq-tab .datas small { display: block; }
+  .cartao .tipos { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; font-size: 12px; color: var(--muted); }
+  .cartao .tipos b { font-family: var(--mono); font-weight: 600; color: var(--text); }
   /* lista com cara de extrato */
   .cq-tab td.num, .cq-tab tfoot td { font-family: var(--mono); }
   .cq-tab tbody tr td:first-child { box-shadow: inset 3px 0 0 var(--cq-faixa, transparent); }
@@ -189,6 +209,8 @@
 
       <section class="cq-trilha" id="rodape-ciclo" aria-label="Pedido da Nio, NF e pagamento"></section>
 
+      <div class="cq-lista-cab"><h2>Linha a linha</h2><small>cada venda: o que o NIOGEN previu e o que a Nio pagou, separado por tipo de crédito e débito</small></div>
+
       <div id="abas"></div>
 
       <div class="barra-filtros">
@@ -202,15 +224,17 @@
         <div class="rolagem">
           <table class="tab cq-tab">
             <thead><tr>
-              <th data-ord="cliente">Venda</th>
+              <th data-ord="cliente">Venda · plano</th>
+              <th data-ord="vendido">Datas</th>
               <th data-ord="pedido">OS · contrato</th>
+              <th>Tipo</th>
               <th data-ord="prevista" data-dir="desc" class="num">Previsto</th>
               <th data-ord="paga" data-dir="desc" class="num">Pago pela Nio</th>
               <th data-ord="dif" class="num">Diferença</th>
               <th>Situação</th>
               <th data-ord="prazo">Prazo de contestação</th>
             </tr></thead>
-            <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+            <tbody id="tbody"><tr><td colspan="9" class="vazio">Carregando…</td></tr></tbody>
             <tfoot id="tfoot"></tfoot>
           </table>
         </div>
@@ -220,19 +244,6 @@
 
     </div>
 
-    <section class="secao" id="margem" aria-label="Margem por canal" hidden>
-      <h2 class="secao-tit">Margem por canal</h2>
-      <section class="lista">
-        <div class="rolagem-s">
-          <table class="tab margem-tab">
-            <thead><tr><th>Canal</th><th class="num">Vendas</th><th class="num">Comissão Nio prevista</th><th class="num">Comissão Nio paga</th>
-              <th class="num">Pago a parceiros</th><th class="num">Previsto a parceiros</th><th class="num">Margem paga</th><th class="num">Margem prevista</th></tr></thead>
-            <tbody id="margem-corpo"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
-          </table>
-        </div>
-        <div class="rodape-lista"><span>Margem = comissão da Nio − o que foi pago (ou previsto) ao parceiro. Só o canal Parceiro PAP tem custo de parceiro; nos outros, as colunas de parceiros mostram "—" e a margem é a própria comissão.</span></div>
-      </section>
-    </section>
   </main>
 </div>
 
@@ -463,7 +474,38 @@
     paga: (l) => (l.paga == null ? null : Number(l.paga)),
     dif: (l) => diferenca(l),
     prazo: (l) => (contestavel(l) ? diasPrazo(l) : null),
+    vendido: (l) => l.vendido_em || '',
   };
+
+  // ---------- tipos de crédito e débito (24/11: "cabe diferenciar o que é comissão e o que é bônus") ----------
+  // Previsto por tipo: comissão (nominal + adicionais), bônus de transição e NMEI. Pago por tipo: as linhas da Nio, pelo evento.
+  // Tipo novo que a Nio mandar (outro bônus, estorno, multa, ajuste) aparece com o nome que veio, sem previsto.
+  function tiposDe(l) {
+    const t = new Map();
+    const pega = (k, rot, deb) => { if (!t.has(k)) t.set(k, { k, rot, deb, prev: null, pago: null }); return t.get(k); };
+    if (l.prevista != null) {
+      const com = Number(l.comissao_nominal || 0) + Number(l.comissao_adicionais || 0);
+      if (com) pega('comissao', Number(l.comissao_adicionais || 0) ? 'Comissão (com adicionais)' : 'Comissão', false).prev = com;
+      if (Number(l.bonus_transicao_previsto || 0)) pega('bonus_transicao', 'Bônus · transição', false).prev = Number(l.bonus_transicao_previsto);
+      if (Number(l.bonus_nmei_previsto || 0)) pega('bonus_nmei', 'Bônus · NMEI', false).prev = Number(l.bonus_nmei_previsto);
+    }
+    for (const x of l.linhas || []) {
+      const v = Number(x.comissao || 0);
+      let k, rot, deb = v < 0;
+      if (ehRecompra(x)) { k = 'multa'; rot = 'Multa de recompra'; deb = true; }
+      else if (ehEstorno(x)) { k = `estorno_${x.sub_evento || ''}`; rot = `Estorno · ${humano(x.sub_evento) || 'sem detalhe'}`; deb = true; }
+      else if (ehComissao(x)) { k = 'comissao'; rot = 'Comissão'; }
+      else if (ehBonus(x, 'TRANSI')) { k = 'bonus_transicao'; rot = 'Bônus · transição'; }
+      else if (ehBonus(x, 'NMEI')) { k = 'bonus_nmei'; rot = 'Bônus · NMEI'; }
+      else if (ehBonus(x)) { k = `bonus_${x.sub_evento || ''}`; rot = `Bônus · ${humano(x.sub_evento) || 'outro'}`; }
+      else { k = `outro_${x.evento}_${x.sub_evento}`; rot = `${humano(x.evento) || 'Lançamento'} · ${humano(x.sub_evento)}`; }
+      const r = pega(k, rot, deb);
+      r.pago = (r.pago || 0) + v;
+    }
+    return [...t.values()];
+  }
+  const tipoHtml = (r) => `<span class="cq-tipo"><i class="${r.deb ? 'db' : 'cr'}" title="${r.deb ? 'débito' : 'crédito'}">${r.deb ? 'D' : 'C'}</i>${esc(r.rot)}</span>`;
+  const dataCurta = (v) => (v ? NG.fmtDiaISO(String(v).slice(0, 10)).slice(0, 5) : '—');
 
   // ---------- desenho ----------
   const moeda = (v) => (v == null ? '—' : NG.fmtMoeda(v));
@@ -707,27 +749,40 @@
     tbody.innerHTML = lista.length ? lista.map((l) => {
       const d = diferenca(l);
       const s = situacao(l);
-      return `<tr class="clicavel sit-${s}" data-chave="${esc(l.chave)}" tabindex="0" title="Ver a composição">
-        <td class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc([l.vendedor_nome, l.ativado_em && `ativada ${NG.fmtDiaISO(String(l.ativado_em).slice(0, 10)).slice(0, 5)}`].filter(Boolean).join(' · '))}</small></td>
+      const tipos = tiposDe(l);
+      const venda = `<tr class="clicavel sit-${s}" data-chave="${esc(l.chave)}" tabindex="0" title="Ver a composição">
+        <td class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc([l.plano_nome, l.vendedor_nome].filter(Boolean).join(' · ') || '—')}</small></td>
+        <td class="datas"><small>venda ${esc(dataCurta(l.vendido_em))}</small><small>instalação ${esc(dataCurta(l.instalado_em || l.ativado_em))}</small></td>
         <td class="plano-c"><b class="mono">${esc(l.nio_pedido || '—')}</b><small>${l.nio_contrato ? `contrato ${esc(l.nio_contrato)}` : ''}</small></td>
+        <td class="muted">${tipos.length > 1 ? `${tipos.length} tipos` : tipos.length ? '' : '—'}</td>
         <td class="num">${moeda(l.prevista)}</td>
         <td class="num">${moeda(l.paga)}</td>
         <td class="num${difCls(d)}">${difHtml(d)}</td>
         <td class="sit-c"><span class="chip ${SIT_CHIP[s]}">${esc(SIT[s])}</span><small>${esc(motivo(l))}</small></td>
         <td>${NG.proxPasso(prazo(l))}</td>
       </tr>`;
-    }).join('') : '<tr><td colspan="7" class="vazio">Nada neste filtro</td></tr>';
+      const sub = tipos.map((r, i) => {
+        const dt = r.prev == null || r.pago == null ? null : r.pago - r.prev;
+        return `<tr class="tipo sit-${s}${i === tipos.length - 1 ? ' ult' : ''}" data-chave="${esc(l.chave)}">
+          <td colspan="3"></td><td>${tipoHtml(r)}</td>
+          <td class="num">${r.prev == null ? '<span class="muted">—</span>' : esc(NG.fmtMoeda(r.prev))}</td>
+          <td class="num${r.pago != null && r.pago < 0 ? ' neg' : ''}">${r.pago == null ? `<span class="muted">${situacao(l) === 'aguardando' ? 'aguarda' : '—'}</span>` : difHtml(r.pago).replace('+ ', '')}</td>
+          <td class="num${difCls(dt)}">${dt == null ? '' : difHtml(dt)}</td><td colspan="2"></td></tr>`;
+      }).join('');
+      return venda + sub;
+    }).join('') : '<tr><td colspan="9" class="vazio">Nada neste filtro</td></tr>';
     const somaCol = (f) => lista.reduce((s, l) => s + Number(f(l) || 0), 0);
     const difTot = lista.filter((l) => situacao(l) !== 'aguardando').reduce((s, l) => s + diferenca(l), 0);
-    document.getElementById('tfoot').innerHTML = lista.length ? `<tr><td colspan="2">Total · ${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'linha' : 'linhas'}</td>
+    document.getElementById('tfoot').innerHTML = lista.length ? `<tr><td colspan="4">Total · ${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'venda' : 'vendas'}</td>
       <td class="num">${esc(NG.fmtMoeda(somaCol((l) => l.prevista)))}</td><td class="num">${esc(NG.fmtMoeda(somaCol((l) => l.paga)))}</td>
       <td class="num${difCls(difTot)}">${difHtml(difTot)}</td><td colspan="2"></td></tr>` : '';
     cartoesEl.innerHTML = lista.length ? lista.map((l) => {
       const d = diferenca(l);
       return `<a class="cartao" href="#" data-chave="${esc(l.chave)}">
-        <div class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc(l.nio_pedido ? `pedido ${l.nio_pedido}` : '—')}</small></div>
+        <div class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc([l.plano_nome, l.nio_pedido && `OS ${l.nio_pedido}`].filter(Boolean).join(' · ') || '—')}</small></div>
         <div class="valor${difCls(d)}">${difHtml(d)}</div>
-        <div class="l2"><span>prevista ${moeda(l.prevista)}</span><span>· paga ${moeda(l.paga)}</span></div>
+        <div class="l2"><span>venda ${esc(dataCurta(l.vendido_em))}</span><span>· instalação ${esc(dataCurta(l.instalado_em || l.ativado_em))}</span></div>
+        <div class="tipos">${tiposDe(l).map((r) => `<span>${tipoHtml(r)}</span><span>prev. <b>${r.prev == null ? '—' : esc(NG.fmtMoeda(r.prev))}</b></span><span>pago <b>${r.pago == null ? '—' : esc(NG.fmtMoeda(r.pago))}</b></span>`).join('')}</div>
         <div class="l2"><span class="chip ${SIT_CHIP[situacao(l)]}">${esc(SIT[situacao(l)])}</span><span>${esc(motivo(l))}</span></div>
         <div class="l2">${NG.proxPasso(prazo(l))}</div>
       </a>`;
@@ -1033,13 +1088,19 @@
     const ls = NG.ordenar(doCiclo().filter((l) => naAba(l, aba)), CHAVES, ord);
     const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
     const n = (x) => (x == null ? '' : Number(x).toFixed(2).replace('.', ','));
-    const cab = ['Ciclo', 'Cliente', 'Pedido', 'Contrato', 'Vendedor', 'Ativação', 'Situação', 'Prevista', 'Paga', 'Diferença', 'Motivo provável', 'Prazo de contestação'];
-    const csv = [cab.map(q).join(';')].concat(ls.map((l) => [cicloDe(l.ciclo.slice(0, 8) + (l.ciclo.endsWith('1Q') ? '01' : '16')).nio, nomeLinha(l), l.nio_pedido, l.nio_contrato,
-      l.vendedor_nome, l.ativado_em ? NG.fmtDiaISO(String(l.ativado_em).slice(0, 10)) : '', SIT[situacao(l)], n(l.prevista), n(l.paga), n(diferenca(l)), motivo(l),
-      prazoDia(l) ? NG.fmtDiaISO(prazoDia(l)) : ''].map(q).join(';'))).join('\r\n');
+    const cab = ['Ciclo', 'Cliente', 'Plano', 'Data da venda', 'Data da instalação', 'OS', 'Contrato', 'Vendedor', 'Tipo', 'Crédito/débito',
+      'Previsto', 'Pago pela Nio', 'Diferença', 'Situação da venda', 'Motivo provável', 'Prazo de contestação'];
+    const dia = (v) => (v ? NG.fmtDiaISO(String(v).slice(0, 10)) : '');
+    const csv = [cab.map(q).join(';')].concat(ls.flatMap((l) => {
+      const tipos = tiposDe(l);
+      return (tipos.length ? tipos : [{ rot: '', deb: false, prev: l.prevista, pago: l.paga }]).map((r) => [cicloDoId(l.ciclo).nio, nomeLinha(l), l.plano_nome,
+        dia(l.vendido_em), dia(l.instalado_em || l.ativado_em), l.nio_pedido, l.nio_contrato, l.vendedor_nome, r.rot, r.deb ? 'débito' : 'crédito',
+        n(r.prev), n(r.pago), r.prev == null || r.pago == null ? '' : n(r.pago - r.prev), SIT[situacao(l)], motivo(l),
+        prazoDia(l) ? NG.fmtDiaISO(prazoDia(l)) : ''].map(q).join(';'));
+    })).join('\r\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
-    a.download = `niogen_conciliacao_${exemplo ? 'EXEMPLO_' : ''}${NG.diaSP().replace(/-/g, '')}.csv`;
+    a.download = `niogen_linha_a_linha_${exemplo ? 'EXEMPLO_' : ''}${NG.diaSP().replace(/-/g, '')}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   });
@@ -1050,29 +1111,6 @@
   fExemplo.checked = exemplo;
   await carregar();
   NGFicha.iniciar();
-})();
-</script>
-<script>
-// Margem por canal (prompt 25): lê v_margem_canal, que já existe; não depende das views da conciliação.
-(async function () {
-  const { esc } = NG;
-  const eu = await NG.exigirLogin();
-  if (!['admin', 'backoffice'].includes(eu.perfil)) return;
-  const sec = document.getElementById('margem');
-  const corpo = document.getElementById('margem-corpo');
-  sec.hidden = false;
-  const { data, error } = await NG.sb.from('v_margem_canal').select('*');
-  if (error) { corpo.innerHTML = `<tr><td colspan="8" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
-  const m = (v) => NG.fmtMoeda(v);
-  const linhas = (data || []).slice().sort((a, b) => (b.origem === 'parceiro_pap') - (a.origem === 'parceiro_pap') || Number(b.vendas) - Number(a.vendas));
-  corpo.innerHTML = linhas.length ? linhas.map((r) => {
-    const par = r.origem === 'parceiro_pap';
-    const neg = (v) => (Number(v) < 0 ? ' class="num bad-txt"' : ' class="num"');
-    return `<tr><td>${esc(NG.ORIGENS[r.origem] || r.origem)}</td><td class="num">${NG.fmtNum(r.vendas)}</td>
-      <td class="num">${esc(m(r.comissao_nio_prevista))}</td><td class="num">${esc(m(r.comissao_nio_paga))}</td>
-      <td class="num">${par ? esc(m(r.parceiros_pago)) : '—'}</td><td class="num">${par ? esc(m(r.parceiros_previsto)) : '—'}</td>
-      <td${neg(r.margem_paga)}>${esc(m(r.margem_paga))}</td><td${neg(r.margem_prevista)}>${esc(m(r.margem_prevista))}</td></tr>`;
-  }).join('') : '<tr><td colspan="8" class="vazio">Sem vendas ainda</td></tr>';
 })();
 </script>
 </body>
