@@ -1,0 +1,30 @@
+# NIOGEN | nfse/docker-compose.yml | 23/11/2026 — Claude Code (Opus 5.5)
+# VPS DO n8n (45.32.161.130), pasta /opt/niogen/nfse/. A Sefin Nacional não bloqueia IP de fora.
+# Segredos (chmod 600/700, fora do repo e do Drive):
+#   /opt/niogen/nfse/.env      NFSE_SERVICO_TOKEN, NFSE_PFX_SENHA, ZOHO_SMTP_SENHA
+#   /opt/niogen/nfse/segredos/ certificado.pfx (e-CNPJ A1 da Dharma) e nfse_config.json (prestador, tomador, serviço, e-mail)
+# Sem porta publicada: o Caddy da rede renata_web chega em niogen-nfse:8092 pela rota
+# https://n8n.ofertasverointernet.com.br/niogen-nfse/* (o serviço ainda exige o Bearer NFSE_SERVICO_TOKEN).
+services:
+  niogen-nfse:
+    build: .
+    image: niogen-nfse:1
+    container_name: niogen-nfse
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      TZ: America/Sao_Paulo
+      NFSE_PFX: /segredos/certificado.pfx
+      NFSE_CONFIG: /segredos/nfse_config.json
+      NFSE_SAIDA: /saida
+    volumes:
+      - ./segredos:/segredos:ro,Z   # SELinux Enforcing na VPS: Z = rótulo privado do contêiner
+      - ./saida:/saida:Z
+    networks: [renata_web]
+    mem_limit: 300m
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "3" }
+networks:
+  renata_web:
+    external: true

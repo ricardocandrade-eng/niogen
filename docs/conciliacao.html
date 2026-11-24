@@ -160,7 +160,8 @@
   const fBusca = document.getElementById('f-busca');
   const fVendedor = document.getElementById('f-vendedor');
   const fCiclo = document.getElementById('f-ciclo');
-  let linhas = [], ciclos = {}, exemplo = false, aba = 'todas', abertaChave = null;
+  let linhas = [], ciclos = {}, exemplo = false, aba = 'todas', abertaChave = null, emissoes = [];
+  const souAdmin = eu.perfil === 'admin';
   const ord = { chave: 'dif', dir: 1 };
 
   // ---------- ciclos (quinzenas) ----------
@@ -179,11 +180,13 @@
   // ---------- fontes ----------
   const naoExiste = (e) => ['PGRST205', '42P01'].includes(e.code) || /does not exist|schema cache/i.test(e.message || '');
   async function carregarReal() {
-    const [rl, rc] = await Promise.all([
+    const [rl, rc, re] = await Promise.all([
       NG.sb.from('v_conciliacao').select('*').limit(5000),
       NG.sb.from('v_conciliacao_ciclos').select('*').limit(500),
+      NG.sb.from('v_nfse_emissoes').select('id, documento_compras, item, ambiente, numero, situacao, n_nfse, chave, erro, email_para, pedida_em').limit(500),
     ]);
     for (const r of [rl, rc]) if (r.error && !naoExiste(r.error)) NG.toast(NG.msgErro(r.error), 'bad');
+    emissoes = re.error ? [] : (re.data || []);   // 0374: botão Emitir NF (sem a view, o pé fica como antes)
     if (rl.error || rc.error) return { linhas: [], ciclos: [] };
     return { linhas: rl.data || [], ciclos: rc.data || [] };
   }
@@ -390,9 +393,19 @@
         const st = p.pago_em ? `pago em ${dia(p.pago_em)} · ${NG.fmtMoeda(p.pago_valor)}`
           : p.nf_numero ? `NF ${p.nf_numero} de ${dia(p.nf_emitida_em)}${p.nf_enviada_em ? ` · enviada ${dia(p.nf_enviada_em)} · pagamento previsto até ${dia(p.previsao_pg)}` : ' · falta marcar o envio à Nio'}`
           : 'NF a emitir';
+        const chaveP = `${esc(c.ciclo)}|${esc(p.documento_compras)}|${esc(p.item)}`;
         const acao = exemplo || !p.documento_compras ? '' : p.pago_em ? ''
-          : `<button type="button" class="btn btn-acc btn-sm" data-pedido="${esc(c.ciclo)}|${esc(p.documento_compras)}|${esc(p.item)}">${p.nf_numero && p.nf_enviada_em ? 'Registrar pagamento' : p.nf_numero ? 'Marcar envio · pagamento' : 'Registrar NF'}</button>`;
-        return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(p.documento_compras || '—')}</span>${p.item && p.item !== '10' ? ` item ${esc(p.item)}` : ''} · ${esc(NG.fmtMoeda(p.valor))} · ${esc(st)}${soma} ${acao}</span>`;
+          : `<button type="button" class="btn ${p.nf_numero ? 'btn-acc' : 'btn-ghost'} btn-sm" data-pedido="${chaveP}">${p.nf_numero && p.nf_enviada_em ? 'Registrar pagamento' : p.nf_numero ? 'Marcar envio · pagamento' : 'Registrar NF à mão'}</button>`;
+        // 0374: Emitir NF (só admin) — emite pela API, gera o PDF e manda o e-mail à Nio num clique (depois da prévia)
+        const ems = emissoes.filter((x) => x.documento_compras === p.documento_compras && String(x.item) === String(p.item));
+        const prod = ems.find((x) => x.ambiente === 'producao'), teste = ems.find((x) => x.ambiente === 'restrita');
+        const SIT_EM = { pedida: 'em andamento', emitida: 'emitida', enviada: 'emitida e enviada', erro_emissao: 'recusada', erro_email: 'emitida, e-mail falhou' };
+        const emi = exemplo || !souAdmin || !p.documento_compras || p.nf_numero ? ''
+          : `<button type="button" class="btn btn-acc btn-sm" data-emitir="${chaveP}">Emitir NF</button>`;
+        const rastro = [teste && `<span class="muted">teste nº ${esc(teste.numero)}: ${esc(SIT_EM[teste.situacao] || teste.situacao)}${teste.chave ? ` <a href="#" data-nfse-pdf="${esc(teste.id)}">PDF</a>` : ''}</span>`,
+          prod && `<span>${esc(SIT_EM[prod.situacao] || prod.situacao)}${prod.chave ? ` <a href="#" data-nfse-pdf="${esc(prod.id)}">PDF</a>` : ''}${prod.situacao === 'erro_email' && souAdmin ? ` <button type="button" class="btn btn-acc btn-sm" data-nfse-reenviar="${esc(prod.id)}">Reenviar e-mail</button>` : ''}</span>`]
+          .filter(Boolean).join(' · ');
+        return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(p.documento_compras || '—')}</span>${p.item && p.item !== '10' ? ` item ${esc(p.item)}` : ''} · ${esc(NG.fmtMoeda(p.valor))} · ${esc(st)}${soma} ${emi} ${acao}${rastro ? ` · ${rastro}` : ''}</span>`;
       }).join('');
     }).join('');
     const falta = ids.length > cs.length ? '<span>1 quinzena ainda sem pedido</span>' : '';
@@ -539,6 +552,12 @@
 
   // ---------- NF e pagamento do pedido (0373: ciclo_nf_registrar / ciclo_pagamento_registrar) ----------
   document.getElementById('rodape-ciclo').addEventListener('click', (ev) => {
+    const em = ev.target.closest('[data-emitir]');
+    if (em) { const [ciclo, doc, item] = em.dataset.emitir.split('|'); previaEmissao(ciclo, doc, item); return; }
+    const pdfA = ev.target.closest('[data-nfse-pdf]');
+    if (pdfA) { ev.preventDefault(); abrirPdfNfse(pdfA.dataset.nfsePdf); return; }
+    const reB = ev.target.closest('[data-nfse-reenviar]');
+    if (reB) { reenviarNfse(reB.dataset.nfseReenviar, reB); return; }
     const b = ev.target.closest('[data-pedido]');
     if (!b) return;
     const [ciclo, doc, item] = b.dataset.pedido.split('|');
@@ -546,6 +565,83 @@
     const p = ((c && c.pedidos) || []).find((x) => x.documento_compras === doc && String(x.item) === item) || { documento_compras: doc, item, valor: c && c.valor_pedido };
     abrirPedido(c, p);
   });
+  // ---------- Emitir NF (0374: edge function nfse-emitir) ----------
+  async function nfse(corpo) {
+    const { data, error } = await NG.sb.functions.invoke('nfse-emitir', { body: corpo });
+    if (error) {
+      let msg = error.message;
+      try { const j = await error.context.json(); msg = j.error || msg; } catch (e) { /* sem corpo */ }
+      throw new Error(msg);
+    }
+    return data;
+  }
+  async function abrirPdfNfse(id) {
+    try { const r = await nfse({ acao: 'pdf', id }); if (r.pdf) window.open(r.pdf, '_blank', 'noopener'); } catch (e) { NG.toast(e.message, 'bad'); }
+  }
+  async function reenviarNfse(id, botao) {
+    if (!confirm('Mandar de novo o e-mail desta NF à Nio (mesmo título, corpo vazio, PDF anexo)?')) return;
+    botao.disabled = true;
+    try { const r = await nfse({ acao: 'reenviar', id }); NG.toast(`E-mail enviado: ${r.para}`, 'ok'); await carregar(); }
+    catch (e) { NG.toast(e.message, 'bad'); botao.disabled = false; }
+  }
+  async function previaEmissao(ciclo, doc, item) {
+    abertaChave = null;
+    document.getElementById('d-titulo').textContent = `Emitir NF · pedido ${doc}`;
+    document.getElementById('d-sub').textContent = 'Carregando a prévia…';
+    document.getElementById('d-corpo').innerHTML = '<span class="carregando">Montando a prévia…</span>';
+    document.getElementById('d-botoes').innerHTML = '';
+    NG.gaveta.abrir(gaveta, {});
+    let pv;
+    try { pv = await nfse({ acao: 'previa', documento: doc, item }); }
+    catch (e) { document.getElementById('d-corpo').innerHTML = `<div class="faixa vermelho">${esc(e.message)}</div>`; return; }
+    const teste = pv.ambiente === 'restrita';
+    document.getElementById('d-sub').textContent = `${pv.ciclo_nio} · item ${item} · ${NG.fmtMoeda(Number(pv.valor))}`;
+    const lin = (r, v) => `<span>${esc(r)}</span><span>${v}</span>`;
+    document.getElementById('d-corpo').innerHTML = `
+      <div class="faixa ${teste ? 'amarelo' : 'vermelho'}"><b>${teste ? 'TESTE — produção restrita' : 'PRODUÇÃO — NF de verdade'}</b>
+        <span>${teste ? 'Nota sem valor fiscal; o e-mail vai só para o remetente.' : 'Emitir é irreversível (só se cancela por evento). O e-mail vai à Nio.'}</span></div>
+      <section class="secao"><h3 class="secao-tit">A nota</h3><div class="dados">
+        ${lin('Tomador', `${esc(pv.tomador.nome)}<br><span class="mono">${esc(pv.tomador.cnpj)}</span>`)}
+        ${lin('Valor', `<b>${esc(NG.fmtMoeda(Number(pv.valor)))}</b>`)}
+        ${lin('Serviço', `${esc(pv.servico.cod_trib_nacional)} / ${esc(pv.servico.cod_trib_municipal || '-')}`)}
+        ${lin('Descrição', `<span class="mono">${esc(pv.descricao)}</span>`)}
+        ${lin('DPS', `série ${esc(pv.serie)} · nº ${esc(pv.numero)}`)}
+      </div></section>
+      <section class="secao"><h3 class="secao-tit">O e-mail (${esc(pv.email.modo)})</h3><div class="dados">
+        ${lin('Para', esc(pv.email.para.join(', ')))}
+        ${pv.email.cc.length ? lin('Cópia', esc(pv.email.cc.join(', '))) : ''}
+        ${lin('Título', `<span class="mono">${esc(pv.email.titulo)}</span>`)}
+        ${lin('Corpo', 'vazio · PDF da nota anexo')}
+      </div></section>`;
+    document.getElementById('d-botoes').innerHTML = `<div class="dir"><button type="button" class="btn btn-ghost" data-fechar>Cancelar</button>
+      <button type="button" class="btn btn-acc" id="b-emitir">${teste ? 'Emitir NF de teste e mandar o e-mail' : 'Emitir NF e enviar à Nio'}</button></div>`;
+    document.getElementById('b-emitir').addEventListener('click', async (ev) => {
+      if (!confirm(teste ? 'Emitir a NF de TESTE (sem valor fiscal) e mandar o e-mail só para você?'
+        : `Emitir a NF de ${NG.fmtMoeda(Number(pv.valor))} para ${pv.tomador.nome} e mandar à Nio?\n\nIsso não se desfaz.`)) return;
+      const bt = ev.currentTarget;
+      bt.disabled = true;
+      bt.textContent = 'Emitindo…';
+      try {
+        const r = await nfse({ acao: 'emitir', documento: doc, item });
+        if (!r.emitida) {
+          document.getElementById('d-corpo').insertAdjacentHTML('afterbegin', `<div class="faixa vermelho"><b>A Receita recusou</b><span>${esc(r.erro || '')}</span></div>`);
+          bt.disabled = false; bt.textContent = 'Tentar de novo';
+          await carregar();
+          return;
+        }
+        document.getElementById('d-corpo').innerHTML = `<div class="faixa verde"><b>NF ${esc(r.n_nfse)} emitida${teste ? ' (teste)' : ''}</b>
+          <span>${r.email.enviado ? `E-mail enviado para ${esc(r.email.para)}` : `A nota saiu, mas o e-mail falhou: ${esc(r.email.erro || '')} — use "Reenviar e-mail".`}</span></div>
+          <p class="mono">chave ${esc(r.chave)}</p>${r.pdf ? `<p><a href="${esc(r.pdf)}" target="_blank" rel="noopener">Abrir o PDF</a></p>` : ''}`;
+        document.getElementById('d-botoes').innerHTML = '<div class="dir"><button type="button" class="btn" data-fechar>Fechar</button></div>';
+        await carregar();
+      } catch (e) {
+        NG.toast(e.message, 'bad');
+        bt.disabled = false; bt.textContent = 'Tentar de novo';
+        await carregar();
+      }
+    });
+  }
+
   function abrirPedido(c, p) {
     abertaChave = null;
     const hoje = NG.diaSP();
