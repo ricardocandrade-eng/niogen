@@ -34,6 +34,102 @@
 <script src="assets/sidebar.js?v=231126-2"></script>
 <script src="assets/conversa.js?v=211126-4c"></script>
 <script src="assets/ficha.js?v=231126-1"></script>
+<style>
+  /* 24/11/2026 (Ricardo: "seletor de quinzena com setas laterais", "pegada mais de conciliação financeira", "cards no topo com gráficos").
+     Cores das séries = as do Placar (previsto azul, pago verde), validadas no fundo #161A21 (dataviz validate_palette: todas PASS). */
+  :root { --cq-prev: #4C97EA; --cq-pago: #2AAE48; }
+  .cq-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .cq-seta { width: 38px; height: 38px; flex: none; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 20px; line-height: 1; cursor: pointer; }
+  .cq-seta:hover:not(:disabled) { border-color: var(--border-strong); background: var(--surface-2); }
+  .cq-seta:disabled { opacity: .35; cursor: default; }
+  .cq-rot { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 0 1 auto; padding: 0 4px; }
+  .cq-rot b { font-size: 18px; font-weight: 700; }
+  .cq-rot span { font-size: 12px; color: var(--muted); }
+  .cq-rot span .ok-txt { color: var(--ok-fg); } .cq-rot span .warn-txt { color: var(--warn-fg); }
+  .cq-modo { margin-left: auto; display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .cq-modo button { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .cq-modo button.ativo { background: var(--surface-2); color: var(--text); }
+  @media (max-width: 640px) { .cq-modo { margin-left: 0; } .cq-rot b { font-size: 16px; } }
+
+  .cq-painel { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+  .cq-cels { display: flex; flex-wrap: wrap; }
+  .cq-cel { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); cursor: default; }
+  .cq-cel > span { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+  .cq-cel > span i { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .cq-cel > b { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
+  .cq-cel > small { font-size: 12px; color: var(--muted); }
+  .cq-cel.bad > b { color: var(--bad-fg); } .cq-cel.ok > b { color: var(--ok-fg); }
+  @media (max-width: 640px) { .cq-cel { flex-basis: 140px; padding: 12px 14px; } .cq-cel > b { font-size: 20px; } }
+
+  .cq-graf { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
+  .cq-g { position: relative; padding: 16px 18px 14px; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+  .cq-g + .cq-g { border-left: 1px solid var(--border); }
+  @media (max-width: 900px) { .cq-graf { grid-template-columns: minmax(0, 1fr); } .cq-g + .cq-g { border-left: 0; border-top: 1px solid var(--border); } }
+  .cq-g-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; }
+  .cq-g-cab h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .cq-g-cab small { font-size: 12px; color: var(--muted); }
+  .cq-leg { display: flex; gap: 14px; margin-left: auto; font-size: 12px; color: var(--muted); }
+  .cq-leg i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+  #cq-svg { display: block; width: 100%; height: 196px; }
+  #cq-svg .grade { stroke: var(--border); stroke-width: 1; }
+  #cq-svg .eixo { fill: var(--muted); font-size: 11px; font-family: var(--sans); }
+  #cq-svg .eixo.sel { fill: var(--text); font-weight: 600; }
+  #cq-svg .alvo { fill: transparent; cursor: pointer; }
+  #cq-svg .alvo:hover { fill: rgba(255, 255, 255, .035); }
+  #cq-svg .espera { fill: none; stroke: var(--border-strong); stroke-dasharray: 3 3; }
+  .cq-dica { position: absolute; z-index: 2; pointer-events: none; min-width: 180px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: 12px; line-height: 1.55; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+  .cq-dica strong { display: block; margin-bottom: 2px; }
+  .cq-dica b { font-family: var(--mono); font-weight: 600; }
+  .cq-dica i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+
+  .cq-sit-num { display: flex; align-items: baseline; gap: 10px; }
+  .cq-sit-num b { font-family: var(--mono); font-size: 34px; font-weight: 600; line-height: 1; }
+  .cq-sit-num span { font-size: 12.5px; color: var(--muted); }
+  .cq-seg { display: flex; gap: 2px; height: 12px; border-radius: 6px; overflow: hidden; background: var(--surface-2); }
+  .cq-seg i { display: block; height: 100%; min-width: 4px; }
+  .cq-seg-leg { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 7px; font-size: 12.5px; }
+  .cq-seg-leg li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 9px; align-items: center; cursor: pointer; }
+  .cq-seg-leg li i { width: 10px; height: 10px; border-radius: 3px; }
+  .cq-seg-leg li b { font-family: var(--mono); font-weight: 600; }
+  .cq-seg-leg li .v { font-family: var(--mono); color: var(--muted); min-width: 78px; text-align: right; }
+  .cq-seg-leg li.zero { opacity: .4; }
+  .cq-seg-leg li:hover span:first-of-type { text-decoration: underline; }
+
+  /* trilha do dinheiro: um cartão por pedido de compra da Nio */
+  .cq-trilha { display: flex; flex-direction: column; gap: 10px; }
+  .cq-ped { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; }
+  .cq-ped-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .cq-ped-cab h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .cq-ped-cab small { font-size: 12px; color: var(--muted); }
+  .cq-ped-cab .valor { margin-left: auto; font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  .cq-passos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cq-passo { position: relative; padding: 20px 10px 2px 0; min-width: 0; }
+  .cq-passo::before { content: ''; position: absolute; left: 0; top: 2px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); z-index: 1; }
+  .cq-passo::after { content: ''; position: absolute; left: 16px; right: 6px; top: 8px; height: 2px; border-radius: 1px; background: var(--border); }
+  .cq-passo:last-child::after { display: none; }
+  .cq-passo.feito::before { background: var(--ok-fg); border-color: var(--ok-fg); }
+  .cq-passo.feito::after { background: rgba(143, 227, 154, .45); }
+  .cq-passo.agora::before { border-color: var(--warn-dot); }
+  .cq-passo.atraso::before { border-color: var(--bad-dot); background: var(--bad-dot); }
+  .cq-passo b { display: block; font-size: 12.5px; font-weight: 600; }
+  .cq-passo span { display: block; font-size: 12px; color: var(--muted); }
+  .cq-passo.atraso span { color: var(--bad-fg); }
+  .cq-ped-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); padding-top: 8px; border-top: 1px solid var(--border); }
+  .cq-ped-acoes:empty { display: none; }
+  .cq-ped.espera { border-style: dashed; }
+  @media (max-width: 640px) { .cq-passos { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 8px; } .cq-passo:nth-child(2)::after { display: none; } }
+
+  /* lista com cara de extrato */
+  .cq-tab td.num, .cq-tab tfoot td { font-family: var(--mono); }
+  .cq-tab tbody tr td:first-child { box-shadow: inset 3px 0 0 var(--cq-faixa, transparent); }
+  .cq-tab tr.sit-bate { --cq-faixa: var(--ok-fg); } .cq-tab tr.sit-diverge { --cq-faixa: var(--warn-dot); }
+  .cq-tab tr.sit-falta { --cq-faixa: var(--bad-dot); } .cq-tab tr.sit-extra { --cq-faixa: var(--info-fg); }
+  .cq-tab tr.sit-contestada, .cq-tab tr.sit-aguardando { --cq-faixa: var(--border-strong); }
+  .cq-tab .sit-c { white-space: normal; min-width: 200px; }
+  .cq-tab .sit-c small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  .cq-tab tfoot td { padding-top: 10px; padding-bottom: 10px; border-top: 1px solid var(--border-strong); font-weight: 600; background: var(--surface-dim); }
+  .cq-tab tfoot td:first-child { font-family: var(--sans); color: var(--muted); font-weight: 500; }
+</style>
 </head>
 <body>
 <div class="app">
@@ -62,37 +158,62 @@
     </section>
 
     <div id="conteudo" hidden>
-      <section class="kpis quatro" id="kpis" aria-label="Resumo do ciclo"></section>
+      <section class="cq-nav" aria-label="Quinzena">
+        <button type="button" class="cq-seta" id="cq-ant" aria-label="Período anterior" title="Anterior (←)">‹</button>
+        <div class="cq-rot"><b id="cq-titulo">—</b><span id="cq-sub"></span></div>
+        <button type="button" class="cq-seta" id="cq-prox" aria-label="Próximo período" title="Próximo (→)">›</button>
+        <div class="cq-modo" role="group" aria-label="Ver por"><button type="button" data-modo="q">Quinzena</button><button type="button" data-modo="m">Mês</button></div>
+      </section>
+
+      <section class="cq-painel" aria-label="Resumo do período">
+        <div class="cq-cels" id="kpis"></div>
+        <div class="cq-graf">
+          <div class="cq-g">
+            <div class="cq-g-cab"><h3>Previsto × pago pela Nio</h3><small>por quinzena · clique para ir até ela</small>
+              <div class="cq-leg"><span><i style="background:var(--cq-prev)"></i>Previsto</span><span><i style="background:var(--cq-pago)"></i>Pago pela Nio</span></div></div>
+            <svg id="cq-svg" role="img" aria-label="Comissão prevista e paga por quinzena"></svg>
+            <div class="cq-dica" id="cq-dica" hidden></div>
+          </div>
+          <div class="cq-g">
+            <div class="cq-g-cab"><h3>Situação das vendas</h3><small id="cq-sit-sub"></small></div>
+            <div class="cq-sit-num" id="cq-sit-num"></div>
+            <div class="cq-seg" id="cq-seg" role="img"></div>
+            <ul class="cq-seg-leg" id="cq-seg-leg"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="cq-trilha" id="rodape-ciclo" aria-label="Pedido da Nio, NF e pagamento"></section>
 
       <div id="abas"></div>
 
       <div class="barra-filtros">
         <label class="busca"><span aria-hidden="true">⌕</span><input type="search" id="f-busca" aria-label="Buscar" placeholder="Buscar por nome, pedido ou contrato"></label>
         <select class="sel" id="f-vendedor" aria-label="Vendedor"></select>
-        <select class="sel ciclo" id="f-ciclo" aria-label="Ciclo"></select>
+        <select class="sel ciclo" id="f-ciclo" aria-label="Ciclo" hidden></select>
         <div class="dir"><button type="button" class="btn btn-ghost" id="exportar">⇩ Exportar</button></div>
       </div>
 
       <section class="lista padrao" aria-label="Conciliação do ciclo">
         <div class="rolagem">
-          <table class="tab">
+          <table class="tab cq-tab">
             <thead><tr>
-              <th data-ord="cliente">Cliente</th>
-              <th data-ord="pedido">Pedido</th>
-              <th data-ord="prevista" data-dir="desc" class="num">Prevista</th>
-              <th data-ord="paga" data-dir="desc" class="num">Paga</th>
+              <th data-ord="cliente">Venda</th>
+              <th data-ord="pedido">OS · contrato</th>
+              <th data-ord="prevista" data-dir="desc" class="num">Previsto</th>
+              <th data-ord="paga" data-dir="desc" class="num">Pago pela Nio</th>
               <th data-ord="dif" class="num">Diferença</th>
-              <th>Motivo provável</th>
+              <th>Situação</th>
               <th data-ord="prazo">Prazo de contestação</th>
             </tr></thead>
             <tbody id="tbody"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+            <tfoot id="tfoot"></tfoot>
           </table>
         </div>
         <div class="rodape-lista"><span id="contagem"></span><span>Clique na linha para ver a composição</span></div>
       </section>
       <div class="cartoes" id="cartoes" aria-label="Conciliação do ciclo"></div>
 
-      <div class="rodape-info rodape-ciclo" id="rodape-ciclo"></div>
     </div>
 
     <section class="secao" id="margem" aria-label="Margem por canal" hidden>
@@ -144,6 +265,7 @@
   const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const MESES_LONGO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   const SIT = { diverge: 'Divergência', bate: 'Bate', falta: 'Falta na Nio', extra: 'Extra da Nio', contestada: 'Contestada', aguardando: 'Aguardando pedido' };
+  const SIT_CHIP = { bate: 'ok', diverge: 'warn', falta: 'bad', extra: 'info', contestada: 'dim', aguardando: 'dim' };
   const MOTIVOS_CONTESTACAO = [
     ['valor_tabela', 'Comissão diferente da tabela'], ['bonus_nao_pago', 'Bônus ou transição não pago'],
     ['adicional_nao_pago', 'Adicional não pago'], ['nao_veio', 'Venda ativada não veio no extrato'],
@@ -345,6 +467,7 @@
   const difCls = (d) => (d == null || Math.abs(d) < 0.005 ? '' : d < 0 ? ' neg' : ' pos');
   const nomeLinha = (l) => l.cliente_nome || (l.nio_contrato ? 'Contrato sem venda no NIOGEN' : 'Lançamento da Nio sem contrato');
 
+  // ---------- cartões do topo (24/11) ----------
   function renderKpis(lista) {
     const ids = ciclosSel();
     const comPedido = ids.filter(temPedido);
@@ -358,87 +481,250 @@
     // "A contestar" olha TODOS os ciclos: um prazo vencendo num ciclo antigo não pode sumir porque o seletor está em outro.
     const aContestar = linhas.filter((l) => filtroBase(l) && contestavel(l) && diasPrazo(l) >= 0 && diasPrazo(l) <= ALERTA_PRAZO);
     const valorContestar = aContestar.reduce((s, l) => s - diferenca(l), 0);
+    const cel = (rot, val, nota, dica, cls = '', cor = '') => `<div class="cq-cel ${cls}" title="${esc(dica)}">
+      <span>${cor ? `<i style="background:${cor}"></i>` : ''}${esc(rot)}</span><b>${val}</b><small>${nota}</small></div>`;
     document.getElementById('kpis').innerHTML = [
-      NG.kpi({ rot: 'Prevista no ciclo', val: NG.fmtMoeda(prevista), nota: `${NG.fmtNum(nPrev)} ${nPrev === 1 ? 'venda ativada' : 'vendas ativadas'}`,
-        dica: 'Comissão prevista no NIOGEN (nominal + adicionais + transição + NMEI) das vendas ativadas no ciclo. O M-10 fica fora: é apurado à parte, no 10º mês.' }),
-      NG.kpi({ rot: 'Paga no ciclo', val: comPedido.length ? NG.fmtMoeda(paga) : '—',
-        nota: comPedido.length ? `${NG.fmtNum(nLinhas)} ${nLinhas === 1 ? 'linha' : 'linhas'} da Nio${comPedido.length < ids.length ? ' · falta pedido de 1 quinzena' : ''}` : 'aguardando o pedido da Nio',
-        dica: 'Soma da aba Linha a Linha do extrato (comissão, bônus, estornos e multas) dos contratos do ciclo.' }),
-      NG.kpi({ rot: 'Diferença', val: comPedido.length ? difHtml(dif) : '—', cls: comPedido.length && dif < -0.005 ? 'bad' : '',
-        nota: comPedido.length ? `${NG.fmtNum(conta('diverge'))} divergências · ${NG.fmtNum(conta('falta'))} faltam · ${NG.fmtNum(conta('extra'))} extras` : 'sem pedido para comparar',
-        dica: 'Paga − prevista, só onde o pedido da Nio já saiu. Negativa = a Nio pagou menos que o previsto.' }),
-      NG.kpi({ rot: 'A contestar', val: NG.fmtNum(aContestar.length), cls: aContestar.length ? 'bad' : '',
-        nota: aContestar.length ? `${NG.fmtMoeda(valorContestar)} · prazo em ≤ ${ALERTA_PRAZO} d · todos os ciclos` : `nenhum prazo em ≤ ${ALERTA_PRAZO} d`,
-        dica: 'Divergências e faltas (a Nio pagou menos) ainda sem contestação, com o prazo de 120 dias do fato gerador vencendo em até 15 dias. Conta todos os ciclos, não só o escolhido.' }),
+      cel('Previsto no NIOGEN', esc(NG.fmtMoeda(prevista)), `${NG.fmtNum(nPrev)} ${nPrev === 1 ? 'venda ativada' : 'vendas ativadas'}`,
+        'Comissão prevista no NIOGEN (nominal + adicionais + transição + NMEI) das vendas ativadas no período. O M-10 fica fora: é apurado à parte, no 10º mês.', '', 'var(--cq-prev)'),
+      cel('Pago pela Nio', comPedido.length ? esc(NG.fmtMoeda(paga)) : '—',
+        comPedido.length ? `${NG.fmtNum(nLinhas)} ${nLinhas === 1 ? 'linha' : 'linhas'} no extrato${comPedido.length < ids.length ? ' · falta o pedido de 1 quinzena' : ''}` : 'aguardando o pedido da Nio',
+        'Soma da aba Linha a Linha do extrato (comissão, bônus, estornos e multas) das vendas do período.', '', 'var(--cq-pago)'),
+      cel('Diferença', comPedido.length ? difHtml(dif) : '—',
+        comPedido.length ? `${NG.fmtNum(conta('diverge'))} divergências · ${NG.fmtNum(conta('falta'))} faltam · ${NG.fmtNum(conta('extra'))} extras` : 'sem pedido para comparar',
+        'Pago − previsto, só onde o pedido da Nio já saiu. Negativa = a Nio pagou menos que o previsto.',
+        comPedido.length ? (dif < -0.005 ? 'bad' : Math.abs(dif) < 0.005 ? 'ok' : '') : ''),
+      cel('A contestar', NG.fmtNum(aContestar.length),
+        aContestar.length ? `${esc(NG.fmtMoeda(valorContestar))} · prazo em ≤ ${ALERTA_PRAZO} d · todos os períodos` : `nenhum prazo em ≤ ${ALERTA_PRAZO} d`,
+        'Divergências e faltas (a Nio pagou menos) ainda sem contestação, com o prazo de 120 dias do fato gerador vencendo em até 15 dias. Conta todos os períodos, não só o escolhido.',
+        aContestar.length ? 'bad' : ''),
     ].join('');
   }
 
+  // ---------- seletor de quinzena com setas (24/11) ----------
+  const todasQuinzenas = () => [...new Set(linhas.map((l) => l.ciclo).concat(Object.keys(ciclos)))].sort();
+  const todosMeses = () => [...new Set(todasQuinzenas().map((id) => id.slice(0, 7)))];
+  const cicloDoId = (id) => cicloDe(id.slice(0, 8) + (id.endsWith('1Q') ? '01' : '16'));
+  function irPara(valor) {
+    fCiclo.value = valor;
+    if (gaveta.classList.contains('aberta')) NG.gaveta.fechar();
+    render();
+  }
+  function renderNav() {
+    const [t, v] = fCiclo.value.split(':');
+    const lista = t === 'q' ? todasQuinzenas() : todosMeses();
+    const i = lista.indexOf(v);
+    document.getElementById('cq-ant').disabled = i <= 0;
+    document.getElementById('cq-prox').disabled = i < 0 || i >= lista.length - 1;
+    const mes = Number(v.slice(5, 7));
+    if (t === 'q') {
+      const c = cicloDoId(v);
+      document.getElementById('cq-titulo').textContent = `${c.q}ª quinzena de ${MESES_LONGO[mes - 1].toLowerCase()} de ${v.slice(0, 4)}`;
+      document.getElementById('cq-sub').innerHTML = `${c.ini.slice(8)} a ${c.fim.slice(8)}/${v.slice(5, 7)} · ${esc(c.nio)} · `
+        + (temPedido(v) ? '<span class="ok-txt">pedido da Nio importado</span>' : '<span class="warn-txt">sem pedido da Nio ainda</span>');
+    } else {
+      const qs = todasQuinzenas().filter((id) => id.startsWith(v));
+      document.getElementById('cq-titulo').textContent = `${MESES_LONGO[mes - 1]} de ${v.slice(0, 4)}`;
+      document.getElementById('cq-sub').textContent = `mês inteiro · ${qs.length} ${qs.length === 1 ? 'quinzena' : 'quinzenas'} · ${qs.filter(temPedido).length} com pedido da Nio`;
+    }
+    document.querySelectorAll('.cq-modo button').forEach((b) => b.classList.toggle('ativo', b.dataset.modo === t));
+  }
+  function passo(d) {
+    const [t, v] = fCiclo.value.split(':');
+    const lista = t === 'q' ? todasQuinzenas() : todosMeses();
+    const i = lista.indexOf(v) + d;
+    if (i >= 0 && i < lista.length) irPara(`${t}:${lista[i]}`);
+  }
+  document.getElementById('cq-ant').addEventListener('click', () => passo(-1));
+  document.getElementById('cq-prox').addEventListener('click', () => passo(1));
+  document.querySelector('.cq-modo').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-modo]');
+    const [t, v] = fCiclo.value.split(':');
+    if (!b || b.dataset.modo === t) return;
+    if (b.dataset.modo === 'm') { irPara(`m:${v.slice(0, 7)}`); return; }
+    const qs = todasQuinzenas().filter((id) => id.startsWith(v));
+    irPara(`q:${[...qs].reverse().find(temPedido) || qs[qs.length - 1]}`);
+  });
+  document.addEventListener('keydown', (ev) => {
+    if (elConteudo.hidden || gaveta.classList.contains('aberta') || ev.altKey || ev.ctrlKey || ev.metaKey) return;
+    if (ev.target.closest('input, select, textarea, [contenteditable]')) return;
+    if (ev.key === 'ArrowLeft') { ev.preventDefault(); passo(-1); }
+    if (ev.key === 'ArrowRight') { ev.preventDefault(); passo(1); }
+  });
+
+  // ---------- gráfico: previsto × pago por quinzena (as últimas 8) ----------
+  const svg = document.getElementById('cq-svg');
+  const dica = document.getElementById('cq-dica');
+  const NS_SVG = 'http://www.w3.org/2000/svg';
+  const mil = (v) => (v >= 1000 ? `R$ ${NG.fmtNum(Math.round(v / 100) / 10)} mil` : `R$ ${NG.fmtNum(Math.round(v))}`);
+  function passoEixo(bruto) {
+    const p = 10 ** Math.floor(Math.log10(Math.max(bruto, 1)));
+    return [1, 2, 2.5, 5, 10].map((k) => k * p).find((x) => x >= bruto) || p * 10;
+  }
+  // barra com o topo arredondado (4 px) e a base reta, presa na linha do zero
+  const barra = (x, y, w, h) => {
+    const r = Math.min(4, w / 2, h);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  };
+  function renderBarras() {
+    const sel = new Set(ciclosSel());
+    const dados = todasQuinzenas().slice(-8).map((id) => {
+      const ls = linhas.filter((l) => l.ciclo === id && filtroBase(l));
+      const prev = ls.reduce((s, l) => s + Number(l.prevista || 0), 0);
+      const temNio = temPedido(id) || ls.some((l) => (l.linhas || []).length);
+      return { id, c: cicloDoId(id), prev, pago: temNio ? ls.reduce((s, l) => s + Number(l.paga || 0), 0) : null };
+    });
+    const W = Math.max(svg.clientWidth || 0, 280), H = 196, m = { t: 12, r: 6, b: 28, l: 64 };
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const maior = Math.max(1, ...dados.map((d) => Math.max(d.prev, d.pago || 0)));
+    const pz = passoEixo(maior / 4), topo = Math.ceil(maior / pz) * pz;
+    const y = (v) => m.t + (H - m.t - m.b) * (1 - v / topo);
+    const gw = (W - m.l - m.r) / Math.max(dados.length, 1);
+    const bw = Math.max(6, Math.min(30, (gw - 18) / 2));
+    let h = '';
+    for (let v = 0; v <= topo + 0.001; v += pz) {
+      h += `<line class="grade" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${esc(mil(v))}</text>`;
+    }
+    dados.forEach((d, i) => {
+      const cx = m.l + gw * i + gw / 2, x1 = cx - bw - 1, x2 = cx + 1, base = y(0);
+      const op = sel.has(d.id) ? 1 : 0.38;
+      if (d.prev > 0) h += `<path d="${barra(x1, y(d.prev), bw, base - y(d.prev))}" fill="var(--cq-prev)" opacity="${op}"/>`;
+      if (d.pago != null && d.pago > 0) h += `<path d="${barra(x2, y(d.pago), bw, base - y(d.pago))}" fill="var(--cq-pago)" opacity="${op}"/>`;
+      else if (d.pago == null && d.prev > 0) h += `<rect class="espera" x="${x2 + 0.5}" y="${y(d.prev) + 0.5}" width="${bw - 1}" height="${Math.max(base - y(d.prev) - 1, 0)}" rx="3" opacity="${op}"/>`;
+      h += `<text class="eixo${sel.has(d.id) ? ' sel' : ''}" x="${cx}" y="${H - 9}" text-anchor="middle">${d.c.q}ª ${MESES[Number(d.id.slice(5, 7)) - 1]}</text>`;
+      h += `<rect class="alvo" data-q="${esc(d.id)}" x="${m.l + gw * i}" y="${m.t}" width="${gw}" height="${H - m.t - m.b + 20}"/>`;
+    });
+    svg.innerHTML = h;
+    svg.onmousemove = (ev) => {
+      const a = ev.target.closest && ev.target.closest('.alvo');
+      if (!a) { dica.hidden = true; return; }
+      const d = dados.find((x) => x.id === a.dataset.q);
+      const dif = d.pago == null ? null : d.pago - d.prev;
+      dica.innerHTML = `<strong>${esc(rotCiclo(d.c))}</strong>
+        <div><i style="background:var(--cq-prev)"></i>Previsto <b>${esc(NG.fmtMoeda(d.prev))}</b></div>
+        <div><i style="background:var(--cq-pago)"></i>Pago pela Nio <b>${d.pago == null ? 'sem pedido ainda' : esc(NG.fmtMoeda(d.pago))}</b></div>
+        ${dif == null ? '' : `<div>Diferença <b>${difHtml(dif)}</b></div>`}`;
+      dica.hidden = false;
+      const caixa = svg.getBoundingClientRect(), pai = svg.parentElement.getBoundingClientRect();
+      const x = ev.clientX - pai.left + 14;
+      dica.style.left = `${Math.min(x, pai.width - dica.offsetWidth - 8)}px`;
+      dica.style.top = `${caixa.top - pai.top + 8}px`;
+    };
+    svg.onmouseleave = () => { dica.hidden = true; };
+    svg.onclick = (ev) => { const a = ev.target.closest && ev.target.closest('.alvo'); if (a) irPara(`q:${a.dataset.q}`); };
+  }
+  let tRes = null;
+  window.addEventListener('resize', () => { clearTimeout(tRes); tRes = setTimeout(() => { if (!elConteudo.hidden) renderBarras(); }, 120); });
+
+  // ---------- situação das vendas do período ----------
+  const SIT_COR = { bate: 'var(--ok-fg)', diverge: 'var(--warn-dot)', falta: 'var(--bad-dot)', extra: 'var(--info-fg)',
+    contestada: 'var(--muted)', aguardando: 'var(--border-strong)' };
+  const SIT_ORDEM = ['bate', 'diverge', 'falta', 'extra', 'contestada', 'aguardando'];
+  function renderSituacao(lista) {
+    const tot = lista.length;
+    const por = Object.fromEntries(SIT_ORDEM.map((k) => [k, lista.filter((l) => situacao(l) === k)]));
+    const conferiveis = tot - por.aguardando.length;
+    const num = document.getElementById('cq-sit-num');
+    if (!conferiveis) num.innerHTML = `<b>—</b><span>${tot ? 'aguardando o pedido da Nio para conferir' : 'nada no período'}</span>`;
+    else num.innerHTML = `<b>${Math.round((por.bate.length / conferiveis) * 100)}%</b><span>conciliado · ${NG.fmtNum(por.bate.length)} de ${NG.fmtNum(conferiveis)} ${conferiveis === 1 ? 'venda conferida' : 'vendas conferidas'} batem</span>`;
+    document.getElementById('cq-sit-sub').textContent = `${NG.fmtNum(tot)} ${tot === 1 ? 'linha' : 'linhas'} no período`;
+    const seg = document.getElementById('cq-seg');
+    seg.innerHTML = SIT_ORDEM.filter((k) => por[k].length).map((k) => `<i style="flex:${por[k].length} 1 0;background:${SIT_COR[k]}" title="${esc(SIT[k])}: ${por[k].length}"></i>`).join('');
+    seg.setAttribute('aria-label', SIT_ORDEM.map((k) => `${SIT[k]}: ${por[k].length}`).join(', '));
+    document.getElementById('cq-seg-leg').innerHTML = SIT_ORDEM.map((k) => {
+      const v = por[k].reduce((s, l) => s + Number((k === 'extra' ? l.paga : l.prevista) || 0), 0);
+      return `<li class="${por[k].length ? '' : 'zero'}" data-aba="${k === 'aguardando' ? 'todas' : k}" title="Mostrar na lista">
+        <i style="background:${SIT_COR[k]}"></i><span>${esc(SIT[k])}</span><b>${NG.fmtNum(por[k].length)}</b><span class="v">${por[k].length ? esc(NG.fmtMoeda(v)) : '—'}</span></li>`;
+    }).join('');
+  }
+  document.getElementById('cq-seg-leg').addEventListener('click', (ev) => {
+    const li = ev.target.closest('[data-aba]');
+    if (!li || li.classList.contains('zero')) return;
+    aba = li.dataset.aba;
+    render();
+    document.querySelector('.lista.padrao').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // ---------- trilha do dinheiro: pedido da Nio → NF → envio → pagamento, um cartão por pedido (24/11) ----------
   function renderRodape() {
     const ids = ciclosSel().sort();
-    const cs = ids.map((id) => ciclos[id]).filter((c) => c && c.valor_pedido != null);
     const el = document.getElementById('rodape-ciclo');
-    if (!cs.length) {
-      el.innerHTML = '<span class="nf">NF a emitir: <b>aguardando o pedido da Nio</b></span><span>A NF só sai depois do pedido da Nio · processamento em até 10 dias úteis</span>';
-      return;
-    }
-    const total = cs.reduce((s, c) => s + Number(c.valor_pedido), 0);
-    // 0373: a Nio não devolve NF nem pagamento — cada pedido tem o seu botão (NF → envio → pagamento)
-    const det = cs.map((c) => {
-      const ci = cicloDe(c.ciclo.slice(0, 8) + (c.ciclo.endsWith('1Q') ? '01' : '16'));
+    const hoje = NG.diaSP();
+    const dia = (d) => (d ? NG.fmtDiaISO(String(d).slice(0, 10)).slice(0, 5) : '');
+    const SIT_EM = { pedida: 'em andamento', emitida: 'emitida', enviada: 'emitida e enviada', erro_emissao: 'recusada', erro_email: 'emitida, e-mail falhou' };
+    const passoH = (cls, tit, txt) => `<div class="cq-passo ${cls}"><b>${esc(tit)}</b><span>${txt}</span></div>`;
+    el.innerHTML = ids.map((id) => {
+      const c = ciclos[id];
+      const ci = cicloDoId(id);
+      if (!c || c.valor_pedido == null) {
+        // pedido da 1ª quinzena sai ~dia 16; o da 2ª, ~dia 1 do mês seguinte (1QNOV26 saiu em 16/11/2026)
+        const prev = ci.q === 1 ? `${id.slice(0, 8)}16` : NG.somaDias(ci.fim, 1);
+        return `<div class="cq-ped espera"><div class="cq-ped-cab"><h3>${esc(ci.nio)} · pedido de compra da Nio</h3>
+            <small>${prev > hoje ? `deve sair por volta de ${esc(dia(prev))}` : `esperado desde ${esc(dia(prev))} — se não chegou, cobrar o Rogério`}</small></div>
+          <div class="cq-passos">${passoH(prev > hoje ? '' : 'agora', 'Pedido da Nio', 'aguardando o extrato')}${passoH('', 'NF emitida', '—')}${passoH('', 'Enviada à Nio', '—')}${passoH('', 'Pago', '—')}</div></div>`;
+      }
       const soma = c.soma_linhas != null && Math.abs(Number(c.soma_linhas) - Number(c.valor_pedido)) >= 0.005
-        ? ` · <b class="bad-txt">linha a linha soma ${esc(NG.fmtMoeda(c.soma_linhas))}</b>` : '';
+        ? `<small class="bad-txt">a linha a linha soma ${esc(NG.fmtMoeda(c.soma_linhas))}</small>` : '';
       const peds = (c.pedidos && c.pedidos.length ? c.pedidos : [{ documento_compras: c.documento_compras, item: '10', valor: c.valor_pedido }]);
       return peds.map((p) => {
-        const dia = (d) => NG.fmtDiaISO(d).slice(0, 5);
-        const st = p.pago_em ? `pago em ${dia(p.pago_em)} · ${NG.fmtMoeda(p.pago_valor)}`
-          : p.nf_numero ? `NF ${p.nf_numero} de ${dia(p.nf_emitida_em)}${p.nf_enviada_em ? ` · enviada ${dia(p.nf_enviada_em)} · pagamento previsto até ${dia(p.previsao_pg)}` : ' · falta marcar o envio à Nio'}`
-          : 'NF a emitir';
         const chaveP = `${esc(c.ciclo)}|${esc(p.documento_compras)}|${esc(p.item)}`;
-        const acao = exemplo || !p.documento_compras ? '' : p.pago_em ? ''
+        const atrasou = !p.pago_em && p.previsao_pg && p.previsao_pg < hoje;
+        const passos = passoH('feito', 'Pedido da Nio', `<span class="mono">${esc(p.documento_compras || '—')}</span> · importado ${esc(dia(c.importado_em))}`)
+          + passoH(p.nf_numero ? 'feito' : 'agora', 'NF emitida', p.nf_numero ? `nº ${esc(p.nf_numero)} · ${esc(dia(p.nf_emitida_em))}` : 'a emitir')
+          + passoH(p.nf_enviada_em ? 'feito' : p.nf_numero ? 'agora' : '', 'Enviada à Nio', p.nf_enviada_em ? esc(dia(p.nf_enviada_em)) : p.nf_numero ? 'falta marcar o envio' : '—')
+          + passoH(p.pago_em ? 'feito' : atrasou ? 'atraso' : p.nf_enviada_em ? 'agora' : '', 'Pago',
+            p.pago_em ? `${esc(dia(p.pago_em))} · ${esc(NG.fmtMoeda(p.pago_valor))}` : p.previsao_pg ? `${atrasou ? 'atrasado · era até' : 'previsto até'} ${esc(dia(p.previsao_pg))}` : '10 dias úteis depois do envio');
+        const acao = exemplo || !p.documento_compras || p.pago_em ? ''
           : `<button type="button" class="btn ${p.nf_numero ? 'btn-acc' : 'btn-ghost'} btn-sm" data-pedido="${chaveP}">${p.nf_numero && p.nf_enviada_em ? 'Registrar pagamento' : p.nf_numero ? 'Marcar envio · pagamento' : 'Registrar NF à mão'}</button>`;
         // 0374: Emitir NF (só admin) — emite pela API, gera o PDF e manda o e-mail à Nio num clique (depois da prévia)
         const ems = emissoes.filter((x) => x.documento_compras === p.documento_compras && String(x.item) === String(p.item));
         const prod = ems.find((x) => x.ambiente === 'producao'), teste = ems.find((x) => x.ambiente === 'restrita');
-        const SIT_EM = { pedida: 'em andamento', emitida: 'emitida', enviada: 'emitida e enviada', erro_emissao: 'recusada', erro_email: 'emitida, e-mail falhou' };
         const emi = exemplo || !souAdmin || !p.documento_compras || p.nf_numero ? ''
           : `<button type="button" class="btn btn-acc btn-sm" data-emitir="${chaveP}">Emitir NF</button>`;
-        const rastro = [teste && `<span class="muted">teste nº ${esc(teste.numero)}: ${esc(SIT_EM[teste.situacao] || teste.situacao)}${teste.chave ? ` <a href="#" data-nfse-pdf="${esc(teste.id)}">PDF</a>` : ''}</span>`,
-          prod && `<span>${esc(SIT_EM[prod.situacao] || prod.situacao)}${prod.chave ? ` <a href="#" data-nfse-pdf="${esc(prod.id)}">PDF</a>` : ''}${prod.situacao === 'erro_email' && souAdmin ? ` <button type="button" class="btn btn-acc btn-sm" data-nfse-reenviar="${esc(prod.id)}">Reenviar e-mail</button>` : ''}</span>`]
-          .filter(Boolean).join(' · ');
-        return `<span>${esc(ci.nio)} · pedido <span class="mono">${esc(p.documento_compras || '—')}</span>${p.item && p.item !== '10' ? ` item ${esc(p.item)}` : ''} · ${esc(NG.fmtMoeda(p.valor))} · ${esc(st)}${soma} ${emi} ${acao}${rastro ? ` · ${rastro}` : ''}</span>`;
+        const rastro = [prod && `<span>NF pelo NIOGEN: ${esc(SIT_EM[prod.situacao] || prod.situacao)}${prod.chave ? ` · <a href="#" data-nfse-pdf="${esc(prod.id)}">PDF</a>` : ''}${prod.situacao === 'erro_email' && souAdmin ? ` <button type="button" class="btn btn-acc btn-sm" data-nfse-reenviar="${esc(prod.id)}">Reenviar e-mail</button>` : ''}</span>`,
+          teste && `<span>teste nº ${esc(teste.numero)}: ${esc(SIT_EM[teste.situacao] || teste.situacao)}${teste.chave ? ` · <a href="#" data-nfse-pdf="${esc(teste.id)}">PDF</a>` : ''}</span>`]
+          .filter(Boolean).join('<span aria-hidden="true">·</span>');
+        return `<div class="cq-ped"><div class="cq-ped-cab"><h3>${esc(ci.nio)} · pedido de compra <span class="mono">${esc(p.documento_compras || '—')}</span>${p.item && p.item !== '10' ? ` item ${esc(p.item)}` : ''}</h3>
+            <small>${p.pago_em ? 'pago' : p.nf_numero ? 'NF emitida' : 'NF a emitir'}</small>${soma}<span class="valor">${esc(NG.fmtMoeda(p.valor))}</span></div>
+          <div class="cq-passos">${passos}</div>
+          <div class="cq-ped-acoes">${emi}${acao}${rastro}</div></div>`;
       }).join('');
     }).join('');
-    const falta = ids.length > cs.length ? '<span>1 quinzena ainda sem pedido</span>' : '';
-    // "NF a emitir" enquanto alguma quinzena do ciclo não tem NF; com todas emitidas, "NF do ciclo".
-    const rot = cs.every((c) => c.dt_compensacao) && ids.length === cs.length ? 'Pago' : cs.every((c) => c.numero_nf) && ids.length === cs.length ? 'NF do ciclo' : 'NF a emitir';
-    el.innerHTML = `<span class="nf">${rot}: <b>${esc(NG.fmtMoeda(total))}</b></span>${det}${falta}<span>A NF só depois do pedido da Nio · processamento em até 10 dias úteis</span>`;
   }
 
   function render() {
     const doC = doCiclo();
+    renderNav();
     renderKpis(doC);
+    renderBarras();
+    renderSituacao(doC);
     NG.abasPilulas(document.getElementById('abas'), ABAS.map(([id, nome]) => ({ id, nome, n: doC.filter((l) => naAba(l, id)).length, alerta: id === 'diverge' })),
       aba, (id) => { aba = id; render(); });
     const lista = NG.ordenar(doC.filter((l) => naAba(l, aba)), CHAVES, ord);
     tbody.innerHTML = lista.length ? lista.map((l) => {
       const d = diferenca(l);
-      return `<tr class="clicavel" data-chave="${esc(l.chave)}" tabindex="0" title="Ver a composição">
-        <td class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc(l.vendedor_nome || '')}</small></td>
+      const s = situacao(l);
+      return `<tr class="clicavel sit-${s}" data-chave="${esc(l.chave)}" tabindex="0" title="Ver a composição">
+        <td class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc([l.vendedor_nome, l.ativado_em && `ativada ${NG.fmtDiaISO(String(l.ativado_em).slice(0, 10)).slice(0, 5)}`].filter(Boolean).join(' · '))}</small></td>
         <td class="plano-c"><b class="mono">${esc(l.nio_pedido || '—')}</b><small>${l.nio_contrato ? `contrato ${esc(l.nio_contrato)}` : ''}</small></td>
         <td class="num">${moeda(l.prevista)}</td>
         <td class="num">${moeda(l.paga)}</td>
         <td class="num${difCls(d)}">${difHtml(d)}</td>
-        <td class="motivo">${esc(motivo(l))}</td>
+        <td class="sit-c"><span class="chip ${SIT_CHIP[s]}">${esc(SIT[s])}</span><small>${esc(motivo(l))}</small></td>
         <td>${NG.proxPasso(prazo(l))}</td>
       </tr>`;
     }).join('') : '<tr><td colspan="7" class="vazio">Nada neste filtro</td></tr>';
+    const somaCol = (f) => lista.reduce((s, l) => s + Number(f(l) || 0), 0);
+    const difTot = lista.filter((l) => situacao(l) !== 'aguardando').reduce((s, l) => s + diferenca(l), 0);
+    document.getElementById('tfoot').innerHTML = lista.length ? `<tr><td colspan="2">Total · ${NG.fmtNum(lista.length)} ${lista.length === 1 ? 'linha' : 'linhas'}</td>
+      <td class="num">${esc(NG.fmtMoeda(somaCol((l) => l.prevista)))}</td><td class="num">${esc(NG.fmtMoeda(somaCol((l) => l.paga)))}</td>
+      <td class="num${difCls(difTot)}">${difHtml(difTot)}</td><td colspan="2"></td></tr>` : '';
     cartoesEl.innerHTML = lista.length ? lista.map((l) => {
       const d = diferenca(l);
       return `<a class="cartao" href="#" data-chave="${esc(l.chave)}">
         <div class="cli"><b>${esc(nomeLinha(l))}</b><small>${esc(l.nio_pedido ? `pedido ${l.nio_pedido}` : '—')}</small></div>
         <div class="valor${difCls(d)}">${difHtml(d)}</div>
         <div class="l2"><span>prevista ${moeda(l.prevista)}</span><span>· paga ${moeda(l.paga)}</span></div>
-        <div class="l2"><span>${esc(motivo(l))}</span></div>
+        <div class="l2"><span class="chip ${SIT_CHIP[situacao(l)]}">${esc(SIT[situacao(l)])}</span><span>${esc(motivo(l))}</span></div>
         <div class="l2">${NG.proxPasso(prazo(l))}</div>
       </a>`;
     }).join('') : '<div class="vazio">Nada neste filtro</div>';
