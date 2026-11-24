@@ -229,7 +229,27 @@ function prometeCobertura(n) {
     // 07/11 23h10: "atende o seu endereço" (sem o "no") passava pela trava.
     /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|(o )?seu endereco|(a )?sua rua|na sua casa|(a )?sua casa|no seu predio|no seu bairro)/.test(f)
     || /\btem cobertura\b|\bcobertura (no|na|pro|pra) (seu|sua)\b|(seu endereco|sua rua|sua casa) (e|esta|ta|fica) (atendid|coberto|coberta)/.test(f)
-    || (/\bboa noticia\b/.test(f) && /atende|cobertura|chega|disponivel/.test(f)));
+    || (/\bboa noticia\b/.test(f) && /atende|cobertura|chega|disponivel/.test(f))
+    // 24/11 (L-287, #248): "Aqui chega fibra de vcs?" → "Chega sim! … o endereço já deu certinho aqui no nosso sistema"
+    // (o portal ainda estava consultando). "Chega sim" em resposta à pergunta da cobertura e "o endereço deu certo" são promessa.
+    || (/^\W*(sim\W+)?(chega|atende|tem|pega|passa) sim\b/.test(f.trim())
+        && (() => { const c = norm(String((prep.consolidado || {}).mensagem || ''));
+          return /cobertura|tem fibra|disponib/.test(c)
+            || (/\b(chega|atende|pega|passa)\b/.test(c) && /\b(fibra|aqui|ai|rua|casa|endereco|bairro|predio|internet|nio|vcs|voces)\b/.test(c)); })())
+    || /\b(o |seu |teu )?endereco (ja )?(deu|esta|ta|foi|ficou) (certo|certinho|ok|aprovad|confirmad|liberad|viavel|atendid)/.test(f)
+    || /\bdeu (certo|certinho|ok)\b.{0,30}\bsistema\b/.test(f));
+}
+// 24/11 (L-287, #248): o carrossel já tinha saído e, ao "Aqui chega fibra de vcs?", o modelo mandou de novo. O estado dizia
+// "planos_mostrados: SIM — repita só se ele pedir ou disser que não viu"; esta é a trava. Mesma regra do 5b (o resumo
+// "[carrossel: …]" fica no histórico).
+function carrosselRepetido() {
+  const hist = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  if (!hist.some((h) => h.papel === 'mari' && /\[carrossel:/i.test(String(h.texto || '')))) return false;
+  const cli = norm(String((prep.consolidado || {}).mensagem || ''));
+  // Endereço novo (outro CEP ou outra cidade) pode mudar a tabela: aí mandar de novo é certo.
+  const cidN = norm(String(tags.cidade_detectada || '')), cidC = norm(String((ctx.conversa || {}).cidade || ''));
+  if (/\b\d{5}-?\d{3}\b/.test(cli) || (cidN && cidC && cidN !== cidC)) return false;
+  return !/\bplanos?\b|\bopc|\bofertas?\b|\bvalores\b|\bprecos?\b|\bquais\b|\boutr[oa]s?\b|\bmais (op|planos)|nao (vi|recebi|chegou|apareceu|abriu|carregou)|de novo|reenvi|manda(r)? (as|os|de)|\bver\b/.test(cli);
 }
 // v7 (prompt 27 A8): prazo para abrir o pedido ou instalar não existe — "em até N horas/minutos", "hoje ainda".
 function prometePrazo(n) {
@@ -422,6 +442,7 @@ function violacoesDe(t) {
       v.push('escreveu as condições com as próprias palavras — use a marca [CONDICOES] sozinha num balão (o sistema põe o texto exato)');
     }
   }
+  if (V7 && tags.carrossel && carrosselRepetido()) v.push('mandou o carrossel de novo sem o cliente pedir — ele já recebeu os planos: responda só ao que ele perguntou, sem [CARROSSEL_PLANOS] e sem "olha as opções", e termine com uma pergunta leve sobre qual plano ele prefere');
   if (V7 && prometeCobertura(n)) v.push('prometeu cobertura no endereço ("a Nio atende aí", "tem cobertura", "chega na sua rua"): proibido antes do portal — diga "A Nio atende [cidade] 🎯 A disponibilidade exata na sua rua o nosso time confirma no sistema da Nio antes de abrir o pedido."');
   // Teste real 07/11 00h11 (conversa #1): sem CEP/cidade o estado não tinha planos ("NÃO apresente planos nem preços") e,
   // pressionado por "Não recebi nada", o modelo INVENTOU três planos ("Nio Turbo, 500 Mega — R$99,90"). Trava geral (vale
