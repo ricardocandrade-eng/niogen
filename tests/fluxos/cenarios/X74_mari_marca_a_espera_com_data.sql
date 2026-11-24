@@ -48,7 +48,11 @@ select sim.confere('fala de verdade encerra a espera', (select espera_ate is nul
 select sim.lead_novo('Lia X74') as d \gset
 select sim.mari_fala(:'d', 'Oi! Sou a Mari, da Dharma. Qual o seu CEP?');
 select sim.mari_handoff(:'d', 'interesse_caindo', jsonb_build_object('agendamento_retorno', to_char(:'hoje'::date + 3, 'YYYY-MM-DD') || ' 09:00'));
-select sim.confere('data a 3 dias: volta amanhã', (select (espera_ate at time zone 'America/Sao_Paulo')::date = :'hoje'::date + 1 from public.mari_conversas where id = :'d'),
+-- 0379 (Ricardo 24/11: "Mari retoma"): data perto (até 7 dias) é retorno com hora — a Mari chama no dia combinado, às 9h; a espera
+-- vai até 2 h depois (sem resposta, volta para o time). Antes: voltava amanhã para o time.
+select sim.confere('data a 3 dias: a Mari chama no dia (retorno com hora, espera até 11h)',
+  (select (espera_ate at time zone 'America/Sao_Paulo') = (:'hoje'::date + 3) + time '11:00' from public.mari_conversas where id = :'d')
+  and exists (select 1 from public.retornos r where r.conversa_id = :'d' and r.estado = 'marcado' and r.quem = 'mari'),
   (select coalesce(espera_ate::text, 'sem espera') from public.mari_conversas where id = :'d'));
 select sim.lead_novo('Rui X74') as e \gset
 select sim.mari_fala(:'e', 'Oi! Sou a Mari, da Dharma. Qual o seu CEP?');

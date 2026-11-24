@@ -1,6 +1,9 @@
 -- id: X95
 -- titulo: Tela Canais + Google Ads (Ricardo, 23/11 16h17: "Todos os canais de qualificação remotos precisam estar dentro do CRM"). O gasto do Google entra pela coleta (google_ads_gravar, só a chave de serviço); no dia coletado o custo digitado à mão é ignorado, nunca somado; o card Canais ganha status e retorno (vazio sem gasto); o selo do Google só aparece depois da 1ª coleta e acusa coleta parada
 -- tipo: atual
+-- premissa (24/11, portão da 0378/0379): a cópia do banco vem do backup do dia e já traz a coleta real do Google — o cenário
+-- começa sem ela (o banco do cenário é descartável)
+delete from public.google_ads_diario; delete from public.google_ads_palavras; delete from public.google_ads_campanhas; delete from public.google_ads_conta;
 
 -- A) sem coleta ainda: nenhum selo do Google; o custo digitado conta sozinho
 select sim.como('admin');

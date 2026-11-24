@@ -1,6 +1,9 @@
 -- id: X99
 -- titulo: Botão "Emitir NF" (0374, Ricardo 23/11: "Sim, fazer o botão" — um clique, teste primeiro). Só admin pede; o nº da DPS é reservado e nunca se repete; duas emissões do mesmo pedido ao mesmo tempo são recusadas; o resultado só pela chave de serviço; nota de teste (restrita) não vira NF do pedido, a de produção vira (com o envio à Nio); pedido com NF de produção não emite de novo; emissão sem resposta vira falha na conferência
 -- tipo: atual
+-- premissa (24/11, portão da 0378/0379): a cópia do banco vem do backup do dia e já traz emissões de teste reais (nº 2, 3…) — o
+-- cenário começa sem elas, para o nº da DPS partir do "proximo" (o banco do cenário é descartável)
+delete from public.nfse_emissoes where ambiente = 'restrita';
 
 -- A) um pedido de compra importado (extrato sem venda ligada basta)
 select sim.como('admin');

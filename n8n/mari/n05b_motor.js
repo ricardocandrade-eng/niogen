@@ -418,9 +418,23 @@ if (V7 && (conv.dados || {}).abertura && !conv.cep) {
       + 'Se ele escolheu ou perguntou de um plano, registre a escolha e peça o CEP (ou a rua e o bairro) para conferir se a fibra chega na rua dele. '
       + 'Não mande os planos de novo agora e não confirme a cobertura antes do CEP.');
   } else if (dAb.abertura_pediu_cidade) {
+    // 24/11 (L-276, Nelma, #241 — Ricardo: "A cidade em si já é o filtro e ela deveria descartar e encerrar o atendimento"): a linha
+    // antiga mandava "confirme a cidade e peça o CEP" — a Mari pediu o CEP de Cabo Frio/RJ e ficou esperando. A cidade fora da lista
+    // encerra agora (linha cidades_atendidas, abaixo); o CEP só se pede quando a cidade pode ser uma das atendidas.
     L.push('abertura_pediu_cidade: a Mari perguntou a CIDADE do cliente para mostrar os planos, e o sistema não reconheceu uma cidade atendida na resposta. '
-      + 'Se ele disse uma cidade, confirme qual é e peça o CEP (ou a rua e o bairro) para conferir se a Nio atende; se não respondeu a cidade, pergunte de novo, com leveza.');
+      + 'Se ele disse uma cidade que NÃO está em cidades_atendidas, siga a linha cidades_atendidas (encerra, sem pedir CEP). '
+      + 'Se o que ele disse pode ser uma das atendidas (erro de digitação, bairro ou distrito de uma delas), pergunte qual é a cidade; se não respondeu a cidade, pergunte de novo, com leveza.');
   }
+}
+// 24/11 (L-276): sem cidade resolvida pelo CEP, a Mari recebe a lista das cidades atendidas (config_area, nó 4c) para reconhecer,
+// pelo texto, a cidade que está fora — antes ela só sabia pelo CEP e pedia o CEP de uma cidade que a gente não atende.
+const cidadesAtendidas = (Array.isArray(inter.cidades) ? inter.cidades : []).map((x) => x && x.cidade).filter(Boolean);
+if (V7 && !cluster && conv.dentro_area !== false && cidadesAtendidas.length) {
+  L.push(`cidades_atendidas: ${cidadesAtendidas.join(', ')} (todas em Minas Gerais). `
+    + 'Se o cliente disser que o endereço da instalação é numa cidade que NÃO está nesta lista (ex.: outra cidade de MG, outro estado, '
+    + 'uma praia do RJ), a cidade já é o filtro: NÃO peça CEP, número nem confirmação — despedida fora_de_area (Bloco 6b) com o nome da cidade '
+    + 'que ele disse + handoff fora_de_area com [ELEGIBILIDADE: fora_area] e [CIDADE_DETECTADA: cidade]. '
+    + 'Só pergunte antes se não der para saber a cidade (pode ser bairro ou distrito de uma da lista, nome com erro, ou ele falou de uma cidade que não é a do endereço).');
 }
 const estadoTxt = L.join('\n');
 

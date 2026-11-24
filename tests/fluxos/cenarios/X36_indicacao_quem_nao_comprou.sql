@@ -40,14 +40,14 @@ select public.lead_sair(:'c2', null, 'cidade_nao_atendida');
 select sim.fila_rodar();
 select sim.como('servico');
 select sim.confere('sem venda: o aviso também leva o pedido',
-  exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c2' and a.payload ->> 'texto_chave' = 'saida_sem_cobertura_indicacao'), '');
+  exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c2' and a.payload ->> 'texto_chave' = 'saida_cidade_nao_atendida_indicacao'), '');   -- 0378: texto da cidade
 select sim.cliente_escreve(:'c2', 'Que pena, obrigado') as r2 \gset
 select sim.passa(:'c2', '40 minutes');
 select sim.cliente_escreve(:'c2', 'Mas não tem previsão de chegar aqui?') as r3 \gset
 select sim.fila_rodar();
 select sim.confere('em menos de 12 h a resposta honesta não sai de novo (o aviso acabou de sair)',
   (select count(*) from public.chatwoot_acoes a where a.conversa_id = :'c2' and a.tipo = 'mensagem'
-     and a.payload ->> 'texto_chave' in ('saida_sem_cobertura', 'saida_sem_cobertura_indicacao')) = 1,
+     and a.payload ->> 'texto_chave' in ('saida_sem_cobertura', 'saida_sem_cobertura_indicacao', 'saida_cidade_nao_atendida', 'saida_cidade_nao_atendida_indicacao')) = 1,
   (select string_agg(a.payload ->> 'texto_chave', ', ') from public.chatwoot_acoes a where a.conversa_id = :'c2' and a.tipo = 'mensagem'));
 
 -- em luto não se pede indicação
@@ -57,7 +57,7 @@ select public.lead_sair(:'c3', null, 'cidade_nao_atendida');
 select sim.fila_rodar();
 select sim.como('servico');
 select sim.confere('em luto: o aviso sai sem o pedido de indicação',
-  exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c3' and a.payload ->> 'texto_chave' = 'saida_sem_cobertura')
+  exists (select 1 from public.chatwoot_acoes a where a.conversa_id = :'c3' and a.payload ->> 'texto_chave' = 'saida_cidade_nao_atendida')   -- 0378
   and not exists (select 1 from public.indicacao_pedidos p where p.conversa_id = :'c3'),
   (select string_agg(a.payload ->> 'texto_chave', ', ') from public.chatwoot_acoes a where a.conversa_id = :'c3' and a.tipo = 'mensagem'));
 

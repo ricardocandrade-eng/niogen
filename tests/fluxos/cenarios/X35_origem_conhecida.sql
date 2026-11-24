@@ -1,6 +1,9 @@
 -- id: X35
 -- titulo: Medidor de canais (0302): lead sem marca nasce "desconhecida" (não "direto"), com referral do anúncio nasce Meta Ads, o referral que chega depois corrige, o backoffice corrige a origem e o Conferir limpa; custo à mão só do admin e nunca da Meta
 -- tipo: atual
+-- premissa (24/11, portão da 0378/0379): a cópia do banco vem do backup do dia e já traz a coleta real do Google — o cenário
+-- começa sem ela (o banco do cenário é descartável)
+delete from public.google_ads_diario; delete from public.google_ads_palavras; delete from public.google_ads_campanhas; delete from public.google_ads_conta;
 -- 1) sem marca no texto e sem referral → desconhecida, e aparece no Conferir
 select sim.lead_novo('Orin X35', 'Oi, quero saber da internet') as c \gset
 select sim.confere('sem marca e sem referral, a origem é desconhecida (não mais direto)',

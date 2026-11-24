@@ -1,6 +1,9 @@
 -- id: X97
 -- titulo: Avisos da tela Canais (Ricardo, 23/11 19h12): "marcar como tratado" esconde o aviso por 48 h; passado o prazo ele volta se o indicador não melhorou (e volta se piorar de novo); aviso que sumiu e voltou começa sem o tratamento antigo; só admin/backoffice tratam; a conferência fecha
 -- tipo: atual
+-- premissa (24/11, portão da 0378/0379): a cópia do banco vem do backup do dia e já traz avisos reais da tela Canais — o cenário
+-- começa sem eles (o banco do cenário é descartável)
+delete from public.canal_aviso_tratado; delete from public.canal_aviso;
 
 select sim.como('admin');
 select public.canal_avisos_sincronizar('google_ads', '[{"chave":"google:classificacao","titulo":"perde buscas pela classificação","valor":0.70}]') as s1 \gset

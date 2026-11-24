@@ -786,6 +786,23 @@ def cen_au(c):   # P48 (23/11, conversa L-259): rua que não existe no cadastro 
     c.exige('VENDA PRONTA' not in b and 'Achar o CEP' in b, f'[P48] aviso ao time errado: «{b[:260]}»')
 
 
+def cen_av(c):   # P49 (24/11, conversa L-276, Nelma, #241): cidade fora da área dita pelo texto → encerra, sem pedir CEP
+    # No "💰 Ver os planos" a Mari pediu a cidade; a cliente respondeu "Cabo Frio no pêro" e a Mari pediu o CEP e o número
+    # "pra confirmar se a Nio atende", depois confirmou "Peró, em Cabo Frio?" ("Sim") e ainda esperou o CEP. Ricardo: "A cidade
+    # em si já é o filtro e ela deveria descartar e encerrar o atendimento."
+    c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
+    c.diz('💰 Ver os planos')
+    r = c.diz('Cabo Frio no pêro')
+    t = fala(r)
+    c.exige(not re.search(r'\bcep\b|numero da casa', t), f'[P49] pediu CEP/número para cidade fora da área: «{t[:220]}»')
+    if not r.get('handoff'):   # no máximo uma confirmação da cidade, quando a Mari tiver dúvida
+        r = c.diz('Sim')
+        t = fala(r)
+    c.exige((r.get('handoff') or {}).get('motivo') == 'fora_de_area', f'[P49] não encerrou como fora_de_area: {r.get("handoff")} «{t[:220]}»')
+    c.exige('obrigada pelo contato' in t and 'cabo frio' in t, f'[P49] despedida sem o texto da Parte 2: «{t[:220]}»')
+    c.exige(not re.search(r'\bcep\b', t), f'[P49] a despedida pede CEP: «{t[:220]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -827,6 +844,8 @@ PORTAO = {
     'at': (53, cen_at, 'P47'),
     # 23/11 — conversa L-259: rua não achada + "não sei o CEP" → consultor na hora (nunca segue para o CPF sem endereço)
     'au': (54, cen_au, 'P48'),
+    # 24/11 — conversa L-276 (Nelma, #241): cidade fora da área dita pelo texto → fora_de_area na hora, sem pedir CEP
+    'av': (55, cen_av, 'P49'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

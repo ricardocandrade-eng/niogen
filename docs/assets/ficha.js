@@ -37,7 +37,7 @@
   let raiz = null;         // onde a ficha é desenhada
   let d = null;            // dados da venda aberta
   let idAtual = null;
-  const AGENDA_RETORNOS = false;   // 24/11: liga junto com a migration 0379 (retorno_marcar) — antes dela o botão daria erro
+  const AGENDA_RETORNOS = true;   // 24/11: ligado — migration 0379 aplicada
   let notaVista = null;   // 24/11: "<id>|<texto>" do post-it já visto nesta abertura da ficha
   let abertos = null;      // blocos abertos (null = o padrão: só o do próximo passo)
   let edicao = null;       // bloco em edição
