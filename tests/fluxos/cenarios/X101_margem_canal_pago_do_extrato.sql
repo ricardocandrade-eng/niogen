@@ -1,5 +1,5 @@
 -- id: X101
--- titulo: Margem por canal (0376, Ricardo 24/11: "Sim, corrigir"): a "Comissão Nio paga" do canal vem das linhas do extrato da Nio na razão (comissão, bônus, estorno), não da coluna antiga vendas.comissao_paga que ninguém escreve; linha da Nio sem venda não entra em canal nenhum
+-- titulo: Margem por canal (0376) e plano e datas na conciliação (0377, Ricardo 24/11: "Sim, corrigir"): a "Comissão Nio paga" do canal vem das linhas do extrato da Nio na razão (comissão, bônus, estorno), não da coluna antiga vendas.comissao_paga que ninguém escreve; linha da Nio sem venda não entra em canal nenhum
 -- tipo: atual
 
 -- A) venda instalada na 1ª quinzena, com OS
@@ -31,3 +31,10 @@ select sim.confere('margem paga do canal acompanha (sem custo de parceiro fora d
 select sim.confere('nenhum canal recebe a linha de 50 sem venda',
   (select coalesce(sum(comissao_nio_paga), 0) from public.v_margem_canal)
   = (select coalesce(sum(valor), 0) from public.comissao_lancamentos where origem = 'extrato' and venda_id is not null), null);
+
+-- D) 0377: a conciliação diz o plano, a data da venda e a da instalação
+select sim.confere('v_conciliacao traz plano, data da venda e data da instalação da venda',
+  (select plano_nome is not distinct from (select coalesce(p.nome_curto, p.nome) from public.vendas v2 left join public.config_planos p on p.id = v2.plano_id where v2.id = sim.venda(:'c'))
+          and vendido_em is not null and (instalado_em at time zone 'America/Sao_Paulo')::date = date '2026-11-13'
+     from public.v_conciliacao where venda_id = sim.venda(:'c') and ciclo = '2026-11-1Q'),
+  (select row_to_json(x)::text from public.v_conciliacao x where venda_id = sim.venda(:'c')));
