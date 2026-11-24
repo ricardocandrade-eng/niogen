@@ -76,7 +76,7 @@
   #cq-svg .eixo.sel { fill: var(--text); font-weight: 600; }
   #cq-svg .alvo { fill: transparent; cursor: pointer; }
   #cq-svg .alvo:hover { fill: rgba(255, 255, 255, .035); }
-  #cq-svg .espera { fill: none; stroke: var(--border-strong); stroke-dasharray: 3 3; }
+  #cq-svg .espera { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; }
   .cq-dica { position: absolute; z-index: 2; pointer-events: none; min-width: 180px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: 12px; line-height: 1.55; box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
   .cq-dica strong { display: block; margin-bottom: 2px; }
   .cq-dica b { font-family: var(--mono); font-weight: 600; }
@@ -555,7 +555,7 @@
   const svg = document.getElementById('cq-svg');
   const dica = document.getElementById('cq-dica');
   const NS_SVG = 'http://www.w3.org/2000/svg';
-  const mil = (v) => (v >= 1000 ? `R$ ${NG.fmtNum(Math.round(v / 100) / 10)} mil` : `R$ ${NG.fmtNum(Math.round(v))}`);
+  const mil = (v) => (v >= 1000 ? `R$ ${(v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `R$ ${NG.fmtNum(Math.round(v))}`);
   function passoEixo(bruto) {
     const p = 10 ** Math.floor(Math.log10(Math.max(bruto, 1)));
     return [1, 2, 2.5, 5, 10].map((k) => k * p).find((x) => x >= bruto) || p * 10;
