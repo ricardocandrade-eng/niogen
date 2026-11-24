@@ -13,7 +13,8 @@ select count(*) as msg from public.chatwoot_acoes where conversa_id = :'a' and t
 select sim.confere('débito: nenhuma mensagem ao cliente (nem negado, nem parente)', :msg = 0, :'msg');
 select sim.confere('débito: nota ao time com quitar e consultar de novo',
   exists (select 1 from public.chatwoot_acoes where conversa_id = :'a' and tipo = 'nota'
-           and payload ->> 'content' like '%DÉBITO NA NIO%' and payload ->> 'content' like '%consultar o crédito de novo%'), null);
+           and payload ->> 'content' like '%DÉBITO NA NIO%' and payload ->> 'content' like '%consultar o crédito de novo%'
+           and payload ->> 'content' like '%negociacao.niointernet.com.br/negociar/%'), null);
 select sim.confere('débito: o texto do popup fica na consulta',
   exists (select 1 from public.operador_consultas where conversa_id = :'a' and resultado = 'negado_debito' and detalhe ->> 'popup' like '%débito na Nio%'), null);
 select sim.confere('débito: sem marca de negado avisado (a Mari não passa "pro CPF do novo titular")',

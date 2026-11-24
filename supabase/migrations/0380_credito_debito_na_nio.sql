@@ -78,7 +78,7 @@ begin
     v_fp := case c.forma_pagamento when 'boleto' then 'boleto' when 'cartao' then 'cartão' when 'debito' then 'débito em conta' end;
     v_fazer := case
       when v = 'negado_antifraude' then 'NÃO consultar outro CPF. Perguntar ao cliente se a Nio do endereço é dele (ou de alguém da casa) ou de outro morador que se mudou; gravar a resposta na ficha › Crédito (Antifraude).'
-      when v = 'negado_debito' then 'CPF COM DÉBITO NA NIO (fatura antiga em aberto). O cliente NÃO foi avisado do negado: a Mari segue e passa para você. Ver no portal o valor da negociação (a Nio dá desconto) e oferecer quitar hoje; pagou → consultar o crédito de novo (ficha › Crédito) e fazer o pedido. Não quis quitar → outra pessoa da casa como titular.'
+      when v = 'negado_debito' then 'CPF COM DÉBITO NA NIO (fatura antiga em aberto). O cliente NÃO foi avisado do negado: a Mari segue e passa para você. Ver no portal o valor da negociação (a Nio dá desconto) e oferecer quitar hoje pelo Nio Negocia (https://negociacao.niointernet.com.br/negociar/); pagou → consultar o crédito de novo (ficha › Crédito) e fazer o pedido. Não quis quitar → outra pessoa da casa como titular.'
       when v = 'pedido_em_andamento' then 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).'
       when v_end = 'padrao' and v like 'aprovado%' then 'Consultar o crédito de novo no endereço do cliente (ficha › Crédito) antes de abrir o pedido.'
       when v = 'nao_decidiu' then 'Consultar o crédito na ficha (Crédito) — o portal não decidiu.'
