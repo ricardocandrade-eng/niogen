@@ -37,6 +37,8 @@
   let raiz = null;         // onde a ficha é desenhada
   let d = null;            // dados da venda aberta
   let idAtual = null;
+  const AGENDA_RETORNOS = false;   // 24/11: liga junto com a migration 0379 (retorno_marcar) — antes dela o botão daria erro
+  let notaVista = null;   // 24/11: "<id>|<texto>" do post-it já visto nesta abertura da ficha
   let abertos = null;      // blocos abertos (null = o padrão: só o do próximo passo)
   let edicao = null;       // bloco em edição
   let formAtivo = null;    // formulário aberto na faixa do próximo passo
@@ -2800,7 +2802,31 @@
         if (await copiar(textoPortal(d.v), 'Dados copiados — cole no portal campo a campo')) registrarCopia('tudo');
         return;
       }
+      if (acao === 'fc-retorno') {   // 24/11 (0379): agenda de retornos — dia e hora combinados com o cliente
+        const am = new Date(Date.now() + 86400000);
+        const dia = `${am.getFullYear()}-${String(am.getMonth() + 1).padStart(2, '0')}-${String(am.getDate()).padStart(2, '0')}`;
+        const fd = await NG.modal(`<h3>📅 Retornar em…</h3><p>O dia e a hora que você combinou com o cliente. Conversa com a Mari: ela chama na hora (se ele não responder em 2 h, volta para o time). Com o time: o 🔔 aparece na Live 15 min antes.</p>
+          <label class="campo">Dia<input type="date" name="dia" value="${dia}" required></label>
+          <label class="campo">Hora<input type="time" name="hora" value="09:00" min="09:00" max="21:00" required></label>
+          <label class="campo">O que combinou (opcional)<input type="text" name="combinado" maxlength="300" placeholder="ex.: ligar depois do almoço para fechar o plano"></label>`);
+        if (!fd) return;
+        const quando = new Date(`${fd.get('dia')}T${fd.get('hora')}:00-03:00`);
+        if (Number.isNaN(quando.getTime())) { NG.toast('Dia ou hora inválidos', 'bad'); return; }
+        const { data, error } = await NG.sb.rpc('retorno_marcar', { p_conversa: d.conversaId, p_quando: quando.toISOString(), p_combinado: String(fd.get('combinado') || '') });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+        NG.toast((data && data.resumo) || 'Retorno marcado', 'ok');
+        fc.menu = false;
+        await recarregar();
+        return;
+      }
+      if (acao === 'fc-nota-ok') {   // 24/11: fecha o balão do post-it nesta abertura
+        notaVista = `${idAtual}|${d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : ''}`;
+        const w = b.closest('.fc-notaw');
+        if (w) { w.querySelector('.fc-nota-balao')?.remove(); w.querySelector('.fc-nota-ic')?.classList.remove('pulsa'); }
+        return;
+      }
       if (acao === 'fc-nota') {
+        notaVista = `${idAtual}|${d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : ''}`;
         const atual = d && d.nota && d.nota.texto ? String(d.nota.texto) : '';
         const fd = await NG.modal(`<h3>Post-it do lead</h3><p>Anotação livre para o time. Não muda nada no fluxo (situação, vez, Chatwoot, Mari).</p>
           <label class="campo">Nota<textarea name="texto" rows="4" maxlength="2000" placeholder="ex.: prefere que liguem depois das 18h">${esc(atual)}</textarea></label>`);
@@ -3088,7 +3114,7 @@
   }
   const abrirConversaFicha = (cid) => abrir(`c:${cid}`);
   function fecharLado() {
-    idAtual = null; d = null;
+    idAtual = null; d = null; notaVista = null;
     if (cvComp) { cvComp.destruir(); cvComp = null; }
     if (ladoEl) { ladoEl.hidden = true; raiz.innerHTML = ''; }
     document.body.classList.remove('ficha-ao-lado');
@@ -3833,9 +3859,14 @@
     if (!ehBO()) return '';
     const t = d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : '';
     // 18/11 (Ricardo: "o ícone da nota pode ficar só ícone, em algum canto"): ao lado do ⋯; amarelo quando há nota, o texto no balão
-    return t ? `<button type="button" class="btn fc-bi fc-nota-ic tem" data-f="fc-nota" aria-label="Post-it do lead" title="📝 ${esc(t)}
-(clique para editar)">📝</button>`
-      : '<button type="button" class="btn fc-bi fc-nota-ic" data-f="fc-nota" aria-label="Escrever um post-it" title="Post-it: anotação livre sobre este cliente (não muda nada no fluxo)">📝</button>';
+    if (!t) return '<button type="button" class="btn fc-bi fc-nota-ic" data-f="fc-nota" aria-label="Escrever um post-it" title="Post-it: anotação livre sobre este cliente (não muda nada no fluxo)">📝</button>';
+    // 24/11 (Ricardo: "ao abri-la, a ficha sinalize que existe uma nota, seja abrindo a nota na tela ou pulsando o ícone"): ficha
+    // aberta com post-it → o ícone pulsa e a nota aparece num balão logo abaixo, até "Ok, vi" ou Editar (só nesta abertura).
+    const aviso = notaVista !== `${idAtual}|${t}`;
+    const bt = `<button type="button" class="btn fc-bi fc-nota-ic tem${aviso ? ' pulsa' : ''}" data-f="fc-nota" aria-label="Post-it do lead" title="📝 ${esc(t)}
+(clique para editar)">📝</button>`;
+    return `<span class="fc-notaw">${bt}${aviso ? `<div class="fc-nota-balao" role="note"><b>📝 Post-it deste cliente</b><p>${esc(t)}</p>
+      <div class="fc-nota-bts"><button type="button" class="btn" data-f="fc-nota">Editar</button><button type="button" class="btn primary" data-f="fc-nota-ok">Ok, vi</button></div></div>` : ''}</span>`;
   }
   function cabCheia(nome, chips, meta, menu, extra = '') {
     const pos = cheiaOpts.posicao ? cheiaOpts.posicao() : null;
@@ -3855,11 +3886,13 @@
     const btSaida = podeSair ? `<button type="button" class="fc-mitem fc-mi-bad" data-f="saida-form" title="${emSaida ? 'Já está em Saída: grave ou ajuste o motivo e a data de retorno' : 'Tirar este cliente da jornada: abre o formulário da Saída, com o motivo'}">${emSaida ? 'Saída… (motivo e retorno)' : 'Saída…'}</button>` : '';
     const btReabrir = emSaida && ehBO() && !silenciadaConv() ? `<button type="button" class="fc-mitem fc-mi-ok" data-f="reabrir" title="Tira este cliente da Saída (Recusou e Não contatar também): volta para o degrau onde parou e a Mari volta a responder">Reabrir</button>` : '';
     const btNada = ehBO() && (naFila || d.conversaId) ? `<button type="button" class="fc-mitem" data-f="fc-concluir" title="Não há o que responder (ex.: o cliente só se despediu)? Tira o aviso &quot;Cliente escreveu · responder&quot; do Live e abre o próximo. Se ele escrever de novo, volta.">✓ Nada a responder</button>` : '';
+    // 24/11 (0379, agenda de retornos): o cliente pediu "me liga sexta às 15h" → dia e hora; a Mari chama (conversa com ela) ou o 🔔 aparece na Live
+    const btRet = AGENDA_RETORNOS && ehBO() && d && d.conversaId && !emSaida ? '<button type="button" class="fc-mitem" data-f="fc-retorno" title="O cliente pediu para falar num dia e hora? Marque aqui. Conversa com a Mari: ela chama na hora. Com o time: o 🔔 aparece na Live 15 min antes; passou 1 h sem contato, vira atrasado.">📅 Retornar em…</button>' : '';
     const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
     // 16/11 (0236): lead sem venda, em andamento → "Virar venda" (pedido aberto pelo time no portal)
     const btVirar = d && d.soConversa && ehBO() && !(d.lead && d.lead.destino && d.lead.destino !== 'em_andamento')
       ? '<button type="button" class="fc-mitem fc-mi-ok" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o nº do pedido / OS e a agenda">Virar venda</button>' : '';
-    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btReabrir}${btVirar}${extraM}${btSaida}`);
+    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btRet}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit fc-tit-linha"><div class="fc-l1"><h1>${esc(nome)}</h1>${idsCab()}</div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
@@ -5190,7 +5223,7 @@
   });
   function fecharCheia() {
     const eraGlobal = !!globalEl && raiz === globalEl;
-    idAtual = null; d = null;
+    idAtual = null; d = null; notaVista = null;
     if (cvCheia) { cvCheia.destruir(); cvCheia = null; }
     fc = novoFc();
     if (raiz) raiz.innerHTML = '';
