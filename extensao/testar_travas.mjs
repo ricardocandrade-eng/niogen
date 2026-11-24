@@ -67,6 +67,8 @@ caso('popup celular', T.classificarPopup('', 'excede a quantidade de repetiçõe
 caso('popup e-mail', T.classificarPopup('Atenção!', 'E-mail inválido. Por favor preencha um e-mail válido', 4) === 'email_invalido');
 caso('popup aprovado todas', T.classificarPopup('Resultado da análise de crédito', 'Crédito aprovado Elegível para todas as formas de pagamento', 4) === 'aprovado_todas');
 caso('popup só cartão', T.classificarPopup('', 'Crédito aprovado. Elegível somente para cartão', 4) === 'aprovado_cartao');
+caso('popup débito na Nio (L-70)', T.classificarPopup('Resultado da análise de crédito', 'Crédito negado CPF/CNPJ com débito na Nio. Consultar outro CPF/CNPJ Salvar interesse', 4) === 'negado_debito');
+caso('negado comum segue negado', T.classificarPopup('Resultado da análise de crédito', 'Crédito negado', 4) === 'negado');
 caso('popup negado', T.classificarPopup('', 'Crédito não aprovado', 4) === 'negado');
 caso('popup Receita', T.classificarPopup('', 'OPS, OCORREU UM ERRO!', 3) === 'receita_retry');
 caso('motivo recompra', T.MOTIVO_POPUP.pedido_em_andamento === 'recompra');

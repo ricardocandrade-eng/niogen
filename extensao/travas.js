@@ -70,6 +70,7 @@
     if (/ops,? ?ocorreu um erro/.test(t) && etapa === 3) return 'receita_retry';
     if (/fora da area/.test(t)) return 'fora_da_area';
     if (/anti ?-? ?fraude/.test(t)) return 'negado_antifraude';   // 15/11 (Helton): "Negado - Critérios Antifraude" (0212)
+    if (/debito (na|com a|junto a) nio|debitos? em aberto/.test(t) && /negad|nao aprovad/.test(t)) return 'negado_debito';   // 24/11 (L-70): "CPF/CNPJ com débito na Nio" (0380)
     if (/negad|nao aprovad|sem ofertas/.test(t)) return 'negado';
     if (/credito aprovado/.test(t)) {
       if (/todas as formas/.test(t)) return 'aprovado_todas';
@@ -81,7 +82,7 @@
     return 'nao_classificado';
   }
   // motivo de parada (evento portal_extensao_conduzido) para cada classe de popup
-  const MOTIVO_POPUP = { pedido_em_andamento: 'recompra', negado: 'credito', pendente: 'credito', negado_antifraude: 'credito', contato_repetido: 'popup',
+  const MOTIVO_POPUP = { pedido_em_andamento: 'recompra', negado: 'credito', pendente: 'credito', negado_antifraude: 'credito', negado_debito: 'credito', contato_repetido: 'popup',
     email_invalido: 'popup', fora_da_area: 'popup', dados_pessoais: 'popup', nao_classificado: 'popup', receita_retry: 'popup' };
 
   // ------------------------------------------------------------------ endereço e complemento (portado do credito.py)

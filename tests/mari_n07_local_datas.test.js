@@ -112,5 +112,15 @@ process.exitCode = falhas ? 1 : 0;
   const ok6 = c6.handoff && c6.handoff.motivo === 'pedido_humano' && /conferência do seu endereço/.test(c6.texto) && !/parente|outro CPF|fraude/i.test(c6.texto)
     && /Antifraude/.test(JSON.stringify(c6.handoff)) && c6.upd.dados && c6.upd.dados.credito_antifraude_avisado === true && !c6.upd.dados.credito_negado_avisado;
   console.log((ok6 ? 'ok   ' : 'FALHOU ') + 'C6 · negado por antifraude → sem outro CPF, conferência do endereço e BKO (0212)');
+  // 0380 (24/11, L-70): "CPF/CNPJ com débito na Nio" → a Mari não nega a venda nem fala de crédito; passa ao consultor, uma vez
+  const c7 = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado_debito', credito_consultas: 1 }), 'Manhã');
+  const ok7 = c7.handoff && c7.handoff.motivo === 'pedido_humano' && /consultor/.test(c7.texto) && !/negad|crédito|credito|débito|debito|parente|CPF/i.test(c7.texto)
+    && /débito na Nio/.test(JSON.stringify(c7.handoff)) && c7.upd.dados && c7.upd.dados.credito_debito_passado === true && !c7.upd.dados.credito_negado_avisado;
+  console.log((ok7 ? 'ok   ' : 'FALHOU ') + 'C7 · débito na Nio → segue sem negar, passa ao consultor (0380)');
+  const c7b = rodar('Show, seguimos.', Object.assign({}, base, { forma_pagamento: 'boleto', credito_resultado: 'negado_debito', credito_consultas: 1,
+    dados: Object.assign({}, base.dados || {}, { credito_debito_passado: true }) }), 'Manhã');
+  const ok7b = !(c7b.handoff && /débito na Nio/.test(JSON.stringify(c7b.handoff)));
+  console.log((ok7b ? 'ok   ' : 'FALHOU ') + 'C7b · débito já passado → não repete');
+  if (!(ok6 && ok7 && ok7b)) process.exitCode = 1;
   if (!(ok1 && ok3 && ok4 && ok5)) process.exitCode = 1;
 }

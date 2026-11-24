@@ -297,7 +297,9 @@ if (V4) {
         + 'Responda curto e gentil ao que o cliente perguntou; se ele quiser seguir com um pedido novo ou tiver dúvida do pedido, emita [HANDOFF] pedido_humano.');
     }
     // 0138: crédito pela Mari — o sistema pede a autorização com botões e consulta sozinho; a Mari só usa o resultado (Bloco 9).
-    L.push(`credito (uso interno): ${conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
+    // 0380: débito na Nio — o modelo não vê "negado" (o cliente não sabe; o time conduz)
+    L.push(`credito (uso interno): ${conv.credito_resultado === 'negado_debito' ? 'em conferência com o nosso time — não comente a análise; se o cliente perguntar, "Isso o nosso time confirma quando abrir o pedido 😊"'
+      : conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
       : conv.credito_em ? 'consultando' : 'ainda não consultado (sai sozinho com CPF e e-mail)'}${conv.credito_consultas >= 2 ? ' | já é a 2ª consulta (CPF do parente)' : ''}`);
     L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)' : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
       + (dados.pedido_aberto_resposta ? ` | o cliente já respondeu: ${dados.pedido_aberto_resposta}` : ''));

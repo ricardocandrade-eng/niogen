@@ -699,6 +699,23 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
     dados.credito_antifraude_avisado = true;
   }
 }
+// 0380 (24/11, L-70 — Ricardo: "Vamos deixar a Mari seguir o atendimento normal, sem negar a venda e conduz ao humano,
+// para que ele entre no mérito e tente conduzir de forma mais natural"): o portal negou por "CPF/CNPJ com débito na Nio". A Mari NÃO
+// fala de crédito nem de débito: na próxima fala do cliente, passa ao consultor como num passo normal da venda. O time recebe a nota
+// do banco (ver o valor da negociação no portal, oferecer quitar hoje, consultar de novo). Determinístico, uma vez só.
+{
+  const cc = ctx.conversa || {};
+  const naSaidaDb = !!cc.funil_destino && !['em_andamento', 'instalada'].includes(cc.funil_destino);
+  if (V7 && !posHandoff && !erro && !handoffYaml && !naSaidaDb && cc.credito_resultado === 'negado_debito' && !((cc.dados || {}).credito_debito_passado)) {
+    const pn = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
+    const prazoD = ctx.dentroHorario ? 'já te chama por aqui' : 'te chama por aqui no próximo horário de atendimento';
+    texto = `Perfeito${pn ? `, ${pn}` : ''}! 😊\n\nPra seguir com o seu pedido, vou te passar pro nosso consultor, que ${prazoD} e finaliza com você.`;
+    handoffYaml = { motivo_handoff: 'pedido_humano',
+      briefing_humano: 'Crédito NEGADO por "CPF/CNPJ com débito na Nio" (fatura antiga em aberto). O cliente NÃO sabe do negado: a Mari só disse que o consultor segue o pedido. Ver no portal o valor da negociação (a Nio dá desconto), oferecer quitar hoje e consultar o crédito de novo; não quis → outra pessoa da casa como titular.' };
+    tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
+    dados.credito_debito_passado = true;
+  }
+}
 // 23/11 (L-259, P48 — Ricardo: "Sim, corrigir"): o cliente NÃO SABE o CEP e a rua que ele escreveu não foi achada pelo nome.
 // A Mari pediu o CEP 3 vezes, disse que "só com o nome da rua não consigo" e seguiu para nome, CPF, e-mail e pagamento sem
 // endereço, sem cobertura e sem plano — e o time recebeu "VENDA PRONTA". Agora ela passa NA HORA ao consultor, que localiza o
@@ -1081,6 +1098,7 @@ if (motivo) {
       aprovado_todas: 'APROVADO — todas as formas', aprovado_parcial: `APROVADO — ${formas.join(', ') || 'formas: ?'}`,
       aprovado_cartao: 'APROVADO SÓ NO CARTÃO', pendente: 'PENDENTE (a Nio responde em até 24 h)',
       negado: nCons >= 2 ? 'NEGADO nos 2 CPFs (titular e parente)' : 'NEGADO neste CPF',
+      negado_debito: 'NEGADO — CPF COM DÉBITO NA NIO (o cliente não sabe)', negado_antifraude: 'NEGADO — CRITÉRIOS ANTIFRAUDE',
       pedido_em_andamento: 'já existe PEDIDO NIO EM ANDAMENTO no CPF', nao_decidiu: 'o portal não decidiu',
     };
     const cpfOk = String(dd.cpf || '').replace(/\D/g, '').length === 11;
@@ -1104,6 +1122,7 @@ if (motivo) {
     else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
     else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
     else if (cr === 'negado_antifraude') fazer = 'Antifraude (a Nio vê Nio no endereço): NÃO consultar outro CPF. Confirmar com o cliente se a Nio é dele/da casa (→ Já é cliente Nio) ou de outro morador (→ defesa na Nio); gravar em ficha › Crédito.';
+    else if (cr === 'negado_debito') fazer = 'Débito na Nio: NÃO consultar outro CPF de cara. Ver no portal o valor da negociação (a Nio dá desconto) e oferecer quitar hoje; pagou → consultar o crédito de novo (ficha › Crédito) e fazer o pedido. Não quis → outra pessoa da casa como titular.';
     else if (cr === 'negado' && nCons < 2) fazer = 'Titular parente: consultar o crédito do CPF do parente; no portal, celular e e-mail DO TITULAR (a biometria vai para ele) → Continuar → Salvar Interesse; na ficha ⋯ › Trocar o titular e Gravar o Interesse. A Live avisa quando a biometria aprovar.';
     else if (!venda) fazer = (sugestao ? sugestao.charAt(0).toUpperCase() + sugestao.slice(1) : '') || {
       pedido_humano: 'Responder o cliente agora e entender o que ele precisa.',

@@ -562,6 +562,7 @@
       : cls === 'contato_repetido' ? 'O portal recusou o celular (repetido em outros pedidos). Peça outro número ao cliente.'
       : cls === 'email_invalido' ? 'O portal recusou o e-mail. Confirme o e-mail com o cliente.'
       : cls === 'negado_antifraude' ? 'Negado por critérios antifraude: a Nio vê Nio neste endereço. NÃO consulte outro CPF — pergunte ao cliente se a Nio é dele ou de outro morador e grave na ficha (Crédito).'
+      : cls === 'negado_debito' ? 'CPF com débito na Nio: NÃO consulte outro CPF de cara. Veja o valor da negociação no portal e ofereça quitar hoje com o desconto da Nio; pagou → consulte o crédito de novo. A ficha já mostra o débito.'
       : cls === 'negado' ? 'Crédito negado no portal.' : cls === 'pendente' ? 'Crédito pendente no portal.'
       : cls === 'dados_pessoais' ? 'O portal pede nascimento ou nome da mãe — pergunte ao cliente e preencha você.'
       : 'O portal mostrou um aviso que eu não esperava. Leia e decida você.';
@@ -744,7 +745,8 @@
     }
     const cls = T.classificarPopup(r.pp.titulo, r.pp.texto, 4);
     // 20/11: o resultado vai para o NIOGEN ANTES de qualquer parada ou pausa (antes, negado/pendente/só cartão paravam sem gravar, e o
-    // aprovado só gravava depois do clique humano — se a pausa caísse, perdia-se). Antifraude fica com o humano: nunca outro CPF.
+    // aprovado só gravava depois do clique humano — se a pausa caísse, perdia-se). Antifraude fica com o humano: nunca outro CPF. Débito na
+    // Nio (24/11, L-70) também: não grava "negado" (o NIOGEN mandaria ao cliente a oferta do parente) — o humano entra no mérito.
     const lido = cls === 'aprovado_cartao' ? 'so_cartao' : /^aprovado/.test(cls) ? 'aprovado' : cls === 'negado' ? 'negado' : cls === 'pendente' ? 'pendente' : null;
     if (lido) avisaPainel({ tipo: 'conduzir_registro', qual: 'credito', resultado: lido });
     if (!/^aprovado/.test(cls)) pararPorPopup(r.pp);

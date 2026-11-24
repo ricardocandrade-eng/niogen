@@ -2578,6 +2578,7 @@
       : /^aprovado/.test(crC || '') ? { s: 'ok', d: crC === 'aprovado_cartao' ? 'aprovado só no cartão' : 'aprovado' }
       // 20/11 (Ricardo, L-207): negado é etapa que parou — vermelho na Jornada (outro CPF ainda pode reabrir)
       : crC === 'negado_antifraude' ? { s: 'x', d: 'negado · antifraude' }
+      : crC === 'negado_debito' ? { s: 'x', d: 'negado · débito na Nio' }   // 0380 (L-70)
       : crC === 'negado' ? { s: 'x', d: 'negado · outro CPF?' }
       : crC === 'pendente' ? { s: 'wa', d: 'pendente' } : crC === 'pedido_em_andamento' ? { s: 'wa', d: 'já tem pedido em andamento' } : { s: 'no', d: '' };
     const pViabC = ['fachada_nao_atendida', 'cidade_nao_atendida'].includes(smC) ? { s: 'x', d: smC === 'cidade_nao_atendida' ? 'fora da área · saída' : 'sem cobertura · saída' }
@@ -2888,6 +2889,10 @@
         fc.etapa = null;
         await recarregar();
         avisarOuvintes(data);
+        return;
+      }
+      if (acao === 'fc-copia-negocia') {   // 0380 (Ricardo, 24/11): link do Nio Negocia para o BKO mandar ao cliente com débito
+        try { await navigator.clipboard.writeText(NIO_NEGOCIA); NG.toast('Link do Nio Negocia copiado — cole na conversa', 'ok'); } catch (e) { NG.toast(NIO_NEGOCIA); }
         return;
       }
       if (acao === 'fc-op-lead') {   // 0159: grava no lead sem venda o que o operador leu
@@ -3208,7 +3213,8 @@
   }
   const linhaDet = (k, v) => `<div class="fc-dr"><span>${esc(k)}</span><b>${v}</b></div>`;
   const VIAB_ROT = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', complemento_fora_lista: 'Unidade fora da lista do portal' };
-  const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado', negado_antifraude: 'Negado — Critérios Antifraude',
+  const NIO_NEGOCIA = 'https://negociacao.niointernet.com.br/negociar/';   // 0380: Nio Negocia (débito na Nio)
+  const CRED_ROT = { aprovado_todas: 'Aprovado — todas as formas', aprovado_cartao: 'Aprovado — só cartão', aprovado_parcial: 'Aprovado', negado: 'Negado', negado_antifraude: 'Negado — Critérios Antifraude', negado_debito: 'Negado — CPF com débito na Nio',
     pedido_em_andamento: 'Já tem pedido em andamento', pendente: 'Pendente', nao_classificado: 'Não classificado', sem_viabilidade: 'Endereço sem viabilidade',
     complemento_fora_lista: 'Unidade fora da lista do portal', contato_repetido: 'Celular recusado pelo portal', email_invalido: 'E-mail recusado pelo portal — confira o e-mail do cliente (ex.: @uol.com.br)', erro_receita: 'Erro da Receita', erro: 'Erro na consulta' };
   const FORMA_OP = { BOLETO: 'boleto', CREDITO: 'cartão', DACC: 'débito automático' };
@@ -3264,7 +3270,7 @@
     const avisosTela = !s.popup && s.texto_tela ? (String(s.texto_tela).split('\n').find((l) => /^Avisos:/.test(l)) || '').replace(/^Avisos:\s*/, '') : '';
     const disse = `${s.cache ? `resultado guardado de uma consulta anterior${s.consultado_em ? ` (${NG.fmtHora(s.consultado_em)})` : ''} · ` : ''}${padrao ? 'lido com o endereço padrão — não vale para o endereço do cliente · ' : ''}${s.popup && s.popup.texto ? '' : avisosTela ? `o portal mostrou: "${avisosTela}"` : (s.motivo || '')}`.replace(/ · $/, '');
     return { rot, det: disse || (s.motivo && !reg ? s.motivo : (s.endereco && s.endereco.origem === 'padrao' ? 'medido com o endereço padrão' : 'crédito do CPF no portal PAP')),
-      cls: padrao || parcialCego ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : ['negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? 'bad' : 'warn', registrar: padrao ? null : reg };
+      cls: padrao || parcialCego ? 'warn' : /^aprovado/.test(s.resultado || '') ? 'ok' : ['negado', 'negado_antifraude', 'negado_debito', 'pedido_em_andamento'].includes(s.resultado) ? 'bad' : 'warn', registrar: padrao ? null : reg };
   }
   // 15/11 (Ricardo: "retirar essa msg 2x"): o texto do portal uma vez, sem linhas repetidas nem os nomes dos botões do popup.
   function telaPortal(s) {
@@ -3400,7 +3406,7 @@
       const podeReg = r.registrar && !d.soConversa && d.v.status !== 'saida' && !o.gravado;
       const rLead = !d.soConversa || !bo || silenciadaConv() ? null : tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (o.s.endereco && o.s.endereco.origem === 'padrao' && /^aprovado/.test(o.s.resultado || '')) ? null   // 15/11 (Helton): aprovado no endereço padrão não se grava
-        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
+        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'negado_debito', 'pedido_em_andamento'].includes(o.s.resultado) ? o.s.resultado : null);
       // 15/11 (Ricardo: "o sistema deve mostrar também a msg do Portal"): sem resultado claro, a tela do portal vai junto
       const telaP = !['viavel'].includes(o.s.resultado) && (!/^aprovado/.test(o.s.resultado || '') || (o.s.resultado === 'aprovado_parcial' && !(o.s.formas_liberadas || []).length)) && (o.s.texto_tela || (o.s.popup && o.s.popup.texto))
         ? `<details class="fc2-tela" open><summary>O que o portal mostrou</summary><pre>${esc(telaPortal(o.s))}</pre></details>` : '';
@@ -3411,6 +3417,7 @@
         : o.s.resultado === 'pedido_em_andamento' ? `<div class="fc-aviso bad"><b>Já existe pedido Nio em andamento neste CPF — NÃO abra outro</b> (recompra = multa de R$ 500).
             Confira no portal, em <b>Histórico de Pedidos</b>, de quem é e em que status está.${respPed ? ` O cliente disse à Mari: «${esc(respPed.slice(0, 160))}».` : ''}
             Se ele cancelou, o portal só libera quando a Nio baixar o cancelamento: <b>reconsulte depois</b>. Se o pedido for dele e seguir ativo (outra revenda ou Nio direto), é <b>Saída</b>; na dúvida, fale com o Ricardo.</div>`
+        : o.s.resultado === 'negado_debito' ? `<div class="fc-aviso bad"><b>CPF com débito na Nio</b> (fatura antiga em aberto). O cliente <b>não foi avisado do negado</b>. Veja no portal o valor da negociação (a Nio dá desconto) e ofereça <b>quitar hoje</b> pelo Nio Negocia; pagou → <b>Reconsultar</b> e fazer o pedido. Não quis quitar → outra pessoa da casa como titular.<br><span class="nota-campo">Nio Negocia: <code>${esc(NIO_NEGOCIA)}</code></span> <button type="button" class="btn btn-sm" data-f="fc-copia-negocia">Copiar link</button></div>`
         : o.s.resultado === 'negado_antifraude' ? '<div class="fc-aviso bad"><b>Negado por critérios antifraude</b>: a Nio vê Nio neste endereço. <b>Nunca consulte outro CPF.</b> Pergunte ao cliente se a Nio é dele (ou de alguém da casa) ou de outro morador que se mudou e grave na ficha › Crédito (Antifraude).</div>'
         : '';
       corpo = `${sv ? '' : `<div class="fc-op-res"><span class="fc-pill ${r.cls}">${esc(r.rot)}</span><small>${esc(r.det)} · lido ${esc(NG.fmtHora(o.em))} · ${o.gravado ? 'gravado sozinho ✓' : podeReg || rLead ? 'não gravado — confira e grave' : 'não gravado'}</small></div>`}${sv ? sv.html : ''}${sv ? telaP.replace('<details class="fc2-tela" open>', '<details class="fc2-tela">') : telaP}${oQueFazer}
@@ -3537,7 +3544,7 @@
       if (silenciadaConv() || !d.conversaId) return;
       const res = tipo === 'viab' ? (r.registrar === 'viavel' ? 'viavel' : null)
         : (s.endereco && s.endereco.origem === 'padrao') ? null
-        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'pedido_em_andamento'].includes(s.resultado) ? s.resultado : null);
+        : (['aprovado_todas', 'aprovado_parcial', 'aprovado_cartao', 'pendente', 'negado', 'negado_antifraude', 'negado_debito', 'pedido_em_andamento'].includes(s.resultado) ? s.resultado : null);
       if (!res) return;
       const { error } = await NG.sb.rpc('lead_registrar_consulta', { p_conversa: d.conversaId, p_tipo: tipo === 'viab' ? 'viabilidade' : 'credito', p_resultado: res });
       if (error) { NG.toast(`Não gravou sozinho: ${NG.msgErro(error)}`, 'bad'); return; }
@@ -4542,6 +4549,7 @@
     else if (!cr && cv.credito_em) fazer = 'Aguardar o resultado do crédito e então abrir o pedido.';
     else if (!cr || cr === 'nao_decidiu') fazer = 'Consultar o crédito (etapa Crédito).';
     else if (cr === 'pendente') fazer = 'Aguardar a resposta da Nio (até 24 h) e avisar o cliente; não abrir o pedido antes.';
+    else if (cr === 'negado_debito') fazer = 'Débito na Nio: ver no portal o valor da negociação e oferecer quitar hoje; pagou → consultar o crédito de novo e fazer o pedido. Não quis → outra pessoa da casa como titular.';
     else if (cr === 'negado') fazer = n >= 2 ? 'Ver com o cliente outra pessoa da casa como titular; sem saída, encerrar pela Saída.' : 'Oferecer outra pessoa da casa como titular (CPF do parente → 1 nova consulta).';
     else if (cr === 'aprovado_cartao' && fp !== 'cartao') fazer = 'Só o cartão foi liberado: confirmar se o cliente paga no cartão; se não, outra pessoa da casa como titular.';
     else if (cr === 'aprovado_parcial' && fpCod && !fcod.includes(fpCod)) fazer = `A forma escolhida (${fpTxt}) não foi liberada: combinar com o cliente uma das liberadas (${formas.join(', ')}).`;

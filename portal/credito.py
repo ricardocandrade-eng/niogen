@@ -163,7 +163,7 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'negado_antifraude',
-              'pedido_em_andamento',
+              'negado_debito', 'pedido_em_andamento',
               'sem_pedido_em_andamento',
               'sem_viabilidade', 'complemento_fora_lista', 'rua_divergente', 'erro_receita', 'contato_repetido', 'email_invalido',
               'nao_classificado', 'erro')
@@ -173,6 +173,10 @@ RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 # É negado de outra natureza: a Nio vê Nio no endereço (ou outro sinal). NUNCA vira "tente outro CPF" — vai para o backoffice
 # conferir com o cliente (dele → Já é cliente Nio; de outro morador → defesa na Nio). Migration 0212.
 RE_ANTIFRAUDE = re.compile(r'anti\s*-?\s*fraude', re.I)
+# 24/11 (L-70, print do Ricardo): popup "Crédito negado · CPF/CNPJ com débito na Nio." — o cliente já foi Nio e tem
+# fatura em aberto. Quitando (a Nio dá desconto na negociação), o crédito volta. NÃO é "tente outro CPF": a Mari segue sem negar a
+# venda e passa ao humano, que entra no mérito (Ricardo: "conduz ao humano, para que ele entre no mérito"). Migration 0380.
+RE_DEBITO = re.compile(r'd[ée]bito\s+(na|com\s+a|junto\s+[àa])\s+nio|d[ée]bitos?\s+em\s+aberto', re.I)
 # 20/11 (Cintia L-219, print do Ricardo): modal "Viabilidade parcial · Endereço com tratamento especial · Será necessário efetuar o
 # cadastro do endereço" [Continuar] [Voltar]. NÃO é "sem cobertura": a fachada existe e a Nio precisa cadastrar o endereço (Forms
 # "Tratamento nacional de endereço"). O resultado segue 'sem_viabilidade' (banco e Mari não mudam), com cadastro_endereco=True para
@@ -213,6 +217,8 @@ def classificar_popup(titulo, texto, etapa=None):
         return 'receita_retry'
     if RE_ANTIFRAUDE.search(t):
         return 'negado_antifraude'
+    if RE_DEBITO.search(t) and RE_NEGADO.search(t):
+        return 'negado_debito'
     if RE_NEGADO.search(t):
         return 'negado'
     if RE_APROVADO.search(t):
