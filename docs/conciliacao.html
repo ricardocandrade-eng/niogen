@@ -49,7 +49,11 @@
   .cq-modo { margin-left: auto; display: inline-flex; padding: 3px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
   .cq-modo button { border: 0; background: transparent; color: var(--muted); padding: 6px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .cq-modo button.ativo { background: var(--surface-2); color: var(--text); }
-  @media (max-width: 640px) { .cq-modo { margin-left: 0; } .cq-rot b { font-size: 16px; } }
+  @media (max-width: 640px) {
+    .cq-nav { display: grid; grid-template-columns: 38px minmax(0, 1fr) 38px; }
+    .cq-rot { text-align: center; } .cq-rot b { font-size: 15px; }
+    .cq-modo { grid-column: 1 / -1; margin-left: 0; justify-self: center; }
+  }
 
   .cq-painel { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
   .cq-cels { display: flex; flex-wrap: wrap; }
@@ -546,7 +550,7 @@
   });
   document.addEventListener('keydown', (ev) => {
     if (elConteudo.hidden || gaveta.classList.contains('aberta') || ev.altKey || ev.ctrlKey || ev.metaKey) return;
-    if (ev.target.closest('input, select, textarea, [contenteditable]')) return;
+    if (ev.target instanceof Element && ev.target.closest('input, select, textarea, [contenteditable]')) return;
     if (ev.key === 'ArrowLeft') { ev.preventDefault(); passo(-1); }
     if (ev.key === 'ArrowRight') { ev.preventDefault(); passo(1); }
   });
