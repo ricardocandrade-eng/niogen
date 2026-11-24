@@ -9,6 +9,9 @@
 # Travas: backup antes de escrever; a conta tem de fechar (cada registro de antes está, com o mesmo texto,
 # no topo ou num arquivo de semana) senão restaura o backup; idempotente; nunca resume nem reescreve texto
 # de registro — só move linhas e troca o rótulo "Última atualização:" <-> "Anterior:".
+# rev. 23/11/2026 ~23h20: trava de escrita concorrente — se algum arquivo mudou (ou nasceu) entre a leitura e a
+# gravação (o Cowork acrescentando na caixa, outra sessão escrevendo no Diário), não grava; se mudou no meio da
+# gravação, desfaz pelo backup. Em qualquer caso: rodar de novo.
 import argparse
 import datetime as dt
 import hashlib
@@ -38,6 +41,26 @@ RE_HORA = re.compile(r'(\d{1,2})(?:h(\d{2})?|:(\d{2}))')
 def ler(caminho):
     with open(caminho, encoding='utf-8', newline='') as f:
         return f.read()
+
+
+LIDOS = {}  # caminho -> hash do texto lido no planejamento (trava de escrita concorrente)
+
+
+def ler_fonte(caminho):
+    texto = ler(caminho)
+    LIDOS[caminho] = hashlib.sha256(texto.encode('utf-8')).hexdigest()
+    return texto
+
+
+def mudou(caminho, novos):
+    """True se o arquivo mudou desde a leitura do planejamento (ou se um arquivo que ia nascer já existe)."""
+    if caminho in novos:
+        return os.path.exists(caminho)
+    if caminho in LIDOS:
+        if not os.path.exists(caminho):
+            return True
+        return hashlib.sha256(ler(caminho).encode('utf-8')).hexdigest() != LIDOS[caminho]
+    return False
 
 
 def gravar(caminho, texto):
@@ -297,7 +320,7 @@ def planejar(pasta, agora):
     p_dir = os.path.join(pasta, 'diario')
 
     # ---- Diário: topo ----
-    tx = ler(p_diario)
+    tx = ler_fonte(p_diario)
     ls = linhas(tx)
     primeiro = next(i for i, t in enumerate(ls) if RE_REG.match(t))
     sec_onde = next(i for i in range(primeiro, len(ls)) if ls[i].startswith('## '))
@@ -314,7 +337,7 @@ def planejar(pasta, agora):
         P.avisos.append('Diário: registro sem data legível, fica no topo: %s' % r['orig'][0][:110])
 
     # ---- caixa ----
-    tc = ler(p_caixa)
+    tc = ler_fonte(p_caixa)
     lc = linhas(tc)
     ini_caixa, entradas, sep_caixa = parse_caixa(lc)
     cx_sem_data = [e for e in entradas if e['quando'] is None]
@@ -348,7 +371,7 @@ def planejar(pasta, agora):
     for nome in sorted(por_semana, reverse=True):
         cam = os.path.join(p_dir, nome + '.md')
         if os.path.exists(cam):
-            base = linhas(ler(cam))
+            base = linhas(ler_fonte(cam))
         else:
             base = cabecalho_semana(nome, agora)
             P.novos.append(cam)
@@ -409,7 +432,7 @@ def planejar(pasta, agora):
         P.escritas[p_caixa] = juntar(nova_caixa)
 
     # ---- INFRA: cabeçalho ----
-    ti = ler(p_infra)
+    ti = ler_fonte(p_infra)
     li = linhas(ti)
     sec1 = next(i for i, t in enumerate(li) if t.startswith('## '))
     reg_i = []
@@ -460,7 +483,7 @@ def planejar(pasta, agora):
             if cam in P.escritas:
                 base = linhas(P.escritas[cam])
             elif os.path.exists(cam):
-                base = linhas(ler(cam))
+                base = linhas(ler_fonte(cam))
             else:
                 base = [
                     '<!-- NIOGEN | diario/%s.md | %s — log do cabeçalho do INFRA.md movido (não resumido) por scripts/arquivar_diario.py -->'
@@ -561,6 +584,12 @@ def main():
     if c['antes'] != c['topo'] + c['semanas']:
         print('ABORTADO: a conta não fecha antes de escrever.')
         return 2
+    mexidos = [c for c in P.escritas if mudou(c, P.novos)]
+    if mexidos:
+        print('ABORTADO sem gravar nada: arquivo mudou enquanto o script lia (alguém escrevendo agora?). Rode de novo.')
+        for c in mexidos:
+            print('  - ' + os.path.relpath(c, a.pasta))
+        return 5
 
     # backup
     dest = os.path.join(a.backup, agora.strftime('%Y%m%d_%H%M'))
@@ -586,6 +615,9 @@ def main():
     gravados = []
     try:
         for cam, texto in P.escritas.items():
+            if mudou(cam, P.novos):
+                raise RuntimeError('%s mudou durante a gravação (alguém escrevendo agora?) — rode de novo'
+                                   % os.path.relpath(cam, a.pasta))
             os.makedirs(os.path.dirname(cam), exist_ok=True)
             gravar(cam, texto)
             gravados.append(cam)
@@ -598,7 +630,7 @@ def main():
                 shutil.copy2(salvos[cam], cam)
             elif cam in P.novos and os.path.exists(cam):
                 os.remove(cam)
-        print('DESFEITO pelo backup — a conta não fechou:')
+        print('DESFEITO pelo backup — não gravou até o fim ou a conta não fechou:')
         for f in falhas[:20]:
             print('  - ' + f)
         return 4
