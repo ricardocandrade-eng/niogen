@@ -253,7 +253,24 @@ function taxaSemPergunta(t) {
   const n = norm(semBloco);
   const cli = norm(String((prep.consolidado || {}).mensagem || ''));
   const perguntouFid = /fidelid|multa|cancel|sair antes|sai antes|desist|permanen|contrato|compromisso|carencia|quebr|tempo minimo|prazo minimo|ficar preso|obrigad/.test(cli);
-  if (perguntouFid) return null;
+  // 24/11 (L-287, Ricardo: "todos os planos possuem fidelidade de 12 meses, com multa de 540, que a Nio chama de taxa de
+  // instalação"; "Sem o valor"): perguntou de fidelidade → a Mari diz que TEM fidelidade (meses do plano) e o proporcional, sem o
+  // R$; o valor só se ele pedir ("quanto?") ou logo depois de ela ter explicado a fidelidade. Nunca "não tem multa/fidelidade".
+  const hist = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const ultMari = [...hist].reverse().find((h) => h.papel === 'mari');
+  const falouFid = !!ultMari && /fidelid|proporcional/.test(norm(ultMari.texto));
+  if (perguntouFid || falouFid) {
+    const temNfid = (ctx.planos || []).some((p) => /nfid/.test(p.variante || '') && p.codigo === (ctx.conversa || {}).plano_escolhido);
+    if (!temNfid && /\bnao tem (multa|fidelidade)|\bsem (multa|fidelidade)\b|\bnao (tem|ha) (prazo|carencia)/.test(n.replace(/versao sem fidelidade/g, ' '))) {
+      return 'disse que não tem multa ou fidelidade: os planos TÊM fidelidade (os meses de isenção do [INTERNAL DATA]) — se cancelar antes, paga só a parte proporcional da taxa de instalação. O preço fixo até janeiro de 2030 é garantia de preço, não prazo de contrato (Bloco 4, fidelidade)';
+    }
+    const pediuValor = /quanto|valor|\bpreco\b|\br\$/.test(cli);
+    const citaValorF = [...n.matchAll(/r\$\s*(\d+)/g)].some((m) => new Set([540, ...(ctx.planos || []).map((p) => Number(p.taxa_habilitacao)).filter(Boolean)].map((x) => String(Math.round(x)))).has(m[1]));
+    if (citaValorF && !pediuValor && !falouFid) {
+      return 'deu o valor da taxa de instalação na primeira resposta sobre fidelidade: diga só que tem fidelidade (os meses do plano) e que, cancelando antes, paga a parte proporcional da taxa de instalação — o valor em R$ só se o cliente perguntar quanto (Bloco 4, fidelidade)';
+    }
+    return null;
+  }
   const perguntouInst = /\btaxa|instala|adesao|habilita/.test(cli);
   const taxas = new Set([540, ...(ctx.planos || []).map((p) => Number(p.taxa_habilitacao)).filter(Boolean)].map((x) => String(Math.round(x))));
   const citaValor = [...n.matchAll(/r\$\s*(\d+)/g)].some((m) => taxas.has(m[1]));
