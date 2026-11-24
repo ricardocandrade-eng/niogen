@@ -281,8 +281,16 @@
   // 0.11.1 (L-248): a forma que vai com a OS é a do pedido que o humano gravou — a que ele tocou no portal; sem toque, a que estava
   // marcada na Etapa 5 na última leitura. Ela corrige a da venda (a porta grava a forma da OS por cima).
   const formaNaOS = (tocada, lida) => tocada || lida || null;
+  // 0.11.2 (L-259, 23/11): a leitura do complemento casava com a caixa "Sem complemento" (checkbox, value "on") e gravava "on" na
+  // ficha. Só campo de texto serve, e "on"/"off" nunca é complemento.
+  const campoDeTexto = (tipo) => !/^(checkbox|radio|hidden|button|submit|reset|file|image)$/i.test(String(tipo || 'text').trim());
+  const complementoLido = (valor) => {
+    const t = String(valor == null ? '' : valor).trim();
+    return !t || /^(on|off|true|false)$/i.test(t) || /^(selecione|escolha|sem complemento)/i.test(t) ? '' : t;
+  };
 
   raiz.NIOGEN_TRAVAS = { norm, textoBotao, LISTA_NEGRA, BOTOES, POPUP, naListaNegra, popupSeguro, conferirClique, classificarPopup, MOTIVO_POPUP,
     temNumero, escolherOpcao, alvoComplemento, alvoEndereco, formaDaVenda, lerOferta, casarOferta, megas, preco,
-    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas, lerOS, periodoDoTexto, diaDoCalendario, FORMA_RADIO, formaNaOS };
+    regrasRede, idsRegras, redeBloqueada, redigir, so, creditoPelasFormas, lerOS, periodoDoTexto, diaDoCalendario, FORMA_RADIO, formaNaOS,
+    campoDeTexto, complementoLido };
 })(typeof globalThis !== 'undefined' ? globalThis : window);

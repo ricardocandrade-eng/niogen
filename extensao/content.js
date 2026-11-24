@@ -925,9 +925,11 @@
       const num = val(campoPorNomes('numero', 'Número'));
       if (sn && sn.checked) LIDO.numero = 'SN'; else if (num && num.length <= 20) LIDO.numero = num;
       const sel = [...document.querySelectorAll('select')].find((s) => /omplement/i.test(`${s.name} ${s.id}`) && visivelBox(s));
-      const comp = sel ? (((sel.options[sel.selectedIndex] || {}).textContent) || '').trim()
-        : val([...document.querySelectorAll('input[placeholder="Complemento"], input[placeholder*="omplement" i], input[name*="omplement" i]')].find(visivelBox));
-      if (comp && !/^(selecione|escolha|sem complemento)/i.test(comp)) LIDO.complemento = comp;
+      // 0.11.2 (L-259): só campo de TEXTO — a caixa "Sem complemento" (checkbox, value "on") casava com o seletor e "on" ia para a ficha
+      const comp = T.complementoLido(sel ? ((sel.options[sel.selectedIndex] || {}).textContent) || ''
+        : val([...document.querySelectorAll('input[placeholder="Complemento"], input[placeholder*="omplement" i], input[name*="omplement" i]')]
+          .find((i) => T.campoDeTexto(i.type) && visivelBox(i))));
+      if (comp) LIDO.complemento = comp;
       const ref = val(campoPorNomes('referencia', 'Referência')); if (ref && !/^sem refer/i.test(ref)) LIDO.referencia = ref;
       const rua = val(document.querySelector('input[placeholder="Endereço de instalação"]')); if (rua) LIDO.rua = rua;
       const doc = digitos(val(campoPorNomes('documento', 'CPF/CNPJ', 'CPF'))); if (doc.length === 11 || doc.length === 14) LIDO.documento = doc;

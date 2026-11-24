@@ -40,6 +40,25 @@ aTrans.forEach((it, i) => {
   else { r.transcricao = txt.slice(0, 4000); r.transcrito_em = agora.toISOString(); r.transcrito_por = 'openai'; }
 });
 
+// 23/11 (L-259): transcrição em OUTRO IDIOMA = áudio não entendido. Em áudio curto ou com ruído o transcritor às vezes devolve
+// inglês, francês ou espanhol (4 de 6 áudios do L-259) e isso ia para a Mari como fala do cliente. Aqui a transcrição com palavra
+// que só existe em outro idioma, em número igual ou maior que o de palavras do português, é descartada: o áudio fica sem texto
+// (2c pede para mandar de novo ou escrever) e o que o transcritor devolveu fica em transcricao_descartada, só para conferência.
+const PT = new Set(('eu voce nao sim que de do da dos das o a os as um uma e em no na nos nas por para pra pro com sem meu minha seu sua me te se la ai '
+  + 'aqui ali isso esse essa este esta ta to estou tenho tem quero queria posso pode sei sabe vou vai foi fui ser era mas ou porque como qual quanto '
+  + 'quando onde oi ola bom boa dia tarde noite obrigado obrigada ok certo beleza tudo bem rua avenida numero casa apartamento bairro cep cpf nome '
+  + 'email internet plano boleto cartao pix manha instalacao instalar moro mora perto frente lado ja so mais muito tambem nem ne entao agora hoje '
+  + 'amanha ainda ate depois antes fazer falar mandar ligar conta mes mega giga wifi fibra nio preco valor reais igreja ponto arroba '
+  + 'zero dois tres quatro cinco seis sete oito nove dez').split(' '));
+const ESTRANGEIRAS = new Set(('the what you your this that and with have thank thanks please is are it its of hello yes my he she they we was were can '
+  + 'not there here how why who watching il est et vous plait je pas avec merci pour faites moi les des oui bonjour nous avoir '
+  + 'empezar el los gracias usted hola puedo muy tengo quiero calle entonces hoy ahora necesito tiene').split(' '));
+const outroIdioma = (txt) => {
+  const pal = String(txt || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z]+/).filter(Boolean);
+  const fora = pal.filter((w) => ESTRANGEIRAS.has(w)).length;
+  return fora > 0 && fora >= pal.filter((w) => PT.has(w)).length;
+};
+
 const midia = (e.anexos || []).map((a) => {
   const r = porN[a.n] || {};
   // 20/11: localização = só o que o cliente mandou (coordenadas e nome do lugar); não há arquivo
@@ -48,6 +67,11 @@ const midia = (e.anexos || []).map((a) => {
   if (a.tipo === 'audio') {
     if (a.cw_transcricao) { m.transcricao = a.cw_transcricao.slice(0, 4000); m.transcrito_em = agora.toISOString(); m.transcrito_por = 'chatwoot'; }
     else if (r.transcricao) { m.transcricao = r.transcricao; m.transcrito_em = r.transcrito_em; m.transcrito_por = r.transcrito_por; }
+    if (m.transcricao && outroIdioma(m.transcricao)) {
+      m.transcricao_descartada = m.transcricao.slice(0, 300);
+      delete m.transcricao; delete m.transcrito_em;
+      r.erro = r.erro || 'transcrição em outro idioma (áudio não entendido)';
+    }
   }
   if (r.url_ia) { m.url_ia = r.url_ia; m.url_ia_ate = r.url_ia_ate; }
   if (r.erro) m.erro = r.erro;

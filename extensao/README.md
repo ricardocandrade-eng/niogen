@@ -11,6 +11,13 @@ a biometria e o pagamento são da pessoa. Prompt 28 · regra 5 do `CLAUDE.md` (r
 4. Abra `https://pap.niointernet.com.br/administrativo/…` logado no portal e clique no ícone **N** da extensão (painel lateral).
 5. Atualizar = `git pull` + recarregar a extensão em `chrome://extensions` + F5 no portal.
 
+## 0.11.2 (23/11/2026) — "on" não é complemento (caso L-259)
+No L-259 a ficha ficou com o complemento **"on"**: a leitura dos campos do portal casava com a caixa de marcar "Sem complemento"
+(checkbox, cujo valor é "on") e gravava esse valor como se fosse o complemento digitado.
+- A leitura do complemento só olha **campo de texto** (caixa de marcar, rádio e campo oculto ficam de fora) e nunca aceita "on"/"off".
+- O banco também recusa "on"/"off" como complemento vindo do portal (migration 0375), para quem ainda está com a versão antiga.
+- Teste: `node extensao/testar_travas.mjs` (seção 11). **Não testado no portal real.**
+
 ## 0.11.1 (23/11/2026) — a forma de pagamento é a do pedido, não a do rádio pré-marcado (caso L-248)
 No L-248 a leitura dos campos gravou **boleto** na venda às 11:58 — o rádio que o portal já deixa marcado na Etapa 5 — antes de o
 cliente responder "cartão" (12:00). Como a leitura só grava o que está vazio, a troca para cartão nunca chegou ao NIOGEN: a OS foi

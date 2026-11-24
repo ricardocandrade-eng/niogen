@@ -158,5 +158,14 @@ caso('dia sem cabeçalho, já passou → mês seguinte', T.diaDoCalendario('2', 
 caso('dia sem cabeçalho, ainda vem → este mês', T.diaDoCalendario('25', '', '', '2026-11-20') === '2026-11-25');
 caso('dia inválido', T.diaDoCalendario('42', '', '', '2026-11-20') === null);
 
+// ── 11. 0.11.2 (L-259, 23/11): a caixa "Sem complemento" (checkbox, value "on") não é o complemento ──
+const tenta = (f) => { try { return f(); } catch (e) { return false; } };
+caso('caixa de marcar não é campo de texto', tenta(() => T.campoDeTexto('checkbox') === false && T.campoDeTexto('radio') === false && T.campoDeTexto('hidden') === false));
+caso('input de texto (ou sem tipo) é campo de texto', tenta(() => T.campoDeTexto('text') === true && T.campoDeTexto('') === true && T.campoDeTexto(undefined) === true));
+caso('complemento "on" não é lido', tenta(() => T.complementoLido('on') === '' && T.complementoLido(' ON ') === '' && T.complementoLido('off') === ''));
+caso('complemento "Selecione" / "Sem complemento" não é lido', tenta(() => T.complementoLido('Selecione') === '' && T.complementoLido('Sem complemento') === ''));
+caso('complemento de verdade é lido', tenta(() => T.complementoLido(' Apto 302 ') === 'Apto 302' && T.complementoLido('Casa B') === 'Casa B' && T.complementoLido('Onix 2') === 'Onix 2'));
+caso('complemento vazio', tenta(() => T.complementoLido('') === '' && T.complementoLido(null) === ''));
+
 console.log(`\n${falhou ? 'VERMELHO' : 'VERDE'} — ${ok} ok, ${falhou} falharam`);
 process.exit(falhou ? 1 : 0);

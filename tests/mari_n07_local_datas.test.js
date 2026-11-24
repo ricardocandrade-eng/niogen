@@ -45,8 +45,10 @@ ok(r.corrigir === true, '4 · elegível 200 m: negar cobertura continua barrado 
 r = rodar('Pronto, Eli, tudo certo por aqui!\n[HANDOFF]\nmotivo_handoff: dados_completos\nbriefing_humano: ok\n[/HANDOFF]\n[DADOS_COLETADOS: pedido_aberto=fui eu, desisti dele]',
   { nio_pedido_aberto: 'sim', cobertura_decisao: 'elegivel_200m', instalacao_preferencia: 'Sex, 13/11, manhã', etapa: 'resumo' }, 'Sim, está certo');
 const br = r.handoff ? r.handoff.lead.briefing : '';
-ok(/ELEGÍVEL PELOS 200 m/.test(br), '5 · nota com a decisão (elegível 200 m)');
-ok(/PEDIDO NIO EM ANDAMENTO[^\n]*fui eu, desisti/.test(br), '5 · nota com o pedido em andamento e a resposta do cliente');
+// 23/11: a nota é a curta desde 15/11 (handoff curto): a decisão vem na linha da Viabilidade, o pedido em andamento no "Fazer agora"
+// e a resposta do cliente nos alertas. As duas conferências abaixo ainda procuravam o texto da nota antiga.
+ok(/^⚠️ Viabilidade: só pelos 200 m/m.test(br), '5 · nota com a decisão (elegível 200 m)');
+ok(/^👉 Fazer agora: NÃO abrir outro pedido/m.test(br) && /sobre o pedido aberto, o cliente disse «fui eu, desisti dele»/.test(br), '5 · nota com o pedido em andamento e a resposta do cliente');
 console.log(falhas ? `VERMELHO — ${falhas} falha(s)` : 'VERDE');
 process.exitCode = falhas ? 1 : 0;
 // P27/P28 determinísticos (12/11)
