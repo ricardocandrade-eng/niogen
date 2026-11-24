@@ -72,6 +72,10 @@ caso('negado comum segue negado', T.classificarPopup('Resultado da análise de c
 caso('popup negado', T.classificarPopup('', 'Crédito não aprovado', 4) === 'negado');
 caso('popup Receita', T.classificarPopup('', 'OPS, OCORREU UM ERRO!', 3) === 'receita_retry');
 caso('motivo recompra', T.MOTIVO_POPUP.pedido_em_andamento === 'recompra');
+// 0383 (L-82): o popup do ENDEREÇO é outro resultado; o do CPF continua pedido_em_andamento
+caso('popup pedido no endereço', T.classificarPopup('Indisponível', 'Pedido encontrado Não é possível abrir um pedido para o endereço consultado pois identificamos que já existe um pedido (Nova Fibra) em andamento para o endereço informado.', 2) === 'pedido_endereco');
+caso('popup pedido no CPF continua', T.classificarPopup('Pedido encontrado', 'Não é possível abrir um novo pedido, pois já existe outro pedido (Nova Fibra) em andamento para este cliente.', 3) === 'pedido_em_andamento');
+caso('motivo recompra (endereço)', T.MOTIVO_POPUP.pedido_endereco === 'recompra');
 
 // ── 5. rede: regras casando com URLs de amostra ──
 const B = (url, metodo = 'POST', pos = true) => T.redeBloqueada(url, metodo, pos);

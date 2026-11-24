@@ -822,6 +822,20 @@ def cen_aw(c):   # P50 (24/11, abertura B4 — trava pedida pelo Ricardo, 11h55:
     c.exige(not re.search(r'no cart[aã]o', t), f'[P50] citou desconto do cartão numa cidade BTU: «{t[:260]}»')
 
 
+def cen_ax(c):   # P51 (24/11, conversa L-82, Michele, #76 — 16/11 17h17): o consultor falou com a cliente e depois a Mari respondeu
+    # com "[Mensagem do consultor da equipe, enviada enquanto ele atendia]" e as falas dele copiadas. A marca e as falas do time nunca
+    # saem na voz da Mari. As falas do consultor entram como entram na produção (mari_turnos, papel humano).
+    c.diz('Oi! Vi o anúncio e quero saber se a Nio chega na minha rua.')
+    B.sql("insert into mari_turnos (conversa_id, papel, texto, pendente) "
+          f"select id, 'humano', t, false from mari_conversas, unnest(array['Boa noite, tudo bem?', "
+          f"'Consegui verificar aqui, me dá só um minutinho que já te retorno']) t where telefone = '{c.tel}'", escrita=True)
+    r = c.diz('Oiii')
+    t = fala(r)
+    c.exige('mensagem do consultor' not in t, f'[P51] a marca interna do consultor saiu para o cliente: «{t[:260]}»')
+    c.exige('me da so um minutinho' not in t and 'me dá só um minutinho' not in t,
+            f'[P51] a Mari repetiu a fala do consultor: «{t[:260]}»')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -867,6 +881,8 @@ PORTAO = {
     'av': (55, cen_av, 'P49'),
     # 24/11 — abertura B4: preço "a partir de" na abertura + cliente de cidade BTU → o preço da cidade, nunca o da abertura
     'aw': (56, cen_aw, 'P50'),
+    # 24/11 — conversa L-82 (Michele, #76): a marca "[Mensagem do consultor…]" e as falas do time não saem na voz da Mari
+    'ax': (57, cen_ax, 'P51'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

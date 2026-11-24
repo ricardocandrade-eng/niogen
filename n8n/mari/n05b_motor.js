@@ -309,7 +309,10 @@ if (V4) {
     L.push(`credito (uso interno): ${conv.credito_resultado === 'negado_debito' ? 'em conferência com o nosso time — não comente a análise; se o cliente perguntar, "Isso o nosso time confirma quando abrir o pedido 😊"'
       : conv.credito_resultado ? `resultado=${conv.credito_resultado}${Array.isArray(conv.credito_formas) && conv.credito_formas.length ? ` (formas: ${conv.credito_formas.join(', ')})` : ''}`
       : conv.credito_em ? 'consultando' : 'ainda não consultado (sai sozinho com CPF e e-mail)'}${conv.credito_consultas >= 2 ? ' | já é a 2ª consulta (CPF do parente)' : ''}`);
-    L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)' : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
+    // 0383 (L-82): 'endereco' = o portal achou o pedido no ENDEREÇO (de qualquer CPF) — outro CPF da casa não resolve
+    L.push(`pedido_nio_em_aberto_no_cpf (uso interno): ${conv.nio_pedido_aberto === 'sim' ? 'SIM — pergunte ao cliente (Bloco 9)'
+      : conv.nio_pedido_aberto === 'endereco' ? 'SIM, NO ENDEREÇO (não no CPF) — pergunte ao cliente se o pedido é dele ou de alguém da casa (Bloco 9); NÃO ofereça outro CPF como titular: o portal trava pelo endereço'
+      : conv.nio_pedido_aberto === 'nao' ? 'nao' : 'nao_consultado'}`
       + (dados.pedido_aberto_resposta ? ` | o cliente já respondeu: ${dados.pedido_aberto_resposta}` : ''));
   }
 }
@@ -797,6 +800,7 @@ return [{ json: {
       credito_recusado_em: conv.credito_recusado_em, credito_resultado: conv.credito_resultado, credito_formas: conv.credito_formas, credito_consultas: conv.credito_consultas,
       // 15/11 (handoff curto): o 7 · Extrair escreve na nota se o crédito está em andamento e em que endereço foi lido (0204)
       credito_em: conv.credito_em, credito_endereco: conv.credito_endereco,
+      venda_id: conv.venda_id || null,   // 24/11 (L-82): já tem venda = o quadro de condições já saiu (o histórico do motor é só o recente)
       status: conv.status },
     primeira,   // 💚 na saudação (7 · Extrair)
     // v7: trava das condições (fechamento obrigatório da Nio) — já saíram nesta conversa?

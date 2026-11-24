@@ -116,6 +116,15 @@ ok(r2['sexo'] == '<redigido>' and r2['cep'] == '<redigido>' and r2['logradouro']
 print('4. Classificação')
 ok(cr.classificar_popup('Pedido encontrado', 'Não é possível abrir um novo pedido, pois já existe outro pedido (Nova Fibra) em andamento para este cliente.', 3)
    == 'pedido_em_andamento', 'Pedido encontrado → pedido_em_andamento')
+# 0383 (L-82): o popup do ENDEREÇO (Etapa 2, "Indisponível") é outro resultado — não é sem viabilidade nem o do CPF
+ok(cr.classificar_popup('Indisponível', 'Pedido encontrado Não é possível abrir um pedido para o endereço consultado pois identificamos que já existe um pedido (Nova Fibra) em andamento para o endereço informado.', 2)
+   == 'pedido_endereco', 'Pedido no endereço → pedido_endereco')
+ok(bool(cr.RE_PEDIDO_END.search('Indisponível Pedido encontrado Não é possível abrir um pedido para o endereço consultado pois identificamos que já existe um pedido (Nova Fibra) em andamento para o endereço informado.')),
+   'Etapa 2: o modal "Indisponível" do pedido no endereço é reconhecido')
+ok(not cr.RE_PEDIDO_END.search('Pedido encontrado Não é possível abrir um novo pedido, pois já existe outro pedido (Nova Fibra) em andamento para este cliente.'),
+   'o popup do CPF não é lido como endereço')
+ok(not cr.RE_PEDIDO_END.search('Indisponível Endereço sem viabilidade técnica no momento'), 'sem viabilidade de verdade continua sem viabilidade')
+ok('pedido_endereco' in cr.RESULTADOS, 'pedido_endereco é resultado conhecido')
 ok(cr.classificar_popup('OPS, OCORREU UM ERRO!', '', 3) == 'receita_retry', 'erro da Receita na Etapa 3 → nova tentativa')
 ok(cr.classificar_popup('Crédito', 'Cliente não aprovado na análise', 5) == 'negado', 'não aprovado → negado')
 ok(cr.classificar_popup('Análise', 'Aguarde 24 h', 5) == 'pendente', 'aguarde 24 h → pendente')

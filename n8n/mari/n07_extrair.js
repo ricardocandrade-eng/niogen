@@ -147,9 +147,18 @@ let texto = bruto
   .replace(/^[ \t]*\[\/?(?:ESTADO|INTERNAL|INTERNO|CONTEXTO)[A-Z_ ]*\][ \t]*$/gim, '')
   .replace(new RegExp(`\\[(?:${NOMES_TAG})(?:\\s*:[^\\]]*)?\\]`, 'gi'), '')
   .replace(/^\s*\[?(INTERNAL DATA|ESTADO_ATUAL[^\]]*)\]?.*$/gim, '')
+  // 24/11 (L-82, Michele, 16/11 17h17): o motor manda a fala do consultor como "[Mensagem do consultor da equipe, enviada enquanto ele
+  // atendia]" e o modelo copiou a marca E as falas do consultor para a resposta. A marca nunca sai; parágrafo igual a uma fala do time sai.
+  .replace(/\[Mensagem do consultor[^\]\n]*\]/gi, '')
   .replace(/[ \t]+\n/g, '\n')
   .replace(/\n{3,}/g, '\n\n')
   .trim();
+{
+  const _nh = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const _hist = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const _doTime = new Set(_hist.filter((h) => h.papel === 'humano').map((h) => _nh(h.texto)).filter((t) => t.length >= 8));
+  if (_doTime.size) texto = texto.split(/\n\s*\n/).filter((p) => !_doTime.has(_nh(p))).join('\n\n').trim();
+}
 
 // ── 3a. travas do teste real de 07/11 23h08 (conversa #1) ──
 const conv0 = ctx.conversa || {};
@@ -196,6 +205,16 @@ function blocoCondicoes() {
     '• 1ª fatura 25 dias depois da instalação (no cartão, no dia da instalação)',
     '', 'A velocidade real depende do aparelho e do Wi-Fi.'].join('\n');
 }
+// 24/11 (L-82, Michele: "Oiii" → o quadro de condições de novo, 2 vezes): o quadro já saiu nesta conversa e o cliente não perguntou de
+// condição, fidelidade, taxa, fatura, roteador ou preço → a marca sai sem o quadro (o resto da fala fica).
+{
+  const _h = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+  const _jaSaiu = _h.some((h) => h.papel === 'mari' && /As condições do seu plano:|Antes de fechar, rapidinho as condições/.test(String(h.texto || '')));
+  const _cli = String((prep.consolidado || {}).mensagem || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (_jaSaiu && !/condic|fidelid|multa|taxa|instala|fatura|roteador|wi-?fi|mesh|preco|valor|quanto|plano/.test(_cli)) {
+    texto = texto.replace(/\[CONDI[CÇ][OÕ]ES\]/gi, '').replace(/(^|\n)[^\n]*condi[cç][oõ]es[^\n]*:[ \t]*(?=\n|$)/gi, '$1').replace(/\n{3,}/g, '\n\n').trim();
+  }
+}
 if (VERc >= 5 && /\[CONDI[CÇ][OÕ]ES\]/i.test(texto)) {
   // Ensaio 07/11 23h55: "Tô te mandando as condições certinhas:" logo antes da marca só repete a abertura do bloco — sai.
   texto = texto.replace(/(^|\n)[^\n]*condi[cç][oõ]es[^\n]*:[ \t]*(?=\s*(\|\|\s*)?\[CONDI[CÇ][OÕ]ES\])/gi, '$1');
@@ -210,7 +229,7 @@ if (VERc >= 5 && /\[CONDI[CÇ][OÕ]ES\]/i.test(texto)) {
 const PROIBIDAS = [
   ['dh' + 'arma', 'o nome da empresa revendedora'], ['gratis', '"grátis"'], ['gratuit', '"gratuito"'], ['combo', '"combo"'], ['pacote', '"pacote"'],
   ['bundle', '"bundle"'], ['nio 5g', '"Nio 5G"'], ['nio movel', '"Nio Móvel"'], ['nio cel', '"Nio Cel"'], ['nio mobile', '"Nio Mobile"'],
-  ['chip da nio', '"chip da Nio"'], ['2028', '"2028"'], ['cobertura confirmada', '"cobertura confirmada"'],
+  ['chip da nio', '"chip da Nio"'], ['5g da nio', '"5G da Nio"'], ['internet 5g nio', '"Internet 5G Nio"'], ['2028', '"2028"'], ['cobertura confirmada', '"cobertura confirmada"'],
   ['fibra dedicada', '"fibra dedicada"'],   // 10/11 (rodada única, §9)
 ];
 // v3 (Bloco 2, itens 4 e 5) — só para o prompt v3 (a v2 usa ✅ 🎯 📍 💰 1️⃣ de propósito).
@@ -440,6 +459,30 @@ function violacoesDe(t) {
     // C7: condições só pelo bloco exato ([CONDICOES]); escritas com as próprias palavras → reescrever.
     if (!t.includes(COND_ABRE) && /2030/.test(n) && /roteador/.test(n)) {
       v.push('escreveu as condições com as próprias palavras — use a marca [CONDICOES] sozinha num balão (o sistema põe o texto exato)');
+    }
+  }
+  // 24/11 (teste L-288, Ricardo + texto da Nio de 01/10/2026): o 5G tem franquia; o chip se pede pelo App Nio depois da
+  // instalação (o técnico não leva); a rede é da TIM (parceria com a Surf), nunca "rede própria".
+  if (V7) {
+    const frases = n.split(/[.!?\n]+/);
+    if (frases.some((f) => /\b(chip|5g|celular|linha movel|movel)\b/.test(f) && /\binternet (e (as )?(chamadas|ligacoes) )?ilimitad/.test(f))) {
+      v.push('disse que a internet do chip/5G é ilimitada: tem franquia (os GB do [INTERNAL DATA]); ilimitadas são só as ligações e as mensagens');
+    }
+    if (frases.some((f) => /\bchip\b/.test(f) && /\b(tecnico|instalacao|instalar)\b/.test(f) && /\b(leva|levam|entrega|entregam|traz|trazem|junto|combinad)\w*/.test(f) && !/\bdepois d[ae] instala/.test(f))) {
+      v.push('disse que o chip vem na instalação: o técnico NÃO leva o chip — depois da instalação, o cliente pede pelo App Nio (chip físico entregue no endereço ou eSIM) e ativa pelo app');
+    }
+    if (/\brede propria\b/.test(n)) v.push('disse "rede própria" para o celular: a linha móvel usa a rede da TIM, por uma parceria da Nio com a Surf Telecom (só se o cliente perguntar)');
+  }
+  // 24/11 (teste L-288: "Me confirma: sua casa tem complemento…" no fim de 13 respostas seguidas): a pergunta pendente
+  // volta no máximo 1 vez a cada 3 respostas — se uma das 2 últimas falas da Mari já perguntou, esta não pergunta.
+  if (V7) {
+    const pergComp = (s) => /\btem complemento\b|complemento[^.!?\n]{0,80}\?/.test(norm(String(s || '')));
+    const histC = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+    const ultimas = histC.filter((h) => h.papel === 'mari').slice(-2);
+    const cliC = norm(String((prep.consolidado || {}).mensagem || ''));
+    const falouDoEndereco = /complement|\bapto\b|apartamento|\bbloco\b|\bcasa [a-z0-9]\b|\bnao tem\b|\bnao\b$|\bsim\b|\bloja\b/.test(cliC);
+    if (pergComp(n) && ultimas.length && ultimas.some((h) => pergComp(h.texto)) && !falouDoEndereco) {
+      v.push('repetiu a pergunta do complemento — você já perguntou numa das 2 últimas respostas: responda só o que o cliente perguntou, sem pedir o complemento de novo agora (ele volta depois, com outras palavras)');
     }
   }
   if (V7 && tags.carrossel && carrosselRepetido()) v.push('mandou o carrossel de novo sem o cliente pedir — ele já recebeu os planos: responda só ao que ele perguntou, sem [CARROSSEL_PLANOS] e sem "olha as opções", e termine com uma pergunta leve sobre qual plano ele prefere');
@@ -804,7 +847,7 @@ if (V7 && nasc && nasc !== '—' && !/^null$/i.test(nasc)) dados.nascimento = na
 const pedAb = String(d.pedido_aberto || '').trim();   // 12/11 (0133): o que o cliente disse sobre o pedido Nio em andamento
 if (V7 && pedAb && pedAb !== '—' && !/^null$/i.test(pedAb)) dados.pedido_aberto_resposta = pedAb.slice(0, 200);
 // Portão P28: a Mari perguntou do pedido em andamento e o modelo não anotou a resposta → a mensagem do cliente é a resposta.
-if (V7 && !dados.pedido_aberto_resposta && (ctx.conversa || {}).nio_pedido_aberto === 'sim' && !(((ctx.conversa || {}).dados || {}).pedido_aberto_resposta)) {
+if (V7 && !dados.pedido_aberto_resposta && ['sim', 'endereco'].includes((ctx.conversa || {}).nio_pedido_aberto) && !(((ctx.conversa || {}).dados || {}).pedido_aberto_resposta)) {
   const hist = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
   const ultMari = [...hist].reverse().find((h) => h.papel === 'mari');
   const msgCli = String((prep.consolidado || {}).mensagem || '').trim();
@@ -1155,7 +1198,8 @@ if (motivo) {
     const venda = motivo === 'dados_completos';
     const pl = (ctx.planos || []).find((p) => p.codigo === (upd.plano_escolhido || c.plano_escolhido)) || null;
     let fazer;
-    if (c.nio_pedido_aberto === 'sim' || cr === 'pedido_em_andamento') fazer = 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).';
+    if (c.nio_pedido_aberto === 'endereco' || cr === 'pedido_endereco') fazer = 'NÃO abrir outro pedido: já existe pedido Nio em andamento NO ENDEREÇO (vale até para outro CPF). Perguntar ao cliente de quem é; não for cancelar → Saída › Já tem pedido Nio no endereço.';   // 0383
+    else if (c.nio_pedido_aberto === 'sim' || cr === 'pedido_em_andamento') fazer = 'NÃO abrir outro pedido: conferir no portal o pedido que já existe no CPF (recompra = multa R$ 500).';
     else if (dec === 'sem_cobertura') fazer = 'Conferir o CEP e o número com o cliente; se estiverem certos, encerrar pela Saída (sem cobertura).';
     else if (dec === 'elegivel_200m') fazer = 'Na Cobertura: conferir os 200 m no mapa e pedir a liberação ANTES de abrir o pedido.';
     else if (dec === 'unidade_fora_lista') fazer = 'Na Cobertura: escolher a unidade certa ou pedir o cadastro pelo formulário.';
@@ -1188,7 +1232,7 @@ if (motivo) {
       .filter((h) => h.papel === 'lead').map((h) => h.texto)].join(' \n '));
     // 12/11 (Edvaldo, Andriene): sem cartão → crédito antes da biometria; só cartão → outra pessoa da casa titular.
     if (/\bn(ao|um)\b[^.?!\n]{0,25}\b(tenho|uso|possuo|tem)\b[^.?!\n]{0,25}\bcart(ao|oes)\b|\bsem cart(ao|oes)\b/.test(falasCliente)) alertas.push('cliente disse que não tem/não usa cartão');
-    if (c.nio_pedido_aberto === 'sim' && dd.pedido_aberto_resposta) alertas.push(`sobre o pedido aberto, o cliente disse «${String(dd.pedido_aberto_resposta).slice(0, 120)}»`);
+    if (['sim', 'endereco'].includes(c.nio_pedido_aberto) && dd.pedido_aberto_resposta) alertas.push(`sobre o pedido aberto, o cliente disse «${String(dd.pedido_aberto_resposta).slice(0, 120)}»`);
     if (dd.pista_nio) alertas.push(`cliente citou Nio/Oi (${String(dd.pista_nio).slice(0, 80)}) — conferir posse no portal`);
     if (dd.rua_informada && dd.rua_confirmada && norm(dd.rua_informada) !== norm(dd.rua_confirmada)) alertas.push(`rua: escreveu «${dd.rua_informada}», confirmou «${dd.rua_confirmada}»`);
     // 23/11 (L-259): "VENDA PRONTA" só com cobertura viável E plano escolhido. Sem um dos dois, o título diz o que falta.
@@ -1294,7 +1338,9 @@ if (V7 && upsellAgora && MESMA_VEL.test(texto)) {
   baloesFinais = baloesFinais.map((b) => b.replace(MESMA_VEL, ' já vem com '));
   texto = texto.replace(MESMA_VEL, ' já vem com ');
 }
-if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas
+// 24/11 (L-82, Michele): em conversa longa o histórico do motor não alcança o quadro de 12 dias atrás e ele saía de novo num "Oiii".
+// Lead que já tem venda já viu as condições: o quadro só volta se o cliente pedir (marca [CONDICOES], com a trava acima).
+if (V7 && !erro && !handoff && !ctx.condicoesEnviadas && !condicoesInseridas && !c.venda_id
   && (upd.plano_escolhido || c.plano_escolhido) && baloesFinais.length && !baloesFinais.some((b) => b.includes(COND_ABRE))) {
   // 07/11 23h11 (conversa #1): o modelo pôs confirmação + "Fechou? Me manda seu nome completo e CPF…" num balão só e as
   // condições chegavam DEPOIS do pedido de dados. O pedido (e a linha da LGPD) passa para depois do bloco.
@@ -1574,11 +1620,14 @@ if (V7 && !erro && !handoff && !m.forma_pagamento && !m.dados.email && cpfOk(m.d
   const cc = ctx.conversa || {};
   const histP = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
   const jaPerguntou = histP.some((h) => h.papel === 'mari' && /pedido[^.?!]{0,60}(andamento|aberto)/.test(norm(h.texto)));
-  if (V7 && !posHandoff && !erro && !handoff && cc.nio_pedido_aberto === 'sim' && !jaPerguntou
+  if (V7 && !posHandoff && !erro && !handoff && ['sim', 'endereco'].includes(cc.nio_pedido_aberto) && !jaPerguntou
     && !dados.pedido_aberto_resposta && !((cc.dados || {}).pedido_aberto_resposta)) {
     const pn = String((cc.dados || {}).nome || '').trim().split(/\s+/)[0];
     const semPerg = baloesFinais.join('\n\n').split('\n\n').filter((p) => p.trim() && !p.includes('?'));
-    baloesFinais = [...semPerg, `Uma coisa${pn ? `, ${pn}` : ''}: já existe um pedido de internet da Nio em andamento no seu CPF. Foi você que fez? Ele ainda está valendo?`];
+    // 0383 (L-82): o portal pode ter achado o pedido no ENDEREÇO (de qualquer CPF) — a pergunta diz onde
+    baloesFinais = [...semPerg, cc.nio_pedido_aberto === 'endereco'
+      ? `Uma coisa${pn ? `, ${pn}` : ''}: já existe um pedido de internet da Nio em andamento no seu endereço. Foi você ou alguém da casa que fez? Ele ainda está valendo?`
+      : `Uma coisa${pn ? `, ${pn}` : ''}: já existe um pedido de internet da Nio em andamento no seu CPF. Foi você que fez? Ele ainda está valendo?`];
     texto = baloesFinais.join('\n\n');
     delete tags.botoes; delete tags.carrossel;
   }

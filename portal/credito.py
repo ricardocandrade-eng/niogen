@@ -163,11 +163,16 @@ def sem_pii(msg):
 
 # ----------------------------------------------------------------------------------------------- leitura do resultado
 RESULTADOS = ('viavel', 'aprovado_todas', 'aprovado_cartao', 'aprovado_parcial', 'pendente', 'negado', 'negado_antifraude',
-              'negado_debito', 'pedido_em_andamento',
+              'negado_debito', 'pedido_em_andamento', 'pedido_endereco',
               'sem_pedido_em_andamento',
               'sem_viabilidade', 'complemento_fora_lista', 'rua_divergente', 'erro_receita', 'contato_repetido', 'email_invalido',
               'nao_classificado', 'erro')
 RE_ANDAMENTO = re.compile(r'já existe outro pedido|em andamento', re.I)
+# 24/11 (L-82, Michele, prints do Ricardo): são DOIS popups "Pedido encontrado". No CPF (Etapa 3): "já existe outro pedido (Nova Fibra)
+# em andamento para este cliente" → pedido_em_andamento (como antes). No ENDEREÇO (Etapa 2, título "Indisponível"): "Não é possível abrir
+# um pedido para o endereço consultado pois identificamos que já existe um pedido (Nova Fibra) em andamento para o endereço informado"
+# → pedido_endereco. Antes o do endereço caía em 'sem_viabilidade' e a Mari dizia que a rede não chega. Migration 0383.
+RE_PEDIDO_END = re.compile(r'pedido[^.]{0,80}em andamento[^.]{0,40}endere[cç]o|endere[cç]o (consultado|informado)[^.]{0,120}pedido', re.I)
 RE_NEGADO = re.compile(r'negad|não aprovad|nao aprovad|sem ofertas', re.I)
 # 15/11 (Helton, print do Ricardo): popup "Resultado da análise de crédito · Crédito negado · Negado - Critérios Antifraude".
 # É negado de outra natureza: a Nio vê Nio no endereço (ou outro sinal). NUNCA vira "tente outro CPF" — vai para o backoffice
@@ -211,6 +216,8 @@ def classificar_popup(titulo, texto, etapa=None):
         return 'contato_repetido'
     if RE_EMAIL.search(t):
         return 'email_invalido'
+    if RE_PEDIDO_END.search(t):
+        return 'pedido_endereco'
     if RE_ANDAMENTO.search(t):
         return 'pedido_em_andamento'
     if RE_RECEITA.search(t) and etapa == 3:
@@ -819,6 +826,8 @@ class Consulta:
         pp = self.popup()
         if pp and not ref:
             self.out['popup'] = pp
+            if RE_PEDIDO_END.search(f"{pp.get('titulo') or ''} {pp.get('texto') or ''}"):   # 0383: pedido de lá no endereço
+                raise Parar('pedido_endereco')
             marca_cadastro(self.out, pp)
             raise Parar('sem_viabilidade')
         if not ref:
@@ -849,6 +858,8 @@ class Consulta:
             return
         self.out['popup'] = pp
         self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
+        if RE_PEDIDO_END.search(txt):      # 0383: "já existe um pedido … em andamento para o endereço" não é falta de rede
+            raise Parar('pedido_endereco')
         marca_cadastro(self.out, pp)
         raise Parar('sem_viabilidade')
 

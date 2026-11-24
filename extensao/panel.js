@@ -784,6 +784,21 @@
     }
     desenha();
   }
+  // 0383: Saída "Já tem pedido Nio no CPF/endereço" pela mesma função da ficha (lead_sair) — nunca grava status direto
+  async function saidaPedidoNio(classe) {
+    const vendaId = (S.cond && S.cond.vendaId) || (S.dados && S.dados.venda_id);
+    const motivo = classe === 'pedido_endereco' ? 'pedido_nio_endereco' : 'pedido_nio_cpf';
+    const nome = classe === 'pedido_endereco' ? 'Já tem pedido Nio no endereço' : 'Já tem pedido Nio no CPF';
+    if (!vendaId || !window.confirm(`Registrar a Saída "${nome}" nesta venda? O lead sai da Live; volta quando o pedido de lá cair (Reabrir).`)) return;
+    S.ocupado = true; aviso(''); desenha();
+    try {
+      const r = await rpc('lead_sair', { p_conversa: null, p_venda: vendaId, p_motivo: motivo, p_sub: null, p_volta: null,
+        p_obs: 'o portal mostrou o pedido em andamento (extensão)', p_cancelou_portal: null });
+      aviso((r && r.resumo) || `Saída "${nome}" registrada no NIOGEN.`, 'ok');
+      condLog(`✓ Saída "${nome}" registrada no NIOGEN.`);
+    } catch (e) { aviso(`${e.message} — registre a Saída pela ficha.`, 'bad'); }
+    S.ocupado = false; desenha();
+  }
   async function pararConducao() {
     try { await mandar({ tipo: 'conduzir_parar' }); } catch (e) { /* ok */ }
     await redeDesligar();
@@ -869,6 +884,11 @@
           h('div', {}, h('b', {}, 'Qual é a unidade do cliente?'), ' Confirme com ele — nunca escolha outra para o pedido passar. Não é nenhuma? Peça o cadastro à Nio e marque na Live.'),
           h('div', { class: 'seg' }, fim.extra.lista.slice(0, 24).map((u) => h('button', { type: 'button', class: 'btn btn-sm', disabled: S.ocupado,
             onclick: () => conduzir(u) }, u)))) : null,
+        // 0383 (L-82, Ricardo 24/11): o portal disse que já existe pedido Nio no CPF ou no endereço → a Saída certa a 1 clique (do humano)
+        fim.extra && ['pedido_endereco', 'pedido_em_andamento'].includes(fim.extra.classe) && ((S.cond && S.cond.vendaId) || (S.dados && S.dados.venda_id))
+          ? h('div', { class: 'sub' }, h('button', { type: 'button', class: 'btn btn-sm', disabled: S.ocupado, onclick: () => saidaPedidoNio(fim.extra.classe) },
+              `Registrar Saída · Já tem pedido Nio no ${fim.extra.classe === 'pedido_endereco' ? 'endereço' : 'CPF'}`),
+            h('span', {}, ' Só se o cliente não for cancelar o pedido de lá. Cancelou? Espere a Nio baixar e conduza de novo.')) : null,
         fim.extra && (fim.extra.popup || fim.extra.lista) ? h('details', { class: 'sub cond-det' }, h('summary', {}, 'O que o portal disse'),
           fim.extra.popup ? h('div', {}, fim.extra.popup) : null,
           fim.extra.lista ? h('div', {}, `Opções: ${fim.extra.lista.join(' · ')}`) : null) : null,

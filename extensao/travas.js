@@ -66,6 +66,8 @@
     const t = norm(`${titulo || ''} ${texto || ''}`);
     if (/repeticoes de mesmo numero|telefone de contato informado|celular ja utilizado/.test(t)) return 'contato_repetido';
     if (/e-?mail invalido|preencha um e-?mail valido/.test(t)) return 'email_invalido';
+    // 0383 (L-82): o "Pedido encontrado" do ENDEREÇO (Etapa 2, "Indisponível") é outro motivo — o do CPF segue pedido_em_andamento
+    if (/pedido[^.]{0,80}em andamento[^.]{0,40}endereco|endereco (consultado|informado)[^.]{0,120}pedido/.test(t)) return 'pedido_endereco';
     if (/pedido encontrado|ja existe outro pedido|em andamento/.test(t)) return 'pedido_em_andamento';
     if (/ops,? ?ocorreu um erro/.test(t) && etapa === 3) return 'receita_retry';
     if (/fora da area/.test(t)) return 'fora_da_area';
@@ -82,7 +84,7 @@
     return 'nao_classificado';
   }
   // motivo de parada (evento portal_extensao_conduzido) para cada classe de popup
-  const MOTIVO_POPUP = { pedido_em_andamento: 'recompra', negado: 'credito', pendente: 'credito', negado_antifraude: 'credito', negado_debito: 'credito', contato_repetido: 'popup',
+  const MOTIVO_POPUP = { pedido_em_andamento: 'recompra', pedido_endereco: 'recompra', negado: 'credito', pendente: 'credito', negado_antifraude: 'credito', negado_debito: 'credito', contato_repetido: 'popup',
     email_invalido: 'popup', fora_da_area: 'popup', dados_pessoais: 'popup', nao_classificado: 'popup', receita_retry: 'popup' };
 
   // ------------------------------------------------------------------ endereço e complemento (portado do credito.py)

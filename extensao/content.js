@@ -276,7 +276,8 @@
   }
 
   const AVISOS = [
-    ['pedido_em_andamento', 'já existe outro pedido', 'O portal avisa que já existe outro pedido (Nova Fibra) em andamento para este cliente/endereço. Não siga: confira no portal (Histórico de pedidos) antes.'],
+    ['pedido_endereco', 'em andamento para o endereco', 'O portal avisa que já existe pedido Nio (Nova Fibra) em andamento NESTE ENDEREÇO — vale até para outro CPF. Não siga: se não for seguir, dê Saída › Já tem pedido Nio no endereço.'],
+    ['pedido_em_andamento', 'ja existe outro pedido', 'O portal avisa que já existe outro pedido (Nova Fibra) em andamento para este CPF. Não siga: confira no portal (Histórico de pedidos) antes.'],
     ['celular_usado', 'celular ja utilizado anteriormente', 'O portal avisa "Celular já utilizado anteriormente". Confirme o número com o cliente; não force.'],
     ['fora_da_area', 'endereco fora da area', 'O portal avisa "Endereço fora da área". Não siga nem use "Seguir fora da área": tente variações de CEP, rua e número e fale com o Ricardo.'],
   ];
@@ -558,7 +559,8 @@
   function pararPorPopup(pp) {
     const cls = T.classificarPopup(pp.titulo, pp.texto, C.etapa);
     const motivo = T.MOTIVO_POPUP[cls] || 'popup';
-    const msg = cls === 'pedido_em_andamento' ? 'O portal diz que já existe pedido para este cliente/endereço (recompra = multa de R$ 500). Parei — confira o Histórico de Pedidos.'
+    const msg = cls === 'pedido_endereco' ? 'O portal diz que já existe pedido Nio em andamento NESTE ENDEREÇO (outra revenda ou a Nio) — vale até para outro CPF. Parei. Se o cliente não for cancelar o de lá, registre a Saída aqui embaixo.'
+      : cls === 'pedido_em_andamento' ? 'O portal diz que já existe pedido Nio em andamento NESTE CPF (recompra = multa de R$ 500). Parei — confira o Histórico de Pedidos; se não for seguir, registre a Saída aqui embaixo.'
       : cls === 'contato_repetido' ? 'O portal recusou o celular (repetido em outros pedidos). Peça outro número ao cliente.'
       : cls === 'email_invalido' ? 'O portal recusou o e-mail. Confirme o e-mail com o cliente.'
       : cls === 'negado_antifraude' ? 'Negado por critérios antifraude: a Nio vê Nio neste endereço. NÃO consulte outro CPF — pergunte ao cliente se a Nio é dele ou de outro morador e grave na ficha (Crédito).'
