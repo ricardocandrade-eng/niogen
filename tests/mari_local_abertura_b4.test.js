@@ -19,6 +19,7 @@ const TEXTOS = {
   abertura_ancora_ainda: 'Oi! Vi que você chegou pelo anúncio da fibra da Nio 👋',
   abertura_ancora_mapa: 'H1=2030,HA=ainda,HB=rua,H2=pordia,H5=giga',
   abertura_corpo_b4: 'Aqui é a Mari, da Nio 😊\n\nA fibra de 600 Mega sai a partir de R$ {preco_entrada}, e o valor que você fechar agora fica travado até janeiro de 2030, sem reajuste todo ano.',
+  abertura_corpo_b4_regular: 'Aqui é a Mari, da Nio 😊\n\nA fibra de 600 Mega sai a partir de R$ {preco_entrada}, ou R$ {preco_cartao_entrada} no cartão de crédito, e o valor que você fechar agora fica travado até janeiro de 2030, sem reajuste todo ano.',
   abertura_corpo_b4_sem_preco: 'Aqui é a Mari, da Nio 😊\n\nOs planos de fibra vão de 600 Mega a 1 Giga, e o valor que você fechar agora fica travado até janeiro de 2030, sem reajuste todo ano.',
   abertura_pergunta_b4: 'Já abri aqui o mapa da Nio pra conferir seu endereço — me diz só uma coisa antes:',
   abertura_fallback_pedido: 'Me manda a rua e o bairro (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na sua porta 😉',
@@ -56,14 +57,15 @@ caso('referral do CJ_C3_MG (H1) → âncora do 2030 + "a partir de R$ 110" + 3 b
   const fx = r.fixo; const it = fx && fx.interativo;
   assert.ok(fx && it, JSON.stringify(fx));
   assert.strictEqual(fx.texto, 'Oi! Vi que você chegou pelo anúncio do preço travado até 2030 👋');
-  assert.match(it.corpo, /a partir de R\$ 110,/);
-  assert.doesNotMatch(it.corpo, /R\$ 55|R\$ 95/);
+  assert.match(it.corpo, /a partir de R\$ 110, ou R\$ 95 no cartão de crédito, e o valor/);
+  assert.doesNotMatch(it.corpo, /R\$ 55/);
   assert.match(it.corpo, /me diz só uma coisa antes:$/);
   assert.deepStrictEqual(it.botoes.map((b) => b.title), ['🏡 Pra minha casa', '🏪 Pro comércio', '🏠 Sou cliente Nio']);
   assert.strictEqual(it.pausaS, 6);
   assert.match(it.fallbackTexto, /a partir de R\$ 110[\s\S]*Me manda a rua e o bairro/);
   assert.strictEqual(fx.upd.dados.abertura, 'b4_241126');
   assert.strictEqual(fx.upd.dados.abertura_preco, 110);
+  assert.strictEqual(fx.upd.dados.abertura_preco_cartao, 95);
   assert.strictEqual(fx.tags.ancora, '2030');
 });
 caso('referral de conjunto fora do mapa → âncora do anúncio pelo gancho, corpo SEM preço', () => {
@@ -85,7 +87,20 @@ caso('sem referral (orgânico, Fila Vero) → "Oi! Tudo bem? 👋" e nenhum pre�
 });
 caso('conjunto mapeado para BTU → "a partir de R$ 55" (o preço do cluster do conjunto, nunca fixo)', () => {
   const r = motor('Oi', {}, { anuncio: AN_C3_H1, textos: { abertura_preco_conjuntos: '120257957894920211=btu' } });
-  assert.match(r.fixo.interativo.corpo, /a partir de R\$ 55,/);
+  assert.match(r.fixo.interativo.corpo, /a partir de R\$ 55, e o valor/);
+  assert.doesNotMatch(r.fixo.interativo.corpo, /cartão/);
+  assert.strictEqual(r.fixo.upd.dados.abertura_preco_cartao, undefined);
+});
+caso('BTU: mesmo se a chave geral pedir o cartão, sem preço no cartão não sai a frase do cartão (cai sem preço)', () => {
+  const r = motor('Oi', {}, { anuncio: AN_C3_H1, textos: { abertura_preco_conjuntos: '120257957894920211=btu',
+    abertura_corpo_b4: 'A partir de R$ {preco_entrada}, ou R$ {preco_cartao_entrada} no cartão.' } });
+  assert.doesNotMatch(r.fixo.interativo.corpo, /cartão|R\$/);
+  assert.strictEqual(r.fixo.upd.dados.abertura_preco, undefined);
+});
+caso('estado: abertura com cartão → o Claude sabe que o R$ 95 foi dito', () => {
+  const r = motor('Contagem', { dados: { abertura: 'b4_241126', abertura_preco: 110, abertura_preco_cartao: 95 } },
+    { historico: [{ papel: 'lead', texto: 'Oi' }, { papel: 'mari', texto: 'Oi!' }] });
+  assert.match(String(r.ctx.estado), /"a partir de R\$ 110, ou R\$ 95 no cartão de crédito"/);
 });
 caso('1ª mensagem já com CEP → sem abertura (segue o fluxo do CEP)', () => {
   const r = motor('Meu CEP é 36010-000', {}, { anuncio: AN_C3_H1 });

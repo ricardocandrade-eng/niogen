@@ -420,7 +420,8 @@ if (V7 && (conv.dados || {}).abertura && !conv.cep) {
     + 'não cumprimente de novo nem se apresente. Siga o Passo 2: peça só o CEP (ou o nome da rua e o bairro); o número da casa só depois de a cidade ser identificada.');
   // 24/11 (0381, B4): a abertura disse "a partir de R$ X" — o preço que vale é o da cidade do cliente, depois do CEP (trava BTU).
   if ((conv.dados || {}).abertura_preco) {
-    L.push(`abertura_preco_citado: a 1ª mensagem disse "a partir de R$ ${(conv.dados || {}).abertura_preco}" (plano de entrada, sem o desconto do cartão). `
+    const dAp = conv.dados || {};
+    L.push(`abertura_preco_citado: a 1ª mensagem disse "a partir de R$ ${dAp.abertura_preco}${dAp.abertura_preco_cartao ? `, ou R$ ${dAp.abertura_preco_cartao} no cartão de crédito` : ''}" (plano de entrada${dAp.abertura_preco_cartao ? '' : ', sem o desconto do cartão'}). `
       + 'O preço que vale é SEMPRE o da cidade do cliente, que só sai depois do CEP: se a cidade dele tiver outro preço, mostre o da cidade, '
       + 'sem repetir nem comentar o da abertura. O desconto do cartão só se cita em cidade Regular, quando o cliente tiver cartão ou perguntar.');
   }
@@ -722,10 +723,22 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       const ancora = an ? ((gancho && tx[`abertura_ancora_${gancho}`]) || tx.abertura_ancora_anuncio || 'Oi! Vi que você chegou pelo nosso anúncio 👋')
         : (tx.abertura_ancora_padrao || 'Oi! Tudo bem? 👋');
       const clAn = an && an.adset_id ? parMapa(tx.abertura_preco_conjuntos)[String(an.adset_id)] || null : null;
-      const precosAn = clAn ? ((inter.planos_cidade || {})[clAn] || []).map((p) => Number(p.preco)).filter((n) => n > 0) : [];
-      const precoEnt = precosAn.length ? Math.min(...precosAn) : null;
+      // 24/11 16h45 (0382, docs/Prompt_mari_abertura_preco_cartao_241126_1645.md — Ricardo: "Estou de acordo"): o anúncio diz R$ 95
+      // (cartão) e a abertura dizia só R$ 110. O corpo é escolhido pelo cluster do conjunto (abertura_corpo_b4_<cluster>, senão o
+      // geral) e {preco_cartao_entrada} sai do mesmo plano de entrada em config_planos. Plano sem preço no cartão (Oferta 50 % da BTU)
+      // com texto que pede o cartão → cai no corpo geral, sem a frase do cartão (nunca desconto de cartão em cidade BTU).
+      const plsAn = clAn ? ((inter.planos_cidade || {})[clAn] || []).filter((p) => Number(p.preco) > 0) : [];
+      const entAn = plsAn.length ? plsAn.reduce((a, b) => (Number(b.preco) < Number(a.preco) ? b : a)) : null;
+      const precoEnt = entAn ? Number(entAn.preco) : null;
+      const cartaoEnt = entAn && Number(entAn.preco_cartao) > 0 && Number(entAn.preco_cartao) < precoEnt ? Number(entAn.preco_cartao) : null;
       const brl0 = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2).replace('.', ','));
-      const corpoB4 = precoEnt ? String(tx.abertura_corpo_b4).replace(/\{preco_entrada\}/g, brl0(precoEnt))
+      let corpoTpl = String(tx[`abertura_corpo_b4_${clAn}`] || tx.abertura_corpo_b4 || '');
+      if (/\{preco_cartao_entrada\}/.test(corpoTpl) && !cartaoEnt) corpoTpl = String(tx.abertura_corpo_b4 || '');
+      if (/\{preco_cartao_entrada\}/.test(corpoTpl) && !cartaoEnt) corpoTpl = '';
+      // o que a 2ª mensagem DISSE (registro + estado do Claude): sem corpo com preço, nada; cartão só se o texto o citou
+      const precoDito = precoEnt && corpoTpl ? precoEnt : null;
+      const cartaoDito = precoDito && cartaoEnt && /\{preco_cartao_entrada\}/.test(corpoTpl) ? cartaoEnt : null;
+      const corpoB4 = precoEnt && corpoTpl ? corpoTpl.replace(/\{preco_entrada\}/g, brl0(precoEnt)).replace(/\{preco_cartao_entrada\}/g, cartaoEnt ? brl0(cartaoEnt) : '')
         : String(tx.abertura_corpo_b4_sem_preco || 'Aqui é a Mari, da Nio 😊\n\nOs planos de fibra vão de 600 Mega a 1 Giga, e o valor que você fechar agora fica travado até janeiro de 2030, sem reajuste todo ano.');
       const perguntaB4 = tx.abertura_pergunta_b4 || 'Já abri aqui o mapa da Nio pra conferir seu endereço — me diz só uma coisa antes:';
       const pedidoB4 = tx.abertura_fallback_pedido || 'Me manda a rua e o bairro (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na sua porta 😉';
@@ -735,8 +748,10 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
         interativo: { tipo: 'botoes', chave: 'abertura', corpo: `${corpoB4}\n\n${perguntaB4}`.slice(0, 1024),
           botoes: BOT_AB.map((b) => ({ id: b.id, title: b.title })),
           resumo: `botões: ${BOT_AB.map((b) => b.title).join(' / ')}`, fallbackTexto: `${corpoB4}\n\n${pedidoB4}`, pausaS: pausaB4 },
-        tags: { abertura: B2, ancora: gancho || (an ? 'anuncio' : 'padrao'), ad_id: an ? an.ad_id : null, preco_abertura: precoEnt },
-        upd: { dados: Object.assign({ abertura: B2 }, precoEnt ? { abertura_preco: precoEnt, abertura_preco_cluster: clAn } : {}) },
+        tags: { abertura: B2, ancora: gancho || (an ? 'anuncio' : 'padrao'), ad_id: an ? an.ad_id : null, preco_abertura: precoDito,
+          preco_cartao_abertura: cartaoDito },
+        upd: { dados: Object.assign({ abertura: B2 }, precoDito ? { abertura_preco: precoDito, abertura_preco_cluster: clAn } : {},
+          cartaoDito ? { abertura_preco_cartao: cartaoDito } : {}) },
         modelo: 'abertura_b2',
       } : FORMATO === 'texto' ? {
         texto: corpoTexto,
