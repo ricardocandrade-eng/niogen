@@ -836,6 +836,56 @@ def cen_ax(c):   # P51 (24/11, conversa L-82, Michele, #76 — 16/11 17h17): o c
             f'[P51] a Mari repetiu a fala do consultor: «{t[:260]}»')
 
 
+def cen_ay(c):   # P52 (24/11, bateria do Ricardo, conversa L-288, #1, 19h01–19h30): as mesmas perguntas, na mesma ordem,
+    # com o complemento pendente. Erros vistos: chip "levado pelo técnico", 1ª fatura inventada ("dentro do mesmo mês"),
+    # "5G da Nio", documentos sem e-mail e "Me confirma: … complemento" no fim de 13 respostas seguidas.
+    c.diz('Oi')
+    c.diz('🏡 Pra minha casa')
+    c.diz('36035130')
+    c.diz('Sim')
+    c.diz('123')
+    pediu_comp = []
+
+    def perg(texto):
+        t = fala(c.diz(texto))
+        pediu_comp.append(bool(re.search(r'\btem complemento\b|complemento[^.!?\n]{0,80}\?', t)))
+        return t
+
+    t = perg('A Nio é confiável?')
+    c.exige('3 milh' in t and '4 milh' not in t, f'[P52] confiança sem os +3 milhões publicados pela Nio: «{t[:260]}»')
+    t = perg('Ela é melhor que a Vero?')
+    c.exige(not re.search(r'\b(pior|ruim|fraca)\b', t), f'[P52] falou mal da concorrente: «{t[:260]}»')
+    t = perg('E tem fidelidade?')
+    c.exige('12 meses' in t, f'[P52] fidelidade sem os 12 meses: «{t[:260]}»')
+    c.exige('540' not in t and not re.search(r'sem fidelidade|nao tem multa|nao tem fidelidade', t), f'[P52] fidelidade com o valor ou "sem multa": «{t[:260]}»')
+    t = perg('E como eu pago?')
+    c.exige('cartao' in t and 'boleto' in t, f'[P52] formas de pagamento incompletas: «{t[:260]}»')
+    t = perg('E quando pago a primeira?')
+    c.exige('25 dias' in t, f'[P52] 1ª fatura sem a regra dos 25 dias: «{t[:260]}»')
+    c.exige(not re.search(r'mesmo mes|nas condicoes', t), f'[P52] 1ª fatura inventada ou adiada para as condições: «{t[:260]}»')
+    perg('Desculpa tantas perguntas')
+    t = perg('Quantos dias depois da instalação?')
+    c.exige('25' in t and 'mesmo mes' not in t, f'[P52] "quantos dias depois" sem os 25 dias: «{t[:260]}»')
+    t = perg('Tô achando caro... A Claro tem plano por 59,00')
+    c.exige('2030' in t, f'[P52] objeção de preço sem o preço fixo até 2030: «{t[:260]}»')
+    perg('Me dá 5 motivos para eu fechar com você?')
+    t = perg('Qual valor da multa se eu cancelar antes de 12 meses?')
+    c.exige('540' in t and 'proporcional' in t, f'[P52] valor da multa pedido e não dado (R$ 540, proporcional): «{t[:260]}»')
+    t = perg('Quais documentos preciso pra contratar?')
+    c.exige('cpf' in t and re.search(r'e-?mail', t), f'[P52] documentos sem CPF ou sem o e-mail: «{t[:260]}»')
+    t = perg('O plano com chip é de qual operadora?')
+    c.exige(not re.search(r'5g da nio|chip da nio|nio 5g|rede propria', t), f'[P52] palavra proibida no 5G: «{t[:260]}»')
+    c.exige(not re.search(r'internet (e (as )?(chamadas|ligacoes) )?ilimitad', t), f'[P52] chamou a internet do chip de ilimitada: «{t[:260]}»')
+    t = perg('Mas é rede da TIm, Claro ou Vivo?')
+    c.exige('tim' in t and 'surf' in t, f'[P52] rede do celular sem TIM/Surf: «{t[:260]}»')
+    t = perg('E como recebo o chip?')
+    c.exige('app' in t and not re.search(r'tecnico[^.!?]{0,40}(leva|entrega|traz)', t), f'[P52] chip fora do App Nio ou levado pelo técnico: «{t[:260]}»')
+    n_comp = sum(pediu_comp)
+    c.exige(n_comp <= 5, f'[P52] pediu o complemento em {n_comp} de {len(pediu_comp)} respostas (teto: 1 a cada 3)')
+    c.exige(not any(pediu_comp[i] and pediu_comp[i + 1] for i in range(len(pediu_comp) - 1)),
+            f'[P52] pediu o complemento em 2 respostas seguidas: {pediu_comp}')
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -883,6 +933,8 @@ PORTAO = {
     'aw': (56, cen_aw, 'P50'),
     # 24/11 — conversa L-82 (Michele, #76): a marca "[Mensagem do consultor…]" e as falas do time não saem na voz da Mari
     'ax': (57, cen_ax, 'P51'),
+    # 24/11 — bateria do Ricardo (L-288, #1): confiança, concorrente, fidelidade, 1ª fatura, documentos, chip/5G e complemento pendente
+    'ay': (58, cen_ay, 'P52'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
