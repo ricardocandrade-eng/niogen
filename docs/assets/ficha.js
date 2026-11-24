@@ -4515,7 +4515,7 @@
     // 23/11 (L-259): sem plano escolhido não se abre pedido — a mesma trava do n8n/mari/n07_extrair.js.
     else if (semPlano) fazer = 'Combinar o plano com o cliente e gravar na ficha antes de abrir o pedido.';
     else fazer = `Abrir o pedido no portal${fpTxt ? ` no ${fpTxt}` : ''} e avisar o cliente do link da biometria que a Nio manda.`;
-    return { viab, cred, fazer };
+    return { viab, cred, fazer, dec, fpTxt };
   }
   function handoffHtml(cv) {
     // 15/11 (Ricardo: "pode fazer sim"): o quadro aparece em TODO lead com conversa da Mari — com handoff, "HANDOFF DA MARI"
@@ -4529,12 +4529,26 @@
     const v = d.soConversa ? null : d.v;
     // pedido já aberto (OS ou etapa adiante): o quadro vira registro — o "Fazer agora" de antes já foi feito.
     const passou = !!(v && (v.nio_os || ['2_aguardando_instalacao', '3_instalado', '4_ativo_provisorio', '5_comissao_firme', 'saida'].includes(v.status)));
-    const L = handoffLinhas(cv, !cv.plano_escolhido && !(v && (v.plano_id || v.plano_nome)));
+    const semPlano = !cv.plano_escolhido && !(v && (v.plano_id || v.plano_nome));
+    const L = handoffLinhas(cv, semPlano);
     const salvo = (re) => (linhas.find((l) => re.test(l)) || '').trim();
     const dn = donoConversa(cv);
     const comMari = !tem && dn.tipo === 'mari';
     const nome = String((v && v.cliente_nome) || (cv.dados && cv.dados.nome) || cv.nome || cv.nome_contato || '').trim().split(/\s+/).slice(0, 2).join(' ');
-    const titulo = novo ? linhas[0] : tem ? `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`
+    // 23/11 (Ricardo: "faz o título acompanhar o estado de agora"): na nota de venda, o título gravado na hora do handoff
+    // ("falta plano", "falta cobertura") seguia igual depois de o time gravar o que faltava. O título de venda é refeito com o que
+    // falta AGORA — a mesma regra do n8n/mari/n07_extrair.js: VENDA PRONTA só com cobertura viável e plano.
+    const faltaAgora = [L.dec !== 'viavel' ? 'cobertura' : null, semPlano ? 'plano' : null].filter(Boolean);
+    const tituloVenda = () => {
+      const era = (linhas[0].match(/^(🟢 VENDA PRONTA|🟡 DADOS COLETADOS)(?: · (.*))?$/u) || [])[1];
+      if (!era) return linhas[0];
+      const quem = nome ? ` · ${nome}` : '';
+      if (faltaAgora.length) return `🟡 DADOS COLETADOS${quem} · falta ${faltaAgora.join(' e ')}`;
+      if (era === '🟢 VENDA PRONTA') return linhas[0];   // já era venda pronta e continua: fica a nota da Mari
+      const pl = (v && (d.nomeCurto || v.plano_nome)) || '';   // lead sem venda: aqui só há o código do plano, que não vai para o título
+      return `🟢 VENDA PRONTA${quem}${pl ? ` · ${pl}` : ''}${L.fpTxt ? ` · ${L.fpTxt}` : ''}`;
+    };
+    const titulo = novo ? (venda ? tituloVenda() : linhas[0]) : tem ? `Mari passou para o time · ${String(cv.handoff_motivo || 'handoff').replace(/_/g, ' ')}`
       : `${comMari ? 'Mari atendendo' : 'Sem handoff da Mari · com o time'}${nome ? ` · ${nome}` : ''}`;
     // venda (ou sem handoff com o time): viabilidade/crédito/fazer de agora; outro motivo: o "Fazer agora" que a Mari escreveu
     const fazer = comMari ? 'nada por enquanto — a Mari está conduzindo e passa para o time quando tiver os dados.'
@@ -4542,6 +4556,10 @@
     // nota antiga (antes de 15/11): some o que o quadro já mostra de agora (1º PASSO, COBERTURA, DFV, CRÉDITO)
     const resto = !tem ? [] : novo ? linhas.slice(1).filter((l) => !/^(✅|⚠️ Viabilidade|❌|❔|💳|👉)/u.test(l))
       : linhas.filter((l) => !/^(1º PASSO|COBERTURA \(consulta|DFV \(pista\)|DFV:|💳 CRÉDITO)/u.test(l));
+    // o alerta "sem plano escolhido" da nota some quando o plano já foi gravado (os outros alertas da linha ficam)
+    const restoAgora = !(novo && venda) || semPlano ? resto
+      : resto.map((l) => (/^⚠️/u.test(l) ? l.replace(/^⚠️\s*/u, '').split(' · ').filter((a) => a.trim() !== 'sem plano escolhido').join(' · ') : l))
+        .map((l, i) => (/^⚠️/u.test(resto[i]) ? (l ? `⚠️ ${l}` : '') : l)).filter(Boolean);
     const aberto = !!fc.ho;
     const quando = cv.handoff_em ? NG.fmtDataHora(cv.handoff_em) : '';
     const rotulo = tem ? 'HANDOFF DA MARI' : 'RESUMO DA MARI';
@@ -4554,7 +4572,7 @@
         <div class="fc2-ho-tt"><span class="fc2-ho-k">${rotulo}</span><b>${esc(titulo)}</b>${passou ? `<small>${esc(sub)}</small>` : ''}</div>
         <div class="fc2-ho-l">${esc(L.viab)}</div><div class="fc2-ho-l">${esc(L.cred)}</div>
         ${passou ? '' : `<div class="fc2-ho-l fz">👉 Fazer agora: ${esc(fazer)}</div>`}
-        ${resto.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
+        ${restoAgora.map((l) => `<div class="fc2-ho-l${/^⚠️/u.test(l) ? ' al' : ''}">${esc(l)}</div>`).join('')}
         <div class="fc2-ho-src">${tem ? `Passou para o time ${esc(quando)} · motivo: ${esc(String(cv.handoff_motivo || '—').replace(/_/g, ' '))} · a mesma nota foi no Chatwoot`
           : 'A Mari ainda não passou esta conversa para o time'} · viabilidade e crédito: como estão agora</div>
       </div></section>`;
