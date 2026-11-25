@@ -1328,7 +1328,16 @@
   async function pedirSaida(venda, pre) {   // pre (0399): motivo já escolhido (ex.: 'recusou', sugerido na conversa)
     const lista = (await saidaLista()).filter((x) => x.codigo !== 'nao_contatar');
     if (!lista.length) { toast('A lista de motivos de saída não carregou. Tente de novo.', 'bad'); return null; }
-    const aberto = !!(String(venda.nio_pedido || '').trim() || String(venda.nio_os || '').trim());
+    let aberto = !!(String(venda.nio_pedido || '').trim() || String(venda.nio_os || '').trim());
+    // 0402 (L-377 e Miriam): OS em Aguardando Pagamento, Draft ou Cancelada não se cancela no portal — sem cartão ela vira Draft sozinha.
+    let osMorre = null;
+    if (aberto && venda.id) {
+      try {
+        const { data } = await sb.from('v_os_andamento').select('estado, status_ordem').eq('venda_id', venda.id).order('mudou_em', { ascending: false }).limit(1);
+        const o = (data || [])[0];
+        if (o && ['aguardando_pagamento', 'rascunho', 'cancelada'].includes(o.estado)) { osMorre = o.status_ordem || o.estado; aberto = false; }
+      } catch (e) { /* sem a leitura da OS, a pergunta de sempre */ }
+    }
     const amanha = somaDias(diaSP(), 1);
     const fd = await modal(`
       <h3>Saída: encerrar com motivo</h3>
@@ -1341,6 +1350,7 @@
       ${aberto ? `<div class="campo"><span><b>Cancelou o pedido no portal?</b> ${dicaTxt(ajuda.saida_portal)}</span>
         <label class="check"><input type="radio" name="cancelou" value="sim" required> Sim, já cancelei no portal PAP</label>
         <label class="check"><input type="radio" name="cancelou" value="nao"> Ainda não — deixar a linha "Cancelar na Nio" na Live</label></div>` : ''}
+      ${osMorre ? `<p class="nota-campo">O pedido na Nio está em <b>${esc(osMorre)}</b>: não precisa (nem dá para) cancelar no portal. Sem o cartão cadastrado ele vira Draft sozinho em cerca de 48 h. Se o cliente pagar depois, a Live avisa.</p>` : ''}
     `, (d) => {
       const sel = d.querySelector('[name=motivo]');
       const aj = d.querySelector('[data-saida-ajuda]');
@@ -1362,7 +1372,7 @@
     });
     if (!fd) return null;
     return { motivo: fd.get('motivo'), sub: fd.get('sub') || null, volta: fd.get('volta') || null, obs: String(fd.get('obs') || '').trim() || null,
-      cancelou: aberto ? fd.get('cancelou') === 'sim' : null };
+      cancelou: osMorre ? false : (aberto ? fd.get('cancelou') === 'sim' : null) };   // 0402: a porta exige a resposta com pedido aberto; aqui é "não cancelei" e o Conferir não cobra
   }
 
   // Muda o status; os campos extras exigidos por cada destino são pedidos antes.
