@@ -879,7 +879,7 @@
   // 11/11 ~21h (consulta unificada): viabilidade oficial do portal SÓ até a Etapa 2 (sem CPF). Mesmo job/polling do crédito.
   const viabIniciar = (endereco) => creditoFn({ acao: 'viabilidade', endereco });
   // 11/11 ~22h30: print da tela do portal quando a viabilidade não saiu ({tipo, base64, em}). Só admin/backoffice.
-  const portalPrint = (jobId) => creditoFn({ acao: 'print', job_id: jobId });
+  const portalPrint = (jobId, parte) => creditoFn({ acao: 'print', job_id: jobId, ...(parte ? { parte } : {}) });   // 25/11: parte 'viab'
   // 0181 (etapa 6c): "meu" pelo vínculo do usuário com o agente do Chatwoot (usuarios.chatwoot_agente_nome, editado em
   // Configurações › Equipe); sem vínculo, vale o nome do usuário no NIOGEN, como antes.
   const ehMeu = (donoNome) => { const u = usuarioAtual || {}; const n = String(donoNome || '').trim().toLowerCase();

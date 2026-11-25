@@ -12,7 +12,11 @@
        uma tela só, sem rolar a página no computador. Cabeçalho com o status dos operadores · faixa fina de entradas
        (endereço | crédito) · duas colunas fixas: Resultado (passos Portal → DFV → Crédito, chips, UMA ação principal no pé)
        e o painel DFV sempre visível · legenda de uma linha no rodapé. Só re-layout: lógica, dados, operadores e edge
-       functions iguais aos do CACHE niogen-111126-12. -->
+       functions iguais aos do CACHE niogen-111126-12.
+     25/11/2026 (Ricardo, protótipo claude.ai/artifact/Xg51nYTmmShSH9nC7F1iUP aprovado — "Aprovo, pode fazer"): botão 🔍 Lead/cliente
+       (busca e preenche a faixa, já consulta a viabilidade; crédito só com "autorizou"); crédito com o endereço do cliente preenche
+       o passo 1 · Portal ("veio da consulta de crédito"); prints SEMPRE (viabilidade e crédito) com 📷 nos passos e "📷 Prints (n)".
+       ?embed=1 = esta tela dentro do painel Consulta (assets/consulta.js) — a única tela de consulta do NIOGEN. -->
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -133,6 +137,32 @@
   .cob2-print-topo .btn { margin-left: auto; min-height: 30px; font-size: 12px; }
   .cob2-print-img { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: flex-start; justify-content: center; padding: 16px; }
   .cob2-print-img img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--border); box-shadow: 0 12px 40px rgba(0, 0, 0, .6); }
+  .cob2-print-topo .btn + .btn { margin-left: 0; }
+  .cob2-print-abas { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cob2-print-abas button { border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); border-radius: 999px; font: inherit; font-size: 12px; padding: 4px 12px; cursor: pointer; }
+  .cob2-print-abas button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  /* 25/11: busca de lead/cliente na faixa de entradas + selo do lead no Resultado + 📷 nos passos */
+  .cob2-lead { position: relative; }
+  .cob2-lead-bt[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+  .cob2-lead-caixa { position: absolute; left: 0; top: calc(100% + 8px); z-index: 30; width: min(440px, 86vw); padding: 10px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border-strong); box-shadow: 0 14px 34px rgba(0, 0, 0, .55); display: flex; flex-direction: column; gap: 8px; }
+  .cob2-lead-caixa input { height: 36px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); padding: 0 11px; font: 13px var(--sans); width: 100%; box-sizing: border-box; }
+  .cob2-lead-dica { font-size: 11px; color: var(--muted); }
+  .cob2-lead-lista { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+  .cob2-lead-lista button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1px 10px; text-align: left; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; cursor: pointer; }
+  .cob2-lead-lista button:hover, .cob2-lead-lista button:focus-visible { background: var(--surface); outline: none; }
+  .cob2-lead-lista b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cob2-lead-lista small { font-size: 11px; color: var(--muted); grid-column: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cob2-lead-lista i { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-style: normal; font-size: 10.5px; color: var(--muted); }
+  .cob2-lead-lista i .tem { color: var(--ok-fg); } .cob2-lead-lista i .falta { color: var(--warn-fg); }
+  .cob2-lead-msg { font-size: 12px; color: var(--muted); padding: 6px 8px; }
+  .cob2-lead-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 2px 1px 9px; margin-right: 8px; border-radius: 999px; border: 1px solid var(--accent); color: var(--text); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .cob2-lead-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; padding: 0 6px; }
+  .cob2-st .b em { font-style: normal; color: var(--accent); }
+  .cob2-foto { flex: none; width: 28px; height: 26px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface-2); cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+  .cob2-foto:hover { border-color: var(--accent); }
+  /* 25/11: dentro do painel Consulta (assets/consulta.js) a tela abre sem o menu lateral */
+  body.cob-embed .nav, body.cob-embed .topo-movel { display: none !important; }
+  body.cob-embed .main.cob2 { padding: 10px 14px 10px; }
   .uni-bloco { display: flex; flex-direction: column; gap: 10px; }
   .cob2-corpo .cob-res.cob-info { background: var(--info-bg); border-color: var(--info-fg); color: var(--info-fg); }
   .cob2-blocos { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
@@ -185,6 +215,16 @@
 
     <!-- Faixa fina de entradas: endereço | crédito -->
     <section class="cob2-inputs" aria-label="Dados da consulta">
+      <!-- 25/11 (Ricardo: "um botão de busca de lead e cliente, para refazer uma consulta com os dados deles sem copiar e colar") -->
+      <div class="cob2-grp cob2-lead">
+        <button type="button" class="btn cob2-lead-bt" id="lead-bt" aria-expanded="false" aria-controls="lead-caixa" title="Buscar lead ou cliente pelo nome, telefone, CPF ou L-número — preenche os campos e consulta">🔍 Lead/cliente</button>
+        <div class="cob2-lead-caixa" id="lead-caixa" hidden>
+          <input type="search" id="lead-q" placeholder="Nome, telefone, CPF ou L-número" aria-label="Buscar lead ou cliente" autocomplete="off" enterkeyhint="search">
+          <span class="cob2-lead-dica">Tocar preenche endereço<span data-so-credito>, CPF, celular e e-mail</span> e já consulta a viabilidade. O crédito só sai com “autorizou” e Crédito.</span>
+          <div class="cob2-lead-lista" id="lead-lista"></div>
+        </div>
+      </div>
+      <div class="cob2-sep"></div>
       <form class="cob2-grp" id="form-cob" novalidate>
         <label class="campo" style="width:118px">CEP<input type="text" name="cep" inputmode="numeric" placeholder="00000-000" maxlength="9" autocomplete="off" required></label>
         <label class="campo" style="width:78px">Número<input type="text" name="numero" placeholder="nº" autocomplete="off" required></label>
@@ -205,7 +245,7 @@
     <section class="cob2-grid">
       <!-- Resultado em largura total (altura fixa; consultar preenche, não empurra): passos à esquerda, decisão e fachadas à direita -->
       <div class="painel cob2-card cob2-res" id="card-res">
-        <div class="cob2-ct"><b>Resultado</b><span id="res-end">digite o CEP e o número</span></div>
+        <div class="cob2-ct"><b>Resultado</b><span><span id="res-lead"></span><span id="res-end">digite o CEP e o número</span></span></div>
         <div class="cob2-corpo" aria-live="polite">
           <div class="cob2-col"><ol class="cob2-steps" id="steps"></ol></div>
           <div class="cob2-col">
@@ -245,9 +285,10 @@
         <div class="cob-moldura" id="moldura"><span class="carregando">Carregando o painel DFV Sudeste…</span></div>
       </div>
     </section>
-    <!-- Print da tela do portal quando a viabilidade não saiu (só admin/backoffice; fica 7 dias na VPS) -->
-    <div class="cob2-print" id="print-portal" hidden role="dialog" aria-label="Tela do portal da Nio">
-      <div class="cob2-print-topo"><b>Tela do portal da Nio</b><span class="muted" id="print-sub"></span>
+    <!-- Prints da tela do portal (só admin/backoffice; ficam 7 dias na VPS). 25/11: sempre — viabilidade e crédito -->
+    <div class="cob2-print" id="print-portal" hidden role="dialog" aria-label="Prints da consulta">
+      <div class="cob2-print-topo"><b>Prints da consulta</b><span class="cob2-print-abas" id="print-abas"></span><span class="muted" id="print-sub"></span>
+        <button type="button" class="btn btn-sm" id="print-copiar" title="Copia o print para colar no WhatsApp">📋 Copiar imagem</button>
         <button type="button" class="btn btn-sm" id="print-fechar">✕ Fechar</button></div>
       <div class="cob2-print-img" id="print-img"></div>
     </div>
@@ -256,8 +297,13 @@
 <script>
 (async function () {
   const { esc } = NG;
+  // 25/11 (Ricardo: "coloque essa tela no lugar do Consulta … e também na lupa"): ?embed=1 = dentro do painel Consulta
+  // (assets/consulta.js, num iframe). Sem menu lateral; conversa com o painel por postMessage (mesma origem).
+  const EMBED = new URLSearchParams(location.search).get('embed') === '1' && window.parent !== window;
+  if (EMBED) document.body.classList.add('cob-embed');
   const eu = await NG.exigirLogin();
-  NGSidebar.montar();
+  if (!EMBED) NGSidebar.montar();
+  const paraPainel = (msg) => { if (EMBED) try { window.parent.postMessage({ ng: 'cob', ...msg }, location.origin); } catch (_) { /* */ } };
   const podeCredito = ['admin', 'backoffice'].includes(eu.perfil);
   document.querySelectorAll('[data-so-credito]').forEach((el) => { el.hidden = !podeCredito; });
   document.getElementById('op-cred').hidden = !podeCredito;
@@ -372,10 +418,12 @@
 
   // ------------------------------------------------------------ passos Portal → DFV → Crédito + status no cabeçalho
   const ETAPA_CRED = { 1: 'identificação PDV', 2: 'viabilidade do endereço', 3: 'Receita Federal e duplicidade de pedido', 4: 'contato', 5: 'lendo o crédito' };
-  const passo = (n, cor, titulo, sub, linha2, selo, seloCor) => `
+  const passo = (n, cor, titulo, sub, linha2, selo, seloCor, foto) => `
     <li class="cob2-step"><span class="cob2-num ${cor}">${n}</span>
       <div class="cob2-st"><div class="a">${titulo} <small>· ${sub}</small></div><div class="b" title="${esc(String(linha2).replace(/<[^>]+>/g, ''))}">${linha2}</div></div>
-      <span class="chip ${seloCor}">${esc(selo)}</span></li>`;
+      ${foto || ''}<span class="chip ${seloCor}">${esc(selo)}</span></li>`;
+  // 25/11: 📷 no passo que tem print (só admin/backoffice abrem — a edge credito-consulta confere)
+  const fotoBt = (qual) => (podeCredito && prints().some((x) => x.qual === qual) ? `<button type="button" class="cob2-foto" data-print="${qual}" title="Ver o print desta etapa no portal">📷</button>` : '');
   function desenharPassos() {
     const p = portal || {}, s = p.s || {};
     // 1 · Portal
@@ -387,12 +435,12 @@
       p1 = passo(1, 'info', 'Portal', 'endereço real', `${esc(txt)}… · leva ~15–25 s`, 'consultando…', 'info');
     } else if (p.estado === 'erro') p1 = passo(1, 'warn', 'Portal', 'endereço real', esc(p.erro || 'sem resposta'), p.naoInstalado ? 'Operador fora' : 'Não decidiu', 'warn');
     else {
-      const car = `${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
+      const car = `${p.viaCredito ? '<em>veio da consulta de crédito</em> · ' : ''}${s.consultado_em ? `hoje ${esc(NG.fmtHora(s.consultado_em))}` : 'agora'}${s.cache ? ' (cache)' : ''}${p.ms && !s.cache ? ` · ${seg(p.ms)}` : ''}`;
       const sit = s.resultado === 'complemento_fora_lista' ? situacaoUnidade(s) : '';
       const R = { viavel: ['Viável', 'ok'], sem_viabilidade: s.cadastro_endereco ? ['Viabilidade parcial', 'warn'] : ['Sem viabilidade', 'bad'], rua_divergente: ['Outra rua', 'warn'],
         complemento_fora_lista: ['escolher', 'ambiguo'].includes(sit) ? ['Escolha a unidade', 'info'] : ['Unidade fora da lista', 'warn'] }[s.resultado] || ['Não decidiu', 'warn'];
       const det = s.resultado === 'viavel' && s.velocidade ? `até ${esc(s.velocidade)} · ${car}` : s.cadastro_endereco ? `a Nio precisa cadastrar o endereço · ${car}` : s.resultado in { viavel: 1, sem_viabilidade: 1, complemento_fora_lista: 1 } ? `viabilidade oficial · ${car}` : `${esc(s.motivo || s.resultado || '—')} · ${car}`;
-      p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1]);
+      p1 = passo(1, R[1], 'Portal', 'endereço real', det, R[0], R[1], fotoBt('viab'));
     }
     // 2 · DFV
     let p2;
@@ -429,7 +477,7 @@
         const padrao = (r.endereco || {}).origem === 'padrao';
         const quando = r.consultado_em ? NG.fmtHora(r.consultado_em) : '';
         p3 = passo(3, cor, 'Crédito', padrao ? 'CPF (endereço padrão)' : 'CPF do cliente',
-          `${esc(r.cpf_mascara || '')}${quando ? ` · ${esc(quando)}${r.cache ? ' (cache)' : ''}` : ''}${r.ms && !r.cache ? ` · ${Math.round(r.ms / 1000)} s` : ''}`, rot, cor);
+          `${esc(r.cpf_mascara || '')}${quando ? ` · ${esc(quando)}${r.cache ? ' (cache)' : ''}` : ''}${r.ms && !r.cache ? ` · ${Math.round(r.ms / 1000)} s` : ''}`, rot, cor, fotoBt('cred'));
       }
     }
     stepsEl.innerHTML = p1 + p2 + p3;
@@ -559,12 +607,14 @@
   function desenharAcoes() {
     desenharDiag();
     const lista = (acoesCred.length ? acoesCred : acoesDec).filter(Boolean);
-    const pj = podeCredito && portal && portal.s && portal.s.print_job;   // print da tela do portal (viabilidade que não saiu)
+    // 25/11: os prints da consulta (viabilidade e crédito) num botão só — antes era "📷 Tela do portal", só da viabilidade que não saiu
+    const np = podeCredito ? prints().length : 0;
     actsEl.innerHTML = lista.join('')
-      + (pj ? `<button type="button" class="btn btn-ghost cob2-nova" data-print="${esc(pj)}" title="Print do que o portal mostrou no fim da consulta (Etapas 0–2, sem CPF; fica 7 dias)">📷 Tela do portal</button>` : '')
-      + (portal || dfv ? `<button type="button" class="btn btn-ghost${pj ? '' : ' cob2-nova'}" data-nova title="Limpar e começar outra consulta">↺ Nova</button>` : '');
+      + (np ? `<button type="button" class="btn btn-ghost cob2-nova" data-print="${esc(prints()[0].qual)}" title="O que o portal mostrou em cada consulta (ficam 7 dias na VPS)">📷 ${np > 1 ? `Prints (${np})` : 'Print do portal'}</button>` : '')
+      + (portal || dfv || cred ? `<button type="button" class="btn btn-ghost${np ? '' : ' cob2-nova'}" data-nova title="Limpar e começar outra consulta">↺ Nova</button>` : '');
     const btns = [...actsEl.querySelectorAll('.btn:not([data-nova]):not([data-print])')];
     btns.forEach((b, i) => b.classList.toggle('btn-acc', i === 0));
+    avisarPainel();
   }
 
   function predioTxt(s) {
@@ -748,6 +798,7 @@
     if (!rodandoCred) { cred = null; acoesCred = []; credEl.hidden = true; }
     resEnd.dataset.base = `CEP ${F.cep.value}${e.numero ? ` · nº ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}`;
     resEnd.textContent = resEnd.dataset.base;
+    guardarSessao({ end: { cep: F.cep.value, numero: e.numero, complemento: e.complemento }, consultou: true });   // 25/11: painel
     rodarDfv(e, minha);       // ≤ 1 s (prévia)
     rodarPortal(e, minha);    // ~15–25 s (decide)
   }
@@ -761,6 +812,8 @@
     form.reset();
     dfvBloco.hidden = true;
     resEnd.textContent = 'digite o CEP e o número';
+    guardarSessao({ end: null, consultou: false });
+    if (lead) soltarLead();
     desenharDecisao();
     F.cep.focus();
   }
@@ -816,24 +869,60 @@
     F.complemento.value = b.dataset.comp;
     consultar();
   });
-  // Print da tela do portal (viabilidade que não saiu)
+  // Prints da tela do portal. 25/11 (Ricardo: "o operador da VPS sempre levar o print da consulta (resultado da viabilidade e
+  // do crédito)"): viabilidade = o print do fim da consulta de viabilidade, ou o da Etapa 2 da consulta de crédito (parte 'viab');
+  // crédito = o print do fim da consulta de crédito (mostra CPF e nome — Ricardo aprovou; só admin/backoffice, 7 dias na VPS).
+  function prints() {
+    const l = [];
+    const s = (portal && portal.estado === 'pronto' && portal.s) || {};
+    if (s.print_job) l.push({ qual: 'viab', rot: 'Viabilidade', job: s.print_job, parte: s.print_parte || '', em: s.consultado_em });
+    const r = cred && cred.estado === 'pronto' ? cred.r : null;
+    if (r && r.print_job) l.push({ qual: 'cred', rot: 'Crédito', job: r.print_job, parte: '', em: r.consultado_em });
+    return l;
+  }
   const printEl = document.getElementById('print-portal');
   const printImg = document.getElementById('print-img');
   const printSub = document.getElementById('print-sub');
-  function fecharPrint() { printEl.hidden = true; printImg.innerHTML = ''; }
-  async function verPrint(jobId) {
+  const printAbas = document.getElementById('print-abas');
+  const printCache = {};   // job+parte → {tipo, base64, em} (só em memória)
+  let printVendo = null;
+  function fecharPrint() { printEl.hidden = true; printImg.innerHTML = ''; printVendo = null; }
+  async function verPrint(qual) {
+    const l = prints();
+    const p = l.find((x) => x.qual === qual) || l[0];
+    if (!p) return;
+    printVendo = p;
     printEl.hidden = false;
+    printAbas.innerHTML = l.length > 1 ? l.map((x) => `<button type="button" data-print-aba="${x.qual}" aria-pressed="${x.qual === p.qual}">${esc(x.rot)}${x.em ? ` · ${esc(NG.fmtHora(x.em))}` : ''}</button>`).join('') : `<b>${esc(p.rot)}</b>`;
     printSub.textContent = '';
     printImg.innerHTML = '<span class="carregando">Buscando o print na VPS…</span>';
+    const k = `${p.job}:${p.parte}`;
     try {
-      const r = await NG.portalPrint(jobId);
-      if (printEl.hidden) return;
-      printSub.textContent = `${resEnd.dataset.base || ''} · no fim da consulta, ${r.em || ''} · fica 7 dias`;
-      printImg.innerHTML = `<img alt="Tela do portal da Nio no fim da consulta de viabilidade" src="data:${esc(r.tipo || 'image/jpeg')};base64,${r.base64}">`;
+      const r = printCache[k] || (printCache[k] = await NG.portalPrint(p.job, p.parte || undefined));
+      if (printVendo !== p) return;
+      printSub.textContent = `${resEnd.dataset.base || ''} · ${r.em || ''} · fica 7 dias na VPS`;
+      printImg.innerHTML = `<img id="print-foto" alt="Tela do portal da Nio — ${esc(p.rot)}" src="data:${esc(r.tipo || 'image/jpeg')};base64,${r.base64}">`;
     } catch (err) {
-      printImg.innerHTML = `<div class="faixa amarelo"><strong>Print indisponível</strong><span>${esc(NG.msgErro(err))}</span></div>`;
+      delete printCache[k];
+      if (printVendo === p) printImg.innerHTML = `<div class="faixa amarelo"><strong>Print indisponível</strong><span>${esc(NG.msgErro(err))}</span></div>`;
     }
   }
+  printAbas.addEventListener('click', (ev) => { const b = ev.target.closest('[data-print-aba]'); if (b) verPrint(b.dataset.printAba); });
+  // Copiar imagem: o navegador só aceita PNG na área de transferência — converte o JPEG num canvas (dentro do clique).
+  document.getElementById('print-copiar').addEventListener('click', () => {
+    const img = document.getElementById('print-foto');
+    if (!img || !img.complete) { NG.toast('O print ainda não carregou.', 'bad'); return; }
+    try {
+      const png = new Promise((ok, falhou) => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth; c.height = img.naturalHeight;
+        c.getContext('2d').drawImage(img, 0, 0);
+        c.toBlob((b) => (b ? ok(b) : falhou(new Error('sem imagem'))), 'image/png');
+      });
+      navigator.clipboard.write([new ClipboardItem({ 'image/png': png })])
+        .then(() => NG.toast('Print copiado — é só colar no WhatsApp.', 'ok'), () => NG.toast('O navegador não deixou copiar a imagem: clique com o botão direito no print › Copiar imagem.', 'bad'));
+    } catch (_) { NG.toast('O navegador não deixou copiar a imagem: clique com o botão direito no print › Copiar imagem.', 'bad'); }
+  });
   document.getElementById('print-fechar').addEventListener('click', fecharPrint);
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !printEl.hidden) fecharPrint(); });
 
@@ -918,7 +1007,33 @@
     credEl.style.cssText = 'display:flex;flex-direction:column;gap:8px';
     document.querySelector('.cob2-corpo').scrollTop = 0;
   }
-  function credMudou() { desenharPassos(); desenharAcoes(); }
+  function credMudou() { desenharPassos(); desenharAcoes(); avisarPainel(); }
+
+  // 25/11 (Ricardo: "quando for uma consulta de crédito, como ele já passa pela etapa da viabilidade, a tela pode mostrar também
+  // o resultado da viabilidade"): crédito com o ENDEREÇO DO CLIENTE → o passo 1 · Portal mostra o que a Etapa 2 dele leu.
+  // Só preenche se a tela não tem viabilidade própria deste mesmo endereço. Endereço padrão: nunca (não é o do cliente — 11/11).
+  const PAROU_NA_VIAB = ['sem_viabilidade', 'complemento_fora_lista', 'rua_divergente'];   // pedido_endereco: a ficha trata
+  function viabDoCredito(r, e) {
+    if (!r || !e || (r.endereco || {}).origem !== 'cliente') return;
+    const mesmo = ultimo && ultimo.cep === e.cep && ultimo.numero === e.numero && ultimo.complemento === e.complemento;
+    if (mesmo && portal && (portal.estado === 'rodando' || (portal.estado === 'pronto' && !portal.viaCredito))) return;
+    let res = null;
+    if (PAROU_NA_VIAB.includes(r.resultado)) res = r.resultado;
+    else if (r.velocidade || (r.etapa_parada || 0) > 2) res = 'viavel';
+    if (!res) return;   // parou antes da Etapa 2 (erro, fila): não diz nada da viabilidade
+    const s = { resultado: res, velocidade: r.velocidade || null, endereco: r.endereco, consultado_em: r.consultado_em, cache: !!r.cache,
+      cadastro_endereco: r.cadastro_endereco, opcoes: r.opcoes,
+      // print: o da Etapa 2 (viável, a consulta seguiu) ou, se parou na viabilidade, o do fim — a mesma tela
+      print_job: res === 'viavel' ? (r.print_viab_job || null) : (r.print_job || null), print_parte: res === 'viavel' ? 'viab' : '' };
+    if (!mesmo) {
+      ultimo = e;
+      resEnd.dataset.base = `CEP ${e.cep.slice(0, 5)}-${e.cep.slice(5)}${e.numero ? ` · nº ${e.numero}` : ''}${e.complemento ? ` · ${e.complemento}` : ''}`;
+      resEnd.textContent = resEnd.dataset.base;
+    }
+    portal = { estado: 'pronto', s, viaCredito: true };
+    if (!dfv || !mesmo) rodarDfv(e, rodada);   // DFV ≤ 1 s — o passo 2 fica completo
+    desenharDecisao();
+  }
   async function consultarCredito(padrao) {
     if (rodandoCred) return;
     const d = { cpf: NG.soDigitos(FC.cpf.value), autorizado: FC.autorizado.checked, contato: { celular: NG.soDigitos(FC.celular.value), email: FC.email.value.trim() } };
@@ -936,26 +1051,33 @@
     acoesCred = []; credEl.hidden = true;
     credMudou();
     try {
-      let s = await NG.creditoIniciar(d);
-      const fim = Date.now() + 4 * 60 * 1000;
-      while (s && !['pronto', 'erro'].includes(s.estado)) {
-        if (Date.now() > fim) { cred = { estado: 'erro', erro: 'demorou demais — tente de novo em alguns minutos' }; credMudou(); return; }
-        cred = { estado: 'rodando', padrao, s };
-        desenharPassos();
-        await pausa(3000);
-        s = await NG.creditoStatus(s.job_id);
-      }
-      cred = { estado: 'pronto', r: s };
-      renderCred(s);
-      registrarConsulta('credito', padrao ? null : d.endereco, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, cache: !!s.cache },
-        s.ms, { cpf_mascara: s.cpf_mascara || null });
+      const s0 = await NG.creditoIniciar(d);
+      guardarSessao({ credJob: s0 && s0.job_id && s0.estado !== 'pronto' ? { job: s0.job_id, padrao: !!padrao, end: padrao ? null : { cep: d.endereco.cep, numero: d.endereco.numero, complemento: d.endereco.complemento }, desde: Date.now() } : null });
+      await acompanharCred(s0, !!padrao, padrao ? null : d.endereco);
     } catch (err) {
       cred = err.naoInstalado ? { estado: 'fora' } : { estado: 'erro', erro: `consulta de crédito indisponível: ${NG.msgErro(err)}` };
       acoesCred = [];
     } finally {
       rodandoCred = false; travar();
+      guardarSessao({ credJob: null });
       credMudou();
     }
+  }
+  // Acompanha o job até o fim (também ao voltar ao painel depois de trocar de tela — o job_id fica na sessão da aba).
+  async function acompanharCred(s, padrao, end) {
+    const fim = Date.now() + 4 * 60 * 1000;
+    while (s && !['pronto', 'erro'].includes(s.estado)) {
+      if (Date.now() > fim) { cred = { estado: 'erro', erro: 'demorou demais — tente de novo em alguns minutos' }; return; }
+      cred = { estado: 'rodando', padrao, s };
+      desenharPassos(); avisarPainel();
+      await pausa(3000);
+      s = await NG.creditoStatus(s.job_id);
+    }
+    cred = { estado: 'pronto', r: s };
+    renderCred(s);
+    viabDoCredito(s, end);
+    registrarConsulta('credito', end, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, cache: !!s.cache },
+      s.ms, { cpf_mascara: s.cpf_mascara || null });
   }
   formCred.addEventListener('submit', (ev) => {
     ev.preventDefault();
@@ -968,10 +1090,194 @@
   travar();
   desenharDecisao();
 
+  stepsEl.addEventListener('click', async (ev) => { await cliqueComum(ev); });   // 📷 dos passos
+
+  // ------------------------------------------------------------ 25/11: lead/cliente (busca) + conversa com o painel Consulta
+  // Ricardo: "acrescente um botão de busca de lead e cliente, para que eu possa refazer uma consulta com os dados deles sem ter
+  // que copiar e colar". Só LÊ (v_leads, mari_conversas, vendas) e preenche a faixa — não grava nada no lead (regra 20).
+  // No painel (EMBED), a sessão da aba guarda o lead (ids e nome), o endereço e o job de crédito em andamento — nunca CPF,
+  // e-mail ou celular (são relidos do banco), como a Consulta central fazia.
+  const SESS = 'niogen.cob';
+  let sessao = {};
+  if (EMBED) try { sessao = JSON.parse(sessionStorage.getItem(SESS) || 'null') || {}; } catch (_) { sessao = {}; }
+  function guardarSessao(x) { if (!EMBED) return; sessao = { ...sessao, ...x }; try { sessionStorage.setItem(SESS, JSON.stringify(sessao)); } catch (_) { /* sem storage: só não volta depois de trocar de tela */ } }
+  const leadBt = document.getElementById('lead-bt');
+  const leadCaixa = document.getElementById('lead-caixa');
+  const leadQ = document.getElementById('lead-q');
+  const leadLista = document.getElementById('lead-lista');
+  const resLead = document.getElementById('res-lead');
+  let lead = null;           // {conversa_id, venda_id, nome, lead_numero}
+  let achados = [];
+  function abrirBusca(abrir) {
+    leadCaixa.hidden = !abrir;
+    leadBt.setAttribute('aria-expanded', String(abrir));
+    if (abrir) { leadQ.focus(); leadQ.select(); if (!leadLista.innerHTML) leadLista.innerHTML = '<div class="cob2-lead-msg">Digite o nome, o telefone, o CPF ou o L-número.</div>'; }
+  }
+  leadBt.addEventListener('click', () => abrirBusca(leadCaixa.hidden));
+  document.addEventListener('click', (ev) => { if (!leadCaixa.hidden && !ev.target.closest('.cob2-lead')) abrirBusca(false); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !leadCaixa.hidden) { abrirBusca(false); leadBt.focus(); } });
+  let tmBusca = null, buscaN = 0;
+  leadQ.addEventListener('input', () => { clearTimeout(tmBusca); tmBusca = setTimeout(() => buscarLead(leadQ.value), 350); });
+  leadQ.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter') { ev.preventDefault(); clearTimeout(tmBusca); if (achados.length === 1) usarLead(achados[0]); else buscarLead(leadQ.value); }
+    if (ev.key === 'ArrowDown') { const b = leadLista.querySelector('button'); if (b) { ev.preventDefault(); b.focus(); } }
+  });
+  // A mesma busca da Consulta central: nome · telefone (8+ dígitos) · CPF · L-número.
+  async function buscarLead(texto) {
+    const t = String(texto || '').trim();
+    const minha = ++buscaN;
+    const dig = NG.soDigitos(t);
+    const soNum = !!t && /^[\d\s().+\-/]+$/.test(t);
+    const mL = t.match(/^\s*L\s*-?\s*(\d{1,9})\s*$/i);
+    if (!mL && !(soNum && dig.length >= 8) && t.length < 3) { achados = []; leadLista.innerHTML = '<div class="cob2-lead-msg">Digite o nome, o telefone, o CPF ou o L-número.</div>'; return; }
+    leadLista.innerHTML = '<div class="cob2-lead-msg">Buscando…</div>';
+    let q = NG.sb.from('v_leads').select('conversa_id, venda_id, nome, cidade, etapa_nome, status_nome, saida_nome, ultima_em').order('ultima_em', { ascending: false, nullsFirst: false }).limit(8);
+    try {
+      if (mL || (soNum && dig.length === 11 && NG.documentoValido(dig))) {
+        const [rc, rv] = mL
+          ? await Promise.all([NG.sb.from('mari_conversas').select('id').eq('lead_numero', Number(mL[1])).limit(5), NG.sb.from('vendas').select('id').eq('lead_numero', Number(mL[1])).limit(5)])
+          : await Promise.all([NG.sb.from('mari_conversas').select('id').eq('dados->>cpf', dig).limit(5), NG.sb.from('vendas').select('id').eq('cliente_cpf_cnpj', dig).limit(5)]);
+        const cs = ((rc && rc.data) || []).map((x) => x.id), vs = ((rv && rv.data) || []).map((x) => x.id);
+        const partes = [cs.length && `conversa_id.in.(${cs.join(',')})`, vs.length && `venda_id.in.(${vs.join(',')})`].filter(Boolean);
+        if (!mL && dig.length === 11) partes.push(`telefone.ilike.*${dig.slice(-8)}`);
+        if (!partes.length) { if (minha === buscaN) { achados = []; leadLista.innerHTML = '<div class="cob2-lead-msg">Nenhum lead encontrado.</div>'; } return; }
+        q = q.or(partes.join(','));
+      } else if (soNum) q = q.ilike('telefone', `%${dig.slice(-8)}`);
+      else q = q.ilike('nome', `%${t.replace(/[%_,()]/g, ' ').trim()}%`);
+      const r = await q;
+      if (minha !== buscaN) return;
+      if (r.error) throw r.error;
+      achados = r.data || [];
+      // O que cada um já tem (endereço, CPF) — 1 rodada paralela, ≤ 2 chamadas
+      const cIds = achados.map((x) => x.conversa_id).filter(Boolean), vIds = achados.map((x) => x.venda_id).filter(Boolean);
+      const [tc, tv] = await Promise.all([
+        cIds.length ? NG.sb.from('mari_conversas').select('id, lead_numero, cep, cpf:dados->>cpf').in('id', cIds) : { data: [] },
+        vIds.length ? NG.sb.from('vendas').select('id, lead_numero, cep, cliente_cpf_cnpj').in('id', vIds) : { data: [] },
+      ]);
+      if (minha !== buscaN) return;
+      const mc = Object.fromEntries(((tc && tc.data) || []).map((x) => [x.id, x])), mv = Object.fromEntries(((tv && tv.data) || []).map((x) => [x.id, x]));
+      achados.forEach((x) => {
+        const c = mc[x.conversa_id] || {}, v = mv[x.venda_id] || {};
+        x.lead_numero = v.lead_numero || c.lead_numero || null;
+        x.temEnd = NG.soDigitos(v.cep || c.cep || '').length === 8;
+        x.temCpf = !!(v.cliente_cpf_cnpj || c.cpf);
+      });
+      const haQuanto = (iso) => { if (!iso) return ''; const m = Math.round((Date.now() - new Date(iso)) / 60000); return m < 60 ? `há ${Math.max(m, 1)} min` : m < 2880 ? `há ${Math.round(m / 60)} h` : `há ${Math.round(m / 1440)} dias`; };
+      leadLista.innerHTML = achados.length ? achados.map((x, k) => `<button type="button" data-lead="${k}">
+          <b>${esc(x.nome || 'Sem nome')}</b>
+          <small>${esc([x.lead_numero ? `L-${x.lead_numero}` : '', x.cidade, x.saida_nome || x.status_nome || x.etapa_nome, haQuanto(x.ultima_em)].filter(Boolean).join(' · '))}</small>
+          <i>${x.temEnd ? '<span class="tem">endereço</span>' : '<span class="falta">sem endereço</span>'}${podeCredito ? ` · ${x.temCpf ? '<span class="tem">CPF</span>' : '<span class="falta">sem CPF</span>'}` : ''}</i></button>`).join('')
+        : '<div class="cob2-lead-msg">Nenhum lead encontrado. Confira a grafia ou tente pelo telefone.</div>';
+    } catch (err) {
+      if (minha === buscaN) leadLista.innerHTML = `<div class="cob2-lead-msg">A busca falhou: ${esc(NG.msgErro(err))}</div>`;
+    }
+  }
+  leadLista.addEventListener('click', (ev) => { const b = ev.target.closest('[data-lead]'); if (b) usarLead(achados[Number(b.dataset.lead)]); });
+  leadLista.addEventListener('keydown', (ev) => {
+    const b = ev.target.closest('[data-lead]');
+    if (!b) return;
+    if (ev.key === 'ArrowDown' && b.nextElementSibling) { ev.preventDefault(); b.nextElementSibling.focus(); }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); (b.previousElementSibling || leadQ).focus(); }
+  });
+  function desenharLead() {
+    resLead.innerHTML = lead ? `<span class="cob2-lead-chip" title="Consulta com os dados deste lead">${lead.lead_numero ? `L-${esc(lead.lead_numero)} · ` : ''}${esc(lead.nome || 'Cliente')}<button type="button" data-soltar-lead title="Soltar o lead (os campos ficam)" aria-label="Soltar o lead">✕</button></span>` : '';
+  }
+  resLead.addEventListener('click', (ev) => { if (ev.target.closest('[data-soltar-lead]')) soltarLead(); });
+  function soltarLead() { lead = null; desenharLead(); guardarSessao({ lead: null }); paraPainel({ tipo: 'lead', cli: null }); }
+  const fmtCel = (t) => { let d = NG.soDigitos(t || ''); if (d.length > 11 && d.startsWith('55')) d = d.slice(2); return d.length === 11 ? `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}` : d; };
+  // Lê o lead (1 rodada paralela, ≤ 3 chamadas), preenche a faixa e — com CEP — consulta a viabilidade.
+  async function usarLead(x, opt) {
+    opt = opt || {};
+    if (!x || !(x.conversa_id || x.venda_id)) return;
+    abrirBusca(false);
+    const um = (p) => Promise.resolve(p).then((r) => (r && !r.error ? r.data : null), () => null);
+    const COLS_C = 'id, lead_numero, venda_id, telefone, cep, numero, complemento, nome_contato, cpf:dados->>cpf, email:dados->>email, dnome:dados->>nome';
+    const COLS_V = 'id, lead_numero, cliente_nome, cliente_cpf_cnpj, cliente_email, cep, numero, complemento';
+    let [conv, venda] = await Promise.all([
+      x.conversa_id ? um(NG.sb.from('mari_conversas').select(COLS_C).eq('id', x.conversa_id).maybeSingle()) : null,
+      x.venda_id ? um(NG.sb.from('vendas').select(COLS_V).eq('id', x.venda_id).maybeSingle()) : null,
+    ]);
+    if (!venda && conv && conv.venda_id) venda = await um(NG.sb.from('vendas').select(COLS_V).eq('id', conv.venda_id).maybeSingle());
+    if (!conv && venda) conv = await um(NG.sb.from('mari_conversas').select(COLS_C).eq('venda_id', venda.id).limit(1).maybeSingle());
+    if (!conv && !venda) { NG.toast('Não consegui ler este lead.', 'bad'); return; }
+    lead = { conversa_id: (conv && conv.id) || x.conversa_id || null, venda_id: (venda && venda.id) || x.venda_id || null,
+      nome: (venda && venda.cliente_nome) || (conv && (conv.dnome || conv.nome_contato)) || x.nome || 'Cliente', lead_numero: (venda && venda.lead_numero) || (conv && conv.lead_numero) || null };
+    const fe = venda && NG.soDigitos(venda.cep || '').length === 8 ? venda : conv || {};
+    const cep = NG.soDigitos(fe.cep || '');
+    F.cep.value = cep.length === 8 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : '';
+    F.numero.value = String(fe.numero || '').trim();
+    F.complemento.value = String(fe.complemento || '').trim();
+    opcaoEndereco = '';
+    if (podeCredito) {
+      const cpf = NG.soDigitos((venda && venda.cliente_cpf_cnpj) || (conv && conv.cpf) || '');
+      FC.cpf.value = cpf.length === 11 ? fmtCpf(cpf) : '';
+      FC.celular.value = fmtCel(conv && conv.telefone);
+      FC.email.value = (venda && venda.cliente_email) || (conv && conv.email) || '';
+      FC.autorizado.checked = false;   // a autorização é de cada consulta: nunca vem marcada
+      credPadrao = false;
+      travar();
+    }
+    desenharLead();
+    guardarSessao({ lead });
+    paraPainel({ tipo: 'lead', cli: lead });
+    if (opt.rodar === false) return;
+    if (cep.length === 8) consultar();
+    else { NG.toast(`${NG.primeiroNome ? NG.primeiroNome(lead.nome) : lead.nome} ainda não tem CEP: os outros dados já estão na faixa.`, 'bad'); F.cep.focus(); }
+  }
+  // Resumo curto para a pílula do painel minimizado
+  function avisarPainel() {
+    if (!EMBED) return;
+    const ocupado = (portal && portal.estado === 'rodando') || (cred && cred.estado === 'rodando');
+    let txt = '';
+    if (cred && cred.estado === 'pronto') txt = `Crédito: ${(ROT[cred.r.resultado] || [cred.r.resultado])[0]}`;
+    else if (portal && portal.estado === 'pronto') txt = `Viab.: ${({ viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', complemento_fora_lista: 'Unidade fora da lista', rua_divergente: 'Outra rua' })[portal.s.resultado] || 'não decidiu'}`;
+    else if (portal && portal.estado === 'erro') txt = 'Viab.: portal não respondeu';
+    paraPainel({ tipo: 'resumo', txt, ocupado: !!ocupado });
+  }
+  window.addEventListener('message', (ev) => {
+    if (!EMBED || ev.origin !== location.origin || ev.source !== window.parent) return;
+    const m = ev.data || {};
+    if (m.ng !== 'painel') return;
+    if (m.tipo === 'lead' && m.cli) {
+      const mesmo = lead && ((m.cli.venda_id && m.cli.venda_id === lead.venda_id) || (m.cli.conversa_id && m.cli.conversa_id === lead.conversa_id));
+      if (mesmo && (portal || cred)) return;   // a lupa de novo no mesmo cliente: só mostra o painel, sem refazer
+      usarLead(m.cli, { rodar: m.rodar !== false });
+    } else if (m.tipo === 'end' && m.end) {
+      F.cep.value = m.end.cep || ''; F.numero.value = m.end.numero || ''; F.complemento.value = m.end.complemento || '';
+      if (NG.soDigitos(F.cep.value).length === 8) consultar(); else F.numero.focus();
+    } else if (m.tipo === 'limpar') {
+      novaConsulta();
+      if (podeCredito) { formCred.reset(); travar(); }
+    }
+  });
+
   // Vindo da venda: ?cep=&numero=&complemento= já consulta. ?cpf= (antiga credito.html) preenche, mas NÃO dispara o crédito.
   const qs = new URLSearchParams(location.search);
   if (qs.get('cpf') && podeCredito) FC.cpf.value = fmtCpf(NG.soDigitos(qs.get('cpf')).slice(0, 11));
-  if (qs.get('cep')) {
+  // No painel: volta como estava antes de trocar de tela (lead relido do banco, endereço, crédito em andamento) e avisa que está pronto.
+  async function restaurarEmbed() {
+    try {
+      if (sessao.lead) await usarLead(sessao.lead, { rodar: false });
+      const e = sessao.end;
+      if (e && NG.soDigitos(e.cep || '').length === 8) {
+        F.cep.value = e.cep; F.numero.value = e.numero || ''; F.complemento.value = e.complemento || '';
+        if (sessao.consultou) consultar();   // o operador devolve do cache (minutos): não roda o portal de novo
+      }
+    } finally {
+      paraPainel({ tipo: 'pronto' });
+    }
+    const cj = sessao.credJob;
+    if (podeCredito && cj && cj.job && Date.now() - (cj.desde || 0) < 5 * 60 * 1000) {
+      rodandoCred = true; travar();
+      cred = { estado: 'rodando', padrao: !!cj.padrao, s: { estado: 'fila', job_id: cj.job } };
+      credMudou();
+      try { await acompanharCred({ estado: 'fila', job_id: cj.job }, !!cj.padrao, cj.end || null); }
+      catch (err) { cred = { estado: 'erro', erro: `consulta de crédito indisponível: ${NG.msgErro(err)}` }; }
+      finally { rodandoCred = false; travar(); guardarSessao({ credJob: null }); credMudou(); }
+    } else if (cj) guardarSessao({ credJob: null });
+  }
+  if (EMBED) restaurarEmbed();
+  else if (qs.get('cep')) {
     F.cep.value = qs.get('cep');
     F.numero.value = qs.get('numero') || '';
     F.complemento.value = qs.get('complemento') || '';
@@ -981,7 +1287,9 @@
     let L = null;
     try { L = JSON.parse(localStorage.getItem('niogen.cobertura.lead') || 'null'); localStorage.removeItem('niogen.cobertura.lead'); } catch (e) { /* */ }
     history.replaceState(null, '', location.pathname);
-    if (L && Date.now() - (L.em || 0) < 120000) {
+    if (L && Date.now() - (L.em || 0) < 120000 && (L.vendaId || L.conversaId)) {
+      usarLead({ venda_id: L.vendaId || null, conversa_id: L.conversaId || null, nome: L.nome });   // 25/11: com o selo do lead e o contato
+    } else if (L && Date.now() - (L.em || 0) < 120000) {
       if (L.cpf && podeCredito) FC.cpf.value = fmtCpf(NG.soDigitos(L.cpf).slice(0, 11));
       if (L.nome) NG.toast(`Consulta para ${String(L.nome).split(' ')[0]}${L.cpf && podeCredito ? ' — o CPF já está no campo do crédito' : ''}`, 'ok');
       if (NG.soDigitos(L.cep)) { F.cep.value = L.cep; F.numero.value = L.numero || ''; F.complemento.value = L.complemento || ''; consultar(); }

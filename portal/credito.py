@@ -597,6 +597,7 @@ class Consulta:
         self.etapa = 0
         self.pos_etapa2 = False
         self.trava = None
+        self.print_viab = None   # 25/11: print da viabilidade tirado no meio da consulta de crédito (Etapa 2)
         self.respostas = []
         self.out = {'pedido_portal': None, 'nome_receita': None, 'endereco': None, 'popup': None,
                     'formas_liberadas': [], 'ofertas': [], 'etapa_parada': None}
@@ -846,10 +847,14 @@ class Consulta:
             raise Parar('nao_classificado', texto_tela=self.texto_tela(), motivo='sem modal de viabilidade em 45 s')
         txt = f'{pp.get("titulo")} {pp.get("texto")}'
         continuar = next((x for x in pp.get('botoes') or [] if re.match(r'^\s*continuar\s*$', x, re.I)), None)
+        if self.modo == 'credito' and self.p['origem_endereco'] == 'cliente':
+            # 25/11 (Ricardo: "o operador da VPS sempre levar o print da consulta"): na consulta de crédito, o print da
+            # viabilidade sai aqui, com o modal na tela — Etapas 0–2, antes de digitar o CPF. Endereço padrão: sem print.
+            self.print_viab = self._foto()
         if continuar and re.search(r'dispon', txt, re.I) and not re.search(r'indispon', txt, re.I) and not RE_CADASTRO_END.search(txt):
             self.out['endereco']['viabilidade'] = resumo_viabilidade(pp)
+            self.out['velocidade'] = velocidade_de(pp)   # 25/11: também no crédito (a Cobertura mostra a viabilidade dele)
             if self.modo == 'viabilidade':     # só viabilidade: lê e PARA — nunca clica Continuar, nunca vai à Etapa 3
-                self.out['velocidade'] = velocidade_de(pp)
                 raise Parar('viavel')
             b = self.botao(r'^\s*continuar\s*$')
             if not b:
@@ -1300,10 +1305,15 @@ class Consulta:
         return out
 
     def print_seguro(self, resultado):
-        """11/11 (Ricardo): print da tela do portal quando a VIABILIDADE não sai. Só no modo viabilidade (Etapas 0–2,
-        sem CPF nem contato na tela); nunca no crédito (Etapas 3–5 mostram CPF e nome). Só a tela visível, em JPEG."""
-        if self.modo != 'viabilidade' or resultado == 'viavel':
+        """Print da tela do portal no fim da consulta. 11/11: só viabilidade que não saiu. 25/11 (Ricardo: "veja uma forma do
+        operador da VPS sempre levar o print da consulta (resultado da viabilidade e do crédito)" — e "Aprovo" ao aviso de que o
+        print do crédito mostra CPF e nome): SEMPRE na viabilidade e no crédito. Duplicidade (Mari) segue sem print.
+        Só a tela visível, em JPEG; fica na VPS 7 dias (chmod 700) e só admin/backoffice abrem (edge credito-consulta)."""
+        if self.modo not in ('viabilidade', 'credito'):
             return None
+        return self._foto()
+
+    def _foto(self):
         try:
             if self.page and not self.page.is_closed():
                 return self.page.screenshot(type='jpeg', quality=60, full_page=False, timeout=5000)

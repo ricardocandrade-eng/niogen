@@ -203,7 +203,7 @@ class Operador:
             try:
                 out = c.rodar()
                 self.estado['ultimo_uso'] = agora()
-                return out, getattr(c, 'amostras_corpos', []), getattr(c, 'print_jpeg', None)
+                return out, getattr(c, 'amostras_corpos', []), (getattr(c, 'print_jpeg', None), getattr(c, 'print_viab', None))
             except cr.SessaoCaida:
                 if tentativa == 2:
                     raise pl.Falha(8, 'portal pediu login de novo logo após o login')
@@ -333,14 +333,17 @@ def log_credito(job_id, origem, resultado, ms, etapa, cache=False, extra=''):
         pass
 
 
-def _arquivo_print(pasta, job_id):
+def _arquivo_print(pasta, job_id, parte=''):
+    """parte '' = print do fim da consulta; 'viab' = print da viabilidade tirado no meio da consulta de crédito (25/11)."""
     jid = re.sub(r'[^0-9a-f]', '', str(job_id or ''))[:32]
-    return os.path.join(pasta, 'prints', f'{jid}.jpg') if len(jid) == 32 and pasta else None
+    suf = '_viab' if parte == 'viab' else ''
+    return os.path.join(pasta, 'prints', f'{jid}{suf}.jpg') if len(jid) == 32 and pasta else None
 
 
-def gravar_print(pasta, job_id, jpeg):
-    """Print da tela do portal (só viabilidade, sem CPF). Fica na VPS, em amostras/prints (chmod 700), 7 dias."""
-    arq = _arquivo_print(pasta, job_id)
+def gravar_print(pasta, job_id, jpeg, parte=''):
+    """Print da tela do portal. Fica na VPS, em amostras/prints (chmod 700), 7 dias. 25/11: também o do crédito (CPF e
+    nome na tela — Ricardo aprovou); só admin/backoffice leem, pela edge credito-consulta."""
+    arq = _arquivo_print(pasta, job_id, parte)
     if not arq:
         return False
     try:
@@ -361,9 +364,9 @@ def _rodar_job(job_id, params, cfg):
 
         def progresso(**k):
             j.update(k)
-        jpeg = None
+        jpeg = jpeg_viab = None
         try:
-            out, corpos, jpeg = op.consultar_credito(params, cfg, progresso)
+            out, corpos, (jpeg, jpeg_viab) = op.consultar_credito(params, cfg, progresso)
         except pl.Falha as f:
             out, corpos = {'resultado': 'erro', 'motivo': cr.sem_pii(f), 'ms': 0,
                            'etapa_parada': j.get('etapa_atual')}, []
@@ -371,8 +374,10 @@ def _rodar_job(job_id, params, cfg):
             out, corpos = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {cr.sem_pii(e)}', 'ms': 0,
                            'etapa_parada': j.get('etapa_atual')}, []
         out.update(consultado_em=agora_br(), cache=False)
-        if jpeg and params.get('modo') == 'viabilidade' and gravar_print(cfg['amostras'], job_id, jpeg):
+        if jpeg and (params.get('modo') or 'credito') in ('viabilidade', 'credito') and gravar_print(cfg['amostras'], job_id, jpeg):
             out['print_job'] = job_id      # o cache leva junto: quem pegar o resultado do cache vê o mesmo print
+        if jpeg_viab and gravar_print(cfg['amostras'], job_id, jpeg_viab, 'viab'):
+            out['print_viab_job'] = job_id   # 25/11: crédito com o endereço do cliente — o print da Etapa 2
         j['resultado'] = out
         j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
         modo = params.get('modo') or 'credito'
@@ -679,7 +684,9 @@ class Handler(BaseHTTPRequestHandler):
                     self._resp(200, r)
                 return
             elif metodo == 'GET' and rota.startswith('/credito/print/'):
-                arq = _arquivo_print(cfg_credito()['amostras'], rota.split('/credito/print/', 1)[1])
+                resto = rota.split('/credito/print/', 1)[1]          # <job> ou <job>/viab (25/11)
+                jid, _, parte = resto.partition('/')
+                arq = _arquivo_print(cfg_credito()['amostras'], jid, parte)
                 if not arq or not os.path.isfile(arq):
                     self._resp(404, {'ok': False, 'erro': 'print inexistente ou expirado (7 dias)'})
                 else:

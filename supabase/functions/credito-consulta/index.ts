@@ -233,7 +233,9 @@ Deno.serve(async (req) => {
     } else if (acao === 'print') {
       const id = String(b.job_id ?? '');
       if (!/^[0-9a-f]{32}$/.test(id)) return json({ error: 'job inválido.' }, 400);
-      r = await fetch(`${opUrl}/credito/print/${id}`, { headers: hdr, signal: AbortSignal.timeout(15000) });
+      // 25/11: parte 'viab' = print da viabilidade tirado no meio da consulta de crédito (Etapa 2, antes do CPF)
+      const parte = b.parte === 'viab' ? '/viab' : '';
+      r = await fetch(`${opUrl}/credito/print/${id}${parte}`, { headers: hdr, signal: AbortSignal.timeout(15000) });
       const d = await r.json().catch(() => null);
       if (!d || !r.ok || d.ok === false) { log(`print ${r.status}`); return json({ error: d?.erro ?? `Operador respondeu ${r.status}.` }, r.status === 404 ? 404 : 502); }
       log('print ok');

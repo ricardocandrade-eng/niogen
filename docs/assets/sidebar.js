@@ -497,7 +497,7 @@
     if (!consultaP) {
       consultaP = new Promise((ok, falhou) => {
         const s = document.createElement('script');
-        s.src = 'assets/consulta.js?v=221126-cc5';
+        s.src = 'assets/consulta.js?v=251126-cob1';
         s.onload = () => ok(window.NGConsulta);
         s.onerror = () => { consultaP = null; falhou(new Error('não carregou')); };
         document.head.appendChild(s);
