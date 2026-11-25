@@ -144,7 +144,9 @@
       // Abriu Leads = viu as novas (22/11: quem ainda não tem OS aparece em Leads; a chave do visto segue 'vendas'). "Visto em" fica no banco (por usuário), não no navegador.
       await NG.sb.from('usuario_vistos').upsert({ usuario_id: u.id, tela: 'vendas', visto_em: new Date().toISOString() }, { onConflict: 'usuario_id,tela' });
     }
-    await avisos(nav);
+    // 25/11 (regra 19): na Live 2.0 os selos do menu esperam a fila aparecer — as leituras deles (jornada_live, live_situacoes,
+    // oportunidades) disputavam o banco com a live2_fila e a primeira tela levava 1,75 s em vez de ~0,8 s.
+    if (pagina === 'live2') setTimeout(() => avisos(nav), 3000); else await avisos(nav);
     NG.mudou('avisos', 2 * 60000);
     // 11/11: aba oculta não consulta · 14/11 (0190): só refaz se o banco foi gravado (ou a cada 2 min) — os mesmos 2 min da
     // Live, para as duas cargas caírem juntas na resposta dividida entre abas (NG compartilhado, 45 s).
