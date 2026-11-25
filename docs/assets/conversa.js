@@ -55,7 +55,7 @@
     return null;
   }
   function seloBloqueio(msgCw) {
-    if (/\/fila\.html/.test(location.pathname)) return '';   // Live: só depois de debater com o Ricardo (regra 20, Live)
+    // Live incluída: Ricardo, 24/11 ("Sim, na Live").
     const b = bloqueioDe(msgCw ? [...msgCw.values()] : []);
     if (!b) return '';
     const desde = NG.fmtDataHora ? NG.fmtDataHora(b.desde) : String(b.desde).slice(0, 16);
