@@ -360,7 +360,7 @@
   const comanda = (t, pos) => {
     const pz = prazoDe(t);
     return `<article class="l2-comanda" style="--c:${cor(t.tipo)}">
-      <div class="l2-topo"><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span><span class="l2-pill${pz.urg ? ' urg' : ''}">prazo: ${esc(pz.txt)}</span><span class="l2-senha">${pos} de ${fila().length}</span></div>
+      <div class="l2-topo"><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span>${t.risco ? '<span class="l2-pill urg" title="A Mari acionou o time: cliente com pressa na instalação ou falando em desistir. Fica em 1º até alguém responder.">🔥 venda em risco · agora</span>' : `<span class="l2-pill${pz.urg ? ' urg' : ''}">prazo: ${esc(pz.txt)}</span>`}<span class="l2-senha">${pos} de ${fila().length}</span></div>
       <div><div class="l2-quem"><h2>${esc(t.nome)}</h2><span class="l2-vale" title="${t.vale_estimado ? 'valor padrão: o cliente ainda não escolheu o plano' : 'comissão prevista'}">vale ${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span></div><div class="l2-sub">${esc(subDe(t))}${t.dono ? ` · com ${esc(t.dono)}` : ''}</div></div>
       <div class="l2-fazer">${esc(t.oque || '')}</div>
       ${t.ultima_fala ? `<div class="l2-fala">Cliente, há ${esc(ha(t.ultima_fala_em))}: “${esc(t.ultima_fala)}”</div>` : ''}
@@ -414,7 +414,7 @@
       return `<div class="l2-linha" style="--c:${cor(t.tipo)}"><span class="n">${i + 1}</span><span><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span></span>
         <div><b>${esc(t.nome)}</b> <span class="l2-vale">${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span><small>${esc(subDe(t))}</small></div>
         <div class="oq">${esc(t.oque || '')}${(t.motivos || []).length ? `<small>${esc(t.motivos.join(' · '))}</small>` : ''}</div>
-        <span><span class="l2-pill${pz.urg ? ' urg' : ''}">${esc(pz.txt)}</span></span>
+        <span><span class="l2-pill${pz.urg || t.risco ? ' urg' : ''}">${t.risco ? '🔥 em risco' : esc(pz.txt)}</span></span>
         <div class="l2-acoes">${acoesHtml(t, false)}</div></div>`;
     }).join('')}</div><div class="l2-sub">* valor padrão: o cliente ainda não escolheu o plano. A ordem é vale × etapa × urgência, calculada no banco.</div>`;
   }
@@ -444,6 +444,15 @@
         <div>Cliente esperando mais de 30 min por uma pessoa, no horário (9h–21h): <b>${t.pct_acima_30 == null ? '—' : `${esc(String(t.pct_acima_30).replace('.', ','))} %`}</b> das ${esc(String(t.respostas || 0))} respostas dos últimos 14 dias
           (${esc(String(t.acima_30 || 0))} acima de 30 min, ${esc(String(t.acima_30_avancado || 0))} delas em lead que já viu os planos). Antes da 2.0, de ${esc(b.periodo || '')}: <b>${esc(String(b.pct_acima_30))} %</b> (${esc(String(b.acima_30))} de ${esc(String(b.respostas))}).</div>
         <div class="l2-sub">A etapa é a de hoje do lead, não a do momento da espera. Serve para comparar períodos.</div></div>
+      ${(() => { const g = m.resgates; if (!g) return '';
+        const DEU = { pedido: 'virou pedido', instalada: 'instalada', saida: 'saiu', em_andamento: 'em andamento' };
+        const TP = { pressa: 'pressa na instalação', desiste: 'falou em desistir', urgencia: 'urgência' };
+        return `<div class="l2-caixa" style="overflow-x:auto"><h3>🔥 Vendas em risco que a Mari passou ao time (${esc(String(g.dias || 30))} dias)</h3>
+          <div><b>${esc(String(g.total || 0))}</b> ${g.total === 1 ? 'caso' : 'casos'} · respondidos por uma pessoa em até 5 min: <b>${esc(String(g.ate_5min || 0))}</b> · em até 30 min: ${esc(String(g.ate_30min || 0))} · sem resposta: ${esc(String(g.sem_resposta || 0))}
+            · viraram pedido: <b>${esc(String(g.pedido || 0))}</b> (${esc(String(g.instalada || 0))} instaladas) · saíram: ${esc(String(g.saida || 0))} · em andamento: ${esc(String(g.em_andamento || 0))}</div>
+          ${(g.lista || []).length ? `<table class="l2-med"><thead><tr><th>Lead</th><th>Quando</th><th>O que foi</th><th>Resposta (min)</th><th>No que deu</th></tr></thead><tbody>
+            ${g.lista.slice(0, 30).map((x) => `<tr><td>${x.lead ? `L-${esc(String(x.lead))}` : '—'}</td><td>${esc(NG.fmtDataHora(x.em))}</td><td style="text-align:left">${esc(TP[x.tipo] || x.tipo)}</td><td>${x.minutos == null ? 'sem resposta' : esc(String(x.minutos))}</td><td>${esc(DEU[x.deu] || x.deu)}</td></tr>`).join('')}</tbody></table>` : ''}
+          <div class="l2-sub">Conta cada vez que a Mari acionou o time por pressa na instalação, ameaça de desistir ou urgência. A regra entrou em 25/11/2026: antes disso quase não há casos.</div></div>`; })()}
       <div class="l2-caixa" style="overflow-x:auto"><h3>Por dia</h3><table class="l2-med"><thead><tr><th>Dia</th><th>Respostas de pessoa</th><th>Mediana (min)</th><th>&gt; 30 min</th><th>&gt; 2 h</th><th>Furos</th><th>Abriu Live</th><th>Abriu Live 2.0</th><th>Abriu Conversas</th></tr></thead><tbody>
         ${(m.dias || []).slice().reverse().map((d) => `<tr><td>${esc(NG.fmtData(d.dia))}</td><td>${d.respostas}</td><td>${d.mediana_min == null ? '—' : String(d.mediana_min).replace('.', ',')}</td><td>${d.acima_30}</td><td>${d.acima_2h}</td><td>${d.furos}</td><td>${d.abriu_live}</td><td>${d.abriu_live2}</td><td>${d.abriu_conversas}</td></tr>`).join('')}</tbody></table></div>
       <div class="l2-caixa" style="overflow-x:auto"><h3>Reforço: o que foi feito e no que deu</h3>
@@ -471,7 +480,12 @@
     vista = v; rfAberto = null;
     ls.gravar('niogen.live2.vista', v);
     render();
-    if (v === 'medicao') { const { data } = await NG.sb.rpc('live2_medicao', { p_dias: 14 }); medicao = data || { dias: [], total: {}, base: {}, reforco: [] }; render(); }
+    if (v === 'medicao') {
+      const [a, g] = await Promise.all([NG.sb.rpc('live2_medicao', { p_dias: 14 }), NG.sb.rpc('live2_resgates', { p_dias: 30 })]);
+      medicao = a.data || { dias: [], total: {}, base: {}, reforco: [] };
+      medicao.resgates = g.data || null;
+      render();
+    }
     if (v === 'radar' && !ops) { const { data } = await NG.sb.rpc('oportunidades_abertas'); ops = Array.isArray(data) ? data : (data && data.lista) || []; render(); }
   }
 
