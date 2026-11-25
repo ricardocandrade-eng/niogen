@@ -610,6 +610,8 @@
     paraCob({ tipo: 'lead', cli: { conversa_id: est.cli.conversa_id, venda_id: est.cli.venda_id, nome: est.cli.nome }, rodar: true });
   }
 
-  window.NGConsulta = { abrir, abrirCliente, minimizar, fechar, alternar, iniciar, estado: () => est.modo };
+  // 25/11: monta a Cobertura escondida (mouse sobre o ⌕ Consulta ou a lupa) — o 1º clique já a encontra pronta.
+  function preparar() { montar(); garantirCob(); }
+  window.NGConsulta = { abrir, abrirCliente, minimizar, fechar, alternar, iniciar, preparar, estado: () => est.modo };
   iniciar();
 })();

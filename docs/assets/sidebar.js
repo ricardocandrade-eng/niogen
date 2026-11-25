@@ -497,7 +497,7 @@
     if (!consultaP) {
       consultaP = new Promise((ok, falhou) => {
         const s = document.createElement('script');
-        s.src = 'assets/consulta.js?v=251126-cob1';
+        s.src = 'assets/consulta.js?v=251126-cob2';
         s.onload = () => ok(window.NGConsulta);
         s.onerror = () => { consultaP = null; falhou(new Error('não carregou')); };
         document.head.appendChild(s);
@@ -506,6 +506,9 @@
     return consultaP;
   }
   // 22/11: a lupa da ficha (assets/ficha.js) abre a Consulta central já no cliente da ficha — mesmo carregamento sob demanda.
+  // 25/11 (Ricardo: "Resolve a lentidão da primeira abertura do painel"): passar o mouse no ⌕ Consulta ou na lupa da ficha já
+  // baixa o painel e monta a Cobertura escondida — no clique ela está pronta. Só com a intenção do usuário (nada na abertura da tela).
+  window.NGConsultaPreparar = () => consultaCarregar().then((c) => c && c.preparar && c.preparar()).catch(() => {});
   window.NGConsultaAbrir = (cli) => consultaCarregar().then((c) => c && (c.abrirCliente ? c.abrirCliente(cli) : c.abrir()))
     .catch(() => NG.toast('A Consulta central não carregou — confira a internet e tente de novo.', 'bad'));
   function consultaBotao(nav, pagina) {
@@ -520,6 +523,7 @@
       }
       const ir = () => consultaCarregar().then((c) => c && c.alternar()).catch(() => NG.toast('A Consulta central não carregou — confira a internet e tente de novo.', 'bad'));
       const b = nav.querySelector('[data-consulta]');
+      if (b) ['pointerenter', 'focus'].forEach((ev) => b.addEventListener(ev, window.NGConsultaPreparar, { once: true }));
       if (b) b.addEventListener('click', () => { if (nav.classList.contains('aberto')) { const m = document.querySelector('.topo-movel .menu-btn'); if (m) m.click(); } ir(); });
       const topo = document.querySelector('.topo-movel');
       if (topo && !topo.querySelector('.cc-topo')) {

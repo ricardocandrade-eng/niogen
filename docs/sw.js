@@ -7,7 +7,7 @@
  *     e sem Cache-Control private/no-store. Supabase (outro domínio) é sempre rede — o navegador nem passa por aqui;
  *   · Web Push: mostra o aviso que o n8n mandou (título, texto, url) e o clique abre/foca o NIOGEN na linha do Live.
  */
-const CACHE = 'niogen-251126-11';
+const CACHE = 'niogen-251126-12';
 const ARQUIVOS = [
   './', 'index.html', 'painel.html', 'funil.html', 'instalacoes.html', 'operacoes.html', 'vendas.html', 'venda.html', 'configuracoes.html', 'tabela.html', 'metaads.html', 'cobertura.html', 'credito.html', 'mari.html', 'embreve.html', 'adimplencia.html', 'conciliacao.html', 'parceiros.html', 'pagamentos.html', 'guia.html', 'fila.html', 'live2.html', 'conversas.html', 'leads.html', 'pulso.html', 'placar.html',
   'assets/app.css', 'assets/app.js', 'assets/ficha.js', 'assets/conversa.js', 'assets/novavenda.js', 'assets/vendasos.js', 'assets/listas.css', 'assets/sidebar.js', 'assets/consulta.js', 'assets/pulso.js', 'assets/movel.js', 'assets/osab.js', 'assets/dfv.js', 'assets/markdown.js', 'assets/icon.svg', 'manifest.webmanifest',
@@ -43,6 +43,13 @@ self.addEventListener('fetch', (ev) => {
   // 14/11: página (HTML) sempre conferida no servidor — o GitHub Pages manda guardar 10 min e a publicação nova demorava a
   // aparecer (e o cache novo podia nascer com a página velha). Assets vêm com ?v= e seguem o cache normal do navegador.
   const pagina = ev.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
+  // 25/11 (Ricardo: "Resolve a lentidão da primeira abertura do painel"): a Cobertura dentro do painel Consulta
+  // (cobertura.html?embed=1) vem da cópia que ESTE cache guardou na instalação — a mesma publicação dos assets, porque o
+  // CACHE muda a cada deploy. Conferir no servidor levava ~2 s e era quase toda a 1ª abertura do painel. Sem cópia: rede.
+  if (url.pathname.endsWith('/cobertura.html') && url.searchParams.get('embed') === '1') {
+    ev.respondWith(caches.open(CACHE).then((c) => c.match('cobertura.html')).then((r) => r || fetch(url.href, { cache: 'no-cache', credentials: 'same-origin' })));
+    return;
+  }
   ev.respondWith(
     (pagina ? fetch(url.href, { cache: 'no-cache', credentials: 'same-origin' }) : fetch(ev.request))
       .then((r) => {
