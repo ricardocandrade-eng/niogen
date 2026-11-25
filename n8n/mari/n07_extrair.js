@@ -820,6 +820,52 @@ if (V7 && !scVoltou && !posHandoff && !erro && (ctx.conversa || {}).cobertura_de
     tags.handoff = handoffYaml; delete tags.carrossel; delete tags.botoes;
   }
 }
+// 25/11 (L-377, P54 — Ricardo: "A Mari deveria imediatamente ter falado que acionaria um atendente para tentar encaixar a
+// instalação dele pra hoje e entrado como prioridade 1 na fila da Live. É oportunidade de venda"): com o plano já escolhido, o
+// cliente perguntou "Teria para hoje?" e a Mari respondeu "pra hoje não vai rolar"; ele disse "Então pode deixar obg" e ela
+// repetiu a pergunta do período duas vezes. Agora, com o plano escolhido: PRESSA na instalação (hoje, agora, o quanto antes,
+// urgente) ou AMEAÇA DE DESISTIR (pode deixar, deixa pra lá, esquece, não quero mais) → a Mari aciona o atendente NA HORA
+// (handoff urgencia_alta, que a Live 2.0 põe em 1º — 0401). Determinístico: a fala do modelo é trocada. "Tentar encaixar" não é
+// promessa de data. Textos trocáveis sem deploy em config_mari_textos (risco_pressa_fala, risco_desiste_fala; {nome} e {prazo}).
+let riscoVenda = null;
+{
+  const cc = ctx.conversa || {};
+  const naSaidaR = !!cc.funil_destino && !['em_andamento', 'instalada'].includes(cc.funil_destino);
+  const msgR = norm(String((prep.consolidado || {}).mensagem || '')).replace(/\s+/g, ' ').trim();
+  // "hoje/agora/antes" só contam na hora de marcar a instalação (forma de pagamento já escolhida) ou se a fala cita a instalação:
+  // "hoje mesmo te mando o CPF" não é pressa. Urgência dita com todas as letras vale em qualquer ponto depois do plano.
+  const naInstalacao = !!cc.forma_pagamento || /\binstal|\btecnico\b|\bagend/.test(msgR);
+  const HOJE_RE = /\b(pra|para|pro|p) hoje\b|\bhoje (mesmo|ainda)\b|\bainda hoje\b|\b(tem|teria|da|daria|dava|consegue|conseguem|conseguiria|rola|instala|instalam|instalar|instalacao|pode ser|podia ser) (como )?(pra |para |pro )?(ser )?(pra |para |pro )?(hoje|agora|ja)\b|\b(nao )?(tem|teria|da|daria) (pra |para )?(antes|mais cedo)\b/;
+  const URG_RE = /\bquanto antes\b|\bmais rapido possivel\b|\burgent|\burgencia\b|\b(tenho|to com|estou com|com muita) pressa\b/;
+  const PRESSA_RE = { test: (s) => URG_RE.test(s) || (naInstalacao && HOJE_RE.test(s)) };
+  const DESISTE_RE = /\bpode deixar\b(?! (de|pra|para|pro|no|na|nesse|nessa|que|como|assim|a|o|as|os|esse|essa|qualquer|tanto|marcad\w*|agendad\w*)\b)|\bdeixa (pra la|para la|quieto|isso pra la)\b|\besquece\b|\bdesist\w+\b|\bnao (quero|vou querer|preciso) mais\b|\bentao nao (quero|vou querer|precisa|da)\b|\b(assim|desse jeito) nao (da|quero|serve|vou querer)\b|\bfica pra (proxima|outra hora|depois)\b|\bvou (ver|procurar|fechar com) outr[ao]\b/;
+  const motivoModelo = handoffYaml ? norm(handoffYaml.motivo_handoff || '').replace(/[^a-z_]/g, '') : null;
+  if (V7 && !posHandoff && !erro && !naSaidaR && cc.plano_escolhido && msgR && msgR.length <= 200
+    && !['dados_completos', 'fora_de_area', 'sem_cobertura', 'ja_cliente_nio'].includes(motivoModelo || '')) {
+    // a ameaça de desistir só vale na hora de marcar a instalação; antes disso é objeção (Bloco 4b) e o "não quero" é respeitado
+    riscoVenda = PRESSA_RE.test(msgR) ? 'pressa' : (cc.forma_pagamento && DESISTE_RE.test(msgR) ? 'desiste' : null);
+  }
+  if (riscoVenda) {
+    const txR = (ctx.inter || {}).textos || {};
+    const p1 = String(((cc.dados || {}).nome) || '').trim().split(/\s+/)[0];
+    const nm = p1 && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : '';
+    const prazoR = ctx.dentroHorario ? 'Ele já te chama aqui mesmo' : 'Ele te chama aqui mesmo no próximo horário de atendimento';
+    const quando = ctx.dentroHorario ? 'pra hoje' : 'pro quanto antes';
+    const padrao = riscoVenda === 'pressa'
+      ? `Entendi{nome}! Vou acionar agora um atendente do nosso time pra tentar encaixar a sua instalação ${quando}.\n\n{prazo} 😊`
+      : 'Calma{nome}, não quero que você fique sem a sua internet por causa da data 😊\n\nVou acionar agora um atendente do nosso time pra ver com você o melhor dia e horário da instalação. {prazo}.';
+    const modelo = String(txR[riscoVenda === 'pressa' ? 'risco_pressa_fala' : 'risco_desiste_fala'] || '').trim() || padrao;
+    texto = modelo.replace('{nome}', nm ? `, ${nm}` : '').replace('{prazo}', prazoR);
+    const falaCli = String((prep.consolidado || {}).mensagem || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    handoffYaml = { motivo_handoff: 'urgencia_alta',
+      briefing_humano: riscoVenda === 'pressa'
+        ? `RESUMO: VENDA EM RISCO — o cliente quer a instalação para já («${falaCli}»). A Mari disse que um atendente vai tentar encaixar. SUGESTÃO: Assumir AGORA, seguir o pedido no portal e tentar a data mais próxima na agenda da Nio.`
+        : `RESUMO: VENDA EM RISCO — o cliente falou em desistir na hora de marcar a instalação («${falaCli}»). A Mari disse que um atendente vai ver o melhor dia e horário. SUGESTÃO: Assumir AGORA, entender o que não serviu na data e combinar outra.` };
+    tags.handoff = handoffYaml; tags.sinal_urgencia = tags.sinal_urgencia || (riscoVenda === 'pressa' ? 'quer instalar já' : 'falou em desistir');
+    delete tags.carrossel; delete tags.botoes;
+    dados.risco_venda = riscoVenda;
+  }
+}
 const hy = handoffYaml || {};
 const nome = d.nome || hy.nome;
 const cpf = (d.cpf || hy.cpf || '').replace(/\D/g, '');

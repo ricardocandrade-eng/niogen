@@ -943,6 +943,61 @@ def cen_az(c):   # P53 (24/11, conversa L-363, Iranilda, #250): o toque em "🏠
         c.log += x.log
 
 
+def ate_data_instalacao(c):
+    """Varejo em JF até os botões de data da instalação (plano Fibra, boleto, nome, CPF e e-mail dados)."""
+    ate_planos_jf(c)
+    r = c.diz('Quero o plano Nio Fibra')
+    if 'por mais r$' in fala(r):
+        r = c.diz('Fico no Fibra')
+    r = c.diz('Boleto')
+    r = c.diz('Ana Teste da Silva, 529.982.247-25')
+    r = c.diz('anateste@gmail.com')
+    for _ in range(3):   # confirmação do e-mail / do que faltar, até chegarem os botões de data
+        if (r.get('interativo') or {}).get('chave') in ('data', 'turno') or r.get('handoff'):
+            break
+        r = c.diz('Sim')
+    return r
+
+
+RX_NEGA_HOJE = re.compile(r'hoje nao (vai|da|tem|rola|consigo|conseguimos)|nao (vai rolar|vai dar|da pra hoje|tem como|consigo pra hoje|temos pra hoje)|infelizmente')
+
+
+def cen_ba(c):   # P54 (25/11, conversa L-377 — Ricardo: "A Mari deveria imediatamente ter falado que acionaria um atendente para
+    # tentar encaixar a instalação dele pra hoje"): nos botões de data o cliente perguntou "Teria para hoje?" e a Mari respondeu
+    # "pra hoje não vai rolar"; ele disse "Então pode deixar obg" e ela repetiu "E qual período você prefere nesse dia?" duas
+    # vezes. A venda só não se perdeu porque o Ricardo viu em Conversas. Agora: pressa na instalação ou ameaça de desistir, com o
+    # plano já escolhido → a Mari aciona o atendente NA HORA (handoff urgencia_alta), sem negar e sem repetir a pergunta.
+    def confere(conv, r, rot, palavra):
+        t = fala(r)
+        h = r.get('handoff') or {}
+        conv.exige(h.get('motivo') == 'urgencia_alta', f'[P54] {rot}: a Mari não acionou o time (handoff {h.get("motivo")!r}): «{t[-220:]}»')
+        conv.exige('atendente' in t and palavra in t, f'[P54] {rot}: a fala não diz que vai acionar um atendente ({palavra!r}): «{t[-220:]}»')
+        conv.exige(not RX_NEGA_HOJE.search(t), f'[P54] {rot}: a Mari negou em vez de acionar o time: «{t[-220:]}»')
+        conv.exige(not r.get('interativo') and not RX_PERG_PERIODO.search(t), f'[P54] {rot}: repetiu a pergunta de data/período: «{t[-200:]}»')
+        row = conv_row(conv, 'status, handoff_motivo')
+        conv.exige(row.get('status') == 'handoff_realizado' and row.get('handoff_motivo') == 'urgencia_alta', f'[P54] {rot}: a conversa não ficou com o time: {row}')
+
+    # (1) pressa: "Teria para hoje?" nos botões de data
+    ate_data_instalacao(c)
+    r = c.diz('Teria para hoje?')
+    confere(c, r, 'pressa', 'encaixar')
+    # (2) ameaça de desistir: escolheu a data, e no período disse "Então pode deixar obg"
+    k = ConversaPortao('ba2', 63)
+    ate_data_instalacao(k)
+    k.diz(data_btn())
+    r = k.diz('Então pode deixar obg')
+    confere(k, r, 'desistência', 'horario')
+    # (3) controle: "pode deixar de manhã" é resposta do período, não desistência
+    g = ConversaPortao('ba3', 64)
+    ate_data_instalacao(g)
+    g.diz(data_btn())
+    r = g.diz('Pode deixar de manhã')
+    g.exige((r.get('handoff') or {}).get('motivo') != 'urgencia_alta', f'[P54] controle: "Pode deixar de manhã" virou urgência: «{fala(r)[-200:]}»')
+    for x in (k, g):
+        c.falhas += x.falhas
+        c.log += x.log
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -994,6 +1049,8 @@ PORTAO = {
     'ay': (58, cen_ay, 'P52'),
     # 24/11 — conversa L-363 (Iranilda, #250): "Sou cliente Nio" pergunta antes de dar a Saída (usa os telefones 59, 60 e 61)
     'az': (59, cen_az, 'P53'),
+    # 25/11 — conversa L-377: pressa na instalação ("Teria para hoje?") ou ameaça de desistir → atendente na hora (telefones 62, 63 e 64)
+    'ba': (62, cen_ba, 'P54'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
