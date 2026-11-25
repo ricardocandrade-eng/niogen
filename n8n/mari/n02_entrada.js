@@ -64,6 +64,13 @@ function statusDe(conv, convId) {
   };
 }
 
+// 24/11 (Ricardo: "verifique porque o Niogen não está trazendo os 2 vv"): o corpo da mensagem no webhook do Chatwoot não
+// traz "status" — ele vem só em conversation.messages[] (o item de mesmo id). Sem isto, mari_msg_cw ficava sem status e os ✓✓ não apareciam.
+function statusMsg(m, c, id) {
+  if (m && m.status) return m.status;
+  const x = ((c && c.messages) || []).find((k) => Number(k.id) === Number(id));
+  return (x && x.status) || null;
+}
 let entrada;
 
 if (ex('1 · Webhook Mari teste')) {
@@ -149,7 +156,7 @@ if (ex('1 · Webhook Mari teste')) {
     const cidU = String(cu.id || mu.conversation_id || pu.conversation_id || '');
     const stU = statusDe(cu, cidU);
     if (!stU || mu.private || !(mu.id || pu.id)) return [];
-    stU.p_msg = { id: Number(mu.id ?? pu.id), wamid: String(mu.source_id || pu.source_id || '') || null, status: mu.status || pu.status || null,
+    stU.p_msg = { id: Number(mu.id ?? pu.id), wamid: String(mu.source_id || pu.source_id || '') || null, status: statusMsg(mu, cu, mu.id ?? pu.id) || pu.status || null,
       dir: (mu.message_type ?? pu.message_type) === 0 || (mu.message_type ?? pu.message_type) === 'incoming' ? 'in' : 'out',
       texto: String(mu.content || pu.content || '').slice(0, 300), em: mu.created_at ?? pu.created_at ?? null };
     return [{ json: { soStatus: true, cwStatus: stU } }];
@@ -168,7 +175,7 @@ if (ex('1 · Webhook Mari teste')) {
   if (msg.private) return cwStatus ? [{ json: { soStatus: true, cwStatus } }] : [];
   // 20/11 (0334): a mensagem (id do Chatwoot, wamid, status) vai junto com o status da conversa → mari_msg_cw (tiques e citar)
   if (cwStatus && (msg.id || p.id)) {
-    cwStatus.p_msg = { id: Number(msg.id ?? p.id), wamid: String(msg.source_id || p.source_id || '') || null, status: msg.status || p.status || null,
+    cwStatus.p_msg = { id: Number(msg.id ?? p.id), wamid: String(msg.source_id || p.source_id || '') || null, status: statusMsg(msg, conv, msg.id ?? p.id) || p.status || null,
       dir: entrante ? 'in' : 'out', texto: String(msg.content || p.content || '').slice(0, 300), em: msg.created_at ?? p.created_at ?? null };
   }
 
