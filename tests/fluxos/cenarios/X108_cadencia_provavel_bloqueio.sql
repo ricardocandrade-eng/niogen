@@ -8,7 +8,8 @@ grant authenticated, anon, service_role to authenticator;
 select sim.lead_novo('Ana X108') as a \gset
 select sim.passa(:'a', interval '3 days 2 hours');
 select coalesce((select proximo_passo || ':' || coalesce(bloqueio, '-') from public.mari_cadencia_avaliar(now(), :'a') limit 1), '?') as a0 \gset
-select sim.confere('sem tiques: o D3 sai como sempre', :'a0' = 'D3:-', :'a0');
+-- (o portão pode rodar de madrugada: "fora do horário" é outro motivo; aqui só importa não ser provável bloqueio)
+select sim.confere('sem tiques: o D3 está na vez, sem provável bloqueio', :'a0' like 'D3:%' and :'a0' not like '%provável bloqueio%', :'a0');
 
 -- B) Cliente falou, depois duas nossas paradas em ✓ há +24 h: bloqueia com o motivo
 insert into public.mari_msg_cw (cw_msg_id, conversa_id, chatwoot_conversation_id, direcao, status, texto, criado_em) values
@@ -21,12 +22,12 @@ select sim.confere('2 paradas em ✓ há +24 h: o toque não sai, motivo prováv
 -- C) Uma delas entregue: libera
 update public.mari_msg_cw set status = 'entregue' where cw_msg_id = 910802;
 select coalesce((select coalesce(bloqueio, '-') || ' | ' || pode_enviar from public.mari_cadencia_avaliar(now(), :'a') limit 1), '?') as c1 \gset
-select sim.confere('uma entregue: volta a tocar', :'c1' = '- | true', :'c1');
+select sim.confere('uma entregue: sai do provável bloqueio', :'c1' not like 'provável bloqueio%', :'c1');
 
 -- D) Só uma parada há +24 h (a outra recente): não bloqueia
 update public.mari_msg_cw set status = 'enviada', criado_em = now() - interval '5 hours' where cw_msg_id = 910802;
 select coalesce((select coalesce(bloqueio, '-') from public.mari_cadencia_avaliar(now(), :'a') limit 1), '?') as d1 \gset
-select sim.confere('só uma há +24 h: não bloqueia', :'d1' = '-', :'d1');
+select sim.confere('só uma há +24 h: não bloqueia', :'d1' not like 'provável bloqueio%', :'d1');
 
 -- E) Duas recusadas pelo WhatsApp: bloqueia
 update public.mari_msg_cw set status = 'falhou' where cw_msg_id in (910802, 910803);
