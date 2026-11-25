@@ -35,6 +35,36 @@
   let semColunaMidia = false;
   const urlsMidia = new Map();   // caminho no bucket → { url, ate } (URL assinada de 1 h, pedida em lote)
 
+  // 24/11 (Ricardo: "Faz o sinal de provável bloqueio no NIOGEN"): o WhatsApp não avisa bloqueio. Sinal SÓ DE LEITURA (não muda
+  // situação, regra 20), com os tiques que a conversa já carrega (mari_msg_cw, sem consulta nova): depois da última fala do
+  // cliente, 2+ mensagens nossas paradas em ✓ (enviada) há mais de 24 h e nenhuma entregue — ou 2+ que falharam. Mensagem sem
+  // status (antes de 25/11 01h UTC, quando os tiques passaram a ser gravados) interrompe a contagem: sem dado, sem sinal.
+  function bloqueioDe(msgs, agora) {
+    const l = [...(msgs || [])].sort((a, b) => new Date(a.criado_em) - new Date(b.criado_em));
+    const nossas = [];
+    for (let i = l.length - 1; i >= 0; i--) {
+      const m = l[i];
+      if (m.direcao !== 'out' || !m.status) break;
+      nossas.unshift(m);
+    }
+    if (nossas.length < 2 || nossas.some((m) => m.status === 'entregue' || m.status === 'lida')) return null;
+    const falhas = nossas.filter((m) => m.status === 'falhou');
+    if (falhas.length >= 2) return { tipo: 'falhou', n: falhas.length, desde: falhas[0].criado_em };
+    const presas = nossas.filter((m) => m.status === 'enviada' && (agora || Date.now()) - new Date(m.criado_em).getTime() > 24 * 3600e3);
+    if (presas.length >= 2) return { tipo: 'preso', n: presas.length, desde: presas[0].criado_em };
+    return null;
+  }
+  function seloBloqueio(msgCw) {
+    if (/\/fila\.html/.test(location.pathname)) return '';   // Live: só depois de debater com o Ricardo (regra 20, Live)
+    const b = bloqueioDe(msgCw ? [...msgCw.values()] : []);
+    if (!b) return '';
+    const desde = NG.fmtDataHora ? NG.fmtDataHora(b.desde) : String(b.desde).slice(0, 16);
+    const tit = b.tipo === 'falhou'
+      ? `As ${b.n} últimas mensagens para o cliente (desde ${desde}) não saíram: o WhatsApp recusou a entrega. Costuma ser bloqueio, número fora do WhatsApp ou aplicativo muito antigo. Ligue antes de mandar outra.`
+      : `As ${b.n} últimas mensagens para o cliente (desde ${desde}) estão em ✓ há mais de 24 h: o WhatsApp não entregou no celular. Pode ser bloqueio, celular desligado ou sem internet — o WhatsApp não confirma bloqueio. Ligue antes de mandar outra.`;
+    return `<span class="cvp-pill fixo warn" title="${esc(tit)}">📵 Provável bloqueio</span>`;
+  }
+
   // Texto do turno: mídia vira "📎 … · ouvir/ver no Chatwoot"; marcações internas da Mari somem.
   function textoTurno(t) {
     let s = String(t || '');
@@ -427,7 +457,7 @@
         <div class="cvp-chips">
         <span class="cvp-pill fixo" title="Só leitura (17/11, passo 6 — regra de ouro 4): quem abre e fecha a conversa é a situação do lead. Responder, Assumir, Devolver, Em espera e Saída fazem isso sozinhos.">${c.chatwoot_status === 'resolved' ? 'Resolvida' : 'Aberta'}</span>
         ${htmlSw}
-        <span class="cvp-pill fixo${jn.aberta ? '' : ' warn'}">${esc(jn.txt)}</span></div>`);
+        <span class="cvp-pill fixo${jn.aberta ? '' : ' warn'}">${esc(jn.txt)}</span>${seloBloqueio(st.msgCw)}</div>`);
       const etq = (c.chatwoot_etiquetas || []).filter(Boolean);
       // 17/11 (passo 6, Ricardo: "Deixe as etiquetas também só leitura" — regra de ouro 4): a etiqueta sai da situação do lead
       // (projetor da porta); aqui só se vê. Não contatar é o botão "Cliente pediu para parar"; Saída/Silenciar, os da ficha.
