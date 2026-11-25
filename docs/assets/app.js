@@ -1335,7 +1335,9 @@
       return ['aguardando_pagamento', 'rascunho', 'cancelada'].includes(o.estado) || /^(draft|aguardando pagamento|cancelad)/i.test(txt) ? (txt || o.estado) : null;
     } catch (e) { return null; }   // sem a leitura da OS, a pergunta de sempre
   }
-  const AVISO_OS_MORRE = (s) => `O pedido na Nio está em <b>${esc(s)}</b>: não precisa (nem dá para) cancelar no portal. Sem o cartão cadastrado ele vira Draft sozinho em cerca de 48 h. Se o cliente pagar depois, a Live avisa.`;
+  const AVISO_OS_MORRE = (s) => /^draft|^cancelad/i.test(String(s))
+    ? `O pedido na Nio já está em <b>${esc(s)}</b>: não foi pra frente e não precisa ser cancelado no portal.`
+    : `O pedido na Nio está em <b>${esc(s)}</b>: não precisa (nem dá para) cancelar no portal. Sem o cartão cadastrado ele vira Draft sozinho em cerca de 48 h. Se o cliente pagar depois, a Live avisa.`;
   // Arrastar para Saída no Quadro: o mesmo formulário da ficha (motivo · porquê · volta · observação · cancelou no portal?).
   async function pedirSaida(venda, pre) {   // pre (0399): motivo já escolhido (ex.: 'recusou', sugerido na conversa)
     const lista = (await saidaLista()).filter((x) => x.codigo !== 'nao_contatar');
