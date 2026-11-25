@@ -1324,20 +1324,26 @@
     if (!k) throw new Error(`Motivo de saída desconhecido: ${codigo}`);
     return { motivo_saida: k.nome + (sub ? ` · ${sub}` : '') + (obs ? ` — ${obs}` : ''), saida_motivo: k.codigo, saida_sub: sub || null, interesse_futuro_em: volta || null };
   }
+  // 0402/0404 (L-377, L-29): a OS que morre sozinha na Nio (Aguardando Pagamento → Draft, ou Cancelado) não se cancela no portal.
+  // Vale o estado traduzido OU o texto da Nio (leitura antiga ficou sem tradução). Devolve o status para o aviso, ou null.
+  async function osMorreDe(vendaId) {
+    try {
+      const { data } = await sb.from('v_os_andamento').select('estado, status_ordem').eq('venda_id', vendaId).order('mudou_em', { ascending: false }).limit(1);
+      const o = (data || [])[0];
+      if (!o) return null;
+      const txt = String(o.status_ordem || '').trim();
+      return ['aguardando_pagamento', 'rascunho', 'cancelada'].includes(o.estado) || /^(draft|aguardando pagamento|cancelad)/i.test(txt) ? (txt || o.estado) : null;
+    } catch (e) { return null; }   // sem a leitura da OS, a pergunta de sempre
+  }
+  const AVISO_OS_MORRE = (s) => `O pedido na Nio está em <b>${esc(s)}</b>: não precisa (nem dá para) cancelar no portal. Sem o cartão cadastrado ele vira Draft sozinho em cerca de 48 h. Se o cliente pagar depois, a Live avisa.`;
   // Arrastar para Saída no Quadro: o mesmo formulário da ficha (motivo · porquê · volta · observação · cancelou no portal?).
   async function pedirSaida(venda, pre) {   // pre (0399): motivo já escolhido (ex.: 'recusou', sugerido na conversa)
     const lista = (await saidaLista()).filter((x) => x.codigo !== 'nao_contatar');
     if (!lista.length) { toast('A lista de motivos de saída não carregou. Tente de novo.', 'bad'); return null; }
     let aberto = !!(String(venda.nio_pedido || '').trim() || String(venda.nio_os || '').trim());
     // 0402 (L-377 e Miriam): OS em Aguardando Pagamento, Draft ou Cancelada não se cancela no portal — sem cartão ela vira Draft sozinha.
-    let osMorre = null;
-    if (aberto && venda.id) {
-      try {
-        const { data } = await sb.from('v_os_andamento').select('estado, status_ordem').eq('venda_id', venda.id).order('mudou_em', { ascending: false }).limit(1);
-        const o = (data || [])[0];
-        if (o && ['aguardando_pagamento', 'rascunho', 'cancelada'].includes(o.estado)) { osMorre = o.status_ordem || o.estado; aberto = false; }
-      } catch (e) { /* sem a leitura da OS, a pergunta de sempre */ }
-    }
+    const osMorre = aberto && venda.id ? await osMorreDe(venda.id) : null;
+    if (osMorre) aberto = false;
     const amanha = somaDias(diaSP(), 1);
     const fd = await modal(`
       <h3>Saída: encerrar com motivo</h3>
@@ -1350,7 +1356,7 @@
       ${aberto ? `<div class="campo"><span><b>Cancelou o pedido no portal?</b> ${dicaTxt(ajuda.saida_portal)}</span>
         <label class="check"><input type="radio" name="cancelou" value="sim" required> Sim, já cancelei no portal PAP</label>
         <label class="check"><input type="radio" name="cancelou" value="nao"> Ainda não — deixar a linha "Cancelar na Nio" na Live</label></div>` : ''}
-      ${osMorre ? `<p class="nota-campo">O pedido na Nio está em <b>${esc(osMorre)}</b>: não precisa (nem dá para) cancelar no portal. Sem o cartão cadastrado ele vira Draft sozinho em cerca de 48 h. Se o cliente pagar depois, a Live avisa.</p>` : ''}
+      ${osMorre ? `<p class="nota-campo">${AVISO_OS_MORRE(osMorre)}</p>` : ''}
     `, (d) => {
       const sel = d.querySelector('[name=motivo]');
       const aj = d.querySelector('[data-saida-ajuda]');
@@ -1933,7 +1939,7 @@
 
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, pedirSaida, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, pedirSaida, osMorreDe, AVISO_OS_MORRE, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome, nomeLegivel, fmtFone,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,

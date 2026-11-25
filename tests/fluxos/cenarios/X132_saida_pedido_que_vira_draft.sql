@@ -42,3 +42,18 @@ select sim.fila_rodar();
 select sim.como('backoffice');
 select sim.confere('sem leitura da OS, a linha Cancelar na Nio continua aparecendo',
   exists (select 1 from jsonb_array_elements(public.live_conferir()) x where x ->> 'tipo' = 'cancelar_nio' and x ->> 'venda_id' = sim.venda(:'v')::text), 'não apareceu');
+
+-- 5) 0404 (L-29): OS em "Draft" numa leitura antiga, sem tradução (estado vazio) — também não cobra o cancelamento
+select sim.venda_pronta('Lu X132') as w \gset
+select sim.como('backoffice');
+select public.backoffice_momento(sim.venda(:'w'), 'os_agendar', jsonb_build_object('os', '78' || sim._conv(:'w'), 'dia', (current_date + 5)::text, 'periodo', '13:00', 'forma', 'cartao'));
+select sim.fila_rodar();
+select sim.como('servico');
+select public.os_registrar_leitura('78' || sim._conv(:'w'), 'operador', '{"status_ordem": "Draft"}'::jsonb);
+update public.os_andamento set estado = null where pedido = '78' || sim._conv(:'w');
+select sim.como('backoffice');
+select public.lead_sair(:'w', sim.venda(:'w'), 'credito_negado', 'só cartão, sem cartão', null, null, false);
+select sim.fila_rodar();
+select sim.como('backoffice');
+select sim.confere('Draft sem tradução: sem a linha Cancelar na Nio',
+  not exists (select 1 from jsonb_array_elements(public.live_conferir()) x where x ->> 'tipo' = 'cancelar_nio' and x ->> 'venda_id' = sim.venda(:'w')::text), 'apareceu');

@@ -48,6 +48,7 @@
   let convAberta = false;  // orelha da conversa da Mari aberta (painel à esquerda da ficha)
   let conv = null;         // { id, turnos, erro } — carregada na 1ª abertura
   let convFim = false;     // rolar a conversa até a última mensagem no próximo desenho
+  let saidaOsMorre = null; // 0404: status da OS que morre sozinha na Nio (a Saída não pergunta do cancelamento)
   let saidaPreset = null;  // 0064: motivo de Saída sugerido pela pendência (pré-seleciona o formulário de Saída)
   let motivosCache = null; // 0064: config_motivos_pendencia (ativos)
   let feitoUltimo = null;  // 0082: { resumo, aviso } do último momento (a linha "✓ …" embaixo do próximo passo)
@@ -627,7 +628,8 @@
          <div class="campo" data-saida-sub hidden><span>Porquê ${NG.dicaTxt(A.saida_sub)}</span><select name="sub" aria-label="Porquê"></select></div>
          <div class="campo"><span>Volta em (opcional) ${NG.dicaTxt(A.saida_volta)}</span><input type="date" name="volta" min="${amanha}" aria-label="Volta em"></div>
          <label class="campo">Observação (opcional)<input type="text" name="obs" maxlength="200"></label>
-         ${aberto ? `<div class="campo f-saida-portal"><span><b>Cancelou o pedido no portal?</b> ${NG.dicaTxt(A.saida_portal)}</span>
+         ${aberto && saidaOsMorre ? `<span class="nota-campo f-saida-portal-ok">${NG.AVISO_OS_MORRE(saidaOsMorre)}</span>` : ''}
+         ${aberto && !saidaOsMorre ? `<div class="campo f-saida-portal"><span><b>Cancelou o pedido no portal?</b> ${NG.dicaTxt(A.saida_portal)}</span>
            <label class="check"><input type="radio" name="cancelou" value="sim"> Sim, já cancelei no portal PAP</label>
            <label class="check"><input type="radio" name="cancelou" value="nao"> Ainda não — deixar a linha "Cancelar na Nio" na Live</label></div>` : ''}
          ${!semVenda && d.conversaId ? '<span class="nota-campo">O cliente pediu para parar? Use o atalho "Cliente pediu para parar": ele põe a etiqueta nao-contatar e resolve a conversa.</span>' : ''}
@@ -1068,6 +1070,7 @@
       const volta = fd.get('volta') || null;
       if (motivo === 'recusou' && sub === 'momento' && !volta) { NG.toast('Informe a data de volta que o cliente deu.', 'bad'); return false; }
       const aberto = !d.soConversa && (String(d.v.nio_pedido || '').trim() || String(d.v.nio_os || '').trim());
+      if (aberto && saidaOsMorre) return sairLead(motivo, sub, volta, String(fd.get('obs') || '').trim(), false);   // 0404: a Nio deixa virar Draft
       const canc = fd.get('cancelou');
       if (aberto && !canc) { NG.toast('Diga se o pedido já foi cancelado no portal.', 'bad'); return false; }
       return sairLead(motivo, sub, volta, String(fd.get('obs') || '').trim(), aberto ? canc === 'sim' : null);
@@ -2855,7 +2858,21 @@
       if (acao === 'pend-viab') { pendPreset = 'viabilidade_confirmar'; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'pend-conf') { pendDescPreset = d.ultTime ? `Cliente confirmou: ${d.ultTime}` : null; formAtivo = 'pend_abrir'; render(); return; }
       if (acao === 'conv-espera') { formAtivo = formAtivo === 'conv_espera' ? null : 'conv_espera'; convEsperaFechado = formAtivo == null; passoAberto.add('conversa'); render(); return; }
-      if (acao === 'saida-form') { formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || (d.soConversa && d.lead && d.lead.destino === 'saida' ? d.lead.saida_motivo : null) || null; if (d.soConversa) passoAberto.add('conversa'); render(); return; }
+      if (acao === 'saida-form') {
+        formAtivo = formAtivo === 'saida' && !b.dataset.pre ? null : 'saida'; saidaPreset = b.dataset.pre || (d.soConversa && d.lead && d.lead.destino === 'saida' ? d.lead.saida_motivo : null) || null; if (d.soConversa) passoAberto.add('conversa');
+        saidaOsMorre = null;
+        render();
+        // 0404 (L-377, L-29): OS em Aguardando Pagamento, Draft ou Cancelado → some a pergunta "Cancelou o pedido no portal?"
+        if (formAtivo === 'saida' && !d.soConversa && d.v && (String(d.v.nio_pedido || '').trim() || String(d.v.nio_os || '').trim())) {
+          const vid = d.v.id;
+          NG.osMorreDe(vid).then((s) => {
+            if (!s || formAtivo !== 'saida' || !d.v || d.v.id !== vid) return;
+            saidaOsMorre = s;
+            raiz.querySelectorAll('.f-saida-portal').forEach((el) => { el.outerHTML = `<span class="nota-campo f-saida-portal-ok">${NG.AVISO_OS_MORRE(s)}</span>`; });
+          });
+        }
+        return;
+      }
       if (acao === 'reabrir') { await reabrirLead(b); return; }
       if (acao === 'virar-venda') { await virarVenda(b); return; }
       if (acao === 'auditar') {
