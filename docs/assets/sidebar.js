@@ -57,7 +57,7 @@
     ['Cadastros', [
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'tabela', ico: '▦', nome: 'Tabela e política', href: 'tabela.html' },
-      { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'] },
+      { id: 'config', ico: '⚙', nome: 'Configurações', href: 'configuracoes.html', perfis: ['admin', 'backoffice'], badge: 'campanhas' },   // 0406: campanha da Meta sem dono
     ]],
   ];
 
@@ -432,6 +432,15 @@
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
         // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.
         const [op, fu] = await Promise.all([NG.oportunidades(j), NG.furosJornada(j)]);
+        // 0406: campanha nova na conta da Meta sem dono — o admin diz se é da agência (Configurações › Agência)
+        if (u.perfil === 'admin') {
+          const rc = await Promise.resolve(NG.sb.rpc('meta_ads_campanhas_sem_dono')).catch(() => null);
+          const nc = rc && !rc.error ? Number(rc.data) || 0 : 0;
+          pinta(nav, 'campanhas', nc, 'alerta', nc ? `${nc} ${nc === 1 ? 'campanha nova' : 'campanhas novas'} na Meta esperando você dizer se é da agência ou nossa (Configurações › Agência).` : '');
+          const it = nav.querySelector('[data-badge="campanhas"]');
+          const a = it && it.closest('a');
+          if (a) a.setAttribute('href', nc ? 'configuracoes.html#agencia' : 'configuracoes.html');
+        }
         if (!op.erro) pinta(nav, 'oport', op.lista.length, '', `${op.lista.length} ${op.lista.length === 1 ? 'oportunidade' : 'oportunidades'}: a Mari acha que uma mensagem sua esquenta a conversa. Não é obrigação.`);
         if (!fu.erro) {
           const n = fu.ids.size;

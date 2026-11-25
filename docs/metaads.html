@@ -50,7 +50,7 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="assets/app.js?v=231126-2"></script>
-<script src="assets/sidebar.js?v=231126-2"></script>
+<script src="assets/sidebar.js?v=251126-15"></script>
 <style>
   .ma-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .ma-lido.velho { color: var(--warn-fg); }
@@ -112,6 +112,24 @@
   .ma-tratados { font-size: 12px; color: var(--muted); padding: 2px 4px; line-height: 1.5; }
   .ma-aba { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .ma-aba[hidden] { display: none; }
+  /* 0406: gráficos e atendimento */
+  .ma-graf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .ma-graf .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); min-width: 0; }
+  .ma-graf .card h3 { font-size: 12px; font-weight: 600; margin: 0 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ma-graf .card .tot { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+  .ma-graf .card .tot small { font-family: var(--sans); font-size: 11.5px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .ma-graf svg { display: block; width: 100%; height: auto; margin-top: 6px; }
+  .ma-graf svg text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+  .ma-graf svg text.forte { fill: var(--text); font-weight: 600; }
+  .ma-funil { display: grid; grid-template-columns: minmax(120px, max-content) 1fr auto; gap: 5px 10px; align-items: center; font-size: 12.5px; }
+  .ma-funil .barra { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
+  .ma-funil .barra i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
+  .ma-funil .n { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  .ma-funil .n small { color: var(--muted); font-family: var(--sans); margin-left: 6px; }
+  .ma-funil .sep { grid-column: 1 / -1; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 6px; }
+  .ma-leg { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .ma-leg i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .ma-sem-camp { padding: 22px 16px; text-align: center; color: var(--muted); }
   .ma-tab td small.apagado, .ma-tab td .sub-l { display: block; font-size: 11.5px; color: var(--muted); font-family: var(--sans); font-weight: 400; }
 </style>
 </head>
@@ -194,6 +212,8 @@
 
     <section class="ma-gavetas" aria-label="Mais detalhes">
       <details class="gaveta" id="g-dias"><summary><b>Dia a dia</b><span id="r-dias">…</span></summary><div class="ma-rol" id="c-dias"></div></details>
+      <details class="gaveta" id="g-graf"><summary><b>Gráficos do período</b><span id="r-graf">funil, CPM, CTR, custo por conversa, CAC e o retorno à Meta</span></summary><div id="c-graf"></div></details>
+      <details class="gaveta" id="g-atend"><summary><b>Atendimento dos leads</b><span id="r-atend">se cada lead de anúncio foi respondido, e em quanto tempo</span></summary><div class="ma-rol" id="c-atend"></div></details>
       <details class="gaveta" id="g-motivos"><summary><b>Por que os leads saíram</b><span id="r-motivos">leads de anúncio que foram para Saída, por anúncio e por motivo</span></summary><div class="ma-rol" id="c-motivos"></div></details>
       <details class="gaveta" id="g-posic"><summary><b>Para onde vai a verba</b><span id="r-posic">…</span></summary><div id="c-posic"></div></details>
       <details class="gaveta" id="g-capi"><summary><b>O que a Meta recebeu de volta</b><span id="r-capi">…</span></summary><div id="c-capi"></div></details>
@@ -267,7 +287,10 @@
   NGSidebar.montar();
   // 23/11: o admin abre, noutra aba, a tela exatamente como a agência a vê (para conversar com ela olhando a mesma coisa)
   if (eu.perfil === 'admin') document.getElementById('lido').insertAdjacentHTML('beforebegin', '<a class="btn btn-ghost" href="metaads.html?como=agencia" target="_blank" rel="noopener" title="Abre noutra aba as telas como a agência de anúncios as vê: Meta Ads, Placar e Tabela, sem saldo, comissão ou vendedor.">Ver como a agência ↗</a>');
-  if (agencia) document.getElementById('ma-pe').textContent = 'Esta tela só mostra, em números: nenhum dado de cliente passa por aqui. Venda = OS gerada.';
+  if (agencia) document.getElementById('ma-pe').textContent = 'Esta tela só mostra, em números, as campanhas liberadas para a agência: nenhum dado de cliente passa por aqui. Venda = OS gerada.';
+  // 0406 (Ricardo 25/11): a agência vê só as campanhas que o admin liberou (Configurações › Agência), e o Google Ads não é dela.
+  // O banco segura o recorte; na prévia do admin ("Ver como a agência") as funções recebem p_agencia e a tela filtra as linhas.
+  if (agencia) document.getElementById('abas-canal').hidden = true;
 
   let VERBA_MES = 2000;     // reserva; o valor vem de config_meta_ads_regras.verba_mes (0058)
   const STATUS_AD = {
@@ -283,7 +306,7 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
   const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { if (mCarregou) carregar(); motivosMudou(); if (gCarregou) carregarGoogle(); } });
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { if (mCarregou) carregar(); motivosMudou(); grafMudou(); atendMudou(); if (gCarregou) carregarGoogle(); } });
   let gCarregou = false, abaAtual = 'meta', gUltimo = null;   // 0369: aba do canal
   // 23/11 (regra 19): cada aba carrega só quando abre — a Google, aberta direto pelo card do Painel, não carrega mais a Meta escondida
   // (26 → menos chamadas). O config_meta_ads_regras é lido uma vez e serve às duas abas; o ↻ Atualizar lê de novo.
@@ -318,18 +341,19 @@
     const trinta = NG.somaDias(NG.diaSP(), -30);
     // Uma rodada só (regra 19). O gasto por anúncio vem inteiro (a campanha é pequena) e o período é filtrado aqui:
     // os avisos usam a campanha desde o início; a tabela, o período escolhido.
-    const [rTudo, rAds, rDias, rCfg, rSaldo, rPos, rPosDia, rConj, rRes] = await Promise.all([
+    const [rTudo, rAds, rDias, rCfg, rSaldo, rPos, rPosDia, rConj, rRes, rCampAg] = await Promise.all([
       NG.sb.from('meta_ads_diario').select('dia, ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, gasto, conversas, atualizado_em'),
-      NG.sb.from('meta_ads_anuncios').select('ad_id, ad_nome, adset_id, adset_nome, campanha_nome, status_efetivo, atualizado_em'),
-      NG.sb.rpc('meta_ads_dia'),   // 0361: o dia a dia, sem coluna de venda nem de comissão
+      NG.sb.from('meta_ads_anuncios').select('ad_id, ad_nome, adset_id, adset_nome, campanha_id, campanha_nome, status_efetivo, atualizado_em'),
+      NG.sb.rpc('meta_ads_dia', { p_agencia: agencia }),   // 0361: o dia a dia, sem coluna de venda nem de comissão · 0406: recorte da agência
       lerCfg(),
       agencia ? Promise.resolve({ data: [] })   // 0361: o saldo em aberto é cobrança nossa; a agência não lê (o banco também nega)
         : NG.sb.from('meta_ads_conta_saldo').select('saldo, imposto_estimado, limite_cobranca, proxima_cobranca_em, fonte_data, coletado_em').order('coletado_em', { ascending: false }).limit(1),
-      NG.sb.from('v_meta_ads_posicionamento_7d').select('plataforma, posicao, gasto, conversas, fatia_gasto, alerta, atualizado_em'),
-      NG.sb.from('meta_ads_posicionamento_diario').select('dia, plataforma, posicao, gasto').gte('dia', trinta),
-      NG.sb.from('meta_ads_conjuntos').select('adset_id, status_efetivo, publisher_platforms'),   // 0056
+      NG.sb.from('v_meta_ads_posicionamento_7d').select('campanha_id, plataforma, posicao, gasto, conversas, fatia_gasto, alerta, atualizado_em'),
+      NG.sb.from('meta_ads_posicionamento_diario').select('campanha_id, dia, plataforma, posicao, gasto').gte('dia', trinta),
+      NG.sb.from('meta_ads_conjuntos').select('campanha_id, adset_id, status_efetivo, publisher_platforms'),   // 0056
       // 0361: o que vem das conversas e das vendas de anúncio, já contado por dia × anúncio (nenhuma linha de cliente)
-      NG.sb.rpc('meta_ads_resultado'),
+      NG.sb.rpc('meta_ads_resultado', { p_agencia: agencia }),
+      agencia ? NG.sb.rpc('agencia_campanhas') : Promise.resolve({ data: null }),   // 0406: as campanhas liberadas
     ]);
     const erro = rTudo.error || rAds.error || rDias.error || rCfg.error;
     if (erro) {
@@ -339,8 +363,12 @@
     }
     const L = Object.fromEntries((rCfg.data || []).map((c) => [c.chave, Number(c.valor)]));
     if (L.verba_mes > 0) VERBA_MES = L.verba_mes;
-    const tudo = rTudo.data || [];
-    const ads = rAds.data || [];
+    // 0406: as linhas só das campanhas liberadas (a agência já recebe filtrado do banco; a prévia do admin filtra aqui)
+    const campAg = agencia ? new Set((rCampAg.data || []).map((x) => (typeof x === 'string' ? x : x.agencia_campanhas))) : null;
+    const daAg = (r) => !campAg || campAg.has(r.campanha_id);
+    if (campAg && !campAg.size) { semCampanha(); return; }
+    const tudo = (rTudo.data || []).filter(daAg);
+    const ads = (rAds.data || []).filter(daAg);
     const diasTodos = (rDias.data || []).slice().sort((a, b) => (a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : 0));
     const dias = diasTodos.filter((r) => noPer(r.dia));
     // 0361: contagens prontas. conversas = [{ dia, ad_id, n, cep_ok, qualif, ja_cliente, sem_cob }] (ad_id nulo = o WhatsApp não
@@ -428,17 +456,17 @@
       .filter((c) => c.vendas >= 3 && c.gasto / c.vendas > L.conjunto_custo_venda_max).sort((a, b) => b.gasto / b.vendas - a.gasto / a.vendas)[0];
 
     // posicionamentos (7 dias)
-    const posDia = rPosDia.error ? [] : (rPosDia.data || []);
+    const posDia = rPosDia.error ? [] : (rPosDia.data || []).filter(daAg);
     const ultDia = posDia.reduce((m, r) => (r.dia > m ? r.dia : m), '');
     const ultGasto = new Map();
     posDia.forEach((r) => { const k = `${r.plataforma}|${r.posicao}`; if (Number(r.gasto) > 0 && (!ultGasto.has(k) || r.dia > ultGasto.get(k))) ultGasto.set(k, r.dia); });
     // Tirado = a plataforma não está em nenhum conjunto ativo (meta_ads_conjuntos). Conjunto sem lista é automático (tudo vale).
-    const conjAtivos = rConj.error ? null : (rConj.data || []).filter((c) => c.status_efetivo === 'ACTIVE');
+    const conjAtivos = rConj.error ? null : (rConj.data || []).filter((c) => daAg(c) && c.status_efetivo === 'ACTIVE');
     const plataformasOn = conjAtivos && conjAtivos.length && !conjAtivos.some((c) => !(c.publisher_platforms || []).length) ? new Set(conjAtivos.flatMap((c) => c.publisher_platforms)) : null;
     const tirado = (r) => !!(plataformasOn && !plataformasOn.has(r.plataforma));
     const semVerba = (r) => { const u = ultGasto.get(`${r.plataforma}|${r.posicao}`); return !!(u && ultDia && u < ultDia); };
     const parou = (r) => tirado(r) || semVerba(r);
-    const pos = (rPos.error ? [] : rPos.data || []).slice().sort((a, b) => Number(b.gasto) - Number(a.gasto));
+    const pos = (rPos.error ? [] : rPos.data || []).filter(daAg).sort((a, b) => Number(b.gasto) - Number(a.gasto));
 
     // qualidade das conversas, no período
     let q = null;
@@ -492,7 +520,8 @@
     document.getElementById('faixa').innerHTML = [
       `<div title="Gasto do período dividido pelas vendas com OS gerada no período. É este número que decide."><span>Custo por venda</span><b class="${cv == null ? '' : 'ok'}">${cv == null ? '—' : R(Math.round(cv))}</b><small>${tot.vendas ? pl(tot.vendas, 'venda com OS', 'vendas com OS') : 'nenhuma venda com OS'}</small></div>`,
       `<div title="Conversas iniciadas no WhatsApp, contadas pela Meta."><span>Gasto · ${esc(per.rotulo.toLowerCase())}</span><b>${R(gasto)}</b><small>${pl(convMeta, 'conversa', 'conversas')}${convMeta ? ` · ${dividir(gasto, convMeta)} cada` : ''}</small></div>`,
-      `<div title="Gasto do mês contra a verba combinada."><span>Verba do mês</span><b class="${gastoMes > VERBA_MES ? 'bad' : ''}">${R(gastoMes)}</b><small>de ${R(VERBA_MES)}</small></div>`,
+      agencia ? `<div title="Gasto do mês nas campanhas liberadas para a agência."><span>Gasto do mês</span><b>${R(gastoMes)}</b><small>${pl(campAg.size, 'campanha liberada', 'campanhas liberadas')}</small></div>`
+        : `<div title="Gasto do mês contra a verba combinada."><span>Verba do mês</span><b class="${gastoMes > VERBA_MES ? 'bad' : ''}">${R(gastoMes)}</b><small>de ${R(VERBA_MES)}</small></div>`,
       agencia ? '' : saldoVelho ? `<div title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora."><span>Saldo em aberto</span><b>—</b><small>sem leitura da Meta</small></div>`
         : `<div title="O que a Meta vai cobrar no cartão.${s.imposto_estimado != null ? ` Mais ${R(Number(s.imposto_estimado))} de imposto estimado.` : ''}"><span>Saldo em aberto</span><b class="${motivosSaldo.length ? 'warn' : ''}">${R(saldo)}</b><small>${esc(cobra)}</small></div>`,
       !capi ? '<div><span>Retorno à Meta</span><b>—</b><small>sem leitura</small></div>'
@@ -544,6 +573,16 @@
     }
     if (!window.NGmaTempo) { window.NGmaTempo = Math.round(performance.now() - t0); window.NGmaDesdeAbrir = Math.round(performance.now()); }   // regra 19
   }
+  // 0406: a agência sem campanha liberada não vê número nenhum (nunca a conta inteira)
+  function semCampanha() {
+    const msg = 'Nenhuma campanha liberada ainda. Quando a Dharma liberar as campanhas da agência, os números aparecem aqui.';
+    document.getElementById('faixa').innerHTML = `<div class="ma-sem-camp">${esc(msg)}</div>`;
+    document.getElementById('acoes').innerHTML = '<div class="ma-nada">Nada por aqui enquanto não houver campanha liberada.</div>';
+    document.getElementById('t-acoes').textContent = 'Precisa de ação';
+    document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="8" class="vazio">${esc(msg)}</td></tr>`;
+    document.getElementById('contagem-ads').textContent = ''; document.getElementById('ver-parados').innerHTML = '';
+    ['g-dias', 'g-graf', 'g-atend', 'g-motivos', 'g-posic', 'g-capi'].forEach((id) => { document.getElementById(id).hidden = true; });
+  }
   function pintarLido() {
     const el = document.getElementById('lido');
     const google = abaAtual === 'google';
@@ -560,7 +599,7 @@
   // #meta (padrão) · #google. O card "Canais · 7 dias" do Painel abre direto a aba do canal. A aba Google só carrega quando abre:
   // a Meta Ads, que é a padrão, segue com as mesmas chamadas de antes (regra 19).
   function mostrarAba(aba) {
-    abaAtual = aba === 'google' ? 'google' : 'meta';
+    abaAtual = aba === 'google' && !agencia ? 'google' : 'meta';   // 0406: o Google Ads não é da agência
     document.querySelectorAll('#abas-canal .aba').forEach((b) => { const on = b.dataset.aba === abaAtual; b.classList.toggle('ativa', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); });
     document.getElementById('aba-meta').hidden = abaAtual !== 'meta';
     document.getElementById('aba-google').hidden = abaAtual !== 'google';
@@ -772,7 +811,7 @@
     motPeriodo = chave;
     const alvo = document.getElementById('c-motivos');
     alvo.innerHTML = '<div class="vazio-curto">Carregando…</div>';
-    const { data, error } = await NG.sb.rpc('meta_ads_motivos_saida', { p_de: p.de || null, p_ate: p.ate || null });
+    const { data, error } = await NG.sb.rpc('meta_ads_motivos_saida', { p_de: p.de || null, p_ate: p.ate || null, p_agencia: agencia });
     if (motPeriodo !== chave) return;
     if (error || !data) { motPeriodo = null; alvo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'Sem leitura dos motivos.')}</div>`; return; }
     const linhasBanco = data.linhas || [];
@@ -801,6 +840,146 @@
   }
   function motivosMudou() { if (gMot.open) carregarMotivos(); else { motPeriodo = null; document.getElementById('r-motivos').textContent = R_MOT; } }
   gMot.addEventListener('toggle', () => { if (gMot.open) carregarMotivos(); });
+
+  // ───────────── Gráficos do período (0406, Ricardo 25/11) ─────────────
+  // Uma chamada (meta_ads_graficos): mídia, conversas, vendas, instaladas e o retorno à Meta por dia × campanha. Carrega quando a
+  // gaveta abre; mudou o período com ela aberta, recarrega. CAC = gasto ÷ vendas com OS (o mesmo "Custo por venda" da faixa).
+  const gGraf = document.getElementById('g-graf');
+  const R_GRAF = 'funil, CPM, CTR, custo por conversa, CAC e o retorno à Meta';
+  let grafPeriodo = null;
+  if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) gGraf.hidden = true;
+  const DEGRAU = [['cidade', 'CEP em cidade atendida', 'var(--cor-neutro)'], ['viavel', 'Rua com rede', 'var(--cor-varejo)'],
+    ['qualificada', 'Qualificada', 'var(--cor-empresas)'], ['venda', 'Venda (OS)', 'var(--ok-fg)']];
+  const fmtDiaCurto = (d) => NG.fmtDiaISO(d).slice(0, 5);
+  // linha simples de um indicador por dia (null = sem base naquele dia: a linha pula)
+  function svgLinha(dias, vals, fmt) {
+    const W = 300, H = 112, m = { t: 10, r: 8, b: 18, l: 8 };
+    const ok = vals.filter((v) => v != null && Number.isFinite(v));
+    if (!ok.length) return '<div class="vazio-curto">Sem base no período.</div>';
+    const max = Math.max(...ok), min = Math.min(...ok), faixa = max - min || max || 1;
+    const x = (i) => m.l + (dias.length === 1 ? (W - m.l - m.r) / 2 : (i / (dias.length - 1)) * (W - m.l - m.r));
+    const y = (v) => m.t + (1 - (v - (min - faixa * 0.15)) / (faixa * 1.3)) * (H - m.t - m.b);
+    let g = `<line x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}" stroke="var(--border)"/>`;
+    let trecho = [];
+    const fecha = () => { if (trecho.length > 1) g += `<polyline points="${trecho.join(' ')}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`; trecho = []; };
+    vals.forEach((v, i) => { if (v == null || !Number.isFinite(v)) { fecha(); return; } trecho.push(`${x(i).toFixed(1)},${y(v).toFixed(1)}`); g += `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.5" fill="var(--accent)"><title>${esc(fmtDiaCurto(dias[i]))}: ${esc(fmt(v))}</title></circle>`; });
+    fecha();
+    const iMax = vals.indexOf(max), iMin = vals.indexOf(min);
+    g += `<text x="${x(iMax)}" y="${Math.max(9, y(max) - 5)}" text-anchor="middle" class="forte">${esc(fmt(max))}</text>`;
+    if (iMin !== iMax) g += `<text x="${x(iMin)}" y="${Math.min(H - m.b - 3, y(min) + 13)}" text-anchor="middle">${esc(fmt(min))}</text>`;
+    g += `<text x="${m.l}" y="${H - 4}">${esc(fmtDiaCurto(dias[0]))}</text><text x="${W - m.r}" y="${H - 4}" text-anchor="end">${esc(fmtDiaCurto(dias[dias.length - 1]))}</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img">${g}</svg>`;
+  }
+  async function carregarGraficos() {
+    const p = per.valor();
+    const chave = `${p.de || ''}|${p.ate || ''}`;
+    if (grafPeriodo === chave) return;
+    grafPeriodo = chave;
+    const alvo = document.getElementById('c-graf');
+    alvo.innerHTML = '<div class="vazio-curto">Carregando…</div>';
+    const { data, error } = await NG.sb.rpc('meta_ads_graficos', { p_de: p.de || null, p_ate: p.ate || null, p_agencia: agencia });
+    if (grafPeriodo !== chave) return;
+    if (error || !data) { grafPeriodo = null; alvo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'Sem leitura dos gráficos.')}</div>`; return; }
+    const porDia = new Map();
+    const dDe = (dia) => { if (!porDia.has(dia)) porDia.set(dia, { gasto: 0, impr: 0, cliq: 0, convMeta: 0, conv: 0, cep: 0, qualif: 0, vendas: 0, inst: 0, capi: {}, erros: 0 }); return porDia.get(dia); };
+    (data.midia || []).forEach((r) => { const d = dDe(r.dia); d.gasto += Number(r.gasto || 0); d.impr += r.impressoes || 0; d.cliq += r.cliques || 0; d.convMeta += r.conversas_meta || 0; });
+    (data.conversas || []).forEach((r) => { const d = dDe(r.dia); d.conv += r.n; d.cep += r.cep_ok; d.qualif += r.qualif; });
+    (data.vendas || []).forEach((r) => { dDe(r.dia).vendas += r.n; });
+    (data.instaladas || []).forEach((r) => { dDe(r.dia).inst += r.n; });
+    (data.capi || []).forEach((r) => { const d = dDe(r.dia); d.capi[r.degrau] = (d.capi[r.degrau] || 0) + r.enviados; d.erros += r.erros; });
+    const dias = [...porDia.keys()].sort();
+    const L = dias.map((k) => porDia.get(k));
+    const T = L.reduce((s, d) => { Object.keys(s).forEach((k) => { if (typeof s[k] === 'number') s[k] += d[k]; }); return s; }, { gasto: 0, impr: 0, cliq: 0, convMeta: 0, conv: 0, cep: 0, qualif: 0, vendas: 0, inst: 0, erros: 0 });
+    if (!dias.length) { document.getElementById('r-graf').textContent = `nada no período · ${per.rotulo.toLowerCase()}`; alvo.innerHTML = '<div class="vazio-curto">Nada no período.</div>'; return; }
+    const R2c = (v) => (v == null ? '—' : NG.fmtMoeda(Math.round(v * 100) / 100));
+    const pctTxt = (a, b) => (b > 0 ? `${N(Math.round((a / b) * 1000) / 10)} %` : '—');
+    const cpm = T.impr ? (T.gasto / T.impr) * 1000 : null, ctr = T.impr ? (T.cliq / T.impr) * 100 : null;
+    const cpc = T.convMeta ? T.gasto / T.convMeta : null, cac = T.vendas ? T.gasto / T.vendas : null;
+    document.getElementById('r-graf').textContent = `CPM ${R2c(cpm)} · CTR ${ctr == null ? '—' : `${N(Math.round(ctr * 100) / 100)} %`} · CAC ${cac == null ? 'sem venda' : R(Math.round(cac))} · ${per.rotulo.toLowerCase()}`;
+    // funil: duas escadas (a da mídia e a do atendimento), cada barra contra o primeiro degrau da sua escada
+    const degrau = (nome, v, base, ant, dica) => `<span title="${esc(dica)}">${esc(nome)}</span><span class="barra"><i style="width:${base > 0 ? Math.max(1.5, Math.min(100, (v / base) * 100)).toFixed(1) : 0}%"></i></span><span class="n">${N(v)}${ant != null ? `<small>${pctTxt(v, ant)} do passo anterior</small>` : ''}</span>`;
+    const funil = `<div class="ma-funil">
+        <span class="sep">Na Meta</span>
+        ${degrau('Impressões', T.impr, T.impr, null, 'Vezes que o anúncio apareceu.')}
+        ${degrau('Cliques', T.cliq, T.impr, T.impr, 'Cliques no anúncio.')}
+        ${degrau('Conversas (Meta)', T.convMeta, T.impr, T.cliq, 'Conversas iniciadas no WhatsApp, contadas pela Meta.')}
+        <span class="sep">No atendimento</span>
+        ${degrau('Conversas (Mari)', T.conv, T.conv, null, 'As que a Mari recebeu de anúncio.')}
+        ${degrau('CEP atendido', T.cep, T.conv, T.conv, 'O cliente deu um CEP de rua que a Nio atende.')}
+        ${degrau('Qualificadas', T.qualif, T.conv, T.cep, 'A Mari passou ao time com os dados completos.')}
+        ${degrau('Vendas (OS)', T.vendas, T.conv, T.qualif, 'OS gerada, pelo dia da OS.')}
+        ${degrau('Instaladas', T.inst, T.conv, T.vendas, 'Instalação feita, pelo dia da instalação.')}
+      </div><p class="ma-nota">Vendas e instaladas contam pelo dia da OS e da instalação: uma venda do período pode ter vindo de conversa anterior.</p>`;
+    // CAC acumulado: gasto acumulado ÷ vendas acumuladas (por dia é ruído: há dias sem venda)
+    let gAc = 0, vAc = 0;
+    const cacAc = L.map((d) => { gAc += d.gasto; vAc += d.vendas; return vAc ? gAc / vAc : null; });
+    const card = (tit, tot, sub, svg) => `<div class="card"><h3>${esc(tit)}</h3><div class="tot">${tot}<small>${esc(sub)}</small></div>${svg}</div>`;
+    const capiDias = dias.map((k, i) => ({ k, d: L[i] }));
+    const maxCapi = Math.max(1, ...capiDias.map(({ d }) => DEGRAU.reduce((s, [g]) => s + (d.capi[g] || 0), 0)));
+    const totCapi = DEGRAU.map(([g]) => L.reduce((s, d) => s + (d.capi[g] || 0), 0));
+    const W = 300, H = 112, bw = Math.max(2, Math.min(18, (W - 16) / dias.length - 3));
+    let gc = `<line x1="8" x2="${W - 8}" y1="${H - 18}" y2="${H - 18}" stroke="var(--border)"/>`;
+    capiDias.forEach(({ k, d }, i) => {
+      const cx = 8 + (dias.length === 1 ? (W - 16) / 2 : (i / (dias.length - 1)) * (W - 16 - bw)) ; let yb = H - 18;
+      DEGRAU.forEach(([g, nome, cor]) => { const v = d.capi[g] || 0; if (!v) return; const h = (v / maxCapi) * (H - 34); yb -= h;
+        gc += `<rect x="${cx.toFixed(1)}" y="${yb.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cor}"><title>${esc(fmtDiaCurto(k))} · ${esc(nome)}: ${N(v)}</title></rect>`; });
+      if (d.erros) gc += `<circle cx="${(cx + bw / 2).toFixed(1)}" cy="${(yb - 6).toFixed(1)}" r="3" fill="var(--bad-fg)"><title>${esc(fmtDiaCurto(k))}: ${pl(d.erros, 'erro de envio', 'erros de envio')}</title></circle>`;
+    });
+    gc += `<text x="8" y="${H - 4}">${esc(fmtDiaCurto(dias[0]))}</text><text x="${W - 8}" y="${H - 4}" text-anchor="end">${esc(fmtDiaCurto(dias[dias.length - 1]))}</text>`;
+    alvo.innerHTML = `<div class="ma-graf">
+        <div class="card" style="grid-column: 1 / -1"><h3>Funil do período</h3>${funil}</div>
+        ${card('CPM', R2c(cpm), 'por mil impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.gasto / d.impr) * 1000 : null)), R2c))}
+        ${card('CTR', ctr == null ? '—' : `${N(Math.round(ctr * 100) / 100)} %`, 'cliques ÷ impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.cliq / d.impr) * 100 : null)), (v) => `${N(Math.round(v * 100) / 100)} %`))}
+        ${card('Custo por conversa', R2c(cpc), 'conversas contadas pela Meta', svgLinha(dias, L.map((d) => (d.convMeta ? d.gasto / d.convMeta : null)), R2c))}
+        ${card('CAC (custo por venda)', cac == null ? 'sem venda' : R(Math.round(cac)), 'gasto ÷ vendas com OS · linha acumulada', svgLinha(dias, cacAc, (v) => R(Math.round(v))))}
+        <div class="card"><h3>Retorno à Meta</h3><div class="tot">${N(totCapi.reduce((s, v) => s + v, 0))}<small>eventos enviados${T.erros ? ` · ${pl(T.erros, 'erro', 'erros')}` : ' · nenhum erro'}</small></div>
+          <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Eventos devolvidos à Meta por dia">${gc}</svg>
+          <div class="ma-leg">${DEGRAU.map(([, nome, cor], i) => `<span><i style="background:${cor}"></i>${esc(nome)} ${N(totCapi[i])}</span>`).join('')}</div></div>
+      </div>
+      <p class="ma-nota">${agencia ? 'Só as campanhas liberadas para a agência. ' : 'Todas as campanhas da conta (as conversas sem anúncio identificado entram no atendimento). '}O retorno à Meta é o que o NIOGEN devolve para ela aprender quem vira venda: só o telefone embaralhado, nunca o número aberto.</p>`;
+  }
+  function grafMudou() { if (gGraf.open) carregarGraficos(); else { grafPeriodo = null; document.getElementById('r-graf').textContent = R_GRAF; } }
+  gGraf.addEventListener('toggle', () => { if (gGraf.open) carregarGraficos(); });
+
+  // ───────────── Atendimento dos leads (0406, Ricardo 25/11: "uma prova de que não haverá falha no atendimento") ─────────────
+  // Por anúncio: conversas que chegaram no período, respondidas, tempo da 1ª resposta, passadas ao consultor e paradas. Só números.
+  const gAtend = document.getElementById('g-atend');
+  const R_ATEND = 'se cada lead de anúncio foi respondido, e em quanto tempo';
+  let atendPeriodo = null;
+  if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) gAtend.hidden = true;
+  const tempo = (s) => (s == null ? '—' : Number(s) < 60 ? `${N(Math.round(Number(s)))} s` : Number(s) < 3600 ? `${N(Math.round(Number(s) / 60))} min` : `${N(Math.round(Number(s) / 360) / 10)} h`);
+  async function carregarAtendimento() {
+    const p = per.valor();
+    const chave = `${p.de || ''}|${p.ate || ''}`;
+    if (atendPeriodo === chave) return;
+    atendPeriodo = chave;
+    const alvo = document.getElementById('c-atend');
+    alvo.innerHTML = '<div class="vazio-curto">Carregando…</div>';
+    const { data, error } = await NG.sb.rpc('meta_ads_atendimento', { p_de: p.de || null, p_ate: p.ate || null, p_agencia: agencia });
+    if (atendPeriodo !== chave) return;
+    if (error || !data) { atendPeriodo = null; alvo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'Sem leitura do atendimento.')}</div>`; return; }
+    const t = data.total || {};
+    if (!t.conversas) { document.getElementById('r-atend').textContent = `nenhuma conversa de anúncio · ${per.rotulo.toLowerCase()}`; alvo.innerHTML = '<div class="vazio-curto">Nenhuma conversa de anúncio chegou no período.</div>'; return; }
+    document.getElementById('r-atend').textContent = `${N(t.respondidas)} de ${pl(t.conversas, 'conversa respondida', 'conversas respondidas')} · 1ª resposta em ${tempo(t.resp_mediana_s)} (metade das conversas) · ${t.paradas ? pl(t.paradas, 'parada', 'paradas') : 'nenhuma parada'} · ${per.rotulo.toLowerCase()}`;
+    const cons = (x) => (!x.passadas_consultor ? '<span class="apagado">—</span>'
+      : x.consultor_medidas ? `${N(x.consultor_mediana_min)} min <small class="apagado">· medido em ${N(x.consultor_medidas)} de ${N(x.passadas_consultor)}</small>`
+        : `<span class="apagado">medido em 0 de ${N(x.passadas_consultor)}</span>`);
+    const nomeL = (x) => (x.ad_id ? [x.ad_nome || (nomeAd.get(x.ad_id) || [])[0] || `anúncio ${x.ad_id}`, x.campanha_nome || ''] : ['Sem anúncio identificado', 'o WhatsApp não disse de qual anúncio veio']);
+    const linha = (x, tot) => `<tr${tot ? ' class="total"' : ''}><td>${tot ? '<b>Total do período</b>' : `${esc(nomeL(x)[0])}${nomeL(x)[1] ? ` <small class="apagado">· ${esc(nomeL(x)[1])}</small>` : ''}`}</td>
+        <td>${N(x.conversas)}</td><td>${N(x.respondidas)}</td><td>${x.sem_resposta ? `<span class="chip bad">${N(x.sem_resposta)}</span>` : '0'}</td>
+        <td>${tempo(x.resp_mediana_s)}</td><td>${tempo(x.resp_p95_s)}</td><td>${tempo(x.resp_pior_s)}</td>
+        <td>${N(x.passadas_consultor)}</td><td>${cons(x)}</td>
+        <td>${x.paradas ? `<span class="chip warn">${N(x.paradas)}</span>` : '0'}</td><td>${N(x.encerradas_sem_resposta)}</td></tr>`;
+    alvo.innerHTML = `<table class="ma-g-tab"><thead><tr><th>Anúncio</th><th title="Conversas de anúncio que chegaram no período, com mensagem do cliente.">Conversas</th>
+        <th title="Tiveram resposta da Mari ou de alguém do time.">Respondidas</th><th title="O cliente escreveu e ninguém respondeu nunca.">Sem resposta</th>
+        <th title="Tempo até a 1ª resposta, em metade das conversas.">1ª resposta (mediana)</th><th title="95 de cada 100 conversas tiveram a 1ª resposta até este tempo.">95 %</th><th>Pior</th>
+        <th title="A Mari passou ao consultor.">Passadas ao consultor</th><th title="Tempo até a 1ª mensagem do consultor depois da passagem, onde ela ficou registrada no NIOGEN.">Consultor</th>
+        <th title="O cliente falou por último há mais de 15 min e a conversa segue em andamento.">Paradas</th><th title="O cliente falou por último numa conversa já encerrada (já é cliente Nio, sem cobertura, recusou…). Não é falha de atendimento.">Encerradas</th></tr></thead><tbody>
+      ${(data.linhas || []).map((x) => linha(x)).join('')}${linha(t, true)}</tbody></table>
+      <p class="ma-nota">A 1ª resposta é da Mari, na hora, dia e noite. O tempo do consultor só conta onde a mensagem dele ficou registrada no NIOGEN — a resposta dada direto no Chatwoot ainda não volta para cá, por isso aparece "medido em X de Y". Paradas = o cliente espera resposta numa conversa em andamento. Só contagem: nenhum dado de cliente.</p>`;
+  }
+  function atendMudou() { if (gAtend.open) carregarAtendimento(); else { atendPeriodo = null; document.getElementById('r-atend').textContent = R_ATEND; } }
+  gAtend.addEventListener('toggle', () => { if (gAtend.open) carregarAtendimento(); });
 
   // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a gaveta abre) ─────────────
   // A gaveta substitui a antiga vista "Bairros prioritários": estes três nomes existem só para o código dos bairros seguir igual.

@@ -4,6 +4,9 @@
 -- premissa: horário dos toques cobre o dia todo (o cenário não depende da hora em que o portão roda)
 update public.config_regras set valor = '{"abre": "00:00", "fecha": "24:00", "todos_os_dias": true}'::jsonb where chave = 'mari_horario_toques';
 select (now() at time zone 'America/Sao_Paulo')::date as hoje \gset
+-- 25/11 (sessão da agência, 0406): a cópia traz os retornos REAIS do backup; um que passou da hora deixava a conferência amarela e
+-- o "volta ao verde" falhava conforme a hora do portão. O cenário só confere os retornos que ele mesmo cria.
+update public.retornos set estado = 'cancelado' where estado = 'marcado';
 
 -- 0) o leitor
 select sim.confere('leitor: "me liga amanhã às 15h"', to_char((public._retorno_ler_quando('me liga amanhã às 15h', now()) ->> 'quando')::timestamptz at time zone 'America/Sao_Paulo', 'YYYY-MM-DD HH24:MI')

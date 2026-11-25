@@ -53,7 +53,9 @@ reset role;
 
 select sim.como('admin');
 set role authenticated;
-select public.meta_ads_resultado() as ad_res, public.meta_ads_motivos_saida(null, null) as ad_motivos \gset
+-- 0406: a agência só vê as campanhas liberadas; o admin compara pela prévia ("Ver como a agência"), que pede o mesmo recorte
+select public.meta_ads_resultado(true) as ad_res, public.meta_ads_motivos_saida(null, null, true) as ad_motivos,
+       public.meta_ads_resultado() as ad_res_tudo, public.meta_ads_motivos_saida(null, null) as ad_motivos_tudo \gset
 select (select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia() x) as ad_dia,
        (select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x) as ad_conv \gset
 reset role;
@@ -66,9 +68,10 @@ select sim.confere('agência NÃO lê conversa, fala, venda, lead, biometria, Fi
     ('meta_ads_diario', 'meta_ads_anuncios', 'meta_ads_conjuntos', 'meta_ads_posicionamento_diario', 'config_meta_ads_regras',
      'config_metas', 'config_area', 'dfv_bairros_pronto', 'usuarios')),
   (select string_agg(r || '=' || n, ', ') from _leu where quem = 'agencia' and n > 0));
-select sim.confere('agência lê o que é dela: a campanha na Meta, a meta do mês e só a PRÓPRIA linha de usuário',
+select sim.confere('agência lê o que é dela: só as campanhas liberadas na Meta (0406: nenhuma aqui), a meta do mês e só a PRÓPRIA linha de usuário',
   (select n from _leu where quem = 'agencia' and r = 'usuarios') = 1
-    and (select n from _leu where quem = 'agencia' and r = 'meta_ads_diario') = (select count(*) from public.meta_ads_diario)
+    and (select n from _leu where quem = 'agencia' and r = 'meta_ads_diario') = (select count(*) from public.meta_ads_diario
+                                                                                where campanha_id in (select campanha_id from public.meta_ads_campanhas_dono where dono = 'agencia'))
     and (select n from _leu where quem = 'agencia' and r = 'config_metas') = (select count(*) from public.config_metas),
   (select string_agg(r || '=' || n, ', ') from _leu where quem = 'agencia' and r in ('usuarios', 'meta_ads_diario', 'config_metas')));
 select sim.confere('as listas do time (conversas_lista, leads_lista, jornada_live) não devolvem nada à agência', :ag_listas = 0, :'ag_listas');
@@ -82,12 +85,12 @@ select sim.confere('o Placar da agência traz todas as vendas com OS', jsonb_arr
   jsonb_array_length(:'ag_placar'::jsonb)::text);
 select sim.confere('a Tabela da agência vem sem comissão', :'ag_tabela' !~* 'comiss' and jsonb_array_length(:'ag_tabela'::jsonb -> 'planos') > 0, left(:'ag_tabela', 120));
 select sim.confere('a agência recebe a meta do mês (só números)', :'ag_ritmo'::boolean, 'nulo');
-select sim.confere('fonte única: Meta Ads e Placar dão à agência exatamente o que dão ao admin',
+select sim.confere('fonte única: Meta Ads e Placar dão à agência exatamente o que dão ao admin na prévia (0406: mesmo recorte)',
   :'ag_res'::jsonb = :'ad_res'::jsonb and :'ag_dia'::jsonb = :'ad_dia'::jsonb and :'ag_conv'::jsonb = :'ad_conv'::jsonb and :'ag_motivos'::jsonb = :'ad_motivos'::jsonb,
   'diferente');
-select sim.confere('o resultado do Meta Ads conta todas as conversas de anúncio, uma vez cada',
-  (select sum((x ->> 'n')::int) from jsonb_array_elements(:'ag_res'::jsonb -> 'conversas') x) = (select count(*) from public.mari_conversas where origem = 'meta_ads'),
-  (select sum((x ->> 'n')::int)::text from jsonb_array_elements(:'ag_res'::jsonb -> 'conversas') x));
+select sim.confere('o resultado do Meta Ads (admin, sem recorte) conta todas as conversas de anúncio, uma vez cada',
+  (select sum((x ->> 'n')::int) from jsonb_array_elements(:'ad_res_tudo'::jsonb -> 'conversas') x) = (select count(*) from public.mari_conversas where origem = 'meta_ads'),
+  (select sum((x ->> 'n')::int)::text from jsonb_array_elements(:'ad_res_tudo'::jsonb -> 'conversas') x));
 select sim.confere('o resultado do Meta Ads só tem contagem (nenhum id de conversa ou de venda, nenhum telefone)',
   :'ag_res' !~ (select string_agg(id::text, '|') from public.mari_conversas where origem = 'meta_ads')
     and :'ag_res' !~* '(telefone|conversa_id|venda_id|dataset_id)', 'veio identificador');
@@ -103,11 +106,11 @@ select sim.confere('quem já lia continua lendo: o backoffice lê as oito tabela
   (select string_agg(r || '=' || n, ', ') from _leu where quem = 'backoffice' and r in ('conteudos', 'projetor_sombra', 'porta_sombra', 'lead_estado', 'meta_eventos', 'pulso_batimentos')));
 
 -- "Por que os leads saíram": a saída de um lead de anúncio entra na contagem, só como número
-select sim.como('agencia');
+select sim.como('admin');
 select coalesce(sum((x ->> 'n')::int), 0) as antes from jsonb_array_elements(public.meta_ads_motivos_saida(null, null) -> 'linhas') x where x ->> 'motivo' = 'recusou' \gset
 select sim.como('backoffice');
 select public.lead_sair(:'a', null, 'recusou', 'preco');
-select sim.como('agencia');
+select sim.como('admin');
 select coalesce(sum((x ->> 'n')::int), 0) as depois from jsonb_array_elements(public.meta_ads_motivos_saida(null, null) -> 'linhas') x where x ->> 'motivo' = 'recusou' \gset
 select public.meta_ads_motivos_saida(null, null)::text as mot \gset
 select sim.como('servico');
