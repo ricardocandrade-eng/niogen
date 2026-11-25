@@ -38,7 +38,8 @@ if (j.saida) {
     emoji_ajustes: r.emojiAjustes || null,
     interativo: r.interativo || null,   // v7: carrossel/botões (enviado pela Graph API depois dos balões)
   };
-  saida.atrasos = saida.baloes.map((b) => Math.min(6, Math.max(2, Math.round(b.length / 60))));
+  // 24/11 (Ricardo: "'Digitando' de 5 s"): do 2º balão em diante, 5 s de "digitando" (12u + 12w) antes de cada um.
+  saida.atrasos = saida.baloes.map((b, i) => (i > 0 ? 5 : Math.min(6, Math.max(2, Math.round(b.length / 60)))));
   // 07/11 (conversa #1, "Sim" que chegou 0,3 s depois da checagem): o "digitando" do 1º balão agora acontece ANTES da
   // checagem de mensagem nova (7w · Espera 1º balão → 7b → 7c). Aqui ele vira quase zero para não esperar duas vezes.
   if (ex('7w · Espera 1º balão') && saida.atrasos.length) saida.atrasos[0] = 0.3;

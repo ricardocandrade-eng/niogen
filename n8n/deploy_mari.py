@@ -579,6 +579,25 @@ def build(ids):
     add('12r · Digitando abertura', 'n8n-nodes-base.wait', 1.1,
         {'amount': "={{ Math.min(15, Number(((($('11 · Saída').first().json.interativo) || {}).pausaS) || 0)) }}", 'unit': 'seconds'}, 8690, -40,
         webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, semente('niogen/mari/12r'))))
+    # 24/11 (Ricardo: "'Digitando' de 5 s" em todas as mensagens → "mostrar o digitando assim que a mensagem do cliente chega"):
+    # o "digitando" da Graph API (o mesmo do 12q, na mensagem do cliente — também marca como lida) em três pontos: na chegada
+    # (3t, cobre o tempo do Claude), antes do 1º balão (7t, renova — o aviso some sozinho em 25 s) e antes de cada balão
+    # seguinte (12u, com 5 s de espera no 12w; o aviso some quando um balão sai). Cada par IF + chamada é um RAMO À PARTE,
+    # sem saída: no executionOrder v1 o ramo mais acima/à esquerda roda inteiro antes do irmão (conferido nas execuções do
+    # 2z → 2s/2e), então o "digitando" sai antes da espera sem mudar o $json de quem segue. Falhou → segue (onError).
+    DIG = "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('2 · Entrada').first().json.wamid, typing_indicator: { type: 'text' } }) }}"
+    PODE_DIG = "$('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.wamid"
+    for _nome_if, _cond, _nome_http, _xy_if, _xy_http in (
+            ('3u · Digitar na chegada?', '={{ ' + PODE_DIG + ' }}', '3t · WABA digitando chegada', (1870, 180), (2090, 120)),
+            ('7u · Digitar 1º balão?', '={{ ' + PODE_DIG + ' }}', '7t · WABA digitando 1º balão', (4840, 150), (5060, 120)),
+            ('12s · Digitar balão?', '={{ ' + PODE_DIG + ' && Number($json.ordem) > 1 }}', '12u · WABA digitando balão', (7590, 330), (7810, 300))):
+        iff(_nome_if, _cond, *_xy_if)
+        add(_nome_http, 'n8n-nodes-base.httpRequest', 4.2, {
+            'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
+            'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+            'sendBody': True, 'specifyBody': 'json', 'jsonBody': DIG,
+            'options': {'timeout': 5000}}, *_xy_http, credentials=wa_cred, onError='continueRegularOutput',
+            notes='"Digitando" da Graph API (WABA Nio) na mensagem do cliente. Ramo sem saída; falhou → a Mari responde igual.')
     code('12y · Montar interativo', 8360, 300)
     add('12z · WABA enviar', 'n8n-nodes-base.httpRequest', 4.2, {
         'method': 'POST', 'url': 'https://graph.facebook.com/v21.0/1342993658907403/messages',
@@ -658,6 +677,8 @@ def build(ids):
         ('2i · Humano?', 1, '3a · Supabase entrada'),
         ('3a · Supabase entrada', 0, '3b · Silêncio?'),
         ('3b · Silêncio?', 0, '11 · Saída'),
+        ('3b · Silêncio?', 1, '3u · Digitar na chegada?'),   # ramo do "digitando" ANTES do 3w (mais acima)
+        ('3u · Digitar na chegada?', 0, '3t · WABA digitando chegada'),
         ('3b · Silêncio?', 1, '3w · Debounce 2s'),
         ('3w · Debounce 2s', 0, '3c · Supabase consolidar'),
         ('3c · Supabase consolidar', 0, '3d · Ok?'),
@@ -682,9 +703,12 @@ def build(ids):
         ('6 · Claude', 0, '7 · Extrair'),
         ('7 · Extrair', 0, '7d · Corrigir?'),
         ('7d · Corrigir?', 0, '5c · Pedido de correção'),
+        ('7d · Corrigir?', 1, '7u · Digitar 1º balão?'),
+        ('7u · Digitar 1º balão?', 0, '7t · WABA digitando 1º balão'),
         ('7d · Corrigir?', 1, '7w · Espera 1º balão'),
         ('5c · Pedido de correção', 0, '6r · Claude (correção)'),
         ('6r · Claude (correção)', 0, '7r · Extrair (correção)'),
+        ('7r · Extrair (correção)', 0, '7u · Digitar 1º balão?'),
         ('7r · Extrair (correção)', 0, '7w · Espera 1º balão'),
         ('7w · Espera 1º balão', 0, '7b · Supabase pendentes'),
         ('7b · Supabase pendentes', 0, '7c · Anti-duplicata'),
@@ -718,6 +742,8 @@ def build(ids):
         ('11c · Tem resposta?', 1, '12x · Interativo?'),
         ('12b · Um balão', 0, '12x · Interativo?'),
         ('12a · Balões', 0, '12b · Um balão'),
+        ('12b · Um balão', 1, '12s · Digitar balão?'),
+        ('12s · Digitar balão?', 0, '12u · WABA digitando balão'),
         ('12b · Um balão', 1, '12w · Digitando'),          # saída 1 = laço; saída 0 = acabou
         ('12w · Digitando', 0, '12c · Chatwoot enviar'),
         ('12c · Chatwoot enviar', 0, '12b · Um balão'),

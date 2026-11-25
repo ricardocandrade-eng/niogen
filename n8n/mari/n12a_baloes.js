@@ -10,7 +10,7 @@ const atrasos = Array.isArray(j.atrasos) ? j.atrasos : [];
 return baloes.map((conteudo, i) => ({ json: {
   conteudo,
   // 0,3 s no 1º balão = o "digitando" já aconteceu antes da checagem de mensagem nova (7w).
-  atraso: atrasos[i] != null ? atrasos[i] : Math.min(6, Math.max(2, Math.round(conteudo.length / 60))),
+  atraso: atrasos[i] != null ? atrasos[i] : (i > 0 ? 5 : Math.min(6, Math.max(2, Math.round(conteudo.length / 60)))),
   ordem: i + 1,
   total: baloes.length,
   chatwootConversationId: j.chatwootConversationId,

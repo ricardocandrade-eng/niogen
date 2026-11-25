@@ -1890,7 +1890,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n11_saida.js — nó \"11 · Saída\" do mari_principal (04/11/2026)\n// Ponto único de saída de todos os caminhos. Monta o corpo devolvido pela rota de teste\n// (modo 'teste') ou a mensagem a enviar pelo Chatwoot (modo 'chatwoot').\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst j = $input.first().json || {};\nconst e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};\n\nlet saida;\nif (j.saida) {\n  saida = j.saida;\n} else if (ex('2r · Supabase registrar calado')) {\n  saida = { ...(($('2h · Guard humano').first().json || {}).saida || { silencio: true }), registrado: j.ignorado === false };\n} else if (ex('10b · Supabase salvar turno')) {\n  const s = $('10 · Salvar turno').first().json;\n  const r = s.r || {};\n  const h = ex('9 · Handoff') ? $('9 · Handoff').first().json : null;\n  saida = {\n    resposta: r.texto,\n    conversa_id: r.conversaId,\n    etapa: r.handoff ? 'handoff' : (r.upd && r.upd.etapa) || null,\n    handoff: r.handoff ? { motivo: r.handoff.motivo, ...(h || {}) } : null,\n    tags: r.tags || {},\n    upd: r.upd || {},\n    modelo: r.modelo,\n    tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,\n    corrigido: r.violacoesCorrigidas || null,\n    erro: r.erro ? r.erro.mensagem : null,\n    prompt: r.promptVersao || null,\n    // Balões (v3, \"||\"): o envio pelo Chatwoot manda um por vez, com o atraso antes de cada um\n    // (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).\n    // Teste real 07/11 23h09 (conversa #1): com interativo, a pergunta inteira vira o corpo dos botões e não sobra balão.\n    // O fallback para r.texto mandava o histórico (\"…\\n\\n[botões: Sim / Não]\") como texto público pelo Chatwoot —\n    // o cliente via a marca e a pergunta duas vezes. Com interativo, balões vazios = só a mensagem interativa.\n    baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.interativo ? [] : (r.texto ? [r.texto] : []))),\n    emoji_ajustes: r.emojiAjustes || null,\n    interativo: r.interativo || null,   // v7: carrossel/botões (enviado pela Graph API depois dos balões)\n  };\n  saida.atrasos = saida.baloes.map((b) => Math.min(6, Math.max(2, Math.round(b.length / 60))));\n  // 07/11 (conversa #1, \"Sim\" que chegou 0,3 s depois da checagem): o \"digitando\" do 1º balão agora acontece ANTES da\n  // checagem de mensagem nova (7w · Espera 1º balão → 7b → 7c). Aqui ele vira quase zero para não esperar duas vezes.\n  if (ex('7w · Espera 1º balão') && saida.atrasos.length) saida.atrasos[0] = 0.3;\n} else if (ex('7f · Supabase abortar')) {\n  saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };\n} else if (j.esgotado) {\n  saida = { erro: 'conversa ocupada por mais de 45 s (lock)' };\n} else if (j.silencio === true && j.conversa_id) {\n  saida = { silencio: true, status: j.status, conversa_id: j.conversa_id, motivo: 'conversa em handoff — o humano conduz' };\n} else if (j.resultado) {\n  saida = { resultado: j.resultado, status: j.status || null };\n} else {\n  saida = { erro: 'saída não identificada' };\n}\n\n// Quem decide o caminho de saída é o GATILHO, não o modo: execução da rota de teste sempre responde\n// pelo 12t (inclusive os comandos admin com o modo em 'chatwoot'); execução do Chatwoot envia pelo 12c.\nreturn [{ json: {\n  modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',\n  saida,\n  // Modo chatwoot com interativo e sem balão: resposta vazia → o 11c pula os balões e vai direto ao 12x (botões).\n  // A rota de teste continua devolvendo saida.resposta inteira (o 12t responde com saida).\n  resposta: (saida.interativo && Array.isArray(saida.baloes) && !saida.baloes.length) ? '' : (saida.resposta || ''),\n  baloes: saida.baloes || (saida.resposta ? [saida.resposta] : []),\n  atrasos: saida.atrasos || (saida.resposta ? [2] : []),\n  chatwootConversationId: e.chatwootConversationId || null,\n  config: e.config || {},\n  // v7: quem recebe a mensagem interativa — WhatsApp real (modo chatwoot) ou o celular liberado no ensaio (\"tel real\").\n  interativo: saida.interativo || null,\n  telefone: e.telefone || null,\n  wamid: e.wamid || null,   // 0381: \"digitando\" (12q) antes da 2ª parte da abertura B4\n  enviarInterativo: !!saida.interativo && (e.modo === 'chatwoot' || e.enviarReal === true),\n} }];\n"
+        "jsCode": "// NIOGEN | n8n/mari/n11_saida.js — nó \"11 · Saída\" do mari_principal (04/11/2026)\n// Ponto único de saída de todos os caminhos. Monta o corpo devolvido pela rota de teste\n// (modo 'teste') ou a mensagem a enviar pelo Chatwoot (modo 'chatwoot').\nconst ex = (n) => { try { return $(n).isExecuted; } catch (e) { return false; } };\nconst j = $input.first().json || {};\nconst e = ex('2 · Entrada') ? ($('2 · Entrada').first().json || {}) : {};\n\nlet saida;\nif (j.saida) {\n  saida = j.saida;\n} else if (ex('2r · Supabase registrar calado')) {\n  saida = { ...(($('2h · Guard humano').first().json || {}).saida || { silencio: true }), registrado: j.ignorado === false };\n} else if (ex('10b · Supabase salvar turno')) {\n  const s = $('10 · Salvar turno').first().json;\n  const r = s.r || {};\n  const h = ex('9 · Handoff') ? $('9 · Handoff').first().json : null;\n  saida = {\n    resposta: r.texto,\n    conversa_id: r.conversaId,\n    etapa: r.handoff ? 'handoff' : (r.upd && r.upd.etapa) || null,\n    handoff: r.handoff ? { motivo: r.handoff.motivo, ...(h || {}) } : null,\n    tags: r.tags || {},\n    upd: r.upd || {},\n    modelo: r.modelo,\n    tokens_in: r.tokensIn, tokens_out: r.tokensOut, latencia_ms: r.latenciaMs,\n    corrigido: r.violacoesCorrigidas || null,\n    erro: r.erro ? r.erro.mensagem : null,\n    prompt: r.promptVersao || null,\n    // Balões (v3, \"||\"): o envio pelo Chatwoot manda um por vez, com o atraso antes de cada um\n    // (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).\n    // Teste real 07/11 23h09 (conversa #1): com interativo, a pergunta inteira vira o corpo dos botões e não sobra balão.\n    // O fallback para r.texto mandava o histórico (\"…\\n\\n[botões: Sim / Não]\") como texto público pelo Chatwoot —\n    // o cliente via a marca e a pergunta duas vezes. Com interativo, balões vazios = só a mensagem interativa.\n    baloes: (Array.isArray(r.baloes) && r.baloes.length ? r.baloes : (r.interativo ? [] : (r.texto ? [r.texto] : []))),\n    emoji_ajustes: r.emojiAjustes || null,\n    interativo: r.interativo || null,   // v7: carrossel/botões (enviado pela Graph API depois dos balões)\n  };\n  // 24/11 (Ricardo: \"'Digitando' de 5 s\"): do 2º balão em diante, 5 s de \"digitando\" (12u + 12w) antes de cada um.\n  saida.atrasos = saida.baloes.map((b, i) => (i > 0 ? 5 : Math.min(6, Math.max(2, Math.round(b.length / 60)))));\n  // 07/11 (conversa #1, \"Sim\" que chegou 0,3 s depois da checagem): o \"digitando\" do 1º balão agora acontece ANTES da\n  // checagem de mensagem nova (7w · Espera 1º balão → 7b → 7c). Aqui ele vira quase zero para não esperar duas vezes.\n  if (ex('7w · Espera 1º balão') && saida.atrasos.length) saida.atrasos[0] = 0.3;\n} else if (ex('7f · Supabase abortar')) {\n  saida = { abortado: true, motivo: 'mensagem nova chegou durante a resposta — a execução mais nova responde' };\n} else if (j.esgotado) {\n  saida = { erro: 'conversa ocupada por mais de 45 s (lock)' };\n} else if (j.silencio === true && j.conversa_id) {\n  saida = { silencio: true, status: j.status, conversa_id: j.conversa_id, motivo: 'conversa em handoff — o humano conduz' };\n} else if (j.resultado) {\n  saida = { resultado: j.resultado, status: j.status || null };\n} else {\n  saida = { erro: 'saída não identificada' };\n}\n\n// Quem decide o caminho de saída é o GATILHO, não o modo: execução da rota de teste sempre responde\n// pelo 12t (inclusive os comandos admin com o modo em 'chatwoot'); execução do Chatwoot envia pelo 12c.\nreturn [{ json: {\n  modo: ex('1 · Webhook Mari teste') ? 'teste' : 'chatwoot',\n  saida,\n  // Modo chatwoot com interativo e sem balão: resposta vazia → o 11c pula os balões e vai direto ao 12x (botões).\n  // A rota de teste continua devolvendo saida.resposta inteira (o 12t responde com saida).\n  resposta: (saida.interativo && Array.isArray(saida.baloes) && !saida.baloes.length) ? '' : (saida.resposta || ''),\n  baloes: saida.baloes || (saida.resposta ? [saida.resposta] : []),\n  atrasos: saida.atrasos || (saida.resposta ? [2] : []),\n  chatwootConversationId: e.chatwootConversationId || null,\n  config: e.config || {},\n  // v7: quem recebe a mensagem interativa — WhatsApp real (modo chatwoot) ou o celular liberado no ensaio (\"tel real\").\n  interativo: saida.interativo || null,\n  telefone: e.telefone || null,\n  wamid: e.wamid || null,   // 0381: \"digitando\" (12q) antes da 2ª parte da abertura B4\n  enviarInterativo: !!saida.interativo && (e.modo === 'chatwoot' || e.enviarReal === true),\n} }];\n"
       },
       "name": "11 · Saída",
       "type": "n8n-nodes-base.code",
@@ -2073,7 +2073,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// NIOGEN | n8n/mari/n12a_baloes.js — nó \"12a · Balões\" do mari_principal (04/11/2026, prompt v3)\n// Um item por balão (a Mari separa com \"||\"; o 7 · Extrair corta em até 3). O laço 12b → 12w → 12c manda um\n// por vez, com o atraso antes de cada um (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).\n// Resposta sem \"||\" (v2, mídia, despedida de segurança) = um balão só, como antes.\nconst j = $input.first().json;\n// 07/11 23h09 (conversa #1): com interativo, nunca cair no texto do histórico (ele traz \"[botões: …]\").\nconst comInterativo = !!(j.saida && j.saida.interativo);\nconst baloes = Array.isArray(j.baloes) && j.baloes.length ? j.baloes : (!comInterativo && j.resposta ? [j.resposta] : []);\nconst atrasos = Array.isArray(j.atrasos) ? j.atrasos : [];\nreturn baloes.map((conteudo, i) => ({ json: {\n  conteudo,\n  // 0,3 s no 1º balão = o \"digitando\" já aconteceu antes da checagem de mensagem nova (7w).\n  atraso: atrasos[i] != null ? atrasos[i] : Math.min(6, Math.max(2, Math.round(conteudo.length / 60))),\n  ordem: i + 1,\n  total: baloes.length,\n  chatwootConversationId: j.chatwootConversationId,\n  config: j.config,\n} }));\n"
+        "jsCode": "// NIOGEN | n8n/mari/n12a_baloes.js — nó \"12a · Balões\" do mari_principal (04/11/2026, prompt v3)\n// Um item por balão (a Mari separa com \"||\"; o 7 · Extrair corta em até 3). O laço 12b → 12w → 12c manda um\n// por vez, com o atraso antes de cada um (≈ 1 s a cada 60 caracteres, mínimo 2 s, máximo 6 s — proposta de tom §5).\n// Resposta sem \"||\" (v2, mídia, despedida de segurança) = um balão só, como antes.\nconst j = $input.first().json;\n// 07/11 23h09 (conversa #1): com interativo, nunca cair no texto do histórico (ele traz \"[botões: …]\").\nconst comInterativo = !!(j.saida && j.saida.interativo);\nconst baloes = Array.isArray(j.baloes) && j.baloes.length ? j.baloes : (!comInterativo && j.resposta ? [j.resposta] : []);\nconst atrasos = Array.isArray(j.atrasos) ? j.atrasos : [];\nreturn baloes.map((conteudo, i) => ({ json: {\n  conteudo,\n  // 0,3 s no 1º balão = o \"digitando\" já aconteceu antes da checagem de mensagem nova (7w).\n  atraso: atrasos[i] != null ? atrasos[i] : (i > 0 ? 5 : Math.min(6, Math.max(2, Math.round(conteudo.length / 60)))),\n  ordem: i + 1,\n  total: baloes.length,\n  chatwootConversationId: j.chatwootConversationId,\n  config: j.config,\n} }));\n"
       },
       "name": "12a · Balões",
       "type": "n8n-nodes-base.code",
@@ -2254,6 +2254,195 @@
       ],
       "id": "0cebe3bd-1adc-5838-add3-d341c0542681",
       "webhookId": "586bbdfd-8993-5b59-82a3-abd449e0f790"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "fc1448e6-c661-5161-b058-eede0aa7d1e4",
+              "leftValue": "={{ $('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.wamid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3u · Digitar na chegada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1870,
+        180
+      ],
+      "id": "a6c1aaed-9a3f-5296-b24c-026a56a5d178"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('2 · Entrada').first().json.wamid, typing_indicator: { type: 'text' } }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "name": "3t · WABA digitando chegada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2090,
+        120
+      ],
+      "id": "5a4d1066-c2c5-5c80-afcd-499ecd05c598",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "\"Digitando\" da Graph API (WABA Nio) na mensagem do cliente. Ramo sem saída; falhou → a Mari responde igual."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "5ac81b57-ed3b-5f80-8c13-3885a8d7518b",
+              "leftValue": "={{ $('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.wamid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "7u · Digitar 1º balão?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        4840,
+        150
+      ],
+      "id": "04352eb9-5927-530d-986a-6e1b5f9bc594"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('2 · Entrada').first().json.wamid, typing_indicator: { type: 'text' } }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "name": "7t · WABA digitando 1º balão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5060,
+        120
+      ],
+      "id": "e61d4178-0d85-57ba-8169-9501cc8b47ae",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "\"Digitando\" da Graph API (WABA Nio) na mensagem do cliente. Ramo sem saída; falhou → a Mari responde igual."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "49f735d7-9e9e-50e9-ada2-c0662d65c920",
+              "leftValue": "={{ $('2 · Entrada').first().json.modo === 'chatwoot' && !!$('2 · Entrada').first().json.wamid && Number($json.ordem) > 1 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "12s · Digitar balão?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        7590,
+        330
+      ],
+      "id": "bfa733ae-0963-5a28-89d0-2fba69fb5aa6"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v21.0/1342993658907403/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('2 · Entrada').first().json.wamid, typing_indicator: { type: 'text' } }) }}",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "name": "12u · WABA digitando balão",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        7810,
+        300
+      ],
+      "id": "3f3b2365-77d6-5cc2-9d2e-68c271d5f5f4",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "58TW1ICGnFrHlnTu",
+          "name": "WABA Nio (Nio_API)"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "notes": "\"Digitando\" da Graph API (WABA Nio) na mensagem do cliente. Ramo sem saída; falhou → a Mari responde igual."
     },
     {
       "parameters": {
@@ -2920,7 +3109,23 @@
         ],
         [
           {
+            "node": "3u · Digitar na chegada?",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "3w · Debounce 2s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3u · Digitar na chegada?": {
+      "main": [
+        [
+          {
+            "node": "3t · WABA digitando chegada",
             "type": "main",
             "index": 0
           }
@@ -3160,7 +3365,23 @@
         ],
         [
           {
+            "node": "7u · Digitar 1º balão?",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "7w · Espera 1º balão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7u · Digitar 1º balão?": {
+      "main": [
+        [
+          {
+            "node": "7t · WABA digitando 1º balão",
             "type": "main",
             "index": 0
           }
@@ -3192,6 +3413,11 @@
     "7r · Extrair (correção)": {
       "main": [
         [
+          {
+            "node": "7u · Digitar 1º balão?",
+            "type": "main",
+            "index": 0
+          },
           {
             "node": "7w · Espera 1º balão",
             "type": "main",
@@ -3507,6 +3733,11 @@
         ],
         [
           {
+            "node": "12s · Digitar balão?",
+            "type": "main",
+            "index": 0
+          },
+          {
             "node": "12w · Digitando",
             "type": "main",
             "index": 0
@@ -3519,6 +3750,17 @@
         [
           {
             "node": "12b · Um balão",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "12s · Digitar balão?": {
+      "main": [
+        [
+          {
+            "node": "12u · WABA digitando balão",
             "type": "main",
             "index": 0
           }
