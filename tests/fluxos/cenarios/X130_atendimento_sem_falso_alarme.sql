@@ -1,6 +1,6 @@
 -- id: X130
 -- titulo: 0400 (25/11, Ricardo: "Essa leitura de que há sempre um problema no atendimento, quando na verdade não"): "tá bom" do cliente depois de despedida nossa não é esperando nós; "ok" a uma pergunta nossa continua sendo; retorno combinado aberto tira da conta; o resumo só conta espera acima de 15 min
--- tipo: regra_nova
+-- tipo: atual
 -- Caso: Poços de Caldas, 24/11 — "A gente vai se falando" → "Ta bom", retorno marcado para 25/11 16h; o agente leu "esperando nós" por 17 h.
 select sim.lead_novo('Ana X130') as c \gset
 select sim.como('backoffice');
