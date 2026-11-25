@@ -1,6 +1,10 @@
 -- id: X123
 -- titulo: 0392 (Live 2.0, passo 3): a medição dos 7 dias — conta por dia as respostas de pessoa no horário e as esperas longas, os furos e as aberturas de cada tela; tela_abriu soma uma abertura por pessoa e dia e ignora tela desconhecida; fora do backoffice não devolve nada
 -- tipo: atual
+-- 25/11: a cópia restaurada de um backup do mesmo dia já traz aberturas reais de hoje (o cenário contava 4 em vez de 2).
+-- O cenário roda numa cópia descartável: zera o dia de hoje antes de contar.
+select sim.como('servico');
+delete from public.tela_aberturas where dia = (now() at time zone 'America/Sao_Paulo')::date;
 select sim.como('backoffice');
 select public.tela_abriu('live2');
 select public.tela_abriu('live2');
