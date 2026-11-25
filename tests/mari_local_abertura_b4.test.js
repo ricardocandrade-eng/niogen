@@ -122,9 +122,41 @@ caso('toque "Pro comércio" (sem emoji) → pede o endereço do comércio, grava
   assert.match(r.fixo.texto, /comércio/);
   assert.strictEqual(r.fixo.upd.dados.abertura_botao, 'comercio');
 });
-caso('toque "🏠 Sou cliente Nio" → a resposta fixa de sempre', () => {
-  const r = motor('🏠 Sou cliente Nio', { dados: { abertura: 'b4_241126' } }, { historico: [{ papel: 'lead', texto: 'Oi' }, { papel: 'mari', texto: 'Oi!' }] });
+// 24/11 (0386, caso L-363): o toque em "Sou cliente Nio" pergunta com 3 botões — a Saída só sai no "Suporte/fatura".
+const HIST = { historico: [{ papel: 'lead', texto: 'Oi' }, { papel: 'mari', texto: 'Oi!' }] };
+caso('toque "🏠 Sou cliente Nio" → pergunta com 3 botões, porta de venda primeiro, SEM gravar "cliente" (não dá Saída)', () => {
+  const r = motor('🏠 Sou cliente Nio', { dados: { abertura: 'b4_241126' } }, HIST);
+  const it = r.fixo.interativo;
+  assert.ok(it && it.tipo === 'botoes', JSON.stringify(r.fixo));
+  assert.deepStrictEqual(it.botoes.map((b) => b.title), ['📍 Outro endereço', '🛒 Quero contratar', '🔧 Suporte/fatura']);
+  assert.ok(it.botoes.every((b) => b.title.length <= 20));
+  assert.ok(it.corpo.indexOf('outro endereço') < it.corpo.indexOf('Fatura'), it.corpo);
+  assert.doesNotMatch(it.corpo, /não consigo ver sua conta/);
+  assert.strictEqual(r.fixo.upd.dados.abertura_botao, 'cliente_pergunta');
+  assert.strictEqual(r.fixo.texto, null);
+});
+caso('"🔧 Suporte/fatura" → App Nio / 0800 e grava "cliente" (o gatilho dá a Saída)', () => {
+  const r = motor('🔧 Suporte/fatura', { dados: { abertura: 'b4_241126', abertura_botao: 'cliente_pergunta' } }, HIST);
+  assert.match(r.fixo.texto, /App Nio ou o 0800 001 1000/);
   assert.strictEqual(r.fixo.upd.dados.abertura_botao, 'cliente');
+});
+caso('"🛒 Quero contratar" e "📍 Outro endereço" → pedem a rua e o bairro, sem App/0800', () => {
+  for (const [msg, k] of [['🛒 Quero contratar', 'cli_contratar'], ['📍 Outro endereço', 'cli_outro']]) {
+    const r = motor(msg, { dados: { abertura: 'b4_241126', abertura_botao: 'cliente_pergunta' } }, HIST);
+    assert.match(r.fixo.texto, /rua e o bairro/);
+    assert.doesNotMatch(r.fixo.texto, /App Nio|0800/);
+    assert.strictEqual(r.fixo.upd.dados.abertura_botao, k);
+  }
+});
+caso('"Outro endereço" com CEP já dado → segue para o Claude com a linha de estado (venda, não suporte)', () => {
+  const r = motor('📍 Outro endereço', { cep: '36035130', dados: { abertura: 'b4_241126', abertura_botao: 'cli_outro' } }, HIST);
+  assert.ok(!r.fixo, JSON.stringify(r.fixo));
+  assert.match(String(r.ctx.estado), /já é Nio NOUTRO endereço/);
+});
+caso('abertura_cliente_pergunta = nao → a resposta fixa de antes (grava "cliente")', () => {
+  const r = motor('🏠 Sou cliente Nio', { dados: { abertura: 'b4_241126' } }, Object.assign({ textos: { abertura_cliente_pergunta: 'nao' } }, HIST));
+  assert.strictEqual(r.fixo.upd.dados.abertura_botao, 'cliente');
+  assert.match(r.fixo.texto, /App Nio/);
 });
 caso('estado: preço citado na abertura vai com a trava da cidade', () => {
   const r = motor('moro em Ipatinga', { dados: { abertura: 'b4_241126', abertura_preco: 110 } },

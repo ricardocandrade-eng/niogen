@@ -414,6 +414,14 @@ if (cons.n_mensagens > 1) L.push(`mensagens_agrupadas: ${cons.n_mensagens} (o cl
 // 08/11 (abertura B2): a saudação com botões já saiu pelo sistema e o cliente respondeu em TEXTO (sem tocar) — o Claude
 // segue sem repetir a saudação; pede só o CEP (ou rua e bairro) e o número depois da cidade.
 const tx0 = inter.textos || {};
+// 24/11 (0386, caso L-363): o que o cliente respondeu à pergunta do "🏠 Sou cliente Nio" vale a conversa inteira (antes e depois do CEP).
+if (V7 && (conv.dados || {}).abertura_botao === 'cli_outro') {
+  L.push('abertura_botao: o cliente já é Nio NOUTRO endereço e tocou "Outro endereço" — quer a Nio num endereço NOVO (família, trabalho, comércio). '
+    + 'Isso é VENDA normal: não trate como cliente Nio de suporte nem mande para o App/0800. Siga o fluxo de sempre para o endereço novo; '
+    + 'quem confere se o endereço novo já tem Nio é a viabilidade do portal.');
+} else if (V7 && (conv.dados || {}).abertura_botao === 'cli_contratar') {
+  L.push('abertura_botao: o cliente tocou "Sou cliente Nio" e depois "Quero contratar" — ainda NÃO tem Nio. É venda normal: siga o fluxo de sempre.');
+}
 if (V7 && (conv.dados || {}).abertura && !conv.cep) {
   // 13/11 (0188): no formato 'texto' a 1ª mensagem já pediu o CEP e o número — o Claude não repete a saudação.
   const comBotoes = String((inter.textos || {}).abertura_formato || 'texto').trim() === 'botoes';
@@ -564,6 +572,10 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
     { id: 'ab:comercio', chave: 'comercio', title: tx.abertura_botao_comercio || '🏪 Pro comércio' },
     // 19/11 (0328): o "rua" virou "📍 Tem na minha rua?" — o título antigo segue reconhecido (menu antigo na tela do cliente).
     { id: 'ab:rua', chave: 'rua', title: '📍 Ver minha rua' },
+    // 24/11 (0386, caso L-363): a pergunta que o "🏠 Sou cliente Nio" abre — não entram no menu (abertura_botoes), só nela.
+    { id: 'ab:cli_outro', chave: 'cli_outro', title: tx.abertura_botao_cli_outro || '📍 Outro endereço' },
+    { id: 'ab:cli_contratar', chave: 'cli_contratar', title: tx.abertura_botao_cli_contratar || '🛒 Quero contratar' },
+    { id: 'ab:cli_suporte', chave: 'cli_suporte', title: tx.abertura_botao_cli_suporte || '🔧 Suporte/fatura' },
   ];
   const BOT_AB = String(tx.abertura_botoes || 'rua,planos,humano').split(',').map((k) => BOT_TODOS.find((b) => b.chave === k.trim()))
     .filter(Boolean).slice(0, 3);
@@ -582,12 +594,46 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       modelo: 'abertura_b2',
     };
   } else if (tocado && tocado.chave === 'cliente') {
-    // "🏠 Sou cliente Nio": esta é a central de VENDAS — suporte é com a Nio. Sem time, sem handoff. O gatilho
-    // mari_conversas_abertura_cliente (0234) dá a Saída "Já é cliente Nio" (para a cadência); se ele escrever de novo, a Mari responde.
-    textoFixo = {
+    // "🏠 Sou cliente Nio" → 24/11 (0386, caso L-363 — Ricardo: "Somos uma revenda e nosso interesse é exclusivo em vender"):
+    // o toque NÃO dá mais a Saída. Desde 16/11, 2 de ~10 que tocaram não eram clientes Nio (L-155 tinha Claro; L-146 queria plano).
+    // A Mari pergunta com 3 botões, a porta de venda primeiro; só "🔧 Suporte/fatura" grava abertura_botao = 'cliente', que é o que o
+    // gatilho mari_conversas_abertura_cliente (0234/0288) espera para a Saída "Já é cliente Nio". Volta ao de antes sem deploy:
+    // abertura_cliente_pergunta = 'nao' em config_mari_textos.
+    const BC = ['cli_outro', 'cli_contratar', 'cli_suporte'].map((k) => BOT_TODOS.find((b) => b.chave === k));
+    const corpoC = tx.abertura_resp_cliente_pergunta || 'Que bom ter você com a gente! 💚\n\nMe conta o que você precisa:\n\n📍 Nio em outro endereço (da família, do trabalho, do comércio): isso é comigo, faço agora.\n🛒 Ainda não tem Nio aí? Toca em Quero contratar.\n🔧 Fatura, suporte ou mudança de plano: quem resolve é a própria Nio, eu te passo o caminho.';
+    textoFixo = String(tx.abertura_cliente_pergunta || 'sim').trim() === 'nao' ? {
       texto: tx.abertura_resp_cliente || 'Que bom ter você com a gente! 💚\n\nAqui é a central de vendas da Nio, então não consigo ver sua conta nem resolver suporte por aqui. Pra fatura, 2ª via, suporte técnico ou mudança de plano, o caminho mais rápido é o App Nio ou o 0800 001 1000.\n\nSe quiser levar a Nio pra outro endereço (da família, do trabalho), é comigo: me manda o CEP 😉',
       tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'cliente' },
       upd: { dados: { abertura_botao: 'cliente' } },
+      modelo: 'abertura_b2',
+    } : {
+      texto: null,
+      interativo: { tipo: 'botoes', chave: 'abertura_cliente', corpo: corpoC.slice(0, 1024),
+        botoes: BC.map((b) => ({ id: b.id, title: b.title })),
+        resumo: `botões: ${BC.map((b) => b.title).join(' / ')}`,
+        fallbackTexto: `${corpoC}\n\nMe responde por aqui mesmo 😊` },
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'cliente_pergunta' },
+      upd: { dados: { abertura_botao: 'cliente_pergunta' } },
+      modelo: 'abertura_b2',
+    };
+  } else if (tocado && tocado.chave === 'cli_suporte') {
+    // "🔧 Suporte/fatura": central de VENDAS — suporte é com a Nio. Sem time, sem handoff. abertura_botao = 'cliente' → o gatilho
+    // mari_conversas_abertura_cliente dá a Saída "Já é cliente Nio" (para a cadência); se ele escrever de novo, a Mari responde.
+    textoFixo = {
+      texto: tx.abertura_resp_cli_suporte || 'Entendi! 💚 Fatura, 2ª via, suporte técnico e mudança de plano quem resolve é a própria Nio, e o caminho mais rápido é o App Nio ou o 0800 001 1000.\n\nAqui é a central de vendas, então não consigo ver a sua conta. Mas se um dia quiser a Nio em outro endereço (da família, do trabalho), é só me chamar aqui 😉',
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: 'cliente' },
+      upd: { dados: { abertura_botao: 'cliente' } },
+      modelo: 'abertura_b2',
+    };
+  } else if (tocado && ['cli_outro', 'cli_contratar'].includes(tocado.chave) && !conv.cep) {
+    // "📍 Outro endereço" / "🛒 Quero contratar": venda normal — pede a rua e o bairro (ou o CEP). Quem barra endereço que já tem
+    // Nio é a posse na viabilidade do portal (Ricardo, 23/11), não a Mari. Com CEP já dado, o toque segue para o Claude (linha de estado).
+    textoFixo = {
+      texto: tocado.chave === 'cli_outro'
+        ? (tx.abertura_resp_cli_outro || 'Boa! Vamos levar a Nio pra lá 😊\n\nMe manda a rua e o bairro do endereço novo (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na porta.')
+        : (tx.abertura_resp_cli_contratar || 'Perfeito! 😊\n\nTô com o mapa aberto aqui — me manda a rua e o bairro (ou o CEP, se souber de cabeça) que em 1 minuto eu te digo se a fibra já passa na sua porta 😉'),
+      tags: { abertura: dadosAb.abertura || B2, abertura_botao: tocado.chave },
+      upd: { dados: { abertura_botao: tocado.chave } },
       modelo: 'abertura_b2',
     };
   } else if (tocado && !cluster && tocado.chave === 'planos' && seg === 'varejo' && String(tx.abertura_planos_cidade || 'sim').trim() !== 'nao') {
@@ -652,7 +698,7 @@ if (V7 && B2 && !textoFixo && conv.status === 'ativo') {
       upd: dadosAb.abertura_botao ? {} : { dados: { abertura_botao: tocado.chave } },
       modelo: 'abertura_b2',
     };
-  } else if (tocado && !cluster) {
+  } else if (tocado && !cluster && !/^cli_/.test(tocado.chave)) {
     // "📍 Ver minha rua" / "💰 Ver os planos": a cidade ainda não é conhecida → pede só o CEP (ou rua e bairro), sem preço.
     // Cidade já conhecida → o toque segue para o Claude (mostra os planos da cidade).
     textoFixo = {

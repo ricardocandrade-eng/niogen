@@ -886,6 +886,63 @@ def cen_ay(c):   # P52 (24/11, bateria do Ricardo, conversa L-288, #1, 19h01–1
             f'[P52] pediu o complemento em 2 respostas seguidas: {pediu_comp}')
 
 
+def cen_az(c):   # P53 (24/11, conversa L-363, Iranilda, #250): o toque em "🏠 Sou cliente Nio" dava a Saída na hora, sem perguntar.
+    # Desde 16/11, 2 de ~10 que tocaram o botão não eram clientes Nio (L-155 tinha Claro e chegou ao CPF; L-146 queria um plano).
+    # Ricardo, 24/11: "Somos uma revenda e nosso interesse é exclusivo em vender" → o toque abre uma pergunta (3 botões), a porta de
+    # venda vem primeiro e a Saída "Já é cliente Nio" só sai no "Suporte/fatura".
+    def saida(conv):
+        # No ensaio a conversa de teste tem destino teste_duplicada e a porta não grava saida_motivo: a prova é o que o gatilho
+        # mari_conversas_abertura_cliente faz — dados.abertura_botao = 'cliente' e o turno de sistema da Saída.
+        r = conv_row(conv, "coalesce(dados->>'abertura_botao', '') b, exists(select 1 from mari_turnos t where t.conversa_id = mari_conversas.id "
+                           "and t.papel = 'sistema' and t.texto like '[Saída \"Já é cliente Nio\"%') s")
+        return {'s': 'ja_cliente_nio' if r.get('s') else '', 'q': 'cliente' if r.get('b') == 'cliente' else '', 'b': r.get('b')}
+
+    c.diz('Olá! Posso ter mais informações sobre isso?')
+    r = c.diz('🏠 Sou cliente Nio')
+    it = r.get('interativo') or {}
+    t = fala(r)
+    titulos = [norm(b.get('title') or '') for b in (it.get('botoes') or [])]
+    c.exige(it.get('tipo') == 'botoes' and len(titulos) == 3, f'[P53] "Sou cliente Nio" não perguntou com 3 botões: {it}')
+    c.exige(any('contratar' in x for x in titulos) and any('outro endereco' in x for x in titulos) and any('suporte' in x for x in titulos),
+            f'[P53] botões errados: {titulos}')
+    c.exige(all(len(b.get('title') or '') <= 20 for b in (it.get('botoes') or [])), f'[P53] título de botão com mais de 20 caracteres: {titulos}')
+    c.exige(r.get('modelo') == 'abertura_b2', f'[P53] a pergunta passou pelo Claude ({r.get("modelo")!r})')
+    c.exige('outro endereco' in t and ('app nio' not in t or t.index('outro endereco') < t.index('app nio')),
+            f'[P53] a porta de venda não vem antes do suporte: «{t[:260]}»')
+    c.exige(not re.search(r'nao consigo ver sua conta', t), f'[P53] abriu com o que não fazemos: «{t[:200]}»')
+    s = saida(c)
+    c.exige(not s.get('s') and not s.get('q'), f'[P53] Saída dada só pelo toque em "Sou cliente Nio": {s}')
+    # "Quero contratar" → venda normal: pede o endereço, sem Saída
+    r = c.diz('🛒 Quero contratar')
+    t = fala(r)
+    c.exige(re.search(r'\bcep\b|rua', t), f'[P53] "Quero contratar" não pediu o endereço: «{t[:200]}»')
+    c.exige(not re.search(r'app nio|0800', t), f'[P53] "Quero contratar" mandou para o suporte: «{t[:200]}»')
+    s = saida(c)
+    c.exige(not s.get('s') and not s.get('q'), f'[P53] Saída depois de "Quero contratar": {s}')
+    # "Outro endereço" → pede o endereço novo, sem Saída
+    k = type(c)('az2', 60, c.nome)
+    k.diz('Oi')
+    k.diz('🏠 Sou cliente Nio')
+    r = k.diz('📍 Outro endereço')
+    t = fala(r)
+    k.exige(re.search(r'\bcep\b|rua', t), f'[P53] "Outro endereço" não pediu o endereço: «{t[:200]}»')
+    s = saida(k)
+    k.exige(not s.get('s') and not s.get('q'), f'[P53] Saída depois de "Outro endereço": {s}')
+    # "Suporte/fatura" → App Nio / 0800 e a Saída de sempre
+    h = type(c)('az3', 61, c.nome)
+    h.diz('Oi')
+    h.diz('🏠 Sou cliente Nio')
+    r = h.diz('🔧 Suporte/fatura')
+    t = fala(r)
+    h.exige(re.search(r'app nio', t) and '0800' in t, f'[P53] "Suporte/fatura" sem os canais oficiais: «{t[:200]}»')
+    h.exige(not re.search(r'consultor|nosso time (vai|te)', t), f'[P53] "Suporte/fatura" prometeu atendimento nosso: «{t[:200]}»')
+    s = saida(h)
+    h.exige(s.get('s') == 'ja_cliente_nio', f'[P53] "Suporte/fatura" não deu a Saída "Já é cliente Nio": {s}')
+    for x in (k, h):
+        c.falhas += x.falhas
+        c.log += x.log
+
+
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
@@ -935,6 +992,8 @@ PORTAO = {
     'ax': (57, cen_ax, 'P51'),
     # 24/11 — bateria do Ricardo (L-288, #1): confiança, concorrente, fidelidade, 1ª fatura, documentos, chip/5G e complemento pendente
     'ay': (58, cen_ay, 'P52'),
+    # 24/11 — conversa L-363 (Iranilda, #250): "Sou cliente Nio" pergunta antes de dar a Saída (usa os telefones 59, 60 e 61)
+    'az': (59, cen_az, 'P53'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
