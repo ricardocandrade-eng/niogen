@@ -60,8 +60,8 @@
     if (!b) return '';
     const desde = NG.fmtDataHora ? NG.fmtDataHora(b.desde) : String(b.desde).slice(0, 16);
     const tit = b.tipo === 'falhou'
-      ? `As ${b.n} últimas mensagens para o cliente (desde ${desde}) não saíram: o WhatsApp recusou a entrega. Costuma ser bloqueio, número fora do WhatsApp ou aplicativo muito antigo. Ligue antes de mandar outra.`
-      : `As ${b.n} últimas mensagens para o cliente (desde ${desde}) estão em ✓ há mais de 24 h: o WhatsApp não entregou no celular. Pode ser bloqueio, celular desligado ou sem internet — o WhatsApp não confirma bloqueio. Ligue antes de mandar outra.`;
+      ? `As ${b.n} últimas mensagens para o cliente (desde ${desde}) não saíram: o WhatsApp recusou a entrega. Costuma ser bloqueio, número fora do WhatsApp ou aplicativo muito antigo. Ligue antes de mandar outra. Os lembretes automáticos da Mari ficam parados até uma mensagem chegar ou o cliente responder; os avisos da venda continuam.`
+      : `As ${b.n} últimas mensagens para o cliente (desde ${desde}) estão em ✓ há mais de 24 h: o WhatsApp não entregou no celular. Pode ser bloqueio, celular desligado ou sem internet — o WhatsApp não confirma bloqueio. Ligue antes de mandar outra. Os lembretes automáticos da Mari ficam parados até uma mensagem chegar ou o cliente responder; os avisos da venda continuam.`;
     return `<span class="cvp-pill fixo warn" title="${esc(tit)}">📵 Provável bloqueio</span>`;
   }
 
