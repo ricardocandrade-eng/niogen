@@ -548,7 +548,7 @@
       const i = b.querySelector('i');
       if (i) i.className = cor[k] || '';
     });
-    if (cob) garantirCob();
+    if (cob && est.modo !== 'fechado') garantirCob();   // fechado: só nasce no preparar() ou ao abrir
   }
   function trocarAba(k) {
     est.aba = k; gravar(); pintarAba();
