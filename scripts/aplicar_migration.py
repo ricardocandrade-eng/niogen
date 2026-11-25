@@ -88,7 +88,7 @@ def main():
 
     # ensaio: transação desfeita na produção
     i = texto.lower().rfind('commit;')
-    with tempfile.NamedTemporaryFile('w', suffix='.sql', delete=False, encoding='utf-8') as t:
+    with tempfile.NamedTemporaryFile('w', suffix='.sql', delete=False, encoding='utf-8', newline='') as t:
         t.write(texto[:i] + 'rollback;' + texto[i + len('commit;'):])
     rc, out = supabase(t.name)
     pathlib.Path(t.name).unlink(missing_ok=True)
