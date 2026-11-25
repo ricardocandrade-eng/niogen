@@ -1439,6 +1439,24 @@
     return ` · <span class="selo-meta ${t[1]}" title="${esc(t[2])}${anun ? ` Anúncio: ${anun}.` : ''}">Meta ${t[0]}</span>`;
   }
 
+  // 25/11 (Ricardo: "colocar um selo na Ficha do cliente de que a venda foi reconhecida") — selo Nio: o que a OSAB importada
+  // diz desta venda. Só leitura dos campos que aplicar_osab grava (nio_osab_em, nio_situacao, nio_venda_valida); sem chamada nova.
+  function seloNio(v) {
+    const dia = (x) => (x ? NG.fmtDiaISO(String(x).slice(0, 10)) : '');
+    const sit = String(v.nio_situacao || '').trim();
+    let t;
+    if (v.nio_osab_em) {
+      const lida = `Lida na OSAB em ${dia(v.nio_osab_em)}.`;
+      if (v.nio_venda_valida === false) t = ['✗ venda inválida', 'bad', `A Nio marcou esta venda como inválida na OSAB: risco de estorno. ${lida}`];
+      else if (/^(Cancelado|Em Cancelamento|Reprovado|Draft-)/.test(sit)) t = [`✗ ${sit}`, 'bad', `Na OSAB a Nio mostra esta venda como "${sit}". ${lida}`];
+      else if (sit === 'Concluído') t = ['✓ reconhecida', 'ok', `Reconhecida pela Nio: OS concluída na OSAB${v.instalado_em ? `, instalada em ${dia(v.instalado_em)}` : ''}. É essa confirmação que libera a comissão do parceiro. ${lida}`];
+      else t = [`⏳ ${sit || 'sem situação'}`, '', `Na OSAB a venda aparece como "${sit || 'sem situação'}": ainda não foi concluída. ${lida}`];
+    } else if (['3_instalado', '4_ativo_provisorio', '5_comissao_firme'].includes(v.status)) {
+      t = ['— fora da OSAB', 'dim', 'A instalação foi marcada no NIOGEN, mas esta venda ainda não apareceu numa OSAB importada (Configurações › Importação).'];
+    } else return '';
+    return ` · <span class="selo-meta ${t[1]}" title="${esc(t[2])}">Nio ${esc(t[0])}</span>`;
+  }
+
   function cabecalho(v) {
     const ehAdmin = (NG.usuario || {}).perfil === 'admin';
     const atual = NG.etapaDe(v).id;
@@ -1460,7 +1478,7 @@
         <div class="f-ctl">${botaoVoltar()}<div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
           <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         ${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span>${seloMeta(d.meta)}</div>
+      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span>${seloNio(v)}${seloMeta(d.meta)}</div>
     </header>`;
   }
 
@@ -4935,7 +4953,7 @@
       // O AGORA saiu do topo: virou o card no alto da Jornada. "Conversa com" fica na Jornada (degrau Atendimento) e no card.
       void meta;
       const l3V = [d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? `${NG.fmtMoeda(v.valor_mensal)}/mês` : null,
-        [v.cidade, v.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · ') + seloMeta(d.meta);
+        [v.cidade, v.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · ') + seloNio(v) + seloMeta(d.meta);
       cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}<span class="fc-orig">Origem: <b>${esc(NG.origemTxt(v) + ref)}</b></span>`,
         l3V || 'plano: não escolheu', menu);
       trilha = trilhasHtml();
