@@ -298,8 +298,8 @@
   // 06/11 (prompt 27): os 4 estados que o backoffice registra na ficha ("Não consultado" = nada gravado).
   const VIAB_PORTAL_REGISTRO = { viavel: 'Viável', sem_viabilidade: 'Sem viabilidade', nao_encontrado: 'Endereço não encontrado' };
   const fmtCep = (c) => { const d = String(c || '').replace(/\D/g, ''); return d.length === 8 ? `${d.slice(0, 5)}-${d.slice(5)}` : (d || '?'); };
-  // Trava 0 → 1 (0048): só o portal libera — Viável e com menos de 7 dias.
-  const portalViavel = (v) => !!v && v.nio_viab_resultado === 'viavel' && !!v.nio_viab_em && (Date.now() - new Date(v.nio_viab_em)) < 7 * 86400000;
+  // Trava 0 → 1 (0048; 0393): só o portal libera — Viável. Não vence.
+  const portalViavel = (v) => !!v && v.nio_viab_resultado === 'viavel';   // 0393 (Ricardo, 25/11): viabilidade do portal não vence
 
   // ---------- ajuda ao passar o mouse (prompt 27) ----------
   // Um único dicionário: o que é e o que fazer. Tela Mari, ficha e menu usam daqui (title= + ⓘ via NG.dicaTxt).
@@ -350,7 +350,7 @@
     origem: 'De onde o cliente veio: (IG) = link do Instagram, (FB) = botão da página, "Vi o anúncio" = Meta Ads, sem marca = direto.',
     dfv_pista: 'DFV = foto da base da Nio (03/11). É só uma pista: "não achou" pode ser endereço escrito diferente. Quem decide a viabilidade é o portal PAP.',
     // ficha · viabilidade e portal
-    viab_portal: 'Viabilidade oficial: o resultado da consulta do endereço no portal PAP (etapa 2 do Novo Pedido). Só "Viável" com menos de 7 dias libera a venda.',
+    viab_portal: 'Viabilidade oficial: o resultado da consulta do endereço no portal PAP (etapa 2 do Novo Pedido). Só "Viável" libera a venda. Não vence: vale enquanto o endereço for o mesmo.',
     viab_consultar: 'Abre o portal PAP numa aba nova e copia "CEP número" para colar na busca de viabilidade.',
     viab_registrar: 'Depois de consultar no portal, registre aqui o que ele respondeu. Fica gravado com a data e quem registrou.',
     portal_dados: 'Tudo o que o portal pede no Novo Pedido, na ordem das etapas. Copie campo a campo ou tudo de uma vez. Em vermelho = falta (peça ao cliente antes de abrir o pedido).',
@@ -664,7 +664,7 @@
   const TEXTOS_DFV = {
     regra: 'O portal PAP dá a palavra final (viabilidade oficial no pedido). Nunca dizer ao cliente "cobertura confirmada" com base no DFV.',
     // 06/11 (prompt 27, 0048): quem decide é o PORTAL. O DFV é pista — não libera nem nega a venda.
-    trava: 'Para registrar a venda (0 → 1) vale só a viabilidade do portal PAP: Viável, com menos de 7 dias. O DFV é só uma pista — não libera nem nega a venda.',
+    trava: 'Para registrar a venda (0 → 1) vale só a viabilidade do portal PAP: Viável (não vence). O DFV é só uma pista — não libera nem nega a venda.',
     como: 'Usuário PARCEIRO · senhas com o Ricardo · filtre UF, município e CEP',
     opcoes: {
       nao_consultado: 'Ninguém consultou o DFV para este endereço ainda. Consulte antes de abrir o pedido no portal.',
@@ -1573,7 +1573,6 @@
             if (['sem_viabilidade', 'nao_encontrado', 'posse'].includes(v.nio_viab_resultado)) {
               return { txt: `Portal: ${VIAB_NIO[v.nio_viab_resultado].toLowerCase()} · conferir no DFV: endereço viável a até 200 m → formulário da Nio + pendência`, nivel: 'warn', acao: true, resolver: 'viab' };
             }
-            if (v.nio_viab_resultado === 'viavel') return { txt: 'Viabilidade vencida (> 7 dias) · consultar de novo no portal', nivel: 'warn', acao: true, resolver: 'viab' };
             return { txt: 'Consultar a viabilidade no portal', nivel: 'warn', acao: true, resolver: 'viab' };
           }
           if (v.credito_resultado === 'pendente') return { txt: 'Crédito pendente na Nio · conferir no portal e gravar o resultado', nivel: 'warn', acao: true, resolver: 'credito' };

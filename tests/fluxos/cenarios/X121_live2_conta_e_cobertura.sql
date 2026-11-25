@@ -11,8 +11,8 @@ select sim.fila_rodar();
 -- 1) a conta fecha
 select sim.como('backoffice');
 select public.live2_fila()::text as f \gset
-select sim.confere('vivos = na fila + com a Mari + esperando o cliente + esperando a Nio + sem lugar',
-  ((:'f')::jsonb #>> '{conta,vivos}')::int = ((:'f')::jsonb #>> '{conta,na_fila}')::int + ((:'f')::jsonb #>> '{conta,com_mari}')::int
+select sim.confere('vivos = na fila + em pausa + com a Mari + esperando o cliente + esperando a Nio + sem lugar',
+  ((:'f')::jsonb #>> '{conta,vivos}')::int = ((:'f')::jsonb #>> '{conta,na_fila}')::int + coalesce(((:'f')::jsonb #>> '{conta,em_pausa}')::int, 0) + ((:'f')::jsonb #>> '{conta,com_mari}')::int
      + ((:'f')::jsonb #>> '{conta,esperando_cliente}')::int + ((:'f')::jsonb #>> '{conta,esperando_nio}')::int + ((:'f')::jsonb #>> '{conta,sem_lugar}')::int,
   (:'f')::jsonb ->> 'conta');
 select sim.confere('nenhum lead vivo sem lugar', ((:'f')::jsonb #>> '{conta,sem_lugar}')::int = 0, (:'f')::jsonb #>> '{radar,sem_lugar}');

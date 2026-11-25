@@ -198,7 +198,7 @@
   };
   const acoesHtml = (t, grande) => {
     const acs = (t.acoes || []).map((a, i) => ({ a, i })).sort((x, y) => (y.a.principal ? 1 : 0) - (x.a.principal ? 1 : 0));
-    const fixos = `${t.pode_adiar ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-adiar="${esc(t.k)}" title="Em espera com data: a tarefa sai e volta sozinha no dia">Adiar</button>` : ''}`
+    const fixos = `${t.pode_adiar || t.pode_pausar ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-adiar="${esc(t.k)}" title="A tarefa sai da fila e volta sozinha na hora marcada (antes, se o cliente escrever)">Adiar</button>` : ''}`
       + `${t.pode_sair ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-saida="${esc(t.k)}" title="Encerrar com motivo: sai da fila; se o cliente escrever de novo, volta">Saída</button>` : ''}`;
     return acs.map(({ a, i }) => btHtml(a, i, 'fila', t.k, grande)).join('') + fixos;
   };
@@ -245,6 +245,7 @@
   async function adiar(k) {
     const t = fila().find((x) => x.k === k);
     if (!t) return;
+    if (!t.pode_adiar) { await pausar(t); return; }
     const d = (n) => NG.somaDias(NG.diaSP(), n);
     const fd = await NG.modal(`<h3>Adiar: ${esc(t.nome)}</h3>
       <p>A conversa fica <b>Em espera</b> até o dia escolhido e a tarefa sai da fila. No dia, ela volta sozinha.</p>
@@ -259,6 +260,18 @@
     const ate = String(fd.get('q') || fd.get('data') || '');
     if (!ate) return;
     const { data, error } = await NG.sb.rpc('backoffice_conversa_espera', { p_conversa: t.conversa_id, p_ate: ate, p_motivo: String(fd.get('motivo') || '') });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast((data && data.resumo) || 'Adiada', 'ok');
+    await carregar();
+  }
+  // 0394: linha de venda (cobrança ou Decidir) não tem "Em espera" de conversa: a pausa é da linha, com teto de 7 dias
+  async function pausar(t) {
+    const fd = await NG.modal(`<h3>Adiar: ${esc(t.nome)}</h3>
+      <p>A tarefa sai da fila e <b>volta sozinha</b> na hora escolhida. Se o cliente escrever antes, ela volta na hora.</p>
+      <label class="campo">Volta<select name="h"><option value="2">Em 2 horas</option><option value="24" selected>Amanhã, nesta hora</option><option value="72">Em 3 dias</option><option value="168">Em 7 dias</option></select></label>
+      <label class="campo">Por quê (opcional)<input type="text" name="nota" maxlength="120" placeholder="Ex.: disse que faz a biometria no sábado"></label>`);
+    if (!fd) return;
+    const { data, error } = await NG.sb.rpc('live2_baixa', { p_k: t.k, p_como: 'agora_nao', p_horas: Number(fd.get('h')) || 24, p_nota: String(fd.get('nota') || '') || null });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast((data && data.resumo) || 'Adiada', 'ok');
     await carregar();
@@ -366,7 +379,7 @@
     return `<h3>A conta fecha</h3><div class="l2-conta">
       <b>${esc(String(c.na_fila ?? 0))}</b><span>na sua fila${Number(c.em_jogo) ? ` · ${esc(reais(c.em_jogo))} em jogo` : ''}</span>
       <b>${esc(String(c.com_mari ?? 0))}</b><span>com a Mari</span>
-      <b>${esc(String(c.esperando_cliente ?? 0))}</b><span>esperando o cliente</span>
+      <b>${esc(String((Number(c.esperando_cliente) || 0) + (Number(c.em_pausa) || 0)))}</b><span>esperando o cliente${Number(c.em_pausa) ? ` · ${esc(String(c.em_pausa))} com hora de volta` : ''}</span>
       <b>${esc(String(c.esperando_nio ?? 0))}</b><span>esperando a Nio</span>
       <b class="tot">${esc(String(c.vivos ?? 0))}</b><span class="tot">leads vivos · <b style="font-size:14px">${semLugar}</b> sem lugar</span></div>
       ${Number(c.tarefas_de_encerrados) ? `<div class="l2-sub">+ ${esc(String(c.tarefas_de_encerrados))} tarefa(s) de lead já encerrado ou instalado (documentos, cancelar na Nio, volta marcada).</div>` : ''}
@@ -409,13 +422,15 @@
     return `<div class="l2-sub" style="max-width:76ch">Conversas que a Mari está atendendo e em que vale um gerente entrar agora. <b>Soprar</b>: você escreve, a Mari fala e segue. <b>Assumir</b>: a conversa passa a ser sua. Nada daqui conta no "faltam", e cada reforço fica registrado com o desfecho (aba 7 dias).</div>
       ${rf.length ? rf.map(reforcoHtml).join('') : '<div class="vazio-curto">Nenhuma conversa pedindo reforço agora.</div>'}`;
   }
+  const voltaTxt = (iso) => { const dt = new Date(iso); return `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`; };
+  const rdPausa = (x) => `<button type="button" class="l2-rd" data-abrir="${esc(x.k)}"><b>${esc(x.nome || 'Contato')}</b><span class="apagado">${esc(x.motivo || '')} · ${esc(String(x.oque || '').slice(0, 70))}</span><small>volta ${esc(voltaTxt(x.volta_em))}</small></button>`;
   const rdLinha = (x) => `<button type="button" class="l2-rd" data-abrir="${esc(x.k)}"><b>${esc(x.nome || 'Contato')}</b><span class="apagado">${esc([x.cidade, x.etapa_nome].filter(Boolean).join(' · '))}</span><small>${x.desde ? `há ${esc(ha(x.desde))}` : ''}</small></button>`;
   function vistaRadar() {
     const r = D.radar || {};
     const bloco = (tit, dica, l) => `<div class="l2-caixa"><h3>${tit} · ${(l || []).length}</h3><div class="l2-sub">${dica}</div>${(l || []).slice(0, 40).map(rdLinha).join('') || '<div class="l2-sub">—</div>'}</div>`;
     return `<div class="l2-sub" style="max-width:76ch">O que não pede ninguém do time agora. Dá para olhar, mas nada daqui é pendência: vira tarefa sozinho se precisar de você.</div>
       <div class="l2-cols">${bloco('Com a Mari', 'Ela está atendendo ou cutucando na cadência.', r.com_mari)}
-      ${bloco('Esperando o cliente', 'O time já respondeu. Se o prazo vencer, vira tarefa Decidir.', r.esperando_cliente)}
+      <div class="l2-caixa"><h3>Esperando o cliente · ${(r.esperando_cliente || []).length + (r.em_pausa || []).length}</h3><div class="l2-sub">O time já falou. Sem resposta até a hora de volta, vira tarefa <b>Cobrar o cliente</b>; 7 dias sem sinal, vira <b>Decidir</b>.</div>${(r.em_pausa || []).map(rdPausa).join('')}${(r.esperando_cliente || []).slice(0, 40).map(rdLinha).join('') || ((r.em_pausa || []).length ? '' : '<div class="l2-sub">—</div>')}</div>
       ${bloco('Esperando a Nio', 'Venda andando. Se a Nio mudar algo, vira tarefa Pendência Nio.', r.esperando_nio)}
       <div class="l2-caixa"><h3>🔥 Oportunidades · ${ops ? ops.length : '…'}</h3><div class="l2-sub">As regras automáticas de volume ficam aqui, fora da fila (em 36 envios não deram venda). Enviar e dispensar continuam na Live atual.</div>
         ${(ops || []).slice(0, 30).map((o) => `<button type="button" class="l2-rd" data-abrir="c:${esc(o.conversa_id)}"><b>${esc(o.nome || 'Contato')}</b><span class="apagado">${esc(String(o.motivo || '').split(' · ')[0])}</span><small>${o.parado_desde ? `há ${esc(ha(o.parado_desde))}` : ''}</small></button>`).join('')}</div></div>`;
@@ -443,7 +458,7 @@
     document.getElementById('alertas').innerHTML = alertasHtml();
     const tab = (id, nome, n) => `<button type="button" class="l2-tab" role="tab" data-vista="${id}" aria-selected="${vista === id}">${nome}${n == null ? '' : `<b>${n}</b>`}</button>`;
     document.getElementById('tabs').innerHTML = tab('vez', 'Tarefa da vez') + tab('fila', 'Fila inteira', f.length) + tab('reforco', 'Reforço', (D.reforco || []).length)
-      + tab('radar', 'Radar', (Number(c.com_mari) || 0) + (Number(c.esperando_cliente) || 0) + (Number(c.esperando_nio) || 0)) + tab('medicao', '7 dias');
+      + tab('radar', 'Radar', (Number(c.com_mari) || 0) + (Number(c.esperando_cliente) || 0) + (Number(c.em_pausa) || 0) + (Number(c.esperando_nio) || 0)) + tab('medicao', '7 dias');
     const rol = corpo.scrollTop;
     const txt = document.activeElement && document.activeElement.tagName === 'TEXTAREA' ? { id: document.activeElement.id, v: document.activeElement.value } : null;
     corpo.innerHTML = vista === 'fila' ? vistaFila() : vista === 'reforco' ? vistaReforco() : vista === 'radar' ? vistaRadar() : vista === 'medicao' ? vistaMedicao() : vistaVez();

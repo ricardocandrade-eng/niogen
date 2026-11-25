@@ -1320,16 +1320,14 @@
     const cls = r === 'viavel' ? (NG.portalViavel(v) ? 'cf-aprovada' : 'cf-pendente') : r ? 'cf-reprovada' : 'cf-pendente';
     const quem = v.nio_viab_por ? (d.usuarios.find((u) => u.id === v.nio_viab_por) || {}).nome : null;
     const quando = r && v.nio_viab_em ? `${NG.fmtDataHora(v.nio_viab_em)}${quem ? ` · ${quem}` : v.nio_viab_origem === 'manual' ? '' : ' · automático'}` : '';
-    const vencida = r === 'viavel' && !NG.portalViavel(v);
     const pd = pistaDfv(v);
     const form = formAtivo === 'viab' ? FORMS.viab(v) : '';
     const fechada = v.status === 'saida';
     // 07/11: recolhido = uma linha com o status do portal; abre no clique ou quando o formulário do resultado está aberto.
     const aberto = abertos.has('c_viab') || formAtivo === 'viab';
     return `<section class="conf-card portal-card recolhe${aberto ? ' aberto' : ''}" aria-label="Viabilidade">
-      <div class="cc-cab"><button type="button" class="cc-tog" data-f="cartao" data-c="c_viab" aria-expanded="${aberto}"><b>Viabilidade</b><span class="pill ${cls}">${esc(estado)}</span>${quando ? `<small>${esc(quando)}</small>` : ''}${vencida ? '<small class="warn-txt">consultar de novo</small>' : ''}</button>${NG.dicaTxt(NG.ajuda.viab_portal)}</div>
+      <div class="cc-cab"><button type="button" class="cc-tog" data-f="cartao" data-c="c_viab" aria-expanded="${aberto}"><b>Viabilidade</b><span class="pill ${cls}">${esc(estado)}</span>${quando ? `<small>${esc(quando)}</small>` : ''}</button>${NG.dicaTxt(NG.ajuda.viab_portal)}</div>
       <div class="cc-corpo">
-      ${vencida ? '<div class="faixa amarelo">Viável há mais de 7 dias: consulte de novo antes de registrar a venda.</div>' : ''}
       ${r && r !== 'viavel' && !fechada ? '<span class="nota-campo">Sem viabilidade ou endereço não encontrado: tente variações de CEP, rua e número no portal antes de encerrar.</span>' : ''}
       ${!fechada && !form ? `<div class="conf-botoes">
         <a class="btn ${r === 'viavel' ? '' : 'btn-acc'}" href="${NG.PORTAL_PAP_NOVO_PEDIDO}" target="_blank" rel="noopener" data-f="consultar-portal" title="${esc(NG.ajuda.viab_consultar)}">Consultar no portal ↗</a>
@@ -1521,7 +1519,6 @@
   function passosVenda(v) {
     const viab = v.nio_viab_resultado;
     const pViab = NG.portalViavel(v) ? { s: 'ok', d: 'portal · ok' }
-      : viab === 'viavel' ? { s: 'wa', d: 'vencida · consultar de novo' }
       : ['sem_viabilidade', 'nao_encontrado', 'posse'].includes(viab) ? { s: 'wa', d: (NG.VIAB_NIO[viab] || viab).toLowerCase() }
       : { s: 'no', d: '' };
     const bio = v.biometria_status;
@@ -3619,7 +3616,7 @@
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
-        ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (7 dias)</span>' : r === 'viavel' ? '<span class="warn-txt">vencida: consulte de novo</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
+        ${!conv && r ? linhaDet('Quando', `${esc(v.nio_viab_em ? NG.fmtDataHora(v.nio_viab_em) : '—')} · ${NG.portalViavel(v) ? '<span class="ok-txt">válida (não vence)</span>' : 'portal ≠ viável não nega a venda'}`) : ''}
         ${!conv && v.nio_viab_velocidade ? linhaDet('Velocidade', esc(v.nio_viab_velocidade)) : ''}
         ${!conv ? semViabGravada(!fimV && (!!liberacaoEspera() || (r === 'sem_viabilidade' && !NG.portalViavel(v))), {}) : ''}
         ${!conv ? dfvBloco() : ''}

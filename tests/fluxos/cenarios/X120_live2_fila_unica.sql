@@ -83,9 +83,10 @@ select sim.confere('toda linha tem o que fazer e pelo menos um botão',
   not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where coalesce(x ->> 'oque', '') = '' or jsonb_array_length(x -> 'acoes') = 0),
   (select string_agg(x ->> 'k', ', ') from jsonb_array_elements((:'f')::jsonb -> 'fila') x where coalesce(x ->> 'oque', '') = '' or jsonb_array_length(x -> 'acoes') = 0));
 -- nada do "Para fazer" de hoje fica de fora: todo alarme da jornada e todo aviso do Conferir sobre cliente está na fila
-select sim.confere('todo "precisa de ação" da jornada está na fila',
+select sim.confere('todo "precisa de ação" da jornada está na fila — ou em pausa com hora de volta (0394: cobrança já feita)',
   not exists (select 1 from public.v_jornada j where j.precisa_acao
-                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(j.venda_id::text, 'c:' || j.conversa_id::text))),
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(j.venda_id::text, 'c:' || j.conversa_id::text))
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb #> '{radar,em_pausa}') x where x ->> 'k' = coalesce(j.venda_id::text, 'c:' || j.conversa_id::text))),
   (select string_agg(j.nome, ', ') from public.v_jornada j where j.precisa_acao
       and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(j.venda_id::text, 'c:' || j.conversa_id::text))));
 select sim.confere('todo aviso do Conferir sobre um cliente está na fila; os de sistema, fora dela',
