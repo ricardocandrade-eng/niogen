@@ -683,17 +683,15 @@
   const linkChatwoot = (conversa) => (CHATWOOT_NIO_ACCOUNT && conversa
     ? `https://app.chatwoot.com/app/accounts/${CHATWOOT_NIO_ACCOUNT}/conversations/${encodeURIComponent(conversa)}` : null);
   function dfvValido(v) {
-    return DFV_OK.includes(v.dfv_viabilidade) && !!v.dfv_consultado_em && (Date.now() - new Date(v.dfv_consultado_em)) < 7 * 86400000;
+    return DFV_OK.includes(v.dfv_viabilidade);   // 0395 (Ricardo, 25/11): o DFV não vence
   }
-  // Selo: verde viável · amarelo não consultado / vencido / dispensado · vermelho sem viabilidade ou não encontrado.
+  // Selo: verde viável · amarelo não consultado / dispensado · vermelho sem viabilidade ou não encontrado.
   function seloDfv(v) {
     if (!v || v.status === 'saida') return '';
     const selo = (txt, cls, texto) => `<span class="chip selo ${cls}" data-dica="${esc(texto)}" title="${esc(texto)}">${esc(txt)}</span>`;
     const quando = v.dfv_consultado_em ? fmtData(v.dfv_consultado_em) : '';
     if (DFV_OK.includes(v.dfv_viabilidade)) {
-      return dfvValido(v)
-        ? selo(`DFV viável ${quando}${v.dfv_origem === 'auto' ? ' · auto' : ''}`, 'ok', `${TEXTOS_DFV.opcoes[v.dfv_viabilidade]} ${TEXTOS_DFV.regra}`)
-        : selo(`DFV vencido (${quando})`, 'warn', `Consulta com mais de 7 dias. ${TEXTOS_DFV.trava}`);
+      return selo(`DFV viável ${quando}${v.dfv_origem === 'auto' ? ' · auto' : ''}`, 'ok', `${TEXTOS_DFV.opcoes[v.dfv_viabilidade]} ${TEXTOS_DFV.regra}`);
     }
     if (v.dfv_resultado === 'endereco_ocupado') return selo('DFV: endereço já tem Nio', 'bad', DFV_RESULTADO.endereco_ocupado);
     if (v.dfv_viabilidade === 'sem_viabilidade' || v.dfv_viabilidade === 'nao_encontrado') {

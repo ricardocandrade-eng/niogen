@@ -2019,7 +2019,7 @@
     const formaTxt = FORMAS[v.forma_pagamento] || '—';
     const planoTxt = d.nomeCurto || v.plano_nome || 'sem plano';
     const dfvRot = (() => {
-      if (NG.DFV_OK.includes(v.dfv_viabilidade)) return NG.dfvValido(v) ? `DFV viável${v.dfv_consultado_em ? ' · ' + NG.fmtData(v.dfv_consultado_em) : ''}` : 'DFV vencido';
+      if (NG.DFV_OK.includes(v.dfv_viabilidade)) return `DFV viável${v.dfv_consultado_em ? ' · ' + NG.fmtData(v.dfv_consultado_em) : ''}`;
       if (v.dfv_dispensado) return 'DFV dispensado';
       return NG.DFV_OPCOES[v.dfv_viabilidade] ? `DFV: ${NG.DFV_OPCOES[v.dfv_viabilidade].toLowerCase()}` : 'DFV não consultado';
     })();
