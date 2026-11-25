@@ -266,6 +266,7 @@
       <div class="cvp-meio"><div class="cvp-msgs" data-msgs tabindex="0" aria-label="Mensagens" aria-live="polite"><div class="carregando">Carregando a conversa…</div></div>
         <button type="button" class="cvp-novas" data-cv="descer" hidden>↓ novas mensagens</button></div>
       <div class="cvp-devolver" data-devolver hidden></div>
+      <div class="cvp-recusa faixa amarelo" data-recusa hidden style="margin:6px 10px 0;flex-direction:row;flex-wrap:wrap;align-items:center"></div>
       <div class="cvp-pe">
         <div class="cvp-venda" data-venda hidden></div>
         <div class="cvp-mari" data-mari hidden></div>
@@ -368,6 +369,7 @@
       const sigFala = `${st.d.turnos.length}:${ultT ? ultT.id : ''}|${st.d.acoes.map((a) => `${a.id}:${a.status}`).join(',')}`;
       if (st.sigFala != null && st.sigFala !== sigFala && o.aoMudar) o.aoMudar({ eco: true });
       st.sigFala = sigFala;
+      recusaConferir();
       // 0107 (🔥 oportunidade no Live): o texto sugerido entra na caixa, editável; a 1ª mensagem sai pela oportunidade_enviar.
       if (o.oportunidade && !st.opPosta) {
         st.opPosta = true;
@@ -381,6 +383,47 @@
       if (st.foco && !matchMedia('(max-width: 900px)').matches) { ta.focus({ preventScroll: true }); ta.setSelectionRange(ta.value.length, ta.value.length); st.foco = false; }
     }
 
+    // 0399 (Ricardo, 25/11, caso L-287): a última fala do cliente é uma recusa curta → sugere a Saída na hora, aqui na conversa.
+    // Quem decide se é recusa é o banco (lead_recusa); a tela só pergunta quando chega fala curta do cliente. Nunca dá a Saída sozinha.
+    const recusaEl = $('[data-recusa]');
+    function recusaDesenhar() {
+      const r = st.recusa;
+      const mostra = !!(r && r.recusa && st.recusaNao !== r.turno_id);
+      recusaEl.hidden = !mostra;
+      if (!mostra) { recusaEl.innerHTML = ''; return; }
+      recusaEl.innerHTML = `<span style="flex:1 1 240px"><b>O cliente recusou:</b> “${esc(r.fala)}” · ${esc(NG.fmtDataHora(r.em))}.${r.respondida ? '' : ' Responda, se quiser, e'} ${r.respondida ? 'Registre' : 'registre'} a Saída para o lead não continuar na fila.</span>
+        <button type="button" class="btn btn-sm btn-acc" data-cv="recusa-saida">Registrar a Saída</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-cv="recusa-nao" title="Some até o cliente escrever de novo">Não é recusa</button>`;
+    }
+    function recusaConferir() {
+      if (!podeSugerir || !st.d) return;
+      const ul = st.d.turnos.filter((t) => t.papel === 'lead').pop();
+      const chave = ul ? ul.id : 0;
+      if (st.recusaVisto === chave) return;
+      st.recusaVisto = chave;
+      if (!ul || String(ul.texto || '').trim().length > 80) { st.recusa = null; recusaDesenhar(); return; }
+      NG.sb.rpc('lead_recusa', { p_conversa: o.conversaId }).then(({ data }) => {
+        if (!st.vivo || st.recusaVisto !== chave) return;
+        st.recusa = data && data.recusa ? data : null;
+        recusaDesenhar();
+      }, () => {});
+    }
+    async function recusaSaida(b) {
+      const r = st.recusa;
+      if (!r) return;
+      const c = st.d.c;
+      const nome = NG.nomeLegivel((c.dados && c.dados.nome) || o.nome || c.nome_contato || 'Cliente', c.telefone);
+      const s = await NG.pedirSaida({ cliente_nome: nome, nio_pedido: r.pedido_aberto ? 'x' : '', nio_os: '' }, 'recusou');
+      if (!s) return;
+      b.disabled = true;
+      const { data, error } = await NG.sb.rpc('lead_sair', { p_conversa: r.venda_id ? null : o.conversaId, p_venda: r.venda_id || null, p_motivo: s.motivo,
+        p_sub: s.sub, p_volta: s.volta, p_obs: s.obs, p_cancelou_portal: s.cancelou });
+      if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+      NG.toast((data && data.resumo) || 'Saída registrada', 'ok');
+      st.recusa = null; recusaDesenhar();
+      if (o.aoMudar) o.aoMudar(data);
+      carregar();
+    }
     const meuNome = () => ((NG.usuario || {}).nome || '').trim();
     function dono(c) {
       if (c.nao_contatar) return { v: 'parar', txt: 'Não contatar' };
@@ -1109,6 +1152,8 @@
       if (a === 'fechar' && o.aoFechar) { o.aoFechar(); return; }
       if (a === 'concluir' && o.aoConcluir) { o.aoConcluir(); return; }
       if (a === 'enviar') { enviar(); return; }
+      if (a === 'recusa-saida') { recusaSaida(b); return; }
+      if (a === 'recusa-nao') { st.recusaNao = st.recusa && st.recusa.turno_id; recusaDesenhar(); return; }
       if (a === 'citar') { if (!podeMidia()) { NG.toast('Responder citando só no modo Responder.', 'bad'); return; } st.cita = { id: Number(b.dataset.cw), txt: b.dataset.txt || '' }; citaDesenhar(); ta.focus(); return; }
       if (a === 'cita-x') { st.cita = null; citaDesenhar(); return; }
       if (a === 'gravar') { gravarCampo(b.dataset.campo, b.dataset.valor, b); return; }

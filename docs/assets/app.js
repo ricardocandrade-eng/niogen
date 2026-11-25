@@ -1325,7 +1325,7 @@
     return { motivo_saida: k.nome + (sub ? ` · ${sub}` : '') + (obs ? ` — ${obs}` : ''), saida_motivo: k.codigo, saida_sub: sub || null, interesse_futuro_em: volta || null };
   }
   // Arrastar para Saída no Quadro: o mesmo formulário da ficha (motivo · porquê · volta · observação · cancelou no portal?).
-  async function pedirSaida(venda) {
+  async function pedirSaida(venda, pre) {   // pre (0399): motivo já escolhido (ex.: 'recusou', sugerido na conversa)
     const lista = (await saidaLista()).filter((x) => x.codigo !== 'nao_contatar');
     if (!lista.length) { toast('A lista de motivos de saída não carregou. Tente de novo.', 'bad'); return null; }
     const aberto = !!(String(venda.nio_pedido || '').trim() || String(venda.nio_os || '').trim());
@@ -1358,6 +1358,7 @@
         if (sel.value === 'fachada_nao_atendida' && !volta.value) { volta.value = somaDias(diaSP(), 90); volta.dataset.auto = '1'; }
         else if (sel.value !== 'fachada_nao_atendida' && volta.dataset.auto) { volta.value = ''; delete volta.dataset.auto; }
       });
+      if (pre && [...sel.options].some((x) => x.value === pre)) { sel.value = pre; sel.dispatchEvent(new Event('change')); }
     });
     if (!fd) return null;
     return { motivo: fd.get('motivo'), sub: fd.get('sub') || null, volta: fd.get('volta') || null, obs: String(fd.get('obs') || '').trim() || null,
@@ -1922,7 +1923,7 @@
 
   window.NG = {
     origemTxt, PARCEIRO_STATUS, PARCEIRO_FORMA, MOTIVOS_CONFERENCIA, CONFERENCIA_STATUS, PAGAMENTO_TIPO, PAGAMENTO_STATUS,
-    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
+    sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, pedirSaida, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome, nomeLegivel, fmtFone,
     documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
