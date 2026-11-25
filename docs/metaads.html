@@ -892,10 +892,11 @@
     const T = L.reduce((s, d) => { Object.keys(s).forEach((k) => { if (typeof s[k] === 'number') s[k] += d[k]; }); return s; }, { gasto: 0, impr: 0, cliq: 0, convMeta: 0, conv: 0, cep: 0, qualif: 0, vendas: 0, inst: 0, erros: 0 });
     if (!dias.length) { document.getElementById('r-graf').textContent = `nada no período · ${per.rotulo.toLowerCase()}`; alvo.innerHTML = '<div class="vazio-curto">Nada no período.</div>'; return; }
     const R2c = (v) => (v == null ? '—' : NG.fmtMoeda(Math.round(v * 100) / 100));
-    const pctTxt = (a, b) => (b > 0 ? `${N(Math.round((a / b) * 1000) / 10)} %` : '—');
+    const dec = (v, d) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: d });   // NG.fmtNum arredonda para inteiro
+    const pctTxt = (a, b) => (b > 0 ? `${dec((a / b) * 100, a / b < 0.1 ? 2 : 1)} %` : '—');
     const cpm = T.impr ? (T.gasto / T.impr) * 1000 : null, ctr = T.impr ? (T.cliq / T.impr) * 100 : null;
     const cpc = T.convMeta ? T.gasto / T.convMeta : null, cac = T.vendas ? T.gasto / T.vendas : null;
-    document.getElementById('r-graf').textContent = `CPM ${R2c(cpm)} · CTR ${ctr == null ? '—' : `${N(Math.round(ctr * 100) / 100)} %`} · CAC ${cac == null ? 'sem venda' : R(Math.round(cac))} · ${per.rotulo.toLowerCase()}`;
+    document.getElementById('r-graf').textContent = `CPM ${R2c(cpm)} · CTR ${ctr == null ? '—' : `${dec(ctr, 2)} %`} · CAC ${cac == null ? 'sem venda' : R(Math.round(cac))} · ${per.rotulo.toLowerCase()}`;
     // funil: duas escadas (a da mídia e a do atendimento), cada barra contra o primeiro degrau da sua escada
     const degrau = (nome, v, base, ant, dica) => `<span title="${esc(dica)}">${esc(nome)}</span><span class="barra"><i style="width:${base > 0 ? Math.max(1.5, Math.min(100, (v / base) * 100)).toFixed(1) : 0}%"></i></span><span class="n">${N(v)}${ant != null ? `<small>${pctTxt(v, ant)} do passo anterior</small>` : ''}</span>`;
     const funil = `<div class="ma-funil">
@@ -929,7 +930,7 @@
     alvo.innerHTML = `<div class="ma-graf">
         <div class="card" style="grid-column: 1 / -1"><h3>Funil do período</h3>${funil}</div>
         ${card('CPM', R2c(cpm), 'por mil impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.gasto / d.impr) * 1000 : null)), R2c))}
-        ${card('CTR', ctr == null ? '—' : `${N(Math.round(ctr * 100) / 100)} %`, 'cliques ÷ impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.cliq / d.impr) * 100 : null)), (v) => `${N(Math.round(v * 100) / 100)} %`))}
+        ${card('CTR', ctr == null ? '—' : `${dec(ctr, 2)} %`, 'cliques ÷ impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.cliq / d.impr) * 100 : null)), (v) => `${dec(v, 2)} %`))}
         ${card('Custo por conversa', R2c(cpc), 'conversas contadas pela Meta', svgLinha(dias, L.map((d) => (d.convMeta ? d.gasto / d.convMeta : null)), R2c))}
         ${card('CAC (custo por venda)', cac == null ? 'sem venda' : R(Math.round(cac)), 'gasto ÷ vendas com OS · linha acumulada', svgLinha(dias, cacAc, (v) => R(Math.round(v))))}
         <div class="card"><h3>Retorno à Meta</h3><div class="tot">${N(totCapi.reduce((s, v) => s + v, 0))}<small>eventos enviados${T.erros ? ` · ${pl(T.erros, 'erro', 'erros')}` : ' · nenhum erro'}</small></div>
@@ -947,7 +948,7 @@
   const R_ATEND = 'se cada lead de anúncio foi respondido, e em quanto tempo';
   let atendPeriodo = null;
   if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) gAtend.hidden = true;
-  const tempo = (s) => (s == null ? '—' : Number(s) < 60 ? `${N(Math.round(Number(s)))} s` : Number(s) < 3600 ? `${N(Math.round(Number(s) / 60))} min` : `${N(Math.round(Number(s) / 360) / 10)} h`);
+  const tempo = (s) => (s == null ? '—' : Number(s) < 60 ? `${Math.round(Number(s))} s` : Number(s) < 3600 ? `${Math.round(Number(s) / 60)} min` : `${(Math.round(Number(s) / 360) / 10).toLocaleString('pt-BR')} h`);
   async function carregarAtendimento() {
     const p = per.valor();
     const chave = `${p.de || ''}|${p.ate || ''}`;
@@ -962,7 +963,7 @@
     if (!t.conversas) { document.getElementById('r-atend').textContent = `nenhuma conversa de anúncio · ${per.rotulo.toLowerCase()}`; alvo.innerHTML = '<div class="vazio-curto">Nenhuma conversa de anúncio chegou no período.</div>'; return; }
     document.getElementById('r-atend').textContent = `${N(t.respondidas)} de ${pl(t.conversas, 'conversa respondida', 'conversas respondidas')} · 1ª resposta em ${tempo(t.resp_mediana_s)} (metade das conversas) · ${t.paradas ? pl(t.paradas, 'parada', 'paradas') : 'nenhuma parada'} · ${per.rotulo.toLowerCase()}`;
     const cons = (x) => (!x.passadas_consultor ? '<span class="apagado">—</span>'
-      : x.consultor_medidas ? `${N(x.consultor_mediana_min)} min <small class="apagado">· medido em ${N(x.consultor_medidas)} de ${N(x.passadas_consultor)}</small>`
+      : x.consultor_medidas ? `${tempo(Number(x.consultor_mediana_min) * 60)} <small class="apagado">· medido em ${N(x.consultor_medidas)} de ${N(x.passadas_consultor)}</small>`
         : `<span class="apagado">medido em 0 de ${N(x.passadas_consultor)}</span>`);
     const nomeL = (x) => (x.ad_id ? [x.ad_nome || (nomeAd.get(x.ad_id) || [])[0] || `anúncio ${x.ad_id}`, x.campanha_nome || ''] : ['Sem anúncio identificado', 'o WhatsApp não disse de qual anúncio veio']);
     const linha = (x, tot) => `<tr${tot ? ' class="total"' : ''}><td>${tot ? '<b>Total do período</b>' : `${esc(nomeL(x)[0])}${nomeL(x)[1] ? ` <small class="apagado">· ${esc(nomeL(x)[1])}</small>` : ''}`}</td>
