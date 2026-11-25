@@ -29,6 +29,12 @@ select sim.confere('o motivo genérico da situação ("Rodar o crédito no porta
 select sim.como('servico');
 select sim.cliente_escreve(:'c', 'Moro no bloco 8', false);
 select sim.fila_rodar();
+select sim.como('backoffice');
+select public.live2_fila()::text as f \gset
+select coalesce((select x::text from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'venda_id' = sim.venda(:'c')::text), '{}') as lr \gset
+select sim.confere('0397: cliente esperando resposta → a linha é Responder (a unidade não passa por cima)',
+  (:'lr')::jsonb ->> 'tipo' = 'responder' and ((:'lr')::jsonb ->> 'urg')::int = 4, ((:'lr')::jsonb ->> 'tipo') || ' · ' || ((:'lr')::jsonb ->> 'oque'));
+select sim.como('servico');
 select sim.passa(:'c', '2 hours');
 select sim.como('backoffice');
 select public.backoffice_responder(:'c', 'Uli, o portal não mostra o bloco 8. Qual o número do apartamento?');

@@ -199,7 +199,7 @@
   const acoesHtml = (t, grande) => {
     const acs = (t.acoes || []).map((a, i) => ({ a, i })).sort((x, y) => (y.a.principal ? 1 : 0) - (x.a.principal ? 1 : 0));
     const fixos = `${t.pode_adiar || t.pode_pausar ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-adiar="${esc(t.k)}" title="A tarefa sai da fila e volta sozinha na hora marcada (antes, se o cliente escrever)">Adiar</button>` : ''}`
-      + `${t.pode_sair ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-saida="${esc(t.k)}" title="Encerrar com motivo: sai da fila; se o cliente escrever de novo, volta">Saída</button>` : ''}`;
+      + `${t.pode_sair && !(t.acoes || []).some((x) => x.a === 'saida') ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-saida="${esc(t.k)}" title="Encerrar com motivo: sai da fila; se o cliente escrever de novo, volta">Saída</button>` : ''}`;
     return acs.map(({ a, i }) => btHtml(a, i, 'fila', t.k, grande)).join('') + fixos;
   };
   async function perguntar(pede) {
@@ -215,6 +215,7 @@
     const t = lista.find((x) => (b.dataset.onde === 'sistema' ? `${x.tipo}:${x.chave}` : x.k) === b.dataset.k);
     const a = t && (t.acoes || [])[Number(b.dataset.ac)];
     if (!a) return;
+    if (a.a === 'saida') { await saida(t.k); return; }   // 0398: o cliente recusou
     if (a.a === 'abrir') { if (!temFichaK(t)) return; if (a.etapa) NGFicha.etapaInicial = a.etapa; abrirChave(kFicha(t)); return; }
     if (a.a === 'assumir') {
       b.disabled = true;
