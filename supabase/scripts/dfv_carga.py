@@ -1,4 +1,6 @@
 # NIOGEN | supabase/scripts/dfv_carga.py | 03/11/2026
+# APOSENTADO em 23/11/2026 (migration 0388, Ricardo: "Aposente essa base antiga"): a base nio_hp não é mais lida; o DFV vale
+# só pela API do Power BI (edge function dfv-consulta). Não recarregar — o script para sozinho.
 # Carga da base DFV da Nio (CSV por município) pelo CLI, enquanto a tela de importação só faz a prévia.
 # Gera arquivos SQL FORA do repo (o dado é da Nio): 00 cria a importação, 01..N enchem nio_hp_stage, 99 chama aplicar_dfv.
 #
@@ -68,4 +70,5 @@ def main():
 
 
 if __name__ == '__main__':
+    sys.exit('dfv_carga.py aposentado em 23/11/2026 (migration 0388): o DFV vale só pela API do Power BI. Não recarregar a nio_hp.')
     main()
