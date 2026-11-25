@@ -1,0 +1,536 @@
+<!doctype html>
+<!-- NIOGEN | docs/live2.html | 24/11/2026 — Claude Code (Fable 5.2)
+     Live 2.0 (Ricardo, 24/11: estudo docs/ESTUDO_live_2_0_241126_2246.md · plano docs/Prompt_live_2_0_construcao_241126_2250.md ·
+     protótipo claude.ai/artifact/Ufvhgm9QmGWhUj6RigWKEo). Fica AO LADO da Live atual (fila.html, que não muda) por 7 dias.
+     A tela não decide nada: desenha o que a live2_fila() devolve (0390) — a fila única em seis tipos de tarefa, já na ordem
+     (vale × etapa × urgência), os botões que o banco aceita em cada linha, a conta que fecha, o Reforço (0391), o radar e os avisos
+     de sistema. Tarefa da vez (padrão) · Fila inteira · Reforço · Radar · 7 dias (medição, 0392).
+     Baixa: a tarefa sai quando o fato muda no banco. Adiar = Em espera com data; Saída = lead_sair. Nenhuma regra de entrada ou de
+     ordem mora aqui. O cliente abre em tela cheia pela mesma NGFicha da Live. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Live 2.0 · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=221126-3">
+<script src="config.js?v=121126-8"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=201126-16"></script>
+<script src="assets/sidebar.js?v=251126-1"></script>
+<script src="assets/conversa.js?v=241126-bl2"></script>
+<script src="assets/ficha.js?v=241126-2"></script>
+<script src="assets/pulso.js?v=181126-2"></script>
+<style>
+  .l2 { --t-responder: #6FB1F7; --t-venda: #32E000; --t-agenda: #57D38C; --t-ligar: #F2B84B; --t-nio: #E58BF0; --t-decidir: #8D97A3; --t-reforco: #FF9F43; }
+  .l2-cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
+  .l2-cab h1 { margin: 0; font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+  .l2-cab h1 small { font-family: var(--dm); font-size: 11px; font-weight: 500; color: var(--accent); letter-spacing: 2px; }
+  .l2-placar { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .l2-placar b { color: var(--text); font-size: 15px; }
+  .l2-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--border); }
+  .l2-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 13px; color: var(--muted); font-weight: 600; cursor: pointer; }
+  .l2-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .l2-tab b { font-family: var(--dm); font-weight: 500; margin-left: 4px; }
+  .l2-rolar { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 24px 0; display: flex; flex-direction: column; gap: 14px; }
+  .l2-furo { background: var(--bad-bg); color: var(--bad-fg); border: 1px solid var(--bad-border); border-radius: 8px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; }
+  .l2-sis { background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-border); border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+  .l2-sis summary { cursor: pointer; font-weight: 600; }
+  .l2-sis-it { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--warn-border); margin-top: 6px; color: var(--text); }
+  .l2-sis-it span { flex: 1 1 320px; min-width: 0; }
+  .l2-grade { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 1000px) { .l2-grade { grid-template-columns: minmax(0, 1fr); } }
+  .l2-comanda { background: var(--surface); border: 1px solid var(--border-strong); border-top: 4px solid var(--c, var(--accent)); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .l2-topo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+  .l2-tipo { font-family: var(--dm); font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--c); border: 1px solid var(--c); border-radius: 4px; padding: 2px 8px; white-space: nowrap; }
+  .l2-senha { font-family: var(--dm); color: var(--muted); font-size: 12px; margin-left: auto; }
+  .l2-quem { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .l2-quem h2 { margin: 0; font-size: 24px; font-weight: 800; overflow-wrap: anywhere; }
+  .l2-vale { font-family: var(--dm); font-size: 14px; color: var(--accent); white-space: nowrap; }
+  .l2-sub { color: var(--muted); font-size: 13px; }
+  .l2-fazer { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+  .l2-fala { border-left: 3px solid var(--border-strong); padding: 2px 0 2px 12px; color: var(--muted); font-style: italic; overflow-wrap: anywhere; }
+  .l2-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .l2-pill { background: var(--surface-2); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
+  .l2-pill.urg { background: var(--bad-bg); color: var(--bad-fg); }
+  .l2-pill.pts { font-family: var(--dm); }
+  .l2-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .l2-go { background: var(--accent); border-color: var(--accent); color: #062400; font-weight: 800; }
+  .l2-go:hover { filter: brightness(1.08); }
+  .l2-lado { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .l2-caixa { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .l2-caixa h3 { margin: 0; font-family: var(--dm); font-size: 11px; font-weight: 500; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
+  .l2-prox { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 1px 8px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--border); cursor: pointer; background: none; border-left: 0; border-right: 0; border-bottom: 0; color: inherit; text-align: left; width: 100%; font: inherit; }
+  .l2-prox:first-of-type { border-top: 0; }
+  .l2-prox .n { font-family: var(--dm); color: var(--muted); font-size: 12px; }
+  .l2-prox small { grid-column: 2 / 4; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .l2-prox .t { font-family: var(--dm); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--c); white-space: nowrap; }
+  .l2-conta { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 12px; align-items: baseline; font-variant-numeric: tabular-nums; }
+  .l2-conta b { font-family: var(--dm); font-weight: 500; font-size: 15px; text-align: right; }
+  .l2-conta .tot { border-top: 1px solid var(--border); padding-top: 5px; margin-top: 2px; }
+  .l2-selo { border-radius: 6px; padding: 6px 10px; font-size: 12.5px; background: var(--ok-bg); color: var(--ok-fg); }
+  .l2-selo.bad { background: var(--bad-bg); color: var(--bad-fg); }
+  .l2-selo.warn { background: var(--warn-bg); color: var(--warn-fg); }
+  .l2-linha { display: grid; grid-template-columns: 26px 118px minmax(0, 1.1fr) minmax(0, 1.6fr) 84px auto; gap: 4px 12px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--border); }
+  .l2-linha:first-child { border-top: 0; }
+  .l2-linha .n { font-family: var(--dm); color: var(--muted); }
+  .l2-linha small { display: block; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .l2-linha .oq { overflow-wrap: anywhere; }
+  .l2-tabela { border: 1px solid var(--border); border-radius: 10px; }
+  @media (max-width: 1000px) { .l2-linha { grid-template-columns: 26px minmax(0, 1fr); } .l2-linha > :nth-child(n+3) { grid-column: 2; } }
+  .l2-rf { border: 1px solid var(--border); border-left: 3px solid var(--t-reforco); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .l2-rf-cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .l2-rf textarea { width: 100%; min-height: 78px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px 10px; resize: vertical; }
+  .l2-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .l2-rd { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; border-top: 1px solid var(--border); font-size: 13px; cursor: pointer; background: none; border-left: 0; border-right: 0; border-bottom: 0; color: inherit; text-align: left; width: 100%; font: inherit; }
+  .l2-rd small { color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .l2-med { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .l2-med th { text-align: right; font-family: var(--dm); font-size: 10.5px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
+  .l2-med td { text-align: right; padding: 6px 8px; border-top: 1px solid var(--border); }
+  .l2-med th:first-child, .l2-med td:first-child { text-align: left; }
+  .l2-limpa { text-align: center; padding: 30px 12px; }
+</style>
+</head>
+<body class="tela-fila lv-tela">
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="live2"></nav>
+  <main class="main mv lv l2">
+    <div class="lv-fila" id="fila">
+      <header class="l2-cab">
+        <h1><span class="live-dot" aria-hidden="true"></span>Live <small>2.0</small></h1>
+        <span class="apagado" id="sub">O banco monta a fila. Trate a tarefa da vez.</span>
+        <span class="l2-placar" id="placar"></span>
+        <span class="cab-acoes" id="cab-acoes"></span>
+      </header>
+      <div id="pulso" class="pl" hidden></div>
+      <div id="alertas"></div>
+      <nav class="l2-tabs" id="tabs" role="tablist" aria-label="Vistas"></nav>
+      <div class="l2-rolar" id="corpo" aria-live="polite"><div class="vazio-curto">Carregando a fila…</div></div>
+    </div>
+    <div class="lv-cliente" id="cliente" aria-label="Cliente" aria-hidden="true"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  const ehBO = ['admin', 'backoffice'].includes(eu.perfil);
+  if (ehBO) { document.body.dataset.pulso = '1'; NGPulso.montar(document.getElementById('pulso')); }
+  NGSidebar.montar();
+  const corpo = document.getElementById('corpo');
+  if (!ehBO) { corpo.innerHTML = '<div class="vazio-curto">A Live é do backoffice. Use o Funil de vendas.</div>'; return; }
+
+  const filaEl = document.getElementById('fila');
+  const clienteEl = document.getElementById('cliente');
+  const movel = window.matchMedia('(max-width: 900px)');
+  const TIPO = { responder: 'Responder', venda: 'Fechar venda', agenda: 'Agendar', ligar: 'Ligar', nio: 'Pendência Nio', decidir: 'Decidir' };
+  const SINAL = { escorregou: 'A Mari escorregou', objecao: 'Objeção', quente: 'Cliente quente', pronto: 'Quase pronto', sumiu: 'Sumiu depois do preço' };
+  const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
+  let D = null;                 // o que a live2_fila() devolveu
+  let vista = ['vez', 'fila', 'reforco', 'radar', 'medicao'].includes(ls.ler('niogen.live2.vista')) ? ls.ler('niogen.live2.vista') : 'vez';
+  let foco = null;              // chave da tarefa mostrada na comanda (a do topo, se nula)
+  let rfAberto = null;          // conversa com a caixa de Soprar ou o "Agora não" abertos: 'soprar:<id>' | 'nao:<id>'
+  let medicao = null;
+  let ops = null;
+  const mostrados = new Set();  // reforços já contados como "mostrados" nesta aba
+  let motivosNao = [{ codigo: 'ja_falei', nome: 'Já falei' }, { codigo: 'nao_vale', nome: 'Não vale' }, { codigo: 'nao_era', nome: 'Não era' }, { codigo: 'depois', nome: 'Depois' }];
+  NG.sb.from('config_regras').select('valor').eq('chave', 'reforco_sinais').maybeSingle().then(({ data }) => {
+    const m = data && data.valor && data.valor.motivos_agora_nao;
+    if (Array.isArray(m) && m.length) motivosNao = m;
+  }, () => {});
+
+  const ha = (iso) => {
+    if (!iso) return '';
+    const min = Math.max(0, (Date.now() - new Date(iso)) / 60000);
+    if (min < 60) return `${Math.round(min)} min`;
+    if (min < 48 * 60) return `${Math.floor(min / 60)} h`;
+    return `${Math.floor(min / 1440)} d`;
+  };
+  const prazoDe = (t) => {
+    if (t.prazo_em) {
+      const min = (new Date(t.prazo_em) - Date.now()) / 60000;
+      if (min <= 0) return { txt: 'venceu', urg: true };
+      return { txt: min < 60 ? `${Math.round(min)} min` : min < 48 * 60 ? `${Math.floor(min / 60)} h` : `${Math.floor(min / 1440)} d`, urg: min <= 60 };
+    }
+    return t.urg >= 3 ? { txt: 'agora', urg: true } : t.urg === 2 ? { txt: 'hoje', urg: false } : { txt: '—', urg: false };
+  };
+  const fila = () => (D && D.fila) || [];
+  const temFicha = (t) => !!(t.venda_id || t.conversa_id);
+  const chaveFicha = (t) => (t.venda_id ? t.venda_id : `c:${t.conversa_id}`);
+  const cor = (tipo) => `var(--t-${tipo})`;
+  const reais = (v) => NG.fmtMoeda(Number(v) || 0).replace(/,00$/, '');
+  const subDe = (t) => [t.cidade, t.plano, t.situacao_nome || t.etapa_nome].filter(Boolean).join(' · ') || '—';
+
+  // ---------- carga ----------
+  async function carregar(fresco = true) {
+    if (fresco) NG.limparCache();
+    NG.mudou('live2', 2 * 60000);
+    const { data, error } = await NG.sb.rpc('live2_fila');
+    if (error || !data) { corpo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'A fila não veio. Atualize a página.')}</div>`; return; }
+    D = data;
+    if (foco && !fila().some((t) => t.k === foco)) foco = null;
+    render();
+    if (NGFicha.modo === 'cheia' && NGFicha.aberta) NGFicha.redesenhar();
+    const novos = (D.reforco || []).filter((r) => !mostrados.has(`${r.conversa_id}|${r.sinal}`));
+    if (novos.length) {
+      novos.forEach((r) => mostrados.add(`${r.conversa_id}|${r.sinal}`));
+      NG.sb.rpc('reforco_mostrados', { p_itens: novos.map((r) => ({ conversa_id: r.conversa_id, sinal: r.sinal })) }).then(() => {}, () => {});
+    }
+  }
+  async function conferirCobertura() {
+    const { data, error } = await NG.sb.rpc('live2_cobertura_conferir');
+    if (error || !data || !D) return;
+    D.cobertura = data;
+    render();
+  }
+
+  // ---------- botões (a lista vem do banco) ----------
+  const btHtml = (a, i, onde, k, grande) => {
+    const cls = `btn${grande ? '' : ' btn-sm'}${a.principal && grande ? ' l2-go' : a.principal ? ' lv-go' : ''}${a.leve ? ' btn-ghost' : ''}`;
+    if (a.a === 'tel') return `<a class="${cls}" href="tel:+${esc(a.tel)}" title="Abre o discador">📞 ${esc(a.rotulo)}</a>`;
+    return `<button type="button" class="${cls}" data-ac="${i}" data-onde="${onde}" data-k="${esc(k)}">${esc(a.rotulo)}</button>`;
+  };
+  const acoesHtml = (t, grande) => {
+    const acs = (t.acoes || []).map((a, i) => ({ a, i })).sort((x, y) => (y.a.principal ? 1 : 0) - (x.a.principal ? 1 : 0));
+    const fixos = `${t.pode_adiar ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-adiar="${esc(t.k)}" title="Em espera com data: a tarefa sai e volta sozinha no dia">Adiar</button>` : ''}`
+      + `${t.pode_sair ? `<button type="button" class="btn${grande ? '' : ' btn-sm'} btn-ghost" data-saida="${esc(t.k)}" title="Encerrar com motivo: sai da fila; se o cliente escrever de novo, volta">Saída</button>` : ''}`;
+    return acs.map(({ a, i }) => btHtml(a, i, 'fila', t.k, grande)).join('') + fixos;
+  };
+  async function perguntar(pede) {
+    if (pede.livre) {
+      const fd = await NG.modal(`<h3>${esc(pede.titulo)}</h3><label class="campo">Motivo<input type="text" name="v" maxlength="200"></label>`);
+      return fd ? String(fd.get('v') || '') : null;
+    }
+    const fd = await NG.modal(`<h3>${esc(pede.titulo)}</h3><label class="campo">Motivo<select name="v" required><option value="">Escolha…</option>${(pede.opcoes || []).map((o) => `<option>${esc(o)}</option>`).join('')}</select></label>`);
+    return fd ? String(fd.get('v') || '') : null;
+  }
+  async function agir(b) {
+    const lista = b.dataset.onde === 'sistema' ? (D.sistema || []) : fila();
+    const t = lista.find((x) => (b.dataset.onde === 'sistema' ? `${x.tipo}:${x.chave}` : x.k) === b.dataset.k);
+    const a = t && (t.acoes || [])[Number(b.dataset.ac)];
+    if (!a) return;
+    if (a.a === 'abrir') { if (!temFichaK(t)) return; if (a.etapa) NGFicha.etapaInicial = a.etapa; abrirChave(kFicha(t)); return; }
+    if (a.a === 'assumir') {
+      b.disabled = true;
+      const r = await NG.momento(t.venda_id || null, 'assumir', t.venda_id ? {} : { conversa_id: t.conversa_id });
+      if (!r) { b.disabled = false; return; }
+      abrirChave(chaveFicha(t));
+      await carregar();
+      return;
+    }
+    if (a.a !== 'rpc') return;
+    if (a.confirma && !window.confirm(a.confirma)) return;
+    const args = { ...(a.args || {}) };
+    if (a.pede) {
+      const v = await perguntar(a.pede);
+      if (v === null) return;
+      args[a.pede.arg] = v || null;
+    }
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc(a.fn, args);
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    NG.toast((data && data.resumo) || 'Feito', 'ok');
+    if (a.depois === 'abrir' && temFichaK(t)) abrirChave(kFicha(t));
+    await carregar();
+  }
+  const temFichaK = (t) => !!(t.venda_id || t.conversa_id || (t.k && !String(t.k).startsWith('p:') && t.k !== 'null'));
+  const kFicha = (t) => (t.venda_id ? t.venda_id : t.conversa_id ? `c:${t.conversa_id}` : t.k);
+
+  async function adiar(k) {
+    const t = fila().find((x) => x.k === k);
+    if (!t) return;
+    const d = (n) => NG.somaDias(NG.diaSP(), n);
+    const fd = await NG.modal(`<h3>Adiar: ${esc(t.nome)}</h3>
+      <p>A conversa fica <b>Em espera</b> até o dia escolhido e a tarefa sai da fila. No dia, ela volta sozinha.</p>
+      <label class="campo">Volta em<select name="q"><option value="${d(1)}">Amanhã</option><option value="${d(3)}">Em 3 dias</option><option value="${d(7)}">Em 7 dias</option><option value="">Outra data…</option></select></label>
+      <label class="campo" data-outra hidden>Data<input type="date" name="data" min="${d(1)}"></label>
+      <label class="campo">Motivo<input type="text" name="motivo" maxlength="80" required placeholder="Ex.: cliente pediu para falar na sexta"></label>`,
+    (dl) => {
+      const sel = dl.querySelector('[name=q]'); const box = dl.querySelector('[data-outra]'); const inp = dl.querySelector('[name=data]');
+      sel.addEventListener('change', () => { box.hidden = !!sel.value; inp.required = !sel.value; });
+    });
+    if (!fd) return;
+    const ate = String(fd.get('q') || fd.get('data') || '');
+    if (!ate) return;
+    const { data, error } = await NG.sb.rpc('backoffice_conversa_espera', { p_conversa: t.conversa_id, p_ate: ate, p_motivo: String(fd.get('motivo') || '') });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast((data && data.resumo) || 'Adiada', 'ok');
+    await carregar();
+  }
+  async function saida(k) {
+    const t = fila().find((x) => x.k === k);
+    if (!t) return;
+    if (t.venda_id) {   // a Saída de venda pergunta do pedido no portal: é o formulário da ficha
+      NG.toast('A Saída de uma venda é pela ficha: abra o cliente e use "Saída…".', 'ok');
+      abrirChave(chaveFicha(t));
+      return;
+    }
+    const lista = (await NG.saidaLista()).filter((x) => x.codigo !== 'nao_contatar' && !(NG.SAIDA_SO_VENDA || []).includes(x.codigo));
+    if (!lista.length) { NG.toast('A lista de motivos de saída não carregou. Tente de novo.', 'bad'); return; }
+    const fd = await NG.modal(`<h3>Saída: ${esc(t.nome)}</h3>
+      <p>Encerra com motivo e tira da fila. Se o cliente escrever de novo, ele volta.</p>
+      <label class="campo">Motivo<select name="motivo" required><option value="">Escolher…</option>${lista.map((x) => `<option value="${esc(x.codigo)}">${esc(x.nome)}</option>`).join('')}</select></label>
+      <label class="campo" data-sub hidden>Porquê<select name="sub"></select></label>
+      <label class="campo">Observação (opcional)<input type="text" name="obs" maxlength="200"></label>`,
+    (dl) => {
+      const sel = dl.querySelector('[name=motivo]'); const box = dl.querySelector('[data-sub]'); const sub = dl.querySelector('[name=sub]');
+      sel.addEventListener('change', () => {
+        const subs = (NG.SAIDA_SUBS || {})[sel.value] || [];
+        box.hidden = !subs.length;
+        sub.innerHTML = subs.length ? `<option value="">Escolher…</option>${subs.map((x) => `<option>${esc(x)}</option>`).join('')}` : '';
+        sub.required = sel.value === 'recusou';
+      });
+    });
+    if (!fd) return;
+    const { data, error } = await NG.sb.rpc('lead_sair', { p_conversa: t.conversa_id, p_venda: null, p_motivo: String(fd.get('motivo')), p_sub: String(fd.get('sub') || '') || null, p_volta: null, p_obs: String(fd.get('obs') || '') || null, p_cancelou_portal: null });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast((data && data.resumo) || 'Saída registrada', 'ok');
+    await carregar();
+  }
+
+  // ---------- reforço ----------
+  async function soprar(cid, b) {
+    const r = (D.reforco || []).find((x) => x.conversa_id === cid);
+    const txt = String((document.getElementById(`rf-txt-${cid}`) || {}).value || '').trim();
+    if (!r || !txt) { NG.toast('Escreva o que a Mari deve dizer.', 'bad'); return; }
+    b.disabled = true;
+    const { data, error } = await NG.sb.rpc('reforco_soprar', { p_conversa: cid, p_sinal: r.sinal, p_texto: txt });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); b.disabled = false; return; }
+    NG.toast((data && data.resumo) || 'Soprado: sai como fala da Mari', 'ok');
+    rfAberto = null;
+    await carregar();
+  }
+  async function assumirReforco(cid, b) {
+    const r = (D.reforco || []).find((x) => x.conversa_id === cid);
+    if (!r || !window.confirm(`Assumir a conversa de ${r.nome}? A Mari para de falar e o lead passa a ser seu.`)) return;
+    b.disabled = true;
+    const ok = await NG.momento(null, 'assumir', { conversa_id: cid });
+    if (!ok) { b.disabled = false; return; }
+    await NG.sb.rpc('reforco_registrar', { p_conversa: cid, p_sinal: r.sinal, p_modo: 'assumir', p_motivo: null });
+    abrirChave(`c:${cid}`);
+    await carregar();
+  }
+  async function agoraNao(cid, motivo) {
+    const r = (D.reforco || []).find((x) => x.conversa_id === cid);
+    if (!r) return;
+    const { error } = await NG.sb.rpc('reforco_registrar', { p_conversa: cid, p_sinal: r.sinal, p_modo: 'agora_nao', p_motivo: motivo });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    rfAberto = null;
+    await carregar();
+  }
+  const reforcoHtml = (r) => {
+    const cid = esc(r.conversa_id);
+    const sop = rfAberto === `soprar:${r.conversa_id}`;
+    const nao = rfAberto === `nao:${r.conversa_id}`;
+    return `<div class="l2-rf">
+      <div class="l2-rf-cab"><b>${esc(r.nome)}</b>${r.vale ? `<span class="l2-vale">vale ${esc(reais(r.vale))}</span>` : ''}<span class="l2-sub">${esc([r.cidade, r.plano].filter(Boolean).join(' · ') || '—')}</span></div>
+      <div class="l2-pills"><span class="l2-pill urg">${esc(SINAL[r.sinal] || r.sinal)}</span><span class="l2-pill">${esc(r.porque || '')}</span>${r.fala_em ? `<span class="l2-pill">cliente falou há ${esc(ha(r.fala_em))}</span>` : ''}</div>
+      ${r.fala ? `<div class="l2-fala">Cliente: “${esc(r.fala)}”</div>` : ''}
+      ${sop ? `<textarea id="rf-txt-${cid}" maxlength="1500" placeholder="O que a Mari deve dizer agora? Sai como fala dela, sem nome, e ela segue a conversa. Nunca desconto nem data de instalação."></textarea>
+        <div class="l2-acoes"><button type="button" class="btn btn-sm lv-go" data-rf-enviar="${cid}">Enviar pela Mari</button><button type="button" class="btn btn-sm btn-ghost" data-rf-x>Cancelar</button></div>`
+      : nao ? `<div class="l2-acoes"><span class="apagado">Por quê?</span>${motivosNao.map((m) => `<button type="button" class="btn btn-sm" data-rf-motivo="${cid}" data-m="${esc(m.codigo)}">${esc(m.nome)}</button>`).join('')}<button type="button" class="btn btn-sm btn-ghost" data-rf-x>×</button></div>`
+      : `<div class="l2-acoes"><button type="button" class="btn btn-sm lv-go" data-rf-soprar="${cid}" title="Você escreve, a Mari fala e segue a conversa">Soprar</button>
+          <button type="button" class="btn btn-sm" data-rf-assumir="${cid}" title="A conversa passa a ser sua: a Mari para de falar">Assumir</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-rf-ver="${cid}" title="Só olhar a conversa: nada muda">Ver a conversa</button>
+          <button type="button" class="btn btn-sm btn-ghost" data-rf-nao="${cid}" title="Tira do Reforço por 24 h, com o motivo">Agora não</button></div>`}
+    </div>`;
+  };
+
+  // ---------- desenho ----------
+  const comanda = (t, pos) => {
+    const pz = prazoDe(t);
+    return `<article class="l2-comanda" style="--c:${cor(t.tipo)}">
+      <div class="l2-topo"><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span><span class="l2-pill${pz.urg ? ' urg' : ''}">prazo: ${esc(pz.txt)}</span><span class="l2-senha">${pos} de ${fila().length}</span></div>
+      <div><div class="l2-quem"><h2>${esc(t.nome)}</h2><span class="l2-vale" title="${t.vale_estimado ? 'valor padrão: o cliente ainda não escolheu o plano' : 'comissão prevista'}">vale ${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span></div><div class="l2-sub">${esc(subDe(t))}${t.dono ? ` · com ${esc(t.dono)}` : ''}</div></div>
+      <div class="l2-fazer">${esc(t.oque || '')}</div>
+      ${t.ultima_fala ? `<div class="l2-fala">Cliente, há ${esc(ha(t.ultima_fala_em))}: “${esc(t.ultima_fala)}”</div>` : ''}
+      <div class="l2-pills">${(t.motivos || []).map((m) => `<span class="l2-pill">${esc(m)}</span>`).join('')}${t.desde ? `<span class="l2-pill">desde há ${esc(ha(t.desde))}</span>` : ''}
+        <span class="l2-pill pts" title="vale × etapa × urgência — os pesos ficam em Configurações (live2_pesos)">${esc(reais(t.vale))} × ${esc(String(t.pe))} × ${esc(String(t.pu))} = ${esc(Number(t.pontos).toLocaleString('pt-BR'))} pontos</span></div>
+      <div class="l2-acoes">${acoesHtml(t, true)}</div>
+    </article>`;
+  };
+  const contaHtml = () => {
+    const c = D.conta || {};
+    const cob = D.cobertura || {};
+    const furos = cob.furos || [];
+    const semLugar = Number(c.sem_lugar) || 0;
+    const selo = furos.length ? `<div class="l2-selo bad">${furos.length} cliente${furos.length > 1 ? 's' : ''} esperando resposta fora da fila: ${esc(furos.slice(0, 3).map((f) => f.nome).join(', '))}</div>`
+      : cob.rodada_em ? `<div class="l2-selo">Conferido com a Conversas há ${esc(ha(cob.rodada_em))}: nenhum cliente esperando resposta fora desta fila.</div>`
+        : '<div class="l2-selo warn">Conferindo com a tela Conversas…</div>';
+    return `<h3>A conta fecha</h3><div class="l2-conta">
+      <b>${esc(String(c.na_fila ?? 0))}</b><span>na sua fila${Number(c.em_jogo) ? ` · ${esc(reais(c.em_jogo))} em jogo` : ''}</span>
+      <b>${esc(String(c.com_mari ?? 0))}</b><span>com a Mari</span>
+      <b>${esc(String(c.esperando_cliente ?? 0))}</b><span>esperando o cliente</span>
+      <b>${esc(String(c.esperando_nio ?? 0))}</b><span>esperando a Nio</span>
+      <b class="tot">${esc(String(c.vivos ?? 0))}</b><span class="tot">leads vivos · <b style="font-size:14px">${semLugar}</b> sem lugar</span></div>
+      ${Number(c.tarefas_de_encerrados) ? `<div class="l2-sub">+ ${esc(String(c.tarefas_de_encerrados))} tarefa(s) de lead já encerrado ou instalado (documentos, cancelar na Nio, volta marcada).</div>` : ''}
+      ${semLugar ? `<div class="l2-selo bad">${semLugar} lead(s) sem lugar: ${esc((D.radar.sem_lugar || []).map((x) => x.nome).join(', '))}</div>` : ''}${selo}`;
+  };
+  function alertasHtml() {
+    const furos = (D.cobertura && D.cobertura.furos) || [];
+    const sis = D.sistema || [];
+    return `${furos.length ? `<div class="l2-furo" role="alert"><b>Furo de cobertura:</b> ${furos.map((f) => `<button type="button" class="btn btn-sm" data-abrir="c:${esc(f.conversa_id)}">${esc(f.nome)} · esperando há ${esc(ha(f.desde))}</button>`).join('')}<span>cliente esperando resposta e fora da fila. Abra e responda.</span></div>` : ''}
+      ${sis.length ? `<details class="l2-sis"><summary>Saúde do sistema · ${sis.length} aviso${sis.length > 1 ? 's' : ''} (não é tarefa de cliente)</summary>${sis.map((s) => `<div class="l2-sis-it"><span><b>${esc(s.nome || '')}</b> — ${esc(s.texto || '')}</span>${(s.acoes || []).map((a, i) => btHtml(a, i, 'sistema', `${s.tipo}:${s.chave}`, false)).join('')}</div>`).join('')}</details>` : ''}`;
+  }
+  function vistaVez() {
+    const f = fila();
+    const i = Math.max(0, foco ? f.findIndex((t) => t.k === foco) : 0);
+    const t = f[i];
+    const prox = f.filter((x, n) => n !== i).slice(0, 5);
+    const rf = D.reforco || [];
+    return `<div class="l2-grade"><div>${t ? comanda(t, i + 1)
+      : '<article class="l2-comanda l2-limpa"><h2 style="margin:0 0 6px">Fila limpa ✅</h2><div class="apagado">Nenhuma tarefa sua agora. A conta ao lado mostra onde está cada lead; quando algo precisar de você, a comanda aparece aqui.</div></article>'}</div>
+      <aside class="l2-lado">
+        <div class="l2-caixa"><h3>A seguir</h3>${prox.map((x) => `<button type="button" class="l2-prox" style="--c:${cor(x.tipo)}" data-foco="${esc(x.k)}"><span class="n">${f.indexOf(x) + 1}</span><b>${esc(x.nome)}</b><span class="t">${esc(TIPO[x.tipo] || x.tipo)}</span><small>${esc(x.oque || '')} · ${esc(reais(x.vale))}</small></button>`).join('') || '<div class="l2-sub">Nada na espera.</div>'}</div>
+        <div class="l2-caixa">${contaHtml()}</div>
+        ${rf.length ? `<div class="l2-caixa"><h3>Reforço · ${rf.length}</h3><div class="l2-sub">Conversas da Mari em que vale você entrar agora. Não conta como pendência.</div>${rf.slice(0, 3).map((r) => `<button type="button" class="l2-rd" data-vista="reforco"><b>${esc(r.nome)}</b><span class="apagado">${esc(SINAL[r.sinal] || r.sinal)}</span><small>há ${esc(ha(r.fala_em))}</small></button>`).join('')}</div>` : ''}
+      </aside></div>`;
+  }
+  function vistaFila() {
+    const f = fila();
+    if (!f.length) return '<div class="l2-comanda l2-limpa"><h2 style="margin:0">Fila limpa ✅</h2></div>';
+    return `<div class="l2-tabela">${f.map((t, i) => {
+      const pz = prazoDe(t);
+      return `<div class="l2-linha" style="--c:${cor(t.tipo)}"><span class="n">${i + 1}</span><span><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span></span>
+        <div><b>${esc(t.nome)}</b> <span class="l2-vale">${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span><small>${esc(subDe(t))}</small></div>
+        <div class="oq">${esc(t.oque || '')}${(t.motivos || []).length ? `<small>${esc(t.motivos.join(' · '))}</small>` : ''}</div>
+        <span><span class="l2-pill${pz.urg ? ' urg' : ''}">${esc(pz.txt)}</span></span>
+        <div class="l2-acoes">${acoesHtml(t, false)}</div></div>`;
+    }).join('')}</div><div class="l2-sub">* valor padrão: o cliente ainda não escolheu o plano. A ordem é vale × etapa × urgência, calculada no banco.</div>`;
+  }
+  function vistaReforco() {
+    const rf = D.reforco || [];
+    return `<div class="l2-sub" style="max-width:76ch">Conversas que a Mari está atendendo e em que vale um gerente entrar agora. <b>Soprar</b>: você escreve, a Mari fala e segue. <b>Assumir</b>: a conversa passa a ser sua. Nada daqui conta no "faltam", e cada reforço fica registrado com o desfecho (aba 7 dias).</div>
+      ${rf.length ? rf.map(reforcoHtml).join('') : '<div class="vazio-curto">Nenhuma conversa pedindo reforço agora.</div>'}`;
+  }
+  const rdLinha = (x) => `<button type="button" class="l2-rd" data-abrir="${esc(x.k)}"><b>${esc(x.nome || 'Contato')}</b><span class="apagado">${esc([x.cidade, x.etapa_nome].filter(Boolean).join(' · '))}</span><small>${x.desde ? `há ${esc(ha(x.desde))}` : ''}</small></button>`;
+  function vistaRadar() {
+    const r = D.radar || {};
+    const bloco = (tit, dica, l) => `<div class="l2-caixa"><h3>${tit} · ${(l || []).length}</h3><div class="l2-sub">${dica}</div>${(l || []).slice(0, 40).map(rdLinha).join('') || '<div class="l2-sub">—</div>'}</div>`;
+    return `<div class="l2-sub" style="max-width:76ch">O que não pede ninguém do time agora. Dá para olhar, mas nada daqui é pendência: vira tarefa sozinho se precisar de você.</div>
+      <div class="l2-cols">${bloco('Com a Mari', 'Ela está atendendo ou cutucando na cadência.', r.com_mari)}
+      ${bloco('Esperando o cliente', 'O time já respondeu. Se o prazo vencer, vira tarefa Decidir.', r.esperando_cliente)}
+      ${bloco('Esperando a Nio', 'Venda andando. Se a Nio mudar algo, vira tarefa Pendência Nio.', r.esperando_nio)}
+      <div class="l2-caixa"><h3>🔥 Oportunidades · ${ops ? ops.length : '…'}</h3><div class="l2-sub">As regras automáticas de volume ficam aqui, fora da fila (em 36 envios não deram venda). Enviar e dispensar continuam na Live atual.</div>
+        ${(ops || []).slice(0, 30).map((o) => `<button type="button" class="l2-rd" data-abrir="c:${esc(o.conversa_id)}"><b>${esc(o.nome || 'Contato')}</b><span class="apagado">${esc(String(o.motivo || '').split(' · ')[0])}</span><small>${o.parado_desde ? `há ${esc(ha(o.parado_desde))}` : ''}</small></button>`).join('')}</div></div>`;
+  }
+  function vistaMedicao() {
+    if (!medicao) return '<div class="vazio-curto">Carregando a medição…</div>';
+    const m = medicao; const b = m.base || {}; const t = m.total || {};
+    const rf = m.reforco || [];
+    return `<div class="l2-caixa"><h3>Régua dos 7 dias</h3>
+        <div>Cliente esperando mais de 30 min por uma pessoa, no horário (9h–21h): <b>${t.pct_acima_30 == null ? '—' : `${esc(String(t.pct_acima_30).replace('.', ','))} %`}</b> das ${esc(String(t.respostas || 0))} respostas dos últimos 14 dias
+          (${esc(String(t.acima_30 || 0))} acima de 30 min, ${esc(String(t.acima_30_avancado || 0))} delas em lead que já viu os planos). Antes da 2.0, de ${esc(b.periodo || '')}: <b>${esc(String(b.pct_acima_30))} %</b> (${esc(String(b.acima_30))} de ${esc(String(b.respostas))}).</div>
+        <div class="l2-sub">A etapa é a de hoje do lead, não a do momento da espera. Serve para comparar períodos.</div></div>
+      <div class="l2-caixa" style="overflow-x:auto"><h3>Por dia</h3><table class="l2-med"><thead><tr><th>Dia</th><th>Respostas de pessoa</th><th>Mediana (min)</th><th>&gt; 30 min</th><th>&gt; 2 h</th><th>Furos</th><th>Abriu Live</th><th>Abriu Live 2.0</th><th>Abriu Conversas</th></tr></thead><tbody>
+        ${(m.dias || []).slice().reverse().map((d) => `<tr><td>${esc(NG.fmtData(d.dia))}</td><td>${d.respostas}</td><td>${d.mediana_min == null ? '—' : String(d.mediana_min).replace('.', ',')}</td><td>${d.acima_30}</td><td>${d.acima_2h}</td><td>${d.furos}</td><td>${d.abriu_live}</td><td>${d.abriu_live2}</td><td>${d.abriu_conversas}</td></tr>`).join('')}</tbody></table></div>
+      <div class="l2-caixa" style="overflow-x:auto"><h3>Reforço: o que foi feito e no que deu</h3>
+        ${rf.length ? `<table class="l2-med"><thead><tr><th>Sinal</th><th>O que foi feito</th><th>Casos</th><th>Respondeu em 24 h</th><th>Virou venda</th><th>Com pedido</th><th>Saiu</th></tr></thead><tbody>
+          ${rf.map((x) => `<tr><td>${esc(SINAL[x.sinal] || x.sinal)}</td><td style="text-align:left">${esc({ so_mostrado: 'Só apareceu', soprar: 'Soprou', assumir: 'Assumiu', agora_nao: 'Agora não' }[x.modo] || x.modo)}</td><td>${x.n}</td><td>${x.respondeu_24h}</td><td>${x.virou_venda}</td><td>${x.com_pedido}</td><td>${x.saiu}</td></tr>`).join('')}</tbody></table>
+          <div class="l2-sub">"Só apareceu" é o grupo de comparação. Com poucos casos, leia como fato, não como causa.</div>` : '<div class="l2-sub">Nenhum reforço registrado ainda.</div>'}</div>`;
+  }
+  function render() {
+    if (!D) return;
+    const f = fila();
+    const c = D.conta || {};
+    document.getElementById('placar').innerHTML = `${esc(String(D.feitos || 0))} ${D.feitos === 1 ? 'feita' : 'feitas'} hoje · <b>${f.length ? `faltam ${f.length}` : 'Fila limpa ✅'}</b>`;
+    document.getElementById('alertas').innerHTML = alertasHtml();
+    const tab = (id, nome, n) => `<button type="button" class="l2-tab" role="tab" data-vista="${id}" aria-selected="${vista === id}">${nome}${n == null ? '' : `<b>${n}</b>`}</button>`;
+    document.getElementById('tabs').innerHTML = tab('vez', 'Tarefa da vez') + tab('fila', 'Fila inteira', f.length) + tab('reforco', 'Reforço', (D.reforco || []).length)
+      + tab('radar', 'Radar', (Number(c.com_mari) || 0) + (Number(c.esperando_cliente) || 0) + (Number(c.esperando_nio) || 0)) + tab('medicao', '7 dias');
+    const rol = corpo.scrollTop;
+    const txt = document.activeElement && document.activeElement.tagName === 'TEXTAREA' ? { id: document.activeElement.id, v: document.activeElement.value } : null;
+    corpo.innerHTML = vista === 'fila' ? vistaFila() : vista === 'reforco' ? vistaReforco() : vista === 'radar' ? vistaRadar() : vista === 'medicao' ? vistaMedicao() : vistaVez();
+    corpo.scrollTop = rol;
+    if (txt && txt.id) { const el = document.getElementById(txt.id); if (el) { el.value = txt.v; el.focus(); } }
+    sincCliente();
+  }
+  async function trocarVista(v) {
+    vista = v; rfAberto = null;
+    ls.gravar('niogen.live2.vista', v);
+    render();
+    if (v === 'medicao') { const { data } = await NG.sb.rpc('live2_medicao', { p_dias: 14 }); medicao = data || { dias: [], total: {}, base: {}, reforco: [] }; render(); }
+    if (v === 'radar' && !ops) { const { data } = await NG.sb.rpc('oportunidades_abertas'); ops = Array.isArray(data) ? data : (data && data.lista) || []; render(); }
+  }
+
+  // ---------- cliente em tela cheia (a mesma ficha da Live) ----------
+  const comFicha = () => fila().filter(temFicha);
+  const posicao = () => {
+    const l = comFicha();
+    const i = l.findIndex((t) => chaveFicha(t) === NGFicha.atual);
+    return { i: i + 1, n: l.length, prev: i > 0 ? l[i - 1] : null, next: i >= 0 ? l[i + 1] || null : l[0] || null };
+  };
+  function abrirChave(k) {
+    if (!k) return;
+    if (String(k).startsWith('c:')) NGFicha.abrirConversa(k.slice(2)); else NGFicha.abrir(k);
+    setTimeout(sincCliente, 0);
+  }
+  NGFicha.cheia(clienteEl, {
+    posicao,
+    aoNavegar(dir) { const p = posicao(); const alvo = dir < 0 ? p.prev : p.next; if (alvo) abrirChave(chaveFicha(alvo)); },
+    aoConcluir() {
+      const k = NGFicha.atual;
+      const prox = comFicha().find((t) => chaveFicha(t) !== k);
+      if (prox) { abrirChave(chaveFicha(prox)); NG.toast(`Próximo: ${NG.primeiroNome(prox.nome || 'Contato')}`, 'ok'); } else { NGFicha.fecharCheia(); NG.toast('Fila limpa ✅', 'ok'); }
+    },
+  });
+  const modoFicha = () => { if (!movel.matches) NGFicha.usarCheia(); else NGFicha.usarGaveta(); };
+  function sincCliente() {
+    const aberto = NGFicha.modo === 'cheia' && NGFicha.aberta;
+    clienteEl.classList.toggle('open', aberto);
+    clienteEl.setAttribute('aria-hidden', String(!aberto));
+    filaEl.classList.toggle('away', aberto);
+    filaEl.setAttribute('aria-hidden', String(aberto));
+    document.body.classList.toggle('lv-com-cliente', aberto);
+  }
+  NGFicha.aoFechar(() => { setTimeout(() => { render(); carregar(false); }, 0); });
+  NGFicha.aoMudar(() => { carregar(); });
+
+  // ---------- cliques ----------
+  filaEl.addEventListener('click', (ev) => {
+    const q = (s) => ev.target.closest(s);
+    let b;
+    if ((b = q('[data-vista]'))) { trocarVista(b.dataset.vista); return; }
+    if ((b = q('[data-ac]'))) { agir(b); return; }
+    if ((b = q('[data-adiar]'))) { adiar(b.dataset.adiar); return; }
+    if ((b = q('[data-saida]'))) { saida(b.dataset.saida); return; }
+    if ((b = q('[data-foco]'))) { foco = b.dataset.foco; render(); corpo.scrollTop = 0; return; }
+    if ((b = q('[data-abrir]'))) { abrirChave(b.dataset.abrir); return; }
+    if ((b = q('[data-rf-soprar]'))) { rfAberto = `soprar:${b.dataset.rfSoprar}`; render(); const el = document.getElementById(`rf-txt-${b.dataset.rfSoprar}`); if (el) el.focus(); return; }
+    if ((b = q('[data-rf-enviar]'))) { soprar(b.dataset.rfEnviar, b); return; }
+    if ((b = q('[data-rf-assumir]'))) { assumirReforco(b.dataset.rfAssumir, b); return; }
+    if ((b = q('[data-rf-ver]'))) { abrirChave(`c:${b.dataset.rfVer}`); return; }
+    if ((b = q('[data-rf-nao]'))) { rfAberto = `nao:${b.dataset.rfNao}`; render(); return; }
+    if ((b = q('[data-rf-motivo]'))) { b.disabled = true; agoraNao(b.dataset.rfMotivo, b.dataset.m); return; }
+    if (q('[data-rf-x]')) { rfAberto = null; render(); }
+  });
+  movel.addEventListener('change', () => { modoFicha(); render(); });
+  window.addEventListener('hashchange', () => setTimeout(sincCliente, 0));
+  window.addEventListener('popstate', () => setTimeout(sincCliente, 0));
+
+  NG.botaoAtualizar(() => carregar());
+  modoFicha();
+  NGFicha.iniciar();
+  sincCliente();
+  await carregar(false);
+  conferirCobertura();
+  // a cada minuto: refaz a fila se o banco mudou (ou a cada 2 min, pelos prazos); a cada 5 min: confere a cobertura.
+  // Com a caixa de Soprar aberta a lista não é redesenhada por baixo do texto (o render guarda o que foi digitado).
+  let tiques = 0;
+  setInterval(async () => {
+    if (document.visibilityState !== 'visible') return;
+    tiques += 1;
+    if (await NG.mudou('live2', 2 * 60000)) { await carregar(false); if (NGFicha.atual) NGFicha.recarregar({ quieto: true }); }
+    if (tiques % 5 === 0) conferirCobertura();
+  }, 60000);
+  document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && await NG.mudou('live2', 2 * 60000)) carregar(false); });
+})();
+</script>
+</body>
+</html>

@@ -31,6 +31,8 @@
   const MENU = [
     ['Atendimento', [
       { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
+      // 25/11 (0390–0392, Ricardo: "7 dias lado a lado"): a Live 2.0 fica ao lado da Live atual até a decisão dos 7 dias.
+      { id: 'live2', ico: '', nome: 'Live 2.0', vivo: true, href: 'live2.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
     ]],
@@ -94,6 +96,10 @@
     if (!nav) return;
     const pagina = nav.dataset.pagina;
     const u = NG.usuario || {};
+    // 25/11 (0392): conta a abertura das três telas da comparação dos 7 dias (Live · Live 2.0 · Conversas). Sem esperar a resposta.
+    if (['minhavez', 'live2', 'conversas'].includes(pagina) && ['admin', 'backoffice'].includes(u.perfil)) {
+      try { NG.sb.rpc('tela_abriu', { p_tela: pagina }).then(() => {}, () => {}); } catch (e) { /* medição não derruba o menu */ }
+    }
     nav.setAttribute('aria-label', 'Menu principal');
     nav.innerHTML = `
       <div class="nav-brand">
