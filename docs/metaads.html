@@ -29,6 +29,13 @@
        chave e indicador; o banco guarda "aberto desde" e o "marcar como tratado" (admin/backoffice): some por 48 h e volta se o
        indicador não melhorou. Aba Google: aviso "Cliques que não viraram conversa" (≥ 10 cliques e < 30 %, em config; abaixo
        disso, "amostra pequena") e a parcela de impressões dita sobre as buscas em que a campanha PODERIA aparecer.
+     26/11 (Ricardo: "na primeira tela, sem rolagem, abrem os gráficos, tipo um dashboard e mais abaixo os demais dados" — vale
+       para a tela dele e a da agência): os gráficos saíram da gaveta e viraram o PAINEL do topo — funil do período, gasto por dia
+       (novo), custo por conversa, CAC, CPM, CTR e retorno à Meta —, que no computador ocupa o resto da primeira tela. Abaixo, na
+       ordem: Precisa de ação (ou Referências, na agência), a tabela por anúncio e as seções já ABERTAS (Dia a dia · Para onde vai
+       a verba · Atendimento · Por que saíram · O que a Meta recebeu); só Bairros segue recolhida. A faixa ganhou o atalho "Precisa
+       de ação · N ↓". Chamadas: +1 na abertura (meta_ads_graficos, em paralelo); Atendimento e Por que saíram só quando a rolagem
+       chega perto. Nenhum número, função ou regra de acesso mudou.
      Dados, numa rodada só (regra 19): meta_ads_diario, meta_ads_anuncios, meta_ads_dia(), config_meta_ads_regras,
      meta_ads_conta_saldo (menos a agência), v_meta_ads_posicionamento_7d, meta_ads_posicionamento_diario, meta_ads_conjuntos
      e meta_ads_resultado(). Bairros (v_dfv_bairros) e motivos de saída só quando a gaveta abre. -->
@@ -123,14 +130,32 @@
   .ma-aba { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
   .ma-aba[hidden] { display: none; }
   /* 0406: gráficos e atendimento */
-  .ma-graf { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
-  .ma-graf .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); min-width: 0; }
-  .ma-graf .card h3 { font-size: 12px; font-weight: 600; margin: 0 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-  .ma-graf .card .tot { font-family: var(--mono); font-size: 18px; font-weight: 600; }
-  .ma-graf .card .tot small { font-family: var(--sans); font-size: 11.5px; font-weight: 400; color: var(--muted); margin-left: 6px; }
-  .ma-graf svg { display: block; width: 100%; height: auto; margin-top: 6px; }
-  .ma-graf svg text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
-  .ma-graf svg text.forte { fill: var(--text); font-weight: 600; }
+  /* 26/11: o painel do topo. No computador ocupa o que sobra da primeira tela (a altura vem de ajustarPainel) e cada gráfico é
+     desenhado no tamanho real do seu quadro; abaixo de 1100 px vira coluna, com altura natural. */
+  .ma-painel { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 430px; }
+  .ma-painel[hidden] { display: none; }
+  .ma-painel > .ma-nada { grid-column: 1 / -1; grid-row: 1 / -1; display: flex; align-items: center; justify-content: center; }
+  .ma-painel .card { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; background: var(--surface); min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  .ma-painel .card.funil { grid-row: 1 / span 2; }
+  .ma-painel .card h3 { font-size: 12px; font-weight: 600; margin: 0 0 2px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .ma-painel .card .tot { font-family: var(--mono); font-size: 18px; font-weight: 600; }
+  .ma-painel .card .tot small { font-family: var(--sans); font-size: 11.5px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .ma-painel .plot { position: relative; flex: 1 1 0; min-height: 80px; margin-top: 6px; }
+  .ma-painel .plot svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .ma-painel svg text { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+  .ma-painel svg text.forte { fill: var(--text); font-weight: 600; }
+  .ma-painel .ma-funil { flex: 1 1 0; align-content: space-evenly; margin-top: 4px; }
+  .ma-painel .ma-funil { grid-template-columns: max-content minmax(40px, 1fr) auto; }
+  .ma-painel .ma-funil .n small { display: block; margin-left: 0; font-size: 11px; }
+  .ma-painel .ma-leg { flex: 0 0 auto; }
+  .ma-pt { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok-fg); margin: 0 3px 0 2px; }
+  @media (max-width: 1100px) {
+    .ma-painel { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; min-height: 0; }
+    .ma-painel .card.funil { grid-row: auto; grid-column: 1 / -1; }
+    .ma-painel .plot { flex: none; height: 130px; }
+    .ma-painel .ma-funil { flex: none; }
+  }
+  @media (max-width: 760px) { .ma-painel { grid-template-columns: minmax(0, 1fr); } }
   .ma-funil { display: grid; grid-template-columns: minmax(120px, max-content) 1fr auto; gap: 5px 10px; align-items: center; font-size: 12.5px; }
   .ma-funil .barra { height: 10px; background: var(--surface-2); border-radius: 5px; overflow: hidden; }
   .ma-funil .barra i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
@@ -196,6 +221,10 @@
     <div id="aba-meta" class="ma-aba">
     <section class="faixa-fina" id="faixa" aria-label="Resumo do período"><div><span>Carregando…</span></div></section>
 
+    <!-- 26/11 (Ricardo: "na primeira tela, sem rolagem, abrem os gráficos, tipo um dashboard e mais abaixo os demais dados") -->
+    <section class="ma-painel" id="painel" aria-label="Painel do período"><div class="ma-nada">Carregando os gráficos…</div></section>
+    <p class="ma-nota" id="nota-painel" style="margin:0" hidden></p>
+
     <section class="ma-acoes" aria-labelledby="t-acoes">
       <h2 id="t-acoes">Precisa de ação</h2>
       <div id="acoes" class="ma-acoes"><div class="ma-nada">Carregando…</div></div>
@@ -221,12 +250,11 @@
     </section>
 
     <section class="ma-gavetas" aria-label="Mais detalhes">
-      <details class="gaveta" id="g-dias"><summary><b>Dia a dia</b><span id="r-dias">…</span></summary><div class="ma-rol" id="c-dias"></div></details>
-      <details class="gaveta" id="g-graf"><summary><b>Gráficos do período</b><span id="r-graf">funil, CPM, CTR, custo por conversa, CAC e o retorno à Meta</span></summary><div id="c-graf"></div></details>
-      <details class="gaveta" id="g-atend"><summary><b>Atendimento dos leads</b><span id="r-atend">se cada lead de anúncio foi respondido, e em quanto tempo</span></summary><div class="ma-rol" id="c-atend"></div></details>
-      <details class="gaveta" id="g-motivos"><summary><b>Por que os leads saíram</b><span id="r-motivos">leads de anúncio que foram para Saída, por anúncio e por motivo</span></summary><div class="ma-rol" id="c-motivos"></div></details>
-      <details class="gaveta" id="g-posic"><summary><b>Para onde vai a verba</b><span id="r-posic">…</span></summary><div id="c-posic"></div></details>
-      <details class="gaveta" id="g-capi"><summary><b>O que a Meta recebeu de volta</b><span id="r-capi">…</span></summary><div id="c-capi"></div></details>
+      <details class="gaveta" id="g-dias" open><summary><b>Dia a dia</b><span id="r-dias">…</span></summary><div class="ma-rol" id="c-dias"></div></details>
+      <details class="gaveta" id="g-posic" open><summary><b>Para onde vai a verba</b><span id="r-posic">…</span></summary><div id="c-posic"></div></details>
+      <details class="gaveta" id="g-atend" open><summary><b>Atendimento dos leads</b><span id="r-atend">se cada lead de anúncio foi respondido, e em quanto tempo</span></summary><div class="ma-rol" id="c-atend"></div></details>
+      <details class="gaveta" id="g-motivos" open><summary><b>Por que os leads saíram</b><span id="r-motivos">leads de anúncio que foram para Saída, por anúncio e por motivo</span></summary><div class="ma-rol" id="c-motivos"></div></details>
+      <details class="gaveta" id="g-capi" open><summary><b>O que a Meta recebeu de volta</b><span id="r-capi">…</span></summary><div id="c-capi"></div></details>
       <details class="gaveta" id="g-bairros"><summary><b>Bairros prioritários</b><span id="r-bairros">a lista de bairros por pontuação e o conjunto para colar no Gerenciador</span></summary>
         <div class="vista">
           <div class="ma-b-topo"><span class="ma-nota" id="sub-bairros" style="margin:0">Carregando…</span>
@@ -329,7 +357,7 @@
   const soma = (l, k) => l.reduce((s, r) => s + Number(r[k] || 0), 0);
   const pl = (n, um, varios) => `${N(n)} ${Number(n) === 1 ? um : varios}`;
   const diaDe = (iso) => (iso ? NG.diaSP(iso) : '');
-  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { if (mCarregou) carregar(); motivosMudou(); grafMudou(); atendMudou(); if (gCarregou) carregarGoogle(); } });
+  const per = NG.filtroPeriodo(document.getElementById('f-periodo'), { padrao: '7', aoMudar: () => { if (mCarregou) { carregar(); carregarGraficos(); } motivosMudou(); atendMudou(); if (gCarregou) carregarGoogle(); } });
   let gCarregou = false, abaAtual = 'meta', gUltimo = null;   // 0369: aba do canal
   // 23/11 (regra 19): cada aba carrega só quando abre — a Google, aberta direto pelo card do Painel, não carrega mais a Meta escondida
   // (26 → menos chamadas). O config_meta_ads_regras é lido uma vez e serve às duas abas; o ↻ Atualizar lê de novo.
@@ -564,8 +592,12 @@
       agencia ? '' : saldoVelho ? `<div title="A coleta da Meta (a cada 15 min) não trouxe o saldo na última hora."><span>Saldo em aberto</span><b>—</b><small>sem leitura da Meta</small></div>`
         : `<div title="O que a Meta vai cobrar no cartão.${s.imposto_estimado != null ? ` Mais ${R(Number(s.imposto_estimado))} de imposto estimado.` : ''}"><span>Saldo em aberto</span><b class="${motivosSaldo.length ? 'warn' : ''}">${R(saldo)}</b><small>${esc(cobra)}</small></div>`,
       !capi ? '<div><span>Retorno à Meta</span><b>—</b><small>sem leitura</small></div>'
-        : `<div title="O que o NIOGEN devolve à Meta para ela aprender quem vira venda. Detalhe na gaveta “O que a Meta recebeu de volta”."><span>Retorno à Meta</span><b class="${capiRuim ? 'bad' : 'ok'}" style="font-family:var(--sans);font-size:13px">${capiRuim ? 'com problema' : 'em dia'}</b><small>${capiRuim ? 'veja em Precisa de ação' : 'sem erro de envio'}</small></div>`,
+        : `<div title="O que o NIOGEN devolve à Meta para ela aprender quem vira venda. Detalhe em “O que a Meta recebeu de volta”, mais abaixo."><span>Retorno à Meta</span><b class="${capiRuim ? 'bad' : 'ok'}" style="font-family:var(--sans);font-size:13px">${capiRuim ? 'com problema' : 'em dia'}</b><small>${capiRuim ? 'veja em Precisa de ação' : 'sem erro de envio'}</small></div>`,
+      // 26/11: com o painel no topo, os avisos ficaram abaixo da primeira tela — o atalho diz quantos são e leva até eles
+      agencia ? '' : '<div id="fx-acoes" title="Os avisos ficam logo abaixo do painel."></div>',
     ].filter(Boolean).join('');
+    pintarAtalho('meta_ads');
+    ajustarPainel();
     ultimo = [...tudo, ...ads].reduce((m, r) => (r.atualizado_em > m ? r.atualizado_em : m), '');
     pintarLido();
 
@@ -620,7 +652,8 @@
     document.getElementById('t-acoes').textContent = agencia ? 'Referências' : 'Precisa de ação';
     document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="8" class="vazio">${esc(msg)}</td></tr>`;
     document.getElementById('contagem-ads').textContent = ''; document.getElementById('ver-parados').innerHTML = '';
-    ['g-dias', 'g-graf', 'g-atend', 'g-motivos', 'g-posic', 'g-capi'].forEach((id) => { document.getElementById(id).hidden = true; });
+    ['painel', 'nota-painel', 'g-dias', 'g-atend', 'g-motivos', 'g-posic', 'g-capi'].forEach((id) => { document.getElementById(id).hidden = true; });
+    semCamp = true;
   }
   function pintarLido() {
     const el = document.getElementById('lido');
@@ -644,7 +677,8 @@
     document.getElementById('aba-google').hidden = abaAtual !== 'google';
     document.title = `${abaAtual === 'google' ? 'Google Ads' : 'Meta Ads'} · Canais · NIOGEN`;
     if (abaAtual === 'google' && !gCarregou) { gCarregou = true; carregarGoogle(); }
-    if (abaAtual === 'meta' && !mCarregou) { mCarregou = true; carregar(); }
+    if (abaAtual === 'meta' && !mCarregou) { mCarregou = true; carregar(); carregarGraficos(); }   // 26/11: o painel carrega junto, na mesma rodada
+    else if (abaAtual === 'meta') ajustarPainel();
     pintarLido();
   }
   document.getElementById('abas-canal').addEventListener('click', (ev) => {
@@ -680,6 +714,8 @@
     const vis = lista.filter((a) => !(est(a) && est(a).escondido));
     const esc2 = lista.filter((a) => est(a) && est(a).escondido);
     const n = vis.filter((a) => a.nivel !== 'resolvido').length;
+    avisosDe[canal].n = n; avisosDe[canal].agora = vis.some((a) => a.nivel === 'agora');
+    pintarAtalho(canal);
     document.getElementById(tituloId).textContent = n ? `Precisa de ação · ${n}` : 'Precisa de ação';
     document.getElementById(alvoId).innerHTML = (n ? '' : '<div class="ma-nada">Nada pedindo ação agora ✓</div>')
       + vis.map((a) => { const e = est(a);
@@ -690,6 +726,15 @@
       + (esc2.length ? `<div class="ma-tratados">${pl(esc2.length, 'aviso tratado fora da lista', 'avisos tratados fora da lista')}: ${esc2.map((a) => { const e = est(a);
           return `${esc(a.titulo)} <span class="apagado">(tratado em ${esc(quandoCurto(e.tratado_em))}${e.tratado_nota ? ` — ${esc(e.tratado_nota)}` : ''}; ${new Date(e.volta_em) > new Date() ? `volta em ${esc(quandoCurto(e.volta_em))} se não melhorar` : 'melhorou: volta se piorar'})</span>`; }).join(' · ')}</div>` : '');
   }
+  // 26/11: o atalho da faixa (só a Meta tem): quantos avisos há e o botão que rola até eles
+  function pintarAtalho(canal) {
+    const el = canal === 'meta_ads' ? document.getElementById('fx-acoes') : null, c = avisosDe[canal];
+    if (!el || !c) return;
+    el.innerHTML = `<span>Precisa de ação</span><b class="${c.n ? (c.agora ? 'bad' : 'warn') : 'ok'}">${c.n ? N(c.n) : '✓'}</b><small>${c.n ? '<button type="button" class="ma-ver" data-ir="t-acoes">ver abaixo ↓</button>' : 'nada agora'}</small>`;
+  }
+  document.getElementById('faixa').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-ir]'); if (b) document.getElementById(b.dataset.ir).scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
   async function sincronizarAvisos(canal, alvoId, tituloId, ac) {
     avisosDe[canal] = { alvoId, tituloId, ac, estado: null };
     pintarAvisos(canal);
@@ -877,22 +922,70 @@
       <tr><td><b>Total do período</b></td><td><b>${N(totLeads)}</b></td><td><b>${N(totSai)}</b></td>${cols.map((m) => `<td><b>${N(totCol(m))}</b></td>`).join('')}</tr></tbody></table>
       <p class="ma-nota">Leads de anúncio que chegaram no período e já foram para Saída, pelo motivo registrado. Fachada não atendida = a rua não tem rede · cidade não atendida = fora da área · sem resposta = parou de responder. Só contagem: nenhum dado de cliente. Quem ainda está em atendimento não entra em "Saíram".</p>`;
   }
-  function motivosMudou() { if (gMot.open) carregarMotivos(); else { motPeriodo = null; document.getElementById('r-motivos').textContent = R_MOT; } }
-  gMot.addEventListener('toggle', () => { if (gMot.open) carregarMotivos(); });
+  // 26/11: as seções de baixo já nascem abertas; as que têm chamada própria só carregam quando a rolagem chega perto delas
+  // (a primeira tela não paga por elas — regra 19). Devolve "está aberta e já foi vista?".
+  function preguica(det, carregarFn) {
+    let visto = false;
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { visto = true; io.disconnect(); if (det.open) carregarFn(); } }, { rootMargin: '250px' });
+    io.observe(det);
+    det.addEventListener('toggle', () => { if (det.open && visto) carregarFn(); });
+    return () => det.open && visto;
+  }
+  const motPronto = preguica(gMot, carregarMotivos);
+  function motivosMudou() { if (motPronto()) carregarMotivos(); else { motPeriodo = null; document.getElementById('r-motivos').textContent = R_MOT; } }
 
   // ───────────── Gráficos do período (0406, Ricardo 25/11) ─────────────
   // Uma chamada (meta_ads_graficos): mídia, conversas, vendas, instaladas e o retorno à Meta por dia × campanha. Carrega quando a
   // gaveta abre; mudou o período com ela aberta, recarrega. CAC = gasto ÷ vendas com OS (o mesmo "Custo por venda" da faixa).
-  const gGraf = document.getElementById('g-graf');
-  const R_GRAF = 'funil, CPM, CTR, custo por conversa, CAC e o retorno à Meta';
-  let grafPeriodo = null;
-  if (!['admin', 'backoffice', 'agencia'].includes(eu.perfil)) gGraf.hidden = true;
+  // 26/11 (Ricardo: "na primeira tela, sem rolagem, abrem os gráficos, tipo um dashboard"): saíram da gaveta e viraram o painel do
+  // topo — carregam junto com a tela (uma chamada a mais na mesma rodada) e cada gráfico é desenhado no tamanho do seu quadro.
+  const painel = document.getElementById('painel');
+  const painelOn = ['admin', 'backoffice', 'agencia'].includes(eu.perfil);
+  let grafPeriodo = null, grafPlots = null, semCamp = false;
+  if (!painelOn) painel.hidden = true;
+  function desenharPainel() {
+    if (!grafPlots) return;
+    painel.querySelectorAll('.plot[data-g]').forEach((el) => {
+      const W = Math.round(el.clientWidth), H = Math.round(el.clientHeight);
+      if (W >= 60 && H >= 50) el.innerHTML = grafPlots[el.dataset.g](W, H);
+    });
+  }
+  // No computador o painel ocupa o que sobra da primeira tela (entre 430 e 660 px); em tela estreita, altura natural.
+  function ajustarPainel() {
+    if (painel.hidden || document.getElementById('aba-meta').hidden) return;
+    if (window.innerWidth > 1100) {
+      const topo = painel.getBoundingClientRect().top + window.scrollY;
+      painel.style.height = `${Math.max(430, Math.min(660, window.innerHeight - topo - 14))}px`;
+    } else painel.style.height = '';
+    desenharPainel();
+  }
+  let tAjuste = 0;
+  window.addEventListener('resize', () => { clearTimeout(tAjuste); tAjuste = setTimeout(ajustarPainel, 150); });
   const DEGRAU = [['cidade', 'CEP em cidade atendida', 'var(--cor-neutro)'], ['viavel', 'Rua com rede', 'var(--cor-varejo)'],
     ['qualificada', 'Qualificada', 'var(--cor-empresas)'], ['venda', 'Venda (OS)', 'var(--ok-fg)']];
   const fmtDiaCurto = (d) => NG.fmtDiaISO(d).slice(0, 5);
   // linha simples de um indicador por dia (null = sem base naquele dia: a linha pula)
-  function svgLinha(dias, vals, fmt) {
-    const W = 300, H = 112, m = { t: 10, r: 8, b: 18, l: 8 };
+  // barras do gasto por dia; a bolinha verde marca o dia que teve venda com OS
+  function svgBarras(dias, L, W, H) {
+    const m = { t: 26, r: 8, b: 18, l: 8 };
+    const max = Math.max(...L.map((d) => d.gasto));
+    if (!(max > 0)) return '<div class="vazio-curto">Sem gasto no período.</div>';
+    const passo = (W - m.l - m.r) / dias.length, bw = Math.max(2, Math.min(30, passo - 3)), base = H - m.b, alt = base - m.t;
+    let g = `<line x1="${m.l}" x2="${W - m.r}" y1="${base}" y2="${base}" stroke="var(--border)"/>`;
+    const cx = (i) => m.l + passo * i + passo / 2;
+    L.forEach((d, i) => {
+      const h = (d.gasto / max) * alt, dica = `${fmtDiaCurto(dias[i])}: ${R(d.gasto)} · ${pl(d.convMeta, 'conversa', 'conversas')} · ${pl(d.vendas, 'venda com OS', 'vendas com OS')}`;
+      g += `<rect x="${(cx(i) - bw / 2).toFixed(1)}" y="${(base - h).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(h, 0.5).toFixed(1)}" rx="2" fill="var(--accent)"><title>${esc(dica)}</title></rect>`;
+      if (d.vendas) g += `<circle cx="${cx(i).toFixed(1)}" cy="${(base - h - 7).toFixed(1)}" r="3.5" fill="var(--ok-fg)"><title>${esc(dica)}</title></circle>`;
+    });
+    const iMax = L.findIndex((d) => d.gasto === max);
+    const ancora = cx(iMax) < 40 ? 'start' : cx(iMax) > W - 40 ? 'end' : 'middle';
+    g += `<text x="${cx(iMax).toFixed(1)}" y="${m.t - (L[iMax].vendas ? 15 : 5)}" text-anchor="${ancora}" class="forte">${esc(R(Math.round(max)))}</text>`;
+    g += `<text x="${m.l}" y="${H - 4}">${esc(fmtDiaCurto(dias[0]))}</text><text x="${W - m.r}" y="${H - 4}" text-anchor="end">${esc(fmtDiaCurto(dias[dias.length - 1]))}</text>`;
+    return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Gasto por dia">${g}</svg>`;
+  }
+  function svgLinha(dias, vals, fmt, W, H) {
+    const m = { t: 10, r: 8, b: 18, l: 8 };
     const ok = vals.filter((v) => v != null && Number.isFinite(v));
     if (!ok.length) return '<div class="vazio-curto">Sem base no período.</div>';
     const max = Math.max(...ok), min = Math.min(...ok), faixa = max - min || max || 1;
@@ -914,12 +1007,14 @@
     const p = per.valor();
     const chave = `${p.de || ''}|${p.ate || ''}`;
     if (grafPeriodo === chave) return;
+    if (!painelOn || semCamp) return;
     grafPeriodo = chave;
-    const alvo = document.getElementById('c-graf');
-    alvo.innerHTML = '<div class="vazio-curto">Carregando…</div>';
+    const alvo = painel, nota = document.getElementById('nota-painel');
+    const aviso = (txt) => { grafPlots = null; nota.hidden = true; alvo.innerHTML = `<div class="ma-nada">${esc(txt)}</div>`; };
+    if (!grafPlots) aviso('Carregando os gráficos…');   // na troca de período o painel antigo fica até o novo chegar (não pisca)
     const { data, error } = await NG.sb.rpc('meta_ads_graficos', { p_de: p.de || null, p_ate: p.ate || null, p_agencia: agencia });
     if (grafPeriodo !== chave) return;
-    if (error || !data) { grafPeriodo = null; alvo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'Sem leitura dos gráficos.')}</div>`; return; }
+    if (error || !data) { grafPeriodo = null; aviso(error ? NG.msgErro(error) : 'Sem leitura dos gráficos.'); return; }
     const porDia = new Map();
     const dDe = (dia) => { if (!porDia.has(dia)) porDia.set(dia, { gasto: 0, impr: 0, cliq: 0, convMeta: 0, conv: 0, cep: 0, qualif: 0, vendas: 0, inst: 0, capi: {}, erros: 0 }); return porDia.get(dia); };
     (data.midia || []).forEach((r) => { const d = dDe(r.dia); d.gasto += Number(r.gasto || 0); d.impr += r.impressoes || 0; d.cliq += r.cliques || 0; d.convMeta += r.conversas_meta || 0; });
@@ -930,15 +1025,14 @@
     const dias = [...porDia.keys()].sort();
     const L = dias.map((k) => porDia.get(k));
     const T = L.reduce((s, d) => { Object.keys(s).forEach((k) => { if (typeof s[k] === 'number') s[k] += d[k]; }); return s; }, { gasto: 0, impr: 0, cliq: 0, convMeta: 0, conv: 0, cep: 0, qualif: 0, vendas: 0, inst: 0, erros: 0 });
-    if (!dias.length) { document.getElementById('r-graf').textContent = `nada no período · ${per.rotulo.toLowerCase()}`; alvo.innerHTML = '<div class="vazio-curto">Nada no período.</div>'; return; }
+    if (!dias.length) { aviso(`Nada no período (${per.rotulo.toLowerCase()}).`); return; }
     const R2c = (v) => (v == null ? '—' : NG.fmtMoeda(Math.round(v * 100) / 100));
     const dec = (v, d) => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: d });   // NG.fmtNum arredonda para inteiro
     const pctTxt = (a, b) => (b > 0 ? `${dec((a / b) * 100, a / b < 0.1 ? 2 : 1)} %` : '—');
     const cpm = T.impr ? (T.gasto / T.impr) * 1000 : null, ctr = T.impr ? (T.cliq / T.impr) * 100 : null;
     const cpc = T.convMeta ? T.gasto / T.convMeta : null, cac = T.vendas ? T.gasto / T.vendas : null;
-    document.getElementById('r-graf').textContent = `CPM ${R2c(cpm)} · CTR ${ctr == null ? '—' : `${dec(ctr, 2)} %`} · CAC ${cac == null ? 'sem venda' : R(Math.round(cac))} · ${per.rotulo.toLowerCase()}`;
     // funil: duas escadas (a da mídia e a do atendimento), cada barra contra o primeiro degrau da sua escada
-    const degrau = (nome, v, base, ant, dica) => `<span title="${esc(dica)}">${esc(nome)}</span><span class="barra"><i style="width:${base > 0 ? Math.max(1.5, Math.min(100, (v / base) * 100)).toFixed(1) : 0}%"></i></span><span class="n">${N(v)}${ant != null ? `<small>${pctTxt(v, ant)} do passo anterior</small>` : ''}</span>`;
+    const degrau = (nome, v, base, ant, dica) => `<span title="${esc(dica)}">${esc(nome)}</span><span class="barra"><i style="width:${base > 0 ? Math.max(1.5, Math.min(100, (v / base) * 100)).toFixed(1) : 0}%"></i></span><span class="n">${N(v)}${ant != null ? `<small>${pctTxt(v, ant)} do anterior</small>` : ''}</span>`;
     const funil = `<div class="ma-funil">
         <span class="sep">Na Meta</span>
         ${degrau('Impressões', T.impr, T.impr, null, 'Vezes que o anúncio apareceu.')}
@@ -950,37 +1044,47 @@
         ${degrau('Qualificadas', T.qualif, T.conv, T.cep, 'A Mari passou ao time com os dados completos.')}
         ${degrau('Vendas (OS)', T.vendas, T.conv, T.qualif, 'OS gerada, pelo dia da OS.')}
         ${degrau('Instaladas', T.inst, T.conv, T.vendas, 'Instalação feita, pelo dia da instalação.')}
-      </div><p class="ma-nota">Vendas e instaladas contam pelo dia da OS e da instalação: uma venda do período pode ter vindo de conversa anterior.</p>`;
+      </div>`;
     // CAC acumulado: gasto acumulado ÷ vendas acumuladas (por dia é ruído: há dias sem venda)
     let gAc = 0, vAc = 0;
     const cacAc = L.map((d) => { gAc += d.gasto; vAc += d.vendas; return vAc ? gAc / vAc : null; });
-    const card = (tit, tot, sub, svg) => `<div class="card"><h3>${esc(tit)}</h3><div class="tot">${tot}<small>${esc(sub)}</small></div>${svg}</div>`;
-    const capiDias = dias.map((k, i) => ({ k, d: L[i] }));
-    const maxCapi = Math.max(1, ...capiDias.map(({ d }) => DEGRAU.reduce((s, [g]) => s + (d.capi[g] || 0), 0)));
+    const card = (tit, tot, sub, g) => `<div class="card"><h3>${esc(tit)}</h3><div class="tot">${tot}<small>${esc(sub)}</small></div><div class="plot" data-g="${g}"></div></div>`;
     const totCapi = DEGRAU.map(([g]) => L.reduce((s, d) => s + (d.capi[g] || 0), 0));
-    const W = 300, H = 112, bw = Math.max(2, Math.min(18, (W - 16) / dias.length - 3));
-    let gc = `<line x1="8" x2="${W - 8}" y1="${H - 18}" y2="${H - 18}" stroke="var(--border)"/>`;
-    capiDias.forEach(({ k, d }, i) => {
-      const cx = 8 + (dias.length === 1 ? (W - 16) / 2 : (i / (dias.length - 1)) * (W - 16 - bw)) ; let yb = H - 18;
-      DEGRAU.forEach(([g, nome, cor]) => { const v = d.capi[g] || 0; if (!v) return; const h = (v / maxCapi) * (H - 34); yb -= h;
-        gc += `<rect x="${cx.toFixed(1)}" y="${yb.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cor}"><title>${esc(fmtDiaCurto(k))} · ${esc(nome)}: ${N(v)}</title></rect>`; });
-      if (d.erros) gc += `<circle cx="${(cx + bw / 2).toFixed(1)}" cy="${(yb - 6).toFixed(1)}" r="3" fill="var(--bad-fg)"><title>${esc(fmtDiaCurto(k))}: ${pl(d.erros, 'erro de envio', 'erros de envio')}</title></circle>`;
-    });
-    gc += `<text x="8" y="${H - 4}">${esc(fmtDiaCurto(dias[0]))}</text><text x="${W - 8}" y="${H - 4}" text-anchor="end">${esc(fmtDiaCurto(dias[dias.length - 1]))}</text>`;
-    alvo.innerHTML = `<div class="ma-graf">
-        <div class="card" style="grid-column: 1 / -1"><h3>Funil do período</h3>${funil}</div>
-        ${card('CPM', R2c(cpm), 'por mil impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.gasto / d.impr) * 1000 : null)), R2c))}
-        ${card('CTR', ctr == null ? '—' : `${dec(ctr, 2)} %`, 'cliques ÷ impressões', svgLinha(dias, L.map((d) => (d.impr ? (d.cliq / d.impr) * 100 : null)), (v) => `${dec(v, 2)} %`))}
-        ${card('Custo por conversa', R2c(cpc), 'conversas contadas pela Meta', svgLinha(dias, L.map((d) => (d.convMeta ? d.gasto / d.convMeta : null)), R2c))}
-        ${card('CAC (custo por venda)', cac == null ? 'sem venda' : R(Math.round(cac)), 'gasto ÷ vendas com OS · linha acumulada', svgLinha(dias, cacAc, (v) => R(Math.round(v))))}
+    // retorno à Meta: barras empilhadas por dia (os quatro eventos), com a bolinha vermelha no dia que teve erro de envio
+    const svgCapi = (W, H) => {
+      const maxCapi = Math.max(1, ...L.map((d) => DEGRAU.reduce((s, [g]) => s + (d.capi[g] || 0), 0)));
+      const passo = (W - 16) / dias.length, bw = Math.max(2, Math.min(30, passo - 3)), base = H - 18;
+      let gc = `<line x1="8" x2="${W - 8}" y1="${base}" y2="${base}" stroke="var(--border)"/>`;
+      L.forEach((d, i) => {
+        const x0 = 8 + passo * i + (passo - bw) / 2; let yb = base;
+        DEGRAU.forEach(([g, nome, cor]) => { const v = d.capi[g] || 0; if (!v) return; const h = (v / maxCapi) * (base - 16); yb -= h;
+          gc += `<rect x="${x0.toFixed(1)}" y="${yb.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cor}"><title>${esc(fmtDiaCurto(dias[i]))} · ${esc(nome)}: ${N(v)}</title></rect>`; });
+        if (d.erros) gc += `<circle cx="${(x0 + bw / 2).toFixed(1)}" cy="${(yb - 6).toFixed(1)}" r="3" fill="var(--bad-fg)"><title>${esc(fmtDiaCurto(dias[i]))}: ${pl(d.erros, 'erro de envio', 'erros de envio')}</title></circle>`;
+      });
+      gc += `<text x="8" y="${H - 4}">${esc(fmtDiaCurto(dias[0]))}</text><text x="${W - 8}" y="${H - 4}" text-anchor="end">${esc(fmtDiaCurto(dias[dias.length - 1]))}</text>`;
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Eventos devolvidos à Meta por dia">${gc}</svg>`;
+    };
+    grafPlots = {
+      gasto: (W, H) => svgBarras(dias, L, W, H),
+      cpc: (W, H) => svgLinha(dias, L.map((d) => (d.convMeta ? d.gasto / d.convMeta : null)), R2c, W, H),
+      cac: (W, H) => svgLinha(dias, cacAc, (v) => R(Math.round(v)), W, H),
+      cpm: (W, H) => svgLinha(dias, L.map((d) => (d.impr ? (d.gasto / d.impr) * 1000 : null)), R2c, W, H),
+      ctr: (W, H) => svgLinha(dias, L.map((d) => (d.impr ? (d.cliq / d.impr) * 100 : null)), (v) => `${dec(v, 2)} %`, W, H),
+      capi: svgCapi,
+    };
+    alvo.innerHTML = `<div class="card funil"><h3 title="Vendas e instaladas contam pelo dia da OS e da instalação: uma venda do período pode ter vindo de conversa anterior.">Funil · ${esc(per.rotulo.toLowerCase())}</h3>${funil}</div>
+        <div class="card"><h3>Gasto por dia</h3><div class="tot">${R(T.gasto)}<small>${pl(T.convMeta, 'conversa', 'conversas')} · <i class="ma-pt"></i>dia com venda</small></div><div class="plot" data-g="gasto"></div></div>
+        ${card('Custo por conversa', R2c(cpc), 'conversas contadas pela Meta', 'cpc')}
+        ${card('CAC (custo por venda)', cac == null ? 'sem venda' : R(Math.round(cac)), 'gasto ÷ vendas com OS · acumulado', 'cac')}
+        ${card('CPM', R2c(cpm), 'por mil impressões', 'cpm')}
+        ${card('CTR', ctr == null ? '—' : `${dec(ctr, 2)} %`, 'cliques ÷ impressões', 'ctr')}
         <div class="card"><h3>Retorno à Meta</h3><div class="tot">${N(totCapi.reduce((s, v) => s + v, 0))}<small>eventos enviados${T.erros ? ` · ${pl(T.erros, 'erro', 'erros')}` : ' · nenhum erro'}</small></div>
-          <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Eventos devolvidos à Meta por dia">${gc}</svg>
-          <div class="ma-leg">${DEGRAU.map(([, nome, cor], i) => `<span><i style="background:${cor}"></i>${esc(nome)} ${N(totCapi[i])}</span>`).join('')}</div></div>
-      </div>
-      <p class="ma-nota">${agencia ? 'Só as campanhas liberadas para a agência. ' : 'Todas as campanhas da conta (as conversas sem anúncio identificado entram no atendimento). '}O retorno à Meta é o que o NIOGEN devolve para ela aprender quem vira venda: só o telefone embaralhado, nunca o número aberto.</p>`;
+          <div class="plot" data-g="capi"></div>
+          <div class="ma-leg">${DEGRAU.map(([, nome, cor], i) => `<span><i style="background:${cor}"></i>${esc(nome)} ${N(totCapi[i])}</span>`).join('')}</div></div>`;
+    nota.hidden = false;
+    nota.textContent = `${agencia ? 'Só as campanhas liberadas para a agência. ' : 'Todas as campanhas da conta (as conversas sem anúncio identificado entram no atendimento). '}O retorno à Meta é o que o NIOGEN devolve para ela aprender quem vira venda: só o telefone embaralhado, nunca o número aberto.`;
+    ajustarPainel();
   }
-  function grafMudou() { if (gGraf.open) carregarGraficos(); else { grafPeriodo = null; document.getElementById('r-graf').textContent = R_GRAF; } }
-  gGraf.addEventListener('toggle', () => { if (gGraf.open) carregarGraficos(); });
 
   // ───────────── Atendimento dos leads (0406, Ricardo 25/11: "uma prova de que não haverá falha no atendimento") ─────────────
   // Por anúncio: conversas que chegaram no período, respondidas, tempo da 1ª resposta, passadas ao consultor e paradas. Só números.
@@ -1019,8 +1123,8 @@
       ${(data.linhas || []).map((x) => linha(x)).join('')}${linha(t, true)}</tbody></table>
       <p class="ma-nota">A 1ª resposta é da Mari, na hora, dia e noite. O tempo do consultor só conta onde a mensagem dele ficou registrada no NIOGEN — a resposta dada direto no Chatwoot ainda não volta para cá, por isso aparece "medido em X de Y". Paradas = o cliente espera resposta numa conversa em andamento. Só contagem: nenhum dado de cliente.</p>`;
   }
-  function atendMudou() { if (gAtend.open) carregarAtendimento(); else { atendPeriodo = null; document.getElementById('r-atend').textContent = R_ATEND; } }
-  gAtend.addEventListener('toggle', () => { if (gAtend.open) carregarAtendimento(); });
+  const atendPronto = preguica(gAtend, carregarAtendimento);
+  function atendMudou() { if (atendPronto()) carregarAtendimento(); else { atendPeriodo = null; document.getElementById('r-atend').textContent = R_ATEND; } }
 
   // ───────────── Bairros prioritários (sem mudança de comportamento; carrega quando a gaveta abre) ─────────────
   // A gaveta substitui a antiga vista "Bairros prioritários": estes três nomes existem só para o código dos bairros seguir igual.
@@ -1152,7 +1256,7 @@
   gBairros.addEventListener('toggle', () => { if (gBairros.open && !bairrosIniciado) { bairrosIniciado = true; iniciarBairros(); } });
   if (new URLSearchParams(location.search).get('vista') === 'bairros') { gBairros.open = true; requestAnimationFrame(() => gBairros.scrollIntoView({ block: 'start' })); }
 
-  NG.botaoAtualizar(() => { cfgRegras = null; if (mCarregou) carregar(); if (gCarregou) carregarGoogle(); });
+  NG.botaoAtualizar(() => { cfgRegras = null; if (mCarregou) { carregar(); grafPeriodo = null; carregarGraficos(); } if (gCarregou) carregarGoogle(); });
   mostrarAba(location.hash.slice(1));   // 0369: o card Canais do Painel abre metaads.html#google · carrega só a aba aberta
 })();
 </script>
