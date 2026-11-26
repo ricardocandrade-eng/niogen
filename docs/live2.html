@@ -52,6 +52,9 @@
   .l2-senha { font-family: var(--dm); color: var(--muted); font-size: 12px; margin-left: auto; }
   .l2-quem { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
   .l2-quem h2 { margin: 0; font-size: 24px; font-weight: 800; overflow-wrap: anywhere; }
+  .l2-nome { all: unset; cursor: pointer; overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: var(--border-strong); text-underline-offset: 4px; }
+  .l2-nome:hover, .l2-nome:focus-visible { color: var(--accent); text-decoration-color: var(--accent); }
+  .l2-nome:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
   .l2-vale { font-family: var(--dm); font-size: 14px; color: var(--accent); white-space: nowrap; }
   .l2-sub { color: var(--muted); font-size: 13px; }
   .l2-fazer { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
@@ -357,16 +360,19 @@
   };
 
   // ---------- desenho ----------
+  // 26/11: o nome do cliente abre a ficha (comanda e fila inteira); a comanda ganha o botão "Abrir ficha" quando a tarefa não tem um
+  const nomeHtml = (t) => (temFichaK(t)
+    ? `<button type="button" class="l2-nome" data-abrir="${esc(kFicha(t))}" title="Abrir a ficha do cliente">${esc(t.nome)}</button>` : esc(t.nome));
   const comanda = (t, pos) => {
     const pz = prazoDe(t);
     return `<article class="l2-comanda" style="--c:${cor(t.tipo)}">
       <div class="l2-topo"><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span>${t.risco ? '<span class="l2-pill urg" title="Cliente com plano escolhido, com pressa na instalação ou falando em desistir. Fica em 1º até alguém responder.">🔥 venda em risco · agora</span>' : `<span class="l2-pill${pz.urg ? ' urg' : ''}">prazo: ${esc(pz.txt)}</span>`}<span class="l2-senha">${pos} de ${fila().length}</span></div>
-      <div><div class="l2-quem"><h2>${esc(t.nome)}</h2><span class="l2-vale" title="${t.vale_estimado ? 'valor padrão: o cliente ainda não escolheu o plano' : 'comissão prevista'}">vale ${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span></div><div class="l2-sub">${esc(subDe(t))}${t.dono ? ` · com ${esc(t.dono)}` : ''}</div></div>
+      <div><div class="l2-quem"><h2>${nomeHtml(t)}</h2><span class="l2-vale" title="${t.vale_estimado ? 'valor padrão: o cliente ainda não escolheu o plano' : 'comissão prevista'}">vale ${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span></div><div class="l2-sub">${esc(subDe(t))}${t.dono ? ` · com ${esc(t.dono)}` : ''}</div></div>
       <div class="l2-fazer">${esc(t.oque || '')}</div>
       ${t.ultima_fala ? `<div class="l2-fala">Cliente, há ${esc(ha(t.ultima_fala_em))}: “${esc(t.ultima_fala)}”</div>` : ''}
       <div class="l2-pills">${(t.motivos || []).map((m) => `<span class="l2-pill">${esc(m)}</span>`).join('')}${t.desde ? `<span class="l2-pill">desde há ${esc(ha(t.desde))}</span>` : ''}
         <span class="l2-pill pts" title="vale × etapa × urgência — os pesos ficam em Configurações (live2_pesos)">${esc(reais(t.vale))} × ${esc(String(t.pe))} × ${esc(String(t.pu))} = ${esc(Number(t.pontos).toLocaleString('pt-BR'))} pontos</span></div>
-      <div class="l2-acoes">${acoesHtml(t, true)}</div>
+      <div class="l2-acoes">${acoesHtml(t, true)}${temFichaK(t) && !(t.acoes || []).some((x) => x.a === 'abrir') ? `<button type="button" class="btn btn-ghost" data-abrir="${esc(kFicha(t))}">Abrir ficha</button>` : ''}</div>
     </article>`;
   };
   const contaHtml = () => {
@@ -412,7 +418,7 @@
     return `<div class="l2-tabela">${f.map((t, i) => {
       const pz = prazoDe(t);
       return `<div class="l2-linha" style="--c:${cor(t.tipo)}"><span class="n">${i + 1}</span><span><span class="l2-tipo">${esc(TIPO[t.tipo] || t.tipo)}</span></span>
-        <div><b>${esc(t.nome)}</b> <span class="l2-vale">${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span><small>${esc(subDe(t))}</small></div>
+        <div><b>${nomeHtml(t)}</b> <span class="l2-vale">${esc(reais(t.vale))}${t.vale_estimado ? ' *' : ''}</span><small>${esc(subDe(t))}</small></div>
         <div class="oq">${esc(t.oque || '')}${(t.motivos || []).length ? `<small>${esc(t.motivos.join(' · '))}</small>` : ''}</div>
         <span><span class="l2-pill${pz.urg || t.risco ? ' urg' : ''}">${t.risco ? '🔥 em risco' : esc(pz.txt)}</span></span>
         <div class="l2-acoes">${acoesHtml(t, false)}</div></div>`;
