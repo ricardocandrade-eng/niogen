@@ -2,16 +2,20 @@
 -- titulo: Área nacional (0417, Ricardo 26/11: "A Dharma está autorizada a vender em todos os estados"): config_area com as 345 cidades da GDP, 320 ativas (21 UFs de fuso −3) e 25 desligadas (AC, AM, RR, RO, MT, MS — fuso pendente). Venda no Rio e em Brasília passa; em Cuiabá é recusada; area_ativar liga e desliga com histórico; o nome sem acento casa; a conferência ganha o item do cluster da GDP
 -- tipo: atual
 
+-- 0418 ligou as 6 UFs de outro fuso: o cenário desliga MT antes, para testar a recusa (vale com ou sem a 0418)
+select public._area_ativar('MT', null, false, 'X141 prepara: MT desligada para o teste', 'sim');
+
 -- A) a área pelo nome que o ViaCEP devolve (e sem acento)
 select sim.confere('Rio de Janeiro/RJ é Regular',      public.cluster_da_area('Rio de Janeiro', 'RJ', 'Centro') = 'regular', public.cluster_da_area('Rio de Janeiro', 'RJ', 'Centro'));
 select sim.confere('Brasília/DF é Regular',            public.cluster_da_area('Brasília', 'DF', null) = 'regular', public.cluster_da_area('Brasília', 'DF', null));
 select sim.confere('Maceió/AL é BTU',                  public.cluster_da_area('Maceió', 'AL', null) = 'btu', public.cluster_da_area('Maceió', 'AL', null));
 select sim.confere('"Divinopolis" sem acento casa',    public.cluster_da_area('Divinopolis', 'MG', null) = 'regular', null);
 select sim.confere('Juiz de Fora continua Regular',    public.cluster_da_area('Juiz de Fora', 'MG', 'Centro') = 'regular', null);
-select sim.confere('Cuiabá/MT está desligada (fuso)',  public.cluster_da_area('Cuiabá', 'MT', null) is null, public.cluster_da_area('Cuiabá', 'MT', null));
+select sim.confere('Cuiabá/MT desligada não tem cluster',  public.cluster_da_area('Cuiabá', 'MT', null) is null, public.cluster_da_area('Cuiabá', 'MT', null));
 select sim.confere('Palmas sem UF não vira a do Tocantins (cai em MG, que não tem)', public.cluster_da_area('Palmas', null, null) is null, null);
-select sim.confere('345 na carteira, 320 ativas, 25 desligadas com o motivo fuso_pendente',
-  (select count(*) from public.config_area) = 345 and (select count(*) from public.config_area where ativo) = 320
+select sim.confere('345 na carteira, todas as 320 das 21 UFs de fuso −3 ativas, as 25 de outro fuso com o histórico fuso_pendente',
+  (select count(*) from public.config_area) = 345
+  and not exists (select 1 from public.config_area where not ativo and uf not in ('AC', 'AM', 'RR', 'RO', 'MT', 'MS'))
   and (select count(*) from public.area_ativa_hist where motivo like 'fuso_pendente%') = 25,
   (select count(*) || ' · ' || count(*) filter (where ativo) from public.config_area));
 
