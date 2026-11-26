@@ -1,6 +1,6 @@
 -- id: X139
 -- titulo: Janela de 24 h com 4 toques (15 min · 2 h · 6 h · ~20 h, F4 desligado) e a Mariana no toque de 2 h (0412)
--- tipo: regra_nova
+-- tipo: atual
 -- Ricardo, 25/11/2026: "podemos espaçar mais os horários" · "ela pode se apresentar como Mariana, num tom mais humano".
 select sim.lead_novo('Joelma X139') as c \gset
 select sim.cliente_escreve(:'c', 'quero pra home office, a internet daqui cai toda hora');
