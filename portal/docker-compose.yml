@@ -19,6 +19,7 @@ services:
     volumes:
       - ./erros:/erros
       - ./amostras:/amostras      # /opt/niogen/portal/amostras, chmod 700, fora do repo
+      - ./sessao:/sessao          # 25/11: sessão guardada do login de gestão (Dashboard), chmod 700/600, fora do repo e do Drive
     shm_size: 256m
     mem_limit: 1g
     logging:

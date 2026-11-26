@@ -1,0 +1,655 @@
+{
+  "name": "dashboard_diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 15 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · todo dia 15h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "b6cd4089-bbf1-5253-b847-bcbecdf7e3a9"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-dashboard-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "f07e063d-2d57-5c8f-9317-9c3de67adce9",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "5e395c35-d5d1-5a70-bbb0-20a379531ac3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/dashboard_config",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        100
+      ],
+      "id": "5c5f7097-59ad-5af5-8cff-f8308e7e4a10",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Config do banco → corpo do pedido. Agendado com a rotina desligada (\"ativo\": false) → para aqui, sem rodar.\nconst cfg = $input.first().json || {};\nconst teste = !!$('1t · rota de teste').isExecuted;\nconst regra = cfg.regra || {};\nif (!teste && regra.ativo !== true) return [{ json: { parar: true } }];\nreturn [{ json: { parar: false, origem: teste ? 'teste' : 'rotina', iniciada_em: new Date().toISOString(),\n                  corpo: { abas: cfg.abas || [], meses: Number(regra.meses || 2), origem: teste ? 'teste' : 'rotina' } } }];"
+      },
+      "name": "3 · Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ],
+      "id": "b5add138-4f51-5a66-9566-b7ff031e7035"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "554b7540-e154-5e5a-a049-7b9c60588cc8",
+              "leftValue": "={{ $json.parar !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3b · Rodar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "id": "eeb73b4a-5dc5-50e6-ab23-cf28f2039373"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://niogen-portal-tunel:8090/dashboard",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}"
+      },
+      "name": "4 · Pedir rodada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "id": "001924d2-3199-5607-9a88-23ccb2e74b8d",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cabeça do laço: chega do \"4 · Pedir rodada\" (1ª vez) ou do \"7 · Status\". Decide: fim ou esperar mais (até ~10 min).\nconst r = $input.first().json || {};\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst job = b.job_id || null;\nlet volta = 0;\ntry { const e = $('6 · Espera 20 s').last().json; if (e && job && e.job_id === job) volta = (e.volta || 0) + 1; } catch (e) { volta = 0; }\nlet fim = false, erro = null;\nif (sc && sc !== 200 && sc !== 202) { fim = true; erro = 'HTTP ' + sc + ' ' + String(b.erro || '').slice(0, 160); }\nelse if (b.estado === 'pronto' || b.estado === 'erro') { fim = true; if (b.estado === 'erro') erro = String(b.motivo || 'erro').slice(0, 300); }\nelse if (volta >= 30) { fim = true; erro = 'o operador demorou mais que 10 min'; }\nreturn [{ json: { fim, job_id: job, volta, erro, trava: !!b.trava, sessao_expirada: !!b.sessao_expirada,\n                  osab: b.osab || null, faturas: b.faturas || null, mapa: b.mapa || [], abas: b.abas || {},\n                  atualizado_painel: b.atualizado_painel || null, ms: b.ms || null } }];"
+      },
+      "name": "5 · Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "id": "e4b443f7-a55d-5cff-b3e9-234e09d522f4"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d8c3b0cc-a520-57a6-aaeb-f2c6025212d8",
+              "leftValue": "={{ $json.fim === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "5b · Terminou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ],
+      "id": "3d912705-8b04-5b21-9995-904c662f60eb"
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "name": "6 · Espera 20 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        320
+      ],
+      "id": "30f2db7f-7aeb-5e4a-b325-c14335fbeeb5",
+      "webhookId": "a4e78af2-9b01-56d3-bda7-8de1fcdaf439"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://niogen-portal-tunel:8090/dashboard/' + $json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "7 · Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        320
+      ],
+      "id": "34b067c1-fdd5-5a5a-b2f4-6de8623f9066",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "79dcfffe-e185-531e-8a7e-07a977d7c1fd",
+              "leftValue": "={{ !!($json.osab && $json.osab.linhas && $json.osab.linhas.length) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "7b · Tem OSAB?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ],
+      "id": "1a554fb5-e0fb-5cc7-9cfa-ffb0c1f6a647"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/osab_importar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_arquivo: $('5 · Estado').last().json.osab.arquivo, p_linhas: $('5 · Estado').last().json.osab.linhas }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "8 · Gravar OSAB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "f12cdb2a-ceb1-5731-86e6-c0e4926bbb12",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "82640ec5-84f2-524e-9ad2-3cdd064aa438",
+              "leftValue": "={{ !!$('5 · Estado').last().json.faturas }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "8b · Tem faturas?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        100
+      ],
+      "id": "7a1f39c0-93c9-5e33-8b4d-53d9f403b430"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/faturas_importar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_arquivo: $('5 · Estado').last().json.faturas.arquivo, p_linhas: $('5 · Estado').last().json.faturas.linhas, p_cartoes: $('5 · Estado').last().json.faturas.cartoes }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "9 · Gravar faturas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        0
+      ],
+      "id": "9bcd59c5-920d-53f9-87ad-b8edb3ecdfdb",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta o que voltou do operador e das duas gravações. Sem dado de cliente (só contagens e textos da Nio).\nconst e = $('5 · Estado').last().json;\nconst p = $('3 · Montar pedido').first().json;\nconst lerRpc = (nome) => { try { const x = $(nome).first().json; return x && (x.body !== undefined ? x.body : x); } catch (err) { return null; } };\nconst osab = e.osab && e.osab.linhas && e.osab.linhas.length ? lerRpc('8 · Gravar OSAB') : null;\nconst fat = e.faturas ? lerRpc('9 · Gravar faturas') : null;\nconst errRpc = (x) => (x && (x.message || x.error) ? String(x.message || x.error).slice(0, 200) : null);\nconst resumo = { atualizado_painel: e.atualizado_painel, ms: e.ms,\n  abas: Object.fromEntries(Object.entries(e.abas || {}).map(([k, v]) => [k, { modo: v.modo, ok: v.ok, linhas: v.linhas, visuais: v.visuais, erro: v.erro, segundos: v.segundos, cartoes: v.cartoes }])),\n  osab: osab ? { linhas: (e.osab.linhas || []).length, importacao: osab.importacao_id || null, mudaram_status: osab.mudaram_status, sem_venda: osab.sem_venda, erro: errRpc(osab) } : null,\n  faturas: fat ? { linhas: (e.faturas.linhas || []).length, casaram: fat.casaram, sem_venda: fat.sem_venda, erro: errRpc(fat) } : null };\nconst erro = e.erro || (resumo.osab && resumo.osab.erro) || (resumo.faturas && resumo.faturas.erro) || null;\nreturn [{ json: { dados: { ok: !erro, origem: p.origem, iniciada_em: p.iniciada_em, erro, resumo, mapa: e.mapa || [] },\n                  erro, trava: e.trava, sessao_expirada: e.sessao_expirada } }];"
+      },
+      "name": "10 · Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ],
+      "id": "65e9d1ed-e8f9-53a3-b5ef-f5fa04fa8bf4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/dashboard_rodada_registrar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_dados: $json.dados }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "11 · Registrar rodada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        100
+      ],
+      "id": "9c108bca-81b0-58ae-b60a-077229d77938",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('10 · Resumo').first().json;\nif (r.trava) throw new Error('TRAVA do operador do Dashboard acionada — a rotina parou: ' + String(r.erro || '').slice(0, 200));\nif (r.sessao_expirada) throw new Error('Dashboard: a sessão do login de gestão expirou — refazer o login no PC (python portal/dashboard_sessao.py).');\nif (r.erro) throw new Error('Dashboard: ' + String(r.erro).slice(0, 300));\nreturn [{ json: r.dados.resumo }];"
+      },
+      "name": "12 · Falhou?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        100
+      ],
+      "id": "d0258dfd-cea8-5a3d-82b9-e49729046a33"
+    }
+  ],
+  "connections": {
+    "1 · todo dia 15h": {
+      "main": [
+        [
+          {
+            "node": "2 · Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Config": {
+      "main": [
+        [
+          {
+            "node": "3 · Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "3b · Rodar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3b · Rodar?": {
+      "main": [
+        [
+          {
+            "node": "4 · Pedir rodada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "4 · Pedir rodada": {
+      "main": [
+        [
+          {
+            "node": "5 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Estado": {
+      "main": [
+        [
+          {
+            "node": "5b · Terminou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b · Terminou?": {
+      "main": [
+        [
+          {
+            "node": "7b · Tem OSAB?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6 · Espera 20 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Espera 20 s": {
+      "main": [
+        [
+          {
+            "node": "7 · Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Status": {
+      "main": [
+        [
+          {
+            "node": "5 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7b · Tem OSAB?": {
+      "main": [
+        [
+          {
+            "node": "8 · Gravar OSAB",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "8b · Tem faturas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Gravar OSAB": {
+      "main": [
+        [
+          {
+            "node": "8b · Tem faturas?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8b · Tem faturas?": {
+      "main": [
+        [
+          {
+            "node": "9 · Gravar faturas",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "10 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9 · Gravar faturas": {
+      "main": [
+        [
+          {
+            "node": "10 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 · Resumo": {
+      "main": [
+        [
+          {
+            "node": "11 · Registrar rodada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 · Registrar rodada": {
+      "main": [
+        [
+          {
+            "node": "12 · Falhou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

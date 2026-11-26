@@ -64,6 +64,7 @@ def _carregar_env():
 _carregar_env()
 
 import consulta_os as co  # noqa: E402
+import dashboard as dsh  # noqa: E402   (25/11: operador do Dashboard — OSAB e Faturas em Aberto)
 import credito as cr  # noqa: E402
 import portal_login as pl  # noqa: E402
 
@@ -234,6 +235,28 @@ class Operador:
                 pl.log('os: sessão caída — login e recomeço da leitura')
                 self.login()
         raise pl.Falha(8, 'inalcançável')
+
+    def rodar_dashboard(self, abas, meses):
+        """25/11: Dashboard com a SESSÃO GUARDADA do login de gestão (exceção da regra 5). Contexto próprio, separado do login
+        do portal (TT837725): dois logins no mesmo contexto não convivem. A sessão renovada volta para o arquivo."""
+        if self.nav is None or not self.nav.is_connected():
+            canal = (os.environ.get('NIO_PORTAL_CANAL') or '').strip() or None
+            self.nav = self.pw.chromium.launch(headless=os.environ.get('NIO_PORTAL_HEADLESS', '1') != '0', channel=canal,
+                                               args=['--no-sandbox', '--disable-dev-shm-usage'])
+        if not os.path.isfile(dsh.SESSAO):
+            raise dsh.SessaoExpirada('sem sessão guardada do Dashboard (rodar python portal/dashboard_sessao.py no PC)')
+        ctx = self.nav.new_context(storage_state=dsh.SESSAO, locale='pt-BR', timezone_id='America/Sao_Paulo',
+                                   viewport={'width': 1600, 'height': 1000}, accept_downloads=True)
+        try:
+            r = dsh.Dashboard(ctx, abas, meses, log_fn=pl.log).rodar()
+            ctx.storage_state(path=dsh.SESSAO)
+            try:
+                os.chmod(dsh.SESSAO, 0o600)
+            except OSError:
+                pass
+            return r
+        finally:
+            ctx.close()
 
 
 # ------------------------------------------------------------------------------------------- thread do navegador
@@ -595,6 +618,57 @@ def novo_job_os(b):
     return 202, _publico(JOBS[job_id])
 
 
+DASH_INICIOS = deque()     # 25/11: rodadas do Dashboard nas últimas 24 h (freio: 6/dia)
+
+
+def novo_job_dashboard(b):
+    """25/11: uma rodada do Dashboard (OSAB + Faturas em Aberto + mapa). Crédito e viabilidade vêm primeiro: com alguém na
+    fila, 429 e a rotina tenta de novo. As linhas voltam no GET /dashboard/<job> (o n8n grava no banco)."""
+    abas = b.get('abas')
+    if not isinstance(abas, list) or not abas:
+        raise pl.Falha(400, 'abas ausentes (vêm de dashboard_config())')
+    meses = int(b.get('meses') or 2)
+    with TRAVA_JOBS:
+        _limpar_jobs()
+        if any(j['estado'] in ('fila', 'rodando') for j in JOBS.values()):
+            raise pl.Falha(429, 'operador ocupado (crédito e viabilidade primeiro) — tente de novo em alguns minutos')
+        t = time.time()
+        while DASH_INICIOS and t - DASH_INICIOS[0] > 86400:
+            DASH_INICIOS.popleft()
+        if len(DASH_INICIOS) >= 6:
+            raise pl.Falha(429, 'limite de 6 rodadas do Dashboard por dia')
+        DASH_INICIOS.append(t)
+        job_id = uuid.uuid4().hex
+        JOBS[job_id] = {'id': job_id, 'criado': t, 'cpf_mascara': None, 'modo': 'dashboard', 'estado': 'fila',
+                        'origem': str(b.get('origem') or '')[:40] or None}
+
+    def tarefa(op):
+        j = JOBS[job_id]
+        j['estado'] = 'rodando'
+        t0 = time.time()
+        try:
+            out = op.rodar_dashboard(abas, meses)
+            out['resultado'] = 'lida' if out.get('ok') else 'erro'
+            if not out.get('ok'):
+                out['motivo'] = '; '.join(f'{k}: {v.get("erro")}' for k, v in out['abas'].items() if v.get('erro'))[:400]
+        except dsh.SessaoExpirada as e:
+            out = {'resultado': 'erro', 'sessao_expirada': True, 'motivo': str(e)[:300]}
+        except dsh.TravaAcionada as e:
+            out = {'resultado': 'erro', 'trava': True, 'motivo': str(e)[:300]}
+        except Exception as e:  # noqa: BLE001
+            out = {'resultado': 'erro', 'motivo': f'{type(e).__name__}: {str(e)[:300]}'}
+        out['ms'] = int((time.time() - t0) * 1000)
+        j['resultado'] = out
+        j['estado'] = 'erro' if out['resultado'] == 'erro' else 'pronto'
+        pl.log(f'dashboard {job_id[:8]} · {out["resultado"]} · {out["ms"]} ms'
+               + (f' · osab {len(out["osab"]["linhas"])}' if out.get('osab') else '')
+               + (f' · faturas {len(out["faturas"]["linhas"])}' if out.get('faturas') else '')
+               + (f' · {out.get("motivo")}' if out['resultado'] == 'erro' else ''))
+        return None
+    FILA.put(Tarefa(tarefa))
+    return 202, _publico(JOBS[job_id])
+
+
 # ------------------------------------------------------------------------------------------- HTTP
 class Handler(BaseHTTPRequestHandler):
     server_version = 'niogen-portal'
@@ -630,7 +704,7 @@ class Handler(BaseHTTPRequestHandler):
         t0 = time.time()
         rota = self.path.split('?')[0].rstrip('/') or '/'
         rota_log = ('/credito/print/<job>' if rota.startswith('/credito/print/') else '/credito/<job>' if rota.startswith('/credito/')
-                    else '/os/<job>' if rota.startswith('/os/') else rota)
+                    else '/os/<job>' if rota.startswith('/os/') else '/dashboard/<job>' if rota.startswith('/dashboard/') else rota)
         if not self._autorizado():
             self._resp(401, {'ok': False, 'erro': 'segredo inválido'})
             pl.log(f'{metodo} {rota_log} → 401 (segredo)')
@@ -672,6 +746,20 @@ class Handler(BaseHTTPRequestHandler):
             elif metodo == 'POST' and rota in ('/os', '/credito/os'):
                 code, r = novo_job_os(self._json())
                 self._resp(code, r)
+                return
+            elif metodo == 'POST' and rota == '/dashboard':
+                code, r = novo_job_dashboard(self._json())
+                self._resp(code, r)
+                return
+            elif metodo == 'GET' and rota.startswith('/dashboard/'):
+                jid = rota.split('/dashboard/', 1)[1][:64]
+                with TRAVA_JOBS:
+                    j = JOBS.get(jid)
+                    r = _publico(j) if j and j.get('modo') == 'dashboard' else None
+                if not r:
+                    self._resp(404, {'ok': False, 'erro': 'job inexistente ou expirado (30 min)'})
+                else:
+                    self._resp(200, r)
                 return
             elif metodo == 'GET' and rota.startswith('/os/'):
                 jid = rota.split('/os/', 1)[1][:64]

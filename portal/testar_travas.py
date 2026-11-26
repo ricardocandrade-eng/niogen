@@ -292,6 +292,66 @@ o = {}; cr.marca_cadastro(o, {'titulo': 'Viabilidade', 'texto': 'Endereço sem v
 ok('cadastro_endereco' not in o, 'sem viabilidade comum → não marca cadastro')
 ok(bool(cr.RE_CADASTRO_END.search('Viabilidade parcial Endereço disponível com tratamento especial')), 'modal parcial com "disponível" no texto → o Continuar segue proibido')
 
+# 9. 25/11 — operador do Dashboard (dashboard.py): lista branca de clique e de rede, leitura do xlsx do Power BI e dos cartões
+import io as _io, zipfile as _zf  # noqa: E402
+import dashboard as dsh  # noqa: E402
+CFG = [{'aba': 'Dinâmica - OSAB', 'modo': 'importar', 'visual': 'Exportação - OSAB', 'filtros': {'tp_venda_irregular': 'todos', 'ANOMES': 'meses'}},
+       {'aba': 'Geral', 'modo': 'listar'}]
+for r_ in ('Dinâmica - OSAB', 'Geral', 'tp_venda_irregular', 'ANOMES', 'Selecionar tudo', '202611', 'Mais opções', 'Exportar dados', 'Exportar', 'Cancelar'):
+    ok(dsh.clique_permitido(r_, CFG), f'dashboard: clique "{r_}" permitido')
+for r_ in ('Cadastro Usuários', 'Pedidos', 'Gestão de Fila', 'Histórico de Atuação', 'Eficácia', 'FAIXA', 'Salvar', 'Excluir', ''):
+    ok(not dsh.clique_permitido(r_, CFG), f'dashboard: clique "{r_}" recusado')
+A_ = 'https://pap-api.niointernet.com.br/'
+ok(dsh.rede_bloqueada(A_ + 'api/portal/powerbi/embed-info', 'GET') is None, 'dashboard: GET embed-info passa')
+ok(dsh.rede_bloqueada(A_ + 'api/portal/permissoes', 'GET') is None, 'dashboard: GET permissoes passa')
+ok(dsh.rede_bloqueada(A_ + 'api/app/novafibra/supervisor/permissao/matricula/XX000000', 'GET') is None, 'dashboard: GET permissão do supervisor passa (a página lê ao abrir)')
+ok(bool(dsh.rede_bloqueada(A_ + 'api/app/novafibra/supervisor/permissao/matricula/XX000000', 'POST')), 'dashboard: POST na permissão do supervisor barrado')
+ok(dsh.rede_bloqueada(A_ + 'auth/saml/login', 'GET') is None and dsh.rede_bloqueada(A_ + 'auth/saml/callback', 'POST') is None, 'dashboard: SSO (renovar o token) passa')
+ok(bool(dsh.rede_bloqueada(A_ + 'api/app/novafibra/pedido', 'POST')), 'dashboard: outra rota do app barrada')
+for c_ in ('api/portal/gestao/usuario', 'api/portal/novafibra/analiseCredito', 'api/portal/aberturaos/checkout/enviar',
+           'api/portal/pagamento/reenviolink', 'api/portal/cadastro/usuario'):
+    ok(bool(dsh.rede_bloqueada(A_ + c_, 'GET')), f'dashboard: barra GET {c_}')
+    ok(bool(dsh.rede_bloqueada(A_ + c_, 'POST')), f'dashboard: barra POST {c_}')
+ok(bool(dsh.rede_bloqueada(A_ + 'auth/logout', 'POST')), 'dashboard: logout barrado')
+ok(bool(dsh.rede_bloqueada('https://pap.niointernet.com.br/x', 'POST')), 'dashboard: POST no front barrado')
+ok(dsh.rede_bloqueada('https://wabi-brazil-south-b-primary-api.analysis.windows.net/public/reports/querydata', 'POST') is None,
+   'dashboard: consulta do Power BI passa')
+
+
+def _xlsx(linhas):
+    def cel(v, ref):
+        if isinstance(v, (int, float)):
+            return f'<x:c r="{ref}"><x:v>{v}</x:v></x:c>'
+        return f'<x:c r="{ref}" t="inlineStr"><x:is><x:t>{v}</x:t></x:is></x:c>'
+    rows = ''.join('<x:row>' + ''.join(cel(v, chr(65 + i) + str(n + 1)) for i, v in enumerate(r) if v is not None) + '</x:row>'
+                   for n, r in enumerate(linhas))
+    b = _io.BytesIO()
+    with _zf.ZipFile(b, 'w') as z:
+        z.writestr('xl/worksheets/sheet1.xml', '<?xml version="1.0"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/'
+                   'spreadsheetml/2006/main"><x:sheetData>' + rows + '</x:sheetData></x:worksheet>')
+    return b.getvalue()
+
+
+CAB = ['REDE', 'DATA HORA - Atualização', 'DATA VENDA', 'NR ORDEM', 'STATUS', 'DATA ATIVACAO', 'FIM EXECUÇÃO REAL']
+X_ = _xlsx([CAB, ['DHARMA', 46351.600844907, 46348, 12261610, 'Concluído', 46349.788576389, None],
+            ['DHARMA', 46351.600844907, 46348, 12261611, 'Em Aprovisionamento', None, None], [], ['Filtros aplicados:\ncheck é ok']])
+o_ = dsh.osab_painel(dsh.ler_xlsx(X_))
+ok(len(o_['linhas']) == 2 and o_['filtros'].startswith('Filtros aplicados'), 'dashboard: OSAB lê 2 linhas e o rodapé não vira linha')
+l_ = {x['pedido']: x for x in o_['linhas']}
+ok(l_['12261610']['situacao'] == 'Concluído' and l_['12261610']['data_fechamento'] == '2026-11-23T18:55:33-03:00',
+   'dashboard: OSAB — pedido sem ".0", data real da instalação em hora de Brasília (igual ao osab.js)')
+ok(l_['12261610']['dt_ref'] == '2026-11-25' and l_['12261610']['fonte'] == 'painel', 'dashboard: OSAB — dt_ref e fonte painel')
+F_ = _xlsx([['REDE', 'NR ORDEM', 'DT VENCIMENTO', 'STATUS PGTO', 'DIAS EM ATRASO', 'INDICADOR', 'NR FATURA', 'DIAS ATÉ BLOQUEIO'],
+            ['DHARMA', 12261610, 46336, 'Em aberto', 12, 'FPD', 'F1', 3]])
+f_ = dsh.faturas_painel(dsh.ler_xlsx(F_))['linhas']
+ok(len(f_) == 1 and f_[0]['nr_ordem'] == '12261610' and f_[0]['dias_atraso'] == 12 and f_[0]['dt_vencimento'] == '2026-11-10'
+   and f_[0]['dias_ate_bloqueio'] == 3, 'dashboard: faturas — OS, atraso, vencimento e dias até o bloqueio')
+ok(dsh.faturas_painel(dsh.ler_xlsx(_xlsx([['REDE', 'NR ORDEM', 'DT VENCIMENTO', 'STATUS PGTO']])))['linhas'] == [], 'dashboard: faturas vazia = lista vazia')
+ok(dsh.ler_cartao('FPD (Data Vencimento)\n1\nSTATUS\nQTD.\n% QTD.\nPagas\n1\n100,0%\nA vencer\n0\n0,0%\nVencidas\n0\n0,0%\n0 a 15 Dias')
+   == {'pagas': 1, 'a_vencer': 0, 'vencidas': 0}, 'dashboard: cartão FPD lido (pagas 1, a vencer 0, vencidas 0)')
+ok(dsh.ler_cartao('SPD (Data Vencimento)\nSTATUS\nQTD.\nPagas\nA vencer\nVencidas') == {'pagas': 0, 'a_vencer': 0, 'vencidas': 0},
+   'dashboard: cartão vazio = zeros')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')
