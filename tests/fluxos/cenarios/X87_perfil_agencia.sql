@@ -38,8 +38,8 @@ select public.meu_perfil() is null as ag_sem_perfil, public.sou_agencia() as ag_
 select (select count(*) from public.conversas_lista()) + (select count(*) from public.leads_lista()) + (select count(*) from public.jornada_live()) as ag_listas \gset
 select public.meta_ads_resultado() as ag_res, public.placar_agencia()::text as ag_placar, public.tabela_agencia()::text as ag_tabela,
        public.meta_ads_motivos_saida(null, null) as ag_motivos, public.painel_meta_ritmo() is not null as ag_ritmo \gset
-select (select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia() x) as ag_dia,
-       (select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x) as ag_conv \gset
+select coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia() x), '[]') as ag_dia,
+       coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x), '[]') as ag_conv \gset
 -- tentar gravar: nada pode passar
 with u as (update public.usuarios set perfil = 'admin' where true returning 1) select count(*) as ag_virou_admin from u \gset
 with u as (update public.meta_ads_diario set gasto = 0 where true returning 1) select count(*) as ag_gravou_meta from u \gset
@@ -56,8 +56,8 @@ set role authenticated;
 -- 0406: a agência só vê as campanhas liberadas; o admin compara pela prévia ("Ver como a agência"), que pede o mesmo recorte
 select public.meta_ads_resultado(true) as ad_res, public.meta_ads_motivos_saida(null, null, true) as ad_motivos,
        public.meta_ads_resultado() as ad_res_tudo, public.meta_ads_motivos_saida(null, null) as ad_motivos_tudo \gset
-select (select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia() x) as ad_dia,
-       (select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x) as ad_conv \gset
+select coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia(true) x), '[]') as ad_dia,
+       coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x), '[]') as ad_conv \gset
 reset role;
 
 select sim.como('servico');
@@ -66,27 +66,24 @@ select sim.confere('para tudo o que já existia, a agência não tem perfil (meu
 select sim.confere('agência NÃO lê conversa, fala, venda, lead, biometria, Fila Vero, indicação, contato, parceiro, balanço, links, regras, saldo, planos/bônus (comissão), HP, guia nem as tabelas de sombra',
   not exists (select 1 from _leu where quem = 'agencia' and n > 0 and r not in
     ('meta_ads_diario', 'meta_ads_anuncios', 'meta_ads_conjuntos', 'meta_ads_posicionamento_diario', 'config_meta_ads_regras',
-     'config_metas', 'config_area', 'dfv_bairros_pronto', 'usuarios')),
+     'config_area', 'dfv_bairros_pronto', 'usuarios')),   -- 0409: config_metas (a meta do mês) saiu com o Placar
   (select string_agg(r || '=' || n, ', ') from _leu where quem = 'agencia' and n > 0));
-select sim.confere('agência lê o que é dela: só as campanhas liberadas na Meta (0406: nenhuma aqui), a meta do mês e só a PRÓPRIA linha de usuário',
+select sim.confere('agência lê o que é dela: só as campanhas liberadas na Meta (0406: nenhuma aqui) e só a PRÓPRIA linha de usuário; a meta do mês não (0409)',
   (select n from _leu where quem = 'agencia' and r = 'usuarios') = 1
     and (select n from _leu where quem = 'agencia' and r = 'meta_ads_diario') = (select count(*) from public.meta_ads_diario
                                                                                 where campanha_id in (select campanha_id from public.meta_ads_campanhas_dono where dono = 'agencia'))
-    and (select n from _leu where quem = 'agencia' and r = 'config_metas') = (select count(*) from public.config_metas),
+    and (select n from _leu where quem = 'agencia' and r = 'config_metas') = 0,
   (select string_agg(r || '=' || n, ', ') from _leu where quem = 'agencia' and r in ('usuarios', 'meta_ads_diario', 'config_metas')));
 select sim.confere('as listas do time (conversas_lista, leads_lista, jornada_live) não devolvem nada à agência', :ag_listas = 0, :'ag_listas');
 select sim.confere('agência não grava: não muda o próprio perfil nem os dados da Meta', :ag_virou_admin = 0 and :ag_gravou_meta = 0,
   :'ag_virou_admin' || ' / ' || :'ag_gravou_meta');
-select sim.confere('o Placar da agência vem sem nome, CPF, telefone, endereço, vendedor, pedido e comissão',
-  :'ag_placar' is not null and :'ag_placar' !~* '(cliente|cpf|cnpj|whatsapp|telefone|email|logradouro|bairro|vendedor|comissao|nio_pedido|"nio_os"|"id")'
-    and :'ag_placar' !~ (select string_agg(id::text, '|') from public.vendas),
-  left(:'ag_placar', 200));
-select sim.confere('o Placar da agência traz todas as vendas com OS', jsonb_array_length(:'ag_placar'::jsonb) = (select count(*) from public.vendas where nio_os is not null),
-  jsonb_array_length(:'ag_placar'::jsonb)::text);
+-- 0409 (Ricardo 25/11: "ela não precisa ter acesso ao Placar"): o Placar fechou para a agência
+select sim.confere('o Placar não abre para a agência: vendas, conversas por dia e meta do mês vêm vazios',
+  :'ag_placar' = '' and :'ag_conv' = '[]', left(:'ag_placar', 120) || ' / ' || left(:'ag_conv', 120));
 select sim.confere('a Tabela da agência vem sem comissão', :'ag_tabela' !~* 'comiss' and jsonb_array_length(:'ag_tabela'::jsonb -> 'planos') > 0, left(:'ag_tabela', 120));
-select sim.confere('a agência recebe a meta do mês (só números)', :'ag_ritmo'::boolean, 'nulo');
-select sim.confere('fonte única: Meta Ads e Placar dão à agência exatamente o que dão ao admin na prévia (0406: mesmo recorte)',
-  :'ag_res'::jsonb = :'ad_res'::jsonb and :'ag_dia'::jsonb = :'ad_dia'::jsonb and :'ag_conv'::jsonb = :'ad_conv'::jsonb and :'ag_motivos'::jsonb = :'ad_motivos'::jsonb,
+select sim.confere('a agência não recebe a meta do mês (0409)', not :'ag_ritmo'::boolean, 'recebeu');
+select sim.confere('fonte única: o Meta Ads dá à agência exatamente o que dá ao admin na prévia (0406: mesmo recorte; 0409: o dia a dia também)',
+  :'ag_res'::jsonb = :'ad_res'::jsonb and :'ag_dia'::jsonb = :'ad_dia'::jsonb and :'ag_motivos'::jsonb = :'ad_motivos'::jsonb,
   'diferente');
 select sim.confere('o resultado do Meta Ads (admin, sem recorte) conta todas as conversas de anúncio, uma vez cada',
   (select sum((x ->> 'n')::int) from jsonb_array_elements(:'ad_res_tudo'::jsonb -> 'conversas') x) = (select count(*) from public.mari_conversas where origem = 'meta_ads'),
@@ -95,8 +92,8 @@ select sim.confere('o resultado do Meta Ads só tem contagem (nenhum id de conve
   :'ag_res' !~ (select string_agg(id::text, '|') from public.mari_conversas where origem = 'meta_ads')
     and :'ag_res' !~* '(telefone|conversa_id|venda_id|dataset_id)', 'veio identificador');
 select sim.confere('o dia a dia do Meta Ads vai sem as colunas de venda e de comissão', :'ag_dia' !~* '(comissao|vendas)', left(:'ag_dia', 120));
-select sim.confere('as conversas por dia do Placar somam as conversas do período',
-  (select sum((x ->> 'conversas')::int) from jsonb_array_elements(:'ag_conv'::jsonb) x) = (select count(*) from public.mari_conversas where created_at >= '2026-01-01 00:00-03'),
+select sim.confere('as conversas por dia do Placar (admin) somam as conversas do período',
+  (select sum((x ->> 'conversas')::int) from jsonb_array_elements(:'ad_conv'::jsonb) x) = (select count(*) from public.mari_conversas where created_at >= '2026-01-01 00:00-03'),
   'soma diferente');
 select sim.confere('quem já lia continua lendo: o backoffice lê as oito tabelas que passaram a exigir perfil',
   public.meu_perfil() is null and :'bo_perfil' = 'backoffice'

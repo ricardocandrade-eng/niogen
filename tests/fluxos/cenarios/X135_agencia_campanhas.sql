@@ -69,8 +69,8 @@ select sim.confere('sem campanha liberada, as funções da tela devolvem vazio �
     and jsonb_array_length((select v from _x135 where k = 'ag0:mot')::jsonb -> 'leads') = 0,
   left((select v from _x135 where k = 'ag0:atend'), 200));
 select sim.confere('a agência não lê a lista de donos das campanhas', (select v from _x135 where k = 'ag0:donos') in ('0', '-1'), (select v from _x135 where k = 'ag0:donos'));
-select sim.confere('o Placar da agência segue o da empresa: meta_ads_dia() sem recorte é a conta inteira',
-  (select v from _x135 where k = 'ag0:dia_conta')::numeric = (select coalesce(sum(gasto), 0) from public.v_meta_ads_dia), (select v from _x135 where k = 'ag0:dia_conta'));
+select sim.confere('0409: sem o Placar, nem o dia a dia da conta inteira vai à agência (meta_ads_dia() sempre com o recorte)',
+  (select v from _x135 where k = 'ag0:dia_conta')::numeric = 0, (select v from _x135 where k = 'ag0:dia_conta'));
 
 -- quem não é admin não decide de quem é a campanha
 select sim.como('agencia');
