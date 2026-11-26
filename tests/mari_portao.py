@@ -1001,6 +1001,44 @@ def cen_ba(c):   # P54 (25/11, conversa L-377 — Ricardo: "A Mari deveria imedi
 
 
 # cenário → (índice do telefone, função, P# que cobre). Índices iguais aos da mari_v7_bateria; q = 15.
+def cen_bb(c):   # P55 (26/11, conversa L-272 — Ricardo: "foi salvo o nome do cliente como Pera Ai. Não é a primeira vez")
+    # A Mari pediu "nome completo e CPF", o cliente respondeu "Pera ai" e a frase foi gravada como nome (o atalho do 7 · Extrair
+    # aceitava qualquer resposta de 2 palavras fora da lista). Frase de espera não é nome; o nome de verdade continua entrando.
+    ate_planos_jf(c)
+    r = c.diz('Quero o plano Nio Essencial')
+    t = fala(r)
+    if 'por mais r$' in t:
+        r = c.diz('Fico no Essencial')
+        t = fala(r)
+    c.exige(RX_PEDE_DADOS.search(t), f'[P55] a Mari não pediu nome/CPF depois do plano: «{t[-220:]}»')
+    for frase in ('Pera ai', 'Calma la', 'Um momentinho'):
+        r = c.diz(frase)
+        row = conv_row(c, "dados->>'nome' as nome")
+        c.exige(not row.get('nome'), f'[P55] a frase "{frase}" virou nome: {row}')
+        c.exige(not re.search(r'\b(pera|calma|momentinho)\b\s*[,!]', fala(r)), f'[P55] chamou o cliente pela frase: «{fala(r)[:160]}»')
+    c.diz('Julio Teste da Silva')
+    row = conv_row(c, "dados->>'nome' as nome")
+    c.exige(row.get('nome') == 'Julio Teste da Silva', f'[P55] nome certo não gravado: {row}')
+
+
+def cen_bc(c):   # P56 (26/11, Ricardo: "Mari ainda continua chamando o cliente por nomes estranhos" — L-269 "Tudo certo, Mamãe!",
+    # L-220 "Pronto, Cidinha" com a cliente já identificada como Maria Aparecida): o nome do WhatsApp não vai mais ao modelo e,
+    # se escapar pelo histórico, o 7 · Extrair tira o vocativo. Nome informado pelo cliente é o único que vale.
+    for i, (apelido, real) in enumerate([('Mamãe', None), ('Cidinha', 'Maria Aparecida Teste')]):
+        h = type(c)(f'bc{i}', int(c.tel[-3:]) + i, apelido)
+        ate_planos_jf(h)
+        falas = [fala(h.diz('Quero o plano Nio Essencial')), fala(h.diz('Fico no Essencial'))]
+        if real:
+            falas.append(fala(h.diz(real)))
+            falas.append(fala(h.diz('529.982.247-25')))
+        falas.append(fala(h.diz('Obrigada, vou ver aqui e ja te falo')))
+        ap = norm(apelido)
+        for t in falas:
+            h.exige(not re.search(r'\b' + ap + r'\b', t), f'[P56] chamou pelo nome do WhatsApp «{apelido}»: «{t[:160]}»')
+        c.falhas += h.falhas
+        c.log += h.log
+
+
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'sem pergunta de operadora (18/11)'), 'i': (7, B.cen_i, 'regressão botão'),
@@ -1053,6 +1091,10 @@ PORTAO = {
     'az': (59, cen_az, 'P53'),
     # 25/11 — conversa L-377: pressa na instalação ("Teria para hoje?") ou ameaça de desistir → atendente na hora (telefones 62, 63 e 64)
     'ba': (62, cen_ba, 'P54'),
+    # 26/11 — conversa L-272: "Pera ai" depois do pedido de nome completo não é nome
+    'bb': (65, cen_bb, 'P55'),
+    # 26/11 — L-269 e L-220: o nome do WhatsApp (apelido) não é usado para chamar o cliente (telefones 66 e 67)
+    'bc': (66, cen_bc, 'P56'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

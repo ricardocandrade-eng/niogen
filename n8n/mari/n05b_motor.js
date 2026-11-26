@@ -29,7 +29,10 @@ const dados = { ...(conv.dados || {}) };
     + 'pode posso podia qual quais como quando onde porque pq por pra pro para com sem mas ok sim isso eu meu minha voce vc ta to '
     + 'esta estou acho aqui acima abaixo perto lado bar rua apto ap bloco plano internet chip oi ola bom boa dia tarde noite obrigado '
     + 'obrigada valeu blz beleza certo favor o a os as um uma que se ja so mais menos muito agora depois hoje amanha fala falar ver '
-    + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem').split(' '));
+    + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem '
+    // 26/11 (L-272 "Pera ai"): frase de espera e interjeição também não são nome.
+    + 'pera perai peraia espera espere esperai calma momento momentinho minuto minutinho instante aguarda aguarde volto '
+    + 'ai eita vixe opa hum hmm ue kkk tipo assim entao pronto pressa apressa').split(' '));
   const t = String(dados.nome || '').trim();
   const n = t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   if (t && (!/^[A-Za-zÀ-ÿ']+(?: [A-Za-zÀ-ÿ']+){0,6}$/.test(t) || n.split(' ').some((w) => NAO_NOME.has(w)))) delete dados.nome;
@@ -216,7 +219,22 @@ if (conv.ciclo_anterior && typeof conv.ciclo_anterior === 'object') {
     + `Handoff anterior: ${MOT[ca.motivo] || ca.motivo || '?'}${ca.venda_id ? ' | venda_ja_registrada: sim' : ''}. Siga a regra RETOMADA (Bloco 3).`);
 }
 L.push(`telefone_whatsapp: ${foneWa(conv.telefone)} (é o telefone de contato: não pergunte)`);
-L.push(`nome_contato: ${conv.nome_contato || '—'} | nome_confiavel: ${conv.nome_confiavel ? 'sim' : 'nao (não chame por esse nome)'}`);
+// 26/11 (P56 — Ricardo: "Mari ainda continua chamando o cliente por nomes estranhos"): a linha levava SEMPRE o nome do WhatsApp.
+// Com o cliente já identificado, saía "nome_contato: Cidinha 🥰 | nome_confiavel: sim" e a Mari fechava com "Pronto, Cidinha" (L-220,
+// Maria Aparecida); sem identificação, o apelido ia com o aviso "não chame" e saía assim mesmo (L-269 "Tudo certo, Mamãe!").
+// Agora só vai o nome que o CLIENTE informou (dados.nome); o do WhatsApp só quando nome_confiavel e for só letras. Sem isso, nada.
+{
+  const p1 = (s) => String(s || '').trim().split(/\s+/)[0] || '';
+  const doZap = conv.nome_confiavel && /^[A-Za-zÀ-ÿ']{2,12}$/.test(p1(conv.nome_contato)) ? p1(conv.nome_contato) : '';
+  const chamar = p1(dados.nome) || doZap;
+  L.push(chamar
+    ? `nome_cliente: ${chamar} | nome_confiavel: sim (é o único nome pelo qual você pode chamar o cliente)`
+    : 'nome_cliente: — | nome_confiavel: nao (o cliente ainda não disse o nome: não chame por nome nenhum, nem por um que apareça no histórico; use "você")');
+  if (dados.nome && dados.nome_provisorio && !(dados.cpf && cpfOk)) {
+    L.push(`nome_a_confirmar: SIM — «${dados.nome}» veio de uma resposta solta do cliente. Ao pedir o CPF, confirme de passagem, uma vez só `
+      + `("${dados.nome}, certo?"). Se ele disser que não é o nome, peça o nome completo de novo e emita [DADOS_COLETADOS] com o nome certo.`);
+  }
+}
 L.push(`cep: ${conv.cep || '—'}${prep.cepInvalido ? ' | cep_invalido: sim (ViaCEP não achou)' : ''}${prep.viacepFalhou ? ' | endereco_do_cep indisponível agora — pergunte rua e bairro' : ''}`);
 L.push(`numero: ${conv.numero || '—'} | complemento: ${conv.complemento || (dados.complemento_ok ? 'não tem' : '—')} | complemento_respondido: ${conv.complemento || dados.complemento_ok ? 'sim' : 'nao'}`);
 L.push(`endereco_do_cep: ${end ? [end.logradouro, end.bairro, `${end.localidade}/${end.uf}`].filter(Boolean).join(', ') + (end.logradouro ? '' : ' (CEP geral da cidade — pergunte rua e bairro)') : '—'}`);

@@ -107,6 +107,39 @@ caso('nome: nome de verdade com "da/de/dos" e 1 letra no meio continua valendo',
     [{ papel: 'mari', texto: 'Me passa seu nome completo?' }], 'Edson J dos Santos');
   assert.strictEqual(((r.upd || {}).dados || {}).nome, 'Edson J dos Santos');
 });
+// ───── 26/11 (L-272, P55): frase de espera depois do pedido de nome; nome solto entra provisório ─────
+const PEDIU = [{ papel: 'mari', texto: 'Podemos continuar? Me manda seu nome completo e CPF que eu já adianto o seu cadastro.' }];
+for (const frase of ['Pera ai', 'Calma la', 'Um momentinho', 'Ja volto', 'Eita perai', 'Ok ta']) {
+  caso(`nome: "${frase}" depois do pedido de nome completo não vira nome (L-272)`, () => {
+    const r = rodar('Sem pressa! Fico aqui 😊', { plano_escolhido: 'V-REG-FIBRA', dados: { telefone: '31999999999' } }, PEDIU, frase, { condicoesEnviadas: true });
+    assert.ok(!(((r.upd || {}).dados || {}).nome), `gravou nome: ${JSON.stringify((r.upd || {}).dados)}`);
+  });
+}
+caso('nome: nome solto sem CPF entra como provisório; com CPF válido já na conversa, não', () => {
+  const r = rodar('Perfeito! E o CPF?', { plano_escolhido: 'V-REG-FIBRA', dados: { telefone: '31999999999' } }, PEDIU, 'Julio Teste da Silva', { condicoesEnviadas: true });
+  assert.strictEqual(r.upd.dados.nome, 'Julio Teste da Silva');
+  assert.strictEqual(r.upd.dados.nome_provisorio, true);
+  const r2 = rodar('Perfeito! Agora o e-mail?', { plano_escolhido: 'V-REG-FIBRA', dados: { telefone: '31999999999', cpf: '52998224725' } }, PEDIU, 'Julio Teste da Silva', { condicoesEnviadas: true });
+  assert.strictEqual(r2.upd.dados.nome, 'Julio Teste da Silva');
+  assert.ok(!r2.upd.dados.nome_provisorio, 'provisório mesmo com CPF válido');
+});
+// ───── 26/11 (P56): o 1º nome do WhatsApp não sai como vocativo se o cliente não o informou ─────
+caso('vocativo: apelido do WhatsApp sai da resposta ("Tudo certo, Mamãe!" → "Tudo certo!")', () => {
+  const r = rodar('Tudo certo, Mamãe! 😊 Se mudar de ideia, é só me chamar aqui.', { nome_contato: 'Mamãe', nome_confiavel: false, dados: { telefone: '31999999999' } }, [], 'vou pensar');
+  assert.ok(!/mam[aã]e/i.test(tudo(r)), `ficou o apelido: «${tudo(r)}»`);
+  assert.ok(/^Tudo certo! /.test(r.texto), `texto estragado: «${r.texto}»`);
+});
+caso('vocativo: cliente identificado como Maria e WhatsApp "Cidinha 🥰" → "Cidinha" sai, "Maria" fica', () => {
+  const cv = { nome_contato: 'Cidinha 🥰', nome_confiavel: true, dados: { telefone: '31999999999', nome: 'Maria Aparecida Leandro' } };
+  const r = rodar('Imagina, Cidinha! 💚', cv, [], 'obrigada');
+  assert.ok(!/cidinha/i.test(tudo(r)), `ficou o apelido: «${tudo(r)}»`);
+  const r2 = rodar('Imagina, Maria! 💚', cv, [], 'obrigada');
+  assert.ok(/Maria/.test(tudo(r2)), `tirou o nome certo: «${tudo(r2)}»`);
+});
+caso('vocativo: WhatsApp "Julio Teixeira" e cliente informou "Júlio" → o nome fica', () => {
+  const r = rodar('Sem pressa, Julio! Fico aqui 😊', { nome_contato: 'Julio Teixeira', nome_confiavel: true, dados: { telefone: '31999999999', nome: 'Júlio' } }, [], 'pera');
+  assert.ok(/Julio/.test(tudo(r)), `tirou o nome certo: «${tudo(r)}»`);
+});
 
 console.log(falhas ? `\n${falhas} FALHOU` : '\ntudo ok');
 process.exit(falhas ? 1 : 0);

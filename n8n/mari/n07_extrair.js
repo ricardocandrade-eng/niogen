@@ -22,7 +22,10 @@ const NAO_NOME = new Set(('n nao num nem entendi entende entendo entender entend
   + 'pode posso podia qual quais como quando onde porque pq por pra pro para com sem mas ok sim isso eu meu minha voce vc ta to '
   + 'esta estou acho aqui acima abaixo perto lado bar rua apto ap bloco plano internet chip oi ola bom boa dia tarde noite obrigado '
   + 'obrigada valeu blz beleza certo favor o a os as um uma que se ja so mais menos muito agora depois hoje amanha fala falar ver '
-  + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem').split(' '));
+  + 'vou vai fica fico quero gostaria preciso tambem nada tudo alguem ninguem '
+  // 26/11 (L-272 "Pera ai"): frase de espera e interjeição também não são nome.
+  + 'pera perai peraia espera espere esperai calma momento momentinho minuto minutinho instante aguarda aguarde volto '
+  + 'ai eita vixe opa hum hmm ue kkk tipo assim entao pronto pressa apressa').split(' '));
 function pareceNome(s, min) {
   const t = String(s || '').trim();
   const n = Math.max(1, min || 2) - 1;
@@ -1529,8 +1532,16 @@ if (V7 && !cpfOk(m.dados.cpf)) {
   // 21/11 (L-40): "…ativa hoje, no seu nome?" não é pedido de nome — só "nome completo" ou "qual/me diz… seu nome". E a
   // resposta tem de parecer nome (L-222: "Am n entende" virou o nome e a Mari passou a chamar a cliente de "Am").
   const pediuNome = /nome completo|\b(qual|me (diz|fala|passa|manda|conta)|preciso)\b[^?.!]{0,20}\bseu nome\b/.test(norm(ultMari));
-  if (V7 && !pareceNome(m.dados.nome, 1) && pediuNome && pareceNome(msgC)) {
-    dados.nome = msgC; m.dados.nome = msgC; upd.dados = { ...(upd.dados || {}), nome: msgC };
+  // 26/11 (L-272, P55): "Pera ai" respondeu ao pedido de nome e virou o nome. O atalho agora só aceita nome completo de verdade
+  // (pelo menos 2 palavras com 3+ letras, sem contar "dos/das"; "Edson J dos Santos" vale) e entra PROVISÓRIO (dados.nome_provisorio):
+  // o 5b manda a Mari confirmar de passagem; com o CPF válido na conversa, deixa de ser provisório. Nome curto de verdade
+  // ("Rui Sá") continua entrando pela tag do modelo ou junto do CPF.
+  const nomeSolto = (s) => pareceNome(s) && String(s).trim().split(/\s+/)
+    .filter((w) => w.replace(/'/g, '').length >= 3 && !/^(dos|das|del|van|von)$/i.test(w)).length >= 2;
+  if (V7 && !pareceNome(m.dados.nome, 1) && pediuNome && nomeSolto(msgC)) {
+    const prov = !cpfOk(m.dados.cpf);
+    dados.nome = msgC; m.dados.nome = msgC; upd.dados = { ...(upd.dados || {}), nome: msgC, ...(prov ? { nome_provisorio: true } : {}) };
+    if (prov) dados.nome_provisorio = true;
   }
   // Nome ruim já gravado (frase de antes desta correção) e nada para pôr no lugar: sai, e a Mari pede de novo.
   if (V7 && m.dados.nome && !pareceNome(m.dados.nome, 1)) {
@@ -1802,6 +1813,23 @@ if (!erro && !handoff && !interativo && ultimaMari && FECHO.test(norm(ultimaMari
   }).filter(Boolean).join('\n\n')).filter((b) => b.trim());
   if (sem.length) { baloesFinais = sem; texto = sem.join('\n\n'); }
   else if (posHandoff) { baloesFinais = []; texto = ''; silencioIntencional = true; }
+}
+// 26/11 (P56): trava do vocativo. O 5b não manda mais o nome do WhatsApp ao modelo, mas ele ainda aparece no histórico (aberturas
+// antigas, falas do time). Se a resposta chamar o cliente pelo 1º nome do WhatsApp e esse não for o nome que ele informou, o
+// vocativo sai: "Sem pressa, Mamãe! Fico aqui" → "Sem pressa! Fico aqui"; "Mamãe, o preço…" → "O preço…". Nunca mexe no resto.
+if (!erro && !(resp.fixo && (resp.fixo.texto || resp.fixo.interativo))) {
+  const cz = ctx.conversa || {};
+  const zap = String(cz.nome_contato || '').trim().split(/\s+/)[0] || '';
+  const real = String(m.dados.nome || '').trim().split(/\s+/)[0] || '';
+  if (/^[A-Za-zÀ-ÿ']{2,}$/.test(zap) && norm(zap) !== norm(real) && !(cz.nome_confiavel && !real)) {
+    const meio = new RegExp(`,[ \\t]*${zap}(?=[ \\t]*(?:[,!.?…]|$))`, 'gim');
+    const ini = new RegExp(`^${zap}[ \\t]*[,!][ \\t]*(\\S)?`, 'gim');
+    const tira = (s) => (typeof s === 'string' ? s.replace(meio, '').replace(ini, (_, c1) => (c1 ? c1.toUpperCase() : '')) : s);
+    const antesV = baloesFinais.join('\n\n');
+    baloesFinais = baloesFinais.map(tira).filter((b) => String(b || '').trim());
+    if (interativo && interativo.corpo) interativo.corpo = tira(interativo.corpo);
+    if (baloesFinais.join('\n\n') !== antesV) { texto = baloesFinais.join('\n\n'); tags.vocativo_tirado = zap; }
+  }
 }
 if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
 // Rede de segurança (conversa #5, 07/11): nada para mandar (sem texto, sem interativo, sem handoff) = cliente no vácuo.
