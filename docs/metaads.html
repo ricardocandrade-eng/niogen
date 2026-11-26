@@ -107,6 +107,10 @@
   .ma-b-topo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 10px; }
   #g-bairros .vista { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .ma-pe { color: var(--muted); font-size: 12px; }
+  .ma-como { border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; background: var(--surface-2); font-size: 12.5px; line-height: 1.5; }
+  .ma-como ol { margin: 4px 0 6px; padding-left: 20px; }
+  .ma-como li { margin: 2px 0; }
+  .ma-como > span { color: var(--muted); font-size: 12px; }
   /* 23/11: as gavetas recolhíveis aparecem pela regra de listas.css (antes havia um conserto local aqui) */
   .ma-desde { font-size: 11.5px; color: var(--muted); }
   .ma-tratados { font-size: 12px; color: var(--muted); padding: 2px 4px; line-height: 1.5; }
@@ -221,6 +225,19 @@
         <div class="vista">
           <div class="ma-b-topo"><span class="ma-nota" id="sub-bairros" style="margin:0">Carregando…</span>
             <button type="button" class="btn btn-acc btn-sm" id="ver-conjunto">Conjunto para o Gerenciador</button></div>
+          <!-- 25/11 (Ricardo: "coloque uma explicação sobre como ela deve usar") -->
+          <div class="ma-como">
+            <b>Como usar</b>
+            <ol>
+              <li><b>Só Juiz de Fora.</b> Use para um conjunto mirado em JF. Nas outras cidades, a localização segue pela cidade inteira.</li>
+              <li>Clique em <b>Marcar</b>: entram os 7 bairros de maior score com crédito aprovado em pelo menos 50 % (dá para trocar o número ou marcar à mão).</li>
+              <li>Abra <b>Conjunto para o Gerenciador</b> e clique em <b>Copiar conjunto</b>.</li>
+              <li>No Gerenciador de Anúncios, no conjunto: <b>Público › Localização › Inserir em massa</b> (ou soltar alfinete) e cole. Cada linha é um bairro: latitude, longitude e raio.</li>
+              <li><b>Não mire bairro com aprovação abaixo de 50 %</b> (aparece marcado): ali o cliente compra, mas a Nio nega o crédito ou ele sai por inadimplência.</li>
+            </ol>
+            <span>Score = rede livre (casas onde a Nio passa e ainda não tem cliente) × aprovação de crédito do bairro × padrão das fachadas. Maior score = mais gente que pode comprar e ficar.
+              Estes números são da base de cobertura da Nio: servem só para mirar os anúncios da Dharma — não compartilhar.</span>
+          </div>
     <section class="kpis quatro" id="kpis" aria-label="Resumo dos bairros"></section>
 
     <div id="abas"></div>
