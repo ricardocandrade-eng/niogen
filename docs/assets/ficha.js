@@ -286,6 +286,7 @@
     const daVendaLinha = (k, velho) => fv.then((d) => (d ? (d[k] === undefined ? null : d[k]) : velho()));
     // 18/11 (0296): o post-it vem na ficha_venda (sem chamada nova); sem a RPC, fica sem post-it nesta abertura
     const notaP = daVendaLinha('nota', () => null);
+    const fatP = daVendaLinha('faturas', () => null);   // 0407: faturas em aberto da Nio, na mesma ficha_venda
     const [rv, re, rl, ra, rc, rk, ru, rx27, rph, rmot, rav, jo, rpl, rlk, andRow, cicloRow, teto, fnome, lead, din, lcfg, metaRow, osTri] = await Promise.all([
       daVenda('v', () => NG.sb.from('v_vendas').select('*').eq('id', id).maybeSingle()),
       daVenda('eventos', () => NG.sb.from('eventos_venda').select('*').eq('venda_id', id).order('criado_em')),
@@ -410,6 +411,7 @@
       usuarios: ru,
       meta: metaRow || null,   // 0186: selo Meta ✓/✗/— da venda (opc devolve o data direto)
       nota: await notaP,       // 0296: post-it do lead
+      faturas: await fatP,     // 0407: faturas em aberto (aba FPD SPD TPD do Dashboard)
       leadNum: (((rc.data || [])[0] || {}).lead_numero) || (rx27.data || {}).lead_numero || null,   // 0296: L-n
       nomeCurto,
     };
@@ -1457,6 +1459,20 @@
     return ` · <span class="selo-meta ${t[1]}" title="${esc(t[2])}">Nio ${esc(t[0])}</span>`;
   }
 
+  // 25/11 (0407) — selo Fatura: a fatura em aberto da Nio mais atrasada desta venda (lida no Dashboard, 1x/dia).
+  // Vencida = vermelho; a vencer = neutro com a data. Sem fatura em aberto, sem selo. Inadimplência não estorna (contrato).
+  function seloFatura(fs) {
+    const f = Array.isArray(fs) && fs.length ? fs[0] : null;
+    if (!f) return '';
+    const dia = f.vencimento ? NG.fmtDiaISO(f.vencimento).slice(0, 5) : '—';
+    const atraso = Number(f.dias_atraso || 0);
+    const lida = f.lido_em ? ` Lida no Dashboard da Nio em ${NG.fmtDiaISO(String(f.lido_em).slice(0, 10))}.` : '';
+    const t = atraso > 0
+      ? [`✗ ${atraso} d em atraso`, 'bad', `${f.indicador || 'Fatura'} em aberto, venceu em ${dia}: ${atraso} dia(s) de atraso. Falar com o cliente antes do D+5 (régua de pagamento).${lida}`]
+      : [`⏳ vence ${dia}`, '', `${f.indicador || 'Fatura'} em aberto, vence em ${dia}.${fs.length > 1 ? ` (+${fs.length - 1} em aberto)` : ''}${lida}`];
+    return ` · <span class="selo-meta ${t[1]}" title="${esc(t[2])}">Fatura ${esc(t[0])}</span>`;
+  }
+
   function cabecalho(v) {
     const ehAdmin = (NG.usuario || {}).perfil === 'admin';
     const atual = NG.etapaDe(v).id;
@@ -1478,7 +1494,7 @@
         <div class="f-ctl">${botaoVoltar()}<div class="f-menu"><button type="button" class="btn f-mais" data-f="menu" aria-haspopup="menu" aria-expanded="false" aria-label="Mais ações">⋯</button>
           <div class="f-menu-lista" role="menu" hidden>${menu}</div></div>
         ${modo !== 'pagina' ? '<button type="button" class="g-fechar" data-f="fechar" aria-label="Fechar a ficha">×</button>' : ''}</div></div>
-      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span>${seloNio(v)}${seloMeta(d.meta)}</div>
+      <div class="f-local">${linkConversa()}${chipsConversa(d.convInfo)}<span class="f-local-txt">${esc(linha2 || '—')}</span>${seloNio(v)}${seloFatura(d.faturas)}${seloMeta(d.meta)}</div>
     </header>`;
   }
 
@@ -4953,7 +4969,7 @@
       // O AGORA saiu do topo: virou o card no alto da Jornada. "Conversa com" fica na Jornada (degrau Atendimento) e no card.
       void meta;
       const l3V = [d.nomeCurto || v.plano_nome, v.valor_mensal != null && Number(v.valor_mensal) ? `${NG.fmtMoeda(v.valor_mensal)}/mês` : null,
-        [v.cidade, v.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · ') + seloNio(v) + seloMeta(d.meta);
+        [v.cidade, v.uf].filter(Boolean).join('-')].filter(Boolean).map(esc).join(' · ') + seloNio(v) + seloFatura(d.faturas) + seloMeta(d.meta);
       cab = cabCheia(v.cliente_nome, `${chipCopia('CPF', v.cliente_cpf_cnpj ? fmtDoc(v.cliente_cpf_cnpj) : '')}${chipCopia('OS', v.nio_os, 'os')}<span class="fc-orig">Origem: <b>${esc(NG.origemTxt(v) + ref)}</b></span>`,
         l3V || 'plano: não escolheu', menu);
       trilha = trilhasHtml();
