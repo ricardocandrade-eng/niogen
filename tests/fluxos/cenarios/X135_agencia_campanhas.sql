@@ -160,3 +160,15 @@ alter policy meta_ads_diario_agencia on public.meta_ads_diario using ((select pu
 select sim.confere('conferência: policy da Meta sem o recorte por campanha é acusada',
   public.agencia_leituras_indevidas()::text ~ 'meta_ads_diario_agencia', public.agencia_leituras_indevidas()::text);
 alter policy meta_ads_diario_agencia on public.meta_ads_diario using ((select public.sou_agencia()) and campanha_id in (select public.agencia_campanhas()));
+
+-- 5) 0411: encerramento da Mari (handoff_em gravado) não conta como passada ao consultor; pedido de pessoa conta
+update public.mari_conversas set handoff_motivo = 'fora_de_area', handoff_em = now() where id = :'g';
+select sim.como('admin');
+select (public.meta_ads_atendimento(null, null, true) -> 'total' ->> 'passadas_consultor')::int as pass_encerra \gset
+select sim.como('servico');
+update public.mari_conversas set handoff_motivo = 'pedido_humano', handoff_em = now() where id = :'g';
+select sim.como('admin');
+select (public.meta_ads_atendimento(null, null, true) -> 'total' ->> 'passadas_consultor')::int as pass_pede \gset
+select sim.como('servico');
+select sim.confere('atendimento: encerramento da Mari não conta como passada ao consultor; pedido de pessoa conta (0411)',
+  :pass_encerra = 0 and :pass_pede = 1, :'pass_encerra' || ' / ' || :'pass_pede');
