@@ -7,7 +7,7 @@
  *     e sem Cache-Control private/no-store. Supabase (outro domínio) é sempre rede — o navegador nem passa por aqui;
  *   · Web Push: mostra o aviso que o n8n mandou (título, texto, url) e o clique abre/foca o NIOGEN na linha do Live.
  */
-const CACHE = 'niogen-251126-17';
+const CACHE = 'niogen-251126-18';
 const ARQUIVOS = [
   './', 'index.html', 'painel.html', 'funil.html', 'instalacoes.html', 'operacoes.html', 'vendas.html', 'venda.html', 'configuracoes.html', 'tabela.html', 'metaads.html', 'cobertura.html', 'credito.html', 'mari.html', 'embreve.html', 'adimplencia.html', 'conciliacao.html', 'parceiros.html', 'pagamentos.html', 'guia.html', 'fila.html', 'live2.html', 'conversas.html', 'leads.html', 'pulso.html', 'placar.html',
   'assets/app.css', 'assets/app.js', 'assets/ficha.js', 'assets/conversa.js', 'assets/novavenda.js', 'assets/vendasos.js', 'assets/listas.css', 'assets/sidebar.js', 'assets/consulta.js', 'assets/pulso.js', 'assets/movel.js', 'assets/osab.js', 'assets/dfv.js', 'assets/markdown.js', 'assets/icon.svg', 'manifest.webmanifest',

@@ -49,8 +49,8 @@
 <link rel="stylesheet" href="assets/listas.css?v=231126-1">
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=231126-2"></script>
-<script src="assets/sidebar.js?v=251126-15"></script>
+<script src="assets/app.js?v=251126-18"></script>
+<script src="assets/sidebar.js?v=251126-18"></script>
 <style>
   .ma-lido { font-size: 12px; color: var(--muted); white-space: nowrap; }
   .ma-lido.velho { color: var(--warn-fg); }
@@ -286,7 +286,7 @@
   const agencia = eu.perfil === 'agencia';   // 0361: a agência da Meta Ads — só contagens, sem o saldo em aberto
   NGSidebar.montar();
   // 23/11: o admin abre, noutra aba, a tela exatamente como a agência a vê (para conversar com ela olhando a mesma coisa)
-  if (eu.perfil === 'admin') document.getElementById('lido').insertAdjacentHTML('beforebegin', '<a class="btn btn-ghost" href="metaads.html?como=agencia" target="_blank" rel="noopener" title="Abre noutra aba as telas como a agência de anúncios as vê: Meta Ads, Placar e Tabela, sem saldo, comissão ou vendedor.">Ver como a agência ↗</a>');
+  if (eu.perfil === 'admin') document.getElementById('lido').insertAdjacentHTML('beforebegin', '<a class="btn btn-ghost" href="metaads.html?como=agencia" target="_blank" rel="noopener" title="Abre noutra aba as telas como a agência de anúncios as vê: Meta Ads (só as campanhas liberadas) e Tabela, sem saldo, comissão ou vendedor.">Ver como a agência ↗</a>');
   if (agencia) document.getElementById('ma-pe').textContent = 'Esta tela só mostra, em números, as campanhas liberadas para a agência: nenhum dado de cliente passa por aqui. Venda = OS gerada.';
   // 0406 (Ricardo 25/11): a agência vê só as campanhas que o admin liberou (Configurações › Agência), e o Google Ads não é dela.
   // O banco segura o recorte; na prévia do admin ("Ver como a agência") as funções recebem p_agencia e a tela filtra as linhas.

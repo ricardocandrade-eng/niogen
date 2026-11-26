@@ -1170,7 +1170,7 @@
   let usuarioAtual = null;
   // 23/11 (0361): o perfil `agencia` (a agência da Meta Ads) só abre estas telas; qualquer outra, pedida pelo endereço, volta
   // para o Meta Ads. É conforto de tela: quem segura o dado é o banco (para tudo o que já existia, a agência não tem perfil).
-  const TELAS_AGENCIA = ['metaads.html', 'placar.html', 'tabela.html'];
+  const TELAS_AGENCIA = ['metaads.html', 'tabela.html'];   // 25/11: o Placar (resultado da empresa) saiu — Ricardo
   function foraDaAgencia(u) {
     if (!u || u.perfil !== 'agencia') return false;
     const aqui = (location.pathname.split('/').pop() || 'index.html').toLowerCase();

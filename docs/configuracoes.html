@@ -24,8 +24,8 @@
 <script src="config.js?v=111126-12"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="assets/app.js?v=231126-1"></script>
-<script src="assets/sidebar.js?v=251126-15"></script>
+<script src="assets/app.js?v=251126-18"></script>
+<script src="assets/sidebar.js?v=251126-18"></script>
 <script src="assets/osab.js?v=131126-20"></script>
 <script src="assets/dfv.js?v=111126-12"></script>
 </head>
@@ -85,7 +85,7 @@
     <!-- Equipe (08/11, Onda 1.3 — só admin) -->
     <section id="equipe" class="secao" hidden>
       <div class="faixa cinza fc-chave"><label class="check"><input type="checkbox" id="chave-ficha"> <b>Voltar para a gaveta antiga</b> neste navegador</label><span id="chave-ficha-i"></span><span class="nota-campo">A ficha única (tela cheia com as três trilhas) é o padrão para todos desde 13/11. Marque só se algo faltar nela — e avise o Ricardo. Vale só para este navegador.</span></div>
-      <div class="faixa cinza">Para incluir alguém: <a href="https://supabase.com/dashboard/project/zlrfwbkblytnokuexjti/auth/users" target="_blank" rel="noopener">Supabase › Authentication › Users</a> › <b>Add user › Send invitation</b> com o e-mail da pessoa. Ela recebe o link, cria a própria senha no NIOGEN e aparece aqui <b>sem acesso</b>: escolha o perfil e clique em <b>Liberar</b>. Para a agência de anúncios, o perfil é <b>Agência</b>: ela só vê Meta Ads (só as campanhas liberadas na aba <b>Agência</b>), Placar e Tabela, em números.</div>
+      <div class="faixa cinza">Para incluir alguém: <a href="https://supabase.com/dashboard/project/zlrfwbkblytnokuexjti/auth/users" target="_blank" rel="noopener">Supabase › Authentication › Users</a> › <b>Add user › Send invitation</b> com o e-mail da pessoa. Ela recebe o link, cria a própria senha no NIOGEN e aparece aqui <b>sem acesso</b>: escolha o perfil e clique em <b>Liberar</b>. Para a agência de anúncios, o perfil é <b>Agência</b>: ela só vê Meta Ads (só as campanhas liberadas na aba <b>Agência</b>) e Tabela, em números.</div>
       <section class="lista padrao" aria-label="Equipe">
         <div class="rolagem"><table class="tab">
           <thead><tr><th>Nome</th><th class="col-media">E-mail</th><th>Perfil</th><th class="col-media" title="Nome e id do agente desta pessoa no Chatwoot. É por ele que o NIOGEN sabe quais conversas são dela (“você” na Live) e a quem atribuir quando ela clica em Assumir.">Agente no Chatwoot</th><th class="col-media">Último login</th><th>Acesso</th><th></th></tr></thead>
@@ -937,7 +937,7 @@ Guardar?`)) return;
   // ---------------------------------------------------------- Equipe (08/11, Onda 1.3 — só admin)
   // admin_equipe() (0069) traz o e-mail e o último login de auth.users; perfil/nome/ativo são UPDATE em usuarios (RLS: só admin).
   let EQ = null;
-  const PERFIS = { vendedor: 'Vendedor', backoffice: 'Backoffice', admin: 'Admin', agencia: 'Agência (só Meta Ads, Placar e Tabela)' };   // 0361
+  const PERFIS = { vendedor: 'Vendedor', backoffice: 'Backoffice', admin: 'Admin', agencia: 'Agência (só Meta Ads e Tabela)' };   // 0361
   async function carregarEquipe() {
     const { data, error } = await NG.sb.rpc('admin_equipe');
     const tb = document.getElementById('equipe-lista');
@@ -991,7 +991,7 @@ Guardar?`)) return;
       mud.ativo = false;
     }
     if (u.id === eu.id) { delete mud.perfil; delete mud.ativo; }
-    if (mud.perfil === 'agencia' && u.perfil !== 'agencia' && !confirm(`${nome} vai ser AGÊNCIA: vê só Meta Ads, Placar e Tabela, em números, sem nenhum dado de cliente, comissão ou vendedor. Use só para gente de fora (agência de anúncios). Confirmar?`)) return;
+    if (mud.perfil === 'agencia' && u.perfil !== 'agencia' && !confirm(`${nome} vai ser AGÊNCIA: vê só Meta Ads (as campanhas liberadas) e Tabela, em números, sem nenhum dado de cliente, comissão ou vendedor. Use só para gente de fora (agência de anúncios). Confirmar?`)) return;
     if (mud.perfil === 'admin' && u.perfil !== 'admin' && !confirm(`${nome} vai ser ADMIN (vê e muda tudo, inclusive a equipe). Confirmar?`)) return;
     b.disabled = true;
     const { error } = await NG.sb.from('usuarios').update(mud).eq('id', u.id);

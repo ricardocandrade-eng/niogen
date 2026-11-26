@@ -44,7 +44,7 @@
     ]],
     ['Acompanhamento', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
-      { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice', 'agencia'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
+      { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Canais', href: 'metaads.html' },   // 23/11 (0369): Meta Ads virou Canais, com uma aba por canal pago
@@ -73,7 +73,7 @@
     return `${f({ weekday: 'short' }).replace('.', '')} ${f({ day: '2-digit', month: '2-digit' })} · ${f({ hour: '2-digit', minute: '2-digit' })} · ${VERSAO}`;
   }
 
-  const MENU_AGENCIA = ['meta', 'placar', 'tabela'];   // 0361
+  const MENU_AGENCIA = ['meta', 'tabela'];   // 0361 · 25/11: sem o Placar (Ricardo: "ela não precisa ter acesso ao Placar")
   const souAgencia = () => (NG.usuario || {}).perfil === 'agencia';
   function item(it, ativo) {
     if (souAgencia() && !MENU_AGENCIA.includes(it.id)) return '';
