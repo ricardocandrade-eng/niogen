@@ -459,9 +459,10 @@ if (V7 && (conv.dados || {}).abertura && !conv.cep) {
 // pelo texto, a cidade que está fora — antes ela só sabia pelo CEP e pedia o CEP de uma cidade que a gente não atende.
 const cidadesAtendidas = (Array.isArray(inter.cidades) ? inter.cidades : []).map((x) => x && x.cidade).filter(Boolean);
 if (V7 && !cluster && conv.dentro_area !== false && cidadesAtendidas.length) {
-  L.push(`cidades_atendidas: ${cidadesAtendidas.join(', ')} (todas em Minas Gerais). `
-    + 'Se o cliente disser que o endereço da instalação é numa cidade que NÃO está nesta lista (ex.: outra cidade de MG, outro estado, '
-    + 'uma praia do RJ), a cidade já é o filtro: NÃO peça CEP, número nem confirmação — despedida fora_de_area (Bloco 6b) com o nome da cidade '
+  // 26/11 (0417/0418, área nacional): a lista vem da config_area — as cidades ativas de todos os estados; não é mais só Minas.
+  L.push(`cidades_atendidas: ${cidadesAtendidas.join(', ')} (as cidades onde a gente vende, em vários estados — a lista é do sistema). `
+    + 'Se o cliente disser que o endereço da instalação é numa cidade que NÃO está nesta lista (de qualquer estado — inclusive de Minas), '
+    + 'a cidade já é o filtro: NÃO peça CEP, número nem confirmação — despedida fora_de_area (Bloco 6b) com o nome da cidade '
     + 'que ele disse + handoff fora_de_area com [ELEGIBILIDADE: fora_area] e [CIDADE_DETECTADA: cidade]. '
     + 'Só pergunte antes se não der para saber a cidade (pode ser bairro ou distrito de uma da lista, nome com erro, ou ele falou de uma cidade que não é a do endereço).');
 }

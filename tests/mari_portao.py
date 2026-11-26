@@ -313,17 +313,19 @@ def cen_x(c):   # P23: "não tenho interesse, pode parar" → despede educado, s
     c.exige(not re.search(r'\?', (r.get('resposta') or '')), f'[P23] insistiu com pergunta: «{t[:160]}»')
 
 
-def cen_y(c):   # P24: CEP fora das 38 cidades → 1 balão do texto da Parte 2, sem promessa
+def cen_y(c):   # P24: CEP fora da área → 1 balão do texto da Parte 2, sem promessa
+    # 26/11 (0417): São Paulo passou a vender — o CEP fora da área agora é Uberlândia/MG, que não está na carteira da Nio
     c.diz('Oi')
-    r = c.diz('Meu CEP é 01310-100, número 1000')   # São Paulo/SP
+    r = c.diz('Meu CEP é 38400-100, número 1000')   # Uberlândia/MG
     if not r.get('handoff'):
-        r = c.diz('Isso, é em São Paulo mesmo')
+        r = c.diz('Isso, é em Uberlândia mesmo')
     t = fala(r)
     bal = r.get('baloes') if isinstance(r.get('baloes'), list) else [r.get('resposta') or '']
     c.exige((r.get('handoff') or {}).get('motivo') == 'fora_de_area', f'[P24] sem handoff fora_de_area: {r.get("handoff")} «{t[:160]}»')
     c.exige(len([b for b in bal if (b or '').strip()]) == 1, f'[P24] mais de 1 balão: {bal}')
     c.exige(not re.search(r'anot|avis|nio vai|televendas|0800', t), f'[P24] promessa/televendas na despedida: «{t[:200]}»')
     c.exige('obrigada pelo contato' in t, f'[P24] sem o texto da Parte 2: «{t[:200]}»')
+    c.exige('minas' not in t, f'[P24] a recusa ainda fala em Minas: «{t[:200]}»')
 
 
 def cen_z(c):   # P25: golpe da "migração" → texto do golpe + handoff humano

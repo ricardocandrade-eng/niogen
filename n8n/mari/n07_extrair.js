@@ -1330,7 +1330,7 @@ if (motivo) {
         ? `Pronto, anotado! Agora o nosso time abre o seu pedido e te manda aqui mesmo, ${prazo}, o link da biometria — é rapidinho, você faz pelo celular. Depois a gente confirma a data da instalação por aqui 😊`
         : `Pronto, anotado! Vou passar pro nosso consultor, que te chama aqui no WhatsApp ${prazo} pra confirmar a visita. Qualquer dúvida é só me chamar 😊`,
       recusa_compra: 'Sem problema! Se mudar de ideia, é só me chamar aqui. Foi um prazer conversar com você 😊',
-      fora_de_area: 'Por enquanto a gente atende só algumas cidades de Minas 😕 Obrigada pelo contato!',
+      fora_de_area: 'Por enquanto a gente atende só algumas das cidades onde a Nio tem fibra 😕 Obrigada pelo contato!',   // 26/11: área nacional, sem "Minas"
       ja_cliente_nio: 'Entendi! Como você já é cliente Nio, quem te atende é a própria Nio — pelo App Nio ou no 0800 001 1000 eles resolvem bem mais rápido. Nós somos uma revenda e só cuidamos de contratação nova, tá? Obrigada pelo contato 😊',
     }[motivo] || `Vou te passar pra um dos nossos consultores, que te chama aqui mesmo ${prazo} 😊`;
   }
@@ -1353,7 +1353,7 @@ if (V7 && handoff && motivo === 'fora_de_area') {
   const p1 = String(dd.nome || '').trim().split(/\s+/)[0];
   const nm = p1 && /^[A-Za-zÀ-ÿ']{2,20}$/.test(p1) ? p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase() : null;
   const cid = String(c.cidade || '').trim();
-  texto = `Poxa${nm ? `, ${nm}` : ''}, por enquanto a gente atende só algumas cidades de Minas${cid ? `, e ${cid} ainda não está entre elas` : ''} 😕 Obrigada pelo contato!`;
+  texto = `Poxa${nm ? `, ${nm}` : ''}, por enquanto a gente atende só algumas das cidades onde a Nio tem fibra${cid ? `, e ${cid} ainda não está entre elas` : ''} 😕 Obrigada pelo contato!`;
   baloes = [texto];
 }
 // Balões finais: texto final (a despedida de segurança acima pode ter preenchido o texto depois do corte).
