@@ -30,9 +30,11 @@
   // 22/11 (novo layout, passo 6): o Placar voltou ao menu como tela de verdade (placar.html), em Acompanhamento.
   const MENU = [
     ['Atendimento', [
-      { id: 'minhavez', ico: '', nome: 'Live', vivo: true, href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila', badge2: 'oport' },
-      // 25/11 (0390–0392, Ricardo: "7 dias lado a lado"): a Live 2.0 fica ao lado da Live atual até a decisão dos 7 dias.
-      { id: 'live2', ico: '', nome: 'Live 2.0', vivo: true, href: 'live2.html', perfis: ['admin', 'backoffice'], esconder: true },
+      // 26/11 (Ricardo: "Coloque o link da Live 2.0 no topo, com notificação caso tenha coisa pra fazer. E deixe a Live 1.0 abaixo,
+      // sem indicadores e sem a bolinha vermelha, até eu decidir removê-la"): a 2.0 é a 1ª, com o número da fila dela (live2_fila);
+      // a 1.0 fica logo abaixo, só o link.
+      { id: 'live2', ico: '', nome: 'Live 2.0', vivo: true, href: 'live2.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila2' },
+      { id: 'minhavez', ico: '▤', nome: 'Live 1.0', href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
     ]],
@@ -413,7 +415,6 @@
       const j = await NG.jornada();
       if (j.erro) return;
       const acao = j.lista.filter((x) => x.precisa_acao);
-      const verm = (l) => l.filter((x) => x.nivel === 'agora').length;
       // Instalações: biometria validada esperando abrir a OS, ou OS aberta esperando agendar (contrato: 4 h da biometria).
       const osAg = j.lista.filter((x) => x.botao === 'os' || x.botao === 'os_agendar' || (x.botao === 'agendar' && x.nivel === 'agora'));
       pinta(nav, 'agendar', osAg.length, osAg.length ? 'alerta' : 'info', `${osAg.length} esperando abrir a OS ou agendar a instalação (contrato: até 4 h da biometria).`);
@@ -421,18 +422,19 @@
         // 10/11 (Ricardo: "não pode o mesmo cliente trazer 2 notificações no menu lateral"): cada cliente conta UMA vez.
         // Live conta tudo o que precisa de ação; Mari não repete esse número; Conversas conta só quem espera e NÃO está no Live.
         pinta(nav, 'mari', 0, 'info', '');
-        // 21/11 (0342, debate da Live): o Para fazer = alarmes da jornada + vez do time na situação gravada — o menu conta igual
-        const rs = await Promise.resolve(NG.sb.rpc('live_situacoes')).catch(() => null);
-        const vezT = new Set(((rs && !rs.error && rs.data) || []).filter((x) => x.vez === 'time')
-          .flatMap((x) => [x.conversa_id && `c:${x.conversa_id}`, x.venda_id && `v:${x.venda_id}`]).filter(Boolean));
-        const chaves = (x) => [x.conversa_id && `c:${x.conversa_id}`, x.venda_id && `v:${x.venda_id}`].filter(Boolean);
-        const fila = j.lista.filter((x) => x.precisa_acao || chaves(x).some((k) => vezT.has(k)));
-        pinta(nav, 'fila', fila.length, verm(acao) ? 'alerta' : 'info',
-          `${fila.length} na sua vez · ${verm(acao)} agora (cliente esperando ou prazo do contrato).`);
-        total = fila.length;
+        // 26/11: o número do menu é o da Live 2.0 — as tarefas da fila dela (live2_fila), vermelho se há venda em risco ou
+        // cliente esperando (urgência 4+). A Live 1.0 não conta mais nada no menu.
+        const r2 = await Promise.resolve(NG.sb.rpc('live2_fila')).catch(() => null);
+        const f2 = (r2 && !r2.error && r2.data && r2.data.fila) || null;
+        if (f2) {
+          const quentes = f2.filter((x) => x.risco || Number(x.urg) >= 4).length;
+          pinta(nav, 'fila2', f2.length, quentes ? 'alerta' : 'info',
+            `${f2.length} ${f2.length === 1 ? 'tarefa' : 'tarefas'} na Live 2.0 · ${quentes} ${quentes === 1 ? 'urgente' : 'urgentes'} (venda em risco ou cliente esperando).`);
+          total = f2.length;
+        }
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
         // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.
-        const [op, fu] = await Promise.all([NG.oportunidades(j), NG.furosJornada(j)]);
+        const fu = await NG.furosJornada(j);   // 26/11: o selo 🔥 de oportunidades era da Live 1.0 e saiu com ela
         // 0406: campanha nova na conta da Meta sem dono — o admin diz se é da agência (Configurações › Agência)
         if (u.perfil === 'admin') {
           const rc = await Promise.resolve(NG.sb.rpc('meta_ads_campanhas_sem_dono')).catch(() => null);
@@ -442,7 +444,6 @@
           const a = it && it.closest('a');
           if (a) a.setAttribute('href', nc ? 'configuracoes.html#agencia' : 'configuracoes.html');
         }
-        if (!op.erro) pinta(nav, 'oport', op.lista.length, '', `${op.lista.length} ${op.lista.length === 1 ? 'oportunidade' : 'oportunidades'}: a Mari acha que uma mensagem sua esquenta a conversa. Não é obrigação.`);
         if (!fu.erro) {
           const n = fu.ids.size;
           pinta(nav, 'conversas', n, n ? 'alerta' : 'info', n ? `${n} ${n === 1 ? 'cliente esperando' : 'clientes esperando'} resposta há 3 min ou mais FORA do Live — deveria ser 0 (defeito registrado para corrigir).` : '');
@@ -555,7 +556,7 @@
     const ir = () => { if (window.NGMovel) window.NGMovel.montar(pagina); };
     if (window.NGMovel) { ir(); return; }
     const s = document.createElement('script');
-    s.src = 'assets/movel.js?v=161126-8';
+    s.src = 'assets/movel.js?v=261126-3';
     s.onload = ir;
     document.head.appendChild(s);
   }
