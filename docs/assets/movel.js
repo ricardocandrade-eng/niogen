@@ -46,7 +46,7 @@
   // ---------- barra inferior ----------
   const ABAS = [
     { id: 'conversas', nome: 'Conversas', href: 'conversas.html', ico: '<path d="M4 5h16v11H8l-4 4z"/>', badge: 'conversas' },
-    { id: 'live2', nome: 'Live', href: 'live2.html', ico: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', badge: 'fila2' },   // 26/11: a barra do celular abre a Live 2.0
+    { id: 'live2', nome: 'Live', href: 'live2.html', ico: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>', badge: 'fila2', badge2: 'oport' },   // 26/11: a barra do celular abre a Live 2.0
     { id: 'pulso', nome: 'Pulso', href: 'pulso.html', ico: '<path d="M2 12h4l3-7 4 14 3-7h6"/>' },
     { id: 'mais', nome: 'Mais', ico: '<path d="M4 6h16M4 12h16M4 18h16"/>' },
   ];

@@ -33,7 +33,7 @@
       // 26/11 (Ricardo: "Coloque o link da Live 2.0 no topo, com notificação caso tenha coisa pra fazer. E deixe a Live 1.0 abaixo,
       // sem indicadores e sem a bolinha vermelha, até eu decidir removê-la"): a 2.0 é a 1ª, com o número da fila dela (live2_fila);
       // a 1.0 fica logo abaixo, só o link.
-      { id: 'live2', ico: '', nome: 'Live 2.0', vivo: true, href: 'live2.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila2' },
+      { id: 'live2', ico: '', nome: 'Live 2.0', vivo: true, href: 'live2.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'fila2', badge2: 'oport' },
       { id: 'minhavez', ico: '▤', nome: 'Live 1.0', href: 'fila.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conversas', ico: '✉', nome: 'Conversas', href: 'conversas.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'conversas' },
       { id: 'cobertura', ico: '⌖', nome: 'Cobertura', href: 'cobertura.html' },   // 11/11: + crédito (antiga credito.html)
@@ -56,6 +56,7 @@
       { id: 'adimplencia', ico: '◇', nome: 'Adimplência', href: 'adimplencia.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conciliacao', ico: '◆', nome: 'Conciliação', href: 'conciliacao.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'pagamentos', ico: '◈', nome: 'Pagamentos a parceiros', href: 'pagamentos.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'ferramentas', ico: '⚒', nome: 'Ferramentas', href: 'ferramentas.html', perfis: ['admin'], esconder: true },   // 26/11 (0415): no ar, custo e vencimento de cada ferramenta paga
     ]],
     ['Cadastros', [
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },
@@ -434,7 +435,9 @@
         }
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
         // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.
-        const fu = await NG.furosJornada(j);   // 26/11: o selo 🔥 de oportunidades era da Live 1.0 e saiu com ela
+        // 26/11 (Ricardo: "Põe o 🔥 de oportunidades na Live 2.0"): o selo à parte, ao lado do número da Live 2.0
+        const [op, fu] = await Promise.all([NG.oportunidades(j), NG.furosJornada(j)]);
+        if (!op.erro) pinta(nav, 'oport', op.lista.length, '', `${op.lista.length} ${op.lista.length === 1 ? 'oportunidade' : 'oportunidades'}: a Mari acha que uma mensagem sua esquenta a conversa. Não é obrigação.`);
         // 0406: campanha nova na conta da Meta sem dono — o admin diz se é da agência (Configurações › Agência)
         if (u.perfil === 'admin') {
           const rc = await Promise.resolve(NG.sb.rpc('meta_ads_campanhas_sem_dono')).catch(() => null);
@@ -556,7 +559,7 @@
     const ir = () => { if (window.NGMovel) window.NGMovel.montar(pagina); };
     if (window.NGMovel) { ir(); return; }
     const s = document.createElement('script');
-    s.src = 'assets/movel.js?v=261126-3';
+    s.src = 'assets/movel.js?v=261126-4';
     s.onload = ir;
     document.head.appendChild(s);
   }
