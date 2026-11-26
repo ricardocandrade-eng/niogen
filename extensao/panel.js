@@ -31,10 +31,11 @@
   const CFG = window.NIOGEN_CONFIG || {};
   const ETAPAS = ['Identificação PDV', 'Consulta de viabilidade', 'Cadastro do cliente', 'Contato', 'Pagamento e ofertas', 'Resumo', 'Abrir OS'];
   const PREENCHE = [1, 2, 3, 4];     // etapas que a extensão preenche; 5 só destaca; 6 e 7 só checklist
-  // Decisão do Ricardo (06/11): TODO pedido sai com a matrícula TT837725 (Joysse), PDV 1069521 — não depende do vendedor da venda
-  // nem de usuarios.matricula_pap, e não há escolha no painel.
-  const MATRICULA_PAP = 'TT837725';
-  const MATRICULA_NOME = 'Joysse';
+  // Matrícula do vendedor da Etapa 1: uma só para todo pedido (não há escolha no painel). 26/11 (Ricardo): o pedido sai no login de
+  // VENDEDOR — "login de vendedor precisa ter venda, se não é excluído" —, não no do backoffice (decisão de 06/11 revista). A matrícula
+  // fica no config.js LOCAL (fora do git: o repositório é público): MATRICULA_PAP e MATRICULA_NOME. Sem ela, a Etapa 1 não preenche.
+  const MATRICULA_PAP = String(CFG.MATRICULA_PAP || '').trim();
+  const MATRICULA_NOME = String(CFG.MATRICULA_NOME || '').trim() || 'vendedor';
   const CHECKLIST = ['Velocidade e o que vem incluso', 'Forma de pagamento', 'Valor mensal fixo até jan/2030', 'Regra da taxa de habilitação',
     'Regra de vencimento', 'Informações técnicas obrigatórias', 'Data da instalação', 'App Nio', 'Sumário/Regulamento'];
   const TXT_ESTADO = {
@@ -375,7 +376,7 @@
     const d = S.dados; if (!d) return [];
     const v = d.viabilidade, c = d.cliente, k = d.contato, o = d.oferta;
     switch (n) {
-      case 1: return [['UF', d.pdv.uf, true], ['PDV', `${d.pdv.codigo} - ${d.pdv.nome}`, true], ['Matrícula do vendedor', `${MATRICULA_PAP} · ${MATRICULA_NOME}`, true, true]];
+      case 1: return [['UF', d.pdv.uf, true], ['PDV', `${d.pdv.codigo} - ${d.pdv.nome}`, true], (MATRICULA_PAP ? ['Matrícula do vendedor', `${MATRICULA_PAP} · ${MATRICULA_NOME}`, true, true] : ['Matrícula do vendedor', 'falta MATRICULA_PAP no config.js da extensão — escolha o vendedor à mão', false, true])];
       case 2: return [['CEP', fmtCep(v.cep), true], ['Número', v.numero || '', true], ['Complemento', v.complemento || '', false],
         ['Referência', v.referencia || '', true], ['Rua (conferir)', v.logradouro || '', false, true], ['Bairro (conferir)', v.bairro || '', false, true],
         ['Cidade (conferir)', [v.cidade, v.uf].filter(Boolean).join('/'), false, true]];
@@ -400,7 +401,7 @@
       return [
         { id: 'uf', modo: 'lista', ph: ['Informe a UF'], busca: d.pdv.uf, match: [d.pdv.uf], exato: true, valor: d.pdv.uf },
         { id: 'pdv', modo: 'lista', ph: ['Insira o código ou nome do seu PDV'], busca: d.pdv.codigo, match: [d.pdv.codigo], valor: d.pdv.codigo },
-        { id: 'mat', modo: 'lista', ph: ['Informe a matrícula do vendedor'], busca: mat, match: [mat], valor: mat },
+        ...(mat ? [{ id: 'mat', modo: 'lista', ph: ['Informe a matrícula do vendedor'], busca: mat, match: [mat], valor: mat }] : []),   // sem config: não chuta
       ];
     }
     if (n === 2) {

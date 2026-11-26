@@ -8,4 +8,7 @@ window.NIOGEN_CONFIG = {
   supabaseAnonKey: 'COLE-AQUI-A-CHAVE-ANON',
   // Endereço do NIOGEN (botão "Abrir a ficha" na etapa 7). Opcional: sem ele a extensão usa https://niogen.dharmatelecom.com.br
   NIOGEN_URL: 'https://niogen.dharmatelecom.com.br',
+  // 26/11: matrícula do VENDEDOR que vai na Etapa 1 de todo pedido (o login de vendedor precisa ter venda). Fica só aqui, nunca no git.
+  MATRICULA_PAP: 'TTxxxxxx',
+  MATRICULA_NOME: 'Nome',
 };
