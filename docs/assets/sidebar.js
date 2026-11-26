@@ -56,6 +56,7 @@
       { id: 'adimplencia', ico: '◇', nome: 'Adimplência', href: 'adimplencia.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'conciliacao', ico: '◆', nome: 'Conciliação', href: 'conciliacao.html', perfis: ['admin', 'backoffice'], esconder: true },
       { id: 'pagamentos', ico: '◈', nome: 'Pagamentos a parceiros', href: 'pagamentos.html', perfis: ['admin', 'backoffice'], esconder: true },
+      { id: 'ferramentas', ico: '⚒', nome: 'Ferramentas', href: 'ferramentas.html', perfis: ['admin'], esconder: true },   // 26/11 (0415): no ar, custo e vencimento de cada ferramenta paga
     ]],
     ['Cadastros', [
       { id: 'parceiros', ico: '⚑', nome: 'Parceiros PAP', href: 'parceiros.html', perfis: ['admin', 'backoffice'], esconder: true },

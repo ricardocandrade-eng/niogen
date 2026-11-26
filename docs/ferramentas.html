@@ -1,0 +1,207 @@
+<!doctype html>
+<!-- NIOGEN | docs/ferramentas.html | 26/11/2026 — Claude Code (Opus 5.5) · migration 0415_ferramentas
+     Ferramentas: cada ferramenta paga do ecossistema (Vultr, n8n, Supabase, Chatwoot, Claude, OpenAI, Meta, domínio…) —
+     está no ar? quanto custa? quando vence? (Ricardo, 26/11/2026: "Sim, monta").
+     Só admin (é dinheiro). Uma chamada: RPC ferramentas_painel (regra 19). Editar = gaveta → RPC ferramenta_salvar (regra 20).
+     A conferência automática roda de hora em hora (edge ferramentas-vigia); o n8n vem do vigia de 2 em 2 min. -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Ferramentas · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=221126-3">
+<link rel="stylesheet" href="assets/listas.css?v=231126-1">
+<script src="config.js?v=121126-8"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=251126-18"></script>
+<script src="assets/sidebar.js?v=261126-4"></script>
+<style>
+  .fe-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+  .fe-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 13px 14px; border-radius: 12px;
+             background: var(--surface); border: 1px solid var(--border); text-align: left; color: inherit; font: inherit; cursor: pointer; }
+  .fe-item:hover { border-color: var(--muted); }
+  .fe-item.atencao { border-color: var(--warn-border); }
+  .fe-item.parado { border-color: var(--bad-border); }
+  .fe-cab { display: flex; align-items: center; gap: 8px; }
+  .fe-nome { font-weight: 600; font-size: 14px; flex: 1; min-width: 0; }
+  .fe-cat { font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .fe-est { font-size: 12.5px; color: var(--ok-fg); overflow-wrap: anywhere; }
+  .fe-item.atencao .fe-est { color: var(--warn-fg); } .fe-item.parado .fe-est { color: var(--bad-fg); }
+  .fe-item.sem_leitura .fe-est { color: var(--muted); }
+  .fe-lin { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+  .fe-lin b { font-family: var(--mono); font-weight: 600; color: var(--text, inherit); }
+  .fe-alerta { font-size: 12.5px; font-weight: 600; color: var(--warn-fg); }
+  .fe-item.parado .fe-alerta { color: var(--bad-fg); }
+  .fe-preencher { font-size: 12px; color: var(--muted); font-style: italic; }
+  .fe-sec { margin: 6px 0 0; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+  .fe-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fe-form .largo { grid-column: 1 / -1; }
+  .fe-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--muted); }
+  .fe-form input, .fe-form select, .fe-form textarea { font: inherit; font-size: 14px; }
+  @media (max-width: 640px) { .fe-form { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="tela-ferramentas">
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="ferramentas"></nav>
+  <main class="main lista-densa">
+    <header class="cab">
+      <div>
+        <h1>Ferramentas</h1>
+        <div class="sub">Tudo o que o NIOGEN usa e paga: está no ar, quanto custa e quando vence.</div>
+      </div>
+      <div class="cab-acoes"><span class="pu-lido" id="fe-lido"></span><button type="button" class="btn" id="fe-nova">Nova ferramenta</button></div>
+    </header>
+    <div id="fe-faixa"></div>
+    <section class="kpis quatro" id="fe-kpis" aria-label="Resumo do mês"></section>
+    <div id="fe-lista"><div class="vazio">Carregando…</div></div>
+    <div class="rodape-lista" style="margin-top:8px"><span>Conferido sozinho de hora em hora (o n8n, de 2 em 2 min). O valor é o que você lança: clique numa ferramenta para preencher. Dólar convertido pela cotação comercial do dia.</span></div>
+  </main>
+</div>
+
+<aside class="gaveta" id="gaveta-fe" aria-label="Ferramenta" aria-hidden="true">
+  <div class="g-cab"><div><h2 id="g-titulo">Ferramenta</h2><p id="g-sub"></p></div><button type="button" class="g-fechar" data-fechar aria-label="Fechar">×</button></div>
+  <div class="g-corpo" id="g-corpo"></div>
+  <div class="g-pe"><div class="g-botoes"><button type="button" class="btn btn-ghost" data-fechar>Fechar</button><button type="button" class="btn btn-acc" id="g-salvar">Salvar</button></div></div>
+</aside>
+
+<script>
+(async function () {
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  const lista = document.getElementById('fe-lista');
+  if (eu.perfil !== 'admin') { lista.innerHTML = '<div class="vazio">As ferramentas são só do admin.</div>'; document.getElementById('fe-nova').hidden = true; return; }
+
+  const esc = (s) => NG.esc(s == null ? '' : String(s));
+  const brl = (n) => (n == null ? '—' : Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  const moeda = (v, m) => (v == null ? '—' : m === 'USD' ? `US$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : brl(v));
+  const dia = (iso) => (iso ? String(iso).slice(0, 10).split('-').reverse().join('/') : '—');
+  const marca = (n) => `<i class="pl-marca pl-${n}" aria-hidden="true"></i>`;
+  const COBRANCA = { mensal: 'Mensal', anual: 'Anual', uso: 'Por uso (média do mês)', pre_pago: 'Pré-pago / crédito', gratis: 'Grátis', incluso: 'Incluso em outra' };
+  const CATEG = { infra: 'Infraestrutura', ia: 'Inteligência artificial', atendimento: 'Atendimento', dominio: 'Domínio e DNS', midia: 'Mídia', escritorio: 'Escritório' };
+  const NIVEL = { ok: 'No ar', atencao: 'Atenção', parado: 'Parado', sem_leitura: 'Sem leitura' };
+  let D = null;
+
+  function ha(iso) {
+    if (!iso) return null;
+    const min = Math.max(0, (Date.now() - new Date(iso)) / 60000);
+    if (min < 1) return 'agora';
+    if (min < 60) return `há ${Math.floor(min)} min`;
+    if (min < 2880) return `há ${Math.floor(min / 60)} h`;
+    return `há ${Math.floor(min / 1440)} d`;
+  }
+
+  function cartao(f) {
+    const e = f.estado || {};
+    const custo = f.cobranca === 'gratis' ? 'grátis' : f.cobranca === 'incluso' ? 'incluso' : f.custo_valor == null ? null
+      : `${moeda(f.custo_valor, f.custo_moeda)}${f.cobranca === 'anual' ? '/ano' : f.cobranca === 'mensal' ? '/mês' : ''}${Number(f.rateio_pct) < 100 ? ` · ${Number(f.rateio_pct)}% nosso` : ''}`;
+    return `<button type="button" class="fe-item ${esc(f.nivel)}" data-id="${esc(f.id)}">
+      <div class="fe-cab">${marca(f.nivel)}<span class="fe-nome">${esc(f.nome)}</span><span class="fe-cat">${esc(NIVEL[f.nivel] || '')}</span></div>
+      <div class="fe-est">${esc(e.texto || '')}${e.lido_em ? ` <span style="color:var(--muted)">· ${esc(ha(e.lido_em))}</span>` : ''}</div>
+      ${(f.alertas || []).map((a) => `<div class="fe-alerta">${esc(a)}</div>`).join('')}
+      <div class="fe-lin"><span>Custo</span>${custo ? `<b>${esc(custo)}</b>` : '<span class="fe-preencher">a preencher</span>'}</div>
+      ${f.custo_mes_brl != null && f.custo_moeda === 'USD' && f.custo_mes_brl > 0 ? `<div class="fe-lin"><span>No mês, em reais</span><b>${esc(brl(f.custo_mes_brl))}</b></div>` : ''}
+      <div class="fe-lin"><span>Vence</span><b>${f.vence ? esc(dia(f.vence)) + (f.dias != null && f.dias >= 0 ? ` (${f.dias} d)` : '') : '—'}</b></div>
+    </button>`;
+  }
+
+  function desenhar() {
+    const it = D.itens || [];
+    const parados = it.filter((f) => f.nivel === 'parado'), atencao = it.filter((f) => f.nivel === 'atencao');
+    document.getElementById('fe-lido').textContent = D.vigia_lido_em ? `conferido ${ha(D.vigia_lido_em)}` : 'ainda não conferido';
+    document.getElementById('fe-faixa').innerHTML = parados.length
+      ? `<div class="faixa vermelho">${parados.map((f) => `<b>${esc(f.nome)}</b>: ${esc((f.alertas || [])[0] || (f.estado || {}).texto || 'parado')}`).join(' · ')}</div>`
+      : atencao.length ? `<div class="faixa amarelo">${atencao.map((f) => `<b>${esc(f.nome)}</b>: ${esc((f.alertas || [])[0] || (f.estado || {}).texto || 'atenção')}`).join(' · ')}</div>` : '';
+    document.getElementById('fe-kpis').innerHTML = [
+      NG.kpi({ rot: 'Ferramentas no mês', val: brl(D.total_mes_brl), nota: D.a_preencher ? `${D.a_preencher} sem valor lançado` : 'todas com valor', cls: D.a_preencher ? 'warn' : '' }),
+      NG.kpi({ rot: 'Por plano instalado', val: D.custo_por_plano != null ? brl(D.custo_por_plano) : '—', nota: `${D.planos_mes} instalado(s) no mês` }),
+      NG.kpi({ rot: 'Fora do ar ou atenção', val: String(parados.length + atencao.length), de: String(it.length), cls: parados.length ? 'bad' : atencao.length ? 'warn' : '' }),
+      NG.kpi({ rot: 'Meta Ads no mês (mídia)', val: brl(D.meta_gasto_mes), nota: D.cotacao_usd ? `dólar ${Number(D.cotacao_usd).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'sem cotação ainda' }),
+    ].join('');
+    const grupos = {};
+    it.forEach((f) => { (grupos[f.categoria] = grupos[f.categoria] || []).push(f); });
+    lista.innerHTML = Object.keys(CATEG).filter((c) => grupos[c]).map((c) =>
+      `<h2 class="fe-sec">${esc(CATEG[c])}</h2><div class="fe-grade">${grupos[c].map(cartao).join('')}</div>`).join('') || '<div class="vazio">Nenhuma ferramenta cadastrada.</div>';
+  }
+
+  async function carregar() {
+    const { data, error } = await NG.sb.rpc('ferramentas_painel');
+    if (error) { lista.innerHTML = `<div class="vazio">${esc(NG.msgErro(error))}</div>`; return; }
+    D = data; desenhar();
+  }
+
+  // ---------- gaveta: preencher / editar ----------
+  const gav = document.getElementById('gaveta-fe');
+  const corpo = document.getElementById('g-corpo');
+  let editando = null;
+  const opc = (obj, v) => Object.entries(obj).map(([k, n]) => `<option value="${esc(k)}"${k === v ? ' selected' : ''}>${esc(n)}</option>`).join('');
+  function abrir(f) {
+    editando = f ? f.id : null;
+    f = f || { categoria: 'infra', custo_moeda: 'BRL', cobranca: 'mensal', rateio_pct: 100 };
+    document.getElementById('g-titulo').textContent = f.nome || 'Nova ferramenta';
+    document.getElementById('g-sub').textContent = f.para_que || '';
+    const e = f.estado || {};
+    corpo.innerHTML = `${editando ? `<p style="margin:0 0 10px">${marca(f.nivel)} ${esc(NIVEL[f.nivel])} · ${esc(e.texto || '')}${e.lido_em ? ` (${esc(ha(e.lido_em))})` : ''}</p>
+        ${f.painel_url ? `<p style="margin:0 0 12px"><a href="${esc(f.painel_url)}" target="_blank" rel="noopener">Abrir o painel de cobrança ↗</a></p>` : ''}
+        ${f.obs ? `<p style="margin:0 0 12px;color:var(--muted);font-size:12.5px">${esc(f.obs)}</p>` : ''}` : ''}
+      <form class="fe-form" id="fe-form" novalidate>
+        ${editando ? '' : `<label>Identificador<input name="id" placeholder="ex.: google_workspace" required></label>`}
+        <label class="${editando ? 'largo' : ''}">Nome<input name="nome" value="${esc(f.nome || '')}" required></label>
+        <label class="largo">Para que serve<input name="para_que" value="${esc(f.para_que || '')}"></label>
+        <label>Categoria<select class="sel" name="categoria">${opc(CATEG, f.categoria)}</select></label>
+        <label>Como cobra<select class="sel" name="cobranca">${opc(COBRANCA, f.cobranca)}</select></label>
+        <label>Valor<input name="custo_valor" inputmode="decimal" value="${f.custo_valor != null ? esc(String(f.custo_valor).replace('.', ',')) : ''}" placeholder="0,00"></label>
+        <label>Moeda<select class="sel" name="custo_moeda">${opc({ BRL: 'Real (R$)', USD: 'Dólar (US$)' }, f.custo_moeda)}</select></label>
+        <label>Dia da cobrança<input name="dia_cobranca" type="number" min="1" max="31" value="${esc(f.dia_cobranca || '')}"></label>
+        <label>Próximo vencimento<input name="proximo_vencimento" type="date" value="${esc(f.proximo_vencimento || '')}"${f.checagem === 'rdap' ? ' disabled title="Vem sozinho do Registro.br"' : ''}></label>
+        <label>Parte da Dharma (%)<input name="rateio_pct" type="number" min="0" max="100" value="${esc(f.rateio_pct ?? 100)}"></label>
+        <label>Forma de pagamento<input name="forma_pagamento" value="${esc(f.forma_pagamento || '')}" placeholder="cartão, boleto, Pix (sem número)"></label>
+        <label class="largo">Painel de cobrança (link)<input name="painel_url" value="${esc(f.painel_url || '')}" placeholder="https://"></label>
+        <label class="largo">Observação<textarea name="obs" rows="2">${esc(f.obs || '')}</textarea></label>
+        ${editando ? `<label class="largo" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="desativar"> Não uso mais (tira da tela)</label>` : ''}
+      </form>`;
+    NG.gaveta.abrir(gav, { foco: false });
+  }
+
+  document.getElementById('g-salvar').addEventListener('click', async (ev) => {
+    const fm = document.getElementById('fe-form');
+    const v = (n) => (fm.elements[n] ? fm.elements[n].value.trim() : undefined);
+    const id = editando || (v('id') || '').toLowerCase();
+    if (!id) { NG.toast('Preencha o identificador.', 'bad'); return; }
+    const p = { nome: v('nome'), para_que: v('para_que'), categoria: v('categoria'), cobranca: v('cobranca'),
+      custo_valor: (v('custo_valor') || '').replace(/\./g, '').replace(',', '.'), custo_moeda: v('custo_moeda'),
+      dia_cobranca: v('dia_cobranca'), rateio_pct: v('rateio_pct'), forma_pagamento: v('forma_pagamento'), painel_url: v('painel_url'), obs: v('obs') };
+    if (!fm.elements.proximo_vencimento.disabled) p.proximo_vencimento = v('proximo_vencimento');
+    if (fm.elements.desativar && fm.elements.desativar.checked) p.ativo = false;
+    if (p.custo_valor && !/^\d+(\.\d{1,2})?$/.test(p.custo_valor)) { NG.toast('Valor inválido. Use, por exemplo, 39,90.', 'bad'); return; }
+    if (/\d{12,}/.test((p.forma_pagamento || '').replace(/\D/g, ''))) { NG.toast('Não guarde número de cartão aqui. Escreva só "cartão".', 'bad'); return; }
+    const b = ev.currentTarget; b.disabled = true;
+    const { error } = await NG.sb.rpc('ferramenta_salvar', { p_id: id, p });
+    b.disabled = false;
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Salvo.', 'ok');
+    NG.gaveta.fechar();
+    carregar();
+  });
+
+  lista.addEventListener('click', (ev) => {
+    const c = ev.target.closest('[data-id]');
+    if (c) abrir((D.itens || []).find((f) => f.id === c.dataset.id));
+  });
+  document.getElementById('fe-nova').addEventListener('click', () => abrir(null));
+
+  await carregar();
+  setInterval(() => { if (!document.hidden) carregar(); }, 5 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
