@@ -527,6 +527,16 @@
     if (q && q.total && (q.jaCliente + q.semCob) > 0)
       add('atencao', `${N(q.jaCliente + q.semCob)} de ${pl(q.total, 'conversa não serve', 'conversas não servem')} para vender`, [q.jaCliente && `${pl(q.jaCliente, 'já é cliente Nio', 'já são clientes Nio')}`, q.semCob && `${pl(q.semCob, 'mora', 'moram')} onde não há cobertura`].filter(Boolean).join(' · ') + ` · ${per.rotulo.toLowerCase()}`, 'Conferir o raio do público com o mapa de cobertura.', 'meta:conversas_nao_servem', (q.jaCliente + q.semCob) / q.total);
     if (motivosSaldo.length) add('atencao', 'A cobrança da Meta está chegando', `${R(saldo)} em aberto · ${motivosSaldo.join(' · ')}`, 'Conferir se o cartão tem limite para a cobrança.', 'meta:cobranca', saldo);
+    // 25/11 (Ricardo: "Não é interferência ao trabalho dela? Ou é apenas sugestão"): para a agência é SÓ sugestão. O agente de
+    // tráfego não mexe nas campanhas dela (trava de 25/11), então o "O agente pausa/tira" vira o critério da Dharma, como sugestão.
+    if (agencia) ac.forEach((a) => {
+      a.fazer = String(a.fazer || '')
+        .replace(/^O agente pausa esse anúncio\.$/, 'Sugestão: pausar este anúncio. A decisão é de vocês.')
+        .replace(/^O agente tira esse posicionamento dos conjuntos\.$/, 'Sugestão: tirar este posicionamento do conjunto. A decisão é de vocês.')
+        .replace(/^Se chegar a (.+) sem CEP atendido, o agente pausa\.$/, 'Pelo critério da Dharma, com $1 sem CEP atendido o anúncio deveria ser pausado.')
+        .replace(/^Com (.+) sem conversa, o agente tira o posicionamento\.$/, 'Pelo critério da Dharma, com $1 sem conversa o posicionamento deveria sair.')
+        .replace(/^Nada a fazer\. /, '');
+    });
     sincronizarAvisos('meta_ads', 'acoes', 't-acoes', ac);   // 0372: aberto desde · tratado · escondidos
 
     // ---------- faixa fina ----------
@@ -595,7 +605,7 @@
     const msg = 'Nenhuma campanha liberada ainda. Quando a Dharma liberar as campanhas da agência, os números aparecem aqui.';
     document.getElementById('faixa').innerHTML = `<div class="ma-sem-camp">${esc(msg)}</div>`;
     document.getElementById('acoes').innerHTML = '<div class="ma-nada">Nada por aqui enquanto não houver campanha liberada.</div>';
-    document.getElementById('t-acoes').textContent = 'Precisa de ação';
+    document.getElementById('t-acoes').textContent = agencia ? 'Sugestões' : 'Precisa de ação';
     document.getElementById('tbody-ads').innerHTML = `<tr><td colspan="8" class="vazio">${esc(msg)}</td></tr>`;
     document.getElementById('contagem-ads').textContent = ''; document.getElementById('ver-parados').innerHTML = '';
     ['g-dias', 'g-graf', 'g-atend', 'g-motivos', 'g-posic', 'g-capi'].forEach((id) => { document.getElementById(id).hidden = true; });
@@ -653,13 +663,15 @@
   const quandoCurto = (iso) => (iso ? `${NG.fmtDiaISO(NG.diaSP(iso)).slice(0, 5)} ${NG.fmtHora(iso)}` : '');
   function pintarAvisos(canal) {
     const { alvoId, tituloId, ac, estado } = avisosDe[canal];
+    const rotulo = agencia ? 'Sugestões' : 'Precisa de ação';   // 25/11: para a agência é sugestão, não ordem
     const est = (a) => (estado && a.chave && estado[a.chave]) || null;
     const lista = ac.slice().sort((a, b) => ORD_AC[a.nivel] - ORD_AC[b.nivel]);
     const vis = lista.filter((a) => !(est(a) && est(a).escondido));
     const esc2 = lista.filter((a) => est(a) && est(a).escondido);
     const n = vis.filter((a) => a.nivel !== 'resolvido').length;
-    document.getElementById(tituloId).textContent = n ? `Precisa de ação · ${n}` : 'Precisa de ação';
-    document.getElementById(alvoId).innerHTML = (n ? '' : '<div class="ma-nada">Nada pedindo ação agora ✓</div>')
+    document.getElementById(tituloId).textContent = n ? `${rotulo} · ${n}` : rotulo;
+    document.getElementById(alvoId).innerHTML = (agencia ? '<div class="ma-nota" style="margin:0 0 6px">Sugestões pelo critério que a Dharma usa nas campanhas dela. Nada aqui muda a sua campanha: a decisão é de vocês.</div>' : '')
+      + (n ? '' : `<div class="ma-nada">${agencia ? 'Nenhuma sugestão agora ✓' : 'Nada pedindo ação agora ✓'}</div>`)
       + vis.map((a) => { const e = est(a);
           const desde = e ? `aberto desde ${quandoCurto(e.aberto_em)}${e.tratado_em ? ` · tratado em ${quandoCurto(e.tratado_em)} e voltou: o indicador não melhorou` : ''}` : '';
           const bt = podeTratar && e && a.nivel !== 'resolvido' ? `<button type="button" class="ma-ver" data-tratar="${esc(a.chave)}" data-canal="${esc(canal)}" title="Some da lista por ${N((estado && estado.__horas) || 48)} h; depois volta se o indicador não melhorar.">marcar como tratado</button>` : '';
