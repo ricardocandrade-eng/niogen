@@ -4134,10 +4134,11 @@
   // Ricardo (13/11): "mostrar de forma visível os lembretes já enviados, o próximo (qual e quando) e por que está parada". SÓ
   // LEITURA: espelha a mari_cadencia_avaliar (0141 · 0114) com o que a ficha já carregou — a linha da v_mari_cadencia (o próximo e
   // o bloqueio) e os turnos da Mari com tags.cadencia (o que saiu). Nenhuma chamada nova; não grava nada nem muda a régua.
-  const CAD_ROT = { P1: '1º contato', L15: '15 min', F1: '15 min', F2: '1 h', F3: '3 h', F4: '6 h', F5: '20 h', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída',
+  // 0412: tempos da chave cadencia_janela_minutos (15 min · 2 h · 6 h · F4 desligado · ~20 h); a Mariana se apresenta no F2.
+  const CAD_ROT = { P1: '1º contato', L15: '15 min', F1: '15 min', F2: '2 h', F3: '6 h', F4: '—', F5: '20 h', D3: 'D3', LIG: 'Ligar', D7: 'D7', D15: 'D15', FIM: 'Saída',
     BIO1: 'Biometria D+1', BIO3: 'Ligar D+3', INSTALACAO: 'Aviso da instalação', VESPERA: 'Véspera', RETORNO: 'Retorno combinado', POS: 'Pós-instalação', IND: 'Pedido de indicação', IND2: 'Insistir na indicação' };
-  const CAD_O_QUE = { P1: 'template de 1º contato', F1: 'cutucada 15 min depois da última fala da Mari', F2: 'cutucada 1 h depois da última fala da Mari',
-    F3: 'cutucada 3 h depois da última fala da Mari', F4: 'cutucada 6 h depois da última fala da Mari', F5: 'última chamada ~20 h depois da mensagem do cliente',
+  const CAD_O_QUE = { P1: 'template de 1º contato', F1: 'cutucada 15 min depois da última fala da Mari', F2: 'cutucada 2 h depois da última fala da Mari (a Mariana se apresenta)',
+    F3: 'cutucada 6 h depois da última fala da Mari', F4: 'desligada desde 26/11 (0412)', F5: 'última chamada ~20 h depois da mensagem do cliente',
     D3: 'template de retomada no 3º dia', LIG: 'o vendedor liga entre o D3 e o D6 (a Mari não liga)', D7: 'template de retomada no 7º dia', D15: 'último template, no 15º dia',
     FIM: '48 h depois do D15 sem resposta, a conversa sem venda vai para Saída · Sem resposta', BIO1: 'lembrete da biometria no D+1 do pedido',
     BIO3: 'no D+3 sem biometria o time liga (nunca automático)', INSTALACAO: 'aviso assim que a instalação é agendada', VESPERA: 'lembrete na véspera da instalação',
@@ -4220,7 +4221,7 @@
         const B = Math.max(L, ms(c.cadencia_retorno_em) || 0);
         corte = L;
         P.sub = `desde a mensagem do cliente, ${cadQuando(L)}`;
-        P.grupos.push({ rot: 'Janela de 24 h', dica: A.cad_janela, janela: true, passos: ['F1', 'F2', 'F3', 'F4', 'F5'].map((x) => mk(x)) });
+        P.grupos.push({ rot: 'Janela de 24 h', dica: A.cad_janela, janela: true, passos: ['F1', 'F2', 'F3', 'F5'].map((x) => mk(x)) });   // 0412: F4 desligado
         // Venda criada não recebe D3/D7/D15 (0050): segue pelo time.
         if (!v && !c.venda_id) {
           P.grupos.push({ rot: 'Retomada', dica: A.cad_retomada, passos: [mk('D3', { prev: B + 3 * 24 * HMS }), mk('LIG', { prev: B + 4 * 24 * HMS }), mk('D7', { prev: B + 7 * 24 * HMS }),
@@ -4315,7 +4316,7 @@
     };
     const extra = [...(hist('P1') ? ['P1'] : []), ...seq.filter((x) => ['P1', 'RETORNO'].includes(x.cod)).map((x) => x.cod)];
     P.todos = [
-      { rot: 'Janela de 24 h', dica: A.cad_janela, passos: [...new Set([...extra, 'F1', 'F2', 'F3', 'F4', 'F5'])].map(todo) },
+      { rot: 'Janela de 24 h', dica: A.cad_janela, passos: [...new Set([...extra, 'F1', 'F2', 'F3', 'F5'])].map(todo) },   // 0412: F4 desligado
       { rot: 'Retomada', dica: A.cad_retomada, passos: ['D3', 'LIG', 'D7', 'D15', 'FIM'].map(todo) },
       { rot: 'Biometria', dica: A.cad_venda, passos: ['BIO1', 'BIO3'].map(todo) },
       { rot: 'Instalação', dica: A.cad_venda, passos: ['INSTALACAO', 'VESPERA'].map(todo) },

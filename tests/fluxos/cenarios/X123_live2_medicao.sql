@@ -27,4 +27,7 @@ select sim.confere('as esperas longas nunca passam do total de respostas',
 select sim.como('servico');
 select public.tela_abriu('live2');
 select sim.confere('fora do backoffice/admin: medição null e abertura não contada',
-  public.live2_medicao(7) is null and (select coalesce(sum(n), 0) from public.tela_aberturas where tela = 'live2') = 2, 'contou ou devolveu');
+  public.live2_medicao(7) is null and (select coalesce(sum(n), 0) from public.tela_aberturas where tela = 'live2'
+                                         and dia = (now() at time zone 'America/Sao_Paulo')::date) = 2, 'contou ou devolveu');
+-- 26/11 (Claude Code): a soma é só do dia de hoje — depois da meia-noite a cópia do backup da véspera traz as aberturas reais de
+-- ontem, que o delete do topo não apaga, e o cenário contava 4 (vermelho falso entre 0h e o backup das 6h)
