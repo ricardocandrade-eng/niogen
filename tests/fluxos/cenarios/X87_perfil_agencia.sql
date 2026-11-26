@@ -36,7 +36,7 @@ set role authenticated;
 select pg_temp.ler('agencia');
 select public.meu_perfil() is null as ag_sem_perfil, public.sou_agencia() as ag_sou \gset
 select (select count(*) from public.conversas_lista()) + (select count(*) from public.leads_lista()) + (select count(*) from public.jornada_live()) as ag_listas \gset
-select public.meta_ads_resultado() as ag_res, public.placar_agencia()::text as ag_placar, public.tabela_agencia()::text as ag_tabela,
+select public.meta_ads_resultado() as ag_res, coalesce(public.placar_agencia()::text, '') as ag_placar, public.tabela_agencia()::text as ag_tabela,
        public.meta_ads_motivos_saida(null, null) as ag_motivos, public.painel_meta_ritmo() is not null as ag_ritmo \gset
 select coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.meta_ads_dia() x), '[]') as ag_dia,
        coalesce((select jsonb_agg(to_jsonb(x) order by x.dia) from public.placar_conversas_dia('2026-01-01') x), '[]') as ag_conv \gset
