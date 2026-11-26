@@ -14,7 +14,7 @@
          ficha não usam a opção e seguem como estão.
        · "Sobre o lead" (v_leads da conversa, só leitura): próximo passo e de quem é a vez, onde está, a venda, etiquetas.
      26/11 (0416, Ricardo): disparo automático (cadência, Retomada, aviso) × conversa viva na lista; caixinha "⏱ Esconder disparos"
-       (?disparos=esconder) e a tela abre na aba Todas (1ª leitura = as 60 mais recentes, o topo da aba; o resto chega atrás).
+       marcada por padrão — ?disparos=mostrar abre com eles; "Limpar tudo" volta a esconder) e a tela abre na aba Todas (1ª leitura = as 60 mais recentes, o topo da aba; o resto chega atrás).
      15/11 (NIOGEN no celular): em tela ≤ 640 px segue o padrão WhatsApp — lista com avatar e a conversa em TELA CHEIA
      (NGConversa movel). Lá só mudam as abas e o botão Filtros. -->
 <html lang="pt-BR">
@@ -173,7 +173,9 @@
   const URLQ = new URLSearchParams(location.search);
   const ABAS_ID = ['esperando', 'minhas', 'abertas', 'todas'];
   // 26/11 (Ricardo: "Põe um filtro para esconder os disparos"): ?disparos=esconder liga o filtro pelo endereço.
-  const f = { dono: URLQ.get('dono') || '', sit: '', etapa: URLQ.get('etapa') || '', destino: URLQ.get('destino') || '', disp: URLQ.get('disparos') === 'esconder' ? 'esconder' : '' };
+  // 26/11 (Ricardo: "Deixa o Esconder disparos marcado por padrão"): a tela abre sem os disparos; ?disparos=mostrar abre com eles.
+  const DISP_PADRAO = 'esconder';
+  const f = { dono: URLQ.get('dono') || '', sit: '', etapa: URLQ.get('etapa') || '', destino: URLQ.get('destino') || '', disp: URLQ.get('disparos') === 'mostrar' ? '' : DISP_PADRAO };
   if (!['', 'mari', 'time'].includes(f.dono)) f.dono = '';
   // 26/11 (Ricardo: "ao clicar em Conversas, mostra a página com o filtro Todas marcado"): sem ?filtro=, abre em Todas.
   let aba = ABAS_ID.includes(URLQ.get('filtro')) ? URLQ.get('filtro') : 'todas';
@@ -248,8 +250,10 @@
     if (/^indicacao/.test(k)) return ['pedido de indicação', 'Automática'];
     return [/^[A-Z0-9_]+$/.test(k) ? k : 'disparo', 'Automática'];
   }
-  // Viva: o cliente falou nas últimas 24 h e a última mensagem não é disparo.
-  const viva = (c) => !c.encerrada && !auto(c) && c.ult_lead && Date.now() - new Date(c.ult_lead).getTime() < 24 * 3600000;
+  // Viva: o cliente falou nas últimas 24 h, a última mensagem não é disparo e a conversa não foi resolvida/adiada no Chatwoot.
+  // 26/11 (Ricardo, L-386): "Obg" do cliente com a conversa já resolvida (e "nada a responder" marcado) não é conversa viva.
+  const viva = (c) => !c.encerrada && !auto(c) && !['resolved', 'snoozed'].includes(c.chatwoot_status)
+    && c.ult_lead && Date.now() - new Date(c.ult_lead).getTime() < 24 * 3600000;
   const AUTO_AJUDA = 'Última mensagem: disparo automático do sistema (cadência, retomada ou aviso). Não pede ação — é só acompanhar. Se o cliente responder, a conversa volta a ser viva.';
   const quemFalou = (c) => { const a = auto(c); return a ? 'Disparo: ' :c.ultima_quem === 'mari' ? 'Mari: ' : c.ultima_quem === 'humano' ? 'Time: ' : ''; };
   const comQuem = (c) => (c.encerrada ? 'encerrada' : c.dono_tipo === 'mari' ? 'com a Mari'
@@ -552,6 +556,7 @@
     if (t) { if (t.dataset.tira === 'busca') buscaEl.value = ''; else f[t.dataset.tira] = ''; render(); return; }
     if (ev.target.closest('#limpar')) {
       Object.keys(TESTE).forEach((k) => { f[k] = ''; });
+      f.disp = DISP_PADRAO;   // volta ao padrão (sem disparos), não liga os disparos
       buscaEl.value = ''; aba = 'todas';
       painel.hidden = true; btFiltros.setAttribute('aria-expanded', 'false');
       render();
