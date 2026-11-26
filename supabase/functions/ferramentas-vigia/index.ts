@@ -114,7 +114,9 @@ Deno.serve(async () => {
     if (!key) return 'falta a chave VULTR_API_KEY (Supabase › Edge Functions › Secrets)';
     const h = { Authorization: `Bearer ${key}` };
     const [c, i] = await Promise.all([buscar('https://api.vultr.com/v2/account', tmo, h), buscar('https://api.vultr.com/v2/instances?per_page=100', tmo, h)]);
-    if (!c.ok) return `API da Vultr recusou (${c.erro}) — conferir a chave e o controle de acesso por IP`;
+    // a Vultr diz no corpo o motivo do 401 (ex.: "Unauthorized IP address: …"): mostrar, sem a chave
+    const motivo = String(((c.body || {}) as Record<string, unknown>).error ?? '').slice(0, 160);
+    if (!c.ok) return `API da Vultr recusou (${c.erro}${motivo ? `: ${motivo}` : ''}) — conferir a chave e o controle de acesso por IP`;
     return { account: (c.body as any)?.account, instancias: (i.body as any)?.instances || [] };
   })());
 
