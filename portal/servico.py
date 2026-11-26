@@ -100,6 +100,28 @@ def agora_br():
     return datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-3))).isoformat(timespec='seconds')
 
 
+def _fic_endereco(t):
+    p = [x.strip() for x in t.split(',')]
+    cep = cr.so_digitos(p[0]) if p else ''
+    if len(cep) != 8:
+        return None
+    return {'cep': cep, 'numero': p[1] if len(p) > 1 else '', 'complemento': p[3] if len(p) > 3 else '',
+            'referencia': (p[2] if len(p) > 2 else '') or 'Centro'}
+
+
+FIC_N = [int(time.time()) % 125]   # contador do rodízio (só memória; começa num ponto qualquer)
+
+
+def proximo_ficticio(cfg):
+    """26/11 (Ricardo: "5 endereços, 5 emails e 5 telefones fictícios para ir alternando entre si"): o próximo trio do rodízio.
+    Cada lista anda no seu passo, para o trio não se repetir a cada volta. Chamar com TRAVA_JOBS na mão."""
+    n = FIC_N[0]
+    FIC_N[0] = n + 1
+    ends, cels, mails = cfg['fic_enderecos'], cfg['fic_celulares'], cfg['fic_emails']
+    return (dict(ends[n % len(ends)]),
+            {'celular': cels[(n + n // len(ends)) % len(cels)], 'email': mails[(n + n // (len(ends) * len(cels))) % len(mails)]})
+
+
 def cfg_credito():
     e = os.environ.get
     return {
@@ -109,6 +131,11 @@ def cfg_credito():
         'end_referencia': (e('CREDITO_END_REFERENCIA') or '').strip(),
         'contato_celular': cr.so_digitos(e('CREDITO_CONTATO_CELULAR') or ''),
         'contato_email': (e('CREDITO_CONTATO_EMAIL') or '').strip(),
+        # 26/11 (Ricardo, "dados fictícios"): listas do rodízio — só no .env, nunca no repo. Endereços "cep,numero,referencia,complemento;…"
+        # (têm de ser viáveis no portal); celulares e e-mails separados por ";".
+        'fic_enderecos': [x for x in (_fic_endereco(t) for t in (e('CREDITO_FIC_ENDERECOS') or '').split(';')) if x],
+        'fic_celulares': [c for c in (cr.so_digitos(t) for t in (e('CREDITO_FIC_CELULARES') or '').split(';')) if len(c) in (10, 11)],
+        'fic_emails': [t.strip() for t in (e('CREDITO_FIC_EMAILS') or '').split(';') if '@' in t],
         'limite_hora': int(e('CREDITO_LIMITE_HORA') or 20),
         'limite_dia': int(e('CREDITO_LIMITE_DIA') or 60),
         'sal': e('CREDITO_SAL') or SEGREDO,
@@ -421,8 +448,14 @@ def novo_job_credito(b):
     if not cr.cpf_valido(cpf):
         raise pl.Falha(400, 'CPF inválido')
     chave = cr.cpf_chave(cpf, cfg['sal'])
-    end_in = b.get('endereco') or None
-    if end_in and cr.so_digitos(end_in.get('cep')):
+    # 26/11 (Ricardo): "dados fictícios" da tela Consulta — só o CPF é do cliente; endereço, celular e e-mail saem do rodízio.
+    fic = b.get('ficticio') is True
+    if fic and not (cfg['fic_enderecos'] and cfg['fic_celulares'] and cfg['fic_emails']):
+        raise pl.Falha(503, 'dados fictícios não configurados (CREDITO_FIC_*)')
+    end_in = None if fic else (b.get('endereco') or None)
+    if fic:
+        endereco, origem_end = None, 'padrao'
+    elif end_in and cr.so_digitos(end_in.get('cep')):
         if len(cr.so_digitos(end_in.get('cep'))) != 8:
             raise pl.Falha(400, 'CEP do cliente inválido')
         endereco = {'cep': cr.so_digitos(end_in.get('cep')), 'numero': str(end_in.get('numero') or '').strip()[:20],
@@ -437,8 +470,10 @@ def novo_job_credito(b):
         endereco = {'cep': cfg['end_cep'], 'numero': cfg['end_numero'], 'complemento': '',
                     'referencia': cfg['end_referencia'] or 'Centro'}
         origem_end = 'padrao'
-    c_in = b.get('contato') or None
-    if c_in and (cr.so_digitos(c_in.get('celular')) or c_in.get('email')):
+    c_in = None if fic else (b.get('contato') or None)
+    if fic:
+        contato = None
+    elif c_in and (cr.so_digitos(c_in.get('celular')) or c_in.get('email')):
         cel = cr.so_digitos(c_in.get('celular'))
         if len(cel) in (12, 13) and cel.startswith('55'):
             cel = cel[2:]
@@ -477,6 +512,8 @@ def novo_job_credito(b):
             raise pl.Falha(429, f'limite de {cfg["limite_dia"]} consultas por dia')
         INICIOS.append(t)
         JOBS[job_id] = {**base, 'estado': 'fila', 'etapa_atual': 0}
+        if fic:
+            endereco, contato = proximo_ficticio(cfg)
         params = {'cpf': cpf, 'endereco': endereco, 'contato': contato, 'origem_endereco': origem_end, 'chave': chave}
         _rodar_job(job_id, params, cfg)
         return 202, _publico(JOBS[job_id])

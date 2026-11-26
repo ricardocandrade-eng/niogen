@@ -2,6 +2,7 @@
 // Consulta de crédito na Nio — CONSULTA-SÓ, ASSÍNCRONA. Só admin e backoffice (403 para os demais).
 //   {acao: 'iniciar', cpf, endereco?, contato?, autorizado} → exige autorizado === true e CPF com dígito válido →
 //        POST {CREDITO_OP_URL}/credito (X-Portal-Secret) → {job_id, posicao_fila, estado} (cache 24 h → já vem pronto)
+//        26/11: {acao: 'iniciar', cpf, autorizado, ficticio: true} → "dados fictícios": endereço e contato do rodízio do operador.
 //   {acao: 'status', job_id}                               → GET {CREDITO_OP_URL}/credito/{job_id}
 //   14/11: endereco.logradouro_esperado (rua confirmada pelo cliente ou a do ViaCEP) vai ao operador, que confere a rua resolvida
 //        pelo portal antes de aceitar (resultado novo rua_divergente). Ver ruaEsperada() no fim.
@@ -191,7 +192,11 @@ Deno.serve(async (req) => {
       const cpf = so(b.cpf);
       if (!cpfValido(cpf)) { log('400 cpf invalido'); return json({ error: 'CPF inválido (confira os dígitos).' }, 400); }
       const corpo: Record<string, unknown> = { cpf, origem: `niogen:${perfil}` };
-      const e = b.endereco ?? null;
+      // 26/11 (Ricardo, "dados fictícios" da tela Consulta): só o CPF é do cliente — endereço, celular e e-mail saem do rodízio
+      // guardado no .env do operador (CREDITO_FIC_*). Só pessoa logada (admin/backoffice); a Mari nunca usa.
+      const fic = b.ficticio === true && servico !== true;
+      if (fic) corpo.ficticio = true;
+      const e = fic ? null : (b.endereco ?? null);
       if (e && so(e.cep)) {
         if (so(e.cep).length !== 8) return json({ error: 'CEP do cliente com 8 dígitos.' }, 400);
         corpo.endereco = {
@@ -201,7 +206,7 @@ Deno.serve(async (req) => {
           logradouro_esperado: await ruaEsperada(e),
         };
       }
-      const c = b.contato ?? null;
+      const c = fic ? null : (b.contato ?? null);
       if (c && (so(c.celular) || String(c.email ?? '').trim())) {
         corpo.contato = { celular: so(c.celular), email: String(c.email ?? '').trim().slice(0, 120) };
       }

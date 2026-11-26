@@ -233,12 +233,12 @@
       </form>
       <div class="cob2-sep" data-so-credito hidden></div>
       <form class="cob2-grp" id="form-cred" novalidate data-so-credito hidden>
-        <label class="campo" style="width:138px"><span>CPF <i class="cob2-i" title="Crédito do CPF: leva ~30–40 s no portal e aparece lá no nome da Joysse (TT837725), com análise no Serasa — só com autorização do titular. Usa o endereço da faixa ao lado (ou o endereço padrão).">i</i></span><input type="text" name="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" autocomplete="off" required></label>
+        <label class="campo" style="width:138px"><span>CPF <i class="cob2-i" title="Crédito do CPF: leva ~30–40 s no portal e aparece lá no nome da Joysse (TT837725), com análise no Serasa — só com autorização do titular. Usa o endereço da faixa ao lado. Só com o CPF: botão &quot;dados fictícios&quot;.">i</i></span><input type="text" name="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" autocomplete="off" required></label>
         <label class="campo" style="width:134px"><span>Celular <i class="cob2-i" title="Celular e e-mail são DO CLIENTE: a Nio grava no pedido e recusa um mesmo celular repetido em vários pedidos.">i</i></span><input type="tel" name="celular" inputmode="numeric" placeholder="(32) 90000-0000" autocomplete="off" required></label>
         <label class="campo" style="width:160px">E-mail<input type="email" name="email" placeholder="cliente@email.com" autocomplete="off" required></label>
         <label class="cob2-chk" title="O titular autorizou a consulta de crédito e o contato da Nio (WhatsApp e e-mail)"><input type="checkbox" name="autorizado"> autorizou</label>
         <button type="submit" class="btn" id="btn-cred" disabled title="Consultar o crédito do CPF com o endereço da faixa">Crédito</button>
-        <button type="button" class="btn btn-ghost" id="btn-cred-padrao" disabled title="Usa um endereço viável fixo só para ler o crédito do CPF (a tela esconde a rua e a viabilidade)">endereço padrão</button>
+        <button type="button" class="btn btn-ghost" id="btn-cred-padrao" disabled title="Só o CPF é do cliente: endereço, celular e e-mail saem de uma lista fictícia em rodízio, só para ler o crédito do CPF. Aprovou → peça os dados reais e consulte de novo com eles.">dados fictícios</button>
       </form>
     </section>
 
@@ -520,7 +520,7 @@
   const BT = {
     pedido: '<button type="button" class="btn btn-acc" data-criar>＋ Abrir pedido com este endereço</button>',
     credito: podeCredito ? '<button type="button" class="btn" data-ir-credito>Consultar crédito</button>' : '',
-    padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ endereço padrão</button>' : '',
+    padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ dados fictícios</button>' : '',
     mapa: '<button type="button" class="btn" data-abrir-painel>Ver no mapa (200 m)</button>',
     liberacao: (mot) => (linkLiberacao
       ? `<a class="btn btn-acc" href="${esc(formsUrl(linkLiberacao, mot || 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
@@ -930,7 +930,7 @@
     if (await cliqueComum(ev)) return;
     if (ev.target.closest('[data-repetir]')) consultar();
     else if (ev.target.closest('[data-padrao]')) consultarCredito(true);
-    else if (ev.target.closest('[data-denovo]')) consultarCredito(credPadrao);
+    else if (ev.target.closest('[data-denovo]')) consultarCredito(credPadrao || credFic, credFic);
     else if (ev.target.closest('[data-contato]')) { FC.celular.focus(); FC.celular.select(); piscar(formCred); }
     else if (ev.target.closest('[data-email-trocar]')) { FC.email.focus(); FC.email.select(); piscar(formCred); }
   });
@@ -943,6 +943,7 @@
   const credEl = document.getElementById('resultado-cred');
   let rodandoCred = false;
   let credPadrao = false;   // "Medir o crédito com o endereço padrão" tocado no resultado
+  let credFic = false;      // 26/11: a última consulta foi com "dados fictícios" (endereço, celular e e-mail do rodízio)
   const fmtCpf = (d) => d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
   FC.cpf.addEventListener('input', () => { FC.cpf.value = fmtCpf(NG.soDigitos(FC.cpf.value).slice(0, 11)); });
   const travar = () => { btnCred.disabled = btnPadrao.disabled = rodandoCred || !FC.autorizado.checked; };
@@ -951,8 +952,8 @@
     if (!podeCredito) return;
     credPadrao = !!padrao;
     piscar(formCred);
-    (NG.soDigitos(FC.cpf.value).length !== 11 ? FC.cpf : !FC.celular.value ? FC.celular : !FC.email.value ? FC.email : FC.autorizado).focus();
-    if (padrao) NG.toast('Preencha CPF e contato, marque "autorizou" e toque em "endereço padrão".', 'ok');
+    (NG.soDigitos(FC.cpf.value).length !== 11 ? FC.cpf : padrao ? FC.autorizado : !FC.celular.value ? FC.celular : !FC.email.value ? FC.email : FC.autorizado).focus();
+    if (padrao) NG.toast('Digite o CPF, marque "autorizou" e toque em "dados fictícios".', 'ok');
   }
 
   const ROT = {
@@ -995,7 +996,8 @@
         ${dado('Nome (Receita)', esc(r.nome_receita || ''))}
         ${dado('Formas liberadas', formas.length ? `<span class="chips">${formas.map((f) => `<span class="chip ok">${esc(FORMA[f] || f)}</span>`).join('')}</span>` : '')}
         ${dado('Pedido em rascunho no portal', r.pedido_portal ? `<span class="mono">${esc(r.pedido_portal)}</span>` : '')}
-        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : padrao ? 'padrão (só para ler o crédito)' : ''))}
+        ${dado('Endereço usado', esc(e.origem === 'cliente' ? 'do cliente' : padrao ? (credFic ? 'fictício (só para ler o crédito)' : 'padrão (só para ler o crédito)') : ''))}
+        ${padrao && credFic ? dado('Celular e e-mail', '<span class="muted">fictícios — aprovou, peça os dados do cliente e consulte de novo</span>') : ''}
         ${padrao   // 11/11 (Ricardo): o endereço padrão não é do cliente — não mostra a rua nem a viabilidade dele
           ? dado('Endereço no portal', '<span class="muted">oculto — endereço padrão, não é o do cliente</span>') + dado('Viabilidade', '<span class="muted">não consultada para o cliente</span>')
           : dado('Endereço no portal', esc(e.resolvido || '')) + dado('Viabilidade', esc(e.viabilidade || ''))}
@@ -1034,25 +1036,27 @@
     if (!dfv || !mesmo) rodarDfv(e, rodada);   // DFV ≤ 1 s — o passo 2 fica completo
     desenharDecisao();
   }
-  async function consultarCredito(padrao) {
+  // fic (26/11, Ricardo: "preciso digitar apenas o CPF"): endereço, celular e e-mail fictícios, do rodízio do operador.
+  async function consultarCredito(padrao, fic) {
     if (rodandoCred) return;
-    const d = { cpf: NG.soDigitos(FC.cpf.value), autorizado: FC.autorizado.checked, contato: { celular: NG.soDigitos(FC.celular.value), email: FC.email.value.trim() } };
+    fic = !!(padrao && fic);
+    const d = fic ? { cpf: NG.soDigitos(FC.cpf.value), autorizado: FC.autorizado.checked, ficticio: true } : { cpf: NG.soDigitos(FC.cpf.value), autorizado: FC.autorizado.checked, contato: { celular: NG.soDigitos(FC.celular.value), email: FC.email.value.trim() } };
     if (!d.autorizado) { NG.toast('Marque que o titular autorizou a consulta.', 'bad'); piscar(formCred); return; }
     if (!NG.documentoValido(d.cpf) || d.cpf.length !== 11) { NG.toast('CPF inválido — confira os dígitos.', 'bad'); FC.cpf.focus(); return; }
-    if (![10, 11].includes(d.contato.celular.length)) { NG.toast('Informe o celular do cliente com DDD.', 'bad'); FC.celular.focus(); return; }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.contato.email)) { NG.toast('Informe o e-mail do cliente.', 'bad'); FC.email.focus(); return; }
+    if (fic) { /* sem contato: o operador sorteia */ } else if (![10, 11].includes(d.contato.celular.length)) { NG.toast('Informe o celular do cliente com DDD.', 'bad'); FC.celular.focus(); return; }
+    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.contato.email)) { NG.toast('Informe o e-mail do cliente.', 'bad'); FC.email.focus(); return; }
     if (!padrao) {
       const e = endereco();
-      if (e.cep.length !== 8) { NG.toast('Informe o endereço do cliente na faixa (ou use o endereço padrão).', 'bad'); F.cep.focus(); return; }
+      if (e.cep.length !== 8) { NG.toast('Informe o endereço do cliente na faixa (ou use "dados fictícios").', 'bad'); F.cep.focus(); return; }
       d.endereco = { ...e, opcao: opcaoEndereco };
     }
-    rodandoCred = true; travar();
+    rodandoCred = true; credFic = fic; travar();
     cred = { estado: 'rodando', padrao, s: { estado: 'fila', posicao_fila: 0 } };
     acoesCred = []; credEl.hidden = true;
     credMudou();
     try {
       const s0 = await NG.creditoIniciar(d);
-      guardarSessao({ credJob: s0 && s0.job_id && s0.estado !== 'pronto' ? { job: s0.job_id, padrao: !!padrao, end: padrao ? null : { cep: d.endereco.cep, numero: d.endereco.numero, complemento: d.endereco.complemento }, desde: Date.now() } : null });
+      guardarSessao({ credJob: s0 && s0.job_id && s0.estado !== 'pronto' ? { job: s0.job_id, padrao: !!padrao, fic, end: padrao ? null : { cep: d.endereco.cep, numero: d.endereco.numero, complemento: d.endereco.complemento }, desde: Date.now() } : null });
       await acompanharCred(s0, !!padrao, padrao ? null : d.endereco);
     } catch (err) {
       cred = err.naoInstalado ? { estado: 'fora' } : { estado: 'erro', erro: `consulta de crédito indisponível: ${NG.msgErro(err)}` };
@@ -1076,7 +1080,7 @@
     cred = { estado: 'pronto', r: s };
     renderCred(s);
     viabDoCredito(s, end);
-    registrarConsulta('credito', end, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, cache: !!s.cache },
+    registrarConsulta('credito', end, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, ficticio: !!(padrao && credFic), cache: !!s.cache },
       s.ms, { cpf_mascara: s.cpf_mascara || null });
   }
   formCred.addEventListener('submit', (ev) => {
@@ -1085,7 +1089,7 @@
     const semViab = portal && portal.s && ['sem_viabilidade', 'complemento_fora_lista'].includes(portal.s.resultado);
     consultarCredito(credPadrao || !!semViab);
   });
-  btnPadrao.addEventListener('click', () => consultarCredito(true));
+  btnPadrao.addEventListener('click', () => consultarCredito(true, true));
   credEl.addEventListener('click', async (ev) => { await cliqueComum(ev); });
   travar();
   desenharDecisao();
@@ -1269,6 +1273,7 @@
     const cj = sessao.credJob;
     if (podeCredito && cj && cj.job && Date.now() - (cj.desde || 0) < 5 * 60 * 1000) {
       rodandoCred = true; travar();
+      credFic = !!cj.fic;
       cred = { estado: 'rodando', padrao: !!cj.padrao, s: { estado: 'fila', job_id: cj.job } };
       credMudou();
       try { await acompanharCred({ estado: 'fila', job_id: cj.job }, !!cj.padrao, cj.end || null); }

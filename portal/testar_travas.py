@@ -360,6 +360,29 @@ ok(R_ == {'colunas': ['ANOMES', '% FPD'], 'linhas': [['202611', 0.0], ['202612',
 ok(dsh.resumo_tabela(dsh.ler_xlsx(_xlsx([[], ['ANOMES', '% SPD']]))) == {'colunas': ['ANOMES', '% SPD'], 'linhas': []}, 'radar: gráfico vazio = só cabeçalho')
 ok(bool(dsh.RADAR_PULAR.match('Segmentação de Dados')) and not dsh.RADAR_PULAR.match('Gráfico de colunas empilhadas'), 'radar: pula filtro, lê gráfico')
 
+# 26/11 — "dados fictícios" da tela Consulta (regra 5, autorizado pelo Rogério via Ricardo): rodízio de endereço, celular e e-mail
+os.environ.setdefault('NIO_PORTAL_SERVICO_SECRET', 'teste')
+import servico as sv  # noqa: E402
+os.environ.update(CREDITO_FIC_ENDERECOS='36013-260,420,Centro; 30130-000,10,,Loja 1 ;lixo', CREDITO_FIC_CELULARES='(32) 99999-0001;32999990002;12',
+                  CREDITO_FIC_EMAILS='a@x.com;b@x.com;sem-arroba;c@x.com')
+cf_ = sv.cfg_credito()
+ok([e['cep'] for e in cf_['fic_enderecos']] == ['36013260', '30130000'] and cf_['fic_enderecos'][1]['referencia'] == 'Centro'
+   and cf_['fic_enderecos'][1]['complemento'] == 'Loja 1' and cf_['fic_enderecos'][0]['complemento'] == '',
+   'fictícios: endereços lidos do .env (CEP inválido fora, referência padrão)')
+ok(cf_['fic_celulares'] == ['32999990001', '32999990002'] and cf_['fic_emails'] == ['a@x.com', 'b@x.com', 'c@x.com'],
+   'fictícios: celular e e-mail inválidos ficam fora da lista')
+sv.FIC_N[0] = 0
+t_ = [sv.proximo_ficticio(cf_) for _ in range(12)]
+ok(len({(e['cep'], c['celular'], c['email']) for e, c in t_}) == 12, 'fictícios: 12 consultas seguidas, 12 trios diferentes (2×2×3)')
+ok(t_[0][0]['cep'] != t_[1][0]['cep'], 'fictícios: o endereço alterna a cada consulta')
+for k_ in ('CREDITO_FIC_ENDERECOS', 'CREDITO_FIC_CELULARES', 'CREDITO_FIC_EMAILS'):
+    os.environ.pop(k_)
+try:
+    sv.novo_job_credito({'cpf': '529.982.247-25', 'ficticio': True})
+    ok(False, 'fictícios: sem lista no .env → 503')
+except sv.pl.Falha as f_:
+    ok('CREDITO_FIC' in str(f_), 'fictícios: sem lista no .env → recusa (não cai no contato de ninguém)')
+
 print()
 if FALHAS:
     print(f'VERMELHO — {len(FALHAS)} falha(s)')
