@@ -77,13 +77,14 @@ async function conferir(it: Item, tmo: number, vultr: () => Promise<Record<strin
       // Vultr: balance negativo = crédito pré-pago; positivo = valor devido
       const saldo = Number(a.balance || 0), pend = Number(a.pending_charges || 0);
       const credito = saldo < 0 ? -saldo : 0;
+      // a conta da Dharma é cobrada no cartão no fim do mês: saldo zero com cobrança acumulada é o normal.
+      // Só é problema quando há valor devido (balance > 0 = a cobrança do cartão não passou).
       const devendo = saldo > 0;
-      const curto = !devendo && pend > credito;
       return {
-        id, nivel: devendo ? 'parado' : curto ? 'atencao' : 'ok',
+        id, nivel: devendo ? 'parado' : 'ok',
         dado: { balance: saldo, pending_charges: pend, last_payment_date: (v.account as any)?.last_payment_date, last_payment_amount: (v.account as any)?.last_payment_amount, instancias: v.instancias },
-        texto: devendo ? `conta devendo ${usd(saldo)} — pagar já (a VPS cai)`
-          : `crédito ${usd(credito)} · a cobrar no mês ${usd(pend)}${curto ? ' — o crédito não cobre' : ''}`,
+        texto: devendo ? `conta devendo ${usd(saldo)} — a cobrança do cartão não passou (a VPS cai)`
+          : `vai no cartão no fim do mês: ${usd(pend)} até agora${credito > 0 ? ` · crédito ${usd(credito)}` : ''}`,
       };
     }
     case 'vultr_instancia': {
