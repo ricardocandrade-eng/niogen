@@ -5,6 +5,8 @@
 #   importar → acerta os filtros (TIPO VENDA, Faixa… = Selecionar tudo; ANOMES = meses que existem) e exporta a tabela
 #              pelo menu do próprio visual (⋯ › Exportar dados › Dados com layout atual › .xlsx) — como gente;
 #   listar   → só anota os visuais da aba e quais têm "Mais opções" (o mapeamento). Não exporta nada.
+#   radar    → 26/11 (Radar Nio; Ricardo: "Regra 5 liberada"): exporta os DADOS RESUMIDOS de cada gráfico da aba (o número
+#              que o gráfico mostra — ⋯ › Exportar dados › Dados resumidos). 'Dados subjacentes' continua proibido.
 # Lê também os cartões FPD/SPD/TPD (texto da tela). Devolve as linhas já no formato que o banco recebe
 # (osab_importar 0168 · faturas_importar 0407). Prompt: docs/Prompt_operador_dashboard_osab_fpd_251126_1847.md (Drive).
 #
@@ -46,7 +48,8 @@ def log(m):
 
 
 # ------------------------------------------------------------------------------------------------------------ travas
-CLIQUES_FIXOS = {'Selecionar tudo', 'Mais opções', 'Exportar dados', 'Exportar', 'Cancelar', 'Fechar'}
+CLIQUES_FIXOS = {'Selecionar tudo', 'Mais opções', 'Exportar dados', 'Exportar', 'Cancelar', 'Fechar',
+                 'Dados resumidos'}   # 26/11: Radar Nio — o resumo (o número do gráfico), nunca 'Dados subjacentes'
 MES = re.compile(r'^20\d{4}$')
 REDE_SESSAO = [re.compile(p) for p in (r'^auth/user/info$', r'^api/portal/permissoes(/skills)?$', r'^manutencao$',
                                        r'^api/portal/powerbi/embed-info$', r'^auth/.*refresh.*$',
@@ -274,12 +277,29 @@ def ler_cartao(txt):
     return out
 
 
+def resumo_tabela(linhas, teto=300):
+    """Linhas do xlsx de 'Dados resumidos' → {colunas, linhas}. Tira linhas vazias e o rodapé 'Filtros aplicados'."""
+    corpo = [r for r in linhas if r and any(c not in (None, '') for c in r)
+             and not (isinstance(r[0], str) and r[0].startswith('Filtros aplicados'))]
+    if not corpo:
+        return {'colunas': [], 'linhas': []}
+    cab = [str(c if c is not None else '').strip() for c in corpo[0]]
+    out = []
+    for r in corpo[1:teto + 1]:
+        r = list(r) + [None] * (len(cab) - len(r))
+        out.append([(round(c, 6) if isinstance(c, float) else c) for c in r[:len(cab)]])
+    return {'colunas': cab, 'linhas': out}
+
+
+RADAR_PULAR = re.compile(r'^(Segmenta|Imagem|img|button|Caixa de texto|Forma|Botão)', re.I)
+
+
 # ------------------------------------------------------------------------------------------------------------ navegador
 ITENS_JS = r"""() => [...document.querySelectorAll('.slicerItemContainer')].filter(e=>e.offsetParent)
   .map(e=>({t:(e.getAttribute('title')||e.innerText||'').trim(), chk:e.getAttribute('aria-checked')}))"""
 MAPA_JS = r"""() => [...document.querySelectorAll('div.visualContainer[aria-roledescription]')].map(v => {
   const ct = v.closest('[data-testid="visual-container"]');
-  return {titulo: (v.getAttribute('aria-label')||'').trim().slice(0,80), tipo: v.getAttribute('aria-roledescription'),
+  return {titulo: (v.getAttribute('aria-label')||'').trim().slice(0,80), aria: v.getAttribute('aria-label')||'', tipo: v.getAttribute('aria-roledescription'),
           tabela: /tabela|matriz/i.test(v.getAttribute('aria-roledescription') || '')};   // tabela/matriz = dá para exportar linha a linha
 }).filter(x => x.tipo && x.tipo !== 'Segmentação de Dados')"""
 
@@ -432,6 +452,93 @@ class Dashboard:
         self._checar()
         return dados
 
+    def exportar_resumo(self, aria, nth=0):
+        """26/11 (Radar): 'Dados resumidos' de UM gráfico, achado pelo aria-label inteiro. None = o visual não exporta."""
+        rot = aria.replace('\\', '\\\\').replace('"', '\\"')
+        vis = self.fr.locator(f'div.visualContainer[aria-roledescription][aria-label="{rot}"]').nth(nth)
+        vis.scroll_into_view_if_needed(timeout=10000)
+        vis.hover(force=True, timeout=8000)   # force: outro visual por cima (cartão, forma) não trava a leitura
+        self.page.wait_for_timeout(600)
+        mais = self.fr.locator('[data-testid="visual-container"]').filter(has=vis).locator('button[aria-label="Mais opções"]')
+        if mais.count() == 0:
+            return None
+        if not clique_permitido('Mais opções', self.cfg):
+            raise TravaAcionada('Mais opções fora da lista')
+        mais.first.evaluate('b => b.click()')
+        self.page.wait_for_timeout(1000)
+        it = self.fr.get_by_text('Exportar dados', exact=True)
+        if it.count() == 0:
+            self.page.keyboard.press('Escape')
+            return None
+        self._clicar(it.first, 'Exportar dados')
+        self.page.wait_for_timeout(1800)
+        res = self.fr.get_by_text('Dados resumidos', exact=True)
+        if res.count():
+            self._clicar(res.first, 'Dados resumidos')
+            self.page.wait_for_timeout(400)
+        elif self.fr.get_by_text('Dados subjacentes', exact=True).count():
+            self.page.keyboard.press('Escape')
+            raise TravaAcionada('o diálogo de exportação não ofereceu "Dados resumidos" (só subjacentes)')
+        with self.page.expect_download(timeout=60000) as dl:
+            self._clicar(self.fr.get_by_role('button', name='Exportar', exact=True), 'Exportar')
+        with open(dl.value.path(), 'rb') as f:
+            dados = f.read()
+        try:
+            dl.value.delete()
+        except Exception:  # noqa: BLE001
+            pass
+        self._checar()
+        return dados
+
+    def _fechar_menus(self):
+        try:
+            for _ in range(2):
+                self.page.keyboard.press('Escape')
+                self.page.wait_for_timeout(300)
+            self.page.mouse.move(5, 5)
+            self.page.wait_for_timeout(500)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def texto_visual(self, aria, nth=0):
+        rot = aria.replace('\\', '\\\\').replace('"', '\\"')
+        try:
+            ct = self.fr.locator('[data-testid="visual-container"]').filter(
+                has=self.fr.locator(f'div.visualContainer[aria-roledescription][aria-label="{rot}"]')).nth(nth)
+            return re.sub(r'\s+', ' ', ct.inner_text(timeout=5000)).strip()[:800]
+        except Exception:  # noqa: BLE001
+            return None
+
+    def radar(self):
+        """Todos os gráficos da aba aberta → [{visual, tipo, ordem, colunas, linhas} | {..., erro} | {..., sem_exportar}]."""
+        vis = self.fr.evaluate(MAPA_JS)
+        vistos, out = {}, []
+        for v in vis:
+            aria, tipo = v.get('aria') or '', v.get('tipo') or ''
+            tit = (v.get('titulo') or '').strip()
+            nth = vistos.get(aria, 0)
+            vistos[aria] = nth + 1
+            if not tit or RADAR_PULAR.match(tipo) or tit.startswith('ATUALIZADO'):
+                continue
+            item = {'visual': tit, 'tipo': tipo, 'ordem': len(out) + 1}
+            t0 = time.time()
+            try:
+                dados = self.exportar_resumo(aria, nth)
+                if dados is None:   # sem menu (ex.: o Funil): fica o TEXTO que a tela mostra — leitura, sem clique
+                    item['sem_exportar'] = True
+                    item['texto'] = self.texto_visual(aria, nth)
+                else:
+                    item.update(resumo_tabela(ler_xlsx(dados)))
+            except (TravaAcionada, SessaoExpirada):
+                raise
+            except Exception as e:  # noqa: BLE001
+                item['erro'] = f'{type(e).__name__}: {str(e)[:160]}'
+                self._fechar_menus()
+            item['segundos'] = round(time.time() - t0, 1)
+            out.append(item)
+            self._fechar_menus()
+        return out
+
     def cartoes(self):
         out = {}
         for f in self.page.frames:
@@ -453,7 +560,8 @@ class Dashboard:
     def rodar(self, so=None):
         ini = datetime.datetime.now(datetime.timezone.utc).isoformat()
         self.abrir()
-        res = {'iniciada_em': ini, 'atualizado_painel': self.atualizado, 'abas': {}, 'mapa': [], 'osab': None, 'faturas': None}
+        res = {'iniciada_em': ini, 'atualizado_painel': self.atualizado, 'abas': {}, 'mapa': [], 'osab': None, 'faturas': None,
+               'radar': []}
         for a in self.cfg:
             nome = a.get('aba')
             if so and nome not in so:
@@ -478,6 +586,14 @@ class Dashboard:
                                           'arquivo': f'Dashboard Faturas {ini[:10]}'}
                         item['linhas'] = len(fa['linhas'])
                     item['ok'] = True
+                elif a.get('modo') == 'radar':
+                    item['filtros'] = [self.filtro(k, v) for k, v in (a.get('filtros') or {}).items()]
+                    if nome.startswith('Dinâmica - FPD'):
+                        item['cartoes'] = self.cartoes()
+                    graf = self.radar()
+                    res['radar'].append({'aba': nome, 'visuais': graf, 'cartoes': item.get('cartoes')})
+                    item.update(ok=True, visuais=len(graf), lidos=sum(1 for g in graf if 'linhas' in g),
+                                erros=sum(1 for g in graf if 'erro' in g))
                 else:
                     vis = self.mapear()
                     res['mapa'].append({'aba': nome, 'visuais': vis})
@@ -489,7 +605,7 @@ class Dashboard:
                 self.log(f'{nome}: {item["erro"]}')
             item['segundos'] = round(time.time() - t0, 1)
             res['abas'][nome] = item
-        res['ok'] = all(v.get('ok') for k, v in res['abas'].items() if v.get('modo') == 'importar')
+        res['ok'] = all(v.get('ok') for k, v in res['abas'].items() if v.get('modo') in ('importar', 'radar'))
         return res
 
 

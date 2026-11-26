@@ -351,6 +351,14 @@ ok(dsh.ler_cartao('FPD (Data Vencimento)\n1\nSTATUS\nQTD.\n% QTD.\nPagas\n1\n100
    == {'pagas': 1, 'a_vencer': 0, 'vencidas': 0}, 'dashboard: cartão FPD lido (pagas 1, a vencer 0, vencidas 0)')
 ok(dsh.ler_cartao('SPD (Data Vencimento)\nSTATUS\nQTD.\nPagas\nA vencer\nVencidas') == {'pagas': 0, 'a_vencer': 0, 'vencidas': 0},
    'dashboard: cartão vazio = zeros')
+# 26/11 — Radar Nio: 'Dados resumidos' entra na lista branca; 'Dados subjacentes' e o título de um gráfico não
+ok(dsh.clique_permitido('Dados resumidos', CFG), 'radar: clique "Dados resumidos" permitido')
+for r_ in ('Dados subjacentes', 'Dados com layout atual', 'FPD VENCIMENTO', 'Mostrar como tabela'):
+    ok(not dsh.clique_permitido(r_, CFG), f'radar: clique "{r_}" recusado')
+R_ = dsh.resumo_tabela(dsh.ler_xlsx(_xlsx([[], ['ANOMES', '% FPD'], ['202611', 0.0], ['202612', 0.125], [], ['Filtros aplicados:\nx']])))
+ok(R_ == {'colunas': ['ANOMES', '% FPD'], 'linhas': [['202611', 0.0], ['202612', 0.125]]}, 'radar: resumo do gráfico — cabeçalho, 2 meses, sem rodapé')
+ok(dsh.resumo_tabela(dsh.ler_xlsx(_xlsx([[], ['ANOMES', '% SPD']]))) == {'colunas': ['ANOMES', '% SPD'], 'linhas': []}, 'radar: gráfico vazio = só cabeçalho')
+ok(bool(dsh.RADAR_PULAR.match('Segmentação de Dados')) and not dsh.RADAR_PULAR.match('Gráfico de colunas empilhadas'), 'radar: pula filtro, lê gráfico')
 
 print()
 if FALHAS:

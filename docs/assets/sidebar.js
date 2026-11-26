@@ -45,6 +45,7 @@
     ['Acompanhamento', [
       { id: 'painel', ico: '◉', nome: 'Painel', href: 'painel.html' },
       { id: 'placar', ico: '▥', nome: 'Placar', href: 'placar.html', perfis: ['admin', 'backoffice'], esconder: true },   // 22/11 (novo layout, passo 6): como está o dia e como vai o mês
+      { id: 'radar', ico: '◬', nome: 'Radar Nio', href: 'radar.html', perfis: ['admin', 'backoffice'], esconder: true },   // 26/11 (0413): os indicadores do Dashboard da Nio, qualidade no topo
       { id: 'pulso', ico: '∿', nome: 'Pulso', href: 'pulso.html', perfis: ['admin', 'backoffice'], esconder: true },   // 15/11: o Pulso como aba
       { id: 'mari', ico: '◎', nome: 'Mari · IA', href: 'mari.html', perfis: ['admin', 'backoffice'], esconder: true, badge: 'mari' },
       { id: 'meta', ico: '▲', nome: 'Canais', href: 'metaads.html' },   // 23/11 (0369): Meta Ads virou Canais, com uma aba por canal pago

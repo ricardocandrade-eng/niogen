@@ -1,0 +1,559 @@
+{
+  "name": "radar_diario",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 5 * * *"
+            }
+          ]
+        }
+      },
+      "name": "1 · todo dia 05h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f6cd310f-b5aa-52c9-8b07-69372e234d13"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "niogen-radar-teste",
+        "authentication": "headerAuth",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "1t · rota de teste",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "id": "f7d4bf64-4697-5753-9cd5-b2df97c3aed7",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uDwozyxJcB1mghWw",
+          "name": "MARI_TESTE_SECRET"
+        }
+      },
+      "webhookId": "c968ac93-a565-5d39-be91-4594d3abfadd"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/dashboard_config",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_rotina: \"radar\" }) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "2 · Config",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        100
+      ],
+      "id": "198611cf-fef1-5a7e-965d-8f9d987cebc3",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 3000
+    },
+    {
+      "parameters": {
+        "jsCode": "// Config do banco → corpo do pedido. Agendado com a rotina desligada (\"ativo\": false) → para aqui, sem rodar.\nconst cfg = $input.first().json || {};\nconst teste = !!$('1t · rota de teste').isExecuted;\nconst regra = cfg.regra || {};\nif (!teste && regra.ativo !== true) return [{ json: { parar: true } }];\nreturn [{ json: { parar: false, origem: teste ? 'radar-teste' : 'radar', iniciada_em: new Date().toISOString(),\n                  corpo: { abas: cfg.abas || [], meses: 1, origem: teste ? 'radar-teste' : 'radar' } } }];"
+      },
+      "name": "3 · Montar pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ],
+      "id": "fb199bcc-d9cf-590e-b7c0-238ceacd8500"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "7a4d2cd5-8774-54f0-a618-a2c83c46755e",
+              "leftValue": "={{ $json.parar !== true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "3b · Rodar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        100
+      ],
+      "id": "1250da53-9fb2-58e3-8bc9-a9ca237d5df8"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://niogen-portal-tunel:8090/dashboard",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.corpo) }}"
+      },
+      "name": "4 · Pedir rodada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        100
+      ],
+      "id": "524118db-d89b-5ee1-84e0-c151ef5deb0e",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cabeça do laço: chega do \"4 · Pedir rodada\" (1ª vez) ou do \"7 · Status\". Decide: fim ou esperar mais (até ~10 min).\nconst r = $input.first().json || {};\nconst sc = r.statusCode || 0;\nconst b = (r.body && typeof r.body === 'object') ? r.body : (r.statusCode ? {} : r);\nconst job = b.job_id || null;\nlet volta = 0;\ntry { const e = $('6 · Espera 20 s').last().json; if (e && job && e.job_id === job) volta = (e.volta || 0) + 1; } catch (e) { volta = 0; }\nlet fim = false, erro = null;\nif (sc && sc !== 200 && sc !== 202) { fim = true; erro = 'HTTP ' + sc + ' ' + String(b.erro || '').slice(0, 160); }\nelse if (b.estado === 'pronto' || b.estado === 'erro') { fim = true; if (b.estado === 'erro') erro = String(b.motivo || 'erro').slice(0, 300); }\nelse if (volta >= 30) { fim = true; erro = 'o operador demorou mais que 10 min'; }\nreturn [{ json: { fim, job_id: job, volta, erro, trava: !!b.trava, sessao_expirada: !!b.sessao_expirada,\n                  radar: b.radar || [], abas: b.abas || {},\n                  atualizado_painel: b.atualizado_painel || null, ms: b.ms || null } }];"
+      },
+      "name": "5 · Estado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        100
+      ],
+      "id": "e8f68ff1-6716-53db-bcdd-00cb35aae0a2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "5b360afe-d0f7-5d6c-b237-8c2c14239299",
+              "leftValue": "={{ $json.fim === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "5b · Terminou?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        100
+      ],
+      "id": "9212c42a-c39c-5b0a-a3ba-ea645d3429e4"
+    },
+    {
+      "parameters": {
+        "amount": 20,
+        "unit": "seconds"
+      },
+      "name": "6 · Espera 20 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        320
+      ],
+      "id": "a05d690a-d954-5869-b7c7-477e26cc0e53",
+      "webhookId": "702660c2-17c0-546b-96d2-074a760ba296"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'http://niogen-portal-tunel:8090/dashboard/' + $json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "7 · Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        320
+      ],
+      "id": "f1ff5bf4-1c08-55ef-8ea0-3848aa4eacec",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "2nT15k5COwvywbns",
+          "name": "Portal Nio (operador)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "12356681-7e8c-567b-8d94-ce84f3af9882",
+              "leftValue": "={{ ($json.radar || []).length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "7b · Tem radar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        100
+      ],
+      "id": "88ae3b6b-7e78-59dd-9be5-f7d55b1bd151"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/radar_importar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_dados: { radar: $('5 · Estado').last().json.radar } }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "8 · Gravar radar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "91325223-a962-56ee-bd24-e1b498d58c4c",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Junta o que voltou do operador e da gravação. Só contagens (o retrato inteiro fica em nio_radar_leituras).\nconst e = $('5 · Estado').last().json;\nconst p = $('3 · Montar pedido').first().json;\nlet g = null;\ntry { const x = $('8 · Gravar radar').first().json; g = x && (x.body !== undefined ? x.body : x); } catch (err) { g = null; }\nconst errG = g && (g.message || g.error) ? String(g.message || g.error).slice(0, 200) : null;\nconst resumo = { ms: e.ms,\n  abas: Object.fromEntries(Object.entries(e.abas || {}).map(([k, v]) => [k, { modo: v.modo, ok: v.ok, visuais: v.visuais, lidos: v.lidos, erros: v.erros, erro: v.erro, segundos: v.segundos }])),\n  radar: g ? { exportados: g.exportados, texto: g.texto, erros: g.erros, dia: g.dia, erro: errG } : null };\nconst erro = e.erro || errG || ((e.radar || []).length ? null : 'o operador não devolveu nenhuma aba do radar');\nreturn [{ json: { dados: { ok: !erro, origem: p.origem, iniciada_em: p.iniciada_em, erro, resumo, mapa: [] },\n                  erro, trava: e.trava, sessao_expirada: e.sessao_expirada } }];"
+      },
+      "name": "10 · Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        100
+      ],
+      "id": "8e3182c3-b293-587d-b41a-87adaffd804f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zlrfwbkblytnokuexjti.supabase.co/rest/v1/rpc/dashboard_rodada_registrar",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_dados: $json.dados }) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "name": "11 · Registrar rodada",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        100
+      ],
+      "id": "2f5d9db3-c381-51c6-931e-85372d8fb9a8",
+      "credentials": {
+        "supabaseApi": {
+          "id": "p59RBqdhm80tQqJq",
+          "name": "Supabase Nio (service role)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $('10 · Resumo').first().json;\nif (r.trava) throw new Error('TRAVA do operador do Dashboard (radar) acionada — a rotina parou: ' + String(r.erro || '').slice(0, 200));\nif (r.sessao_expirada) throw new Error('Radar: a sessão do login de gestão expirou — refazer o login no PC (python portal/dashboard_sessao.py).');\nif (r.erro) throw new Error('Radar: ' + String(r.erro).slice(0, 300));\nreturn [{ json: r.dados.resumo }];"
+      },
+      "name": "12 · Falhou?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        100
+      ],
+      "id": "3bc5ea7c-ba52-5046-987f-5c81fa186222"
+    }
+  ],
+  "connections": {
+    "1 · todo dia 05h30": {
+      "main": [
+        [
+          {
+            "node": "2 · Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1t · rota de teste": {
+      "main": [
+        [
+          {
+            "node": "2 · Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2 · Config": {
+      "main": [
+        [
+          {
+            "node": "3 · Montar pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 · Montar pedido": {
+      "main": [
+        [
+          {
+            "node": "3b · Rodar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3b · Rodar?": {
+      "main": [
+        [
+          {
+            "node": "4 · Pedir rodada",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "4 · Pedir rodada": {
+      "main": [
+        [
+          {
+            "node": "5 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5 · Estado": {
+      "main": [
+        [
+          {
+            "node": "5b · Terminou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5b · Terminou?": {
+      "main": [
+        [
+          {
+            "node": "7b · Tem radar?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "6 · Espera 20 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6 · Espera 20 s": {
+      "main": [
+        [
+          {
+            "node": "7 · Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7 · Status": {
+      "main": [
+        [
+          {
+            "node": "5 · Estado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7b · Tem radar?": {
+      "main": [
+        [
+          {
+            "node": "8 · Gravar radar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "10 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8 · Gravar radar": {
+      "main": [
+        [
+          {
+            "node": "10 · Resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10 · Resumo": {
+      "main": [
+        [
+          {
+            "node": "11 · Registrar rodada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11 · Registrar rodada": {
+      "main": [
+        [
+          {
+            "node": "12 · Falhou?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "timezone": "America/Sao_Paulo",
+    "errorWorkflow": "Nsb1dcL3HWQpKSav"
+  },
+  "active": true
+}

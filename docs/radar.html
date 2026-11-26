@@ -1,0 +1,302 @@
+<!doctype html>
+<!-- NIOGEN | docs/radar.html | 26/11/2026 — Claude Code / Opus 5.5
+     Radar Nio: todos os números que a Nio vê da Dharma no Dashboard "Performance em Foco", numa tela só, com a QUALIDADE NO
+     TOPO e filtro de datas (Ricardo, 25-26/11: "Talvez uma tela chamada Radar Nio, com todos esses indicadores pode ser uma boa
+     sacada. Tudo com filtro de datas" · "uma tela só, com dados bem organizados e a qualidade no topo, para chegarmos no alvo").
+     Absorve a tela Qualidade do PLANO_qualidade_bko_191126_1115 (etapa 1): a régua do BKO (SPD 35 · FPD 20 · Match 20 ·
+     Aproveitamento 15 · Churn M3 10) com o número da Nio e, onde já existe, o nosso.
+     Dados: radar_resumo(p_de, p_ate) — UMA chamada (regra 19). Vem de nio_radar_leituras, que o operador da VPS enche todo dia
+     às 05h30 (migration 0413, n8n radar_diario). Só leitura. Admin e backoffice.
+     O Canal Local (a régua com que a Nio dá a nota do BKO) ainda não chegou: a tela mostra o número, não a faixa — e diz isso.
+     Live intocada (regra 20). -->
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>Radar Nio · NIOGEN</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icones/niogen_apple_180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css?v=221126-3">
+<link rel="stylesheet" href="assets/listas.css?v=231126-1">
+<script src="config.js?v=111126-12"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="assets/app.js?v=251126-18"></script>
+<script src="assets/sidebar.js?v=261126-2"></script>
+<style>
+  .rd-h2 { margin: 0 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .rd-h2 em { font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; margin-left: 6px; }
+  .rd-bloco { display: flex; flex-direction: column; margin-top: 10px; }
+  .rd-painel { border-radius: 14px; background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+  .rd-cels { display: flex; flex-wrap: wrap; }
+  .rd-cel { flex: 1 1 190px; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .rd-cel > span { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: baseline; justify-content: space-between; }
+  .rd-cel > span i { font-style: normal; font-family: var(--mono); font-size: 11px; padding: 1px 6px; border-radius: 6px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+  .rd-cel > b { font-family: var(--mono); font-size: 26px; font-weight: 600; line-height: 1.1; letter-spacing: -.01em; }
+  .rd-cel > b.vazio { font-size: 15px; font-weight: 500; color: var(--muted); font-family: inherit; letter-spacing: 0; }
+  .rd-cel > small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+  .rd-cel > small b { font-family: var(--mono); font-weight: 600; color: var(--text); }
+  .rd-cel.bad > b { color: var(--bad-fg); } .rd-cel.ok > b { color: var(--ok-fg); }
+  .rd-cel svg { display: block; width: 100%; height: 26px; margin-top: 2px; }
+  .rd-faixa { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; padding: 14px 18px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .rd-faixa b { font-weight: 600; }
+  .rd-faixa small { color: var(--muted); font-size: 12px; }
+  .rd-filtro { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .rd-filtro input[type=date] { height: 32px; padding: 0 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
+  .rd-filtro .chip { height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+  .rd-filtro .chip.on { color: var(--text); border-color: var(--border-strong); background: var(--surface-2); }
+  /* funil */
+  .rd-funil { display: grid; grid-template-columns: minmax(130px, 200px) minmax(0, 1fr) auto; gap: 8px 14px; align-items: center; padding: 16px 18px; }
+  .rd-funil .nome { font-size: 13px; }
+  .rd-funil .bar { height: 10px; border-radius: 5px; background: var(--surface-2); }
+  .rd-funil .bar i { display: block; height: 100%; border-radius: 5px; background: #4C97EA; min-width: 4px; }
+  .rd-funil .n { font-family: var(--mono); font-size: 13px; font-weight: 600; text-align: right; white-space: nowrap; }
+  .rd-funil .n small { font-weight: 500; color: var(--muted); margin-left: 6px; }
+  .rd-nota { padding: 10px 18px 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); line-height: 1.5; }
+  /* todos os gráficos */
+  details.rd-aba { border-top: 1px solid var(--border); }
+  details.rd-aba:first-child { border-top: 0; }
+  details.rd-aba > summary { cursor: pointer; padding: 12px 18px; font-size: 13.5px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; }
+  details.rd-aba > summary::-webkit-details-marker { display: none; }
+  details.rd-aba > summary small { font-weight: 500; color: var(--muted); }
+  .rd-vis { display: flex; flex-wrap: wrap; gap: 0; border-top: 1px solid var(--border); }
+  .rd-v { flex: 1 1 300px; min-width: 0; padding: 12px 18px; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
+  .rd-v h4 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .rd-v table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rd-v th, .rd-v td { text-align: left; padding: 3px 6px 3px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .rd-v td.num, .rd-v th.num { text-align: right; font-family: var(--mono); }
+  .rd-v .txt { font-size: 12px; line-height: 1.5; word-break: break-word; }
+  .rd-v .vz { font-size: 12px; color: var(--muted); }
+  .rd-v .rolar { overflow-x: auto; }
+  .rd-pe { color: var(--muted); font-size: 12px; margin-top: 10px; line-height: 1.6; }
+  @media (max-width: 640px) {
+    .rd-cel { flex-basis: 150px; padding: 12px 14px; } .rd-cel > b { font-size: 21px; }
+    .rd-funil { grid-template-columns: minmax(0, 1fr) auto; } .rd-funil .bar { grid-column: 1 / -1; order: 3; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav" id="sidebar" data-pagina="radar"></nav>
+  <main class="main lista-densa">
+    <header class="cab">
+      <div>
+        <h1>Radar Nio</h1>
+        <div class="sub">O que a Nio vê da Dharma no Dashboard dela — lido todo dia às 05h30.</div>
+      </div>
+      <div class="cab-acoes rd-filtro">
+        <button class="chip" data-p="mes">Este mês</button>
+        <button class="chip" data-p="ant">Mês passado</button>
+        <button class="chip" data-p="90">90 dias</button>
+        <input type="date" id="f-de" aria-label="De">
+        <input type="date" id="f-ate" aria-label="Até">
+      </div>
+    </header>
+
+    <section class="rd-bloco" aria-labelledby="t-bko">
+      <h2 class="rd-h2" id="t-bko">Qualidade · a régua do BKO <em>é o que libera reagendamento e as outras ferramentas</em></h2>
+      <div class="rd-painel">
+        <div class="rd-faixa" id="rd-faixa">Carregando…</div>
+        <div class="rd-cels" id="rd-bko"></div>
+      </div>
+    </section>
+
+    <section class="rd-bloco" aria-labelledby="t-est">
+      <h2 class="rd-h2" id="t-est">Estorno e multa <em>acima de zero = venda que volta</em></h2>
+      <div class="rd-painel rd-cels" id="rd-estorno"></div>
+    </section>
+
+    <section class="rd-bloco" aria-labelledby="t-m10">
+      <h2 class="rd-h2" id="t-m10">M-10 <em>R$ 150 por cliente no 10º mês</em></h2>
+      <div class="rd-painel">
+        <div class="rd-cels" id="rd-m10"></div>
+        <div class="rd-nota">O Dashboard só mostra o churn e o AASD por safra — não diz cliente a cliente nem o bônus. Para acompanhar o M-10
+          de cada cliente falta o extrato das faturas da 4ª à 10ª (pedido ao Rogério). Até lá, o selo Fatura da ficha mostra quem está em aberto.</div>
+      </div>
+    </section>
+
+    <section class="rd-bloco" aria-labelledby="t-funil">
+      <h2 class="rd-h2" id="t-funil">Funil do mês na Nio</h2>
+      <div class="rd-painel">
+        <div class="rd-funil" id="rd-funil"></div>
+        <div class="rd-nota" id="rd-funil-nota"></div>
+      </div>
+    </section>
+
+    <section class="rd-bloco" aria-labelledby="t-op">
+      <h2 class="rd-h2" id="t-op">Operação</h2>
+      <div class="rd-painel rd-cels" id="rd-op"></div>
+    </section>
+
+    <section class="rd-bloco" aria-labelledby="t-todos">
+      <h2 class="rd-h2" id="t-todos">Todos os gráficos do Dashboard <em>como a Nio mostra, na última leitura do período</em></h2>
+      <div class="rd-painel" id="rd-todos"></div>
+    </section>
+    <div class="rd-pe" id="rd-pe"></div>
+  </main>
+</div>
+<script>
+(async function () {
+  const t0 = performance.now();
+  const { esc } = NG;
+  const eu = await NG.exigirLogin();
+  NGSidebar.montar();
+  if (!['admin', 'backoffice'].includes(eu.perfil)) {
+    document.querySelector('main').innerHTML = '<header class="cab"><div><h1>Radar Nio</h1></div></header><div class="vazio">O Radar Nio é do admin e do backoffice.</div>';
+    return;
+  }
+  const $ = (id) => document.getElementById(id);
+  const hoje = NG.diaSP();
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const mesNome = (am) => (/^\d{6}$/.test(String(am)) ? `${MESES[Number(String(am).slice(4)) - 1]}/${String(am).slice(2, 4)}` : NG.fmtDiaISO(am).slice(0, 5));
+  const fmt = (v, f) => {
+    if (v == null || v === '') return null;
+    const n = Number(v);
+    if (f === 'pct') return `${(n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`;
+    if (f === 'dec') return n.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    return n.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+  };
+  const primeiroDoMes = (d) => `${d.slice(0, 7)}-01`;
+  const ultimoDoMes = (d) => { const a = Number(d.slice(0, 4)), m = Number(d.slice(5, 7)); return `${d.slice(0, 7)}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`; };
+  const PRESETS = {
+    mes: () => [primeiroDoMes(hoje), hoje],
+    ant: () => { const p = NG.somaDias(primeiroDoMes(hoje), -1); return [primeiroDoMes(p), ultimoDoMes(p)]; },
+    90: () => [NG.somaDias(hoje, -89), hoje],
+  };
+  let de, ate, r = null;
+  try { const s = JSON.parse(sessionStorage.getItem('radar_periodo') || 'null'); if (s && s.de && s.ate) { de = s.de; ate = s.ate; } } catch (e) { /* sem storage */ }
+  if (!de) [de, ate] = PRESETS.mes();
+
+  // linha fina com a série (meses ou dias) — sem eixo, só a forma
+  function spark(serie, f) {
+    const pts = (serie || []).filter((p) => p.v != null).map((p) => Number(p.v));
+    if (pts.length < 2) return '';
+    const max = Math.max(...pts), min = Math.min(...pts, 0), w = 120, h = 24, k = (max - min) || 1;
+    const xy = pts.map((v, i) => `${(i / (pts.length - 1)) * w},${h - 2 - ((v - min) / k) * (h - 4)}`).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${xy}" fill="none" stroke="var(--muted)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+  }
+  const ind = (ch) => (r.indicadores || []).find((i) => i.chave === ch);
+
+  function celula(i, extra = '') {
+    const v = fmt(i.valor, i.formato);
+    const ruim = i.alarme && Number(i.valor) > 0;
+    const serie = (i.serie || []).filter((p) => p.v != null);
+    const linhaSerie = serie.length > 1 && /^\d{6}$/.test(String(serie[0].x))
+      ? serie.map((p) => `${esc(mesNome(p.x))} <b>${esc(fmt(p.v, i.formato))}</b>`).join(' · ') : '';
+    return `<div class="rd-cel${ruim ? ' bad' : ''}" title="${esc(i.ajuda || '')}">
+      <span>${esc(i.nome)}${i.peso_bko ? `<i>peso ${i.peso_bko}</i>` : ''}</span>
+      ${v != null ? `<b>${esc(v)}</b>` : '<b class="vazio">sem safra no período</b>'}
+      <small>${i.ref ? `Nio · ${esc(mesNome(i.ref))}` : 'Nio ainda não mostra'}${i.direcao ? ` · ${i.direcao === 'menor' ? 'menor é melhor' : 'maior é melhor'}` : ''}</small>
+      ${linhaSerie ? `<small>${linhaSerie}</small>` : ''}
+      ${extra}
+      ${spark(serie, i.formato)}
+    </div>`;
+  }
+
+  function pintarBko() {
+    const bko = (r.indicadores || []).filter((i) => i.grupo === 'bko');
+    const n = r.nosso || {};
+    const extra = {
+      aproveitamento: `<small>Nosso no período: <b>${esc(fmt(n.aproveitamento, 'pct') || '—')}</b> (${esc(NG.fmtNum(n.instaladas))} de ${esc(NG.fmtNum(n.os_geradas))} OS instaladas)</small>`,
+      fpd: `<small>Agora na Nio: <b>${esc(NG.fmtNum(n.faturas_vencidas))}</b> vencida(s) · <b>${esc(NG.fmtNum(n.faturas_a_vencer))}</b> a vencer${n.faturas_vencidas > 0 ? ' — <a href="adimplencia.html">ver</a>' : ''}</small>`,
+      churn_m3: n.canceladas_apos_instalar ? `<small>Nosso: <b>${esc(NG.fmtNum(n.canceladas_apos_instalar))}</b> cancelada(s) depois de instalar</small>` : '',
+    };
+    $('rd-bko').innerHTML = bko.map((i) => celula(i, extra[i.chave] || '')).join('') || '<div class="rd-cel"><span>Sem leitura</span></div>';
+    const comNumero = bko.filter((i) => i.valor != null).length;
+    $('rd-faixa').innerHTML = `<b>Faixa do BKO: ainda sem nota</b>
+      <small>A Nio dá a nota comparando cada indicador com o <b>Canal Local</b> do mês — essa régua ainda não chegou. Com ela, a faixa
+      (Excelente → Grave) sai daqui. ${comNumero} de ${bko.length} indicadores com número no período; safra vazia é safra que ainda não fechou.</small>`;
+  }
+
+  function pintarGrupo(id, grupo) {
+    const l = (r.indicadores || []).filter((i) => i.grupo === grupo);
+    $(id).innerHTML = l.map((i) => celula(i)).join('');
+  }
+
+  function pintarFunil() {
+    const passos = ['funil_viab', 'funil_viavel', 'funil_credito', 'funil_plano', 'funil_pedido', 'funil_vb', 'funil_inst'].map(ind).filter(Boolean);
+    const topo = Number((passos[0] || {}).valor) || 0;
+    $('rd-funil').innerHTML = passos.map((p, k) => {
+      const v = Number(p.valor), ant = k ? Number(passos[k - 1].valor) : null;
+      const pctTopo = topo && p.valor != null ? (v / topo) * 100 : 0;
+      return `<div class="nome">${esc(p.nome)}</div>
+        <div class="bar"><i style="width:${Math.max(pctTopo, 0.6)}%"></i></div>
+        <div class="n">${p.valor != null ? esc(NG.fmtNum(v)) : '—'}${ant ? `<small>${esc((v / ant * 100).toLocaleString('pt-BR', { maximumFractionDigits: 0 }))} % da etapa</small>` : ''}</div>`;
+    }).join('') || '<div class="nome">Sem leitura do funil no período.</div>';
+    const lido = (passos[0] || {}).lido;
+    const n = r.nosso || {};
+    $('rd-funil-nota').innerHTML = `${lido ? `Última leitura: ${esc(NG.fmtDiaISO(lido))}. ` : ''}A Nio atualiza o funil às 10h, 14h e 17h; as consultas do robô da Mari entram no login da Joysse.
+      No NIOGEN, no mesmo período: <b>${esc(NG.fmtNum(n.os_geradas))}</b> OS geradas, <b>${esc(NG.fmtNum(n.instaladas))}</b> instaladas.`;
+  }
+
+  function tabela(v) {
+    if (!v.colunas) return v.texto ? `<div class="txt">${esc(v.texto)}</div>` : '<div class="vz">sem dado</div>';
+    const ls = v.linhas || [];
+    if (!ls.length) return '<div class="vz">vazio (a Nio ainda não tem número da Dharma)</div>';
+    const num = (x) => typeof x === 'number';
+    const cel = (c, x) => {
+      if (x == null) return '';
+      if (num(x) && /%|conver|match|macth|churn|aasd/i.test(c) && Math.abs(x) <= 1.5) return fmt(x, 'pct');
+      if (num(x)) return x.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      return /^\d{6}$/.test(String(x)) && /anomes/i.test(c) ? mesNome(x) : String(x);
+    };
+    return `<div class="rolar"><table><thead><tr>${v.colunas.map((c, k) => `<th class="${num((ls[0] || [])[k]) ? 'num' : ''}">${esc(c)}</th>`).join('')}</tr></thead>
+      <tbody>${ls.slice(0, 40).map((l) => `<tr>${l.map((x, k) => `<td class="${num(x) ? 'num' : ''}">${esc(cel(v.colunas[k], x))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function pintarTodos() {
+    const ORDEM = ['Indicadores Qualidade', 'Geral', 'Eficácia', 'Operacional Vendas', 'Atuação de Campo', 'Produtividade Vendedor'];
+    const abas = {};
+    (r.visuais || []).forEach((v) => { (abas[v.aba] = abas[v.aba] || []).push(v); });
+    const nomes = Object.keys(abas).sort((a, b) => (ORDEM.indexOf(a) + 99) % 99 - (ORDEM.indexOf(b) + 99) % 99);
+    $('rd-todos').innerHTML = nomes.map((a, k) => {
+      const lido = abas[a].reduce((m, v) => (v.dia > m ? v.dia : m), '');
+      return `<details class="rd-aba"${k === 0 ? ' open' : ''}><summary>${esc(a)} <small>${abas[a].length} gráfico(s) · ${esc(NG.fmtDiaISO(lido))}</small></summary>
+        <div class="rd-vis">${abas[a].map((v) => `<div class="rd-v"><h4>${esc(v.visual)}</h4>${tabela(v)}</div>`).join('')}</div></details>`;
+    }).join('') || '<div class="rd-nota">Nenhuma leitura até a data escolhida. A primeira rodada do Radar é às 05h30.</div>';
+  }
+
+  function pintarPe() {
+    const rod = r.rodada || {};
+    $('rd-pe').innerHTML = `Período: ${esc(NG.fmtDiaISO(r.de))} a ${esc(NG.fmtDiaISO(r.ate))} · leitura usada: ${esc(NG.fmtDiaISO(r.dia_ref) || '—')}
+      · histórico desde ${esc(NG.fmtDiaISO(r.primeiro_dia) || '—')}
+      · última rodada do Radar: ${rod.em ? esc(new Date(rod.em).toLocaleString('pt-BR', { timeZone: NG.TZ, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + (rod.ok ? '' : ` <b style="color:var(--bad-fg)">falhou: ${esc(rod.erro || '')}</b>`) : '—'}.
+      <br>Indicadores por mês (ANOMES) mostram só os meses do período; os lidos do texto da tela (funil, eficácia, operação) usam a última leitura do período.
+      Fonte: Dashboard "Performance em Foco" da Nio, dados resumidos de cada gráfico.`;
+  }
+
+  function marcarChips() {
+    document.querySelectorAll('.rd-filtro .chip').forEach((b) => { const [a, z] = PRESETS[b.dataset.p](); b.classList.toggle('on', a === de && z === ate); });
+    $('f-de').value = de; $('f-ate').value = ate;
+  }
+
+  async function carregar() {
+    marcarChips();
+    try { sessionStorage.setItem('radar_periodo', JSON.stringify({ de, ate })); } catch (e) { /* sem storage */ }
+    const { data, error } = await NG.sb.rpc('radar_resumo', { p_de: de, p_ate: ate });
+    if (error) { $('rd-faixa').textContent = 'Não consegui ler o Radar: ' + (error.message || error); return; }
+    r = data || {};
+    pintarBko();
+    pintarGrupo('rd-estorno', 'estorno');
+    pintarGrupo('rd-m10', 'm10');
+    pintarFunil();
+    pintarGrupo('rd-op', 'operacao');
+    pintarTodos();
+    pintarPe();
+    if (!window.NGrdTempo) window.NGrdTempo = Math.round(performance.now() - t0);   // regra 19
+  }
+  document.querySelectorAll('.rd-filtro .chip').forEach((b) => b.addEventListener('click', () => { [de, ate] = PRESETS[b.dataset.p](); carregar(); }));
+  $('f-de').addEventListener('change', () => { if ($('f-de').value) { de = $('f-de').value; if (de > ate) ate = de; carregar(); } });
+  $('f-ate').addEventListener('change', () => { if ($('f-ate').value) { ate = $('f-ate').value; if (ate < de) de = ate; carregar(); } });
+  NG.botaoAtualizar(() => carregar());
+  await carregar();
+  NG.aoVoltarAba(() => carregar());
+})();
+</script>
+</body>
+</html>
