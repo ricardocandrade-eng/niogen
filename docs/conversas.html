@@ -13,6 +13,8 @@
        · Conversa: o componente de sempre (assets/conversa.js), com a opção cabUnico — um cabeçalho só, numa linha. A Live e a
          ficha não usam a opção e seguem como estão.
        · "Sobre o lead" (v_leads da conversa, só leitura): próximo passo e de quem é a vez, onde está, a venda, etiquetas.
+     26/11 (0416, Ricardo): disparo automático (cadência, Retomada, aviso) × conversa viva na lista; caixinha "⏱ Esconder disparos"
+       (?disparos=esconder) e a tela abre na aba Todas (1ª leitura = as 60 mais recentes, o topo da aba; o resto chega atrás).
      15/11 (NIOGEN no celular): em tela ≤ 640 px segue o padrão WhatsApp — lista com avatar e a conversa em TELA CHEIA
      (NGConversa movel). Lá só mudam as abas e o botão Filtros. -->
 <html lang="pt-BR">
@@ -41,6 +43,10 @@
   .cv-busca input { flex: 1; min-width: 0; }
   .cv-busca .btn { flex: 0 0 auto; min-height: 36px; white-space: nowrap; }
   .cv-busca .btn[aria-expanded="true"], .cv-busca .btn.tem { border-color: var(--accent); color: var(--text); }
+  .cv-disp { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted); cursor: pointer; user-select: none; }
+  .cv-disp input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+  .cv-disp:has(input:checked) { color: var(--text); }
+  .cv-disp span { font-variant-numeric: tabular-nums; }
   .cv-painel { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--border); background: var(--surface-dim); }
   .cv-painel label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); min-width: 0; }
   .cv-painel select { height: 32px; min-width: 0; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12.5px; padding: 0 6px; }
@@ -126,6 +132,7 @@
           <button type="button" class="btn btn-sm" id="bt-filtros" aria-expanded="false" aria-controls="painel">Filtros</button>
         </div>
         <div class="cv-filtros" id="filtros" role="tablist" aria-label="Quais conversas"></div>
+        <label class="cv-disp" title="Esconde as conversas cuja última mensagem foi disparo automático (cadência, Retomada, aviso) — as que são só para acompanhar"><input type="checkbox" id="bt-disp"> ⏱ Esconder disparos <span id="n-disp"></span></label>
         <div class="cv-painel" id="painel" hidden>
           <label>Quem atende<select id="f-dono"></select></label>
           <label>Situação<select id="f-sit"></select></label>
@@ -155,6 +162,7 @@
   const buscaEl = document.getElementById('busca');
   const painel = document.getElementById('painel');
   const btFiltros = document.getElementById('bt-filtros');
+  const btDisp = document.getElementById('bt-disp');
   if (!['admin', 'backoffice'].includes(eu.perfil)) { itensEl.innerHTML = '<div class="vazio">As conversas são do backoffice.</div>'; return; }
 
   let lista = [];
@@ -164,9 +172,11 @@
   // ?filtro=esperando|minhas|abertas|todas (e os antigos fora|encerradas, que viraram Situação) · ?dono=mari|time · ?etapa= · ?destino=
   const URLQ = new URLSearchParams(location.search);
   const ABAS_ID = ['esperando', 'minhas', 'abertas', 'todas'];
-  const f = { dono: URLQ.get('dono') || '', sit: '', etapa: URLQ.get('etapa') || '', destino: URLQ.get('destino') || '' };
+  // 26/11 (Ricardo: "Põe um filtro para esconder os disparos"): ?disparos=esconder liga o filtro pelo endereço.
+  const f = { dono: URLQ.get('dono') || '', sit: '', etapa: URLQ.get('etapa') || '', destino: URLQ.get('destino') || '', disp: URLQ.get('disparos') === 'esconder' ? 'esconder' : '' };
   if (!['', 'mari', 'time'].includes(f.dono)) f.dono = '';
-  let aba = ABAS_ID.includes(URLQ.get('filtro')) ? URLQ.get('filtro') : 'abertas';
+  // 26/11 (Ricardo: "ao clicar em Conversas, mostra a página com o filtro Todas marcado"): sem ?filtro=, abre em Todas.
+  let aba = ABAS_ID.includes(URLQ.get('filtro')) ? URLQ.get('filtro') : 'todas';
   if (['fora', 'encerradas'].includes(URLQ.get('filtro'))) { f.sit = URLQ.get('filtro'); aba = 'todas'; }
   if ((f.etapa || f.destino) && !URLQ.get('filtro')) aba = 'todas';
   let atual = null;     // id da conversa aberta
@@ -209,9 +219,10 @@
     sit: (c, v) => (v === 'fora' ? !!c.funil_alerta : !!c.encerrada),
     etapa: (c, v) => (c.funil_etapa || 'nova') === v,
     destino: (c, v) => (c.funil_destino || 'em_andamento') === v,
+    disp: (c) => !auto(c),
   };
   const passa = (c, menos) => Object.keys(TESTE).every((k) => k === menos || !f[k] || TESTE[k](c, f[k]));
-  const rotFiltro = (k) => (k === 'dono' ? `Atende: ${DONO[f.dono]}` : k === 'sit' ? SIT[f.sit]
+  const rotFiltro = (k) => (k === 'disp' ? 'Sem disparos' : k === 'dono' ? `Atende: ${DONO[f.dono]}` : k === 'sit' ? SIT[f.sit]
     : k === 'etapa' ? `Etapa: ${fnome.etapa[f.etapa] || f.etapa}` : `Destino: ${fnome.destino[f.destino] || f.destino}`);
 
   const quando = (iso) => {
@@ -268,10 +279,11 @@
   // da resposta (239 conversas inteiras = 223 KB → ~0,65 s). Na PRIMEIRA abertura, na aba Abertas e sem filtro, a tela pede antes
   // só as abertas (as ~50 que aparecem), pinta, e a lista completa chega logo atrás (os contadores das outras abas mostram "…"
   // nesse intervalo). Depois disso, e em qualquer outro caso, é uma leitura só, como antes.
-  let primeira = true, parcial = false;
-  const lerLista = (soAbertas) => {
-    const filtro = (qy) => (soAbertas ? qy.eq('encerrada', false).or('chatwoot_status.is.null,chatwoot_status.neq.resolved') : qy);
-    return filtro(NG.sb.rpc('conversas_lista')).order('ultima_em', { ascending: false }).limit(500)
+  let primeira = true, parcial = false, parcialAba = 'abertas';
+  // modo: 'abertas' = só as abertas · 'topo' = as 60 mais recentes (o topo exato da aba Todas, 26/11) · vazio = a lista inteira
+  const lerLista = (modo) => {
+    const filtro = (qy) => (modo === 'abertas' ? qy.eq('encerrada', false).or('chatwoot_status.is.null,chatwoot_status.neq.resolved') : qy);
+    return filtro(NG.sb.rpc('conversas_lista')).order('ultima_em', { ascending: false }).limit(modo === 'topo' ? 60 : 500)
       .then((r) => (r.error ? filtro(NG.sb.from('v_conversas').select('*')).order('ultima_em', { ascending: false }).limit(500) : r));
   };
   const guardar = (data) => { lista = (data || []).map((c) => ({ ...c, nome: NG.nomeLegivel(c.nome, c.telefone) })); };   // 16/11: nome legível (conversa 119)
@@ -280,11 +292,13 @@
     // das outras duas (nome da etapa, "fora da Live") entram quando elas chegarem.
     // 22/11 (0360, regra 19): a lista vem da conversas_lista() — as mesmas linhas da v_conversas, sem o RLS conferido linha a
     // linha (~1,0–1,4 s → ~0,3 s). A tela é só de admin/backoffice. Se a função falhar, cai na visão, como antes.
-    const emDuas = primeira && aba === 'abertas' && !Object.keys(TESTE).some((k) => f[k]) && !buscaEl.value.trim();
+    // 26/11: abrindo em Todas, a 1ª leitura traz as 60 mais recentes (o topo da aba); o resto chega logo atrás.
+    const emDuas = primeira && ['abertas', 'todas'].includes(aba) && !Object.keys(TESTE).some((k) => f[k] && k !== 'disp') && !buscaEl.value.trim();
     primeira = false;
-    const pc = lerLista(false);
+    const pc = lerLista('');
     if (emDuas) {
-      const ra = await lerLista(true);
+      parcialAba = aba;
+      const ra = await lerLista(aba === 'abertas' ? 'abertas' : 'topo');
       if (!ra.error && !lista.length) {
         parcial = true; guardar(ra.data); render();
         if (window.NGcvTempo == null) window.NGcvTempo = Math.round(performance.now() - T0);   // regra 19: lista na tela
@@ -306,12 +320,13 @@
     const qd = NG.soDigitos(q);
     const casa = (c) => !q || [c.nome, c.cidade].some((x) => String(x || '').toLowerCase().includes(q)) || (qd.length >= 3 && NG.soDigitos(c.telefone).includes(qd));
     const porBusca = lista.filter(casa);
+    const naAbaSemBusca = q ? () => true : (ABAS.find((a) => a[0] === aba) || ABAS[3])[2];
     const base = porBusca.filter((c) => passa(c));
     // Opções do painel: o número diz quantas conversas você vai ver (com os outros filtros aplicados).
     const opcoes = (k, todos, pares, pad) => {
       const uni = porBusca.filter((c) => passa(c, k));
       const sel = document.getElementById(`f-${k}`);
-      if (document.activeElement === sel) return;
+      if (!sel || document.activeElement === sel) return;
       sel.innerHTML = `<option value="">${esc(todos)} (${uni.length})</option>` + pares.map(([v, nome]) => `<option value="${esc(v)}"${f[k] === v ? ' selected' : ''}>${esc(nome)} (${uni.filter((c) => TESTE[k](c, v)).length})</option>`).join('');
     };
     opcoes('dono', 'Todos', Object.entries(DONO));
@@ -321,17 +336,22 @@
     // Etiquetas dos filtros aplicados
     const ativos = Object.keys(TESTE).filter((k) => f[k]);
     const etqs = document.getElementById('etqs');
-    etqs.hidden = !ativos.length && !q;
-    etqs.innerHTML = ativos.map((k) => `<span class="cv-etq">${esc(rotFiltro(k))}<button type="button" data-tira="${k}" aria-label="Tirar o filtro ${esc(rotFiltro(k))}">×</button></span>`).join('')
+    const ativosEtq = ativos.filter((k) => k !== 'disp');   // o "Esconder disparos" já tem a sua caixinha
+    etqs.hidden = !ativosEtq.length && !q;
+    etqs.innerHTML = ativosEtq.map((k) => `<span class="cv-etq">${esc(rotFiltro(k))}<button type="button" data-tira="${k}" aria-label="Tirar o filtro ${esc(rotFiltro(k))}">×</button></span>`).join('')
       + (q ? `<span class="cv-etq">Busca: ${esc(buscaEl.value.trim())}<button type="button" data-tira="busca" aria-label="Limpar a busca">×</button></span>` : '')
-      + (ativos.length || q ? '<button type="button" class="cv-limpar" id="limpar">Limpar tudo</button>' : '');
-    btFiltros.classList.toggle('tem', ativos.length > 0);
-    btFiltros.textContent = ativos.length ? `Filtros · ${ativos.length}` : 'Filtros';
+      + (ativosEtq.length || q ? '<button type="button" class="cv-limpar" id="limpar">Limpar tudo</button>' : '');
+    const nPainel = ativos.filter((k) => k !== 'disp').length;
+    btFiltros.classList.toggle('tem', nPainel > 0);
+    btFiltros.textContent = nPainel ? `Filtros · ${nPainel}` : 'Filtros';
+    btDisp.checked = !!f.disp;
+    const nDisp = porBusca.filter((c) => passa(c, 'disp') && auto(c) && naAbaSemBusca(c)).length;
+    document.getElementById('n-disp').textContent = parcial ? '' : `(${nDisp} ${f.disp ? 'escondidos' : 'nesta aba'})`;
     // 12/11: com busca, acha a conversa em qualquer aba (encerrada ou silenciada inclusive).
-    const naAba = q ? () => true : (ABAS.find((a) => a[0] === aba) || ABAS[2])[2];
+    const naAba = q ? () => true : (ABAS.find((a) => a[0] === aba) || ABAS[3])[2];
     document.getElementById('filtros').innerHTML = ABAS.map(([id, nome, fn, ajuda]) => {
       const n = base.filter(fn).length;
-      const conta = parcial && id !== 'abertas' ? '…' : n;   // a lista completa ainda está chegando: só o número das Abertas já é certo
+      const conta = parcial && (parcialAba !== 'abertas' || id !== 'abertas') ? '…' : n;   // a lista completa ainda está chegando: só o número das Abertas (lidas inteiras) já é certo
       return `<button type="button" role="tab" data-filtro="${id}" aria-selected="${aba === id}" title="${esc(ajuda)}" class="${aba === id ? 'on' : ''}${id === 'esperando' && n ? ' alerta' : ''}">${esc(nome)} <b>${conta}</b></button>`;
     }).join('');
     // 22/11 (Ricardo: "ordem como no WhatsApp"): a mensagem mais recente em cima, em todas as abas.
@@ -520,7 +540,8 @@
   buscaEl.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && NG.abrirLeadNumero) NG.abrirLeadNumero(ev.target.value); });
   btFiltros.addEventListener('click', () => { painel.hidden = !painel.hidden; btFiltros.setAttribute('aria-expanded', String(!painel.hidden)); });
   // Situação, etapa ou destino escolhido: a aba vai para Todas (senão "Abertas" esconderia as encerradas e as saídas).
-  Object.keys(TESTE).forEach((k) => document.getElementById(`f-${k}`).addEventListener('change', (ev) => {
+  btDisp.addEventListener('change', () => { f.disp = btDisp.checked ? 'esconder' : ''; render(); });
+  Object.keys(TESTE).filter((k) => k !== 'disp').forEach((k) => document.getElementById(`f-${k}`).addEventListener('change', (ev) => {
     f[k] = ev.target.value;
     if (f[k] && k !== 'dono') aba = 'todas';
     ev.target.blur();
@@ -531,7 +552,7 @@
     if (t) { if (t.dataset.tira === 'busca') buscaEl.value = ''; else f[t.dataset.tira] = ''; render(); return; }
     if (ev.target.closest('#limpar')) {
       Object.keys(TESTE).forEach((k) => { f[k] = ''; });
-      buscaEl.value = ''; aba = 'abertas';
+      buscaEl.value = ''; aba = 'todas';
       painel.hidden = true; btFiltros.setAttribute('aria-expanded', 'false');
       render();
     }
