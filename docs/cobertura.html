@@ -1081,7 +1081,10 @@
     renderCred(s);
     viabDoCredito(s, end);
     registrarConsulta('credito', end, s.resultado, { formas: s.formas_liberadas || null, padrao: !!padrao, ficticio: !!(padrao && credFic), cache: !!s.cache },
-      s.ms, { cpf_mascara: s.cpf_mascara || null });
+      // 26/11 (0423, Ricardo: "Sim, grava"): com um lead escolhido, o nome da Receita vai para a ficha dele — o banco decide
+      // (grava se não há nome ou é provisório, completa se o 1º nome é o mesmo, nunca troca um nome diferente).
+      s.ms, { cpf_mascara: s.cpf_mascara || null,
+        ...(lead && lead.conversa_id && s.nome_receita ? { conversa_id: lead.conversa_id, nome_receita: s.nome_receita } : {}) });
   }
   formCred.addEventListener('submit', (ev) => {
     ev.preventDefault();
