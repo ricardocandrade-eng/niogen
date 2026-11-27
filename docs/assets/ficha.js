@@ -2497,7 +2497,7 @@
     const credP = Promise.resolve(NG.sb.from('operador_consultas').select('origem, resultado, criado_em').eq('conversa_id', cid).eq('tipo', 'credito').order('criado_em', { ascending: false }).limit(1))
       .then((r) => (r && !r.error && r.data && r.data[0]) || null, () => null);
     const [rc, jo, rq, rk, rn, rt, rb, ultFala, fnome, lead, lcfg] = await Promise.all([
-      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_origem, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
+      NG.sb.from('mari_conversas').select('id, lead_numero, venda_id, telefone, cidade, cep, numero, complemento, endereco_cep, rua_conferir, rua_conferir_em, nio_viab_em, nio_viab_velocidade, cobertura_decisao, cobertura_em, cobertura_detalhe, forma_pagamento, instalacao_preferencia, cluster, segmento, uf, origem, nome_contato, dados, plano_escolhido, chatwoot_conversation_id, chatwoot_status, chatwoot_agente, chatwoot_time, chatwoot_etiquetas, humano_atribuido, nao_contatar, ultima_msg_lead_at, nio_viab_resultado, credito_resultado, credito_em, credito_origem, credito_endereco, credito_formas, credito_consultas, nio_pedido_aberto, antifraude_situacao, antifraude_em, antifraude_hist, status, handoff_motivo, handoff_briefing, handoff_em, quadro_encerrada_motivo, espera_ate, espera_motivo, espera_em, funil_etapa, funil_destino, funil_detalhe, funil_alerta, created_at, cadencia_passo, cadencia_retorno_em, agendamento_retorno, chatwoot_resolvida, time_atribuido, retomada_desde, retomada_passo, retomada_passo_em, retomada_fim_em, retomada_fim').eq('id', cid).maybeSingle(),
       NG.jornadaLinha({ conversa: cid }),
       NG.sb.from('v_mari_quadro_jornada').select('coluna, itens, itens_total, itens_validados, faltam, plano_nome, trava_cliente_nio, trava_endereco_nio, trava_viabilidade').eq('id', cid).maybeSingle(),
       NG.sb.rpc('mari_cadencia_avaliar', { p_conversa: cid }).maybeSingle(),   // 13/11: só esta conversa (60 ms; a view avalia todas)
@@ -2946,6 +2946,13 @@
       if (acao === 'fc-op-lead') {   // 0159: grava no lead sem venda o que o operador leu
         // 18/11 (caso Lucia Helena): o aviso dizia "a Mari vai oferecer o CPF de um parente", mas este botão só grava o resultado no
         // lead — não manda nada ao cliente. E o crédito já negado (operador/Mari) não precisa ser gravado de novo.
+        if (b.dataset.mao && b.dataset.t === 'viab') {   // 0425 (L-434): avisa antes de gravar por cima de um "não" do portal
+          const cv = d.conv || {};
+          const portalNao = cv.nio_viab_resultado === 'sem_viabilidade' || ['sem_cobertura', 'elegivel_200m'].includes(cv.cobertura_decisao);
+          const qd = cv.cobertura_em || cv.nio_viab_em;
+          if (b.dataset.r === 'viavel' && portalNao && !window.confirm(`O portal respondeu SEM VIABILIDADE para este endereço${qd ? ` (${NG.fmtDataHora(qd)})` : ''}.\n\nGravar VIÁVEL mesmo assim? Confirme só se você viu "viável" no portal agora. A Mari passa a oferecer os planos ao cliente.`)) return;
+          if (b.dataset.r === 'desfazer' && !window.confirm('Desfazer o "viável" gravado pela ficha?\n\nA viabilidade volta ao que o robô do portal respondeu para este endereço (ou a "não consultado", e o robô consulta de novo).')) return;
+        }
         if (b.dataset.mao && b.dataset.t !== 'viab') {
           const cv = d.conv || {};
           if (cv.credito_resultado && cv.credito_resultado === b.dataset.r) {
@@ -3633,6 +3640,14 @@
       ? `<div class="fc-op-bts">${bt('viavel', 'Registrar "viável" à mão')}<span class="nota-campo">viu viável no portal ou na extensão? grave aqui · sem viabilidade: antes da Saída, confira o DFV e a Cobertura — fachada viável lá vira pedido de liberação</span></div>`
       : `<div class="fc-op-bts"><span class="nota-campo">Rodou o crédito no portal ou pela extensão? Grave aqui:</span>${bt('aprovado_todas', 'Aprovado')}${bt('aprovado_cartao', 'Só cartão')}${bt('pendente', 'Pendente')}${bt('negado', 'Negado')}</div>`;
   }
+  // 26/11 (Ricardo, L-434: "sem querer eu marquei a mão como viável e agora não consigo corrigir mais") — 0425: o viável gravado
+  // pela ficha tem volta. Só aparece quando o banco aceita desfazer (registrado_na_ficha); viável do robô não se desfaz por aqui.
+  function corrigirViabConv() {
+    const c = d.conv || {};
+    if (!ehBO() || silenciadaConv() || !d.conversaId || !(c.cobertura_detalhe && c.cobertura_detalhe.registrado_na_ficha)) return '';
+    if (d.lead && ['saida', 'instalada', 'teste_duplicada'].includes(d.lead.destino)) return '';
+    return `<details class="fc-corrigir"><summary class="btn btn-sm">Corrigir</summary><div class="fc-op-bts"><span class="nota-campo">Este "viável" foi gravado pela ficha. Gravou por engano? Desfazer volta ao que o robô do portal respondeu para este endereço (ou a "não consultado").</span><button type="button" class="btn btn-sm" data-f="fc-op-lead" data-t="viab" data-r="desfazer" data-mao="1">Desfazer o viável</button></div></details>`;
+  }
   // Detalhe de cada etapa (abre por baixo dela, na mesma largura).
   function etapaDetalhe(p) {
     const conv = !!d.soConversa;
@@ -3663,7 +3678,7 @@
         <div class="fc2-v-end" title="${esc(endTxt)}">${esc(endTxt || '—')}</div>
         <div class="fc2-v-fazer ${rc || (dec && dec !== 'viavel') ? 'warn' : ''}">${fazer}</div>
         ${semViabGravada(!!liberacaoEspera() || (dec !== 'viavel' && (r === 'sem_viabilidade' || ['elegivel_200m', 'sem_cobertura'].includes(dec))), rc ? { endereco: { resolvido: rc.portal } } : {})}
-        ${opPainel('viab')}${dec === 'viavel' ? '' : regMaoConv('viab')}${dfvBloco()}`;
+        ${opPainel('viab')}${dec === 'viavel' ? corrigirViabConv() : regMaoConv('viab')}${dfvBloco()}`;
     } else if (p.k === 'viab') {
       const r = conv ? d.conv.nio_viab_resultado : v.nio_viab_resultado;
       corpo = `${linhaDet('Resultado', r ? esc(NG.VIAB_NIO[r] || r) : 'não consultado')}
