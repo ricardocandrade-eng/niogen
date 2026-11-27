@@ -57,3 +57,12 @@ select sim.cliente_escreve(:'e', 'Oi, um amigo me indicou vocês') as r5 \gset
 select sim.confere('sem quem indicou: pista aberta, origem Indicação, nenhuma indicação criada',
   exists (select 1 from public.indicacao_pistas p where p.conversa_id = :'e' and p.tipo = 'disse_indicado' and p.estado = 'aberta')
   and not exists (select 1 from public.indicacoes i where i.conversa_id = :'e'), '');
+
+-- 0428 (Ricardo, 26/11: "A origem deve ficar 'Indicação Cliente' no lugar de 'Evento / outro'"): a venda do indicado que nasceu sem canal
+select sim.lead_com_venda('Vendido X150') as f \gset
+select sim.como('servico');
+update public.vendas set origem = 'outro' where id = sim.venda(:'f');
+select sim.como('backoffice');
+select public.indicacao_registrar(:'f', (select lead_numero::text from public.mari_conversas where id = :'c'), true);
+select sim.confere('registrou a indicação: a venda que estava em "outro" passa a Indicação Cliente',
+  (select origem from public.vendas where id = sim.venda(:'f')) = 'indicacao', (select origem from public.vendas where id = sim.venda(:'f')));

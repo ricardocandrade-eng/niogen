@@ -71,7 +71,7 @@
           <label class="campo">CPF / CNPJ<input type="text" name="doc" inputmode="numeric" placeholder="valida dígito"><span class="erro" id="doc-erro"></span></label>
           <label class="campo">WhatsApp<input type="tel" name="whatsapp" placeholder="confirmado com o cliente" required></label>
           <label class="campo">E-mail<input type="email" name="email" placeholder="para a fatura"></label>
-          <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação de cliente</option><option value="outro">Evento</option></select></label>
+          <label class="campo">Origem<select name="origem"><option value="rua">Rua / PAP</option><option value="indicacao">Indicação Cliente</option><option value="outro">Evento</option></select></label>
           <label class="campo" id="campo-ref" hidden style="grid-column:1/-1">Quem indicou<input type="text" name="origem_ref"></label>
           <label class="campo" id="campo-parceiro" hidden style="grid-column:1/-1">Parceiro PAP (só ativos)<select name="parceiro_id"><option value="">Escolher o parceiro…</option></select>
             <span class="nota-campo" id="nota-parceiro">A venda nasce em conferência de qualidade: o nosso time liga para o cliente antes de seguir. Nada de pedido, biometria ou "Registrar venda" agora.</span></label>

@@ -134,7 +134,7 @@
   const VEZ = { mari: 'Mari', time: 'Nosso time', cliente: 'Cliente', nio: 'Nio' };
   const VEZ_AJUDA = { mari: 'A Mari está cuidando. Nada a fazer, a não ser que ela peça uma pessoa.', time: 'A próxima ação é nossa. Abra o lead e faça o que o status pede.',
     cliente: 'Estamos esperando o cliente. A Mari lembra sozinha; se passou do prazo, vale uma mensagem ou ligação sua.', nio: 'Estamos esperando a Nio (instalação marcada ou pendência dela).' };
-  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto', parceiro: 'Parceiro PAP', parceiro_pap: 'Parceiro PAP', rua: 'Rua' };
+  const ORIGEM = { meta_ads: 'Anúncio', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação Cliente', direto: 'Direto', parceiro: 'Parceiro PAP', parceiro_pap: 'Parceiro PAP', rua: 'Rua' };
   const ABAS = [
     ['andamento', 'Em andamento', (l) => l.destino === 'em_andamento', 'Leads que ainda podem virar venda.'],
     ['acao', 'Precisam de ação', (l) => l.destino === 'em_andamento' && !l.em_espera && (l.vez === 'time' || l.atrasado), 'A vez é nossa, ou o prazo de alguém estourou. Comece por aqui.'],

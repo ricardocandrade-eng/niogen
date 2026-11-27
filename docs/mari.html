@@ -158,7 +158,7 @@
   const ELEG_TXT = { ok: 'OK', ja_cliente: 'Já é cliente Nio', cancelou_30d: 'Cancelou há menos de 30 dias', fora_area: 'Fora da área' };
 
   const ETAPAS_MARI = { abertura: 'Abertura', endereco: 'Endereço', elegibilidade: 'Elegibilidade', planos: 'Planos', coleta: 'Coleta', resumo: 'Resumo', handoff: 'Handoff', retomada: 'Retomada (voltou do time)' };
-  const ORIGENS_MARI = { meta_ads: 'Meta Ads', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação', direto: 'Direto (WhatsApp)', teste: 'Teste' };
+  const ORIGENS_MARI = { meta_ads: 'Meta Ads', instagram: 'Instagram', facebook: 'Facebook', site: 'Site', fila_vero: 'Fila Vero', indicacao: 'Indicação Cliente', direto: 'Direto (WhatsApp)', teste: 'Teste' };
   const MOTIVOS = {
     dados_completos: 'dados completos', pedido_humano: 'cliente pediu humano', objecao: 'objeção', recusa_compra: 'recusou',
     multiplos_decisores: 'mais de um decisor', interesse_caindo: 'interesse caindo', urgencia_alta: 'urgência', sem_cobertura: 'sem cobertura',
@@ -737,7 +737,7 @@
   }
   const MOTIVO = { dados_completos: 'Dados completos', pedido_humano: 'Pediu uma pessoa', fora_de_area: 'Fora da área', sem_cobertura: 'Sem cobertura',
     interesse_caindo: 'Interesse caindo', multiplos_decisores: 'Vários decisores', recusa_compra: 'Recusou', 'sem motivo': 'Sem motivo' };
-  const ORIGEM = { meta_ads: 'Meta Ads', instagram: 'Instagram', facebook: 'Facebook', direto: 'Direto', indicacao: 'Indicação' };
+  const ORIGEM = { meta_ads: 'Meta Ads', instagram: 'Instagram', facebook: 'Facebook', direto: 'Direto', indicacao: 'Indicação Cliente' };
   const barrinhas = (itens, rot, cls = '') => {
     const mx = Math.max(1, ...itens.map((x) => Number(x.n || 0)));
     return itens.map((x) => `<div class="mp-bl ${cls}"><span title="${esc(rot(x))}">${esc(rot(x))}</span><span class="mp-bl-b"><i style="width:${Math.round((Number(x.n || 0) * 100) / mx)}%"></i></span><b>${NG.fmtNum(x.n || 0)}</b></div>`).join('');

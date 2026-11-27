@@ -265,7 +265,7 @@
 
   const ORIGENS = {
     meta_ads: 'Meta Ads · Mari', instagram: 'Instagram · Mari', facebook: 'Facebook · Mari', fila_vero: 'Fila Vero', rua: 'Rua / PAP',
-    indicacao: 'Indicação', site: 'Site', outro: 'Evento / outro', parceiro_pap: 'Parceiro PAP',
+    indicacao: 'Indicação Cliente', site: 'Site', outro: 'Evento / outro', parceiro_pap: 'Parceiro PAP',
   };
   // Origem para exibir: "Parceiro PAP · <nome>" (o nome vem de v_funil.parceiro_nome; o vendedor não lê a tabela parceiros e vê só "Parceiro PAP").
   const origemTxt = (v) => {
