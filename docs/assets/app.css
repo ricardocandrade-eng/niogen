@@ -3854,6 +3854,17 @@ button.fc-id:hover { color: inherit; }
 .fc-sv-o > b { display: block; margin-bottom: 4px; color: #F2CC6B; }
 .fc-sv-o.bad > b { color: #FF8A8A; }
 .fc-sv-o ol { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45; }
+/* 27/11 (L-449): coordenada da fachada do cliente — o mesmo bloco na Cobertura e na Ficha */
+.ng-coord { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; padding: 10px 12px; border: 1px solid #1D232B; border-radius: 8px; }
+.ng-coord-t { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 13px; color: #E9EDF3; }
+.ng-coord-t small { font-size: 11px; color: #8D97A3; }
+.ng-coord-l { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.ng-coord-l input.inp { flex: 1 1 220px; width: auto; min-height: 32px; font-variant-numeric: tabular-nums; }
+.ng-coord-ref { font-size: 12px; color: #8FB8F0; }
+.ng-coord-st { font-size: 11.5px; color: #8D97A3; line-height: 1.4; }
+.ng-coord-st.ok { color: #6FCF97; }
+.ng-coord-st.warn { color: #F2CC6B; }
+.ng-coord-st.bad { color: #FF8A8A; }
 .fc-sv-espera { margin: 6px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid #2A3F5C; background: rgba(88, 150, 230, .08); font-size: 13px; color: #E9EDF3; line-height: 1.45; }
 @media (max-width: 560px) { .fc-sv-l { grid-template-columns: 56px auto; } .fc-sv-l small { grid-column: 1 / -1; white-space: normal; } }
 

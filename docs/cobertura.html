@@ -30,10 +30,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/app.css?v=221126-3">
+<link rel="stylesheet" href="assets/app.css?v=271126-1">
 <script src="config.js?v=111126-20"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="assets/app.js?v=251126-18"></script>
+<script src="assets/app.js?v=271126-1"></script>
 <script src="assets/sidebar.js?v=261126-5"></script>
 <script src="assets/novavenda.js?v=211126-4b"></script>
 <style>
@@ -247,7 +247,7 @@
       <div class="painel cob2-card cob2-res" id="card-res">
         <div class="cob2-ct"><b>Resultado</b><span><span id="res-lead"></span><span id="res-end">digite o CEP e o número</span></span></div>
         <div class="cob2-corpo" aria-live="polite">
-          <div class="cob2-col"><ol class="cob2-steps" id="steps"></ol></div>
+          <div class="cob2-col"><ol class="cob2-steps" id="steps"></ol><div id="coord" hidden></div></div>
           <div class="cob2-col">
             <div id="resultado-cred" hidden></div>
             <div id="decisao" class="uni-bloco" style="margin-top:0" hidden></div>
@@ -320,6 +320,7 @@
   const opCred = document.getElementById('op-cred');
   const opSrc = document.getElementById('op-src');
   const cardMapa = document.getElementById('card-mapa');
+  const coordEl = document.getElementById('coord');
   const base = (p) => (p ? NG.fmtDiaISO(p).slice(0, 5) : '—');
   const pausa = (ms) => new Promise((ok) => setTimeout(ok, ms));
   const seg = (ms) => `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0).replace('.', ',')} s`;
@@ -523,9 +524,9 @@
     padrao: podeCredito ? '<button type="button" class="btn" data-ir-credito="padrao">Crédito c/ dados fictícios</button>' : '',
     mapa: '<button type="button" class="btn" data-abrir-painel>Ver no mapa (200 m)</button>',
     liberacao: (mot) => (linkLiberacao
-      ? `<a class="btn btn-acc" href="${esc(formsUrl(linkLiberacao, mot || 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
+      ? `<a class="btn btn-acc" data-forms-nio href="${esc(formsUrl(linkLiberacao, mot || 'liberacao'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir liberação (formulário) ↗</a>`
       : '<span class="chip warn" title="config_links.nio_pedido_liberacao">Pedir liberação: formulário ainda não cadastrado no NIOGEN — pedir ao Rogério</span>'),
-    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" href="${esc(formsUrl(linkCadastro, 'cadastro'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
+    cadastro: () => (linkCadastro ? `<a class="btn btn-acc" data-forms-nio href="${esc(formsUrl(linkCadastro, 'cadastro'))}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (Maps) e a foto">Pedir cadastro da unidade (formulário) ↗</a>` : ''),
     acompanhar: () => (linkAcompanhar ? `<a class="btn" href="${esc(linkAcompanhar)}" target="_blank" rel="noopener noreferrer" title="Onde a Nio responde o pedido de liberação da fachada (login do PDV)">Acompanhar a resposta da Nio ↗</a>` : ''),
     conferirDfv: '<button type="button" class="btn" data-ver-dfv>Conferir no DFV ↓</button>',
   };
@@ -607,6 +608,11 @@
   function desenharAcoes() {
     desenharDiag();
     const lista = (acoesCred.length ? acoesCred : acoesDec).filter(Boolean);
+    // 27/11 (L-449): onde há formulário da Nio a pedir, a coordenada da fachada fica abaixo dos passos (link do Maps + campo)
+    const pedeForms = acoesDec.some((h) => /data-forms-nio/.test(h || ''));
+    const htmlCoord = pedeForms ? NG.coordBloco({ end: ultimo || endereco(), portal: (portal && portal.s) || {}, dfv: dfv && dfv.estado === 'pronto' ? dfv.r : null }) : '';
+    if (!coordEl.contains(document.activeElement) || !htmlCoord) coordEl.innerHTML = htmlCoord;   // digitando: não redesenha
+    coordEl.hidden = !htmlCoord;
     // 25/11: os prints da consulta (viabilidade e crédito) num botão só — antes era "📷 Tela do portal", só da viabilidade que não saiu
     const np = podeCredito ? prints().length : 0;
     actsEl.innerHTML = lista.join('')

@@ -3452,7 +3452,8 @@ Registrar?`)) return;
     } else {
       const passos = (dz.passos || []).map((t) => `<li>${esc(t)}</li>`).join('');
       corpo = `<div class="fc-sv-o ${dz.cor === 'bad' ? 'bad' : 'warn'}"><b>${esc(dz.rot)}</b><ol>${passos}</ol></div>
-        <div class="fc-op-bts">${url ? `<a class="btn btn-sm btn-acc" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (mapa) e a foto da fachada">1 · Pedir liberação (formulário) ↗</a>` : ''}${dz.motivoForms ? B('pedido', '2 · Enviei o pedido à Nio') : ''}${aAcomp}${aCob}</div>`;
+        ${dz.motivoForms ? NG.coordBloco({ end: e, portal: s, dfv: r }) : ''}
+        <div class="fc-op-bts">${url ? `<a class="btn btn-sm btn-acc" data-forms-nio href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Abre o formulário da Nio já preenchido. Falta só a coordenada (mapa) e a foto da fachada">1 · Pedir liberação (formulário) ↗</a>` : ''}${dz.motivoForms ? B('pedido', '2 · Enviei o pedido à Nio') : ''}${aAcomp}${aCob}</div>`;
     }
     return { ver, html: linhas + corpo };
   }

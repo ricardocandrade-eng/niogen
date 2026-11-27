@@ -776,7 +776,8 @@
     executivo: 'ROGERIO PEREIRA PACHECO', canal: 'PAP', empresa: 'DHARMA', sap: '1069521',   // SAP = código do PDV
     e: { sap: 98401140, executivo: 1446139771, canal: 1657894342, email: 1046842637, empresa: 1496414418, uf: 81810683, cep: 1307779506,
       cidade: 1889792069, tipoLog: 559365206, logradouro: 1115141868, bairro: 2063972096, numero: 1765507466, complemento: 1597331614,
-      vizinhos: 386386775, obs: 1647236246 },
+      vizinhos: 386386775, obs: 1647236246,
+      coordenada: 2105371171 },   // 27/11: campo "Digite a coordenada do endereço" (lido do Forms na sessão do Ricardo); a foto (upload) não aceita link
   };
   const UF_NOME = { AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará', DF: 'Distrito Federal', ES: 'Espírito Santos',
     GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso', MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
@@ -815,6 +816,7 @@
         ? `Pedido de liberação/cadastro da fachada. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): esta fachada consta como viável${fach ? ` (${fach.logradouro || ''}, ${fach.numero || e.numero || ''}${fach.celula ? ` · célula ${fach.celula}` : ''})` : ''}. Enviado pelo NIOGEN (Dharma Telecom).`
         : `Pedido de liberação pela regra dos 200 m. Portal PAP (viabilidade${quando ? `, ${quando}` : ''}): sem viabilidade neste número. DFV (painel Sudeste): ${viz.length ? `fachada viável mais próxima no CEP: nº ${viz[0].n}` : 'fachadas viáveis no CEP'}. Enviado pelo NIOGEN (Dharma Telecom).`;
     const v = {
+      coordenada: FORMS_NIO.e.coordenada ? coordLer(e) : '',
       sap: FORMS_NIO.sap, executivo: FORMS_NIO.executivo, canal: FORMS_NIO.canal, email: o.email || '', empresa: FORMS_NIO.empresa,
       uf: UF_NOME[uf] || '', cep: cepHifen(e.cep), cidade, tipoLog: tipo, logradouro: rua, bairro, numero: e.numero || '0', complemento: e.complemento || '',
       vizinhos: viz.length ? `Viáveis no DFV (mesmo CEP): ${viz.map((x) => `nº ${x.n}${x.c ? ` ${x.c}` : ''}`).join(', ')}` : '',
@@ -822,9 +824,103 @@
     };
     const u = new URL(base);
     u.searchParams.set('usp', 'pp_url');
-    Object.entries(v).forEach(([k, val]) => { if (val) u.searchParams.set(`entry.${FORMS_NIO.e[k]}`, val); });
+    Object.entries(v).forEach(([k, val]) => { if (val && FORMS_NIO.e[k]) u.searchParams.set(`entry.${FORMS_NIO.e[k]}`, val); });
     return u.toString();
   }
+
+  // ---- Coordenada da fachada do cliente (27/11, Ricardo, caso L-449: "o link aproximado serve para referência, porque eu já clico
+  // nele e tento localizar a fachada exata") — o Forms da Nio pede "-21.766439758166563, -43.38820185767233". O DFV só tem a
+  // coordenada das fachadas VIÁVEIS (a do cliente não está na lista): a tela dá o link do endereço no Maps, a viável mais perto como
+  // referência e um campo para colar a coordenada achada, que vai no link do formulário. Fica só neste navegador (por CEP + número);
+  // nada é gravado no banco. Com a coordenada colada, a distância real até a viável mais próxima (regra dos 200 m) aparece na hora.
+  const COORD_RE = /(-?\d{1,2}\.\d{4,})\s*,?\s*(-?\d{1,3}\.\d{4,})/;   // também acha o "@-21.76,-43.38" de um link do Maps
+  function coordNormalizar(txt) {
+    const m = String(txt || '').match(COORD_RE);
+    if (!m || Math.abs(Number(m[1])) > 90 || Math.abs(Number(m[2])) > 180) return '';
+    return `${m[1]}, ${m[2]}`;
+  }
+  const coordChave = (e) => `ng-coord:${soDigitos((e || {}).cep)}|${String((e || {}).numero || '').trim().toUpperCase()}`;
+  function coordLer(e) { try { return coordNormalizar(localStorage.getItem(coordChave(e))); } catch (_) { return ''; } }
+  function coordGuardar(chave, txt) { try { if (txt) localStorage.setItem(chave, txt); else localStorage.removeItem(chave); } catch (_) { /* aba privada: vale só na tela */ } }
+  const coordNum = (x) => { const n = x == null || x === '' ? NaN : Number(String(x).replace(',', '.')); return Number.isFinite(n) && n !== 0 ? n : null; };
+  const mapsBusca = (q) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+  function metrosEntre(a, b, c, d2) {   // haversine
+    const rad = (g) => g * Math.PI / 180;
+    const h = Math.sin(rad(c - a) / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(rad(d2 - b) / 2) ** 2;
+    return 2 * 6371000 * Math.asin(Math.sqrt(h));
+  }
+  const coordFach = new Map();   // chave → fachadas viáveis do CEP com lat/long (para a distância)
+  function coordDistancia(chave, coord) {
+    const m = String(coord || '').match(COORD_RE);
+    const lista = coordFach.get(chave) || [];
+    if (!m || !lista.length) return null;
+    let melhor = null;
+    lista.forEach((f) => { const d = metrosEntre(Number(m[1]), Number(m[2]), f.lat, f.lon); if (!melhor || d < melhor.d) melhor = { d, f }; });
+    return melhor;
+  }
+  function coordStatus(chave, bruto, coord) {
+    if (!String(bruto || '').trim()) return ['Abra o endereço no Maps, clique com o botão direito na casa do cliente e copie a coordenada.', ''];
+    if (!coord) return ['Formato esperado: -21.766439758166563, -43.38820185767233', 'bad'];
+    const p = coordDistancia(chave, coord);
+    const dist = p ? ` · ${fmtNum(Math.round(p.d))} m da viável mais próxima (nº ${p.f.numero})${p.d <= 200 ? ' — dentro dos 200 m' : ' — fora dos 200 m'}` : '';
+    return [`${FORMS_NIO.e.coordenada ? '✓ Vai preenchida no formulário' : '✓ Guardada — cole no campo da coordenada do formulário'}${dist}`, p && p.d > 200 ? 'warn' : 'ok'];
+  }
+  // o: { end: {cep, numero, complemento}, portal: s do operador, dfv: resposta do dfv-consulta } → HTML do bloco (o mesmo nas duas telas)
+  function coordBloco(o) {
+    const e = o.end || {};
+    if (soDigitos(e.cep).length !== 8) return '';
+    const s = o.portal || {};
+    const r = (o.dfv && o.dfv.fonte !== 'base_congelada') ? o.dfv : {};
+    const chave = coordChave(e);
+    const m = String((s.endereco && s.endereco.resolvido) || '').match(/^(.+?),\s*[^,]*?-\s*(.+?),\s*(.+?)\s*-\s*([A-Z]{2})\s*$/);
+    const rua = m ? m[1] : tituloEnd(r.logradouro || (r.fachada || {}).logradouro);
+    const bairro = m ? m[2] : tituloEnd(r.bairro);
+    const cidade = m ? tituloEnd(m[3]) : tituloEnd((r.entrada || {}).municipio);
+    const uf = m ? m[4] : String((r.entrada || {}).uf || '').toUpperCase();
+    const onde = [[rua, e.numero].filter(Boolean).join(', '), bairro, [cidade, uf].filter(Boolean).join(' - '), cepHifen(e.cep)].filter(Boolean).join(', ');
+    // viáveis do CEP com coordenada, a mais perto pela numeração primeiro (referência para achar a casa do cliente no mapa)
+    const alvo = parseInt(String(e.numero || '').replace(/\D/g, ''), 10);
+    const viz = (r.fachadas_no_cep || []).map((x) => ({ numero: String(x.numero || ''), lat: coordNum(x.lat), lon: coordNum(x.lon),
+      d: Math.abs((parseInt(String(x.numero).replace(/\D/g, ''), 10) || 1e9) - (alvo || 0)) }))
+      .filter((x) => x.lat != null && x.lon != null).sort((a, b) => a.d - b.d);
+    coordFach.set(chave, viz);
+    const ref = viz.find((x) => x.numero && x.numero !== String(e.numero || '')) || null;
+    const salva = coordLer(e);
+    const [txt, cor] = coordStatus(chave, salva, salva);
+    return `<div class="ng-coord" data-ng-coord-bloco="${esc(chave)}">
+      <div class="ng-coord-t"><b>Coordenada da fachada</b><small>o formulário da Nio pede — e a foto da casa</small></div>
+      <div class="ng-coord-l"><a class="btn btn-sm" href="${esc(mapsBusca(onde))}" target="_blank" rel="noopener noreferrer" title="${esc(onde)} — ponto aproximado: localize a casa exata do cliente">📍 Abrir o endereço no Maps ↗</a>
+        ${ref ? `<a class="ng-coord-ref" href="${esc(mapsBusca(`${ref.lat},${ref.lon}`))}" target="_blank" rel="noopener noreferrer" title="Coordenada desta fachada no DFV: ${esc(`${ref.lat}, ${ref.lon}`)}">viável mais próxima no DFV: nº ${esc(ref.numero)} ↗</a>` : ''}</div>
+      <div class="ng-coord-l"><input type="text" class="inp" data-ng-coord value="${esc(salva)}" placeholder="Cole aqui a coordenada copiada do Maps" autocomplete="off" spellcheck="false" aria-label="Coordenada da fachada do cliente">
+        <button type="button" class="btn btn-sm" data-ng-coord-copiar title="Copia no formato do formulário">Copiar</button></div>
+      <span class="ng-coord-st ${cor}" data-ng-coord-st>${esc(txt)}</span>
+    </div>`;
+  }
+  // Colou/digitou a coordenada: guarda, mostra a distância e acerta o link do formulário que já está na tela (sem redesenhar: o foco fica)
+  document.addEventListener('input', (ev) => {
+    const inp = ev.target && ev.target.matches && ev.target.matches('[data-ng-coord]') ? ev.target : null;
+    if (!inp) return;
+    const bloco = inp.closest('[data-ng-coord-bloco]');
+    const chave = bloco.dataset.ngCoordBloco;
+    const coord = coordNormalizar(inp.value);
+    coordGuardar(chave, coord);
+    const st = bloco.querySelector('[data-ng-coord-st]');
+    const [txt, cor] = coordStatus(chave, inp.value, coord);
+    st.textContent = txt;
+    st.className = `ng-coord-st ${cor}`;
+    if (FORMS_NIO.e.coordenada) document.querySelectorAll('a[data-forms-nio]').forEach((a) => {
+      try { const u = new URL(a.href); if (coord) u.searchParams.set(`entry.${FORMS_NIO.e.coordenada}`, coord); else u.searchParams.delete(`entry.${FORMS_NIO.e.coordenada}`); a.href = u.toString(); } catch (_) { /* link sem URL */ }
+    });
+  });
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target && ev.target.closest ? ev.target.closest('[data-ng-coord-copiar]') : null;
+    if (!b) return;
+    const inp = b.closest('[data-ng-coord-bloco]').querySelector('[data-ng-coord]');
+    const coord = coordNormalizar(inp.value);
+    if (!coord) { toast('Cole primeiro a coordenada copiada do Maps.', 'bad'); inp.focus(); return; }
+    inp.value = coord;
+    try { await navigator.clipboard.writeText(coord); toast('Coordenada copiada.', 'ok'); } catch (_) { inp.select(); toast('Selecionada — Ctrl+C para copiar.', 'ok'); }
+  });
   // Portal disse "sem viabilidade": o que o DFV muda. {chave, rot, cor, txt, motivoForms} — o texto é o mesmo nas duas telas.
   // chave: 'conferir_fachada' (DFV tem esta fachada) · 'elegivel_200m' · 'sem_cobertura' · 'sem_dfv' (DFV não respondeu: investigar)
   // 20/11 (Ricardo: "Portal: Sem viabilidade · DFV: Fachada viável e em seguida as orientações"): passos[] = o que fazer, em ordem.
@@ -1951,7 +2047,7 @@
     CHATWOOT_NIO_ACCOUNT, linkChatwoot,
     QUEM_DESTRAVA, RESULTADO_PENDENCIA, pendencia, diaCurto,   // 0064: "Em espera"
     DFV_OPCOES, DFV_OK, TEXTOS_DFV, DFV_MAPA, DFV_RESULTADO, DFV_ROTULO, dadosDfv, dfvValido, seloDfv, dfvCampos, dfvLer, ligarLinkDfv,
-    dfvConsultar, dfvAoVivo, dfvVeredito, formsNioUrl, semViabDecisao, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
+    dfvConsultar, dfvAoVivo, dfvVeredito, formsNioUrl, coordBloco, semViabDecisao, creditoIniciar, creditoStatus, viabIniciar, portalPrint, osConsultar, osResumo, osModal, bioModal, ehMeu, linkConfig, dfvPreencher, ligarDfvAuto, exigirLogin, sair, modal,
     aoVoltarAba, guardado, aCada,   // 13/11: aliviar a carga do Supabase
     mudou,   // 14/11 (0190): timer só refaz a leitura pesada se o banco foi gravado
     abrirLeadNumero,   // 0296: busca por L-n
