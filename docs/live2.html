@@ -220,7 +220,7 @@
     const t = lista.find((x) => (b.dataset.onde === 'sistema' ? `${x.tipo}:${x.chave}` : x.k) === b.dataset.k);
     const a = t && (t.acoes || [])[Number(b.dataset.ac)];
     if (!a) return;
-    if (a.a === 'saida') { await saida(t.k); return; }   // 0398: o cliente recusou
+    if (a.a === 'saida') { await saida(t.k, a.pre); return; }   // 0398: o cliente recusou · 0429: sem viabilidade (motivo já escolhido)
     if (a.a === 'abrir') { if (!temFichaK(t)) return; if (a.etapa) NGFicha.etapaInicial = a.etapa; abrirChave(kFicha(t)); return; }
     if (a.a === 'assumir') {
       b.disabled = true;
@@ -274,20 +274,39 @@
   async function pausar(t) {
     const fd = await NG.modal(`<h3>Adiar: ${esc(t.nome)}</h3>
       <p>A tarefa sai da fila e <b>volta sozinha</b> na hora escolhida. Se o cliente escrever antes, ela volta na hora.</p>
-      <label class="campo">Volta<select name="h"><option value="2">Em 2 horas</option><option value="24" selected>Amanhã, nesta hora</option><option value="72">Em 3 dias</option><option value="168">Em 7 dias</option></select></label>
-      <label class="campo">Por quê (opcional)<input type="text" name="nota" maxlength="120" placeholder="Ex.: disse que faz a biometria no sábado"></label>`);
+      <label class="campo">Volta<select name="h"><option value="2">Em 2 horas</option><option value="24" selected>Amanhã, nesta hora</option><option value="72">Em 3 dias</option><option value="168">Em 7 dias</option><option value="360">Em 15 dias</option><option value="">Outra data…</option></select></label>
+      <label class="campo" data-outra hidden>Data (até 30 dias; volta às 9h)<input type="date" name="data" min="${NG.somaDias(NG.diaSP(), 1)}" max="${NG.somaDias(NG.diaSP(), 30)}"></label>
+      <label class="campo">Por quê (opcional)<input type="text" name="nota" maxlength="120" placeholder="Ex.: disse que faz a biometria no sábado"></label>`,
+    (dl) => {   // 0429 (caso L-82): quem espera a Nio ou outra revenda escolhe a data, em vez de adiar 24 h todo dia
+      const sel = dl.querySelector('[name=h]'); const box = dl.querySelector('[data-outra]'); const inp = dl.querySelector('[name=data]');
+      sel.addEventListener('change', () => { box.hidden = !!sel.value; inp.required = !sel.value; });
+    });
     if (!fd) return;
-    const { data, error } = await NG.sb.rpc('live2_baixa', { p_k: t.k, p_como: 'agora_nao', p_horas: Number(fd.get('h')) || 24, p_nota: String(fd.get('nota') || '') || null });
+    let horas = Number(fd.get('h')) || 0;
+    if (!horas) {
+      const dia = String(fd.get('data') || '');
+      if (!dia) return;
+      horas = Math.max(1, Math.ceil((new Date(`${dia}T09:00:00-03:00`) - Date.now()) / 3600000));
+    }
+    const { data, error } = await NG.sb.rpc('live2_baixa', { p_k: t.k, p_como: 'agora_nao', p_horas: horas, p_nota: String(fd.get('nota') || '') || null });
     if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
     NG.toast((data && data.resumo) || 'Adiada', 'ok');
     await carregar();
   }
-  async function saida(k) {
+  async function saida(k, pre) {
     const t = fila().find((x) => x.k === k);
     if (!t) return;
-    if (t.venda_id) {   // a Saída de venda pergunta do pedido no portal: é o formulário da ficha
-      NG.toast('A Saída de uma venda é pela ficha: abra o cliente e use "Saída…".', 'ok');
-      abrirChave(chaveFicha(t));
+    if (t.venda_id) {
+      // 0429 (caso L-449, Ricardo 27/11): a Saída de venda sai do próprio cartão, com o MESMO formulário da ficha (motivo, porquê,
+      // volta, observação e a pergunta do pedido no portal) e a mesma lead_sair — a tela não grava nada.
+      const rv = await NG.sb.from('vendas').select('id, cliente_nome, nio_pedido, nio_os').eq('id', t.venda_id).maybeSingle();
+      if (rv.error || !rv.data) { NG.toast(rv.error ? NG.msgErro(rv.error) : 'Não achei a venda. Abra a ficha e use "Saída…".', 'bad'); return; }
+      const s = await NG.pedirSaida(rv.data, pre);
+      if (!s) return;
+      const r = await NG.sb.rpc('lead_sair', { p_conversa: null, p_venda: t.venda_id, p_motivo: s.motivo, p_sub: s.sub, p_volta: s.volta, p_obs: s.obs, p_cancelou_portal: s.cancelou });
+      if (r.error) { NG.toast(NG.msgErro(r.error), 'bad'); return; }
+      NG.toast((r.data && r.data.resumo) || 'Saída registrada', 'ok');
+      await carregar();
       return;
     }
     const lista = (await NG.saidaLista()).filter((x) => x.codigo !== 'nao_contatar' && !(NG.SAIDA_SO_VENDA || []).includes(x.codigo));
@@ -305,6 +324,7 @@
         sub.innerHTML = subs.length ? `<option value="">Escolher…</option>${subs.map((x) => `<option>${esc(x)}</option>`).join('')}` : '';
         sub.required = sel.value === 'recusou';
       });
+      if (pre && [...sel.options].some((x) => x.value === pre)) { sel.value = pre; sel.dispatchEvent(new Event('change')); }
     });
     if (!fd) return;
     const { data, error } = await NG.sb.rpc('lead_sair', { p_conversa: t.conversa_id, p_venda: null, p_motivo: String(fd.get('motivo')), p_sub: String(fd.get('sub') || '') || null, p_volta: null, p_obs: String(fd.get('obs') || '') || null, p_cancelou_portal: null });

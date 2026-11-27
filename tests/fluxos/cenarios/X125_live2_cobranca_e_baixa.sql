@@ -68,8 +68,8 @@ select public.live2_fila()::text as f \gset
 select sim.confere('com a baixa, a cobrança sai da fila',
   not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'venda_id' = sim.venda(:'c')::text and (x ->> 'cobranca')::boolean), 'continua na fila');
 select sim.confere('chave que não é de cliente é recusada', sim.recusa($$select public.live2_baixa('p:casar_pedido:1', 'cobrei')$$) is not null, 'aceitou');
-select sim.confere('o teto é de 7 dias, mesmo pedindo mais',
-  ((public.live2_baixa(sim.venda(:'c')::text, 'agora_nao', 9999) ->> 'ate')::timestamptz) <= now() + interval '7 days 1 minute', 'passou do teto');
+select sim.confere('o teto é de 30 dias, mesmo pedindo mais (0429, Ricardo 27/11: era 7)',
+  ((public.live2_baixa(sim.venda(:'c')::text, 'agora_nao', 9999) ->> 'ate')::timestamptz) <= now() + interval '30 days 1 minute', 'passou do teto');
 select sim.como('servico');
 select sim.confere('fora do backoffice/admin a baixa é recusada',
   sim.recusa(format($q$select public.live2_baixa(%L, 'cobrei')$q$, sim.venda(:'c')::text)) is not null, 'aceitou');
