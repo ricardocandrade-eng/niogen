@@ -197,6 +197,8 @@
   const btHtml = (a, i, onde, k, grande) => {
     const cls = `btn${grande ? '' : ' btn-sm'}${a.principal && grande ? ' l2-go' : a.principal ? ' lv-go' : ''}${a.leve ? ' btn-ghost' : ''}`;
     if (a.a === 'tel') return `<a class="${cls}" href="tel:+${esc(a.tel)}" title="Abre o discador">📞 ${esc(a.rotulo)}</a>`;
+    // 0426 (Fila Vero › chamar por fora): abre o WhatsApp de quem está usando a tela, na conversa do cliente, com o texto pronto
+    if (a.a === 'wa') return `<a class="${cls}" href="https://wa.me/${esc(String(a.tel || '').replace(/\D/g, ''))}${a.texto ? `?text=${encodeURIComponent(a.texto)}` : ''}" target="_blank" rel="noopener" title="Abre o WhatsApp deste aparelho na conversa do cliente, com a mensagem pronta. Depois de mandar, marque Enviei.">💬 ${esc(a.rotulo)}</a>`;
     return `<button type="button" class="${cls}" data-ac="${i}" data-onde="${onde}" data-k="${esc(k)}">${esc(a.rotulo)}</button>`;
   };
   const acoesHtml = (t, grande) => {
