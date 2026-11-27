@@ -1039,6 +1039,23 @@ def cen_bc(c):   # P56 (26/11, Ricardo: "Mari ainda continua chamando o cliente 
         c.log += h.log
 
 
+def cen_bd(c):   # P57 (26/11, conversa L-434, #266): o cliente digitou o CEP colado no ponto final da frase pronta do anúncio
+    # ("…ver os planos da Nio.33203360"). O 4 · Preparar recusava todo número depois de ponto (proteção do CPF formatado), o CEP
+    # não foi gravado, a Mari pediu o número, disse "deixa eu confirmar esse endereço" e a consulta nunca saiu (47 min parado).
+    r = c.diz('Oi, Mari! Quero consultar meu CEP e ver os planos da Nio.36035130')
+    t = fala(r)
+    row = conv_row(c, 'cep, cidade')
+    c.exige(str(row.get('cep') or '').replace('-', '') == '36035130', f'[P57] CEP colado no ponto não foi gravado: {row}')
+    c.exige(not re.search(r'qual (e )?(o )?(seu )?cep|me (manda|passa|informa) (o )?(seu )?cep', t), f'[P57] pediu o CEP que o cliente já mandou: «{t[:200]}»')
+    # controle: CPF formatado continua não sendo lido como CEP
+    k = type(c)('bd1', int(c.tel[-3:]) + 1, 'Teste')
+    k.diz('Oi! Meu CPF é 529.982.247-25, quero ver os planos')
+    row = conv_row(k, 'cep')
+    k.exige(not row.get('cep'), f'[P57] controle: pedaço do CPF virou CEP: {row}')
+    c.falhas += k.falhas
+    c.log += k.log
+
+
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'sem pergunta de operadora (18/11)'), 'i': (7, B.cen_i, 'regressão botão'),
@@ -1095,6 +1112,8 @@ PORTAO = {
     'bb': (65, cen_bb, 'P55'),
     # 26/11 — L-269 e L-220: o nome do WhatsApp (apelido) não é usado para chamar o cliente (telefones 66 e 67)
     'bc': (66, cen_bc, 'P56'),
+    # 26/11 — conversa L-434: CEP colado no ponto final da frase do anúncio ("…da Nio.33203360") é lido (telefones 68 e 69)
+    'bd': (68, cen_bd, 'P57'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 

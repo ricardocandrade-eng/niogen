@@ -19,9 +19,12 @@ if (soMidia) return [{ json: out }];
 const etapaEndereco = ['abertura', 'endereco', 'elegibilidade'].includes(conv.etapa) || !conv.cep || /\bcep\b/i.test(msg);
 
 // (2a) CEP: 8 dígitos isolados (36070-480, 36070480, 36.070-480).
+// 26/11 (L-434, P57): o ponto antes só descarta quando vem depois de um dígito (CPF "123.456.789-00"). Ponto final de frase
+// não: o cliente digitou o CEP colado na frase pronta do anúncio ("…da Nio.33203360") e ele não era lido.
+const CEP_RE = /(?<!\d)(?<!\d\.)(\d{2})\.?(\d{3})[-\s]?(\d{3})(?![\d])/;
 let resto = msg;
 if (etapaEndereco) {
-  const m = msg.match(/(?<![\d.])(\d{2})\.?(\d{3})[-\s]?(\d{3})(?![\d])/);
+  const m = msg.match(CEP_RE);
   if (m) {
     // O lookbehind/lookahead já descarta pedaço de CPF ou telefone formatado.
     out.p_cep = m[1] + m[2] + m[3];
@@ -36,7 +39,7 @@ if (!out.p_cep && !conv.cep && etapaEndereco) {
   const hist = Array.isArray(r.historico) ? r.historico : [];
   for (let k = hist.length - 1; k >= 0; k--) {
     if (hist[k].papel !== 'lead') continue;
-    const m = String(hist[k].texto || '').match(/(?<![\d.])(\d{2})\.?(\d{3})[-\s]?(\d{3})(?![\d])/);
+    const m = String(hist[k].texto || '').match(CEP_RE);
     if (m) { out.p_cep = m[1] + m[2] + m[3]; out.cepDoHistorico = true; break; }
   }
 }
