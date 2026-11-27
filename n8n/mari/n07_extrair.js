@@ -247,7 +247,11 @@ const V7 = VER >= 7;   // prompts 26 + 27 (06/11): carrossel/botões; sem promes
 function prometeCobertura(n) {
   if (((ctx.conversa || {}).nio_viab_resultado) === 'viavel') return false;   // portal já disse viável (nível A)
   // Pergunta ou condicional ("pra eu ver se a Nio chega aí", "chega aí?") não é promessa — só afirmação conta.
-  return n.split(/(?<=[.?!\n])/).filter((f) => !f.includes('?') && !/\b(ver|saber|confirmar|checar|conferir|olhar) se\b|\bse (a nio |a fibra |ela )?(chega|atende)\b/.test(f)).some((f) =>
+  // 27/11 (L-437, #269): "Me passa o CEP e o número da casa que eu já vejo o que chega aí pra você" caiu aqui nas duas
+  // tentativas e virou "Só um instante…" + handoff. "Ver/mostrar o que chega aí" é intenção de consultar (o roteiro do
+  // prompt usa a frase), não promessa — a afirmação ("já vi que chega aí", "a fibra chega aí") continua barrada.
+  const VAI_VER = /\b(ver|vejo|vendo|conferir|confiro|consultar|consulto|checar|checo|olhar|olho|saber|mostrar|mostro|falar|falo|dizer|digo) o que (chega|atende|tem|pega)\b/;
+  return n.split(/(?<=[.?!\n])/).filter((f) => !f.includes('?') && !VAI_VER.test(f) && !/\b(ver|saber|confirmar|checar|conferir|olhar) se\b|\bse (a nio |a fibra |ela )?(chega|atende)\b/.test(f)).some((f) =>
     // 07/11 23h10: "atende o seu endereço" (sem o "no") passava pela trava.
     /\b(atende|chega|tem cobertura|tem fibra|tem disponibilidade)\s+(a[ií]\b|na sua rua|no seu endereco|(o )?seu endereco|(a )?sua rua|na sua casa|(a )?sua casa|no seu predio|no seu bairro)/.test(f)
     || /\btem cobertura\b|\bcobertura (no|na|pro|pra) (seu|sua)\b|(seu endereco|sua rua|sua casa) (e|esta|ta|fica) (atendid|coberto|coberta)/.test(f)

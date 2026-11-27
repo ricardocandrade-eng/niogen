@@ -43,5 +43,17 @@ caso('cliente disse que não viu: carrossel passa', rodar('Mando de novo:\n\n[CA
 caso('outro CEP: carrossel passa', rodar('Anotado o novo endereço. Olha as opções:\n\n[CARROSSEL_PLANOS]', 'na verdade é no cep 30140-071'), CARR, false);
 caso('"sim, chega" sem pergunta de cobertura não é tratado como promessa', rodar('Chega sim, o técnico leva o roteador no dia da instalação 😊', 'o roteador chega junto?'), COB, false);
 caso('portal já disse viável: "chega sim" passa', rodar('Chega sim! 🎉 Qual plano você prefere?', 'aqui chega fibra?', JA_VIU, { nio_viab_resultado: 'viavel' }), COB, false);
+// 27/11 (L-437, #269): "Quero consultar meu CEP e ver os planos" → a Mari pediu o CEP dizendo "que eu já vejo o que chega aí
+// pra você" e o filtro leu promessa de cobertura nas duas tentativas → "Só um instante…" + handoff, 1h25 de espera.
+// "Ver o que chega aí" é intenção de consultar (o roteiro do prompt usa a mesma frase), não promessa.
+const ABRE = [{ papel: 'mari', texto: 'Oi! Tudo bem? 👋\n\nAqui é a Mari, da Nio 😊' }];
+const SEM_CEP = { etapa: 'abertura', cidade: null, cep: null, numero: null, elegibilidade: null };
+const PEDIU = 'Oi, Mari! Quero consultar meu CEP e ver os planos da Nio.';
+caso('L-437 real: "que eu já vejo o que chega aí pra você" passa', rodar('Me passa o CEP e o número da casa que eu já vejo o que chega aí pra você 😊', PEDIU, ABRE, SEM_CEP), COB, false);
+caso('frase do roteiro sem interrogação passa', rodar('Pra eu ver o que chega aí na sua rua, me passa o CEP e o número.', PEDIU, ABRE, SEM_CEP), COB, false);
+caso('"te mostro o que tem aí na sua rua" passa', rodar('Me manda o CEP que eu confiro e te mostro o que tem aí na sua rua 😊', PEDIU, ABRE, SEM_CEP), COB, false);
+caso('afirmação continua barrada: "a fibra chega aí na sua rua"', rodar('A fibra chega aí na sua rua, me passa o CEP e o número 😊', PEDIU, ABRE, SEM_CEP), COB, true);
+caso('afirmação continua barrada: "já vi que chega aí"', rodar('Já vi que chega aí, me passa só o número da casa 😊', PEDIU, ABRE, SEM_CEP), COB, true);
+caso('afirmação na frase seguinte continua barrada', rodar('Deixa eu ver o que chega aí. A Nio atende a sua rua, sim 😊', PEDIU, ABRE, SEM_CEP), COB, true);
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\ntudo verde');
 process.exit(falhas ? 1 : 0);
