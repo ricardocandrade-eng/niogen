@@ -118,11 +118,10 @@
   const normCampo = (campo, v) => (campo === 'email' ? String(v || '').trim().toLowerCase() : ['cpf', 'cep'].includes(campo) ? String(v || '').replace(/\D/g, '') : String(v || '').trim().toLowerCase());
   async function rapidas() {
     if (rapidasCache) return rapidasCache;
-    const { data } = await NG.sb.from('config_mari_textos').select('chave, texto').like('chave', 'rr\\_%').order('chave');
-    rapidasCache = (data || []).map((r) => {
-      const [rot, ...resto] = String(r.texto || '').split('::');
-      return resto.length ? { rot: rot.trim(), texto: resto.join('::').trim() } : { rot: r.chave.replace(/^rr_\d*_?/, ''), texto: r.texto };
-    });
+    // 0433: tabela própria, cadastrada em Configurações › Textos (antes: rr_* de config_mari_textos, só por migration)
+    const { data, error } = await NG.sb.rpc('respostas_rapidas');
+    if (error) return [];   // não guarda a falha: a próxima abertura tenta de novo
+    rapidasCache = (data || []).map((r) => ({ id: r.id, rot: r.rotulo, texto: r.texto }));
     return rapidasCache;
   }
   async function templates() {
@@ -897,6 +896,8 @@
       if (item.op) o.oportunidade = null;   // só a 1ª mensagem é a da oportunidade
       // ✨ a mensagem saiu de uma sugestão: amarra o envio a ela (medição: % que saiu de sugestão e quanto foi editada)
       if (st.sug && st.sug.escolhida && !item.nota && !item.tpl) { item.sug = { id: st.sug.id, escolhida: st.sug.escolhida }; sugFechar(false); }
+      if (st.rr && !item.nota && !item.tpl) item.rr = st.rr;
+      st.rr = null;
       if (st.cita && !item.nota && !item.sopro && !item.tpl && !item.op) { item.cita = st.cita; st.cita = null; citaDesenhar(); }
       st.locais.push(item);
       ta.value = '';
@@ -1010,6 +1011,10 @@
         if (item.sug && data.acao_id) {
           NG.sb.rpc('sugestao_resultado', { p_id: item.sug.id, p_escolhida: item.sug.escolhida, p_texto: item.texto, p_acao_id: data.acao_id })
             .then(({ error: e2 }) => { if (e2) console.warn('sugestao_resultado', e2.message); });
+        }
+        if (item.rr) {   // 0433: registro de uso (medição); não muda nada na conversa
+          NG.sb.rpc('resposta_rapida_usada', { p_id: item.rr, p_conversa: o.conversaId, p_acao_id: data.acao_id || null, p_texto: item.texto })
+            .then(({ error: e3 }) => { if (e3) console.warn('resposta_rapida_usada', e3.message); });
         }
         if (data.assumiu) NG.toast('Conversa assumida: a Mari calou', 'ok');
         if (o.aoMudar) o.aoMudar(data);
@@ -1182,7 +1187,7 @@
       if (a === 'emo-aba') { st.emoAba = Number(b.dataset.i) || 0; emoDesenhar(); return; }
       if (a === 'emo-x') { emoInserir(b.dataset.e); return; }
       if (a === 'descer') { msgs.scrollTop = msgs.scrollHeight; novas.hidden = true; return; }
-      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.sopro = b.dataset.m === 'sopro'; st.tpl = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
+      if (a === 'modo') { st.nota = b.dataset.m === 'nota'; st.sopro = b.dataset.m === 'sopro'; st.tpl = null; st.rr = null; if (ta.readOnly) ta.value = ''; desenhar(); ta.focus(); return; }
       if (a === 'tirar') { conversaAcao('etiqueta_remove', b.dataset.tg); return; }
       if (a === 'dono-bt') {   // 22/11 (cabeçalho único): o mesmo que o interruptor, em botão com o nome da ação
         if (b.disabled || st.trocandoDono) return;
@@ -1220,12 +1225,14 @@
         if (s.value.startsWith('r:')) {
           const r = st.d.rapidas[Number(s.value.slice(2))];
           st.tpl = null;
+          st.rr = r && r.id ? r.id : null;   // 0433: a mensagem que sair daqui conta como uso desta resposta
           ta.readOnly = false;
           ta.value = r ? r.texto : '';
         } else if (s.value.startsWith('t:')) {
           const nomeT = s.value.slice(2);
           const tpl = st.d.tpls.find((t) => t.nome === nomeT);
           st.tpl = nomeT;
+          st.rr = null;
           ta.value = tpl ? NG.renderTpl(tpl.corpo, [NG.nomeCadencia((st.d.c.dados || {}).nome || st.d.c.nome_contato)]) : '';
         }
         s.value = '';

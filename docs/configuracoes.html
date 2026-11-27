@@ -107,6 +107,45 @@
       </section>
     </section>
 
+    <!-- 0433: Textos — respostas rápidas do menu da conversa (admin cadastra; backoffice vê) -->
+    <section id="textos" class="secao" hidden>
+      <div class="faixa cinza"><span>As <b>respostas rápidas</b> são os textos prontos do menu <b>Respostas rápidas…</b> na caixa da conversa: a pessoa escolhe, o texto entra na caixa, ela ajusta se quiser e envia. O <b>rótulo</b> é o nome que aparece no menu. Só valem com a <b>janela de 24 h aberta</b> — com ela fechada, o menu mostra só os <b>Templates aprovados</b> da Meta, que não se cadastram aqui.</span></div>
+      <div class="faixa cinza" id="tx-ro" hidden>Você é backoffice: vê e usa as respostas, mas só o admin cadastra ou altera.</div>
+      <div class="barra-filtros">
+        <h2 class="secao-tit" style="margin:0">Respostas rápidas</h2>
+        <label class="check-mini"><input type="checkbox" id="tx-inativas"> Mostrar desativadas</label>
+        <span style="flex:1"></span>
+        <button type="button" class="btn btn-acc" id="tx-nova" hidden>+ Nova resposta rápida</button>
+      </div>
+      <form id="tx-form" class="lista padrao" novalidate hidden style="padding:14px;display:flex;flex-direction:column;gap:12px">
+        <strong id="tx-form-tit">Nova resposta rápida</strong>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <label class="campo" style="flex:1 1 240px">Rótulo (o nome no menu) <span class="nota-campo" id="tx-rot-n">0/40</span>
+            <input type="text" id="tx-rotulo" maxlength="40" placeholder="Ex.: Prazo de instalação" autocomplete="off"></label>
+          <label class="campo" style="flex:0 0 110px" title="Posição no menu: a menor aparece primeiro. Vazio = fim da lista.">Ordem
+            <input type="number" id="tx-ordem" min="0" step="1" inputmode="numeric" placeholder="fim"></label>
+        </div>
+        <label class="campo">Texto que vai para o cliente <span class="nota-campo" id="tx-txt-n">0/1000</span>
+          <textarea id="tx-texto" maxlength="1000" rows="5" placeholder="Escreva como você falaria no WhatsApp. Enter quebra a linha."></textarea></label>
+        <div class="campo">Como chega no WhatsApp
+          <div id="tx-previa" style="align-self:flex-start;max-width:min(100%,420px);padding:8px 12px;border-radius:10px;background:var(--ok-bg);color:var(--text);border:1px solid var(--border);font-size:14px;white-space:pre-wrap;overflow-wrap:anywhere;min-height:36px"></div></div>
+        <span class="nota-campo">Valem as regras de sempre: só a tabela vigente, sem desconto, sem prometer data de instalação. Mensagem com valor ou data pede confirmação antes de sair.</span>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="submit" class="btn btn-acc" id="tx-salvar">Salvar</button>
+          <button type="button" class="btn" id="tx-cancelar">Cancelar</button>
+          <span style="flex:1"></span>
+          <button type="button" class="btn" id="tx-desativar" hidden>Desativar</button>
+        </div>
+      </form>
+      <section class="lista padrao" aria-label="Respostas rápidas">
+        <div class="rolagem"><table class="tab">
+          <thead><tr><th class="num">Ordem</th><th>Rótulo</th><th class="col-media">Texto</th><th class="num" title="Mensagens enviadas a partir desta resposta nos últimos 30 dias">Usos 30 d</th><th class="col-media">Alterada</th><th>Situação</th><th></th></tr></thead>
+          <tbody id="tx-lista"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+        </table></div>
+        <div class="rodape-lista"><span id="tx-rodape"></span><span>Desativar tira do menu e guarda o histórico · nada é apagado</span></div>
+      </section>
+    </section>
+
     <!-- Tabela vigente -->
     <!-- 0302: canais de captação — custo por dia (à mão, admin) e origem a conferir (backoffice) -->
     <section id="canais" class="secao" hidden>
@@ -1095,9 +1134,90 @@ Guardar?`)) return;
     carregarAgencia();
   });
 
-  // ---------------------------------------------------------- abas (Importação · Tabela vigente · Programa Parceiro · Equipe · Agência · Canais)
-  const HASH_ABA = { tabela: '#tabela', parceiro: '#parceiro', equipe: '#equipe', agencia: '#agencia', canais: '#canais' };
-  let aba = location.hash === '#tabela' ? 'tabela' : location.hash === '#parceiro' ? 'parceiro' : location.hash === '#canais' ? 'canais'
+  // ---------------------------------------------------------- 0433: Textos — respostas rápidas (admin cadastra; backoffice vê)
+  let TX = null, txEdit = null;   // txEdit: null = formulário fechado · {} = nova · {id,…} = editando
+  const txEl = (id) => document.getElementById(id);
+  async function carregarTextos() {
+    const { data, error } = await NG.sb.rpc('respostas_rapidas', { p_todas: true });
+    if (error) { txEl('tx-lista').innerHTML = `<tr><td colspan="7" class="vazio">${esc(NG.msgErro(error))}</td></tr>`; return; }
+    TX = data || [];
+    renderTextos();
+    renderAbas();
+  }
+  function renderTextos() {
+    txEl('tx-ro').hidden = ehAdmin;
+    txEl('tx-nova').hidden = !ehAdmin || !!txEdit;
+    const ver = TX.filter((r) => r.ativo || txEl('tx-inativas').checked);
+    const ativas = TX.filter((r) => r.ativo).length;
+    txEl('tx-lista').innerHTML = ver.length ? ver.map((r) => `<tr${r.ativo ? '' : ' class="apagado"'}>
+        <td class="num mono">${r.ativo ? esc(r.ordem) : '—'}</td>
+        <td><b>${esc(r.rotulo)}</b></td>
+        <td class="col-media" style="max-width:420px;white-space:normal" title="${esc(r.texto)}">${esc(r.texto.length > 110 ? `${r.texto.slice(0, 110)}…` : r.texto)}</td>
+        <td class="num mono">${NG.fmtNum(r.usos_30d || 0)}</td>
+        <td class="col-media apagado">${esc(NG.fmtDataHora(r.alterada_em))}${r.alterada_por ? ` · ${esc(r.alterada_por)}` : ''}</td>
+        <td>${r.ativo ? '<span class="chip ok">no menu</span>' : '<span class="chip dim">desativada</span>'}</td>
+        <td>${ehAdmin ? `<button type="button" class="btn btn-sm" data-tx-editar="${esc(r.id)}">${r.ativo ? 'Editar' : 'Religar'}</button>` : ''}</td></tr>`).join('')
+      : `<tr><td colspan="7" class="vazio">${TX.length ? 'Nenhuma resposta ativa. Marque "Mostrar desativadas" para ver as antigas.' : 'Nenhuma resposta rápida cadastrada ainda.'}</td></tr>`;
+    txEl('tx-rodape').textContent = `${ativas} no menu${TX.length - ativas ? ` · ${TX.length - ativas} desativada(s)` : ''}`;
+  }
+  function txContar() {
+    txEl('tx-rot-n').textContent = `${txEl('tx-rotulo').value.trim().length}/40`;
+    txEl('tx-txt-n').textContent = `${txEl('tx-texto').value.trim().length}/1000`;
+    txEl('tx-previa').textContent = txEl('tx-texto').value.trim() || '…';
+  }
+  function txAbrir(r) {
+    txEdit = r || {};
+    txEl('tx-form').hidden = false;
+    txEl('tx-form-tit').textContent = !txEdit.id ? 'Nova resposta rápida' : txEdit.ativo ? `Editar “${txEdit.rotulo}”` : `Religar “${txEdit.rotulo}”`;
+    txEl('tx-rotulo').value = txEdit.rotulo || '';
+    txEl('tx-texto').value = txEdit.texto || '';
+    txEl('tx-ordem').value = txEdit.id && txEdit.ativo ? txEdit.ordem : '';
+    txEl('tx-salvar').textContent = txEdit.id && !txEdit.ativo ? 'Religar e salvar' : 'Salvar';
+    txEl('tx-desativar').hidden = !(txEdit.id && txEdit.ativo);
+    txContar();
+    renderTextos();
+    txEl('tx-form').scrollIntoView({ block: 'nearest' });
+    txEl('tx-rotulo').focus();
+  }
+  function txFechar() { txEdit = null; txEl('tx-form').hidden = true; renderTextos(); }
+  txEl('tx-nova').addEventListener('click', () => txAbrir(null));
+  txEl('tx-cancelar').addEventListener('click', txFechar);
+  txEl('tx-inativas').addEventListener('change', () => { if (TX) renderTextos(); });
+  txEl('tx-rotulo').addEventListener('input', txContar);
+  txEl('tx-texto').addEventListener('input', txContar);
+  txEl('tx-lista').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-tx-editar]');
+    if (!b || !TX) return;
+    const r = TX.find((x) => String(x.id) === b.dataset.txEditar);
+    if (r) txAbrir(r);
+  });
+  txEl('tx-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    if (!txEdit) return;
+    const ordem = txEl('tx-ordem').value.trim();
+    const bt = txEl('tx-salvar');
+    bt.disabled = true;
+    const { error } = await NG.sb.rpc('resposta_rapida_salvar', { p_id: txEdit.id || null, p_rotulo: txEl('tx-rotulo').value, p_texto: txEl('tx-texto').value,
+      p_ordem: ordem === '' ? null : Number(ordem), p_ativo: true });
+    bt.disabled = false;
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }   // a frase da recusa vem do banco
+    NG.toast(txEdit.id ? 'Resposta salva: vale nas conversas abertas daqui para a frente' : 'Resposta cadastrada: já aparece no menu da conversa', 'ok');
+    txEdit = null; txEl('tx-form').hidden = true;
+    carregarTextos();
+  });
+  txEl('tx-desativar').addEventListener('click', async () => {
+    if (!txEdit || !txEdit.id) return;
+    if (!window.confirm(`Tirar “${txEdit.rotulo}” do menu das conversas?\n\nNada é apagado: ela fica em "Mostrar desativadas" e pode ser religada.`)) return;
+    const { error } = await NG.sb.rpc('resposta_rapida_apagar', { p_id: txEdit.id });
+    if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+    NG.toast('Resposta desativada', 'ok');
+    txEdit = null; txEl('tx-form').hidden = true;
+    carregarTextos();
+  });
+
+  // ---------------------------------------------------------- abas (Textos · Importação · Tabela vigente · Programa Parceiro · Equipe · Agência · Canais)
+  const HASH_ABA = { textos: '#textos', tabela: '#tabela', parceiro: '#parceiro', equipe: '#equipe', agencia: '#agencia', canais: '#canais' };
+  let aba = location.hash === '#textos' ? 'textos' : location.hash === '#tabela' ? 'tabela' : location.hash === '#parceiro' ? 'parceiro' : location.hash === '#canais' ? 'canais'
     : (location.hash === '#equipe' && ehAdmin) ? 'equipe' : (location.hash === '#agencia' && ehAdmin) ? 'agencia' : 'conteudo';
   function renderAbas() {
     NG.abasPilulas(document.getElementById('abas'), [
@@ -1106,6 +1226,7 @@ Guardar?`)) return;
       { id: 'parceiro', nome: 'Programa Parceiro', n: PC ? PC.comissao.length : 0 },
       ...(ehAdmin ? [{ id: 'equipe', nome: 'Equipe', n: EQ ? EQ.length : 0 }, { id: 'agencia', nome: 'Agência', n: AG ? AG.filter((c) => !c.dono).length : 0 }] : []),
       { id: 'canais', nome: 'Canais', n: CN ? CN.origem.length : 0 },
+      { id: 'textos', nome: 'Textos', n: TX ? TX.filter((r) => r.ativo).length : 0 },
     ], aba, (id) => { aba = id; history.replaceState(null, '', HASH_ABA[id] || location.pathname); mostrarAba(); });
   }
   function mostrarAba() {
@@ -1118,6 +1239,8 @@ Guardar?`)) return;
     if (aba === 'agencia' && !AG) carregarAgencia();
     document.getElementById('canais').hidden = aba !== 'canais';
     if (aba === 'canais' && !CN) carregarCanais();
+    document.getElementById('textos').hidden = aba !== 'textos';
+    if (aba === 'textos' && !TX) carregarTextos();
     if (aba === 'tabela' && !tabelaCarregada) carregarTabela();
     if (aba === 'parceiro' && !PC) carregarParceiro();
     if (aba === 'equipe' && !EQ) carregarEquipe();
@@ -1128,6 +1251,7 @@ Guardar?`)) return;
   if (!tabelaCarregada) carregarTabela();   // contagem da aba Tabela vigente já certa
   if (!PC) carregarParceiro();               // idem para o Programa Parceiro
   if (ehAdmin && !EQ) carregarEquipe();      // idem para a Equipe
+  if (!TX) carregarTextos();                 // 0433: o número da aba Textos
   if (ehAdmin && !AG) carregarAgencia();     // 0406: o número da aba Agência (campanhas sem dono)
 })();
 </script>
