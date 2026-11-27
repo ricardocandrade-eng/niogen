@@ -2854,6 +2854,26 @@
         await recarregar();
         return;
       }
+      if (acao === 'fc-indicado-por') {   // 26/11 (0427): registrar quem indicou — prévia do banco antes de gravar (regra de ouro 3)
+        const fd = await NG.modal(`<h3>🤝 Indicado por…</h3><p>Quem indicou este cliente? Digite o <b>número do lead</b> de quem indicou (ex.: L-156) ou o <b>WhatsApp</b> dele. Nenhuma mensagem sai para ninguém.</p>
+          <label class="campo">Quem indicou<input type="text" name="quem" maxlength="30" placeholder="L-156 ou (32) 9 9999-9999" required></label>`);
+        if (!fd) return;
+        const quem = String(fd.get('quem') || '').trim();
+        const pv = await NG.sb.rpc('indicacao_registrar', { p_indicado_conversa: d.conversaId, p_indicador: quem, p_confirmar: false });
+        if (pv.error) { NG.toast(NG.msgErro(pv.error), 'bad'); return; }
+        if (!window.confirm(`${pv.data.resumo}${pv.data.aviso ? `
+
+⚠ ${pv.data.aviso}` : ''}
+
+Registrar?`)) return;
+        const { data, error } = await NG.sb.rpc('indicacao_registrar', { p_indicado_conversa: d.conversaId, p_indicador: quem, p_confirmar: true });
+        if (error) { NG.toast(NG.msgErro(error), 'bad'); return; }
+        NG.toast((data && data.resumo) || 'Indicação registrada', 'ok');
+        fc.menu = false;
+        fc.ind = undefined;
+        await recarregar();
+        return;
+      }
       if (acao === 'fc-nota-ok') {   // 24/11: fecha o balão do post-it nesta abertura
         notaVista = `${idAtual}|${d && d.nota && d.nota.texto ? String(d.nota.texto).trim() : ''}`;
         const w = b.closest('.fc-notaw');
@@ -3962,10 +3982,12 @@
     // 24/11 (0379, agenda de retornos): o cliente pediu "me liga sexta às 15h" → dia e hora; a Mari chama (conversa com ela) ou o 🔔 aparece na Live
     const btRet = AGENDA_RETORNOS && ehBO() && d && d.conversaId && !emSaida ? '<button type="button" class="fc-mitem" data-f="fc-retorno" title="O cliente pediu para falar num dia e hora? Marque aqui. Conversa com a Mari: ela chama na hora. Com o time: o 🔔 aparece na Live 15 min antes; passou 1 h sem contato, vira atrasado.">📅 Retornar em…</button>' : '';
     const extraM = extra ? extra.replace(/class="btn"/g, 'class="fc-mitem"') : '';
+    // 26/11 (0427, caso L-156 → L-397): o time registra ou corrige quem indicou este lead — é o vínculo que faz o Pix aparecer em Pagamentos
+    const btInd = ehBO() && d && d.conversaId ? `<button type="button" class="fc-mitem" data-f="fc-indicado-por" title="Este cliente veio por indicação? Registre quem indicou (nº do lead ou WhatsApp). Antes de gravar, a tela mostra o que vai acontecer. Se ele instalar, entra o Pix de quem indicou em Pagamentos › Indicações.">🤝 ${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? 'Trocar quem indicou…' : 'Indicado por…'}</button>` : '';
     // 16/11 (0236): lead sem venda, em andamento → "Virar venda" (pedido aberto pelo time no portal)
     const btVirar = d && d.soConversa && ehBO() && !(d.lead && d.lead.destino && d.lead.destino !== 'em_andamento')
       ? '<button type="button" class="fc-mitem fc-mi-ok" data-f="virar-venda" title="Lead conduzido pelo time: abre a venda para gravar o nº do pedido / OS e a agenda">Virar venda</button>' : '';
-    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btRet}${btReabrir}${btVirar}${extraM}${btSaida}`);
+    const menuT = menu.replace('<!--MENU-AG-->', `<div class="fc-mlab">Agir</div><!--AG-ITENS-->${btNada}${btRet}${btInd}${btReabrir}${btVirar}${extraM}${btSaida}`);
     return `<header class="fc-top">
       <button type="button" class="btn" data-f="fc-voltar" title="${naFila ? 'Volta para a fila (Esc)' : 'Fecha a ficha (Esc)'}">${IC.voltar}${naFila ? 'Fila' : 'Voltar'}</button>
       <div class="fc-tit fc-tit-linha"><div class="fc-l1"><h1>${esc(nome)}</h1>${idsCab()}</div>${chips ? `<div class="fc-l2">${chips}</div>` : ''}<div class="fc-meta">${meta}${fc.ind && fc.ind.por && fc.ind.por.indicador_nome ? ` · <span class="fc-ind-por" title="Chegou por indicação (R$ 100 no Pix a quem indicou, se instalar)">🤝 indicado por ${esc(String(fc.ind.por.indicador_nome).split(/\s+/).slice(0, 2).join(' '))}</span>` : ''}</div><!--AGORA--></div>
