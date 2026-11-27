@@ -1,6 +1,9 @@
 -- id: X13
 -- titulo: Casos Janaina e Greiciele (0274 · 0305): "Sem resposta" dado pelo time liga a Retomada da Mari (D3 → Ligar → D7 → D15); só no fim a Saída fica
 -- tipo: atual
+-- 27/11: o cenário monta o próprio estado — na produção as variantes do D3 (v1 e v2) já foram aprovadas pela Meta e vêm assim no backup;
+-- aqui todas começam PENDING, e cada parte aprova a que vai testar.
+update public.config_templates_waba set status = 'PENDING' where nome like 'nio_retomada_d3_%';
 select sim.lead_com_venda('Jana X13') as c \gset
 select sim.como('backoffice');
 select public.backoffice_momento(sim.venda(:'c'), 'assumir');

@@ -1,6 +1,9 @@
 -- id: X105
 -- titulo: 0381 (B4, Ricardo 24/11): o aviso de crédito aprovado pede a preferência de período quando falta (Parte 3); o D3 sai pela variante da etapa (nunca deu endereço · viu os planos · faltam os dados) só com o template aprovado — sem aprovação, o de sempre (Parte 4); a 1ª cutucada de quem não deu endereço é a saída honesta (BYAF); a Mari recebe o anúncio que abriu a conversa
 -- tipo: atual
+-- 27/11: o cenário monta o próprio estado — na produção as variantes do D3 (v1 e v2) já foram aprovadas pela Meta e vêm assim no backup;
+-- aqui todas começam PENDING, e cada parte aprova a que vai testar.
+update public.config_templates_waba set status = 'PENDING' where nome like 'nio_retomada_d3_%';
 
 -- A) Crédito aprovado com plano e forma, sem a preferência de período: o aviso pede o período (sem prometer data)
 select sim.lead_pronto('Ana X105') as a \gset

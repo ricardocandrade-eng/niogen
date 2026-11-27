@@ -92,12 +92,15 @@ select sim.confere('todo "precisa de ação" da jornada está na fila — ou em 
 select sim.confere('todo aviso do Conferir sobre um cliente está na fila; os de sistema, fora dela',
   not exists (select 1 from jsonb_array_elements(public.live_conferir()) c
                where public._live2_tipo_conferir(c ->> 'tipo') <> 'sistema' and coalesce(c ->> 'venda_id', c ->> 'conversa_id') is not null
-                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(c ->> 'venda_id', 'c:' || (c ->> 'conversa_id'))))
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(c ->> 'venda_id', 'c:' || (c ->> 'conversa_id')))
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb #> '{radar,em_pausa}') x where x ->> 'k' = coalesce(c ->> 'venda_id', 'c:' || (c ->> 'conversa_id'))))
   and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'sub' in ('acao_falhou', 'fora_niogen', 'conta_nao_fecha')),
   'aviso do Conferir fora da fila, ou aviso de sistema dentro');
 select sim.confere('toda vez do time na situação gravada está na fila',
   not exists (select 1 from public.lead_estado e where e.vez = 'time'
-                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(e.venda_id::text, 'c:' || e.conversa_id::text))),
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(e.venda_id::text, 'c:' || e.conversa_id::text))
+                 -- 27/11: adiada/cobrada na tela (0394) fica em pausa com hora de volta, como na 1ª conferência — há lead real assim no backup
+                 and not exists (select 1 from jsonb_array_elements((:'f')::jsonb #> '{radar,em_pausa}') x where x ->> 'k' = coalesce(e.venda_id::text, 'c:' || e.conversa_id::text))),
   (select string_agg(e.situacao, ', ') from public.lead_estado e where e.vez = 'time'
       and not exists (select 1 from jsonb_array_elements((:'f')::jsonb -> 'fila') x where x ->> 'k' = coalesce(e.venda_id::text, 'c:' || e.conversa_id::text))));
 

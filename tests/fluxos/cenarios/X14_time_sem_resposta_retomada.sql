@@ -1,6 +1,9 @@
 -- id: X14
 -- titulo: Cliente some depois de falar com o time (0274): em 24 h úteis a Mari faz a Retomada (a conversa já voltou para ela, 0227); ele responde e a Mari atende
 -- tipo: atual
+-- 27/11: o cenário monta o próprio estado — na produção as variantes do D3 (v1 e v2) já foram aprovadas pela Meta e vêm assim no backup;
+-- aqui todas começam PENDING, e cada parte aprova a que vai testar.
+update public.config_templates_waba set status = 'PENDING' where nome like 'nio_retomada_d3_%';
 select sim.lead_novo('Rosa X14') as c \gset
 select sim.mari_handoff(:'c', 'pedido_humano');
 select sim.fila_rodar();

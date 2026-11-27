@@ -1,6 +1,9 @@
 -- id: X134
 -- titulo: 0405 (Ricardo 25/11): o D3 sai na v2 (estilo Nio) só com ela aprovada e a chave ligada; sem aprovação ou com retomada_d3_v2 = nao, a v1 da 0381; a escada usa a v2; os textos têm linha em branco entre os parágrafos
 -- tipo: atual
+-- 27/11: o cenário monta o próprio estado — na produção as variantes do D3 (v1 e v2) já foram aprovadas pela Meta e vêm assim no backup;
+-- aqui todas começam PENDING, e cada parte aprova a que vai testar.
+update public.config_templates_waba set status = 'PENDING' where nome like 'nio_retomada_d3_%';
 
 select sim.lead_novo('Duda X134') as a \gset
 

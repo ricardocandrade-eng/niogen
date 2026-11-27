@@ -2,6 +2,13 @@
 -- titulo: 0406 (Ricardo 25/11): a agência só vê as campanhas que o admin liberou (nada liberado = nada), Google Ads não é dela, campanha nova entra sem dono e avisa o admin (1 vez, 8h–21h), gráficos e atendimento só em contagens, a prévia do admin dá o mesmo número que a agência vê
 -- tipo: atual
 select sim.como('servico');
+-- 27/11: o cenário monta o próprio estado — na produção já há campanha liberada à agência (vem no backup); aqui toda campanha que
+-- já existe começa com a Dharma, e só a que o cenário cria muda de dono.
+insert into public.meta_ads_campanhas_dono (campanha_id, dono, classificada_em)
+select distinct x.campanha_id, 'dharma', now()
+  from (select campanha_id from public.meta_ads_diario union select campanha_id from public.meta_ads_anuncios) x where x.campanha_id is not null
+on conflict (campanha_id) do update set dono = 'dharma';
+update public.meta_ads_campanhas_dono set dono = 'dharma' where dono is distinct from 'dharma';
 update public.usuarios set perfil = 'agencia', ativo = true
  where id = (select id from public.usuarios where perfil = 'vendedor' and not ativo order by id limit 1);
 
