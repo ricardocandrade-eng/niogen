@@ -140,6 +140,22 @@ caso('vocativo: WhatsApp "Julio Teixeira" e cliente informou "Júlio" → o nome
   const r = rodar('Sem pressa, Julio! Fico aqui 😊', { nome_contato: 'Julio Teixeira', nome_confiavel: true, dados: { telefone: '31999999999', nome: 'Júlio' } }, [], 'pera');
   assert.ok(/Julio/.test(tudo(r)), `tirou o nome certo: «${tudo(r)}»`);
 });
+// ───── 26/11 22h (L-397): nome de terceiro citado pelo cliente não vira vocativo ─────
+caso('vocativo: "A minha prima me passou seu contato keroly" → "Que bom, Keroly!" perde o nome', () => {
+  const r = rodar('Que bom, Keroly! Fico feliz que ela te indicou 😊\n\nMe passa o CEP?', { nome_contato: 'Rayra Santos🦋✨', nome_confiavel: false, etapa: 'inicio', plano_escolhido: null, dados: {} },
+    [{ papel: 'lead', texto: 'Boa noite!' }], 'A minha prima me passou seu contato keroly');
+  assert.ok(!/keroly/i.test(tudo(r)), `ficou o nome da prima: «${tudo(r)}»`);
+  assert.ok(/^Que bom! Fico feliz/.test(r.texto), `texto estragado: «${r.texto}»`);
+});
+caso('vocativo: o cliente disse o nome neste turno e o modelo marcou → o nome fica', () => {
+  const r = rodar('Prazer, Keroly! Me passa o CEP?\n[DADOS_COLETADOS: nome=Keroly Souza]', { nome_contato: 'K 🦋', nome_confiavel: false, dados: {} }, [], 'me chamo keroly souza');
+  assert.ok(/Keroly/.test(tudo(r)), `tirou o nome que o cliente informou: «${tudo(r)}»`);
+});
+caso('vocativo: endereço e plano que o cliente escreveu não são mexidos', () => {
+  const r = rodar('Anotado: Rua Halfeld, Centro, Juiz de Fora. Fica no Essencial, certo?', { nome_contato: '🌻', nome_confiavel: false, cidade: 'Juiz de Fora',
+    endereco_cep: { logradouro: 'Rua Halfeld', bairro: 'Centro', localidade: 'Juiz de Fora' }, dados: {} }, [{ papel: 'lead', texto: 'rua halfeld centro' }], 'quero o essencial');
+  assert.ok(/Rua Halfeld, Centro, Juiz de Fora\. Fica no Essencial, certo\?/.test(tudo(r)), `mexeu no endereço: «${tudo(r)}»`);
+});
 
 console.log(falhas ? `\n${falhas} FALHOU` : '\ntudo ok');
 process.exit(falhas ? 1 : 0);

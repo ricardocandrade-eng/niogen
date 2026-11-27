@@ -1817,19 +1817,43 @@ if (!erro && !handoff && !interativo && ultimaMari && FECHO.test(norm(ultimaMari
 // 26/11 (P56): trava do vocativo. O 5b não manda mais o nome do WhatsApp ao modelo, mas ele ainda aparece no histórico (aberturas
 // antigas, falas do time). Se a resposta chamar o cliente pelo 1º nome do WhatsApp e esse não for o nome que ele informou, o
 // vocativo sai: "Sem pressa, Mamãe! Fico aqui" → "Sem pressa! Fico aqui"; "Mamãe, o preço…" → "O preço…". Nunca mexe no resto.
+// 26/11 22h (L-397): a cliente escreveu "A minha prima me passou seu contato keroly" e a Mari respondeu "Que bom, Keroly!" — o nome
+// era da prima. Sem nome informado pelo cliente (nem [DADOS_COLETADOS] neste turno), palavra com cara de nome que o CLIENTE escreveu
+// também não vale como vocativo: sai do mesmo jeito. Ficam de fora as palavras do endereço, da cidade e dos planos.
 if (!erro && !(resp.fixo && (resp.fixo.texto || resp.fixo.interativo))) {
   const cz = ctx.conversa || {};
   const zap = String(cz.nome_contato || '').trim().split(/\s+/)[0] || '';
   const real = String(m.dados.nome || '').trim().split(/\s+/)[0] || '';
-  if (/^[A-Za-zÀ-ÿ']{2,}$/.test(zap) && norm(zap) !== norm(real) && !(cz.nome_confiavel && !real)) {
-    const meio = new RegExp(`,[ \\t]*${zap}(?=[ \\t]*(?:[,!.?…]|$))`, 'gim');
-    const ini = new RegExp(`^${zap}[ \\t]*[,!][ \\t]*(\\S)?`, 'gim');
+  const cand = [];
+  if (/^[A-Za-zÀ-ÿ']{2,}$/.test(zap) && norm(zap) !== norm(real) && !(cz.nome_confiavel && !real)) cand.push({ re: zap, fl: 'gim', nome: zap });
+  if (!real && !cz.nome_confiavel) {
+    const ec = cz.endereco_cep || {};
+    const fora = new Set(norm([cz.cidade, cz.complemento, ec.logradouro, ec.bairro, ec.localidade, ...(ctx.planos || []).map((p) => p.nome),
+      'sim nao obrigada obrigado claro beleza combinado perfeito fibra essencial super ultra nio mari mariana casa apto centro '
+      + 'olha veja show legal entendi imagina poxa tranquilo otimo maravilha bacana joia fechado fechou prazer opa'].filter(Boolean).join(' '))
+      .split(/[^a-z']+/).filter(Boolean));
+    const hl = Array.isArray((prep.consolidado || {}).historico) ? prep.consolidado.historico : [];
+    const ditas = [String((prep.consolidado || {}).mensagem || ''), ...hl.filter((h) => h && h.papel === 'lead').map((h) => String(h.texto || ''))].join(' ');
+    const vistas = new Set();
+    for (const w of ditas.split(/[^A-Za-zÀ-ÿ']+/)) {
+      const k = norm(w);
+      if (w.length < 3 || w.length > 14 || vistas.has(k) || fora.has(k) || k === norm(zap) || !pareceNome(w, 1)) continue;
+      vistas.add(k);
+      cand.push({ re: `${w.charAt(0).toUpperCase()}${w.slice(1).toLowerCase()}`, fl: 'gm', nome: w });   // só com inicial maiúscula na resposta
+    }
+  }
+  const antesV = baloesFinais.join('\n\n');
+  const tirados = [];
+  for (const c of cand) {
+    const meio = new RegExp(`,[ \\t]*${c.re}(?=[ \\t]*(?:[,!.?…]|$))`, c.fl);
+    const ini = new RegExp(`^${c.re}[ \\t]*[,!][ \\t]*(\\S)?`, c.fl);
     const tira = (s) => (typeof s === 'string' ? s.replace(meio, '').replace(ini, (_, c1) => (c1 ? c1.toUpperCase() : '')) : s);
-    const antesV = baloesFinais.join('\n\n');
+    const antesC = baloesFinais.join('\n\n') + ((interativo && interativo.corpo) || '');
     baloesFinais = baloesFinais.map(tira).filter((b) => String(b || '').trim());
     if (interativo && interativo.corpo) interativo.corpo = tira(interativo.corpo);
-    if (baloesFinais.join('\n\n') !== antesV) { texto = baloesFinais.join('\n\n'); tags.vocativo_tirado = zap; }
+    if (baloesFinais.join('\n\n') + ((interativo && interativo.corpo) || '') !== antesC) tirados.push(c.nome);
   }
+  if (tirados.length) { tags.vocativo_tirado = tirados.join(', '); if (baloesFinais.join('\n\n') !== antesV) texto = baloesFinais.join('\n\n'); }
 }
 if (interativo) texto = [...baloesFinais, interativo.corpo, `[${interativo.resumo}]`].filter(Boolean).join('\n\n');
 // Rede de segurança (conversa #5, 07/11): nada para mandar (sem texto, sem interativo, sem handoff) = cliente no vácuo.

@@ -229,7 +229,7 @@ L.push(`telefone_whatsapp: ${foneWa(conv.telefone)} (é o telefone de contato: n
   const chamar = p1(dados.nome) || doZap;
   L.push(chamar
     ? `nome_cliente: ${chamar} | nome_confiavel: sim (é o único nome pelo qual você pode chamar o cliente)`
-    : 'nome_cliente: — | nome_confiavel: nao (o cliente ainda não disse o nome: não chame por nome nenhum, nem por um que apareça no histórico; use "você")');
+    : 'nome_cliente: — | nome_confiavel: nao (o cliente ainda não disse o nome: não chame por nome nenhum, nem por um que apareça no histórico, nem pelo nome de outra pessoa que ele citar — quem indicou, parente, vizinho; use "você")');
   if (dados.nome && dados.nome_provisorio && !(dados.cpf && cpfOk)) {
     L.push(`nome_a_confirmar: SIM — «${dados.nome}» veio de uma resposta solta do cliente. Ao pedir o CPF, confirme de passagem, uma vez só `
       + `("${dados.nome}, certo?"). Se ele disser que não é o nome, peça o nome completo de novo e emita [DADOS_COLETADOS] com o nome certo.`);
