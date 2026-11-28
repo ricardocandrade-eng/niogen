@@ -264,10 +264,22 @@
       <p>A conversa fica <b>Em espera</b> até o dia escolhido e a tarefa sai da fila. No dia, ela volta sozinha.</p>
       <label class="campo">Volta em<select name="q"><option value="${d(1)}">Amanhã</option><option value="${d(3)}">Em 3 dias</option><option value="${d(7)}">Em 7 dias</option><option value="">Outra data…</option></select></label>
       <label class="campo" data-outra hidden>Data<input type="date" name="data" min="${d(1)}"></label>
-      <label class="campo">Motivo<input type="text" name="motivo" maxlength="80" required placeholder="Ex.: cliente pediu para falar na sexta"></label>`,
+      <label class="campo">Motivo<input type="text" name="motivo" maxlength="80" required placeholder="Ex.: cliente pediu para falar na sexta"></label>
+      <p class="apagado" data-jan hidden></p>`,
     (dl) => {
       const sel = dl.querySelector('[name=q]'); const box = dl.querySelector('[data-outra]'); const inp = dl.querySelector('[name=data]');
-      sel.addEventListener('change', () => { box.hidden = !!sel.value; inp.required = !sel.value; });
+      // 28/11 (Ricardo, caso Vivian): adiar para depois de a janela de 24 h fechar deixa a volta só com template ou ligação — a tela avisa
+      const jan = t.ultima_fala_em ? new Date(new Date(t.ultima_fala_em).getTime() + 24 * 3600 * 1000) : null;
+      const aviso = dl.querySelector('[data-jan]');
+      const avisar = () => {
+        const dia = sel.value || inp.value;
+        const fora = !!(jan && jan > new Date() && dia && new Date(`${dia}T09:00:00-03:00`) > jan);
+        aviso.hidden = !fora;
+        if (fora) aviso.textContent = `⚠ A janela de 24 h deste cliente fecha ${jan.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. Na volta, só dá para mandar template ou ligar. Para a Mari seguir com os lembretes dentro da janela, use Devolver para a Mari (na ficha ou no cartão da cutucada).`;
+      };
+      sel.addEventListener('change', () => { box.hidden = !!sel.value; inp.required = !sel.value; avisar(); });
+      inp.addEventListener('input', avisar);
+      avisar();
     });
     if (!fd) return;
     const ate = String(fd.get('q') || fd.get('data') || '');
