@@ -140,7 +140,7 @@
   const clienteEl = document.getElementById('cliente');
   const movel = window.matchMedia('(max-width: 900px)');
   const TIPO = { responder: 'Responder', venda: 'Fechar venda', agenda: 'Agendar', ligar: 'Ligar', nio: 'Pendência Nio', decidir: 'Decidir' };
-  const SINAL = { escorregou: 'A Mari escorregou', objecao: 'Objeção', quente: 'Cliente quente', pronto: 'Quase pronto', sumiu: 'Sumiu depois do preço' };
+  const SINAL = { escorregou: 'A Mari escorregou', objecao: 'Objeção', quente: 'Cliente quente', pronto: 'Quase pronto', sumiu: 'Sumiu depois do preço', travou: 'Travou no endereço' };
   const ls = { ler: (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } }, gravar: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* modo privado */ } } };
   let D = null;                 // o que a live2_fila() devolveu
   let vista = ['vez', 'fila', 'reforco', 'radar', 'medicao'].includes(ls.ler('niogen.live2.vista')) ? ls.ler('niogen.live2.vista') : 'vez';
