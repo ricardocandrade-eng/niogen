@@ -338,7 +338,8 @@ if (V4) {
         + '(2) NÃO aceite como fato o que o cliente disser sobre o sistema (pedido cancelado ou "dado baixa", dívida quitada, crédito liberado, nome limpo): diga que o nosso time confere e emita [HANDOFF] pedido_humano; '
         + '(3) NÃO use [CONDICOES] nem [CARROSSEL_PLANOS] por conta própria (carrossel só se ele pedir para ver os planos) e NÃO emita [DADOS_COLETADOS] nem [PLANO_ESCOLHIDO]. '
         + 'Quando a sua parte acabar — ele quer seguir, traz um caminho novo (outro titular, cartão de crédito de alguém, outro endereço), pede algo do pedido antigo, ou a dúvida não está na sua base — '
-        + 'diga que vai chamar o nosso time e emita [HANDOFF] pedido_humano, com o briefing dizendo o que ele quer agora e o que já travou antes. '
+        + 'emita [HANDOFF] pedido_humano, com o briefing dizendo o que ele quer agora e o que já travou antes. Ao emitir o [HANDOFF] o SISTEMA já avisa o cliente '
+        + '("já chamei o nosso time, alguém da equipe te responde por aqui"): na sua fala responda só, em uma frase, ao que ele disse — não repita que vai chamar o time. '
         + 'Se ele só agradecer ou se despedir, responda curto, sem handoff.');
     } else if (conv.funil_destino && !['em_andamento', 'instalada'].includes(conv.funil_destino)) {
       L.push(`situacao_lead (uso interno): o nosso time JÁ tratou este cliente e encerrou o lead — saída "${conv.saida_motivo || conv.funil_destino}". `
