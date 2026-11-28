@@ -317,7 +317,30 @@ if (V4) {
         + 'Se só agradeceu ou se despediu: responda curto ("Imagina! 💚 Assim que a rede chegar aí eu te aviso.").');
     }
     // 15/11 (Ricardo, caso Lucas): o time já tratou e encerrou o lead → a Mari sabe e não reabre a venda por conta própria.
-    if (conv.funil_destino && !['em_andamento', 'instalada'].includes(conv.funil_destino)) {
+    // 28/11 (0443, casos L-132 e L-82 — Ricardo: "acho que ela poderia retomar a conversa, lendo todo o contexto e seguindo com o
+    // atendimento normal novamente e encaminhar para o time quando encerrado a parte dela"): em Saída definitiva de venda que não
+    // saiu (crédito negado, biometria reprovada) a Mari volta a responder — com o RESUMO DO CASO pronto e três proibições, que o
+    // nó "7 · Extrair" também barra no código (o L-82 mostrou que só a linha do prompt não segura).
+    const RETOMA_SAIDA = { credito_negado: 'Crédito negado', reprovado_biometria: 'Biometria reprovada' };
+    if (RETOMA_SAIDA[conv.funil_destino]) {
+      const quando = conv.saida_em || conv.funil_destino_em;
+      const dia = quando ? new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }).format(new Date(quando)) : null;
+      const formas = Array.isArray(conv.credito_formas) ? conv.credito_formas.join(', ') : '';
+      const travou = conv.funil_destino === 'reprovado_biometria' ? 'a biometria do titular não passou na Nio'
+        : /cartao/.test(String(conv.credito_resultado || '')) ? 'a análise da Nio só aprovou no cartão de crédito e o cliente não seguiu com cartão'
+          : conv.credito_resultado === 'aprovado_parcial' ? `a análise da Nio só aprovou parte das formas de pagamento${formas ? ` (${formas})` : ''} e o cliente não seguiu`
+            : conv.credito_resultado === 'negado_debito' ? 'há uma pendência do cliente com a Nio (o nosso time conduz; NÃO comente com o cliente)'
+              : 'a análise de crédito da Nio não aprovou o CPF';
+      L.push(`retomada_saida (uso interno): este cliente JÁ foi atendido e o lead foi encerrado — saída "${RETOMA_SAIDA[conv.funil_destino]}"${dia ? ` em ${dia}` : ''}. `
+        + `O que travou: ${travou}. Leia no histórico o que o nosso consultor já disse e tentou (outros CPFs, formas de pagamento) e NÃO repita. `
+        + 'Ele voltou a escrever agora e VOCÊ retoma o atendimento: responda ao que ele perguntou (produto, chip, preço, cobertura, como funciona) com a base normal, curto e gentil, sem empurrar venda. '
+        + 'Três proibições: (1) NÃO diga que vai abrir, reabrir, refazer ou adiantar pedido — quem abre é o nosso time; '
+        + '(2) NÃO aceite como fato o que o cliente disser sobre o sistema (pedido cancelado ou "dado baixa", dívida quitada, crédito liberado, nome limpo): diga que o nosso time confere e emita [HANDOFF] pedido_humano; '
+        + '(3) NÃO use [CONDICOES] nem [CARROSSEL_PLANOS] por conta própria (carrossel só se ele pedir para ver os planos) e NÃO emita [DADOS_COLETADOS] nem [PLANO_ESCOLHIDO]. '
+        + 'Quando a sua parte acabar — ele quer seguir, traz um caminho novo (outro titular, cartão de crédito de alguém, outro endereço), pede algo do pedido antigo, ou a dúvida não está na sua base — '
+        + 'diga que vai chamar o nosso time e emita [HANDOFF] pedido_humano, com o briefing dizendo o que ele quer agora e o que já travou antes. '
+        + 'Se ele só agradecer ou se despedir, responda curto, sem handoff.');
+    } else if (conv.funil_destino && !['em_andamento', 'instalada'].includes(conv.funil_destino)) {
       L.push(`situacao_lead (uso interno): o nosso time JÁ tratou este cliente e encerrou o lead — saída "${conv.saida_motivo || conv.funil_destino}". `
         + 'Leia no histórico o que o consultor já disse e tentou (ex.: outros CPFs). NÃO repita ofertas que o time já fez nem refaça consultas. '
         + 'Responda curto e gentil ao que o cliente perguntou; se ele quiser seguir com um pedido novo ou tiver dúvida do pedido, emita [HANDOFF] pedido_humano.');

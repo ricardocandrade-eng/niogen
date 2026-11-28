@@ -547,6 +547,18 @@ function violacoesDe(t) {
   }
   if (V7 && prometePrazo(n)) v.push('prometeu prazo para abrir o pedido ou instalar ("em até N horas", "hoje ainda"): não existe — diga "o nosso time confere tudo no sistema da Nio e abre o seu pedido"');
   // v7: o CPF mascarado (123.***.***-30) é o formato pedido — não é markdown.
+  // 28/11 (0443, casos L-82 e L-132): retomada em Saída definitiva (crédito negado, biometria reprovada). A Mari volta a responder,
+  // mas NÃO promete pedido nem reenvia o quadro de condições — em 24/11 (L-82) ela disse "vou tentar abrir o seu pedido agora" com
+  // a regra só no prompt. Aqui é trava do código: vira correção.
+  if (['credito_negado', 'reprovado_biometria'].includes((ctx.conversa || {}).funil_destino)) {
+    if (/\b(abr\w*|reabr\w*|refa\w*|adiant\w*|fa[cz]\w*|finaliz\w*|fech\w*) (ja |agora |hoje |entao |aqui )?(o |um |um novo |outro |esse |este )?(seu |teu |novo )?pedido\b/.test(n)
+        && !/\b(nosso time|a equipe|nossa equipe|o consultor|nosso consultor|o time)\b[^.!?]{0,60}\b(abr|reabr|refa|adiant|fa[cz]|finaliz|fech)\w* /.test(n)) {
+      v.push('retomada de lead encerrado: disse que vai abrir, reabrir ou adiantar o pedido — você NÃO abre pedido aqui: responda a dúvida e, se o cliente quer seguir, diga que vai chamar o nosso time e emita [HANDOFF] pedido_humano');
+    }
+    if (/\[CONDICOES\]/i.test(String(bruto || '')) || /\[CONDICOES\]/i.test(t)) {
+      v.push('retomada de lead encerrado: mandou o quadro de condições ([CONDICOES]) — não é venda nova: tire a marca e responda só ao que o cliente perguntou');
+    }
+  }
   if (t.replace(/\d{3}\.?[*x•]{3}\.?[*x•]{3}-?\d{2}/gi, '').includes('*')) v.push('usou asterisco (markdown aparece cru no WhatsApp)');
   if (/\{\{|\[(?:nome|rua|bairro|n[uú]mero|valor|plano|cpf|e-?mail|telefone|dia|per[ií]odo|forma|prazo|data|dd\/mm|taxa|meses|diferen[çc]a|benef[ií]cio|cidade|cep|complemento)[^\]]*\]/i.test(t)) {
     v.push('deixou um campo entre colchetes sem preencher (placeholder)');
