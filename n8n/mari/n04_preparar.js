@@ -170,6 +170,10 @@ if (!out.p_cep && (!conv.cep || refazBusca) && etapaEndereco && ruaBusca && !rec
   const cidade = (refazBusca ? null : conv.cidade)
     || dadosConv.planos_cidade
     || (/juiz de fora|\bjf\b/i.test([msg, ...(r.historico || []).map((h) => h.texto)].join(' ')) ? 'Juiz de Fora' : null)
+    // 27/11 (L-456): lead da Fila Vero não tinha cidade de partida — «Rua das perolas ,Marilândia» virou "rua sem cidade" e a Mari
+    // tomou o bairro por município do ES. A cidade do cadastro da Fila Vero (mari_contexto.cidade_cadastro, 0437) entra aqui:
+    // depois do que o cliente disse, antes do palpite do anúncio. A Mari confirma rua, bairro e CEP com o cliente, como em toda busca.
+    || (r.cidade_cadastro ? String(r.cidade_cadastro) : null)
     || (['meta_ads', 'instagram', 'facebook'].includes(conv.origem) ? 'Juiz de Fora' : null)
     || conv.cidade;
   if (!cidade) out.ruaSemCidade = ruaBusca;

@@ -243,7 +243,7 @@ L.push(`dfv_resultado (uso interno, nunca citar): ${conv.dfv_resultado || '—'}
 if (V7) {
   if (prep.ruaDivergente) L.push(`rua_divergente: SIM — o cliente escreveu «${prep.ruaDivergente.cliente}», mas o CEP ${conv.cep || prep.p_cep || ''} é da «${prep.ruaDivergente.cep}». Pergunte qual é ANTES de seguir (Passo 2).`);
   if (prep.opcoesRua) L.push(`opcoes_de_rua (busca pela rua que o cliente escreveu, sem CEP — ofereça numeradas, uma por linha, com o CEP): ${prep.opcoesRua.map((o, i) => `${i + 1}) ${o.logradouro} · ${o.bairro} · CEP ${o.cep}`).join(' | ')}`);
-  if (prep.ruaSemCidade) L.push(`rua_sem_cep: o cliente passou a rua «${prep.ruaSemCidade}» sem CEP e sem cidade — pergunte a cidade (ou o CEP).`);
+  if (prep.ruaSemCidade) L.push(`rua_sem_cep: o cliente passou a rua «${prep.ruaSemCidade}» sem CEP e sem cidade — pergunte a cidade (ou o CEP). NUNCA suponha a cidade nem o estado: o nome que vem depois da rua costuma ser o BAIRRO, não um município (L-456).`);
   if (prep.ruaNaoAchada) L.push(`rua_sem_cep: não achei a rua «${prep.ruaNaoAchada}» pelo nome — peça o CEP.`);
   // 23/11 (L-259, P48): sem endereço resolvido a Mari seguiu para nome, CPF, e-mail e pagamento. Trava no estado.
   if ((prep.ruaNaoAchada || dados.rua_nao_achada) && !conv.cep && !prep.p_cep && !prep.opcoesRua) {

@@ -1056,6 +1056,22 @@ def cen_bd(c):   # P57 (26/11, conversa L-434, #266): o cliente digitou o CEP co
     c.log += k.log
 
 
+def cen_be(c):   # P58 (27/11, conversa L-456, Fila Vero): "Rua das perolas ,Marilândia" — a Mari tomou o bairro por município do ES
+    # O cliente respondeu ao pedido de "rua e bairro". Sem cidade na conversa, a Mari perguntou "é em Marilândia mesmo, aí perto de
+    # Vitória/ES, ou é outro município?" e repetiu o erro em duas cutucadas; o cliente sumiu. O nome depois da rua é o BAIRRO: sem
+    # cidade conhecida, a Mari pergunta a cidade (ou o CEP) e nunca supõe município nem estado. (A cidade do cadastro da Fila Vero
+    # entra pela 0437 e é provada no teste local tests/mari_n04_local_cidade_cadastro.test.js e no cenário X159 dos fluxos.)
+    c.diz('Quero ver a oferta Nio com preço congelado até 2030')
+    c.diz('🏡 Pra minha casa')
+    r = c.diz('Rua das perolas ,Marilândia')
+    t = fala(r)
+    c.exige(not re.search(r'espirito santo|\bes\b|vitoria|/es\b', t), f'[P58] supôs o estado/município a partir do bairro: «{t[:220]}»')
+    c.exige(not re.search(r'marilandia mesmo|municipio de marilandia|cidade de marilandia', t), f'[P58] tratou o bairro como cidade: «{t[:220]}»')
+    c.exige(re.search(r'cidade|cep', t), f'[P58] não perguntou a cidade nem o CEP: «{t[:220]}»')
+    row = conv_row(c, 'cidade, uf')
+    c.exige(str(row.get('uf') or '').upper() != 'ES', f'[P58] gravou o estado errado: {row}')
+
+
 PORTAO = {
     'a': (1, B.cen_a, 'P1 P5 P7 P17'), 'c': (2, B.cen_c, 'P2'), 'd': (3, B.cen_d, 'regressão DFV'), 'e': (4, B.cen_e, 'regressão DFV'),
     'g': (5, B.cen_g, 'regressão já-Nio'), 'h': (6, B.cen_h, 'sem pergunta de operadora (18/11)'), 'i': (7, B.cen_i, 'regressão botão'),
@@ -1114,6 +1130,8 @@ PORTAO = {
     'bc': (66, cen_bc, 'P56'),
     # 26/11 — conversa L-434: CEP colado no ponto final da frase do anúncio ("…da Nio.33203360") é lido (telefones 68 e 69)
     'bd': (68, cen_bd, 'P57'),
+    # 27/11 — conversa L-456 (Fila Vero): o nome depois da rua é o bairro — sem cidade conhecida, pergunta a cidade ou o CEP, nunca supõe município/estado
+    'be': (70, cen_be, 'P58'),
 }
 GLOBAIS = 'P3 P5 P6 P8 P10 P11 P12 P14 P16 P17 em toda fala'
 
