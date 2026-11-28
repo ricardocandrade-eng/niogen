@@ -33,7 +33,7 @@ select sim.confere('pagamento antes da NF é recusado',
 select public.ciclo_nf_registrar('4500000097', '10', '97', current_date - 1, current_date);
 select sim.confere('o ciclo mostra a NF 97 e a previsão de pagamento em 10 dias úteis',
   (select numero_nf = '97' and nf_enviada_em = current_date and previsao_pg = public._dias_uteis_somar(current_date, 10)
-          and previsao_pg >= current_date + 14 and jsonb_array_length(pedidos) = 1
+          and previsao_pg >= current_date + 12 /* 28/11: no fim de semana 10 dias uteis sao 12 ou 13 dias corridos, nao 14 */ and jsonb_array_length(pedidos) = 1
      from public.v_conciliacao_ciclos where ciclo = '2026-11-1Q'),
   (select row_to_json(x)::text from public.v_conciliacao_ciclos x where ciclo = '2026-11-1Q'));
 

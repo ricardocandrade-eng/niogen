@@ -14,6 +14,10 @@ select sim.confere('rotina do radar pede só as 6 abas do radar, com a regra das
   and (public.dashboard_config('radar') -> 'regra' ->> 'hora') = '05:30',
   left((public.dashboard_config('radar'))::text, 300));
 
+-- 28/11: a cópia local traz leituras reais do Radar (do dia do backup); sem limpar, elas entram na série e o cenário só
+-- passava no dia seguinte ao backup (a leitura de "ontem" caía em cima da real). O cenário parte de um Radar vazio.
+select sim._servico();
+delete from public.nio_radar_leituras;
 -- dia 1 (ontem): FPD 0 % em nov · funil pelo texto · eficácia pelo texto
 select public.radar_importar(jsonb_build_object('dia', ((now() at time zone 'America/Sao_Paulo')::date - 1)::text, 'radar', jsonb_build_array(
   jsonb_build_object('aba', 'Indicadores Qualidade', 'visuais', jsonb_build_array(
