@@ -39,8 +39,9 @@ select public.backoffice_momento(sim.venda(:'d'), 'agendar', jsonb_build_object(
 select sim.fila_rodar();
 select (select min(n) from sim.envios where conversa = :'d' and texto like 'Instalação agendada%') as n_inst,
        (select min(n) from sim.envios where conversa = :'d' and texto ilike '%golpe%') as n_golpe \gset
-select sim.confere('agendou: o alerta de golpe saiu numa mensagem própria, depois da confirmação da instalação',
-  :'n_inst' <> '' and :'n_golpe' <> '' and :'n_golpe'::int > :'n_inst'::int,
+-- 0446 (28/11): o alerta passou a sair quando a OS é gravada (antes da instalação) — a ordem em relação à confirmação é do X168.
+select sim.confere('agendou: o alerta de golpe saiu numa mensagem própria (0446: já na OS; a confirmação da instalação vem à parte)',
+  :'n_inst' <> '' and :'n_golpe' <> '' and :'n_golpe'::int <> :'n_inst'::int,
   (select string_agg(n || ': ' || left(texto, 50), ' | ' order by n) from sim.envios where conversa = :'d'));
 select sim.confere('a confirmação da instalação não traz o golpe',
   not exists (select 1 from sim.envios where conversa = :'d' and texto like 'Instalação agendada%' and texto ilike '%golpe%'), null);
