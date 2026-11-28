@@ -181,7 +181,7 @@
   async function carregar(fresco = true) {
     if (fresco) NG.limparCache();
     NG.mudou('live2', 2 * 60000);
-    const { data, error } = await NG.sb.rpc('live2_fila');
+    const { data, error } = await (NG.fila2 ? NG.fila2() : NG.sb.rpc('live2_fila'));   // 27/11: dividida com o menu lateral (app.js › fila2) — uma chamada por carga, não duas; sem fila2 (app.js antigo no cache), chama direto
     if (error || !data) { corpo.innerHTML = `<div class="vazio-curto">${esc(error ? NG.msgErro(error) : 'A fila não veio. Atualize a página.')}</div>`; return; }
     D = data;
     if (foco && !fila().some((t) => t.k === foco)) foco = null;

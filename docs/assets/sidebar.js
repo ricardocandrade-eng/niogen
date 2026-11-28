@@ -425,7 +425,7 @@
         pinta(nav, 'mari', 0, 'info', '');
         // 26/11: o número do menu é o da Live 2.0 — as tarefas da fila dela (live2_fila), vermelho se há venda em risco ou
         // cliente esperando (urgência 4+). A Live 1.0 não conta mais nada no menu.
-        const r2 = await Promise.resolve(NG.sb.rpc('live2_fila')).catch(() => null);
+        const r2 = await Promise.resolve(NG.fila2 ? NG.fila2() : NG.sb.rpc('live2_fila')).catch(() => null);   // 27/11: a mesma chamada da tela Live 2.0 (app.js › fila2)
         const f2 = (r2 && !r2.error && r2.data && r2.data.fila) || null;
         if (f2) {
           const quentes = f2.filter((x) => x.risco || Number(x.urg) >= 4).length;
