@@ -5,6 +5,10 @@
 #      feita COM esta migration (mesmo sha256) nas últimas 6 h — lida de ~/niogen_sim/resultados/portao_*.json.
 #   2) Ensaio na produção: roda o arquivo com o "commit;" final trocado por "rollback;" (transação desfeita).
 #   3) Só então aplica de verdade.
+#   4) Registra a migration em supabase_migrations.schema_migrations (28/11/2026): versão, nome e o texto do arquivo — é o
+#      que o banco e o painel do Supabase mostram como "migrations aplicadas". Se o registro falhar, a migration JÁ ESTÁ
+#      aplicada: o script avisa e diz o comando para registrar depois (scripts/registrar_migrations.py). Número repetido
+#      (outro arquivo já registrado com o mesmo NNNN) também só avisa — a chave da tabela é a versão.
 #
 # Uso:  python scripts/aplicar_migration.py supabase/migrations/0250_x.sql
 #       python scripts/aplicar_migration.py supabase/migrations/0250_x.sql --so-ensaio      # só o passo 2 (não precisa de portão)
@@ -29,6 +33,40 @@ def supabase(arq):
     r = subprocess.run([npx, '--yes', 'supabase@3.0.0', 'db', 'query', '--remote', '--yes', '-f', str(arq)],
                        cwd=RAIZ, capture_output=True, text=True, encoding='utf-8', errors='replace')
     return r.returncode, (r.stdout + '\n' + r.stderr).strip()
+
+
+def sql_registro(arq, texto):
+    """SQL que grava a linha da migration no registro do banco; devolve (número, nome, sql) ou None se o nome foge do padrão."""
+    m = re.match(r'^(\d{4})_(.+)\.sql$', arq.name)
+    if not m:
+        return None
+    num, nome = m.group(1), m.group(2)
+    tag = '$reg$'
+    while tag in texto:
+        tag = tag[:-1] + 'x$'
+    return num, nome, ('begin;\n'
+                       'insert into supabase_migrations.schema_migrations (version, name, statements)\n'
+                       f"values ('{num}', '{nome}', array[{tag}{texto}{tag}]::text[])\n"
+                       'on conflict (version) do nothing;\n'
+                       'commit;\n'
+                       f"select name as registrada_como from supabase_migrations.schema_migrations where version = '{num}';\n")
+
+
+def registrar(arq, texto):
+    """Grava a linha da migration no registro do banco. Devolve (ok, aviso)."""
+    r = sql_registro(arq, texto)
+    if not r:
+        return False, 'nome fora do padrão NNNN_nome.sql — não registrada'
+    num, nome, sql = r
+    with tempfile.NamedTemporaryFile('w', suffix='.sql', delete=False, encoding='utf-8', newline='\n') as t:
+        t.write(sql)
+    rc, out = supabase(t.name)
+    pathlib.Path(t.name).unlink(missing_ok=True)
+    if rc or '"_tag":"Error"' in out:
+        return False, 'o registro falhou: ' + out[-600:]
+    if f'"{nome}"' not in out:
+        return False, f'o número {num} já estava registrado com outro nome (número repetido) — esta não entrou no registro'
+    return True, f'{num} · {nome}'
 
 
 def portao_ok(arq):
@@ -102,6 +140,13 @@ def main():
     if rc:
         sys.exit(f'APLICAÇÃO FALHOU:\n{out[-2000:]}')
     print(f'APLICADA: {arq.name}')
+    ok, aviso = registrar(arq, texto.replace('\r\n', '\n'))
+    if ok:
+        print(f'registrada em schema_migrations: {aviso}')
+    else:
+        print(f'⚠️  APLICADA, MAS NÃO REGISTRADA — {aviso}\n'
+              f'    A migration está no ar. Para registrar depois: python scripts/registrar_migrations.py --ate {arq.name[:4]} --aplicar '
+              '(com --fora para as que não subiram).')
 
 
 if __name__ == '__main__':
