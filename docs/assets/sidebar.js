@@ -425,13 +425,19 @@
         pinta(nav, 'mari', 0, 'info', '');
         // 26/11: o número do menu é o da Live 2.0 — as tarefas da fila dela (live2_fila), vermelho se há venda em risco ou
         // cliente esperando (urgência 4+). A Live 1.0 não conta mais nada no menu.
-        const r2 = await Promise.resolve(NG.fila2 ? NG.fila2() : NG.sb.rpc('live2_fila')).catch(() => null);   // 27/11: a mesma chamada da tela Live 2.0 (app.js › fila2)
-        const f2 = (r2 && !r2.error && r2.data && r2.data.fila) || null;
-        if (f2) {
-          const quentes = f2.filter((x) => x.risco || Number(x.urg) >= 4).length;
-          pinta(nav, 'fila2', f2.length, quentes ? 'alerta' : 'info',
-            `${f2.length} ${f2.length === 1 ? 'tarefa' : 'tarefas'} na Live 2.0 · ${quentes} ${quentes === 1 ? 'urgente' : 'urgentes'} (venda em risco ou cliente esperando).`);
-          total = f2.length;
+        // 27/11: na Live 2.0 é a mesma chamada da tela (app.js › fila2); nas outras telas o número vem guardado por até 1 min
+        // (app.js › fila2Menu). Sem fila2Menu (app.js antigo no cache do navegador), conta pela chamada direta, como antes.
+        let m2 = null;
+        if (NG.fila2Menu) m2 = await NG.fila2Menu().catch(() => null);
+        else {
+          const r2 = await Promise.resolve(NG.fila2 ? NG.fila2() : NG.sb.rpc('live2_fila')).catch(() => null);
+          const f2 = (r2 && !r2.error && r2.data && r2.data.fila) || null;
+          if (f2) m2 = { n: f2.length, quentes: f2.filter((x) => x.risco || Number(x.urg) >= 4).length };
+        }
+        if (m2) {
+          pinta(nav, 'fila2', m2.n, m2.quentes ? 'alerta' : 'info',
+            `${m2.n} ${m2.n === 1 ? 'tarefa' : 'tarefas'} na Live 2.0 · ${m2.quentes} ${m2.quentes === 1 ? 'urgente' : 'urgentes'} (venda em risco ou cliente esperando).`);
+          total = m2.n;
         }
         // 0107: 🔥 oportunidades — selo à parte; não entra no número verde nem no título da aba.
         // 0094/0102: Conversas = clientes esperando 3 min+ fora do Live (deveria ser 0; furo fica gravado). 11/11: as duas em paralelo.

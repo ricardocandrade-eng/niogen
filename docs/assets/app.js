@@ -133,7 +133,30 @@
   // 27/11 (memória do banco — Ricardo: "Sim, tira"): na Live 2.0 a tela e o menu pediam a live2_fila cada um por si, na mesma carga
   // (205 chamadas em 3 h contra ~100 da jornada). memo() junta os dois pedidos; 5 s só para cobrir a mesma carga — depois de uma
   // ação a tela chama limparCache() e a fila vem nova, e a atualização de 1 em 1 minuto sempre busca de novo.
-  const fila2 = () => memo('live2_fila', () => sb.rpc('live2_fila'), 5000);
+  // 27/11 (Ricardo: "Sim, guarda"): em toda tela o menu chamava a live2_fila inteira (~0,6 s de banco, ~30 KB) só para pintar o
+  // número. Agora o NÚMERO (tarefas e quantas urgentes — nenhum dado de cliente) fica guardado no navegador por 1 min e vale para
+  // todas as abas: fora da Live 2.0 o menu usa o guardado; na Live 2.0 ele vem sempre da fila que a tela acabou de buscar, e
+  // toda fila nova regrava o número. Depois de uma ação (limparCache) esta aba busca na hora, como no compartilhado().
+  const FILA2_MENU_MS = 60000;
+  const FILA2_MENU_K = 'niogen.comp.fila2_menu';
+  const fila2Conta = (f) => ({ n: f.length, quentes: f.filter((x) => x.risco || Number(x.urg) >= 4).length });
+  const fila2 = () => memo('live2_fila', () => Promise.resolve(sb.rpc('live2_fila')).then((r) => {
+    const f = r && !r.error && r.data && r.data.fila;
+    if (f) { try { localStorage.setItem(FILA2_MENU_K, JSON.stringify({ t: Date.now(), uid: (usuarioAtual || {}).id || '', ...fila2Conta(f) })); } catch (e) { /* cheio ou bloqueado */ } }
+    return r;
+  }), 5000);
+  async function fila2Menu() {
+    const naLive2 = /\/live2\.html$/.test(location.pathname);
+    if (!naLive2 && Date.now() > compPularAte) {
+      try {
+        const x = JSON.parse(localStorage.getItem(FILA2_MENU_K) || 'null');
+        if (x && x.uid === ((usuarioAtual || {}).id || '') && Date.now() - x.t < FILA2_MENU_MS) return { n: Number(x.n) || 0, quentes: Number(x.quentes) || 0, guardado: true };
+      } catch (e) { /* sem armazenamento: busca normal */ }
+    }
+    const r = await fila2();
+    const f = r && !r.error && r.data && r.data.fila;
+    return f ? fila2Conta(f) : null;
+  }
   // Volta à aba: só recarrega se a última carga tem mais de `ms` (trocar de aba não dispara leitura pesada à toa).
   function aoVoltarAba(fn, ms = 60000) {
     let ult = Date.now();
@@ -2044,7 +2067,7 @@
     sb, TZ, STATUS, STATUS_MAP, ETAPAS, etapaDe, naBiometria, ORIGENS, FORMAS, SEGMENTOS, BIOMETRIA, CREDITO, VIAB_NIO, PORTAL_PAP_NOVO_PEDIDO, opcoes, PERFIS, MOTIVOS_SAIDA, SAIDA_SUBS, pedirSaida, osMorreDe, AVISO_OS_MORRE, SAIDA_SO_VENDA, saidaLista, saidaCampos, funilNomes, FUNIL_ALERTA,
     VIAB_PORTAL_REGISTRO, portalViavel, fmtCep, ajuda,
     esc, fmtData, fmtDataAno, fmtHora, fmtDataHora, fmtDiaSemana, fmtMoeda, fmtDiaISO, fmtNum, fmtHoras, diaSP, diasEntre, janela, primeiroNome, nomeLegivel, fmtFone,
-    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, fila2, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
+    documentoValido, soDigitos, msgErro, toast, botaoAtualizar, consultarOperador, botaoOperador, momento, MOMENTOS, JORNADA, BOTAO_PASSO, jornada, jornadaSnap, jornadaLinha, jornadaEspia, limparCache, rpcOportunidades, fila2, fila2Menu, oportunidades, oportunidadesCanal, opCanalLinha, ligarOpCanal, furosJornada, tetoContato, noTetoContato, contatosTxt, passoJornada, ordemJornada, NIVEL_COR, TEXTOS_COMISSAO, textoComissao, dica, dicaTxt, rotulo, avisoDowngrade,
     PERIODOS, periodo, noPeriodo, somaDias, filtroPeriodo, kpi, abasPilulas, ligarOrdenacao, ordenar, pilulaEtapa, proxPasso, quando, gaveta,
     proximoPasso, ultimosContatos, abrirVenda, PARADAS, paradaDe, haQuanto,   // onda 2.1: faixa do Painel
     selosFicha, ICONE_SELO,   // onda 3.1: ficha única (só aviso)
