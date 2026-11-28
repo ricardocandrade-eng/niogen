@@ -38,6 +38,13 @@
   .l2-tab { background: none; border: 0; border-bottom: 2px solid transparent; padding: 7px 13px; color: var(--muted); font-weight: 600; cursor: pointer; }
   .l2-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
   .l2-tab b { font-family: var(--dm); font-weight: 500; margin-left: 4px; }
+  /* 27/11 (Ricardo: "as abas dentro da Live precisa ter sinalização de notificação quando tem demandas"): o número vira selo quando há o que fazer —
+     vermelho com cliente esperando ou venda em risco, amarelo nas demais tarefas, 🔥 no Reforço. O Radar segue número simples: não é demanda. */
+  .l2-tab b.tem { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 10px; background: var(--warn-dot); color: var(--bg); }
+  .l2-tab b.tem.urg { background: var(--bad-dot); }
+  .l2-tab b.tem.fogo { background: var(--fogo-bg); color: var(--fogo); border: 1px solid var(--fogo-border); }
+  .l2-tab i.l2-ponto { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 6px; background: var(--warn-dot); vertical-align: middle; }
+  .l2-tab i.l2-ponto.urg { background: var(--bad-dot); }
   .l2-rolar { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 24px 0; display: flex; flex-direction: column; gap: 14px; }
   .l2-furo { background: var(--bad-bg); color: var(--bad-fg); border: 1px solid var(--bad-border); border-radius: 8px; padding: 8px 12px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; }
   .l2-sis { background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-border); border-radius: 8px; padding: 6px 12px; font-size: 13px; }
@@ -494,8 +501,13 @@
     const c = D.conta || {};
     document.getElementById('placar').innerHTML = `${esc(String(D.feitos || 0))} ${D.feitos === 1 ? 'feita' : 'feitas'} hoje · <b>${f.length ? `faltam ${f.length}` : 'Fila limpa ✅'}</b>`;
     document.getElementById('alertas').innerHTML = alertasHtml();
-    const tab = (id, nome, n) => `<button type="button" class="l2-tab" role="tab" data-vista="${id}" aria-selected="${vista === id}">${nome}${n == null ? '' : `<b>${n}</b>`}</button>`;
-    document.getElementById('tabs').innerHTML = tab('vez', 'Tarefa da vez') + tab('fila', 'Fila inteira', f.length) + tab('reforco', 'Reforço', (D.reforco || []).length)
+    // selo: cls = 'urg' | 'fogo' | '' pinta o número quando há demanda (n > 0); ponto = bolinha sem número (Tarefa da vez)
+    const tab = (id, nome, n, cls, dica, ponto) => `<button type="button" class="l2-tab" role="tab" data-vista="${id}" aria-selected="${vista === id}"${dica ? ` title="${esc(dica)}"` : ''}>${nome}${ponto ? `<i class="l2-ponto${cls ? ` ${cls}` : ''}" aria-label="tem tarefa"></i>` : ''}${n == null ? '' : `<b${n > 0 && cls != null ? ` class="tem${cls ? ` ${cls}` : ''}"` : ''}>${cls === 'fogo' && n > 0 ? '🔥 ' : ''}${n}</b>`}</button>`;
+    const urgentes = f.filter((t) => t.risco || Number(t.urg) >= 4).length;
+    const nRf = (D.reforco || []).length;
+    const dicaFila = f.length ? `${f.length} ${f.length === 1 ? 'tarefa' : 'tarefas'} na fila · ${urgentes} ${urgentes === 1 ? 'urgente' : 'urgentes'} (venda em risco ou cliente esperando)` : 'Fila limpa';
+    document.getElementById('tabs').innerHTML = tab('vez', 'Tarefa da vez', null, urgentes ? 'urg' : '', dicaFila, f.length > 0) + tab('fila', 'Fila inteira', f.length, urgentes ? 'urg' : '', dicaFila)
+      + tab('reforco', 'Reforço', nRf, 'fogo', nRf ? `${nRf} ${nRf === 1 ? 'conversa' : 'conversas'} da Mari em que vale você entrar agora. Não é obrigação.` : 'Nenhuma conversa pedindo reforço agora')
       + tab('radar', 'Radar', (Number(c.com_mari) || 0) + (Number(c.esperando_cliente) || 0) + (Number(c.em_pausa) || 0) + (Number(c.esperando_nio) || 0)) + tab('medicao', '7 dias');
     const rol = corpo.scrollTop;
     const txt = document.activeElement && document.activeElement.tagName === 'TEXTAREA' ? { id: document.activeElement.id, v: document.activeElement.value } : null;
