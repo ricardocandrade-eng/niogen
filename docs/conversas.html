@@ -213,7 +213,7 @@
   const silenciada = (c) => (c.etiquetas || []).includes('suporte-nio');
   const saiu = (c) => c.funil_destino && !['em_andamento', 'teste_duplicada', 'instalada'].includes(c.funil_destino);
   const ABAS = [
-    ['esperando', 'Esperando', (c) => c.cliente_esperando && !c.encerrada, 'O cliente escreveu por último e ninguém respondeu.'],
+    ['esperando', 'Esperando', (c) => (c.cliente_esperando && !c.encerrada) || esperaTime(c), 'O cliente escreveu por último e ninguém respondeu (ou ouviu "já chamei o time" e espera uma pessoa).'],
     ['minhas', 'Minhas', (c) => minha(c) && !c.encerrada, 'As conversas que estão com você.'],
     ['abertas', 'Abertas', aberta, 'Tudo que não foi encerrado nem resolvido.'],
     ['todas', 'Todas', () => true, 'Todas, inclusive encerradas e silenciadas.'],
@@ -245,6 +245,9 @@
   function auto(c) {
     const k = c.ultima_auto;
     if (!k || (c.cliente_esperando && !c.encerrada)) return null;
+    // 28/11 (Ricardo, L-132: "não o localizei nem no topo da tela Conversas"): "já chamei o nosso time" (0383) é resposta a quem
+    //   acabou de escrever, não disparo — o cliente espera uma pessoa; escondida com os disparos, ninguém a via.
+    if (k === 'cliente_voltou') return null;
     let m;
     if ((m = /^F(\d)$/.exec(k))) return [`${m[1]}ª cutucada`, 'Cadência'];
     if (/^D\d+$/.test(k)) return [k, 'Cadência'];
@@ -257,7 +260,10 @@
   }
   // Viva: o cliente falou nas últimas 24 h, a última mensagem não é disparo e a conversa não foi resolvida/adiada no Chatwoot.
   // 26/11 (Ricardo, L-386): "Obg" do cliente com a conversa já resolvida (e "nada a responder" marcado) não é conversa viva.
-  const quieta = (c) => !!c.encerrada || ['resolved', 'snoozed'].includes(c.chatwoot_status);
+  // 28/11 (L-132, 0420): ouviu "já chamei o nosso time" (0383) e a conversa segue aberta no Chatwoot → espera uma pessoa.
+  //   Em Saída a linha vem "encerrada" da view; quem espera o time não fica apagado.
+  const esperaTime = (c) => c.ultima_auto === 'cliente_voltou' && !['resolved', 'snoozed'].includes(c.chatwoot_status);
+  const quieta = (c) => !esperaTime(c) && (!!c.encerrada || ['resolved', 'snoozed'].includes(c.chatwoot_status));
   // 26/11 (Ricardo: "por que muitas conversas ficam com essas notificações verdes"): nao_lidas conta as falas do cliente depois da
   //   última resposta — e quase sempre era o "Obrigada"/"Ok" depois da despedida, com a conversa já resolvida. O número só aparece
   //   quando o cliente está mesmo esperando (cliente_esperando: aberta, sem "nada a responder", ninguém respondeu).
@@ -276,6 +282,8 @@
       return furos.has(c.id) ? ['bad', `esperando há ${durTxt(c.esperando_min)} · fora da Live`, 'Cliente esperando e fora da Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.']
         : ['bad', `esperando há ${durTxt(c.esperando_min)}`, 'O cliente escreveu por último e ainda não teve resposta.'];
     }
+    // 28/11 (L-132): ouviu "já chamei o nosso time" (0383) e a conversa segue aberta → é uma pessoa que deve responder
+    if (esperaTime(c)) return ['bad', 'esperando o time', 'O cliente escreveu depois de uma Saída, a Mari não responde por regra e avisou que chamou o time. Falta uma pessoa responder.'];
     if (c.funil_alerta) return ['warn', ({ resolvida_fora_niogen: 'resolvida fora do NIOGEN', mensagem_fora_niogen: 'respondida pelo Chatwoot', atribuida_fora_niogen: 'atribuída pelo Chatwoot', adiada_fora_niogen: 'adiada pelo Chatwoot' })[c.funil_alerta] || 'mexida fora do NIOGEN', NG.FUNIL_ALERTA[c.funil_alerta] || ''];
     if (c.funil_destino === 'instalada') return ['ok', 'instalada', 'Internet instalada.'];
     if (saiu(c)) return ['dim', `saída · ${fnome.destino[c.funil_destino] || c.funil_destino}`, c.funil_detalhe || 'O lead saiu do funil.'];
@@ -380,7 +388,7 @@
     const [cls, txt, tit] = selo(c);
     const quem = quemFalou(c);
     const au = !!auto(c), vv = viva(c);
-    return `<button type="button" class="cv-item cv-n${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada ? ' enc' : ''}${quieta(c) ? ' quieta' : ''}${au ? ' auto' : ''}${vv ? ' viva' : ''}" data-id="${esc(c.id)}"${vv ? ' title="Conversa viva: o cliente falou nas últimas 24 h"' : ''}>
+    return `<button type="button" class="cv-item cv-n${c.id === atual ? ' sel' : ''}${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada && !esperaTime(c) ? ' enc' : ''}${quieta(c) ? ' quieta' : ''}${au ? ' auto' : ''}${vv ? ' viva' : ''}" data-id="${esc(c.id)}"${vv ? ' title="Conversa viva: o cliente falou nas últimas 24 h"' : ''}>
       <span class="cv-n-av ${ladoDono(c) === 'time' ? 'time' : 'mari'}${au ? ' auto' : ''}" aria-hidden="true">${esc(iniciais(c.nome))}</span>
       <span class="cv-n-meio">
         <span class="cv-l1"><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
@@ -408,7 +416,7 @@
     else if (c.funil_destino && !['em_andamento', 'teste_duplicada'].includes(c.funil_destino)) selos.push(`<span class="cv-tag apagada">${c.funil_destino === 'instalada' ? '✅' : '⛔'} ${esc(fnome.destino[c.funil_destino] || c.funil_destino)}</span>`);
     if (c.funil_alerta) selos.push(`<span class="cv-tag ruim" title="${esc(NG.FUNIL_ALERTA[c.funil_alerta] || '')}">mexida no Chatwoot</span>`);
     if (furos.has(c.id)) selos.push('<span class="cv-tag ruim" title="Cliente esperando e fora do Live: é defeito da regra (já ficou registrado). Responda daqui e avise o Ricardo.">deveria estar no Live</span>');
-    return `<button type="button" class="cv-item cv-mv${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada ? ' enc' : ''}${quieta(c) ? ' quieta' : ''}${au ? ' auto' : ''}${vv ? ' viva' : ''}" data-id="${esc(c.id)}">
+    return `<button type="button" class="cv-item cv-mv${c.cliente_esperando && !c.encerrada ? ' esperando' : ''}${nl ? ' naolida' : ''}${c.encerrada && !esperaTime(c) ? ' enc' : ''}${quieta(c) ? ' quieta' : ''}${au ? ' auto' : ''}${vv ? ' viva' : ''}" data-id="${esc(c.id)}">
       <span class="cv-av" style="--av:${corAv(c.id)}" aria-hidden="true">${esc(iniciais(c.nome))}</span>
       <span class="cv-mv-meio">
         <span class="cv-l1"><b>${esc(c.nome)}</b><span class="cv-hora">${esc(quando(c.ultima_em))}</span></span>
