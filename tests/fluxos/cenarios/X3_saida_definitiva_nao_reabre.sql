@@ -1,9 +1,11 @@
 -- id: X3
--- titulo: Saída definitiva (crédito negado): cliente escreve e não reabre — desde a 0383 a Mari não responde, a conversa abre para o time e fecha de novo em 24 h
+-- titulo: Saída definitiva (Nio não instalou): cliente escreve e não reabre — desde a 0383 a Mari não responde, a conversa abre para o time e fecha de novo em 24 h
 -- tipo: atual
 select sim.lead_com_venda('Rita X3') as c \gset
 select sim.como('backoffice');
-select public.lead_sair(:'c', sim.venda(:'c'), 'credito_negado');
+-- 28/11 (0443): em crédito negado e biometria reprovada a Mari voltou a responder (cenário X165); aqui fica a regra da 0383,
+-- que segue valendo nas outras Saídas definitivas
+select public.lead_sair(:'c', sim.venda(:'c'), 'nio_nao_instalou', 'outro', null, null, false);
 select sim.fila_rodar();
 select sim.cliente_escreve(:'c', 'e aí, deu certo?') as r \gset
 select sim.espera(:'c', '10 minutes');
